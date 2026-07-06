@@ -330,10 +330,10 @@ func TestRegisterAll_ToolCount(t *testing.T) {
 			t.Fatalf(fmtListToolsErr, err)
 		}
 		t.Logf("CE tool count: %d", len(result.Tools))
-		// 861 = 862 −1 group_milestone_burndown action gated to Premium (the
-		// burndown_events endpoint is Premium/Ultimate). Prior: 858 +3 instance
-		// service accounts un-gated. See cmd/audit_edition_tier.
-		const expectedTools = 861
+		// 847 = 861 −11 group webhooks −3 MR dependencies gated to Premium
+		// (group_webhooks.md and merge request dependencies are
+		// Premium/Ultimate). See cmd/audit_edition_tier.
+		const expectedTools = 847
 		if len(result.Tools) != expectedTools {
 			t.Errorf("tool count = %d, want %d", len(result.Tools), expectedTools)
 			for _, tool := range result.Tools {

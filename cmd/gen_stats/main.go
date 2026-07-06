@@ -147,7 +147,9 @@ func collectStats(root string) (*repoStats, error) {
 		}
 		if d.IsDir() {
 			switch d.Name() {
-			case ".git", "vendor", "node_modules", "dist":
+			// .claude holds agent worktrees (full repo copies) that would
+			// double-count every metric when present.
+			case ".git", "vendor", "node_modules", "dist", ".claude":
 				return filepath.SkipDir
 			}
 			return nil

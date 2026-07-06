@@ -7,6 +7,12 @@
 // own details block. The values seen are "Free, Premium, Ultimate" (all tiers),
 // "Premium, Ultimate" (Premium minimum) and "Ultimate" (Ultimate only).
 //
+// Not every endpoint family is graded by its owner package's page: some are
+// documented on a different API page (group webhooks) or carry their tier badge
+// only on a user-facing page (merge request dependencies). actionDocOverrides
+// in docmap.go redirects those actions to the page that actually states their
+// tier, and the tier is still parsed from that page's badge.
+//
 // The current MCP gating is binary and positional: an action is either present
 // in the Community Edition catalog (effectively Free) or only in the Enterprise
 // catalog (an undifferentiated Premium-or-Ultimate). This auditor surfaces, per
@@ -111,8 +117,11 @@ func main() {
 	// Cancel the doc-fetch sweep on Ctrl+C so a slow refresh aborts promptly.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
-	fetcher := apidocs.New(root, apidocs.Options{Refresh: *refresh, Offline: *offline, MaxAge: *maxAge})
-	rep, err := buildReport(ctx, fetcher)
+	opts := apidocs.Options{Refresh: *refresh, Offline: *offline, MaxAge: *maxAge}
+	userOpts := opts
+	userOpts.BaseURL = apidocs.DefaultUserDocBaseURL
+	res := newDocResolver(apidocs.New(root, opts), apidocs.New(root, userOpts))
+	rep, err := buildReport(ctx, res)
 	if err != nil {
 		cmdutil.Fatalf("build edition tier report: %v", err)
 	}
@@ -186,18 +195,67 @@ type actionDetail struct {
 	Note        string `json:"note,omitempty"` // exception rationale, when applicable
 }
 
+// docResolver fetches documentation pages for tier grading: the owner domain
+// pages under doc/api/ and the override pages referenced by actionDocOverrides
+// (which may live outside doc/api/). Override page tiers are memoized so each
+// page is fetched and parsed once per run.
+type docResolver struct {
+	api  *apidocs.Fetcher
+	user *apidocs.Fetcher
+	memo map[docRef]docPage
+}
+
+// docPage is the memoized parse result of one override page.
+type docPage struct {
+	tier tier
+	err  error
+}
+
+func newDocResolver(api, user *apidocs.Fetcher) *docResolver {
+	return &docResolver{api: api, user: user, memo: map[docRef]docPage{}}
+}
+
+// pageTier returns the page-level tier badge of the referenced doc page.
+func (r *docResolver) pageTier(ctx context.Context, ref docRef) (tier, error) {
+	if p, ok := r.memo[ref]; ok {
+		return p.tier, p.err
+	}
+	fetcher := r.api
+	if ref.userDoc {
+		fetcher = r.user
+	}
+	var p docPage
+	content, err := fetcher.Fetch(ctx, ref.area)
+	if err != nil {
+		p.err = err
+	} else {
+		p.tier, _ = parseDocTiers(content)
+	}
+	r.memo[ref] = p
+	return p.tier, p.err
+}
+
 // expectedTierForAction returns the doc-grounded minimum tier expected for an
-// action and a rationale note. An accepted exception (an action whose true doc
-// page differs from its owner domain's page, or a per-section override) wins;
-// otherwise the domain page tier applies.
-func expectedTierForAction(id string, pageTier tier) (expected tier, reason string) {
+// action and a rationale note. An accepted exception (an audited per-action
+// tier) wins; then a declared doc-page override grades the action against the
+// page that actually documents it; otherwise the domain page tier applies.
+// When an override page cannot be fetched, the domain page tier is kept and
+// the failure is surfaced in the note rather than silently grading Free.
+func (r *docResolver) expectedTierForAction(ctx context.Context, id string, pageTier tier) (expected tier, reason string) {
 	if ex, ok := acceptedTierExceptions[id]; ok {
 		return ex.tier, ex.reason
+	}
+	if ref, ok := docOverrideForAction(id); ok {
+		t, err := r.pageTier(ctx, ref)
+		if err != nil {
+			return pageTier, "doc override fetch failed (" + ref.docPath() + "): " + err.Error()
+		}
+		return t, "documented on " + ref.docPath() + " (page tier " + t.String() + ")"
 	}
 	return pageTier, ""
 }
 
-func buildReport(ctx context.Context, fetcher *apidocs.Fetcher) (*report, error) {
+func buildReport(ctx context.Context, res *docResolver) (*report, error) {
 	// Mechanical current-state: diff the CE and EE catalogs to learn each
 	// action's current binary gate.
 	ceCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: false, IncludeMCP: true})
@@ -257,7 +315,7 @@ func buildReport(ctx context.Context, fetcher *apidocs.Fetcher) (*report, error)
 	sort.Strings(pkgNames)
 
 	for _, pkg := range pkgNames {
-		dr := buildDomainReport(ctx, pkg, domains[pkg].actions, fetcher)
+		dr := buildDomainReport(ctx, pkg, domains[pkg].actions, res)
 		if !dr.DocFetched && dr.Note == "no doc-area mapping" {
 			unmapped[pkg] = struct{}{}
 		}
@@ -283,7 +341,7 @@ func buildReport(ctx context.Context, fetcher *apidocs.Fetcher) (*report, error)
 // buildDomainReport assembles the report for one owner package: it resolves the
 // doc area, fetches and parses the tier badges, tallies the current gating, and
 // classifies the domain for wave planning.
-func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, fetcher *apidocs.Fetcher) domainReport {
+func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, res *docResolver) domainReport {
 	sort.Slice(actions, func(i, j int) bool { return actions[i].ID < actions[j].ID })
 
 	docArea, mapped := docAreaForPackage(pkg)
@@ -295,7 +353,7 @@ func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, 
 	case !mapped:
 		note = "no doc-area mapping"
 	default:
-		content, ferr := fetcher.Fetch(ctx, docArea)
+		content, ferr := res.api.Fetch(ctx, docArea)
 		if ferr != nil {
 			note = "doc fetch failed: " + ferr.Error()
 		} else {
@@ -313,9 +371,6 @@ func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, 
 		Actions:       len(actions),
 		ActionDetails: actions,
 	}
-	for _, ot := range overrideTiers {
-		dr.OverrideTiers = append(dr.OverrideTiers, ot.String())
-	}
 	for i := range dr.ActionDetails {
 		a := &dr.ActionDetails[i]
 		if a.CurrentGate == "free" {
@@ -326,13 +381,23 @@ func buildDomainReport(ctx context.Context, pkg string, actions []actionDetail, 
 		if !docFetched {
 			continue
 		}
-		exp, reason := expectedTierForAction(a.ID, pageTier)
+		exp, reason := res.expectedTierForAction(ctx, a.ID, pageTier)
 		a.Expected = exp.String()
 		a.Note = reason
+		// A doc-page override that grades differently from the owner page is a
+		// per-endpoint tier difference within the domain: record it alongside
+		// the parsed per-section override badges so classification sees it.
+		if _, ok := docOverrideForAction(a.ID); ok && exp != pageTier && !slices.Contains(overrideTiers, exp) {
+			overrideTiers = append(overrideTiers, exp)
+		}
 		if edition := parseEditionTier(a.Edition); edition != exp {
 			a.Mismatch = true
 			dr.Mismatches++
 		}
+	}
+	slices.Sort(overrideTiers)
+	for _, ot := range overrideTiers {
+		dr.OverrideTiers = append(dr.OverrideTiers, ot.String())
 	}
 	dr.Classification, dr.NeedsWork = classifyDomain(dr, overrideTiers, pageTier, docFetched)
 	return dr

@@ -14,13 +14,13 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.43.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 2.4.0                                               |
+| Version       | 2.4.1                                               |
 
 ### Scale
 
 | Metric                    | Count                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| MCP Tools (individual)    | By instance tier: ~862 Free/CE; ~999 Premium; ~1065 Ultimate (self-managed) / ~1071 on GitLab.com Ultimate with Orbit |
+| MCP Tools (individual)    | By instance tier: ~847 Free/CE; ~999 Premium; ~1065 Ultimate (self-managed) / ~1071 on GitLab.com Ultimate with Orbit |
 | Catalog groups            | By instance tier: 28 Free/CE; 34 Premium; 45 Ultimate                                                       |
 | Meta-mode tools           | 32 base (Free/CE) / 49 self-managed Ultimate / 50 GitLab.com Ultimate (Orbit)                              |
 | Dynamic-mode tools        | 2 dynamic tools (`gitlab_find_action`, `gitlab_execute_action`) — see Dynamic toolset mode below |
@@ -148,7 +148,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (2.4.0)
+└── VERSION                      # Semantic version (2.4.1)
 ```
 
 ## Key Development Patterns
@@ -487,7 +487,7 @@ ADRs document key decisions in `docs/development/adr`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (176 `internal/tools` packages; tools by tier: ~862 Free/CE, ~999 Premium, ~1065 Ultimate self-managed, ~1071 GitLab.com Ultimate) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (176 `internal/tools` packages; tools by tier: ~847 Free/CE, ~999 Premium, ~1065 Ultimate self-managed, ~1071 GitLab.com Ultimate) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |

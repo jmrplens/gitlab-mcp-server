@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 2.4.0 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
+> Version 2.4.1 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 46 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -2597,17 +2597,6 @@ Action guidance:
 - group_upload_delete_by_id: Use to permanently remove a group Markdown upload identified by its numeric upload ID.
 - group_upload_delete_by_secret: Use to permanently remove a group Markdown upload identified by its secret and filename.
 - group_upload_list: Use to enumerate files uploaded into a group's Markdown attachments store.
-- hook_add: Create a group webhook. Send url plus the event flags to enable (push_events, merge_requests_events, pipeline_events, etc.) and optional token/custom_headers/custom_webhook_template. Requires Owner role.
-- hook_delete: Delete a group webhook by hook_id. Destructive and irreversible. Confirm before calling. Requires Owner role.
-- hook_delete_custom_header: Delete a custom HTTP header from a group webhook by hook_id and key. Destructive. Requires Owner role.
-- hook_delete_url_variable: Delete a templated URL variable from a group webhook by hook_id and key. Destructive. Requires Owner role.
-- hook_edit: Update an existing group webhook by hook_id. Send only the fields to change; unset fields keep their current values. Requires Owner role.
-- hook_get: Fetch a single group webhook by hook_id. Use to inspect a webhook's URL, enabled events, and SSL/header settings. Requires Owner role.
-- hook_list: List the webhooks configured on a group. Use when the user asks which webhooks fire for a group and its subgroups/projects. Requires Owner role.
-- hook_resend_event: Resend a specific previously-delivered group hook event by hook_id and hook_event_id. Use to retry a failed webhook delivery. Requires Owner role.
-- hook_set_custom_header: Set (create or update) a custom HTTP header on a group webhook by hook_id and key. The value is write-only and masked on read. Requires Owner role.
-- hook_set_url_variable: Set (create or update) a templated URL variable on a group webhook by hook_id and key. The value is write-only and masked on read. Requires Owner role.
-- hook_test: Trigger a test event for a group webhook by hook_id and trigger event type (push_events, pipeline_events, etc.). Use to verify webhook delivery. Requires Owner role.
 - invited_groups: List the groups invited to this group. Use when the user asks which groups were invited (directly or by inheritance) to collaborate on a group.
 - issues: List issues across a group and its projects. Use this when the prompt scopes work to a group or subgroup rather than a single project.
 - list: List groups visible to the authenticated user. Use search, owned, min_access_level, and pagination when the user asks for matching or accessible groups.
@@ -2699,27 +2688,6 @@ Parameter guidance:
 - group_upload_delete_by_id.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_upload_delete_by_secret.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - group_upload_list.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- hook_add.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- hook_add.url; source: HTTP(S) endpoint that should receive webhook payloads.; avoid: Enable specific event flags (push_events, merge_requests_events, etc.); a hook with no events fires nothing.
-- hook_delete.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- hook_delete.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
-- hook_delete_custom_header.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- hook_delete_custom_header.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
-- hook_delete_url_variable.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- hook_delete_url_variable.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
-- hook_edit.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- hook_edit.url; source: HTTP(S) endpoint that should receive webhook payloads.; avoid: Enable specific event flags (push_events, merge_requests_events, etc.); a hook with no events fires nothing.
-- hook_get.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- hook_get.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
-- hook_list.group_id: scope_group; source: Group numeric ID or full path whose webhooks are listed.
-- hook_resend_event.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- hook_resend_event.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
-- hook_set_custom_header.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- hook_set_custom_header.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
-- hook_set_url_variable.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- hook_set_url_variable.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
-- hook_test.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
-- hook_test.hook_id; source: Numeric hook ID from gitlab_group_hook_list.
 - invited_groups.group_id: scope_group; source: Group numeric ID or full path whose invited groups are listed.
 - invited_groups.relation; source: Inheritance filter: direct, inherited, or both.; avoid: relation filters by how the invitation reaches the group; it is not an access level.
 - issues.group_id: scope_group; source: Group ID or full group path from the user's request.; avoid: Use group_id for group paths or IDs; use project_id only with issue.list for a single project.
@@ -5426,9 +5394,6 @@ Action guidance:
 - create_pipeline: Creates a new pipeline for a merge request; use pipeline.wait after receiving pipeline_id if the task asks to wait for completion.
 - create_todo: Create a to-do item on a merge request for the caller so it appears in their GitLab to-do list.
 - delete: Permanently delete a merge request (owner-only). To merely stop work, use merge_request.update with state_event=close instead.
-- dependencies_list: List the blocking dependencies of a merge request (the MRs that must merge first).
-- dependency_create: Add a blocking dependency so this merge request cannot merge until the specified blocking MR is merged.
-- dependency_delete: Remove a previously added blocking dependency from a merge request.
 - emoji_mr_create: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
 - emoji_mr_delete: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
 - emoji_mr_get: Manage merge request and MR-note award emojis (list/get/create/delete). Use for feedback and quick approval/review signals.
@@ -5482,9 +5447,6 @@ Parameter guidance:
 - create_pipeline.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - create_todo.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
-- dependencies_list.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
-- dependency_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
-- dependency_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - emoji_mr_create.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.
 - emoji_mr_create.project_id: scope_project; source: Project ID or path that owns the merge request.
 - emoji_mr_delete.merge_request_iid: merge_request_iid; source: Merge request IID from MR list/get outputs.

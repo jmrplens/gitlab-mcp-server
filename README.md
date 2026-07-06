@@ -173,7 +173,7 @@ The server can present GitLab in three shapes, controlled by `TOOL_SURFACE`. The
 | ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
 | **Dynamic** (default)         | 2 (`gitlab_find_action`, `gitlab_execute_action`) | Lowest token cost; reaches the full catalog via find/execute.    |
 | **Meta-tools** (`meta`)       | 32 base / 49 Ultimate / 50 GitLab.com Ultimate    | Domain-grouped dispatchers with an `action` parameter.           |
-| **Individual** (`individual`) | ~862 Free/CE · ~999 Premium · 1065–1071 Ultimate  | One MCP tool per GitLab operation; needs a large context window. |
+| **Individual** (`individual`) | ~847 Free/CE · ~999 Premium · 1065–1071 Ultimate  | One MCP tool per GitLab operation; needs a large context window. |
 
 Tool counts scale with your GitLab edition (`GITLAB_TIER`); higher tiers expose more actions. See [Dynamic Toolset](docs/concepts/dynamic-tools.md) and [Meta-Tools Reference](docs/concepts/meta-tools.md) for the ranking model, safety guards, and full catalogs. For dynamic runs where resources dominate context, set `CAPABILITY_SURFACE=minimal`.
 
@@ -187,8 +187,8 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ----------------------------------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          | Free/CE  |             2 |               865 | n/a                 |              2,180 |        31,758 |       33,938 |
-| `dynamic` / `minimal`                                 | Free/CE  |             2 |               865 | n/a                 |              2,180 |         1,088 |        3,268 |
+| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              2,180 |        31,758 |       33,938 |
+| `dynamic` / `minimal`                                 | Free/CE  |             2 |               851 | n/a                 |              2,180 |         1,088 |        3,268 |
 | `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              2,180 |        31,758 |       33,938 |
 | `dynamic` / `minimal`                                 | Premium  |             2 |             1,003 | n/a                 |              2,180 |         1,088 |        3,268 |
 | `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              2,180 |        31,758 |       33,938 |
@@ -358,50 +358,50 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       965 |     192,353 |
-| Unit tests (`_test.go`)  |       534 |     297,236 |
-| End-to-end tests         |       143 |      35,337 |
-| **Total**                | **1,642** | **524,926** |
+| Source (`.go`, non-test) |       966 |     192,762 |
+| Unit tests (`_test.go`)  |       535 |     297,536 |
+| End-to-end tests         |       169 |      43,890 |
+| **Total**                | **1,670** | **534,188** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,383 |
+| Source functions                |  7,394 |
 | — exported (public)             |  2,590 |
-| — unexported (private)          |  4,793 |
-| Unit test functions (`TestXxx`) | 11,514 |
-| Subtests (`t.Run(...)`)         |  2,661 |
-| End-to-end test functions       |    287 |
+| — unexported (private)          |  4,804 |
+| Unit test functions (`TestXxx`) | 11,526 |
+| Subtests (`t.Run(...)`)         |  2,887 |
+| End-to-end test functions       |    376 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.55× more tests than code |
+| Test lines vs source lines         | 1.54× more tests than code |
 | Average source file length         |                 ~199 lines |
 | Average test file length           |                 ~556 lines |
-| Comment lines in source            |  20,869 (~10.8% of source) |
+| Comment lines in source            |  20,970 (~10.9% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,559 |
-| `defer` statements                 |   707 |
-| `struct` types defined             | 2,701 |
-| `//nolint` suppressions            |   182 |
-| `TODO` / `FIXME` / `HACK` comments |     2 |
+| `if err != nil` checks             | 6,597 |
+| `defer` statements                 |   828 |
+| `struct` types defined             | 2,708 |
+| `//nolint` suppressions            |   204 |
+| `TODO` / `FIXME` / `HACK` comments |     3 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   226 |
+| Go packages                    |   227 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   232 |
+| Git commits                    |   242 |
 | Unique contributors            |     4 |
 
 ### Hall of fame
@@ -415,8 +415,8 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,497 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,459 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,504 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,468 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
