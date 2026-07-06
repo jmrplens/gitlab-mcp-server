@@ -154,11 +154,14 @@ func TestIndividual_MRExtras(t *testing.T) {
 			ProjectID: proj.pidOf(),
 			MRIID:     mr.IID,
 		})
-		// Creating blocking dependencies is a Premium feature and CE gates the
-		// read endpoint too (404 on GitLab 18 CE, 403 on other versions). An
-		// empty list on a fresh MR is the expected result when available.
-		if dErr != nil && (isHTTPStatus(dErr, 403) || isHTTPStatus(dErr, 404) || strings.Contains(dErr.Error(), "Premium")) {
-			t.Skipf("MR dependencies endpoint not available on this tier: %v", dErr)
+		// MR dependencies are a Premium feature: on a Free-tier catalog the
+		// gitlab_mr_dependencies_list tool is not registered at all (unknown
+		// tool), and an ungated server against live CE gets 404/403 from the
+		// API. An empty list on a fresh MR is the expected result when
+		// available.
+		if dErr != nil && (isHTTPStatus(dErr, 403) || isHTTPStatus(dErr, 404) ||
+			strings.Contains(dErr.Error(), "Premium") || strings.Contains(dErr.Error(), "unknown tool")) {
+			t.Skipf("MR dependencies not available on this tier: %v", dErr)
 		}
 		requireNoError(t, dErr, "list MR dependencies")
 		requireTruef(t, len(out.Dependencies) == 0, "expected no dependencies on a fresh MR, got %d", len(out.Dependencies))

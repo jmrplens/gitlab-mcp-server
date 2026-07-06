@@ -73,28 +73,28 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		groupReadSpec("invited_groups", toolutil.RouteAction(client, InvitedList), "gitlab_group_invited_list"),
 		// gitlab_group_transfer_locations — list candidate parent groups for a transfer.
 		groupReadSpec("transfer_locations", toolutil.RouteAction(client, TransferLocationsList), "gitlab_group_transfer_locations"),
-		// gitlab_group_hook_list — list group webhooks.
-		groupReadSpec("hook_list", toolutil.RouteAction(client, ListHooks), "gitlab_group_hook_list"),
-		// gitlab_group_hook_get — fetch a single group webhook by ID.
-		groupReadSpec("hook_get", toolutil.RouteAction(client, GetHook), "gitlab_group_hook_get"),
-		// gitlab_group_hook_add — create a new group webhook.
-		groupCreateSpec("hook_add", toolutil.RouteAction(client, AddHook), toolGroupHookAdd),
-		// gitlab_group_hook_edit — update an existing group webhook.
-		groupUpdateSpec("hook_edit", toolutil.RouteAction(client, EditHook), "gitlab_group_hook_edit"),
-		// gitlab_group_hook_delete — delete a group webhook (destructive).
-		groupDeleteSpec("hook_delete", toolutil.DestructiveVoidAction(client, DeleteHook), "gitlab_group_hook_delete"),
-		// gitlab_group_hook_set_custom_header — set a custom header on a group webhook.
-		groupUpdateSpec("hook_set_custom_header", toolutil.RouteAction(client, SetHookCustomHeaderOutput), toolGroupHookSetHeader),
-		// gitlab_group_hook_delete_custom_header — delete a custom header from a group webhook (destructive).
-		groupDeleteSpec("hook_delete_custom_header", toolutil.DestructiveVoidAction(client, DeleteHookCustomHeader), toolGroupHookDelHeader),
-		// gitlab_group_hook_set_url_variable — set a templated URL variable on a group webhook.
-		groupUpdateSpec("hook_set_url_variable", toolutil.RouteAction(client, SetHookURLVariableOutput), toolGroupHookSetURLVar),
-		// gitlab_group_hook_delete_url_variable — delete a URL variable from a group webhook (destructive).
-		groupDeleteSpec("hook_delete_url_variable", toolutil.DestructiveVoidAction(client, DeleteHookURLVariable), toolGroupHookDelURLVar),
-		// gitlab_group_hook_test — trigger a test group hook event.
-		groupUpdateSpec("hook_test", toolutil.RouteAction(client, TestHookOutput), toolGroupHookTest),
-		// gitlab_group_hook_resend_event — resend a specific group hook event.
-		groupUpdateSpec("hook_resend_event", toolutil.RouteAction(client, ResendHookEventOutput), toolGroupHookResend),
+		// gitlab_group_hook_list — list group webhooks (Premium/Ultimate).
+		groupPremiumSpec(groupReadSpec("hook_list", toolutil.RouteAction(client, ListHooks), "gitlab_group_hook_list")),
+		// gitlab_group_hook_get — fetch a single group webhook by ID (Premium/Ultimate).
+		groupPremiumSpec(groupReadSpec("hook_get", toolutil.RouteAction(client, GetHook), "gitlab_group_hook_get")),
+		// gitlab_group_hook_add — create a new group webhook (Premium/Ultimate).
+		groupPremiumSpec(groupCreateSpec("hook_add", toolutil.RouteAction(client, AddHook), toolGroupHookAdd)),
+		// gitlab_group_hook_edit — update an existing group webhook (Premium/Ultimate).
+		groupPremiumSpec(groupUpdateSpec("hook_edit", toolutil.RouteAction(client, EditHook), "gitlab_group_hook_edit")),
+		// gitlab_group_hook_delete — delete a group webhook (Premium/Ultimate, destructive).
+		groupPremiumSpec(groupDeleteSpec("hook_delete", toolutil.DestructiveVoidAction(client, DeleteHook), "gitlab_group_hook_delete")),
+		// gitlab_group_hook_set_custom_header — set a custom header on a group webhook (Premium/Ultimate).
+		groupPremiumSpec(groupUpdateSpec("hook_set_custom_header", toolutil.RouteAction(client, SetHookCustomHeaderOutput), toolGroupHookSetHeader)),
+		// gitlab_group_hook_delete_custom_header — delete a custom header from a group webhook (Premium/Ultimate, destructive).
+		groupPremiumSpec(groupDeleteSpec("hook_delete_custom_header", toolutil.DestructiveVoidAction(client, DeleteHookCustomHeader), toolGroupHookDelHeader)),
+		// gitlab_group_hook_set_url_variable — set a templated URL variable on a group webhook (Premium/Ultimate).
+		groupPremiumSpec(groupUpdateSpec("hook_set_url_variable", toolutil.RouteAction(client, SetHookURLVariableOutput), toolGroupHookSetURLVar)),
+		// gitlab_group_hook_delete_url_variable — delete a URL variable from a group webhook (Premium/Ultimate, destructive).
+		groupPremiumSpec(groupDeleteSpec("hook_delete_url_variable", toolutil.DestructiveVoidAction(client, DeleteHookURLVariable), toolGroupHookDelURLVar)),
+		// gitlab_group_hook_test — trigger a test group hook event (Premium/Ultimate).
+		groupPremiumSpec(groupUpdateSpec("hook_test", toolutil.RouteAction(client, TestHookOutput), toolGroupHookTest)),
+		// gitlab_group_hook_resend_event — resend a specific group hook event (Premium/Ultimate).
+		groupPremiumSpec(groupUpdateSpec("hook_resend_event", toolutil.RouteAction(client, ResendHookEventOutput), toolGroupHookResend)),
 		// gitlab_group_share_with_group — share a group with another group (Groups API).
 		groupCreateSpec("share_with_group", toolutil.RouteAction(client, ShareGroupWithGroup), "gitlab_group_share_with_group"),
 		// gitlab_group_unshare_from_group — revoke a group-to-group share (Groups API, destructive).

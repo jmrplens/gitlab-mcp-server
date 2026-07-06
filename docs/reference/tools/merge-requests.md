@@ -536,9 +536,9 @@ Set the status of an external status check for a project merge request. Requires
 | 25 | `gitlab_mr_reset_spent_time` | Time Tracking | Update |
 | 26 | `gitlab_mr_time_stats` | Time Tracking | Read |
 | 27 | `gitlab_mr_create_todo` | Todo | Create |
-| 28 | `gitlab_mr_dependency_create` | Dependencies | Create |
-| 29 | `gitlab_mr_dependency_delete` | Dependencies | Delete |
-| 30 | `gitlab_mr_dependencies_list` | Dependencies | Read |
+| 28 | `gitlab_mr_dependency_create` | Dependencies (Premium/Ultimate) | Create |
+| 29 | `gitlab_mr_dependency_delete` | Dependencies (Premium/Ultimate) | Delete |
+| 30 | `gitlab_mr_dependencies_list` | Dependencies (Premium/Ultimate) | Read |
 | 31 | `gitlab_mr_approval_state` | Approval Rules | Read |
 | 32 | `gitlab_mr_approval_rules` | Approval Rules | Read |
 | 33 | `gitlab_mr_approval_config` | Approval Rules | Read |

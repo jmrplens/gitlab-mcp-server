@@ -237,6 +237,8 @@ List users provisioned for a GitLab group via SAML/SCIM (Premium/Ultimate). Supp
 
 ## Group Webhooks
 
+> Group webhooks (Premium/Ultimate) deliver group-wide events to external endpoints. GitLab Free/CE responds 404 to the whole `/groups/:id/hooks` namespace, and the MCP catalog gates these tools to Premium and Ultimate tiers.
+
 ### `gitlab_group_hook_list`
 
 List webhooks configured for a GitLab group. Returns hook URL, enabled events, SSL verification status, and creation date with pagination.
@@ -923,17 +925,17 @@ Delete a group markdown upload by secret and filename.
 | 23 | `gitlab_remove_billable_group_member` | Members (legacy) | Delete |
 | 24 | `gitlab_issue_list_group` | Members (legacy) | Read |
 | 25 | `gitlab_group_list_provisioned_users` | Members (legacy) | Read |
-| 26 | `gitlab_group_hook_list` | Webhooks | Read |
-| 27 | `gitlab_group_hook_get` | Webhooks | Read |
-| 28 | `gitlab_group_hook_add` | Webhooks | Create |
-| 29 | `gitlab_group_hook_edit` | Webhooks | Update |
-| 30 | `gitlab_group_hook_delete` | Webhooks | Delete |
-| 31 | `gitlab_group_hook_test` | Webhooks | Update |
-| 32 | `gitlab_group_hook_resend_event` | Webhooks | Update |
-| 33 | `gitlab_group_hook_set_custom_header` | Webhooks | Update |
-| 34 | `gitlab_group_hook_delete_custom_header` | Webhooks | Delete |
-| 35 | `gitlab_group_hook_set_url_variable` | Webhooks | Update |
-| 36 | `gitlab_group_hook_delete_url_variable` | Webhooks | Delete |
+| 26 | `gitlab_group_hook_list` | Webhooks (Premium/Ultimate) | Read |
+| 27 | `gitlab_group_hook_get` | Webhooks (Premium/Ultimate) | Read |
+| 28 | `gitlab_group_hook_add` | Webhooks (Premium/Ultimate) | Create |
+| 29 | `gitlab_group_hook_edit` | Webhooks (Premium/Ultimate) | Update |
+| 30 | `gitlab_group_hook_delete` | Webhooks (Premium/Ultimate) | Delete |
+| 31 | `gitlab_group_hook_test` | Webhooks (Premium/Ultimate) | Update |
+| 32 | `gitlab_group_hook_resend_event` | Webhooks (Premium/Ultimate) | Update |
+| 33 | `gitlab_group_hook_set_custom_header` | Webhooks (Premium/Ultimate) | Update |
+| 34 | `gitlab_group_hook_delete_custom_header` | Webhooks (Premium/Ultimate) | Delete |
+| 35 | `gitlab_group_hook_set_url_variable` | Webhooks (Premium/Ultimate) | Update |
+| 36 | `gitlab_group_hook_delete_url_variable` | Webhooks (Premium/Ultimate) | Delete |
 | 37 | `gitlab_group_member_get` | Member Management | Read |
 | 38 | `gitlab_group_member_get_inherited` | Member Management | Read |
 | 39 | `gitlab_group_member_remove` | Member Management | Delete |

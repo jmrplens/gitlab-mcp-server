@@ -29,15 +29,15 @@ All measurements are against the current source tree. The catalog is built in-me
 
 | Configuration                | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ---------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default) | Free/CE  |             2 |               865 | n/a                 |              2,180 |        31,758 |       33,938 |
-| `dynamic` / `minimal`        | Free/CE  |             2 |               865 | n/a                 |              2,180 |         1,088 |        3,268 |
-| `meta` / `full` (opaque)     | Free/CE  |            33 |               865 | `opaque`            |            136,940 |        31,758 |      168,698 |
-| `meta` / `minimal` (opaque)  | Free/CE  |            33 |               865 | `opaque`            |            136,940 |         1,088 |      138,028 |
-| `meta` / `full` (compact)    | Free/CE  |            33 |               865 | `compact`           |            203,560 |        31,758 |      235,318 |
-| `meta` / `minimal` (compact) | Free/CE  |            33 |               865 | `compact`           |            203,560 |         1,088 |      204,648 |
-| `meta` / `full` (full)       | Free/CE  |            33 |               865 | `full`              |            291,261 |        31,758 |      323,019 |
-| `meta` / `minimal` (full)    | Free/CE  |            33 |               865 | `full`              |            291,261 |         1,088 |      292,349 |
-| `individual` / `full`        | Free/CE  |           861 |               861 | n/a                 |            780,655 |        31,758 |      812,413 |
+| `dynamic` / `full` (default) | Free/CE  |             2 |               851 | n/a                 |              2,180 |        31,758 |       33,938 |
+| `dynamic` / `minimal`        | Free/CE  |             2 |               851 | n/a                 |              2,180 |         1,088 |        3,268 |
+| `meta` / `full` (opaque)     | Free/CE  |            33 |               851 | `opaque`            |            135,719 |        31,758 |      167,477 |
+| `meta` / `minimal` (opaque)  | Free/CE  |            33 |               851 | `opaque`            |            135,719 |         1,088 |      136,807 |
+| `meta` / `full` (compact)    | Free/CE  |            33 |               851 | `compact`           |            200,984 |        31,758 |      232,742 |
+| `meta` / `minimal` (compact) | Free/CE  |            33 |               851 | `compact`           |            200,984 |         1,088 |      202,072 |
+| `meta` / `full` (full)       | Free/CE  |            33 |               851 | `full`              |            287,396 |        31,758 |      319,154 |
+| `meta` / `minimal` (full)    | Free/CE  |            33 |               851 | `full`              |            287,396 |         1,088 |      288,484 |
+| `individual` / `full`        | Free/CE  |           847 |               847 | n/a                 |            767,635 |        31,758 |      799,393 |
 | `dynamic` / `full` (default) | Premium  |             2 |             1,003 | n/a                 |              2,180 |        31,758 |       33,938 |
 | `dynamic` / `minimal`        | Premium  |             2 |             1,003 | n/a                 |              2,180 |         1,088 |        3,268 |
 | `meta` / `full` (opaque)     | Premium  |            39 |             1,003 | `opaque`            |            157,308 |        31,758 |      189,066 |

@@ -110,12 +110,12 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		mergeRequestReadSpec("related_issues", toolutil.RouteAction(client, RelatedIssues), "gitlab_mr_related_issues"),
 		// gitlab_mr_create_todo — add a to-do item on the MR for the caller.
 		mergeRequestCreateSpec("create_todo", toolutil.RouteAction(client, CreateTodo), "gitlab_mr_create_todo"),
-		// gitlab_mr_dependency_create — add a blocking dependency.
-		mergeRequestCreateSpec("dependency_create", toolutil.RouteAction(client, CreateDependency), "gitlab_mr_dependency_create"),
-		// gitlab_mr_dependency_delete — remove a blocking dependency (destructive).
-		mergeRequestDeleteSpec("dependency_delete", toolutil.RouteAction(client, DeleteDependencyOutput), "gitlab_mr_dependency_delete"),
-		// gitlab_mr_dependencies_list — list blocking dependencies.
-		mergeRequestReadSpec("dependencies_list", toolutil.RouteAction(client, GetDependencies), "gitlab_mr_dependencies_list"),
+		// gitlab_mr_dependency_create — add a blocking dependency (Premium/Ultimate).
+		mergeRequestPremiumSpec(mergeRequestCreateSpec("dependency_create", toolutil.RouteAction(client, CreateDependency), "gitlab_mr_dependency_create")),
+		// gitlab_mr_dependency_delete — remove a blocking dependency (Premium/Ultimate, destructive).
+		mergeRequestPremiumSpec(mergeRequestDeleteSpec("dependency_delete", toolutil.RouteAction(client, DeleteDependencyOutput), "gitlab_mr_dependency_delete")),
+		// gitlab_mr_dependencies_list — list blocking dependencies (Premium/Ultimate).
+		mergeRequestPremiumSpec(mergeRequestReadSpec("dependencies_list", toolutil.RouteAction(client, GetDependencies), "gitlab_mr_dependencies_list")),
 	}
 }
 
@@ -192,6 +192,14 @@ func mergeRequestUpdateSpec(name string, route toolutil.ActionRoute, individualT
 // [mergeRequestOptions].
 func mergeRequestDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewDeleteActionSpec(name, route, mergeRequestOptions(name, individualTool))
+}
+
+// mergeRequestPremiumSpec marks a spec as a GitLab Premium/Ultimate action.
+// Merge request dependencies require Premium per
+// doc/user/project/merge_requests/dependencies.md.
+func mergeRequestPremiumSpec(spec toolutil.ActionSpec) toolutil.ActionSpec {
+	spec.Edition = "premium"
+	return spec
 }
 
 // mergeRequestDestructiveUpdateIndividualSpec builds a destructive

@@ -534,9 +534,10 @@ func assertCatalogMissingAction(t *testing.T, catalog *actioncatalog.Catalog, ac
 
 const (
 	// expectedBaseDynamicCatalogActions identifies the expected base (Free tier)
-	// dynamic catalog actions. 865 = 866 −1 group_milestone_burndown gated to
-	// Premium (burndown_events endpoint is Premium/Ultimate). See cmd/audit_edition_tier.
-	expectedBaseDynamicCatalogActions = 865
+	// dynamic catalog actions. 851 = 865 −11 group webhooks −3 MR dependencies
+	// gated to Premium (group_webhooks.md and merge request dependencies are
+	// Premium/Ultimate). See cmd/audit_edition_tier.
+	expectedBaseDynamicCatalogActions = 851
 	// expectedEnterpriseDynamicCatalogActions identifies the expected enterprise dynamic catalog actions constant used by this package.
 	// 1069 = 1066 + 3 security scan profile actions (attach/detach/list_project_statuses, Ultimate, client-go v2.45.0).
 	expectedEnterpriseDynamicCatalogActions = 1069
