@@ -50,7 +50,9 @@ func TestIndividual_MRExtras(t *testing.T) {
 		t.Skip("individual session not configured")
 	}
 
-	ctx, cancel := e2eTimeoutContext(300*time.Second, 600*time.Second)
+	// 480s base: the shared MR readiness wait plus the pipeline retry loop
+	// (MR "checking" state can last minutes under full-suite load) both fit.
+	ctx, cancel := e2eTimeoutContext(480*time.Second, 600*time.Second)
 	defer cancel()
 
 	proj, branch := setupMRProject(ctx, t, sess.individual)
@@ -173,9 +175,11 @@ func TestIndividual_MRExtras(t *testing.T) {
 		commitFileCreateOrUpdate(ctx, t, sess.individual, proj, pipeBranch.Name, ".gitlab-ci.yml", mrExtrasCIYAML, "ci: add MR pipeline configuration")
 		pipeMR := createMR(ctx, t, sess.individual, proj, pipeBranch.Name, defaultBranch, "MR extras pipeline fixture")
 
-		// A short retry still absorbs momentary Sidekiq lag right after MR
-		// creation.
-		out, pErr := retryWithBackoffInterval(ctx, t, "create MR pipeline", 6, 5*time.Second, func(int) (pipelines.Output, bool, string, error) {
+		// Right after creation the MR sits in detailed_merge_status
+		// "checking" for minutes under load; the pipelines endpoint answers
+		// 405 until the MR settles and 400 while the CI config propagates —
+		// both are transient states, so poll patiently over both.
+		out, pErr := retryWithBackoffInterval(ctx, t, "create MR pipeline", 20, 8*time.Second, func(int) (pipelines.Output, bool, string, error) {
 			out, callErr := callToolOn[pipelines.Output](ctx, sess.individual, "gitlab_mr_create_pipeline", mergerequests.CreatePipelineInput{
 				ProjectID: proj.pidOf(),
 				MRIID:     pipeMR.IID,
@@ -183,8 +187,8 @@ func TestIndividual_MRExtras(t *testing.T) {
 			if callErr == nil {
 				return out, false, "", nil
 			}
-			retryable := isHTTPStatus(callErr, 400) || isRetryableError(callErr)
-			return out, retryable, "CI config not yet visible on the merge request ref", callErr
+			retryable := isHTTPStatus(callErr, 400) || isHTTPStatus(callErr, 405) || isRetryableError(callErr)
+			return out, retryable, "merge request not yet ready for pipeline creation", callErr
 		})
 		requireNoError(t, pErr, "create MR pipeline")
 		requireTruef(t, out.ID > 0, "expected non-zero pipeline ID")
