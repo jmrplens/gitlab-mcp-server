@@ -22,6 +22,7 @@ permissions:
 jobs:
   fly:
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 20
     env:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
