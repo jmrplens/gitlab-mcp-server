@@ -241,15 +241,30 @@ func TestExpectedTierForAction_DocOverrideFetchFailure_KeepsPageTier(t *testing.
 }
 
 // TestExpectedTierForAction_ExceptionWinsOverPageTier verifies that an audited
-// per-action exception still takes precedence over the domain page tier.
+// per-action exception still takes precedence over the domain page tier,
+// covering a cross-page exception (project push rules) and a live-verified
+// correction (merge_request.approval_state: the doc lists it as Free but
+// GitLab 19.0.1 CE answers 404, so the audited tier is Premium).
 func TestExpectedTierForAction_ExceptionWinsOverPageTier(t *testing.T) {
 	res := newOfflineResolver(t, t.TempDir())
 
-	got, note := res.expectedTierForAction(context.Background(), "project.push_rule_get", tierFree)
-	if got != tierPremium {
-		t.Errorf("exception tier = %v; want premium", got)
+	cases := []struct {
+		id       string
+		wantNote string
+	}{
+		{"project.push_rule_get", ""},
+		{"merge_request.approval_state", "live-verified Premium"},
 	}
-	if note == "" {
-		t.Error("exception note is empty; want the audited rationale")
+	for _, c := range cases {
+		got, note := res.expectedTierForAction(context.Background(), c.id, tierFree)
+		if got != tierPremium {
+			t.Errorf("expectedTierForAction(%q) tier = %v; want premium", c.id, got)
+		}
+		if note == "" {
+			t.Errorf("expectedTierForAction(%q) note is empty; want the audited rationale", c.id)
+		}
+		if c.wantNote != "" && !strings.Contains(note, c.wantNote) {
+			t.Errorf("expectedTierForAction(%q) note = %q; want it to contain %q", c.id, note, c.wantNote)
+		}
 	}
 }

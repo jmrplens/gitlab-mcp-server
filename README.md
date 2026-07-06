@@ -356,23 +356,23 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 ### File counts
 
-| Category                 |     Files |       Lines |
-| ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       966 |     192,750 |
-| Unit tests (`_test.go`)  |       534 |     296,899 |
-| End-to-end tests         |       169 |      43,866 |
-| **Total**                | **1,669** | **533,515** |
+| Category                 |     Files |         Lines |
+| ------------------------ | --------: | ------------: |
+| Source (`.go`, non-test) |     1,932 |       385,520 |
+| Unit tests (`_test.go`)  |     1,069 |       594,450 |
+| End-to-end tests         |       338 |        87,756 |
+| **Total**                | **3,339** | **1,067,726** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,394 |
-| — exported (public)             |  2,590 |
-| — unexported (private)          |  4,804 |
-| Unit test functions (`TestXxx`) | 11,510 |
-| Subtests (`t.Run(...)`)         |  2,875 |
-| End-to-end test functions       |    376 |
+| Source functions                | 14,788 |
+| — exported (public)             |  5,180 |
+| — unexported (private)          |  9,608 |
+| Unit test functions (`TestXxx`) | 23,036 |
+| Subtests (`t.Run(...)`)         |  5,762 |
+| End-to-end test functions       |    752 |
 
 ### Ratios worth noting
 
@@ -380,43 +380,43 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.54× more tests than code |
 | Average source file length         |                 ~199 lines |
-| Average test file length           |                 ~555 lines |
-| Comment lines in source            |  20,960 (~10.9% of source) |
+| Average test file length           |                 ~556 lines |
+| Comment lines in source            |  41,936 (~10.9% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
-| Pattern                            | Count |
-| ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,597 |
-| `defer` statements                 |   828 |
-| `struct` types defined             | 2,708 |
-| `//nolint` suppressions            |   204 |
-| `TODO` / `FIXME` / `HACK` comments |     3 |
+| Pattern                            |  Count |
+| ---------------------------------- | -----: |
+| `if err != nil` checks             | 13,194 |
+| `defer` statements                 |  1,656 |
+| `struct` types defined             |  5,416 |
+| `//nolint` suppressions            |    408 |
+| `TODO` / `FIXME` / `HACK` comments |      6 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   227 |
+| Go packages                    |   454 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   242 |
+| Git commits                    |   240 |
 | Unique contributors            |     4 |
 
 ### Hall of fame
 
-| Record              | File                                                     |
-| ------------------- | -------------------------------------------------------- |
-| Longest source file | `internal/tools/projects/projects.go` — 3,795 lines      |
-| Longest test file   | `internal/tools/projects/projects_test.go` — 7,931 lines |
+| Record              | File                                                                                               |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| Longest source file | `.claude/worktrees/agent-abf61238361d69d0c/internal/tools/projects/projects.go` — 3,795 lines      |
+| Longest test file   | `.claude/worktrees/agent-abf61238361d69d0c/internal/tools/projects/projects_test.go` — 7,931 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,504 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,466 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~7,009 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 24,936 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
