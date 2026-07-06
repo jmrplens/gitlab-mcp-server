@@ -358,10 +358,10 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       966 |     192,760 |
+| Source (`.go`, non-test) |       966 |     192,762 |
 | Unit tests (`_test.go`)  |       535 |     297,536 |
 | End-to-end tests         |       169 |      43,890 |
-| **Total**                | **1,670** | **534,186** |
+| **Total**                | **1,670** | **534,188** |
 
 ### Functions
 
@@ -381,7 +381,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | Test lines vs source lines         | 1.54× more tests than code |
 | Average source file length         |                 ~199 lines |
 | Average test file length           |                 ~556 lines |
-| Comment lines in source            |  20,968 (~10.9% of source) |
+| Comment lines in source            |  20,970 (~10.9% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
@@ -401,7 +401,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | Go packages                    |   227 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   240 |
+| Git commits                    |   242 |
 | Unique contributors            |     4 |
 
 ### Hall of fame
