@@ -510,6 +510,7 @@ export default defineConfig({
 						{
 							slug: "capabilities/completions",
 							label: "Completions",
+							translations: { es: "Autocompletado" },
 						},
 						{
 							slug: "capabilities/progress",
