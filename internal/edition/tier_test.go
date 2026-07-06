@@ -106,3 +106,14 @@ func TestTierOrderingHelpers(t *testing.T) {
 		t.Errorf("String() mismatch: %q %q %q", Free, Premium, Ultimate)
 	}
 }
+
+// TestTierString_FreeAndUnknown verifies String() maps Free to "free" and
+// coerces unknown tier values to "free" as the safe default branch.
+func TestTierString_FreeAndUnknown(t *testing.T) {
+	if got := Free.String(); got != "free" {
+		t.Errorf("Free.String() = %q, want free", got)
+	}
+	if got := Tier(99).String(); got != "free" {
+		t.Errorf("Tier(99).String() = %q, want free (default branch)", got)
+	}
+}

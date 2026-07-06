@@ -815,3 +815,31 @@ func TestIntegrationFromService_Branches(t *testing.T) {
 		})
 	}
 }
+
+// TestFormatSetJiraMarkdown_RendersUpdateAndHints verifies the Jira upsert
+// formatter renders the integration item plus the write-only credentials
+// hint through the shared Markdown registry.
+func TestFormatSetJiraMarkdown_RendersUpdateAndHints(t *testing.T) {
+	md := formatSetJiraMarkdownString(SetJiraOutput{Integration: IntegrationItem{Slug: "jira", Active: true}})
+	for _, want := range []string{"Jira Integration Updated", "write-only"} {
+		if !strings.Contains(md, want) {
+			t.Errorf("formatSetJiraMarkdownString missing %q in:\n%s", want, md)
+		}
+	}
+}
+
+// TestListGroupIntegrations_SkipsNullElements verifies that a JSON null
+// element inside the integrations array is skipped instead of producing an
+// empty item or a panic (the nil-guard branch of the list loop).
+func TestListGroupIntegrations_SkipsNullElements(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `[null, {"id": 3, "slug": "datadog", "active": true}]`)
+	}))
+	out, err := ListGroupIntegrations(t.Context(), client, ListGroupIntegrationsInput{GroupID: "42"})
+	if err != nil {
+		t.Fatalf("ListGroupIntegrations error = %v", err)
+	}
+	if len(out.Integrations) != 1 || out.Integrations[0].Slug != "datadog" {
+		t.Errorf("Integrations = %+v, want single datadog item (null skipped)", out.Integrations)
+	}
+}

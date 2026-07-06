@@ -21,6 +21,7 @@ func RegisterAll(server *mcp.Server, client *gitlabclient.Client, tier edition.T
 	}
 	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{
 		IncludeStandaloneUtilities: true,
+		SchemaCacheKey:             "individual|" + tier.String(),
 	})
 	RegisterMetaStandaloneTools(server, client)
 }

@@ -677,3 +677,45 @@ func TestPrintSection(t *testing.T) {
 		t.Error("section missing separator")
 	}
 }
+
+// TestRunCLI_StepInstallError_Propagates verifies RunCLI aborts with the
+// step-one error when the install prompt cannot be read (exhausted input),
+// covering the stepInstall error return inside RunCLI.
+func TestRunCLI_StepInstallError_Propagates(t *testing.T) {
+	stubLoadExistingConfig(t)
+
+	var w bytes.Buffer
+	err := RunCLI("1.0.0", strings.NewReader(""), &w)
+	if err == nil || !strings.Contains(err.Error(), "reading input") {
+		t.Fatalf("RunCLI error = %v, want reading input", err)
+	}
+}
+
+// TestStepInstall_ExecutablePathError verifies stepInstall fails with a
+// wrapped error when the running binary path cannot be resolved. The
+// executable hook injects the failure because os.Executable practically
+// never fails on a real host.
+func TestStepInstall_ExecutablePathError(t *testing.T) {
+	stubOsExecutable(t, "", errors.New("no executable"))
+
+	var w bytes.Buffer
+	p := NewPrompter(strings.NewReader("\n"), &w)
+	_, err := stepInstall(p, &w)
+	if err == nil || !strings.Contains(err.Error(), "getting executable path") {
+		t.Fatalf("stepInstall error = %v, want getting executable path", err)
+	}
+}
+
+// TestStepInstall_ExpandPathError verifies stepInstall fails with a wrapped
+// error when the user-provided install directory starts with ~ but no home
+// directory can be resolved from the environment.
+func TestStepInstall_ExpandPathError(t *testing.T) {
+	unsetHomeEnv(t)
+
+	var w bytes.Buffer
+	p := NewPrompter(strings.NewReader("~gitlab-install\n"), &w)
+	_, err := stepInstall(p, &w)
+	if err == nil || !strings.Contains(err.Error(), "expanding path") {
+		t.Fatalf("stepInstall error = %v, want expanding path", err)
+	}
+}

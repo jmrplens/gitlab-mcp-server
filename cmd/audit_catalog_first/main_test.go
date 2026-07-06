@@ -16,22 +16,43 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 )
 
+// cachedCoverageReport builds the repository coverage report once and shares
+// it across the test functions of this package: buildCoverageReport is a pure
+// analysis over the working tree (~3s per run), so re-running it per test only
+// multiplied CPU time. Tests must treat the returned report as read-only.
+var coverageReportOnce sync.Once
+
+var (
+	cachedReport    coverageReport
+	errCachedReport error
+)
+
+func cachedCoverageReport(t *testing.T) coverageReport {
+	t.Helper()
+	coverageReportOnce.Do(func() {
+		root, err := cmdutil.RepositoryRoot("../..")
+		if err != nil {
+			errCachedReport = err
+			return
+		}
+		cachedReport, errCachedReport = buildCoverageReport(root)
+	})
+	if errCachedReport != nil {
+		t.Fatalf("buildCoverageReport() error = %v", errCachedReport)
+	}
+	return cachedReport
+}
+
 // TestBuildCoverageReport_ClassifiesKeyDomains verifies BuildCoverageReport classifies key domains.
 func TestBuildCoverageReport_ClassifiesKeyDomains(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot("../..")
-	if err != nil {
-		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
-	}
-	report, err := buildCoverageReport(root)
-	if err != nil {
-		t.Fatalf("buildCoverageReport() error = %v", err)
-	}
+	report := cachedCoverageReport(t)
 	if report.SchemaVersion != schemaVersion {
 		t.Fatalf("SchemaVersion = %d, want %d", report.SchemaVersion, schemaVersion)
 	}
@@ -189,14 +210,7 @@ func TestCatalogActionsMissingIndividualProjectionPolicy(t *testing.T) {
 
 // TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked verifies BuildCoverageReport when core source domains are spec backed.
 func TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot("../..")
-	if err != nil {
-		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
-	}
-	report, err := buildCoverageReport(root)
-	if err != nil {
-		t.Fatalf("buildCoverageReport() error = %v", err)
-	}
+	report := cachedCoverageReport(t)
 
 	assertSpecBackedDomains(t, report, []string{
 		"branches",
@@ -216,14 +230,7 @@ func TestBuildCoverageReport_CoreSourceDomainsAreSpecBacked(t *testing.T) {
 
 // TestBuildCoverageReport_CICDDomainsAreSpecBacked verifies BuildCoverageReport when cicd domains are spec backed.
 func TestBuildCoverageReport_CICDDomainsAreSpecBacked(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot("../..")
-	if err != nil {
-		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
-	}
-	report, err := buildCoverageReport(root)
-	if err != nil {
-		t.Fatalf("buildCoverageReport() error = %v", err)
-	}
+	report := cachedCoverageReport(t)
 
 	assertSpecBackedDomains(t, report, []string{
 		"cicatalog",
@@ -245,14 +252,7 @@ func TestBuildCoverageReport_CICDDomainsAreSpecBacked(t *testing.T) {
 
 // TestBuildCoverageReport_CollaborationDomainsAreSpecBacked verifies BuildCoverageReport when collaboration domains are spec backed.
 func TestBuildCoverageReport_CollaborationDomainsAreSpecBacked(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot("../..")
-	if err != nil {
-		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
-	}
-	report, err := buildCoverageReport(root)
-	if err != nil {
-		t.Fatalf("buildCoverageReport() error = %v", err)
-	}
+	report := cachedCoverageReport(t)
 
 	assertSpecBackedDomains(t, report, []string{
 		"boards",
@@ -273,14 +273,7 @@ func TestBuildCoverageReport_CollaborationDomainsAreSpecBacked(t *testing.T) {
 
 // TestBuildCoverageReport_NoteAndDiscussionDomainsAreSpecBacked verifies BuildCoverageReport when note and discussion domains are spec backed.
 func TestBuildCoverageReport_NoteAndDiscussionDomainsAreSpecBacked(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot("../..")
-	if err != nil {
-		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
-	}
-	report, err := buildCoverageReport(root)
-	if err != nil {
-		t.Fatalf("buildCoverageReport() error = %v", err)
-	}
+	report := cachedCoverageReport(t)
 
 	assertSpecBackedDomains(t, report, []string{
 		"commitdiscussions",
@@ -302,14 +295,7 @@ func TestBuildCoverageReport_NoteAndDiscussionDomainsAreSpecBacked(t *testing.T)
 
 // TestBuildCoverageReport_AccessAndSecurityDomainsAreSpecBacked verifies BuildCoverageReport when access and security domains are spec backed.
 func TestBuildCoverageReport_AccessAndSecurityDomainsAreSpecBacked(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot("../..")
-	if err != nil {
-		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
-	}
-	report, err := buildCoverageReport(root)
-	if err != nil {
-		t.Fatalf("buildCoverageReport() error = %v", err)
-	}
+	report := cachedCoverageReport(t)
 
 	assertSpecBackedDomains(t, report, []string{
 		"accessrequests",
@@ -332,14 +318,7 @@ func TestBuildCoverageReport_AccessAndSecurityDomainsAreSpecBacked(t *testing.T)
 
 // TestBuildCoverageReport_AdminPlatformDomainsAreSpecBacked verifies BuildCoverageReport when admin platform domains are spec backed.
 func TestBuildCoverageReport_AdminPlatformDomainsAreSpecBacked(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot("../..")
-	if err != nil {
-		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
-	}
-	report, err := buildCoverageReport(root)
-	if err != nil {
-		t.Fatalf("buildCoverageReport() error = %v", err)
-	}
+	report := cachedCoverageReport(t)
 
 	assertSourceSpecBackedDomains(t, report, []string{
 		"applications",
@@ -366,14 +345,7 @@ func TestBuildCoverageReport_AdminPlatformDomainsAreSpecBacked(t *testing.T) {
 
 // TestBuildCoverageReport_PackageDeploymentStorageDomainsAreSpecBacked verifies BuildCoverageReport when package deployment storage domains are spec backed.
 func TestBuildCoverageReport_PackageDeploymentStorageDomainsAreSpecBacked(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot("../..")
-	if err != nil {
-		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
-	}
-	report, err := buildCoverageReport(root)
-	if err != nil {
-		t.Fatalf("buildCoverageReport() error = %v", err)
-	}
+	report := cachedCoverageReport(t)
 
 	assertSpecBackedDomains(t, report, []string{
 		"containerregistry",
@@ -401,14 +373,7 @@ func TestBuildCoverageReport_PackageDeploymentStorageDomainsAreSpecBacked(t *tes
 
 // TestBuildCoverageReport_GroupProjectEnterpriseDomainsAreSpecBacked verifies BuildCoverageReport when group project enterprise domains are spec backed.
 func TestBuildCoverageReport_GroupProjectEnterpriseDomainsAreSpecBacked(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot("../..")
-	if err != nil {
-		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
-	}
-	report, err := buildCoverageReport(root)
-	if err != nil {
-		t.Fatalf("buildCoverageReport() error = %v", err)
-	}
+	report := cachedCoverageReport(t)
 
 	assertSpecBackedDomains(t, report, []string{
 		"epicissues",
@@ -433,14 +398,7 @@ func TestBuildCoverageReport_GroupProjectEnterpriseDomainsAreSpecBacked(t *testi
 
 // TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked verifies BuildCoverageReport when utility template domains are spec backed.
 func TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot("../..")
-	if err != nil {
-		t.Fatalf("cmdutil.RepositoryRoot() error = %v", err)
-	}
-	report, err := buildCoverageReport(root)
-	if err != nil {
-		t.Fatalf("buildCoverageReport() error = %v", err)
-	}
+	report := cachedCoverageReport(t)
 
 	assertSpecBackedDomains(t, report, []string{
 		"avatar",

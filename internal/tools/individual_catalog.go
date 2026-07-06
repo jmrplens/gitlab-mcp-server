@@ -35,6 +35,12 @@ type IndividualCatalogRegisterOptions struct {
 	AllowedToolNames           []string
 	ExcludeToolNames           []string
 	DescriptionForTool         func(actioncatalog.Action) string
+	// SchemaCacheKey, when non-empty, enables process-wide reuse of compiled
+	// tool schemas across registrations (see toolutil.CompileToolSchemas).
+	// It must uniquely identify the catalog's schema content — RegisterAll
+	// passes the instance tier. Leave empty when the schemas may vary for
+	// the same tier (none of the production surfaces do).
+	SchemaCacheKey string
 }
 
 // individualCatalogRegisterState carries the gating sets and registered
@@ -94,6 +100,9 @@ func registerIndividualCatalogAction(server *mcp.Server, group actioncatalog.Gro
 	tool := mustIndividualToolFromCatalogAction(action, group.Icons, state.opts)
 	if state.opts.ReadOnlyOnly && (tool.Annotations == nil || !tool.Annotations.ReadOnlyHint) {
 		return
+	}
+	if state.opts.SchemaCacheKey != "" {
+		toolutil.CompileToolSchemas(tool, state.opts.SchemaCacheKey+"|"+toolName)
 	}
 	state.registered[toolName] = struct{}{}
 	mcp.AddTool[map[string]any, any](server, tool, individualCatalogHandler(toolName, action, formatResult, state.opts))

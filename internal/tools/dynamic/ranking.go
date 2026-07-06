@@ -113,6 +113,9 @@ type searchDocument struct {
 	SchemaEnums      []string
 	SchemaDescTerms  []string
 	FlatText         string
+	// WordizedValues maps each searchable multi-word value above to its
+	// precomputed space-joined word form (see wordizeSearchDocument).
+	WordizedValues map[string]string
 }
 
 type searchIndex struct {

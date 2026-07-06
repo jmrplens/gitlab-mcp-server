@@ -681,6 +681,11 @@ func runStdio(ctx context.Context) error {
 	return serveStdio(ctx, server)
 }
 
+// sharedSchemaCache caches resolved tool schemas across every MCP server
+// created by this process (stdio startup and the per-token servers of the
+// HTTP pool). See mcp.ServerOptions.SchemaCache.
+var sharedSchemaCache = mcp.NewSchemaCache()
+
 // createServer builds a fully configured [*mcp.Server] with all tools,
 // resources, and prompts registered for the given GitLab client.
 // Used both by stdio mode (single call) and by the HTTP server pool factory.
@@ -743,6 +748,11 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 			)
 		},
 		KeepAlive: 30 * time.Second,
+		// Shared across every server this process creates: in HTTP mode the
+		// pool builds one MCP server per token+URL, and with the compiled
+		// schema pointers from toolutil.CompileToolSchemas this cache skips
+		// schema resolution on every registration after the first.
+		SchemaCache: sharedSchemaCache,
 	})
 
 	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)

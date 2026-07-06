@@ -10,6 +10,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
@@ -440,6 +441,28 @@ func TestEmptyParamDescription_FlagsBoilerplate(t *testing.T) {
 	}
 }
 
+// cachedFullReport runs the full discovery analysis (gapsOnly=false,
+// minAliases=3) once under its own mock client and shares the result across
+// this package's tests: buildReport spins an in-memory MCP server over the
+// full catalog (~4s per run). Tests must treat the returned report as
+// read-only.
+var (
+	fullReportOnce sync.Once
+	fullReport     report
+	errFullReport  error
+)
+
+func cachedFullReport(t *testing.T) report {
+	t.Helper()
+	fullReportOnce.Do(func() {
+		fullReport, errFullReport = buildReport(false, 3)
+	})
+	if errFullReport != nil {
+		t.Fatalf("buildReport: %v", errFullReport)
+	}
+	return fullReport
+}
+
 // TestBuildReport_LinkCreateBatchGoldStandard exercises the auditor against
 // the canonical link_create / link_create_batch cluster using synthetic
 // specs that mirror the BEFORE/AFTER signature from the discovery eval
@@ -530,10 +553,7 @@ func TestBuildReport_LinkCreateBatchGoldStandard(t *testing.T) {
 		t.Fatalf("auditclient.NewMock: %v", err)
 	}
 	defer cleanup2()
-	rep, err := buildReport(false, 3)
-	if err != nil {
-		t.Fatalf("buildReport: %v", err)
-	}
+	rep := cachedFullReport(t)
 	var liveFlags []string
 	for _, pr := range rep.Packages {
 		if pr.Package != "releaselinks" {
@@ -570,10 +590,7 @@ func TestBuildReport_Deterministic(t *testing.T) {
 
 // TestBuildReport_NonEmptyActions verifies the auditor reports actions.
 func TestBuildReport_NonEmptyActions(t *testing.T) {
-	rep, err := buildReport(false, 3)
-	if err != nil {
-		t.Fatalf("buildReport: %v", err)
-	}
+	rep := cachedFullReport(t)
 	if rep.Summary.Actions == 0 {
 		t.Fatalf("no actions analyzed: %+v", rep.Summary)
 	}
@@ -598,10 +615,7 @@ func TestBuildReport_NonEmptyActions(t *testing.T) {
 // the work that drives it down to zero. See plan/post-pr190-cleanup.md
 // META-001 §5 (Phases).
 func TestBuildReport_LiveBaseline(t *testing.T) {
-	rep, err := buildReport(false, 3)
-	if err != nil {
-		t.Fatalf("buildReport: %v", err)
-	}
+	rep := cachedFullReport(t)
 	t.Logf("discovery baseline: actions=%d errors=%d warnings=%d packages=%d clusters=%d",
 		rep.Summary.Actions, rep.Summary.Errors, rep.Summary.Warnings,
 		rep.Summary.Packages, len(rep.Clusters))

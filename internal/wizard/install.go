@@ -22,6 +22,18 @@ var installBinaryFn = installBinaryImpl
 // Tests override it to avoid executing real binaries.
 var getInstalledVersionFn = getInstalledVersionImpl
 
+// osExecutableFn resolves the path of the running binary. Tests override it
+// to exercise executable-resolution error branches deterministically.
+var osExecutableFn = os.Executable
+
+// filepathAbsFn resolves a path to its absolute form. Tests override it to
+// exercise path-resolution error branches deterministically.
+var filepathAbsFn = filepath.Abs
+
+// chmodFn sets file permissions after install. Tests override it to exercise
+// the permission error branch without an unwritable filesystem.
+var chmodFn = os.Chmod
+
 // InstallBinary copies the currently running binary to destDir.
 // Returns the full path of the installed binary. Skips copy if
 // the source and destination resolve to the same path.
@@ -30,7 +42,7 @@ func InstallBinary(destDir string) (string, error) {
 }
 
 func installBinaryImpl(destDir string) (string, error) {
-	srcPath, err := os.Executable()
+	srcPath, err := osExecutableFn()
 	if err != nil {
 		return "", fmt.Errorf("getting executable path: %w", err)
 	}
@@ -40,7 +52,7 @@ func installBinaryImpl(destDir string) (string, error) {
 	}
 
 	// Sanitize destDir to prevent path traversal.
-	cleanDir, err := filepath.Abs(filepath.Clean(destDir)) // #nosec G304 -- wizard install dir chosen by local user via setup UI
+	cleanDir, err := filepathAbsFn(filepath.Clean(destDir)) // #nosec G304 -- wizard install dir chosen by local user via setup UI
 	if err != nil {
 		return "", fmt.Errorf("resolving absolute path for %s: %w", destDir, err)
 	}
@@ -68,7 +80,7 @@ func installBinaryImpl(destDir string) (string, error) {
 	}
 
 	if runtime.GOOS != "windows" {
-		if err = os.Chmod(destPath, 0o700); err != nil { // #nosec G302 -- binary needs owner-only execute permission
+		if err = chmodFn(destPath, 0o700); err != nil { // #nosec G302 -- binary needs owner-only execute permission
 			return "", fmt.Errorf("setting permissions: %w", err)
 		}
 	}

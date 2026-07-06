@@ -3,6 +3,7 @@
 package wizard
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -269,4 +270,154 @@ func writeFakeVersionBinary(t *testing.T, output string) string {
 		t.Fatal(err)
 	}
 	return p
+}
+
+// stubOsExecutable overrides osExecutableFn to return the given path and
+// error, so executable-resolution branches can be exercised without
+// depending on the real running binary.
+func stubOsExecutable(t *testing.T, path string, err error) {
+	t.Helper()
+	orig := osExecutableFn
+	osExecutableFn = func() (string, error) { return path, err }
+	t.Cleanup(func() { osExecutableFn = orig })
+}
+
+// TestInstallBinaryImpl_ExecutablePathError verifies installBinaryImpl
+// surfaces a wrapped error when the running binary path cannot be resolved.
+func TestInstallBinaryImpl_ExecutablePathError(t *testing.T) {
+	stubOsExecutable(t, "", errors.New("no executable"))
+
+	_, err := installBinaryImpl(t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "getting executable path") {
+		t.Fatalf("installBinaryImpl error = %v, want getting executable path", err)
+	}
+}
+
+// TestInstallBinaryImpl_SymlinkResolutionError verifies installBinaryImpl
+// surfaces a wrapped error when the executable path cannot be resolved via
+// EvalSymlinks (e.g. the reported binary no longer exists on disk).
+func TestInstallBinaryImpl_SymlinkResolutionError(t *testing.T) {
+	stubOsExecutable(t, filepath.Join(t.TempDir(), "missing-binary"), nil)
+
+	_, err := installBinaryImpl(t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "resolving executable path") {
+		t.Fatalf("installBinaryImpl error = %v, want resolving executable path", err)
+	}
+}
+
+// stubFilepathAbs overrides filepathAbsFn to return the given path and
+// error, so absolute-path resolution branches can be exercised
+// deterministically (filepath.Abs only fails when the working directory is
+// unavailable).
+func stubFilepathAbs(t *testing.T, path string, err error) {
+	t.Helper()
+	orig := filepathAbsFn
+	filepathAbsFn = func(string) (string, error) { return path, err }
+	t.Cleanup(func() { filepathAbsFn = orig })
+}
+
+// TestInstallBinaryImpl_AbsPathError verifies installBinaryImpl surfaces a
+// wrapped error when the destination directory cannot be resolved to an
+// absolute path.
+func TestInstallBinaryImpl_AbsPathError(t *testing.T) {
+	stubFilepathAbs(t, "", errors.New("no working directory"))
+
+	_, err := installBinaryImpl("relative-dir")
+	if err == nil || !strings.Contains(err.Error(), "resolving absolute path for relative-dir") {
+		t.Fatalf("installBinaryImpl error = %v, want resolving absolute path", err)
+	}
+}
+
+// TestInstallBinaryImpl_PathTraversalRejected verifies the defensive
+// traversal guard: if the resolved destination still contains a ".."
+// component, installation is rejected. The Abs hook injects such a path
+// because filepath.Abs normally cleans it away.
+func TestInstallBinaryImpl_PathTraversalRejected(t *testing.T) {
+	stubFilepathAbs(t, filepath.Join(string(filepath.Separator), "opt")+string(filepath.Separator)+".."+string(filepath.Separator)+"bin", nil)
+
+	_, err := installBinaryImpl("ignored")
+	if err == nil || !strings.Contains(err.Error(), "invalid install directory (contains path traversal)") {
+		t.Fatalf("installBinaryImpl error = %v, want path traversal rejection", err)
+	}
+}
+
+// TestInstallBinaryImpl_SourceEqualsDestination_SkipsCopy verifies the
+// short-circuit branch: when the running binary already resides at the
+// destination path, installBinaryImpl returns the destination without
+// copying or modifying anything.
+func TestInstallBinaryImpl_SourceEqualsDestination_SkipsCopy(t *testing.T) {
+	dir := t.TempDir()
+	existing := filepath.Join(dir, DefaultBinaryName())
+	if err := os.WriteFile(existing, []byte("fake binary"), 0o755); err != nil { //nolint:gosec // executable fixture required for install path comparison
+		t.Fatal(err)
+	}
+	stubOsExecutable(t, existing, nil)
+
+	got, err := installBinaryImpl(dir)
+	if err != nil {
+		t.Fatalf("installBinaryImpl error = %v", err)
+	}
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(absDir, DefaultBinaryName()); got != want {
+		t.Fatalf("installBinaryImpl = %q, want %q", got, want)
+	}
+	content, err := os.ReadFile(existing) // #nosec G304 -- reading back the fixture path created above
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(content) != "fake binary" {
+		t.Fatalf("destination content = %q, want untouched fixture (no copy)", content)
+	}
+}
+
+// TestInstallBinaryImpl_CopyFails_DestinationIsDirectory verifies
+// installBinaryImpl surfaces a wrapped copy error when the destination file
+// path is occupied by a directory, which makes os.Create fail on any
+// platform.
+func TestInstallBinaryImpl_CopyFails_DestinationIsDirectory(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, DefaultBinaryName()), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := installBinaryImpl(dir)
+	if err == nil || !strings.Contains(err.Error(), "copying binary") {
+		t.Fatalf("installBinaryImpl error = %v, want copying binary", err)
+	}
+}
+
+// TestInstallBinaryImpl_ChmodError verifies installBinaryImpl surfaces a
+// wrapped permissions error when the post-copy chmod fails. The chmod hook
+// injects the failure because chmod on a freshly created file cannot fail
+// naturally. Skipped on Windows where the chmod branch is not executed.
+func TestInstallBinaryImpl_ChmodError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod branch is skipped on Windows")
+	}
+	orig := chmodFn
+	chmodFn = func(string, os.FileMode) error { return errors.New("chmod denied") }
+	t.Cleanup(func() { chmodFn = orig })
+
+	_, err := installBinaryImpl(t.TempDir())
+	if err == nil || !strings.Contains(err.Error(), "setting permissions") {
+		t.Fatalf("installBinaryImpl error = %v, want setting permissions", err)
+	}
+}
+
+// TestCopyFile_SourceIsDirectory_ReturnsCopyError verifies copyFile returns
+// the io.Copy read error when the source path is a directory: opening a
+// directory succeeds on Unix, so the failure surfaces during the copy.
+func TestCopyFile_SourceIsDirectory_ReturnsCopyError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("opening a directory for read behaves differently on Windows")
+	}
+	src := t.TempDir()
+	dst := filepath.Join(t.TempDir(), "out")
+
+	if err := copyFile(src, dst); err == nil {
+		t.Fatal("copyFile(directory, file) error = nil, want read error")
+	}
 }

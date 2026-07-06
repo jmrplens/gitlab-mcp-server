@@ -20,6 +20,11 @@ const (
 	UIModeCLI UIMode = "cli"
 )
 
+// isInteractiveTerminalFn detects an interactive terminal for the auto-mode
+// cascade. Tests override it to exercise the TUI fallback branch without a
+// real TTY.
+var isInteractiveTerminalFn = IsInteractiveTerminal
+
 // Run executes the setup wizard using the selected UI mode.
 // In "auto" mode it cascades: Web UI → Bubble Tea TUI → plain CLI.
 func Run(version string, mode UIMode, r io.Reader, w io.Writer) error {
@@ -50,7 +55,7 @@ func runCascade(version string, r io.Reader, w io.Writer) error {
 	}
 
 	// Try Bubble Tea TUI — requires a real terminal
-	if IsInteractiveTerminal() {
+	if isInteractiveTerminalFn() {
 		if err := RunTUI(version, w); err == nil {
 			return nil
 		}

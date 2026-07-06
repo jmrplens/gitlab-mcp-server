@@ -747,3 +747,91 @@ func TestHookSubOps_CanceledContext(t *testing.T) {
 		t.Error("ResendHookEvent: expected context error")
 	}
 }
+
+// TestHookHelpers_APIError_ReturnsWrappedError verifies that every custom
+// header / URL variable / test / resend hook helper wraps a failing GitLab
+// API response into its operation-prefixed error instead of returning nil,
+// covering the error branch of each of the six twin handlers.
+func TestHookHelpers_APIError_ReturnsWrappedError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	tests := []struct {
+		name   string
+		call   func() error
+		wantOp string
+	}{
+		{name: "set custom header", wantOp: "groupSetHookCustomHeader", call: func() error {
+			return SetHookCustomHeader(t.Context(), client, SetHookCustomHeaderInput{GroupID: "42", HookID: 7, Key: "X-K", Value: "v"})
+		}},
+		{name: "delete custom header", wantOp: "groupDeleteHookCustomHeader", call: func() error {
+			return DeleteHookCustomHeader(t.Context(), client, DeleteHookCustomHeaderInput{GroupID: "42", HookID: 7, Key: "X-K"})
+		}},
+		{name: "set url variable", wantOp: "groupSetHookURLVariable", call: func() error {
+			return SetHookURLVariable(t.Context(), client, SetHookURLVariableInput{GroupID: "42", HookID: 7, Key: "k", Value: "v"})
+		}},
+		{name: "delete url variable", wantOp: "groupDeleteHookURLVariable", call: func() error {
+			return DeleteHookURLVariable(t.Context(), client, DeleteHookURLVariableInput{GroupID: "42", HookID: 7, Key: "k"})
+		}},
+		{name: "test hook", wantOp: "groupTestHook", call: func() error {
+			return TestHook(t.Context(), client, TestHookInput{GroupID: "42", HookID: 7, Trigger: "push_events"})
+		}},
+		{name: "resend hook event", wantOp: "groupResendHookEvent", call: func() error {
+			return ResendHookEvent(t.Context(), client, ResendHookEventInput{GroupID: "42", HookID: 7, HookEventID: 3})
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.call()
+			if err == nil {
+				t.Fatalf("%s: expected error from failing API, got nil", tt.name)
+			}
+			if !strings.Contains(err.Error(), tt.wantOp) {
+				t.Errorf("%s: error %q does not carry op prefix %q", tt.name, err, tt.wantOp)
+			}
+		})
+	}
+}
+
+// TestHookOutputWrappers_APIError_PropagatesError verifies the legacy
+// *Output wrappers propagate the underlying helper error (covering their
+// error pass-through branches) instead of returning a success payload.
+func TestHookOutputWrappers_APIError_PropagatesError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{name: "set custom header output", call: func() error {
+			_, err := SetHookCustomHeaderOutput(t.Context(), client, SetHookCustomHeaderInput{GroupID: "42", HookID: 7, Key: "X-K", Value: "v"})
+			return err
+		}},
+		{name: "set url variable output", call: func() error {
+			_, err := SetHookURLVariableOutput(t.Context(), client, SetHookURLVariableInput{GroupID: "42", HookID: 7, Key: "k", Value: "v"})
+			return err
+		}},
+		{name: "test hook output", call: func() error {
+			_, err := TestHookOutput(t.Context(), client, TestHookInput{GroupID: "42", HookID: 7, Trigger: "push_events"})
+			return err
+		}},
+		{name: "resend hook event output", call: func() error {
+			_, err := ResendHookEventOutput(t.Context(), client, ResendHookEventInput{GroupID: "42", HookID: 7, HookEventID: 3})
+			return err
+		}},
+		{name: "delete push rule output", call: func() error {
+			_, err := DeletePushRuleOutput(t.Context(), client, DeletePushRuleInput{GroupID: "42"})
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.call(); err == nil {
+				t.Fatalf("%s: expected propagated error from failing API, got nil", tt.name)
+			}
+		})
+	}
+}

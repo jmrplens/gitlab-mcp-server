@@ -158,3 +158,47 @@ func TestToOutput_Nil(t *testing.T) {
 		t.Error("expected Active false, got true")
 	}
 }
+
+// TestFormatOutputMarkdown_EmptyAndPopulated verifies the single-identity
+// formatter returns an empty string for a zero-value identity (the
+// nothing-to-render guard) and renders UID/UserID/Active for a populated one.
+func TestFormatOutputMarkdown_EmptyAndPopulated(t *testing.T) {
+	if got := FormatOutputMarkdown(Output{}); got != "" {
+		t.Errorf("FormatOutputMarkdown(zero) = %q, want empty", got)
+	}
+	got := FormatOutputMarkdown(Output{ExternalUID: "uid-1", UserID: 7, Active: true})
+	for _, want := range []string{"## SCIM Identity", "`uid-1`", "**User ID**: 7", "**Active**: true"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("FormatOutputMarkdown missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+// TestFormatListMarkdown_EmptyAndRows verifies the list formatter emits the
+// no-identities message for an empty list and a table row per identity plus
+// the count header otherwise.
+func TestFormatListMarkdown_EmptyAndRows(t *testing.T) {
+	if got := FormatListMarkdown(ListOutput{}); got != "No SCIM identities found." {
+		t.Errorf("FormatListMarkdown(empty) = %q", got)
+	}
+	got := FormatListMarkdown(ListOutput{Identities: []Output{
+		{ExternalUID: "a", UserID: 1, Active: true},
+		{ExternalUID: "b", UserID: 2},
+	}})
+	for _, want := range []string{"## SCIM Identities (2)", "| `a` | 1 | true |", "| `b` | 2 | false |"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("FormatListMarkdown missing %q in:\n%s", want, got)
+		}
+	}
+}
+
+// TestFormatUpdateMarkdown_RendersConfirmation verifies the update formatter
+// surfaces the Updated flag and message text.
+func TestFormatUpdateMarkdown_RendersConfirmation(t *testing.T) {
+	got := FormatUpdateMarkdown(UpdateOutput{Updated: true, Message: "ok"})
+	for _, want := range []string{"## SCIM Identity Updated", "**Updated**: true", "**Message**: ok"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("FormatUpdateMarkdown missing %q in:\n%s", want, got)
+		}
+	}
+}

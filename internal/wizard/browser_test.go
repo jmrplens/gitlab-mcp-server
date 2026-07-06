@@ -1,6 +1,7 @@
 package wizard
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -203,5 +204,66 @@ func TestOpenBrowser_NonLinux(t *testing.T) {
 
 	if err := openBrowser("http://127.0.0.1:65535/test"); err != nil {
 		t.Fatalf("openBrowser() error = %v, want nil from stub", err)
+	}
+}
+
+// TestHasDisplayOn_PlatformBranches verifies graphical-environment detection
+// for every GOOS branch with injected environment lookups: Linux/BSD honor
+// DISPLAY and WAYLAND_DISPLAY, all other platforms always report a display.
+// The extracted helper makes each branch testable on any host.
+func TestHasDisplayOn_PlatformBranches(t *testing.T) {
+	env := func(vars map[string]string) func(string) string {
+		return func(key string) string { return vars[key] }
+	}
+
+	tests := []struct {
+		name string
+		goos string
+		vars map[string]string
+		want bool
+	}{
+		{name: "linux without display vars", goos: "linux", vars: map[string]string{}, want: false},
+		{name: "linux with DISPLAY", goos: "linux", vars: map[string]string{"DISPLAY": ":1"}, want: true},
+		{name: "linux with WAYLAND_DISPLAY", goos: "linux", vars: map[string]string{"WAYLAND_DISPLAY": "wayland-1"}, want: true},
+		{name: "freebsd without display vars", goos: "freebsd", vars: map[string]string{}, want: false},
+		{name: "darwin always true", goos: "darwin", vars: map[string]string{}, want: true},
+		{name: "windows always true", goos: "windows", vars: map[string]string{}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasDisplayOn(tt.goos, env(tt.vars)); got != tt.want {
+				t.Errorf("hasDisplayOn(%q, %v) = %v, want %v", tt.goos, tt.vars, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestBrowserCommand_PlatformBranches verifies the browser launch command for
+// every GOOS branch: rundll32 on Windows, open on macOS, xdg-open elsewhere.
+// The extracted builder makes each branch testable on any host without
+// starting a real browser process.
+func TestBrowserCommand_PlatformBranches(t *testing.T) {
+	const url = "http://127.0.0.1:8080"
+	tests := []struct {
+		goos string
+		want []string
+	}{
+		{goos: "windows", want: []string{"rundll32", "url.dll,FileProtocolHandler", url}},
+		{goos: "darwin", want: []string{"open", url}},
+		{goos: "linux", want: []string{"xdg-open", url}},
+		{goos: "freebsd", want: []string{"xdg-open", url}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.goos, func(t *testing.T) {
+			cmd := browserCommand(context.Background(), tt.goos, url)
+			if len(cmd.Args) != len(tt.want) {
+				t.Fatalf("browserCommand(%q) args = %v, want %v", tt.goos, cmd.Args, tt.want)
+			}
+			for i, arg := range tt.want {
+				if cmd.Args[i] != arg {
+					t.Fatalf("browserCommand(%q) args = %v, want %v", tt.goos, cmd.Args, tt.want)
+				}
+			}
+		})
 	}
 }

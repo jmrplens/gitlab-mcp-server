@@ -339,12 +339,15 @@ func keysOf(m map[string]any) []string {
 	return out
 }
 
-// metaSession sets the active param-schema mode, registers meta-tools, and
-// resets the mode on cleanup so other tests see the default (opaque).
+// metaSessionWithMode sets the active param-schema mode, registers meta-tools
+// on a FRESH isolated session, and resets the mode on cleanup so other tests
+// see the default (opaque). It must not use the shared meta session: the mode
+// shapes the tool schemas at registration time, so a cached registration
+// would leak one mode's schemas into the other modes' assertions.
 func metaSessionWithMode(t *testing.T, mode string, handler http.Handler) *mcp.ClientSession {
 	t.Helper()
 	t.Cleanup(SetMetaParamSchemaScoped(mode))
-	return newMetaMCPSession(t, handler, false)
+	return newIsolatedMetaMCPSession(t, handler, false)
 }
 
 // TestMetaSchema_DispatchParity verifies that the same {action, params}

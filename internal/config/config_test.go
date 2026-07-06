@@ -1763,3 +1763,27 @@ func TestValidate_RateLimitBurstRequiredWithRPS(t *testing.T) {
 		t.Fatal("Load() expected error for RPS > 0 with burst = 0, got nil")
 	}
 }
+
+// TestConfigEnterprise_NilReceivers verifies the nil-receiver guards of
+// Config.Enterprise and ServerConfig.Enterprise return false instead of
+// panicking, so callers can probe unset configurations safely.
+func TestConfigEnterprise_NilReceivers(t *testing.T) {
+	var c *Config
+	if c.Enterprise() {
+		t.Error("nil *Config Enterprise() = true, want false")
+	}
+	var s *ServerConfig
+	if s.Enterprise() {
+		t.Error("nil *ServerConfig Enterprise() = true, want false")
+	}
+}
+
+// TestResolveTierEnv_InvalidEnterpriseValue verifies a non-boolean
+// GITLAB_ENTERPRISE value yields the explicit invalid-value error instead of
+// silently defaulting a tier.
+func TestResolveTierEnv_InvalidEnterpriseValue(t *testing.T) {
+	_, _, err := resolveTierEnv("", "maybe")
+	if err == nil || !strings.Contains(err.Error(), "invalid GITLAB_ENTERPRISE value") {
+		t.Errorf("resolveTierEnv err = %v, want invalid GITLAB_ENTERPRISE error", err)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"go/types"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
@@ -134,19 +135,44 @@ func TestPathHelpers(t *testing.T) {
 	}
 }
 
+// cachedBuildReport runs the full struct analysis once per gapsOnly mode and
+// shares the result across this package's tests: buildReport is a pure
+// (~3-5s) analysis over the working tree, so per-test re-runs only multiplied
+// CPU time. Tests must treat the returned report as read-only.
+// TestBuildReport_Deterministic still performs one fresh run and compares it
+// against the cached one, preserving the two-independent-runs property.
+var (
+	cachedReportOnce [2]sync.Once
+	cachedReports    [2]report
+	cachedReportErrs [2]error
+)
+
+func cachedBuildReport(t *testing.T, gapsOnly bool) report {
+	t.Helper()
+	idx := 0
+	if gapsOnly {
+		idx = 1
+	}
+	cachedReportOnce[idx].Do(func() {
+		root, err := cmdutil.RepositoryRoot(".")
+		if err != nil {
+			cachedReportErrs[idx] = err
+			return
+		}
+		cachedReports[idx], cachedReportErrs[idx] = buildReport(root, gapsOnly)
+	})
+	if cachedReportErrs[idx] != nil {
+		t.Fatalf("buildReport: %v", cachedReportErrs[idx])
+	}
+	return cachedReports[idx]
+}
+
 // TestBuildReport_DetectsKnownBranchGaps runs the auditor against the real
 // repository as a methodology regression guard: it verifies the resolver still
 // attributes a healthy number of SDK↔MCP input/output pairs across the tools tree
 // (a broken resolver would collapse these toward zero).
 func TestBuildReport_DetectsKnownBranchGaps(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot(".")
-	if err != nil {
-		t.Fatalf("repository root: %v", err)
-	}
-	rep, err := buildReport(root, false)
-	if err != nil {
-		t.Fatalf("buildReport: %v", err)
-	}
+	rep := cachedBuildReport(t, false)
 	if rep.Summary.Packages == 0 || rep.Summary.InputPairs == 0 || rep.Summary.OutputPairs == 0 {
 		t.Fatalf("summary looks empty: %+v", rep.Summary)
 	}
@@ -174,10 +200,7 @@ func TestBuildReport_Deterministic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("repository root: %v", err)
 	}
-	first, err := buildReport(root, true)
-	if err != nil {
-		t.Fatalf("first buildReport: %v", err)
-	}
+	first := cachedBuildReport(t, true)
 	second, err := buildReport(root, true)
 	if err != nil {
 		t.Fatalf("second buildReport: %v", err)
@@ -237,14 +260,7 @@ func TestExtraOutputFields_FlagsInventedScalars(t *testing.T) {
 func TestExtraOutputFields_DiffPairKindGating(t *testing.T) {
 	// Synthesize via the real diffPair against the repository to confirm input
 	// gaps never carry extras. Output extras are exercised in the unit test above.
-	root, err := cmdutil.RepositoryRoot(".")
-	if err != nil {
-		t.Fatalf("repository root: %v", err)
-	}
-	rep, err := buildReport(root, true)
-	if err != nil {
-		t.Fatalf("buildReport: %v", err)
-	}
+	rep := cachedBuildReport(t, true)
 	for _, pr := range rep.Packages {
 		for _, g := range pr.Gaps {
 			if g.Kind == "input" && len(g.ExtraFields) > 0 {
@@ -351,14 +367,7 @@ func TestExtraOutputFields_SuppressesAllowlistedRename(t *testing.T) {
 //   - the issue family (issues, issuenotes, issuediscussions) reports ZERO
 //     extras after the cleanup.
 func TestBuildReport_NoFalsePositiveExtras(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot(".")
-	if err != nil {
-		t.Fatalf("repository root: %v", err)
-	}
-	rep, err := buildReport(root, false)
-	if err != nil {
-		t.Fatalf("buildReport: %v", err)
-	}
+	rep := cachedBuildReport(t, false)
 
 	// No output pair may be formed against a non-result SDK struct.
 	for _, pr := range rep.Packages {
@@ -563,14 +572,7 @@ func TestDisjointPhantomInput_SkipsDisjointHelperOptions(t *testing.T) {
 // for FIX B: the mrdiscussions/mrdraftnotes DiffPosition input struct must pair
 // only against gl.PositionOptions, never the list/diff options a helper builds.
 func TestBuildReport_NoDiffPositionPhantomInput(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot(".")
-	if err != nil {
-		t.Fatalf("repository root: %v", err)
-	}
-	rep, err := buildReport(root, false)
-	if err != nil {
-		t.Fatalf("buildReport: %v", err)
-	}
+	rep := cachedBuildReport(t, false)
 	for _, name := range []string{"mrdiscussions", "mrdraftnotes"} {
 		pr := findPackage(t, rep, name)
 		for _, g := range pr.Gaps {
@@ -590,14 +592,7 @@ func TestBuildReport_NoDiffPositionPhantomInput(t *testing.T) {
 // MergeRequest) must report a single joined-SDK output gap with no extras and
 // none of the MergeRequest-only fields reported as missing.
 func TestBuildReport_UnionsMultiConverterOutput(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot(".")
-	if err != nil {
-		t.Fatalf("repository root: %v", err)
-	}
-	rep, err := buildReport(root, false)
-	if err != nil {
-		t.Fatalf("buildReport: %v", err)
-	}
+	rep := cachedBuildReport(t, false)
 	mr := findPackage(t, rep, "mergerequests")
 	var outputs []gap
 	for _, g := range mr.Gaps {
@@ -679,14 +674,7 @@ func TestDocGroundedSuppression(t *testing.T) {
 // removed action/shape), and raise it when new pairs are added so the guard
 // stays tight.
 func TestBuildReport_AuditedPairFloors(t *testing.T) {
-	root, err := cmdutil.RepositoryRoot(".")
-	if err != nil {
-		t.Fatalf("repository root: %v", err)
-	}
-	rep, err := buildReport(root, false)
-	if err != nil {
-		t.Fatalf("buildReport: %v", err)
-	}
+	rep := cachedBuildReport(t, false)
 
 	const minInputPairs, minOutputPairs = 554, 324
 	if rep.Summary.InputPairs < minInputPairs {

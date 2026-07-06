@@ -30,11 +30,22 @@ const (
 //go:embed webui_assets/index.html
 var webAssets embed.FS
 
+// readWebAssetFn reads embedded web UI assets. Tests override it to exercise
+// the internal-error branch of serveIndex, which is otherwise unreachable
+// with a valid embedded filesystem.
+var readWebAssetFn = webAssets.ReadFile
+
+// listenFn opens the local TCP listener for the web wizard. Tests override it
+// to force listener startup failures or to inject a listener they control.
+var listenFn = func(ctx context.Context, network, address string) (net.Listener, error) {
+	var lc net.ListenConfig
+	return lc.Listen(ctx, network, address)
+}
+
 // RunWebUI starts a local HTTP server and opens the setup wizard in the browser.
 // It blocks until the user completes configuration or the context is cancelled.
 func RunWebUI(version string, w io.Writer) error {
-	var lc net.ListenConfig
-	listener, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	listener, err := listenFn(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		return fmt.Errorf("starting web server: %w", err)
 	}
@@ -82,7 +93,7 @@ func RunWebUI(version string, w io.Writer) error {
 
 // serveIndex writes the embedded browser wizard HTML page.
 func serveIndex(rw http.ResponseWriter, _ *http.Request) {
-	data, err := webAssets.ReadFile("webui_assets/index.html")
+	data, err := readWebAssetFn("webui_assets/index.html")
 	if err != nil {
 		http.Error(rw, "Internal error", http.StatusInternalServerError)
 		return
