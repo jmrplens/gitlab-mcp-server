@@ -437,7 +437,7 @@ For zero-config token management, use OAuth mode. Users authorize through the br
 ./gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth
 ```
 
-MCP clients that support OAuth 2.1 (VS Code, Claude Code) discover the authorization server automatically via `/.well-known/oauth-protected-resource`. See [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) for creating the required GitLab OAuth Application.
+MCP clients that support OAuth 2.1 (VS Code, Claude Code) discover the authorization server automatically via `/.well-known/oauth-protected-resource`. See [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) for creating the required GitLab OAuth Application.
 
 :::caution
 Clients must be configured with the `clientId` from the GitLab OAuth Application and `api` scope. Without `clientId`, clients fall back to Dynamic Client Registration (DCR) which assigns the `mcp` scope instead of `api`, causing most operations to fail. See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for per-client examples.

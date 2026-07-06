@@ -437,7 +437,7 @@ Para gestión de tokens sin configuración manual, usa el modo OAuth. Los usuari
 ./gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth
 ```
 
-Los clientes MCP que soportan OAuth 2.1 (VS Code, Claude Code) descubren el servidor de autorización automáticamente vía `/.well-known/oauth-protected-resource`. Consulta [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) para crear la Aplicación OAuth de GitLab requerida.
+Los clientes MCP que soportan OAuth 2.1 (VS Code, Claude Code) descubren el servidor de autorización automáticamente vía `/.well-known/oauth-protected-resource`. Consulta [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) para crear la Aplicación OAuth de GitLab requerida.
 
 :::caution
 Los clientes deben configurarse con el `clientId` de la Aplicación OAuth de GitLab y el scope `api`. Sin `clientId`, los clientes recurren al Registro Dinámico de Clientes (DCR) que asigna el scope `mcp` en lugar de `api`, causando que la mayoría de las operaciones fallen. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para ejemplos por cliente.
