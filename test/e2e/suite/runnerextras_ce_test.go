@@ -45,6 +45,9 @@ func TestIndividual_RunnerExtras(t *testing.T) {
 	if sess.individual == nil {
 		t.Skip("individual session not configured")
 	}
+	if sess.meta == nil {
+		t.Skip("meta session not configured (group fixture uses the meta surface)")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
@@ -81,6 +84,9 @@ func TestIndividual_RunnerExtras(t *testing.T) {
 //
 // Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: individual. Admin token required.
 func TestIndividual_RunnerExtrasInstanceRegToken(t *testing.T) {
+	if sess.individual == nil {
+		t.Skip("individual session not configured")
+	}
 	if !isDockerMode() {
 		t.Skip("instance registration token reset mutates instance-global state; Docker mode only")
 	}

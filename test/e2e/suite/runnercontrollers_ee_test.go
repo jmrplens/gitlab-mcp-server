@@ -43,6 +43,14 @@ func runnerCtlFindRunnerID(ctx context.Context, t *testing.T) int64 {
 	if len(runners) == 0 {
 		return 0
 	}
+	// Prefer the compose-registered runner by its known description so a
+	// leftover throwaway runner from a previous partial run cannot win by
+	// list ordering.
+	for _, runner := range runners {
+		if runner.Description == "e2e-docker-runner" {
+			return runner.ID
+		}
+	}
 	return runners[0].ID
 }
 

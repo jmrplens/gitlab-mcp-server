@@ -125,6 +125,11 @@ func pkgImgUploadBlob(ctx context.Context, t *testing.T, registryURL, repository
 	requireTruef(t, status == http.StatusAccepted, "blob upload start: status %d, body %s", status, payload)
 	location := headers.Get("Location")
 	requireTruef(t, location != "", "expected blob upload Location header")
+	// The registry may return a relative upload path; resolve it against the
+	// registry base URL before the follow-up PUT.
+	if strings.HasPrefix(location, "/") {
+		location = strings.TrimSuffix(registryURL, "/") + location
+	}
 
 	separator := "?"
 	if strings.Contains(location, "?") {

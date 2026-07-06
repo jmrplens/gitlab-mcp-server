@@ -183,7 +183,11 @@ func scanSuite(suiteDir string, catalogIDs map[string]struct{}) (suiteIndex, err
 	return index, nil
 }
 
-// indexFile records every action reference found in one suite file.
+// indexFile records every action reference found in one suite file. Comment
+// lines are skipped so documentation prose can name tools and action IDs
+// without counting as coverage; within code, any reference counts — the
+// audit is deliberately reference-based rather than call-shape-based, since
+// suite call sites take several forms (helpers, wrappers, table entries).
 func indexFile(index *suiteIndex, fileName string, lines []string, catalogIDs map[string]struct{}) {
 	addRef := func(refs map[string]map[string]struct{}, key string) {
 		if refs[key] == nil {
@@ -192,6 +196,9 @@ func indexFile(index *suiteIndex, fileName string, lines []string, catalogIDs ma
 		refs[key][fileName] = struct{}{}
 	}
 	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "//") {
+			continue
+		}
 		for _, match := range actionIDRe.FindAllStringSubmatch(line, -1) {
 			if _, ok := catalogIDs[match[1]]; ok {
 				addRef(index.dynamicIDs, match[1])
