@@ -70,7 +70,7 @@ func TestListRegisteredTools_NilServerAndCancelledContext(t *testing.T) {
 
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := ListRegisteredTools(cancelled, mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil), "x"); err == nil {
+	if _, listErr := ListRegisteredTools(cancelled, mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil), "x"); listErr == nil {
 		t.Error("cancelled context: expected connect/list error, got nil")
 	}
 }

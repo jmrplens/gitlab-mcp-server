@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+// currentGOOS carries runtime.GOOS through a variable so the GOOS-
+// parameterized helpers below keep varied call sites on every platform
+// (a direct constant argument would trip unparam on single-OS CI runners).
+var currentGOOS = runtime.GOOS
+
 var linuxDialogToolDirs = []string{"/usr/bin", "/bin"}
 
 var findLinuxDialogToolPath = fixedLinuxDialogToolPath
@@ -23,7 +28,7 @@ var pickDirectoryFn = pickDirectory
 // pickDirectory opens a native OS directory picker dialog and returns the selected path.
 // Uses PowerShell FolderBrowserDialog on Windows, osascript on macOS, zenity/kdialog on Linux.
 func pickDirectory(startDir string) (string, error) {
-	return pickDirectoryOn(runtime.GOOS, startDir)
+	return pickDirectoryOn(currentGOOS, startDir)
 }
 
 // pickDirectoryOn is the GOOS-parameterized implementation of pickDirectory,

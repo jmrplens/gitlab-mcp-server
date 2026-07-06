@@ -31,7 +31,7 @@ var coverageReportOnce sync.Once
 
 var (
 	cachedReport    coverageReport
-	cachedReportErr error
+	errCachedReport error
 )
 
 func cachedCoverageReport(t *testing.T) coverageReport {
@@ -39,13 +39,13 @@ func cachedCoverageReport(t *testing.T) coverageReport {
 	coverageReportOnce.Do(func() {
 		root, err := cmdutil.RepositoryRoot("../..")
 		if err != nil {
-			cachedReportErr = err
+			errCachedReport = err
 			return
 		}
-		cachedReport, cachedReportErr = buildCoverageReport(root)
+		cachedReport, errCachedReport = buildCoverageReport(root)
 	})
-	if cachedReportErr != nil {
-		t.Fatalf("buildCoverageReport() error = %v", cachedReportErr)
+	if errCachedReport != nil {
+		t.Fatalf("buildCoverageReport() error = %v", errCachedReport)
 	}
 	return cachedReport
 }

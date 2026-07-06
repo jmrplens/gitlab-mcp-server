@@ -449,16 +449,16 @@ func TestEmptyParamDescription_FlagsBoilerplate(t *testing.T) {
 var (
 	fullReportOnce sync.Once
 	fullReport     report
-	fullReportErr  error
+	errFullReport  error
 )
 
 func cachedFullReport(t *testing.T) report {
 	t.Helper()
 	fullReportOnce.Do(func() {
-		fullReport, fullReportErr = buildReport(false, 3)
+		fullReport, errFullReport = buildReport(false, 3)
 	})
-	if fullReportErr != nil {
-		t.Fatalf("buildReport: %v", fullReportErr)
+	if errFullReport != nil {
+		t.Fatalf("buildReport: %v", errFullReport)
 	}
 	return fullReport
 }

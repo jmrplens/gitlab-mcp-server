@@ -25,7 +25,7 @@ import (
 var (
 	siteStatsOnce   sync.Once
 	siteStatsShared siteStats
-	siteStatsErr    error
+	errSiteStats    error
 )
 
 func newSiteStats(t *testing.T) siteStats {
@@ -37,13 +37,13 @@ func newSiteStats(t *testing.T) siteStats {
 			GitLabToken: "audit-token", //#nosec G101 -- audit-only dummy token, not a real credential
 		})
 		if err != nil {
-			siteStatsErr = err
+			errSiteStats = err
 			return
 		}
 		siteStatsShared = generateSiteStats(client, gitLabComClient)
 	})
-	if siteStatsErr != nil {
-		t.Fatalf("create gitlab.com client: %v", siteStatsErr)
+	if errSiteStats != nil {
+		t.Fatalf("create gitlab.com client: %v", errSiteStats)
 	}
 	return siteStatsShared
 }
