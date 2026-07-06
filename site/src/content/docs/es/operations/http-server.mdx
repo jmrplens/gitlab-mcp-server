@@ -1,5 +1,5 @@
 ---
-title: Modo Servidor HTTP
+title: Modo servidor HTTP
 description: Despliega GitLab MCP Server como servicio HTTP multiusuario con autenticación por token en cada petición, pool aislado, OAuth y rate limiting.
 head:
   - tag: script
@@ -188,7 +188,7 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth
 }
 ```
 
-- **`clientId`**: El Application ID de tu Aplicación OAuth de GitLab (ver [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md))
+- **`clientId`**: El Application ID de tu Aplicación OAuth de GitLab (ver [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md))
 - **`scopes`**: Debe incluir `api` para funcionalidad completa de herramientas
 
 VS Code maneja el descubrimiento OAuth y la autorización automáticamente.
@@ -214,7 +214,7 @@ Claude Code descubre los metadatos OAuth y abre el navegador para la autorizaci�
 </Tabs>
 
 :::tip
-El modo OAuth requiere una Aplicación OAuth de GitLab. Consulta la guía [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) para instrucciones de configuración.
+El modo OAuth requiere una Aplicación OAuth de GitLab. Consulta la guía [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) para instrucciones de configuración.
 :::
 
 :::note
@@ -531,7 +531,7 @@ Esto reemplaza las máquinas en ejecución con la nueva versión atómicamente y
 
 ### OAuth en Fly.io
 
-El `fly.toml` incluido se ejecuta en **modo de autenticación legacy** (PAT por petición). El modo OAuth también está soportado pero requiere una URL pública estable conocida al inicio para que los endpoints de descubrimiento OAuth (`/.well-known/oauth-protected-resource`) anuncien los metadatos correctos. Para habilitar OAuth, establece `--auth-mode=oauth` y `--gitlab-url=<tu-default>` en el array `cmd`, y redespliega. Consulta [`docs/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) para la configuración de la Aplicación OAuth de GitLab.
+El `fly.toml` incluido se ejecuta en **modo de autenticación legacy** (PAT por petición). El modo OAuth también está soportado pero requiere una URL pública estable conocida al inicio para que los endpoints de descubrimiento OAuth (`/.well-known/oauth-protected-resource`) anuncien los metadatos correctos. Para habilitar OAuth, establece `--auth-mode=oauth` y `--gitlab-url=<tu-default>` en el array `cmd`, y redespliega. Consulta [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) para la configuración de la Aplicación OAuth de GitLab.
 
 ## Verificación de salud
 
