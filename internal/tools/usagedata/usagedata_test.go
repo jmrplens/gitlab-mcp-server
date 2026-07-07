@@ -150,6 +150,24 @@ func TestGetNonSQLMetrics_Error(t *testing.T) {
 	}
 }
 
+// TestGetNonSQLMetrics_NotFound_HintsAlternatives verifies that the GitLab 19
+// 404 (the endpoint is gone even with the usage_data_non_sql_metrics feature
+// flag) is wrapped with a hint pointing at the working alternatives.
+func TestGetNonSQLMetrics_NotFound_HintsAlternatives(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"error":"404 Not Found"}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := GetNonSQLMetrics(t.Context(), client, GetNonSQLMetricsInput{})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "unavailable on GitLab 19") ||
+		!strings.Contains(err.Error(), "gitlab_get_metric_definitions") {
+		t.Errorf("error = %q, want GitLab 19 unavailability hint with alternatives", err.Error())
+	}
+}
+
 // TestGetQueries verifies GetQueries.
 func TestGetQueries(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

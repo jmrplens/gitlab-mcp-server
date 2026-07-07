@@ -353,6 +353,23 @@ func TestSetURLVariable_Success(t *testing.T) {
 	}
 }
 
+// TestSetURLVariable_IllegalKey422_HintsKeyFormat verifies that a GitLab 19
+// 422 "Illegal key or value" response is wrapped with a hint about the accepted
+// key characters and the non-empty value requirement.
+func TestSetURLVariable_IllegalKey422_HintsKeyFormat(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"error":"Illegal key or value"}`)
+	}))
+
+	err := SetURLVariable(t.Context(), client, SetURLVariableInput{ID: 1, Key: "env1", Value: "prod"})
+	if err == nil {
+		t.Fatal("expected error for 422 Illegal key or value")
+	}
+	if !strings.Contains(err.Error(), "letters and underscores") {
+		t.Errorf("error = %q, want key-format hint", err.Error())
+	}
+}
+
 // TestDeleteURLVariable_Success verifies DeleteURLVariable when success.
 func TestDeleteURLVariable_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

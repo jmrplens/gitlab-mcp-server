@@ -384,6 +384,11 @@ func TestGet_NotFound(t *testing.T) {
 	if !strings.Contains(err.Error(), "not found") {
 		t.Errorf("error = %q, want 'not found'", err.Error())
 	}
+	// Draft catalog resources (no published release yet) also return null;
+	// the message must tell the model that a release is required first.
+	if !strings.Contains(err.Error(), "first release") {
+		t.Errorf("error = %q, want draft-release guidance", err.Error())
+	}
 }
 
 // TestGet_NullOptionalFields verifies the Get_NullOptionalFields handler.

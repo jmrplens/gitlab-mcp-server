@@ -293,7 +293,7 @@ func ListGroupEpicLabelEvents(ctx context.Context, client *gitlabclient.Client, 
 	events, resp, err := client.GL().ResourceLabelEvents.ListGroupEpicLabelEvents(string(input.GroupID), input.EpicIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListLabelEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_group_epic_label_events", err, http.StatusNotFound,
-			"epic label events require GitLab Premium/Ultimate — verify group_id and epic_iid (the per-group epic number) with gitlab_epic_get")
+			"epic label events require GitLab Premium/Ultimate on GitLab 18 or earlier; GitLab 19 removed the legacy epic REST API (epics became work items), so this endpoint returns 404 there regardless of tier — on GitLab 19 use the work item tools instead (epics are work items there; see gitlab_list_work_items), and on GitLab 18 verify group_id and epic_iid (the per-group epic number) with gitlab_epic_get")
 	}
 	return toLabelEventsOutput(events, resp), nil
 }
@@ -312,7 +312,7 @@ func GetGroupEpicLabelEvent(ctx context.Context, client *gitlabclient.Client, in
 	event, _, err := client.GL().ResourceLabelEvents.GetGroupEpicLabelEvent(string(input.GroupID), input.EpicIID, input.LabelEventID, gl.WithContext(ctx))
 	if err != nil {
 		return LabelEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_get_group_epic_label_event", err, http.StatusNotFound,
-			"epic label events require GitLab Premium/Ultimate — verify label_event_id with gitlab_list_group_epic_label_events")
+			"epic label events require GitLab Premium/Ultimate on GitLab 18 or earlier; GitLab 19 removed the legacy epic REST API (epics became work items), so this endpoint returns 404 there regardless of tier — on GitLab 19 inspect label changes through the work item tools instead (see gitlab_get_work_item), and on GitLab 18 verify label_event_id with gitlab_list_group_epic_label_events")
 	}
 	return toLabelEventOutput(event), nil
 }

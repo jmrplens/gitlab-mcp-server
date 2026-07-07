@@ -658,15 +658,33 @@ func TestCentralTierFilter_Invariants(t *testing.T) {
 			t.Errorf("Premium issue.create schema must include field %q", field)
 		}
 	}
+
+	// reviewer_assignment_strategy (client-go v2.46.0) is Premium: pruned from
+	// the Free project.create/project.update input schemas, present on Premium.
+	for _, id := range []actioncatalog.ActionID{"project.create", "project.update"} {
+		if actionHasInputProp(t, free, id, "reviewer_assignment_strategy") {
+			t.Errorf("Free %s schema must not advertise Premium field reviewer_assignment_strategy", id)
+		}
+		if !actionHasInputProp(t, premium, id, "reviewer_assignment_strategy") {
+			t.Errorf("Premium %s schema must include field reviewer_assignment_strategy", id)
+		}
+	}
 }
 
 // issueCreateHasInputProp reports whether the issue.create action's input schema
 // in the catalog advertises the named property.
 func issueCreateHasInputProp(t *testing.T, catalog *actioncatalog.Catalog, prop string) bool {
 	t.Helper()
-	action, ok := catalog.Action("issue.create")
+	return actionHasInputProp(t, catalog, "issue.create", prop)
+}
+
+// actionHasInputProp reports whether the named action's input schema in the
+// catalog advertises the named property.
+func actionHasInputProp(t *testing.T, catalog *actioncatalog.Catalog, id actioncatalog.ActionID, prop string) bool {
+	t.Helper()
+	action, ok := catalog.Action(id)
 	if !ok {
-		t.Fatal("issue.create missing from catalog")
+		t.Fatalf("%s missing from catalog", id)
 	}
 	props, _ := action.Route.InputSchema["properties"].(map[string]any)
 	_, has := props[prop]

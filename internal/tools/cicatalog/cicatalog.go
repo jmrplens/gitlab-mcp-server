@@ -381,7 +381,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithHint("get_catalog_resource", err,
-			"verify the resource exists with gitlab_catalog_list; id must be a GID (gid://gitlab/Ci::CatalogResource/N) or use full_path of the hosting project")
+			"verify the resource exists with gitlab_list_catalog_resources; id must be a GID (gid://gitlab/Ci::CatalogResource/N) or use full_path of the hosting project")
 	}
 
 	if resp.Data.CiCatalogResource == nil {
@@ -389,7 +389,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 		if lookup == "" {
 			lookup = input.FullPath
 		}
-		return GetOutput{}, fmt.Errorf("get_catalog_resource: catalog resource %q not found", lookup)
+		return GetOutput{}, fmt.Errorf("get_catalog_resource: catalog resource %q not found. Suggestion: a project marked as a catalog resource stays in draft and is not queryable until it publishes its first release — create a release and retry, or use gitlab_list_catalog_resources to see published resources", lookup)
 	}
 
 	return GetOutput{Resource: nodeToResourceDetail(*resp.Data.CiCatalogResource)}, nil

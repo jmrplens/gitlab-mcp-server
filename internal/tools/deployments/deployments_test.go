@@ -471,6 +471,69 @@ func TestDeploymentCreate_MissingFields(t *testing.T) {
 	}
 }
 
+// TestDeploymentCreate_TagMissing400_HintsTagField verifies that a GitLab 19
+// 400 response with "tag is missing" is wrapped with a hint that tells the
+// model to retry with an explicit tag:false/tag:true field.
+// The mock GitLab API at /api/v4/projects/42/deployments (POST) responds with HTTP 400.
+// It asserts that the returned error carries the tag-field corrective hint.
+func TestDeploymentCreate_TagMissing400_HintsTagField(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"error":"tag is missing"}`)
+	}))
+
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42", Environment: "staging", Ref: "main", SHA: "abc123",
+	})
+	if err == nil {
+		t.Fatal("expected error for 400 tag is missing")
+	}
+	if !strings.Contains(err.Error(), "tag:false for branch refs") {
+		t.Errorf("error = %q, want tag-field hint", err.Error())
+	}
+}
+
+// TestDeploymentCreate_InvalidStatus400_HintsAcceptedStatuses verifies that a
+// GitLab 19 400 response with "status does not have a valid value" is wrapped
+// with a hint listing the statuses the create API accepts.
+// The mock GitLab API at /api/v4/projects/42/deployments (POST) responds with HTTP 400.
+// It asserts that the returned error lists the accepted status values.
+func TestDeploymentCreate_InvalidStatus400_HintsAcceptedStatuses(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"error":"status does not have a valid value"}`)
+	}))
+
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42", Environment: "staging", Ref: "main", SHA: "abc123", Status: "created",
+	})
+	if err == nil {
+		t.Fatal("expected error for 400 invalid status")
+	}
+	if !strings.Contains(err.Error(), "running, success, failed, or canceled") {
+		t.Errorf("error = %q, want accepted-status hint", err.Error())
+	}
+}
+
+// TestDeploymentCreate_Generic400_HintsInputChecks verifies that a 400 response
+// without a recognized GitLab 19 drift message falls back to the generic
+// environment/sha/ref verification hint.
+// The mock GitLab API at /api/v4/projects/42/deployments (POST) responds with HTTP 400.
+// It asserts that the returned error carries the generic input-verification hint.
+func TestDeploymentCreate_Generic400_HintsInputChecks(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"error":"ref not found"}`)
+	}))
+
+	_, err := Create(context.Background(), client, CreateInput{
+		ProjectID: "42", Environment: "staging", Ref: "gone", SHA: "abc123",
+	})
+	if err == nil {
+		t.Fatal("expected error for generic 400")
+	}
+	if !strings.Contains(err.Error(), "gitlab_environment_list") {
+		t.Errorf("error = %q, want generic input-verification hint", err.Error())
+	}
+}
+
 // TestDeploymentCreate_CancelledContext verifies the DeploymentCreate_CancelledContext handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.

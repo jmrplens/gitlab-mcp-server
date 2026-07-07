@@ -64,7 +64,15 @@ func UploadCurrentUserAvatar(ctx context.Context, client *gitlabclient.Client, i
 		return Output{}, toolutil.WrapErrWithStatusHint("upload_user_avatar", err, http.StatusUnauthorized,
 			"verify your token is valid with the api scope; the avatar is set for the token's own user")
 	}
-	return toOutput(u), nil
+	out := toOutput(u)
+	// GitLab 19 responds with only {avatar_url}, so the decoded user ID is
+	// legitimately zero even though the upload succeeded.
+	if out.ID == 0 && out.AvatarURL != "" {
+		out.NextSteps = []string{
+			"The avatar was updated; GitLab 19 returns only avatar_url for this endpoint — use gitlab_user_current to fetch the caller's full profile",
+		}
+	}
+	return out, nil
 }
 
 // UserActivityOutput represents a user activity entry.

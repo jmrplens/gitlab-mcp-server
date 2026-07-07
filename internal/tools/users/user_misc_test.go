@@ -44,6 +44,39 @@ func TestUploadCurrentUserAvatar_Success_Base64(t *testing.T) {
 	if !strings.Contains(out.AvatarURL, "avatar.png") {
 		t.Errorf("AvatarURL = %q, want it to reference avatar.png", out.AvatarURL)
 	}
+	if len(out.NextSteps) != 0 {
+		t.Errorf("NextSteps = %v, want none when the full user profile is returned", out.NextSteps)
+	}
+}
+
+// TestUploadCurrentUserAvatar_GitLab19AvatarURLOnly_SetsRecoveryHint verifies
+// that when GitLab 19 answers with only {avatar_url} (so the decoded user ID
+// is zero), the output carries a next-steps hint confirming success and
+// pointing at gitlab_user_current for the full profile.
+func TestUploadCurrentUserAvatar_GitLab19AvatarURLOnly_SetsRecoveryHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/user/avatar" {
+			testutil.RespondJSON(w, http.StatusOK, `{"avatar_url":"https://gitlab.example.com/uploads/-/system/user/avatar/7/avatar.png"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	content := base64.StdEncoding.EncodeToString([]byte("fake-image-data"))
+	out, err := UploadCurrentUserAvatar(context.Background(), client, UploadCurrentUserAvatarInput{
+		Filename: "avatar.png", ContentBase64: content,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ID != 0 {
+		t.Errorf("ID = %d, want 0 from avatar_url-only response", out.ID)
+	}
+	if out.AvatarURL == "" {
+		t.Error("AvatarURL is empty, want the uploaded avatar URL")
+	}
+	if len(out.NextSteps) != 1 || !strings.Contains(out.NextSteps[0], "gitlab_user_current") {
+		t.Errorf("NextSteps = %v, want one hint pointing at gitlab_user_current", out.NextSteps)
+	}
 }
 
 // TestUploadCurrentUserAvatar_Success_FilePath verifies the file_path branch

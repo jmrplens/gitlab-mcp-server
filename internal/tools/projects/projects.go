@@ -129,6 +129,7 @@ type CreateInput struct {
 	ApprovalsBeforeMerge                      int64  `json:"approvals_before_merge,omitempty" tier:"premium" jsonschema:"Number of approvals required before merge (deprecated: use Merge Request Approvals API)"`
 	MergeRequestTitleRegex                    string `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
 	MergeRequestTitleRegexDescription         string `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex"`
+	ReviewerAssignmentStrategy                string `json:"reviewer_assignment_strategy,omitempty" tier:"premium" jsonschema:"Reviewer assignment strategy for merge requests (disabled, code_owners, dap_powered)"`
 
 	// Feature toggles
 	IssuesEnabled              *bool  `json:"issues_enabled,omitempty" jsonschema:"Enable issues feature (deprecated: use issues_access_level)"`
@@ -257,6 +258,7 @@ type Output struct {
 	ImportURL                                 string   `json:"import_url,omitempty"`
 	MergeRequestTitleRegex                    string   `json:"merge_request_title_regex,omitempty" tier:"premium"`
 	MergeRequestTitleRegexDescription         string   `json:"merge_request_title_regex_description,omitempty" tier:"premium"`
+	ReviewerAssignmentStrategy                string   `json:"reviewer_assignment_strategy,omitempty" tier:"premium"`
 
 	// Access-level enums (1:1 SDK parity).
 	ContainerRegistryAccessLevel     string `json:"container_registry_access_level,omitempty"`
@@ -487,6 +489,7 @@ type UpdateInput struct {
 	ApprovalsBeforeMerge                      int64                `json:"approvals_before_merge,omitempty"   tier:"premium" jsonschema:"Number of approvals required before merge"`
 	MergeRequestTitleRegex                    string               `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
 	MergeRequestTitleRegexDescription         string               `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex"`
+	ReviewerAssignmentStrategy                string               `json:"reviewer_assignment_strategy,omitempty" tier:"premium" jsonschema:"Reviewer assignment strategy for merge requests (disabled, code_owners, dap_powered)"`
 
 	// Basic metadata (additive 1:1 SDK parity)
 	Path              string   `json:"path,omitempty" jsonschema:"New project path slug"`
@@ -626,6 +629,7 @@ func ToOutput(p *gl.Project) Output {
 		ImportURL:                                 p.ImportURL,
 		MergeRequestTitleRegex:                    p.MergeRequestTitleRegex,
 		MergeRequestTitleRegexDescription:         p.MergeRequestTitleRegexDescription,
+		ReviewerAssignmentStrategy:                string(p.ReviewerAssignmentStrategy),
 
 		ContainerRegistryAccessLevel:     string(p.ContainerRegistryAccessLevel),
 		IssuesAccessLevel:                string(p.IssuesAccessLevel),
@@ -987,6 +991,9 @@ func applyCreateMergeTemplateOpts(opts *gl.CreateProjectOptions, input CreateInp
 	}
 	if input.MergeRequestTitleRegexDescription != "" {
 		opts.MergeRequestTitleRegexDescription = new(input.MergeRequestTitleRegexDescription)
+	}
+	if input.ReviewerAssignmentStrategy != "" {
+		opts.ReviewerAssignmentStrategy = new(gl.ReviewerAssignmentStrategyValue(input.ReviewerAssignmentStrategy))
 	}
 }
 
@@ -1627,6 +1634,9 @@ func applyUpdateAccessOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	}
 	if input.MergeRequestTitleRegexDescription != "" {
 		opts.MergeRequestTitleRegexDescription = new(input.MergeRequestTitleRegexDescription)
+	}
+	if input.ReviewerAssignmentStrategy != "" {
+		opts.ReviewerAssignmentStrategy = new(gl.ReviewerAssignmentStrategyValue(input.ReviewerAssignmentStrategy))
 	}
 }
 
@@ -3484,8 +3494,8 @@ func DeleteCustomHeader(ctx context.Context, client *gitlabclient.Client, input 
 type SetWebhookURLVariableInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	HookID    int64                `json:"hook_id" jsonschema:"Webhook ID,required"`
-	Key       string               `json:"key" jsonschema:"URL variable key name,required"`
-	Value     string               `json:"value" jsonschema:"URL variable value,required"`
+	Key       string               `json:"key" jsonschema:"URL variable key name — letters and underscores only; GitLab rejects keys containing digits,required"`
+	Value     string               `json:"value" jsonschema:"URL variable value — must be non-empty,required"`
 }
 
 // SetWebhookURLVariable sets a URL variable on a project webhook.
@@ -3507,6 +3517,10 @@ func SetWebhookURLVariable(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	_, err := client.GL().Projects.SetProjectWebhookURLVariable(string(input.ProjectID), input.HookID, input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+			return toolutil.WrapErrWithHint("projectSetWebhookURLVariable", err,
+				"URL variable keys accept only letters and underscores (digits are rejected) and the value must be non-empty")
+		}
 		return toolutil.WrapErrWithStatusHint("projectSetWebhookURLVariable", err, http.StatusNotFound,
 			"webhook not found \u2014 use gitlab_project_hook_list to verify hook_id")
 	}
@@ -3594,7 +3608,15 @@ func CreateForkRelation(ctx context.Context, client *gitlabclient.Client, input 
 		return ForkRelationOutput{}, toolutil.WrapErrWithStatusHint("projectCreateForkRelation", err, http.StatusNotFound,
 			"verify both project_id and forked_from_id reference existing projects with gitlab_project_get")
 	}
-	return forkRelationToOutput(rel), nil
+	out := forkRelationToOutput(rel)
+	// GitLab 19 responds with the full project body instead of the relation
+	// object, so the SDK decodes both relation IDs to zero even on success.
+	if out.ForkedFromProjectID == 0 && out.ForkedToProjectID == 0 {
+		out.NextSteps = []string{
+			"The fork relation was created even though GitLab returned no relation IDs (GitLab 19 responds with the project body); confirm with gitlab_project_get and check forked_from_project",
+		}
+	}
+	return out, nil
 }
 
 // DeleteForkRelationInput defines parameters for deleting a fork relation.

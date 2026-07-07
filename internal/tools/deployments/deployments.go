@@ -48,8 +48,8 @@ type CreateInput struct {
 	Environment string               `json:"environment"       jsonschema:"Name of the environment to deploy to,required"`
 	Ref         string               `json:"ref"               jsonschema:"Git branch or tag to deploy,required"`
 	SHA         string               `json:"sha"               jsonschema:"Git SHA to deploy,required"`
-	Tag         *bool                `json:"tag,omitempty"     jsonschema:"Whether the ref is a tag (default: false)"`
-	Status      string               `json:"status,omitempty"  jsonschema:"Deployment status: created or running or success or failed or canceled"`
+	Tag         *bool                `json:"tag,omitempty"     jsonschema:"Whether the ref is a tag. GitLab 19 requires this explicitly: pass false for branch refs and true for tag refs (default: false)"`
+	Status      string               `json:"status,omitempty"  jsonschema:"Initial deployment status: running or success or failed or canceled. GitLab 19 rejects created when creating a deployment"`
 }
 
 // UpdateInput contains parameters for updating a deployment status.
@@ -308,6 +308,16 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 				"creating deployments requires Developer+ role; protected environments may require additional approver permissions")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
+			// GitLab 19 rejects requests that omit tag or that pass status
+			// "created"; each drift needs its own corrective field hint.
+			switch {
+			case toolutil.ContainsAny(err, "tag is missing"):
+				return Output{}, toolutil.WrapErrWithHint(opCreateDeployment, err,
+					"GitLab 19 requires the tag field explicitly — retry with tag:false for branch refs or tag:true for tag refs")
+			case toolutil.ContainsAny(err, "status does not have a valid value"):
+				return Output{}, toolutil.WrapErrWithHint(opCreateDeployment, err,
+					"the API accepts status running, success, failed, or canceled when creating a deployment — GitLab 19 rejects 'created'; omit status or use an accepted value")
+			}
 			return Output{}, toolutil.WrapErrWithHint(opCreateDeployment, err,
 				"verify environment exists with gitlab_environment_list, sha is a valid commit, and ref is an existing branch/tag")
 		}

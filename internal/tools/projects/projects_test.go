@@ -630,6 +630,104 @@ func TestProjectUpdate_Success(t *testing.T) {
 	}
 }
 
+// TestProjectCreate_ReviewerAssignmentStrategy_SentAndMapped verifies that a
+// non-empty reviewer_assignment_strategy (client-go v2.46.0, Premium) is sent
+// in the create request body and round-trips into the output.
+func TestProjectCreate_ReviewerAssignmentStrategy_SentAndMapped(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"my-repo","path_with_namespace":"jmrplens/my-repo","visibility":"private","reviewer_assignment_strategy":"code_owners"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{
+		Name:                       testRepoName,
+		ReviewerAssignmentStrategy: "code_owners",
+	})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	assertJSONKeys(t, capturedBody, "reviewer_assignment_strategy")
+	if !strings.Contains(capturedBody, `"code_owners"`) {
+		t.Errorf("request body = %s, want reviewer_assignment_strategy value code_owners", capturedBody)
+	}
+	if out.ReviewerAssignmentStrategy != "code_owners" {
+		t.Errorf("out.ReviewerAssignmentStrategy = %q, want code_owners", out.ReviewerAssignmentStrategy)
+	}
+}
+
+// TestProjectCreate_ReviewerAssignmentStrategy_OmittedWhenEmpty verifies that
+// the create request body carries no reviewer_assignment_strategy key when the
+// input field is unset.
+func TestProjectCreate_ReviewerAssignmentStrategy_OmittedWhenEmpty(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"my-repo"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{Name: testRepoName})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if strings.Contains(capturedBody, "reviewer_assignment_strategy") {
+		t.Errorf("request body = %s, want no reviewer_assignment_strategy key", capturedBody)
+	}
+	if out.ReviewerAssignmentStrategy != "" {
+		t.Errorf("out.ReviewerAssignmentStrategy = %q, want empty", out.ReviewerAssignmentStrategy)
+	}
+}
+
+// TestProjectUpdate_ReviewerAssignmentStrategy_SentAndMapped verifies that a
+// non-empty reviewer_assignment_strategy (client-go v2.46.0, Premium) is sent
+// in the edit request body and round-trips into the output.
+func TestProjectUpdate_ReviewerAssignmentStrategy_SentAndMapped(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathProject42 {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"my-repo","reviewer_assignment_strategy":"dap_powered"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Update(context.Background(), client, UpdateInput{
+		ProjectID:                  "42",
+		ReviewerAssignmentStrategy: "dap_powered",
+	})
+	if err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+	assertJSONKeys(t, capturedBody, "reviewer_assignment_strategy")
+	if !strings.Contains(capturedBody, `"dap_powered"`) {
+		t.Errorf("request body = %s, want reviewer_assignment_strategy value dap_powered", capturedBody)
+	}
+	if out.ReviewerAssignmentStrategy != "dap_powered" {
+		t.Errorf("out.ReviewerAssignmentStrategy = %q, want dap_powered", out.ReviewerAssignmentStrategy)
+	}
+}
+
 // TestProjectCreate_ContextCancelled verifies that Create returns an
 // error immediately when the context is already canceled, without making
 // an API call.
@@ -5809,6 +5907,24 @@ func TestSetWebhookURLVariable_APIError(t *testing.T) {
 	}
 }
 
+// TestSetWebhookURLVariable_IllegalKey422_HintsKeyFormat verifies that a
+// GitLab 19 422 "Illegal key or value" response is wrapped with a hint about
+// the accepted key characters and the non-empty value requirement.
+func TestSetWebhookURLVariable_IllegalKey422_HintsKeyFormat(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"error":"Illegal key or value"}`)
+	}))
+	err := SetWebhookURLVariable(context.Background(), client, SetWebhookURLVariableInput{
+		ProjectID: "42", HookID: 1, Key: "var1", Value: testValueVar,
+	})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "letters and underscores") {
+		t.Errorf("error = %q, want key-format hint", err.Error())
+	}
+}
+
 // TestDeleteWebhookURLVariable_Success verifies DeleteURLVariable succeeds when the GitLab API confirms deletion of a webhook URL variable.
 func TestDeleteWebhookURLVariable_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -5898,6 +6014,35 @@ func TestCreateForkRelation_Success(t *testing.T) {
 	}
 	if out.ForkedToProjectID != 42 {
 		t.Errorf("ForkedToProjectID = %d, want 42", out.ForkedToProjectID)
+	}
+	if len(out.NextSteps) != 0 {
+		t.Errorf("NextSteps = %v, want none when relation IDs are present", out.NextSteps)
+	}
+}
+
+// TestCreateForkRelation_GitLab19ProjectBody_SetsRecoveryHint verifies that
+// when GitLab 19 answers the fork-relation POST with the full project body
+// (so both relation IDs decode to zero), the output carries a next-steps hint
+// confirming success and pointing at gitlab_project_get for verification.
+func TestCreateForkRelation_GitLab19ProjectBody_SetsRecoveryHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, pathProject42ForkRelation) {
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"forked","path_with_namespace":"group/forked","forked_from_project":{"id":99}}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := CreateForkRelation(context.Background(), client, CreateForkRelationInput{
+		ProjectID: "42", ForkedFromID: 99,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ForkedFromProjectID != 0 || out.ForkedToProjectID != 0 {
+		t.Fatalf("expected zero relation IDs from project-body response, got %+v", out)
+	}
+	if len(out.NextSteps) != 1 || !strings.Contains(out.NextSteps[0], "gitlab_project_get") {
+		t.Errorf("NextSteps = %v, want one hint pointing at gitlab_project_get", out.NextSteps)
 	}
 }
 

@@ -84,6 +84,12 @@ type NonSQLMetricsOutput struct {
 func GetNonSQLMetrics(ctx context.Context, client *gitlabclient.Client, _ GetNonSQLMetricsInput) (NonSQLMetricsOutput, error) {
 	data, _, err := client.GL().UsageData.GetNonSQLMetrics(gl.WithContext(ctx))
 	if err != nil {
+		// GitLab 19 removed this endpoint: it returns 404 even with the
+		// usage_data_non_sql_metrics feature flag enabled.
+		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
+			return NonSQLMetricsOutput{}, toolutil.WrapErrWithHint("get_non_sql_metrics", err,
+				"this endpoint is unavailable on GitLab 19 even with the usage_data_non_sql_metrics feature flag — use gitlab_get_metric_definitions or gitlab_get_service_ping instead")
+		}
 		return NonSQLMetricsOutput{}, toolutil.WrapErrWithStatusHint("get_non_sql_metrics", err, http.StatusForbidden,
 			"requires administrator access; self-managed only; service ping must be enabled")
 	}

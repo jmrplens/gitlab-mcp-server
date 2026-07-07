@@ -146,6 +146,22 @@ func TestLock_Error(t *testing.T) {
 	}
 }
 
+// TestLock_BadRequest_HintsSDKLimitation verifies that the guaranteed 400 from
+// GitLab (client-go sends no Terraform lock-info body) is wrapped with a hint
+// pointing at the terraform CLI and gitlab_unlock_terraform_state.
+func TestLock_BadRequest_HintsSDKLimitation(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"400 Bad request"}`)
+	}))
+	_, err := Lock(t.Context(), client, LockInput{ProjectID: "1", Name: "state1"})
+	if err == nil {
+		t.Fatal(errExpectedErr)
+	}
+	if !strings.Contains(err.Error(), "lock-info body") || !strings.Contains(err.Error(), "gitlab_unlock_terraform_state") {
+		t.Errorf("error = %q, want SDK-limitation hint with unlock alternative", err.Error())
+	}
+}
+
 // TestUnlock verifies Unlock.
 func TestUnlock(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -129,8 +129,8 @@ type DeleteInput struct {
 // SetURLVariableInput is the input for creating or updating a system hook URL variable.
 type SetURLVariableInput struct {
 	ID    int64  `json:"id"    jsonschema:"System hook ID,required"`
-	Key   string `json:"key"   jsonschema:"URL variable key name,required"`
-	Value string `json:"value" jsonschema:"URL variable value,required"`
+	Key   string `json:"key"   jsonschema:"URL variable key name — letters and underscores only; GitLab rejects keys containing digits,required"`
+	Value string `json:"value" jsonschema:"URL variable value — must be non-empty,required"`
 }
 
 // DeleteURLVariableInput is the input for deleting a system hook URL variable.
@@ -369,6 +369,10 @@ func SetURLVariable(ctx context.Context, client *gitlabclient.Client, input SetU
 	opts := &gl.SetHookURLVariableOptions{Value: &input.Value}
 	_, err := client.GL().SystemHooks.SetHookURLVariable(input.ID, input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+			return toolutil.WrapErrWithHint("system_hook_set_url_variable", err,
+				"URL variable keys accept only letters and underscores (digits are rejected) and the value must be non-empty")
+		}
 		return toolutil.WrapErrWithStatusHint("system_hook_set_url_variable", err, http.StatusNotFound,
 			"verify hook_id with gitlab_list_system_hooks; URL variable keys are case-sensitive and referenced by placeholders in the hook URL")
 	}
