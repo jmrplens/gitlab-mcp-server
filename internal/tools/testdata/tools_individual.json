@@ -20601,7 +20601,7 @@
           "type": "string"
         },
         "status": {
-          "description": "Deployment status: created or running or success or failed or canceled",
+          "description": "Initial deployment status: running or success or failed or canceled. GitLab 19 rejects created when creating a deployment",
           "enum": [
             "created",
             "running",
@@ -20612,7 +20612,7 @@
           "type": "string"
         },
         "tag": {
-          "description": "Whether the ref is a tag (default: false)",
+          "description": "Whether the ref is a tag. GitLab 19 requires this explicitly: pass false for branch refs and true for tag refs (default: false)",
           "type": [
             "null",
             "boolean"
@@ -48771,11 +48771,11 @@
           "type": "integer"
         },
         "key": {
-          "description": "URL variable key name",
+          "description": "URL variable key name — letters and underscores only; GitLab rejects keys containing digits",
           "type": "string"
         },
         "value": {
-          "description": "URL variable value (write-only)",
+          "description": "URL variable value (write-only) — must be non-empty",
           "type": "string"
         }
       },
@@ -155244,7 +155244,7 @@
           "type": "integer"
         },
         "key": {
-          "description": "URL variable key name",
+          "description": "URL variable key name — letters and underscores only; GitLab rejects keys containing digits",
           "type": "string"
         },
         "project_id": {
@@ -155252,7 +155252,7 @@
           "type": "string"
         },
         "value": {
-          "description": "URL variable value",
+          "description": "URL variable value — must be non-empty",
           "type": "string"
         }
       },
@@ -192897,11 +192897,11 @@
           "type": "integer"
         },
         "key": {
-          "description": "URL variable key name",
+          "description": "URL variable key name — letters and underscores only; GitLab rejects keys containing digits",
           "type": "string"
         },
         "value": {
-          "description": "URL variable value",
+          "description": "URL variable value — must be non-empty",
           "type": "string"
         }
       },
@@ -202715,7 +202715,7 @@
   },
   {
     "name": "gitlab_upload_user_avatar",
-    "description": "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
+    "description": "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL; GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty — use gitlab_user_current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

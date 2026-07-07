@@ -2145,7 +2145,8 @@ Parameter guidance:
 - deployment_create.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - deployment_create.ref: branch_or_tag; source: Branch or tag name (without the "refs/heads/" or "refs/tags/" prefix).; avoid: Use "sha" for an exact commit hash, not "ref".
 - deployment_create.sha: commit_sha; source: Full or short commit SHA that uniquely identifies a commit.
-- deployment_create.tag: tag_name; source: Tag name (without the "refs/tags/" prefix).
+- deployment_create.status: initial_deployment_status; source: One of running, success, failed, or canceled. GitLab 19 rejects 'created' on create with 400 'status does not have a valid value'.; avoid: 'created' is a stored deployment status but is not accepted when creating a deployment on GitLab 19
+- deployment_create.tag: ref_is_tag_flag; source: Derive from the ref type: false for branch refs, true for tag refs. GitLab 19 rejects the request with 400 'tag is missing' when the field is omitted.
 - deployment_delete.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
 - deployment_get.deployment_id: deployment_id; source: Deployment numeric ID from deployment list output.
 - deployment_get.project_id: scope_project; source: Project ID or URL-encoded path (e.g. "group/project").
@@ -15498,8 +15499,8 @@ Create a deployment record for an environment at a given ref and sha with an ini
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `ref` (string) (required): Git branch or tag to deploy
 - `sha` (string) (required): Git SHA to deploy
-- `status` (string): Deployment status: created or running or success or failed or canceled
-- `tag` (boolean): Whether the ref is a tag (default: false)
+- `status` (string): Initial deployment status: running or success or failed or canceled. GitLab 19 rejects created when creating a deployment
+- `tag` (boolean): Whether the ref is a tag. GitLab 19 requires this explicitly: pass false for branch refs and true for tag refs (default: false)
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -17959,8 +17960,8 @@ Set a URL variable on a GitLab group webhook. Returns: a success confirmation. S
 
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `hook_id` (integer) (required): Webhook ID
-- `key` (string) (required): URL variable key name
-- `value` (string) (required): URL variable value (write-only)
+- `key` (string) (required): URL variable key name — letters and underscores only; GitLab rejects keys containing digits
+- `value` (string) (required): URL variable value (write-only) — must be non-empty
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -24871,9 +24872,9 @@ Set a URL variable on a project webhook. Returns: a success confirmation naming 
 **Parameters:**
 
 - `hook_id` (integer) (required): Webhook ID
-- `key` (string) (required): URL variable key name
+- `key` (string) (required): URL variable key name — letters and underscores only; GitLab rejects keys containing digits
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `value` (string) (required): URL variable value
+- `value` (string) (required): URL variable value — must be non-empty
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -27595,8 +27596,8 @@ Create or update one URL variable for an instance system hook. Returns: a succes
 **Parameters:**
 
 - `id` (integer) (required): System hook ID
-- `key` (string) (required): URL variable key name
-- `value` (string) (required): URL variable value
+- `key` (string) (required): URL variable key name — letters and underscores only; GitLab rejects keys containing digits
+- `value` (string) (required): URL variable value — must be non-empty
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -28583,7 +28584,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_upload_user_avatar
 
-Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.
+Upload the current user's avatar. Returns: the updated user profile including the new avatar URL; GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty — use gitlab_user_current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.
 
 **Parameters:**
 
