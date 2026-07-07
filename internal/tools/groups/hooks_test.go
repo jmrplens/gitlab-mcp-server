@@ -580,6 +580,22 @@ func TestSetHookURLVariable_Success(t *testing.T) {
 	}
 }
 
+// TestSetHookURLVariable_IllegalKey422_HintsKeyFormat verifies that a GitLab 19
+// 422 "Illegal key or value" response is wrapped with a hint about the accepted
+// key characters and the non-empty value requirement.
+func TestSetHookURLVariable_IllegalKey422_HintsKeyFormat(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"error":"Illegal key or value"}`)
+	}))
+	err := SetHookURLVariable(context.Background(), client, SetHookURLVariableInput{GroupID: "99", HookID: 10, Key: "env1", Value: "prod"})
+	if err == nil {
+		t.Fatal("expected error for 422 Illegal key or value")
+	}
+	if !strings.Contains(err.Error(), "letters and underscores") {
+		t.Errorf("error = %q, want key-format hint", err.Error())
+	}
+}
+
 // TestSetHookURLVariable_Guards verifies required-input guards.
 func TestSetHookURLVariable_Guards(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))

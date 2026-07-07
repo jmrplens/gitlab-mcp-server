@@ -389,7 +389,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 		if lookup == "" {
 			lookup = input.FullPath
 		}
-		return GetOutput{}, fmt.Errorf("get_catalog_resource: catalog resource %q not found", lookup)
+		return GetOutput{}, fmt.Errorf("get_catalog_resource: catalog resource %q not found. Suggestion: a project marked as a catalog resource stays in draft and is not queryable until it publishes its first release — create a release and retry, or use gitlab_catalog_list to see published resources", lookup)
 	}
 
 	return GetOutput{Resource: nodeToResourceDetail(*resp.Data.CiCatalogResource)}, nil

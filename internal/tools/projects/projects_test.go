@@ -5809,6 +5809,24 @@ func TestSetWebhookURLVariable_APIError(t *testing.T) {
 	}
 }
 
+// TestSetWebhookURLVariable_IllegalKey422_HintsKeyFormat verifies that a
+// GitLab 19 422 "Illegal key or value" response is wrapped with a hint about
+// the accepted key characters and the non-empty value requirement.
+func TestSetWebhookURLVariable_IllegalKey422_HintsKeyFormat(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusUnprocessableEntity, `{"error":"Illegal key or value"}`)
+	}))
+	err := SetWebhookURLVariable(context.Background(), client, SetWebhookURLVariableInput{
+		ProjectID: "42", HookID: 1, Key: "var1", Value: testValueVar,
+	})
+	if err == nil {
+		t.Fatal(errExpectedAPI)
+	}
+	if !strings.Contains(err.Error(), "letters and underscores") {
+		t.Errorf("error = %q, want key-format hint", err.Error())
+	}
+}
+
 // TestDeleteWebhookURLVariable_Success verifies DeleteURLVariable succeeds when the GitLab API confirms deletion of a webhook URL variable.
 func TestDeleteWebhookURLVariable_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

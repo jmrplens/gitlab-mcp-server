@@ -598,8 +598,8 @@ func DeleteHookCustomHeader(ctx context.Context, client *gitlabclient.Client, in
 type SetHookURLVariableInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	HookID  int64                `json:"hook_id"  jsonschema:"Webhook ID,required"`
-	Key     string               `json:"key"      jsonschema:"URL variable key name,required"`
-	Value   string               `json:"value"    jsonschema:"URL variable value (write-only),required"`
+	Key     string               `json:"key"      jsonschema:"URL variable key name — letters and underscores only; GitLab rejects keys containing digits,required"`
+	Value   string               `json:"value"    jsonschema:"URL variable value (write-only) — must be non-empty,required"`
 }
 
 // SetHookURLVariable creates or updates a templated URL variable on a group webhook.
@@ -619,6 +619,10 @@ func SetHookURLVariable(ctx context.Context, client *gitlabclient.Client, input 
 	opts := &gl.SetHookURLVariableOptions{Value: &input.Value}
 	_, err := client.GL().Groups.SetGroupHookURLVariable(string(input.GroupID), input.HookID, input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+			return toolutil.WrapErrWithHint("groupSetHookURLVariable", err,
+				"URL variable keys accept only letters and underscores (digits are rejected) and the value must be non-empty")
+		}
 		return toolutil.WrapErrWithStatusHint("groupSetHookURLVariable", err, http.StatusNotFound,
 			"webhook not found — use gitlab_group_hook_list to verify hook_id; requires Owner role")
 	}

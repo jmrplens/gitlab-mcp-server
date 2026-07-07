@@ -1285,6 +1285,22 @@ func TestListGroupEpicLabelEvents_APIError(t *testing.T) {
 	}
 }
 
+// TestListGroupEpicLabelEvents_NotFound_HintsGitLab19Removal verifies that a
+// 404 is wrapped with a hint covering both causes: missing Premium/Ultimate
+// tier and the GitLab 19 removal of the legacy epic REST API.
+func TestListGroupEpicLabelEvents_NotFound_HintsGitLab19Removal(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	_, err := ListGroupEpicLabelEvents(t.Context(), client, ListGroupEpicLabelEventsInput{GroupID: covGID(), EpicIID: 7})
+	if err == nil {
+		t.Fatal("expected 404 error")
+	}
+	if !strings.Contains(err.Error(), "GitLab 19 removed the legacy epic REST API") {
+		t.Errorf("error = %q, want GitLab 19 removal hint", err.Error())
+	}
+}
+
 // TestListGroupEpicLabelEvents_Success verifies ListGroupEpicLabelEvents hits
 // the group epic resource_label_events endpoint and maps the label event,
 // nested label, acting user, and pagination metadata.
@@ -1344,6 +1360,22 @@ func TestGetGroupEpicLabelEvent_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, covBadHandler())
 	if _, err := GetGroupEpicLabelEvent(t.Context(), client, GetGroupEpicLabelEventInput{GroupID: covGID(), EpicIID: 7, LabelEventID: 50}); err == nil {
 		t.Fatal("expected API error")
+	}
+}
+
+// TestGetGroupEpicLabelEvent_NotFound_HintsGitLab19Removal verifies that a
+// 404 is wrapped with a hint covering both causes: missing Premium/Ultimate
+// tier and the GitLab 19 removal of the legacy epic REST API.
+func TestGetGroupEpicLabelEvent_NotFound_HintsGitLab19Removal(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusNotFound, `{"message":"404 Not Found"}`)
+	}))
+	_, err := GetGroupEpicLabelEvent(t.Context(), client, GetGroupEpicLabelEventInput{GroupID: covGID(), EpicIID: 7, LabelEventID: 50})
+	if err == nil {
+		t.Fatal("expected 404 error")
+	}
+	if !strings.Contains(err.Error(), "GitLab 19 removed the legacy epic REST API") {
+		t.Errorf("error = %q, want GitLab 19 removal hint", err.Error())
 	}
 }
 

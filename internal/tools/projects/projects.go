@@ -3484,8 +3484,8 @@ func DeleteCustomHeader(ctx context.Context, client *gitlabclient.Client, input 
 type SetWebhookURLVariableInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	HookID    int64                `json:"hook_id" jsonschema:"Webhook ID,required"`
-	Key       string               `json:"key" jsonschema:"URL variable key name,required"`
-	Value     string               `json:"value" jsonschema:"URL variable value,required"`
+	Key       string               `json:"key" jsonschema:"URL variable key name — letters and underscores only; GitLab rejects keys containing digits,required"`
+	Value     string               `json:"value" jsonschema:"URL variable value — must be non-empty,required"`
 }
 
 // SetWebhookURLVariable sets a URL variable on a project webhook.
@@ -3507,6 +3507,10 @@ func SetWebhookURLVariable(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	_, err := client.GL().Projects.SetProjectWebhookURLVariable(string(input.ProjectID), input.HookID, input.Key, opts, gl.WithContext(ctx))
 	if err != nil {
+		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) {
+			return toolutil.WrapErrWithHint("projectSetWebhookURLVariable", err,
+				"URL variable keys accept only letters and underscores (digits are rejected) and the value must be non-empty")
+		}
 		return toolutil.WrapErrWithStatusHint("projectSetWebhookURLVariable", err, http.StatusNotFound,
 			"webhook not found \u2014 use gitlab_project_hook_list to verify hook_id")
 	}

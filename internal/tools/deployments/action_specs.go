@@ -100,6 +100,21 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 				"enum": []any{"created", "running", "success", "failed", "canceled"},
 			}),
 		}
+		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
+			"tag": {
+				SemanticRole:   "ref_is_tag_flag",
+				ValueSource:    "Derive from the ref type: false for branch refs, true for tag refs. GitLab 19 rejects the request with 400 'tag is missing' when the field is omitted.",
+				ExampleBinding: "params.tag:false",
+			},
+			"status": {
+				SemanticRole: "initial_deployment_status",
+				ValueSource:  "One of running, success, failed, or canceled. GitLab 19 rejects 'created' on create with 400 'status does not have a valid value'.",
+				CommonConfusions: []string{
+					"'created' is a stored deployment status but is not accepted when creating a deployment on GitLab 19",
+				},
+				ExampleBinding: "params.status:running",
+			},
+		}
 	case "deployment_update":
 		options.Usage = "Update an existing deployment's status (created, running, success, failed, or canceled) by deployment_id. Use to transition a deployment after a CI/CD job or manual step completes."
 		options.Aliases = []string{"update deployment status", "set deployment status", "transition deployment"}
