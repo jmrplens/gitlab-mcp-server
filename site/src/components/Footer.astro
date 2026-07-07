@@ -12,7 +12,9 @@ const rel = pathname.startsWith(BASE) ? pathname.slice(BASE.length) : pathname;
 const isES = rel === "/es" || rel.startsWith("/es/");
 
 const label = isES ? "Mantenido por" : "Maintained by";
-// Visible mirror of the Person `sameAs` set in the site-wide @graph.
+// Curated subset of the Person `sameAs` set in the site-wide @graph — the
+// human-relevant profiles; machine-oriented entries (Matrix, Keyoxide) stay
+// JSON-LD-only.
 const links = [
 	{ href: "https://github.com/jmrplens", text: "GitHub" },
 	{ href: "https://linkedin.com/in/jmrplens", text: "LinkedIn" },
