@@ -1,0 +1,74 @@
+---
+title: Extensión para Claude Desktop
+description: Instala GitLab MCP Server en Claude Desktop con un clic mediante la extensión de escritorio .mcpb — macOS y Windows, sin Docker ni runtimes.
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+GitLab MCP Server se distribuye como **extensión de escritorio** (`.mcpb`) de
+instalación en un clic para Claude Desktop en macOS y Windows. El paquete
+contiene un binario universal de macOS (Apple Silicon + Intel) y un ejecutable
+de Windows — sin Docker, Node.js ni Python.
+
+## Instalación
+
+<Steps>
+
+1. Descarga [`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb)
+   desde la última release.
+
+2. Abre el archivo con Claude Desktop — doble clic, o arrástralo a la ventana
+   de Ajustes de Claude Desktop. Claude muestra un diálogo de instalación con
+   los detalles de la extensión.
+
+3. Rellena los ajustes y empieza a chatear.
+
+</Steps>
+
+## Ajustes
+
+| Ajuste                           | Obligatorio | Por defecto          | Variable de entorno      |
+| -------------------------------- | ----------- | -------------------- | ------------------------ |
+| GitLab URL                       | Sí          | `https://gitlab.com` | `GITLAB_URL`             |
+| GitLab Personal Access Token     | Sí          | —                    | `GITLAB_TOKEN`           |
+| Tool surface                     | No          | `dynamic`            | `TOOL_SURFACE`           |
+| GitLab tier                      | No          | autodetección        | `GITLAB_TIER`            |
+| Read-only mode                   | No          | desactivado          | `GITLAB_READ_ONLY`       |
+| Safe mode                        | No          | desactivado          | `GITLAB_SAFE_MODE`       |
+| Skip TLS verification            | No          | desactivado          | `GITLAB_SKIP_TLS_VERIFY` |
+
+:::tip[Almacenamiento del token]
+Claude Desktop guarda el Personal Access Token en el llavero del sistema
+operativo, no en un archivo de configuración en texto plano. Crea el token con
+el scope `api` en **GitLab → User Settings → Access Tokens**.
+:::
+
+La superficie de herramientas por defecto, `dynamic`, registra solo dos
+herramientas find/execute, de modo que el servidor nunca satura la ventana de
+contexto de Claude. Cambia a `meta` (~32 herramientas consolidadas por
+dominio) o `individual` (una herramienta por acción) en los ajustes de la
+extensión — consulta [Superficies de herramientas](/gitlab-mcp-server/es/tools/overview/).
+
+## Actualizaciones
+
+La extensión lleva desactivado el mecanismo de
+[auto-actualización](/gitlab-mcp-server/es/operations/auto-update/) del
+servidor: las actualizaciones llegan como nuevas versiones de la extensión
+publicadas con cada release, en lugar de reemplazos del binario in situ.
+
+## Verificación
+
+Pídele a Claude algo como *"¿Con qué usuario de GitLab estoy autenticado?"* —
+debería llamar a `gitlab_find_action` y después a `gitlab_execute_action` con
+la acción `user.current` y devolver tu nombre de usuario.
+
+:::note[Instancias self-managed]
+Configura la URL de tu instancia en el ajuste **GitLab URL**. Si usa un
+certificado autofirmado, activa **Skip TLS verification**.
+:::
+
+## Privacidad
+
+El servidor se ejecuta íntegramente en tu máquina y no tiene telemetría — los
+datos fluyen solo entre Claude Desktop y la instancia de GitLab que
+configures. Consulta la [Política de privacidad](/gitlab-mcp-server/es/operations/privacy/).

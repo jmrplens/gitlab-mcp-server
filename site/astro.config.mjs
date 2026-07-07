@@ -448,6 +448,11 @@ export default defineConfig({
 							translations: { es: "Asistente de configuración" },
 						},
 						{
+							slug: "claude-desktop",
+							label: "Claude Desktop (.mcpb)",
+							translations: { es: "Claude Desktop (.mcpb)" },
+						},
+						{
 							slug: "configuration",
 							label: "Configuration",
 							translations: { es: "Configuración" },
@@ -534,6 +539,11 @@ export default defineConfig({
 							slug: "operations/security",
 							label: "Security",
 							translations: { es: "Seguridad" },
+						},
+						{
+							slug: "operations/privacy",
+							label: "Privacy",
+							translations: { es: "Privacidad" },
 						},
 						{
 							slug: "operations/auto-update",
