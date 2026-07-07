@@ -51,7 +51,7 @@ func compiledSchema(key string, schema map[string]any) any {
 		return schema
 	}
 	compiled := new(jsonschema.Schema)
-	if unmarshalErr := json.Unmarshal(data, compiled); unmarshalErr != nil {
+	if json.Unmarshal(data, compiled) != nil {
 		return schema
 	}
 	actual, _ := compiledSchemaCache.LoadOrStore(key, compiled)
