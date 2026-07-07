@@ -14,7 +14,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.46.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 2.4.1                                               |
+| Version       | 2.5.0                                               |
 
 ### Scale
 
@@ -142,13 +142,14 @@ gitlab-mcp-server/
 │       └── fixture_ce_test.go   # Self-contained GitLab resource builders (CE runtime)
 │       └── fixture_ee_test.go   # Self-contained GitLab resource builders (EE runtime)
 ├── plan/                        # Implementation plans for features
+├── mcpb/                        # Claude Desktop extension (.mcpb) manifest + icon (packed by scripts/build-mcpb.sh)
 ├── .github/                     # AI assistance infrastructure
 │   ├── copilot-instructions.md  # GitHub Copilot context (auto-loaded by VS Code)
 │   ├── agents/                  # 7 specialized AI agents
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (2.4.1)
+└── VERSION                      # Semantic version (2.5.0)
 ```
 
 ## Key Development Patterns
