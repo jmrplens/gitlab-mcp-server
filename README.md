@@ -64,9 +64,14 @@ Pick one. Each path ends with you typing a prompt to your assistant.
     <td><a href="https://kiro.dev/launch/mcp/add?name=gitlab&amp;config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22YOUR_GITLAB_TOKEN%22%7D%7D"><img alt="Add to Kiro" src="https://kiro.dev/images/add-to-kiro.svg" height="28" /></a></td>
     <td>edit <code>YOUR_GITLAB_TOKEN</code></td>
   </tr>
+  <tr>
+    <td><b>Claude Desktop</b></td>
+    <td><a href="https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb"><img alt="Download .mcpb extension" src="https://img.shields.io/badge/Download-.mcpb_extension-d97757?style=flat-square&amp;logo=claude&amp;logoColor=white" /></a></td>
+    <td>settings UI (keychain)</td>
+  </tr>
 </table>
 
-Each button registers the **Docker**-based server (auto-pulls the image on first run; you need [Docker](https://www.docker.com/) installed). Need a token? [Create a Personal Access Token](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html) with the **`api`** scope. Self-managed GitLab? Add a `GITLAB_URL` env var in your client's MCP config after install.
+Each button registers the **Docker**-based server (auto-pulls the image on first run; you need [Docker](https://www.docker.com/) installed). The **Claude Desktop** row instead downloads a native [.mcpb desktop extension](docs/guides/claude-desktop-extension.md) (macOS universal + Windows, no Docker) — open it with Claude Desktop and fill in the settings. Need a token? [Create a Personal Access Token](https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html) with the **`api`** scope. Self-managed GitLab? Add a `GITLAB_URL` env var in your client's MCP config after install.
 
 ### Claude Code (`claude mcp add`)
 
@@ -342,6 +347,14 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.1  |
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.46.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
+
+## Privacy Policy
+
+The server runs entirely on your machine and has **no telemetry, analytics, or
+backend of its own** — data flows only between your MCP client and the GitLab
+instance you configure (plus an optional signed-binary update check against
+GitHub Releases). Your token is used solely to authenticate GitLab requests
+and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 ## Contributing & Security
 

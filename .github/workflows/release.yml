@@ -109,6 +109,16 @@ jobs:
       - name: Update server.json with SHA256 hashes
         run: bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}"
 
+      - name: Build and upload Claude Desktop extension (.mcpb)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          bash scripts/build-mcpb.sh "${VERSION}"
+          sha256sum dist/gitlab-mcp-server.mcpb
+          gh release upload "v${VERSION}" dist/gitlab-mcp-server.mcpb --clobber
+
       - name: Publish to MCP Registry
         env:
           # Pin to a specific version of the mcp-publisher tool for supply-chain integrity.
@@ -182,6 +192,7 @@ jobs:
 
           git add server.json
           [ -f .plugin/plugin.json ] && git add .plugin/plugin.json
+          [ -f mcpb/manifest.json ] && git add mcpb/manifest.json
 
           if git diff --cached --quiet; then
             echo "::notice::No manifest changes to commit"
@@ -190,8 +201,9 @@ jobs:
 
           git commit -m "chore: update manifests for v${VERSION}
 
-          Updates server.json (MCP Registry) and .plugin/plugin.json
-          (Open Plugins) with version ${VERSION} and pinned SHA256 hashes."
+          Updates server.json (MCP Registry), .plugin/plugin.json
+          (Open Plugins), and mcpb/manifest.json (Claude Desktop
+          extension) with version ${VERSION} and pinned SHA256 hashes."
           git push origin main
 
   docker:

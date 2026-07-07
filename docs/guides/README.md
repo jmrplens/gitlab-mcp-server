@@ -9,15 +9,16 @@ over HTTP, wiring it into CI, keeping it current, or getting unstuck.
 
 > **Diátaxis type**: How-to · **Audience**: 👤 Users & 🔧 operators
 
-| Guide                                     | What it helps you do                                                                                       |
-| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| [IDE Configuration](ide-configuration.md) | Configure the MCP server in VS Code, Cursor, JetBrains, and other clients (stdio, HTTP legacy, HTTP OAuth) |
-| [HTTP Server Mode](http-server-mode.md)   | Run the multi-user HTTP transport with a per-token+URL server pool                                         |
-| [OAuth App Setup](oauth-app-setup.md)     | Create a GitLab OAuth application so MCP clients can authenticate                                          |
-| [CI/CD Usage](ci-cd.md)                   | Use the server inside CI/CD pipelines, with or without an LLM in the loop                                  |
-| [Auto-Update](auto-update.md)             | Enable, configure, or disable the self-update mechanism                                                    |
-| [Troubleshooting](troubleshooting.md)     | Diagnose common connection, TLS, tool, and transport problems                                              |
-| [Examples](examples/README.md)            | Walk through real-world, multi-step usage scenarios and skill templates                                    |
+| Guide                                                   | What it helps you do                                                                                       |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| [IDE Configuration](ide-configuration.md)               | Configure the MCP server in VS Code, Cursor, JetBrains, and other clients (stdio, HTTP legacy, HTTP OAuth) |
+| [Claude Desktop Extension](claude-desktop-extension.md) | Install or build the one-click `.mcpb` desktop extension for Claude Desktop                                |
+| [HTTP Server Mode](http-server-mode.md)                 | Run the multi-user HTTP transport with a per-token+URL server pool                                         |
+| [OAuth App Setup](oauth-app-setup.md)                   | Create a GitLab OAuth application so MCP clients can authenticate                                          |
+| [CI/CD Usage](ci-cd.md)                                 | Use the server inside CI/CD pipelines, with or without an LLM in the loop                                  |
+| [Auto-Update](auto-update.md)                           | Enable, configure, or disable the self-update mechanism                                                    |
+| [Troubleshooting](troubleshooting.md)                   | Diagnose common connection, TLS, tool, and transport problems                                              |
+| [Examples](examples/README.md)                          | Walk through real-world, multi-step usage scenarios and skill templates                                    |
 
 **Looking for something else?**
 [Reference](../reference/README.md) for exact flags and variables ·

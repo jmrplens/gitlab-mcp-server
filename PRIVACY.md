@@ -1,0 +1,66 @@
+# Privacy Policy
+
+Last updated: 2026-07-07
+
+**gitlab-mcp-server** is a local Model Context Protocol (MCP) server. It runs
+entirely on your machine and acts as a bridge between your MCP client (Claude
+Desktop, Claude Code, Cursor, VS Code, …) and the GitLab instance you
+configure. This policy describes what data the server handles and where it
+goes.
+
+## What we collect
+
+**Nothing.** The server has no telemetry, no analytics, no crash reporting,
+and no backend of its own. The maintainer never receives, stores, or has
+access to any of your data, credentials, or usage information.
+
+## Data flows
+
+- **Your GitLab instance.** Every tool call results in requests to the GitLab
+  URL you configure (`GITLAB_URL`), authenticated with your Personal Access
+  Token (`GITLAB_TOKEN`). Data returned by GitLab (projects, issues, merge
+  requests, pipeline logs, …) is passed directly to your MCP client and is
+  never sent anywhere else. GitLab's handling of that data is governed by the
+  [GitLab Privacy Statement](https://about.gitlab.com/privacy/) (for
+  GitLab.com) or by your organization's own policies (for self-managed
+  instances).
+- **GitHub (auto-update only).** When the auto-update feature is enabled
+  (`AUTO_UPDATE=true`, the default for standalone binaries), the server
+  periodically checks GitHub Releases on this repository for new versions and
+  downloads signed binaries from there. No personal data is sent — it is a
+  standard HTTPS request to `api.github.com`, subject to the
+  [GitHub Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
+  The Claude Desktop extension (`.mcpb`) ships with auto-update **disabled**;
+  updates arrive through new extension versions instead.
+
+There are no other network destinations.
+
+## Credentials
+
+Your GitLab Personal Access Token is provided by you through environment
+variables or your MCP client's configuration UI. Claude Desktop stores
+extension secrets in the operating system keychain. The server keeps the
+token in process memory only, uses it solely to authenticate requests to your
+configured GitLab instance, and never logs it.
+
+## Local storage and logs
+
+The server writes logs to standard error only (collected, if at all, by your
+MCP client). It does not create databases, caches, or files with your GitLab
+data. In HTTP mode, token identities are cached in memory for the configured
+TTL and are never persisted to disk.
+
+## Data retention and sharing
+
+The server retains nothing after it exits and shares data with no third
+parties beyond the GitLab instance you explicitly configure.
+
+## Changes
+
+Changes to this policy are published in this file and noted in release
+changelogs.
+
+## Contact
+
+Questions or concerns: [open an issue](https://github.com/jmrplens/gitlab-mcp-server/issues)
+or email <jmrplens@gmail.com>.
