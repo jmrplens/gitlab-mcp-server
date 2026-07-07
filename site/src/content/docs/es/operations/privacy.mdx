@@ -1,0 +1,69 @@
+---
+title: Política de privacidad
+description: Política de privacidad de GitLab MCP Server — sin telemetría, sin analítica, sin backend; los datos fluyen solo entre tu máquina y la instancia de GitLab que configures.
+---
+
+Última actualización: 2026-07-07
+
+GitLab MCP Server es un servidor Model Context Protocol **local**. Se ejecuta
+íntegramente en tu máquina y actúa como puente entre tu cliente MCP (Claude
+Desktop, Claude Code, Cursor, VS Code, …) y la instancia de GitLab que
+configures.
+
+## Qué recopilamos
+
+**Nada.** El servidor no tiene telemetría, ni analítica, ni informes de
+errores, ni backend propio. El mantenedor nunca recibe, almacena ni tiene
+acceso a tus datos, credenciales o información de uso.
+
+## Flujos de datos
+
+- **Tu instancia de GitLab.** Cada llamada a una herramienta genera peticiones
+  a la URL de GitLab que configures (`GITLAB_URL`), autenticadas con tu
+  Personal Access Token (`GITLAB_TOKEN`). Los datos que devuelve GitLab —
+  proyectos, issues, merge requests, logs de pipelines — se entregan
+  directamente a tu cliente MCP y no se envían a ningún otro sitio. El
+  tratamiento de esos datos por GitLab se rige por la
+  [Declaración de privacidad de GitLab](https://about.gitlab.com/privacy/)
+  (en GitLab.com) o por las políticas de tu organización (en instancias
+  self-managed).
+- **GitHub (solo auto-actualización).** Con la
+  [auto-actualización](/gitlab-mcp-server/es/operations/auto-update/)
+  activada (por defecto en los binarios standalone), el servidor consulta
+  periódicamente GitHub Releases y descarga binarios firmados. No se envía
+  ningún dato personal — es una petición HTTPS estándar a `api.github.com`,
+  sujeta a la [Declaración de privacidad de GitHub](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
+  La [extensión para Claude Desktop](/gitlab-mcp-server/es/claude-desktop/)
+  lleva la auto-actualización **desactivada**; las actualizaciones llegan como
+  nuevas versiones de la extensión.
+
+No existen otros destinos de red.
+
+## Credenciales
+
+Tu Personal Access Token de GitLab lo proporcionas tú mediante variables de
+entorno o la interfaz de configuración de tu cliente MCP. Claude Desktop
+guarda los secretos de las extensiones en el llavero del sistema operativo.
+El servidor mantiene el token solo en la memoria del proceso, lo usa
+únicamente para autenticar las peticiones a tu instancia de GitLab y nunca lo
+escribe en los logs. Consulta [Seguridad](/gitlab-mcp-server/es/operations/security/)
+para el modelo de seguridad completo.
+
+## Almacenamiento local y logs
+
+El servidor escribe logs solo en la salida de error estándar (recogidos, en
+su caso, por tu cliente MCP). No crea bases de datos, cachés ni archivos con
+tus datos de GitLab. En modo HTTP, las identidades de los tokens se cachean en
+memoria durante el TTL configurado y nunca se persisten a disco.
+
+## Retención y compartición de datos
+
+El servidor no retiene nada tras finalizar y no comparte datos con terceros
+más allá de la instancia de GitLab que configures explícitamente.
+
+## Cambios y contacto
+
+Los cambios de esta política se publican en
+[`PRIVACY.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/PRIVACY.md)
+(la versión canónica de esta página) y se recogen en los changelogs de las
+releases. Preguntas: [abre un issue](https://github.com/jmrplens/gitlab-mcp-server/issues).

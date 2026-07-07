@@ -1,0 +1,72 @@
+---
+title: Claude Desktop Extension
+description: Install GitLab MCP Server in Claude Desktop with one click using the .mcpb desktop extension — macOS and Windows, no Docker or runtime required.
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+GitLab MCP Server ships as a one-click **desktop extension** (`.mcpb`) for
+Claude Desktop on macOS and Windows. The bundle contains a macOS universal
+binary (Apple Silicon + Intel) and a Windows executable — no Docker, Node.js,
+or Python required.
+
+## Install
+
+<Steps>
+
+1. Download [`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb)
+   from the latest release.
+
+2. Open the file with Claude Desktop — double-click it, or drag it onto the
+   Claude Desktop Settings window. Claude shows an install dialog with the
+   extension details.
+
+3. Fill in the settings and start chatting.
+
+</Steps>
+
+## Settings
+
+| Setting                      | Required | Default              | Environment variable     |
+| ---------------------------- | -------- | -------------------- | ------------------------ |
+| GitLab URL                   | Yes      | `https://gitlab.com` | `GITLAB_URL`             |
+| GitLab Personal Access Token | Yes      | —                    | `GITLAB_TOKEN`           |
+| Tool surface                 | No       | `dynamic`            | `TOOL_SURFACE`           |
+| GitLab tier                  | No       | auto-detect          | `GITLAB_TIER`            |
+| Read-only mode               | No       | off                  | `GITLAB_READ_ONLY`       |
+| Safe mode                    | No       | off                  | `GITLAB_SAFE_MODE`       |
+| Skip TLS verification        | No       | off                  | `GITLAB_SKIP_TLS_VERIFY` |
+
+:::tip[Token storage]
+Claude Desktop stores the Personal Access Token in the operating system
+keychain, not in a plain-text config file. Create the token with the `api`
+scope under **GitLab → User Settings → Access Tokens**.
+:::
+
+The default `dynamic` tool surface registers just two find/execute tools, so
+the server never crowds Claude's context window. Switch to `meta`
+(~32 consolidated domain tools) or `individual` (one tool per action) in the
+extension settings — see [Tool surfaces](/gitlab-mcp-server/tools/overview/).
+
+## Updates
+
+The extension has the server's [auto-update](/gitlab-mcp-server/operations/auto-update/)
+mechanism disabled: updates arrive as new extension versions published with
+each release instead of in-place binary swaps.
+
+## Verify
+
+Ask Claude something like *"What GitLab user am I authenticated as?"* — it
+should call `gitlab_find_action` and then `gitlab_execute_action` with the
+`user.current` action and return your username.
+
+:::note[Self-managed instances]
+Set your instance URL in the **GitLab URL** setting. If it uses a self-signed
+certificate, enable **Skip TLS verification**.
+:::
+
+## Privacy
+
+The server runs entirely on your machine and has no telemetry — data flows
+only between Claude Desktop and the GitLab instance you configure. See the
+[Privacy Policy](/gitlab-mcp-server/operations/privacy/).
