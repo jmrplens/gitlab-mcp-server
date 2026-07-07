@@ -10,7 +10,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin check-mcpb mcpb gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
@@ -686,6 +686,28 @@ check-server-json:
 ## check-openplugin: validate Open Plugins manifest and MCP config files.
 check-openplugin:
 	scripts/check-openplugin.sh
+
+# Pin the MCPB packer CLI for supply-chain integrity (also pinned in scripts/build-mcpb.sh).
+MCPB_CLI_VERSION := 2.1.2
+
+## check-mcpb: validate the Claude Desktop extension manifest (mcpb/manifest.json).
+check-mcpb:
+	npx --yes @anthropic-ai/mcpb@$(MCPB_CLI_VERSION) validate mcpb/manifest.json
+
+## mcpb: build the Claude Desktop extension bundle (dist/gitlab-mcp-server.mcpb).
+## Cross-compiles the darwin universal binary (lipo) and the windows/amd64 binary,
+## then assembles and packs the bundle with scripts/build-mcpb.sh.
+mcpb:
+	@command -v lipo >/dev/null || { echo "ERROR: lipo is required (macOS Xcode CLT)"; exit 1; }
+	@set -e; \
+	VER=$$(tr -d '[:space:]' < VERSION); \
+	rm -rf dist/local_darwin_arm64 dist/local_darwin_amd64 dist/local_darwin_all dist/local_windows_amd64; \
+	mkdir -p dist/local_darwin_arm64 dist/local_darwin_amd64 dist/local_darwin_all dist/local_windows_amd64; \
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_darwin_arm64/gitlab-mcp-server ./cmd/server; \
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_darwin_amd64/gitlab-mcp-server ./cmd/server; \
+	lipo -create -output dist/local_darwin_all/gitlab-mcp-server dist/local_darwin_arm64/gitlab-mcp-server dist/local_darwin_amd64/gitlab-mcp-server; \
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_windows_amd64/gitlab-mcp-server.exe ./cmd/server; \
+	bash scripts/build-mcpb.sh "$$VER"
 
 ## gen-readme: regenerate all managed README.md sections (token footprint + stats).
 gen-readme: gen-footprint gen-stats

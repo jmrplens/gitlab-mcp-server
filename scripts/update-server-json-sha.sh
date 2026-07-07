@@ -89,3 +89,12 @@ if [[ -f "$PLUGIN_JSON" ]]; then
 else
   echo "NOTE: $PLUGIN_JSON not found, skipping Open Plugins manifest update"
 fi
+
+# 6. Update MCPB (Claude Desktop extension) manifest version (if present)
+MCPB_JSON="mcpb/manifest.json"
+if [[ -f "$MCPB_JSON" ]]; then
+  jq --arg v "$VERSION" '.version = $v' "$MCPB_JSON" > tmp.$$.json && mv tmp.$$.json "$MCPB_JSON"
+  echo "$MCPB_JSON version set to $VERSION"
+else
+  echo "NOTE: $MCPB_JSON not found, skipping MCPB manifest update"
+fi
