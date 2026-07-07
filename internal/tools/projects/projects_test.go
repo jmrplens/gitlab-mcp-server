@@ -630,6 +630,104 @@ func TestProjectUpdate_Success(t *testing.T) {
 	}
 }
 
+// TestProjectCreate_ReviewerAssignmentStrategy_SentAndMapped verifies that a
+// non-empty reviewer_assignment_strategy (client-go v2.46.0, Premium) is sent
+// in the create request body and round-trips into the output.
+func TestProjectCreate_ReviewerAssignmentStrategy_SentAndMapped(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"my-repo","path_with_namespace":"jmrplens/my-repo","visibility":"private","reviewer_assignment_strategy":"code_owners"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{
+		Name:                       testRepoName,
+		ReviewerAssignmentStrategy: "code_owners",
+	})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	assertJSONKeys(t, capturedBody, "reviewer_assignment_strategy")
+	if !strings.Contains(capturedBody, `"code_owners"`) {
+		t.Errorf("request body = %s, want reviewer_assignment_strategy value code_owners", capturedBody)
+	}
+	if out.ReviewerAssignmentStrategy != "code_owners" {
+		t.Errorf("out.ReviewerAssignmentStrategy = %q, want code_owners", out.ReviewerAssignmentStrategy)
+	}
+}
+
+// TestProjectCreate_ReviewerAssignmentStrategy_OmittedWhenEmpty verifies that
+// the create request body carries no reviewer_assignment_strategy key when the
+// input field is unset.
+func TestProjectCreate_ReviewerAssignmentStrategy_OmittedWhenEmpty(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"my-repo"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Create(context.Background(), client, CreateInput{Name: testRepoName})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	if strings.Contains(capturedBody, "reviewer_assignment_strategy") {
+		t.Errorf("request body = %s, want no reviewer_assignment_strategy key", capturedBody)
+	}
+	if out.ReviewerAssignmentStrategy != "" {
+		t.Errorf("out.ReviewerAssignmentStrategy = %q, want empty", out.ReviewerAssignmentStrategy)
+	}
+}
+
+// TestProjectUpdate_ReviewerAssignmentStrategy_SentAndMapped verifies that a
+// non-empty reviewer_assignment_strategy (client-go v2.46.0, Premium) is sent
+// in the edit request body and round-trips into the output.
+func TestProjectUpdate_ReviewerAssignmentStrategy_SentAndMapped(t *testing.T) {
+	var capturedBody string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathProject42 {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read request body: %v", err)
+			}
+			capturedBody = string(body)
+			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"my-repo","reviewer_assignment_strategy":"dap_powered"}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Update(context.Background(), client, UpdateInput{
+		ProjectID:                  "42",
+		ReviewerAssignmentStrategy: "dap_powered",
+	})
+	if err != nil {
+		t.Fatalf("Update() unexpected error: %v", err)
+	}
+	assertJSONKeys(t, capturedBody, "reviewer_assignment_strategy")
+	if !strings.Contains(capturedBody, `"dap_powered"`) {
+		t.Errorf("request body = %s, want reviewer_assignment_strategy value dap_powered", capturedBody)
+	}
+	if out.ReviewerAssignmentStrategy != "dap_powered" {
+		t.Errorf("out.ReviewerAssignmentStrategy = %q, want dap_powered", out.ReviewerAssignmentStrategy)
+	}
+}
+
 // TestProjectCreate_ContextCancelled verifies that Create returns an
 // error immediately when the context is already canceled, without making
 // an API call.

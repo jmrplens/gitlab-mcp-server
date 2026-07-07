@@ -129,6 +129,7 @@ type CreateInput struct {
 	ApprovalsBeforeMerge                      int64  `json:"approvals_before_merge,omitempty" tier:"premium" jsonschema:"Number of approvals required before merge (deprecated: use Merge Request Approvals API)"`
 	MergeRequestTitleRegex                    string `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
 	MergeRequestTitleRegexDescription         string `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex"`
+	ReviewerAssignmentStrategy                string `json:"reviewer_assignment_strategy,omitempty" tier:"premium" jsonschema:"Reviewer assignment strategy for merge requests (disabled, code_owners, dap_powered)"`
 
 	// Feature toggles
 	IssuesEnabled              *bool  `json:"issues_enabled,omitempty" jsonschema:"Enable issues feature (deprecated: use issues_access_level)"`
@@ -257,6 +258,7 @@ type Output struct {
 	ImportURL                                 string   `json:"import_url,omitempty"`
 	MergeRequestTitleRegex                    string   `json:"merge_request_title_regex,omitempty" tier:"premium"`
 	MergeRequestTitleRegexDescription         string   `json:"merge_request_title_regex_description,omitempty" tier:"premium"`
+	ReviewerAssignmentStrategy                string   `json:"reviewer_assignment_strategy,omitempty" tier:"premium"`
 
 	// Access-level enums (1:1 SDK parity).
 	ContainerRegistryAccessLevel     string `json:"container_registry_access_level,omitempty"`
@@ -487,6 +489,7 @@ type UpdateInput struct {
 	ApprovalsBeforeMerge                      int64                `json:"approvals_before_merge,omitempty"   tier:"premium" jsonschema:"Number of approvals required before merge"`
 	MergeRequestTitleRegex                    string               `json:"merge_request_title_regex,omitempty" jsonschema:"Regex that MR titles must match"`
 	MergeRequestTitleRegexDescription         string               `json:"merge_request_title_regex_description,omitempty" jsonschema:"Human-readable description for the MR title regex"`
+	ReviewerAssignmentStrategy                string               `json:"reviewer_assignment_strategy,omitempty" tier:"premium" jsonschema:"Reviewer assignment strategy for merge requests (disabled, code_owners, dap_powered)"`
 
 	// Basic metadata (additive 1:1 SDK parity)
 	Path              string   `json:"path,omitempty" jsonschema:"New project path slug"`
@@ -626,6 +629,7 @@ func ToOutput(p *gl.Project) Output {
 		ImportURL:                                 p.ImportURL,
 		MergeRequestTitleRegex:                    p.MergeRequestTitleRegex,
 		MergeRequestTitleRegexDescription:         p.MergeRequestTitleRegexDescription,
+		ReviewerAssignmentStrategy:                string(p.ReviewerAssignmentStrategy),
 
 		ContainerRegistryAccessLevel:     string(p.ContainerRegistryAccessLevel),
 		IssuesAccessLevel:                string(p.IssuesAccessLevel),
@@ -987,6 +991,9 @@ func applyCreateMergeTemplateOpts(opts *gl.CreateProjectOptions, input CreateInp
 	}
 	if input.MergeRequestTitleRegexDescription != "" {
 		opts.MergeRequestTitleRegexDescription = new(input.MergeRequestTitleRegexDescription)
+	}
+	if input.ReviewerAssignmentStrategy != "" {
+		opts.ReviewerAssignmentStrategy = new(gl.ReviewerAssignmentStrategyValue(input.ReviewerAssignmentStrategy))
 	}
 }
 
@@ -1627,6 +1634,9 @@ func applyUpdateAccessOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	}
 	if input.MergeRequestTitleRegexDescription != "" {
 		opts.MergeRequestTitleRegexDescription = new(input.MergeRequestTitleRegexDescription)
+	}
+	if input.ReviewerAssignmentStrategy != "" {
+		opts.ReviewerAssignmentStrategy = new(gl.ReviewerAssignmentStrategyValue(input.ReviewerAssignmentStrategy))
 	}
 }
 

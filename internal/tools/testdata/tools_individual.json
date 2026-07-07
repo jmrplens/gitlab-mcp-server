@@ -67972,6 +67972,9 @@
         "restrict_user_defined_variables": {
           "type": "boolean"
         },
+        "reviewer_assignment_strategy": {
+          "type": "string"
+        },
         "runner_token_expiration_interval": {
           "type": "integer"
         },
@@ -147276,6 +147279,9 @@
         "restrict_user_defined_variables": {
           "type": "boolean"
         },
+        "reviewer_assignment_strategy": {
+          "type": "string"
+        },
         "runner_token_expiration_interval": {
           "type": "integer"
         },
@@ -147941,6 +147947,10 @@
             "oldest_first",
             "newest_first"
           ],
+          "type": "string"
+        },
+        "reviewer_assignment_strategy": {
+          "description": "Reviewer assignment strategy for merge requests (disabled, code_owners, dap_powered)",
           "type": "string"
         },
         "security_and_compliance_access_level": {
@@ -148746,6 +148756,9 @@
         "restrict_user_defined_variables": {
           "type": "boolean"
         },
+        "reviewer_assignment_strategy": {
+          "type": "string"
+        },
         "runner_token_expiration_interval": {
           "type": "integer"
         },
@@ -149410,6 +149423,10 @@
             "oldest_first",
             "newest_first"
           ],
+          "type": "string"
+        },
+        "reviewer_assignment_strategy": {
+          "description": "Reviewer assignment strategy for merge requests (disabled, code_owners, dap_powered)",
           "type": "string"
         },
         "security_and_compliance_access_level": {
@@ -150219,6 +150236,9 @@
         },
         "restrict_user_defined_variables": {
           "type": "boolean"
+        },
+        "reviewer_assignment_strategy": {
+          "type": "string"
         },
         "runner_token_expiration_interval": {
           "type": "integer"
@@ -152395,6 +152415,9 @@
         "restrict_user_defined_variables": {
           "type": "boolean"
         },
+        "reviewer_assignment_strategy": {
+          "type": "string"
+        },
         "runner_token_expiration_interval": {
           "type": "integer"
         },
@@ -153347,6 +153370,9 @@
         },
         "restrict_user_defined_variables": {
           "type": "boolean"
+        },
+        "reviewer_assignment_strategy": {
+          "type": "string"
         },
         "runner_token_expiration_interval": {
           "type": "integer"
@@ -156572,6 +156598,9 @@
               "restrict_user_defined_variables": {
                 "type": "boolean"
               },
+              "reviewer_assignment_strategy": {
+                "type": "string"
+              },
               "runner_token_expiration_interval": {
                 "type": "integer"
               },
@@ -157715,6 +157744,9 @@
               },
               "restrict_user_defined_variables": {
                 "type": "boolean"
+              },
+              "reviewer_assignment_strategy": {
+                "type": "string"
               },
               "runner_token_expiration_interval": {
                 "type": "integer"
@@ -159529,6 +159561,9 @@
               "restrict_user_defined_variables": {
                 "type": "boolean"
               },
+              "reviewer_assignment_strategy": {
+                "type": "string"
+              },
               "runner_token_expiration_interval": {
                 "type": "integer"
               },
@@ -160718,6 +160753,9 @@
               "restrict_user_defined_variables": {
                 "type": "boolean"
               },
+              "reviewer_assignment_strategy": {
+                "type": "string"
+              },
               "runner_token_expiration_interval": {
                 "type": "integer"
               },
@@ -161906,6 +161944,9 @@
               },
               "restrict_user_defined_variables": {
                 "type": "boolean"
+              },
+              "reviewer_assignment_strategy": {
+                "type": "string"
               },
               "runner_token_expiration_interval": {
                 "type": "integer"
@@ -164487,6 +164528,9 @@
         },
         "restrict_user_defined_variables": {
           "type": "boolean"
+        },
+        "reviewer_assignment_strategy": {
+          "type": "string"
         },
         "runner_token_expiration_interval": {
           "type": "integer"
@@ -167262,6 +167306,9 @@
         "restrict_user_defined_variables": {
           "type": "boolean"
         },
+        "reviewer_assignment_strategy": {
+          "type": "string"
+        },
         "runner_token_expiration_interval": {
           "type": "integer"
         },
@@ -168298,6 +168345,9 @@
         "restrict_user_defined_variables": {
           "type": "boolean"
         },
+        "reviewer_assignment_strategy": {
+          "type": "string"
+        },
         "runner_token_expiration_interval": {
           "type": "integer"
         },
@@ -169230,6 +169280,9 @@
         },
         "restrict_user_defined_variables": {
           "type": "boolean"
+        },
+        "reviewer_assignment_strategy": {
+          "type": "string"
         },
         "runner_token_expiration_interval": {
           "type": "integer"
@@ -170164,6 +170217,9 @@
         "restrict_user_defined_variables": {
           "type": "boolean"
         },
+        "reviewer_assignment_strategy": {
+          "type": "string"
+        },
         "runner_token_expiration_interval": {
           "type": "integer"
         },
@@ -170950,6 +171006,10 @@
             "null",
             "boolean"
           ]
+        },
+        "reviewer_assignment_strategy": {
+          "description": "Reviewer assignment strategy for merge requests (disabled, code_owners, dap_powered)",
+          "type": "string"
         },
         "security_and_compliance_access_level": {
           "description": "Security and compliance access level (disabled, private, enabled)",
@@ -171738,6 +171798,9 @@
         },
         "restrict_user_defined_variables": {
           "type": "boolean"
+        },
+        "reviewer_assignment_strategy": {
+          "type": "string"
         },
         "runner_token_expiration_interval": {
           "type": "integer"
@@ -172757,6 +172820,9 @@
         },
         "restrict_user_defined_variables": {
           "type": "boolean"
+        },
+        "reviewer_assignment_strategy": {
+          "type": "string"
         },
         "runner_token_expiration_interval": {
           "type": "integer"
@@ -191031,6 +191097,9 @@
               },
               "restrict_user_defined_variables": {
                 "type": "boolean"
+              },
+              "reviewer_assignment_strategy": {
+                "type": "string"
               },
               "runner_token_expiration_interval": {
                 "type": "integer"

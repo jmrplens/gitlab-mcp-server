@@ -338,7 +338,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | ------------- | ------------------------------------------------ |
 | Language      | Go 1.26+                                         |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.1  |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.43.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.46.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
 ## Contributing & Security
