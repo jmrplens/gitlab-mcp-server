@@ -14,7 +14,7 @@ const BASE = (import.meta.env.BASE_URL ?? "/").replace(/\/$/, "");
 const PERSON_ID = "https://jmrp.io/#person";
 const WEBSITE_ID = `${SITE}${BASE}/#website`;
 // Matches the SoftwareApplication @id in the site-wide @graph (astro.config.mjs),
-// which carries the Wikidata sameAs — so each page's TechArticle ties back to it.
+// which carries the directory-listing sameAs — so each page's TechArticle ties back to it.
 const SOFTWARE_ID = "https://github.com/jmrplens/gitlab-mcp-server#software";
 
 // Minimal typed view of the Starlight route data we consume.
