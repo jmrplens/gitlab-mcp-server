@@ -5917,6 +5917,35 @@ func TestCreateForkRelation_Success(t *testing.T) {
 	if out.ForkedToProjectID != 42 {
 		t.Errorf("ForkedToProjectID = %d, want 42", out.ForkedToProjectID)
 	}
+	if len(out.NextSteps) != 0 {
+		t.Errorf("NextSteps = %v, want none when relation IDs are present", out.NextSteps)
+	}
+}
+
+// TestCreateForkRelation_GitLab19ProjectBody_SetsRecoveryHint verifies that
+// when GitLab 19 answers the fork-relation POST with the full project body
+// (so both relation IDs decode to zero), the output carries a next-steps hint
+// confirming success and pointing at gitlab_project_get for verification.
+func TestCreateForkRelation_GitLab19ProjectBody_SetsRecoveryHint(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, pathProject42ForkRelation) {
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"forked","path_with_namespace":"group/forked","forked_from_project":{"id":99}}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	out, err := CreateForkRelation(context.Background(), client, CreateForkRelationInput{
+		ProjectID: "42", ForkedFromID: 99,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.ForkedFromProjectID != 0 || out.ForkedToProjectID != 0 {
+		t.Fatalf("expected zero relation IDs from project-body response, got %+v", out)
+	}
+	if len(out.NextSteps) != 1 || !strings.Contains(out.NextSteps[0], "gitlab_project_get") {
+		t.Errorf("NextSteps = %v, want one hint pointing at gitlab_project_get", out.NextSteps)
+	}
 }
 
 // TestCreateForkRelation_EmptyProjectID verifies CreateForkRelation returns an error when ProjectID is empty.

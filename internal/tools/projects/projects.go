@@ -3598,7 +3598,15 @@ func CreateForkRelation(ctx context.Context, client *gitlabclient.Client, input 
 		return ForkRelationOutput{}, toolutil.WrapErrWithStatusHint("projectCreateForkRelation", err, http.StatusNotFound,
 			"verify both project_id and forked_from_id reference existing projects with gitlab_project_get")
 	}
-	return forkRelationToOutput(rel), nil
+	out := forkRelationToOutput(rel)
+	// GitLab 19 responds with the full project body instead of the relation
+	// object, so the SDK decodes both relation IDs to zero even on success.
+	if out.ForkedFromProjectID == 0 && out.ForkedToProjectID == 0 {
+		out.NextSteps = []string{
+			"The fork relation was created even though GitLab returned no relation IDs (GitLab 19 responds with the project body); confirm with gitlab_project_get and check forked_from_project",
+		}
+	}
+	return out, nil
 }
 
 // DeleteForkRelationInput defines parameters for deleting a fork relation.

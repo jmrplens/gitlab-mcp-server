@@ -292,7 +292,7 @@ var userToolMetadata = map[string]userToolMeta{
 		usage:          "Set or replace the current authenticated user's avatar image. Provide a filename plus exactly one of file_path (a local image on the MCP server) or content_base64 (base64-encoded JPG/PNG/GIF under 200 KB). Targets the token's own user; there is no user_id parameter.",
 		aliases:        []string{"upload my avatar", "set current user avatar", "change my profile picture", "update user avatar"},
 		relatedActions: []string{actionUserCurrent, actionUserModify, actionUserCurrentStatus},
-		description:    "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
+		description:    "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL; GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty — use gitlab_user_current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
 	},
 	"gitlab_delete_user_identity": {
 		usage:          "Delete a user's external authentication identity by user_id and provider name (admin only). Use when the prompt asks to unlink an SSO/LDAP identity from a user.",
