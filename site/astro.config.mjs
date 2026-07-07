@@ -145,6 +145,7 @@ const jsonLd = JSON.stringify({
 				"AI assistants",
 			],
 			sameAs: [
+				"https://www.wikidata.org/wiki/Q140455276",
 				"https://github.com/jmrplens",
 				"https://linkedin.com/in/jmrplens",
 				"https://mstdn.jmrp.io/@jmrplens",
