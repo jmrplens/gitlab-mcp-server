@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 11,881 |
-| Unit test functions                                   | 11,509 |
+| Total test functions                                  | 11,901 |
+| Unit test functions                                   | 11,529 |
 | E2E test functions                                    |    372 |
-| cmd test functions                                    |    905 |
+| cmd test functions                                    |    910 |
 | Test files (internal/)                                |    465 |
 | Test files (cmd/)                                     |     70 |
 | Test files (test/e2e/suite/)                          |    166 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,545 | 88.8% |
+| `TestFunc_Scenario` (2-part)           | 10,548 | 88.6% |
 | `TestFunc` (no underscore)             |    962 |  8.1% |
-| `TestFunc_Scenario_Expected` (3+ part) |    374 |  3.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |    391 |  3.3% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,021 |        102 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            283 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          8,300 |        349 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          8,315 |        349 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            372 |        166 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            905 |         70 | server entry point and developer command utilities                                              |
-| **Total**               |     **11,881** |    **701** |                                                                                                 |
+| cmd packages            |            910 |         70 | server entry point and developer command utilities                                              |
+| **Total**               |     **11,901** |    **701** |                                                                                                 |
 
 ### Core Packages
 
@@ -78,18 +78,18 @@
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   382 |   100.0% |    57 |
-| groups            |   239 |    99.7% |    37 |
+| projects          |   387 |   100.0% |    57 |
+| groups            |   240 |    99.7% |    37 |
 | mergerequests     |   239 |   100.0% |    30 |
 | issues            |   223 |   100.0% |    21 |
-| users             |   208 |   100.0% |    38 |
+| users             |   209 |   100.0% |    38 |
 | dynamic           |   159 |    99.9% |     2 |
 | jobs              |   147 |    99.5% |    17 |
 | packages          |   123 |    99.2% |     9 |
 | search            |   118 |   100.0% |    10 |
 | commits           |   114 |    99.8% |    13 |
+| resourceevents    |   114 |   100.0% |    17 |
 | awardemoji        |   113 |   100.0% |    24 |
-| resourceevents    |   112 |   100.0% |    17 |
 | pipelines         |   111 |   100.0% |    12 |
 | runners           |   109 |   100.0% |    19 |
 | containerregistry |   101 |   100.0% |    16 |
@@ -146,7 +146,7 @@
 | dependencyproxy         |         5 |          1 |   100.0% |         1 |
 | deploykeys              |        71 |          2 |   100.0% |         9 |
 | deploymentmergerequests |        24 |          1 |   100.0% |         1 |
-| deployments             |        61 |          2 |   100.0% |         6 |
+| deployments             |        64 |          2 |   100.0% |         6 |
 | deploytokens            |        68 |          2 |   100.0% |         9 |
 | dockerfiletemplates     |        15 |          1 |   100.0% |         2 |
 | dorametrics             |        11 |          2 |   100.0% |         2 |
@@ -184,7 +184,7 @@
 | groupprotectedenvs      |        19 |          2 |   100.0% |         5 |
 | grouprelationsexport    |        26 |          2 |   100.0% |         2 |
 | groupreleases           |        18 |          3 |   100.0% |         1 |
-| groups                  |       239 |          8 |    99.7% |        37 |
+| groups                  |       240 |          8 |    99.7% |        37 |
 | groupsaml               |        33 |          3 |   100.0% |         5 |
 | groupscim               |        31 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |        20 |          2 |   100.0% |         8 |
@@ -240,7 +240,7 @@
 | projectimportexport     |        40 |          1 |   100.0% |         5 |
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        63 |          2 |   100.0% |         7 |
-| projects                |       382 |          6 |   100.0% |        57 |
+| projects                |       387 |          6 |   100.0% |        57 |
 | projectserviceaccounts  |        11 |          2 |   100.0% |         8 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        19 |          2 |   100.0% |         6 |
@@ -251,7 +251,7 @@
 | releases                |        67 |          1 |   100.0% |         6 |
 | repository              |        69 |          1 |    99.7% |         9 |
 | repositorysubmodules    |        53 |          3 |   100.0% |         3 |
-| resourceevents          |       112 |          3 |   100.0% |        17 |
+| resourceevents          |       114 |          3 |   100.0% |        17 |
 | resourcegroups          |        16 |          1 |   100.0% |         4 |
 | runnercontrollers       |        34 |          2 |   100.0% |         5 |
 | runnercontrollerscopes  |        34 |          2 |   100.0% |         5 |
@@ -272,21 +272,21 @@
 | snippets                |        89 |          3 |    99.5% |        15 |
 | snippetstoragemoves     |        41 |          2 |   100.0% |         6 |
 | surfaces                |        10 |          1 |   100.0% |         0 |
-| systemhooks             |        35 |          2 |   100.0% |         8 |
+| systemhooks             |        36 |          2 |   100.0% |         8 |
 | tags                    |        83 |          2 |   100.0% |         9 |
-| terraformstates         |        17 |          1 |   100.0% |         6 |
+| terraformstates         |        18 |          1 |   100.0% |         6 |
 | todos                   |        33 |          1 |   100.0% |         3 |
 | topics                  |        29 |          2 |   100.0% |         5 |
 | uploads                 |        47 |          2 |   100.0% |         4 |
-| usagedata               |        27 |          1 |   100.0% |         6 |
+| usagedata               |        28 |          1 |   100.0% |         6 |
 | useremails              |        24 |          2 |   100.0% |         6 |
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
-| users                   |       208 |          8 |   100.0% |        38 |
+| users                   |       209 |          8 |   100.0% |        38 |
 | vulnerabilities         |        61 |          3 |   100.0% |         8 |
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        80 |          2 |   100.0% |         6 |
-| **Total**               | **8,300** |    **349** |          | **1,169** |
+| **Total**               | **8,315** |    **349** |          | **1,169** |
 
 </details>
 
@@ -305,8 +305,8 @@
 | cmd/audit_discovery_completeness               |    77.9% |
 | cmd/audit_doc_coverage                         |    81.6% |
 | cmd/audit_dynamic_aliases                      |    48.4% |
-| cmd/audit_e2e_gaps                             |    87.5% |
-| cmd/audit_edition_tier                         |    26.0% |
+| cmd/audit_e2e_gaps                             |    87.8% |
+| cmd/audit_edition_tier                         |    36.0% |
 | cmd/audit_metrics                              |    52.4% |
 | cmd/audit_string_dupes                         |    90.7% |
 | cmd/audit_surface_quality                      |    71.8% |
@@ -531,9 +531,9 @@
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:
 
-- **cmd/audit_edition_tier** (26.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_llms** (26.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_testing_docs** (27.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_edition_tier** (36.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_1to1** (39.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_action_catalog_manifest** (41.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/termio** (45.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
@@ -554,8 +554,8 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_docker_tools** (86.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/internal/apidocs** (86.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **edition** (87.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
-- **cmd/audit_e2e_gaps** (87.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_1to1/internal/actions** (87.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_e2e_gaps** (87.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 
 <!-- END TESTING STATS -->
