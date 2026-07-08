@@ -238,6 +238,12 @@ When creating a new release and uploading binaries to GitHub Releases:
 
 1. Build cross-platform binaries with `make release` (uses GoReleaser locally, flattens `dist/` to match GitHub Release asset names)
 2. **Release link names MUST be exact filenames** (e.g. `checksums.txt.asc`, `gitlab-mcp-server-linux-amd64`). Never add descriptive suffixes like `(GPG signature)` — `go-selfupdate` matches asset names exactly and will fail to find files with decorated names
+3. The tag-triggered release workflow also publishes derived artifacts automatically:
+   - `gitlab-mcp-server-darwin-all` — macOS universal (fat) binary from GoReleaser `universal_binaries`
+   - `gitlab-mcp-server.mcpb` — Claude Desktop extension built by `scripts/build-mcpb.sh` from `mcpb/manifest.json` (validate with `make check-mcpb`, build locally with `make mcpb`)
+   - Homebrew formula update pushed to `jmrplens/homebrew-tap` by `scripts/update-homebrew-tap.sh` (secret `TAP_DEPLOY_KEY_B64`)
+   - winget version PR to `microsoft/winget-pkgs` via `winget-releaser` (secret `WINGET_TOKEN`)
+   - Version stamping of `server.json`, `.plugin/plugin.json`, and `mcpb/manifest.json` committed back to main by `scripts/update-server-json-sha.sh`
 
 ### Post-implementation verification
 

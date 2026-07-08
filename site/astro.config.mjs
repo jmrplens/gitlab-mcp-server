@@ -202,6 +202,8 @@ const jsonLd = JSON.stringify({
 				"https://www.pulsemcp.com/servers/jmrplens-gitlab",
 				"https://mcpservers.org/servers/jmrplens/gitlab-mcp-server",
 				"https://enterprisedna.co/directories/mcp/jmrplens-gitlab-mcp-server",
+				"https://lobehub.com/mcp/jmrplens-gitlab-mcp-server",
+				"https://mcpmarket.com/server/gitlab-32",
 			],
 		},
 		{

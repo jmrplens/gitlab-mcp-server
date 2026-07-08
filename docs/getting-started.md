@@ -44,13 +44,22 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
 ### One-line installer (native binary)
 
 ```bash
-# Linux/macOS
+# macOS/Linux (Homebrew)
+brew install jmrplens/tap/gitlab-mcp-server
+# Linux/macOS (script)
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 
 claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
 ```
+
+### Claude Desktop one-click extension (.mcpb)
+
+Claude Desktop users can skip all of the above: download
+[`gitlab-mcp-server.mcpb`](https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server.mcpb)
+and open it with Claude Desktop — see the
+[Claude Desktop Extension guide](guides/claude-desktop-extension.md).
 
 Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs). Prefer a guided flow with no JSON to edit? Run `gitlab-mcp-server --setup` after installing the binary (see [Step 2](#step-2-run-the-setup-wizard)).
 
@@ -70,6 +79,7 @@ Download the latest release for your platform from the project [Releases](https:
 | Windows arm64       | `gitlab-mcp-server-windows-arm64.exe` |
 | macOS Intel         | `gitlab-mcp-server-darwin-amd64`      |
 | macOS Apple Silicon | `gitlab-mcp-server-darwin-arm64`      |
+| macOS universal     | `gitlab-mcp-server-darwin-all`        |
 
 On Linux/macOS, make it executable:
 
