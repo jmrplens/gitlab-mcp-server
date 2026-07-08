@@ -119,6 +119,24 @@ jobs:
           sha256sum dist/gitlab-mcp-server.mcpb
           gh release upload "v${VERSION}" dist/gitlab-mcp-server.mcpb --clobber
 
+      - name: Update Homebrew tap formula
+        env:
+          TAP_DEPLOY_KEY_B64: ${{ secrets.TAP_DEPLOY_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAP_DEPLOY_KEY_B64}" ]; then
+            echo "::warning::TAP_DEPLOY_KEY_B64 secret is not configured — skipping Homebrew tap update"
+            exit 0
+          fi
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          KEY_FILE="${RUNNER_TEMP}/tap_deploy_key"
+          KNOWN_HOSTS_FILE="${RUNNER_TEMP}/tap_known_hosts"
+          echo "${TAP_DEPLOY_KEY_B64}" | base64 --decode > "${KEY_FILE}"
+          chmod 600 "${KEY_FILE}"
+          ssh-keyscan -H github.com > "${KNOWN_HOSTS_FILE}"
+          export GIT_SSH_COMMAND="ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
+          bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap"
+
       - name: Publish to MCP Registry
         env:
           # Pin to a specific version of the mcp-publisher tool for supply-chain integrity.
@@ -205,6 +223,24 @@ jobs:
           (Open Plugins), and mcpb/manifest.json (Claude Desktop
           extension) with version ${VERSION} and pinned SHA256 hashes."
           git push origin main
+
+  winget:
+    name: Winget
+    runs-on: windows-latest
+    needs: [release]
+    steps:
+      # Publishes a version-update PR to microsoft/winget-pkgs via the
+      # jmrplens/winget-pkgs fork. Only works once the initial package
+      # manifest (jmrplens.gitlab-mcp-server) has been merged upstream —
+      # continue-on-error keeps releases green until then and if Microsoft's
+      # validation service hiccups.
+      - uses: vedantmgoyal9/winget-releaser@v2
+        continue-on-error: true
+        with:
+          identifier: jmrplens.gitlab-mcp-server
+          installers-regex: '-windows-(amd64|arm64)\.exe$'
+          release-tag: ${{ github.ref_name }}
+          token: ${{ secrets.WINGET_TOKEN }}
 
   docker:
     name: Docker
