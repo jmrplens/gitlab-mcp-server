@@ -88,6 +88,11 @@ Registran un servidor basado en **Docker** (descarga la imagen en la primera eje
 [![Añadir a LM Studio](https://files.lmstudio.ai/deeplink/mcp-install-dark.svg)](https://lmstudio.ai/install-mcp?name=gitlab&config=eyJjb21tYW5kIjoiZG9ja2VyIiwiYXJncyI6WyJydW4iLCItaSIsIi0tcm0iLCItZSIsIkdJVExBQl9UT0tFTiIsImdoY3IuaW8vam1ycGxlbnMvZ2l0bGFiLW1jcC1zZXJ2ZXI6bGF0ZXN0IiwiLS1odHRwPWZhbHNlIl0sImVudiI6eyJHSVRMQUJfVE9LRU4iOiJZT1VSX0dJVExBQl9UT0tFTiJ9fQ%3D%3D)
 [![Añadir a Kiro](https://kiro.dev/images/add-to-kiro.svg)](https://kiro.dev/launch/mcp/add?name=gitlab&config=%7B%22command%22%3A%22docker%22%2C%22args%22%3A%5B%22run%22%2C%22-i%22%2C%22--rm%22%2C%22-e%22%2C%22GITLAB_TOKEN%22%2C%22ghcr.io%2Fjmrplens%2Fgitlab-mcp-server%3Alatest%22%2C%22--http%3Dfalse%22%5D%2C%22env%22%3A%7B%22GITLAB_TOKEN%22%3A%22YOUR_GITLAB_TOKEN%22%7D%7D)
 
+Para **Claude Desktop**, descarga en su lugar la
+[extensión de escritorio .mcpb](/gitlab-mcp-server/es/claude-desktop/) — una
+instalación nativa en un clic (macOS universal + Windows) sin Docker y con el
+token guardado en el llavero del sistema.
+
 ### Claude Code (`claude mcp add`)
 
 Docker (sin instalar nada — descarga la imagen en la primera ejecución):
@@ -99,10 +104,12 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
 
 ### Instalador de una línea (binario nativo)
 
-Instala el binario en tu PATH y lo registra. Las actualizaciones las gestiona el auto-update integrado del binario.
+Instala el binario en tu PATH y lo registra. Las actualizaciones las gestiona el auto-update integrado del binario (o Homebrew, que fija su propia fórmula con checksums).
 
 ```bash
-# Linux/macOS
+# macOS/Linux (Homebrew)
+brew install jmrplens/tap/gitlab-mcp-server
+# Linux/macOS (script)
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
@@ -124,10 +131,12 @@ El [asistente de configuración](#asistente-de-configuración) integrado recoge 
 | --------------------- | ------------------------------------- |
 | Linux (x86_64)        | `gitlab-mcp-server-linux-amd64`       |
 | Linux (ARM64)         | `gitlab-mcp-server-linux-arm64`       |
+| macOS (universal)     | `gitlab-mcp-server-darwin-all`        |
 | macOS (Intel)         | `gitlab-mcp-server-darwin-amd64`      |
 | macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`      |
 | Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe` |
 | Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe` |
+| Claude Desktop        | `gitlab-mcp-server.mcpb` — consulta [Extensión para Claude Desktop](/gitlab-mcp-server/es/claude-desktop/) |
 
 ### Hacerlo ejecutable (Linux/macOS)
 

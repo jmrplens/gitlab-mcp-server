@@ -476,10 +476,12 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 
 	b.WriteString("## Documentation\n\n")
 	writeLLMSLink(&b, "Getting started", "docs/getting-started.md", "Installation and first-run guide")
+	writeLLMSLink(&b, "Claude Desktop extension", "docs/guides/claude-desktop-extension.md", "One-click .mcpb install for Claude Desktop (macOS universal + Windows)")
 	writeLLMSLink(&b, "Configuration", "docs/reference/configuration.md", "Full configuration reference")
 	writeLLMSLink(&b, "Environment variables", "docs/reference/env.md", "Environment variable reference")
 	writeLLMSLink(&b, "HTTP server mode", "docs/guides/http-server-mode.md", "Remote MCP transport setup")
 	writeLLMSLink(&b, "Security model", "docs/concepts/security.md", "Authentication, read-only mode, safe mode, and security controls")
+	writeLLMSLink(&b, "Privacy policy", "PRIVACY.md", "No telemetry; data flows only to the configured GitLab instance")
 
 	b.WriteString("\n## Tool References\n\n")
 	writeLLMSLink(&b, "Dynamic tools", "docs/concepts/dynamic-tools.md", "Low-token find/execute mode and usage pattern")

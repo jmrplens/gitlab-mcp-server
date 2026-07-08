@@ -199,10 +199,12 @@ Prompts:
 ## Documentation
 
 - [Getting started](docs/getting-started.md): Installation and first-run guide
+- [Claude Desktop extension](docs/guides/claude-desktop-extension.md): One-click .mcpb install for Claude Desktop (macOS universal + Windows)
 - [Configuration](docs/reference/configuration.md): Full configuration reference
 - [Environment variables](docs/reference/env.md): Environment variable reference
 - [HTTP server mode](docs/guides/http-server-mode.md): Remote MCP transport setup
 - [Security model](docs/concepts/security.md): Authentication, read-only mode, safe mode, and security controls
+- [Privacy policy](PRIVACY.md): No telemetry; data flows only to the configured GitLab instance
 
 ## Tool References
 
