@@ -224,6 +224,24 @@ jobs:
           extension) with version ${VERSION} and pinned SHA256 hashes."
           git push origin main
 
+  winget:
+    name: Winget
+    runs-on: windows-latest
+    needs: [release]
+    steps:
+      # Publishes a version-update PR to microsoft/winget-pkgs via the
+      # jmrplens/winget-pkgs fork. Only works once the initial package
+      # manifest (jmrplens.gitlab-mcp-server) has been merged upstream —
+      # continue-on-error keeps releases green until then and if Microsoft's
+      # validation service hiccups.
+      - uses: vedantmgoyal9/winget-releaser@v2
+        continue-on-error: true
+        with:
+          identifier: jmrplens.gitlab-mcp-server
+          installers-regex: '-windows-(amd64|arm64)\.exe$'
+          release-tag: ${{ github.ref_name }}
+          token: ${{ secrets.WINGET_TOKEN }}
+
   docker:
     name: Docker
     runs-on: ubuntu-latest
