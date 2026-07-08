@@ -86,7 +86,9 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
 Or install the native binary first, then register it:
 
 ```bash
-# Linux/macOS
+# macOS/Linux (Homebrew)
+brew install jmrplens/tap/gitlab-mcp-server
+# Linux/macOS (script)
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex

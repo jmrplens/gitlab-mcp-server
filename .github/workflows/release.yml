@@ -119,6 +119,24 @@ jobs:
           sha256sum dist/gitlab-mcp-server.mcpb
           gh release upload "v${VERSION}" dist/gitlab-mcp-server.mcpb --clobber
 
+      - name: Update Homebrew tap formula
+        env:
+          TAP_DEPLOY_KEY_B64: ${{ secrets.TAP_DEPLOY_KEY_B64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAP_DEPLOY_KEY_B64}" ]; then
+            echo "::warning::TAP_DEPLOY_KEY_B64 secret is not configured — skipping Homebrew tap update"
+            exit 0
+          fi
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          KEY_FILE="${RUNNER_TEMP}/tap_deploy_key"
+          KNOWN_HOSTS_FILE="${RUNNER_TEMP}/tap_known_hosts"
+          echo "${TAP_DEPLOY_KEY_B64}" | base64 --decode > "${KEY_FILE}"
+          chmod 600 "${KEY_FILE}"
+          ssh-keyscan -H github.com > "${KNOWN_HOSTS_FILE}"
+          export GIT_SSH_COMMAND="ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN_HOSTS_FILE}"
+          bash scripts/update-homebrew-tap.sh dist/checksums.txt "${VERSION}" "${RUNNER_TEMP}/homebrew-tap"
+
       - name: Publish to MCP Registry
         env:
           # Pin to a specific version of the mcp-publisher tool for supply-chain integrity.
