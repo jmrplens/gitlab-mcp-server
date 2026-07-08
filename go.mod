@@ -1,6 +1,6 @@
 module github.com/jmrplens/gitlab-mcp-server/v2
 
-go 1.26.4
+go 1.26.5
 
 require (
 	charm.land/bubbles/v2 v2.1.1
