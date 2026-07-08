@@ -177,7 +177,7 @@ Always write idiomatic Go code that follows the official SDK patterns and Go com
 ## MCP Go SDK v1.6.1 Key Knowledge
 
 - **Protocol version**: 2025-11-25
-- **Project Go requirement**: 1.26.4
+- **Project Go requirement**: 1.26.5
 - **OAuth**: Stabilized — no build tag needed, `auth/` and `auth/extauth/` packages
 - **DNS rebinding protection**: Built-in for HTTP transport (localhost binding)
 - **Cross-origin protection**: `http.CrossOriginProtection` middleware applied automatically
