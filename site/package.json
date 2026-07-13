@@ -45,6 +45,6 @@
     "prettier": "^3.9.4",
     "serve": "^14.2.6",
     "starlight-links-validator": "^0.25.2",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   }
 }
