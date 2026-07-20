@@ -1,6 +1,7 @@
 package auditevents
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -46,8 +47,10 @@ func FormatMarkdown(e Output) string {
 			)
 		}
 	}
-	if len(e.Details.ChangeObject) > 0 {
-		fmt.Fprintf(&sb, "\n### Change (object)\n\n```json\n%s\n```\n", string(e.Details.ChangeObject))
+	if e.Details.ChangeObject != nil {
+		if raw, err := json.Marshal(e.Details.ChangeObject); err == nil {
+			fmt.Fprintf(&sb, "\n### Change (object)\n\n```json\n%s\n```\n", string(raw))
+		}
 	}
 	toolutil.WriteHints(
 		&sb,

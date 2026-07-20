@@ -934,11 +934,15 @@ func TestGetInstance_ObjectValuedChange_LandsInChangeObject(t *testing.T) {
 	if out.Details.Change != "" {
 		t.Errorf("plain-string Change should be empty for object-valued change, got %q", out.Details.Change)
 	}
-	if len(out.Details.ChangeObject) == 0 {
-		t.Fatal("ChangeObject should hold the object-valued change, got empty")
+	if out.Details.ChangeObject == nil {
+		t.Fatal("ChangeObject should hold the object-valued change, got nil")
 	}
-	if !strings.Contains(string(out.Details.ChangeObject), "group_access") {
-		t.Errorf("ChangeObject missing expected content, got %s", string(out.Details.ChangeObject))
+	raw, err := json.Marshal(out.Details.ChangeObject)
+	if err != nil {
+		t.Fatalf("marshal ChangeObject: %v", err)
+	}
+	if !strings.Contains(string(raw), "group_access") {
+		t.Errorf("ChangeObject missing expected content, got %s", string(raw))
 	}
 }
 

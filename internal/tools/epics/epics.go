@@ -484,7 +484,7 @@ func listWithWorkItems(ctx context.Context, client *gitlabclient.Client, input L
 		// Epics are Premium/Ultimate and the output maps EE fields (weight,
 		// status, color, health_status), so opt into them explicitly or they
 		// silently come back empty.
-		ReturnedFields: append(gl.WorkItemDefaultListFields(), "color", "healthStatus", "status", "weight"),
+		ReturnedFields: append(append([]string(nil), gl.WorkItemDefaultListFields()...), "color", "healthStatus", "status", "weight"),
 	}
 	if input.State != "" {
 		opts.State = &input.State

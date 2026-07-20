@@ -961,7 +961,7 @@ func TestList_WorkItems_RequestsEEFields(t *testing.T) {
 	}))
 	boolTrue := true
 	// Confidential set routes List through the work-items (GraphQL) path.
-	if _, err := List(context.Background(), client, ListInput{FullPath: testFullPath, Confidential: &boolTrue}); err != nil {
+	if _, err := List(t.Context(), client, ListInput{FullPath: testFullPath, Confidential: &boolTrue}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 }
