@@ -22,6 +22,12 @@ type LinkedItem struct {
 	Path     string `json:"path,omitempty"`
 }
 
+// ChildItem is a summary reference to a child work item in the hierarchy.
+type ChildItem struct {
+	IID  int64  `json:"iid" jsonschema:"Internal ID (IID) of the child work item"`
+	Path string `json:"path,omitempty" jsonschema:"Namespace full path of the child work item"`
+}
+
 // WorkItemItem is a summary of a work item.
 type WorkItemItem struct {
 	ID           int64        `json:"id"`
@@ -36,6 +42,7 @@ type WorkItemItem struct {
 	Assignees    []string     `json:"assignees,omitempty"`
 	Labels       []string     `json:"labels,omitempty"`
 	LinkedItems  []LinkedItem `json:"linked_items,omitempty"`
+	Children     []ChildItem  `json:"children,omitempty" jsonschema:"Child work items in the hierarchy (each with namespace path and IID)"`
 	Confidential bool         `json:"confidential,omitempty"`
 	CreatedAt    string       `json:"created_at,omitempty"`
 	UpdatedAt    string       `json:"updated_at,omitempty"`
@@ -89,6 +96,12 @@ func workItemToItem(wi *gl.WorkItem) WorkItemItem {
 			IID:      li.IID,
 			LinkType: li.LinkType,
 			Path:     li.NamespacePath,
+		})
+	}
+	for _, c := range wi.Children {
+		item.Children = append(item.Children, ChildItem{
+			IID:  c.IID,
+			Path: c.NamespacePath,
 		})
 	}
 	if wi.CreatedAt != nil {
@@ -202,6 +215,19 @@ query ListWorkItems(
         updatedAt
         closedAt
         webUrl
+        features {
+          hierarchy {
+            hasChildren
+            children {
+              nodes {
+                iid
+                namespace {
+                  fullPath
+                }
+              }
+            }
+          }
+        }
       }
     }
   }
@@ -240,6 +266,22 @@ type gqlListWorkItem struct {
 	UpdatedAt string `json:"updatedAt"`
 	ClosedAt  string `json:"closedAt"`
 	WebURL    string `json:"webUrl"`
+	Features  struct {
+		Hierarchy *struct {
+			HasChildren bool `json:"hasChildren"`
+			Children    struct {
+				Nodes []gqlWorkItemChild `json:"nodes"`
+			} `json:"children"`
+		} `json:"hierarchy"`
+	} `json:"features"`
+}
+
+// gqlWorkItemChild is a child node in the hierarchy widget of the list query.
+type gqlWorkItemChild struct {
+	IID       string `json:"iid"`
+	Namespace struct {
+		FullPath string `json:"fullPath"`
+	} `json:"namespace"`
 }
 
 // List retrieves work items for a project or group.
@@ -346,6 +388,18 @@ func gqlListWorkItemToItem(item gqlListWorkItem) (WorkItemItem, error) {
 	}
 	if item.Author != nil {
 		mapped.Author = item.Author.Username
+	}
+	if h := item.Features.Hierarchy; h != nil && h.HasChildren {
+		for _, node := range h.Children.Nodes {
+			childIID, parseErr := parseWorkItemInt64("iid", node.IID)
+			if parseErr != nil {
+				return WorkItemItem{}, parseErr
+			}
+			mapped.Children = append(mapped.Children, ChildItem{
+				IID:  childIID,
+				Path: node.Namespace.FullPath,
+			})
+		}
 	}
 	return mapped, nil
 }

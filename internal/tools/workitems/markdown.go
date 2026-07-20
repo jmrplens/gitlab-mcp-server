@@ -42,6 +42,14 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 			fmt.Fprintf(&sb, "| %d | %s | %s |\n", li.IID, li.LinkType, li.Path)
 		}
 	}
+	if len(wi.Children) > 0 {
+		sb.WriteString("\n### Children\n\n")
+		sb.WriteString("| IID | Path |\n")
+		sb.WriteString("|-----|------|\n")
+		for _, c := range wi.Children {
+			fmt.Fprintf(&sb, "| %d | %s |\n", c.IID, c.Path)
+		}
+	}
 	toolutil.WriteHints(&sb, "Use `gitlab_update_work_item` to modify this work item")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }

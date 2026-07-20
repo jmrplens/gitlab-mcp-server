@@ -53,7 +53,7 @@ Retrieve detailed information about a GitLab merge request by its IID (project-s
 
 ### `gitlab_mr_list`
 
-List merge requests in a GitLab project. Supports filtering by state (opened/closed/merged/all), author, assignee, reviewer, labels, milestone, and source/target branch. Returns paginated results.
+List merge requests in a GitLab project. Supports filtering by state (opened/closed/merged/all), author, assignee, reviewer, labels, milestone, source/target branch, and non_archived (restrict to merge requests from non-archived projects; default true). Returns paginated results.
 
 | Annotation | **Read** |
 | ---------- | -------- |
@@ -125,14 +125,14 @@ Remove the authenticated user's approval from a GitLab merge request.
 
 ### `gitlab_mr_list_global`
 
-List merge requests across all projects visible to the authenticated user. Supports filtering by state (opened/closed/merged/all), author, reviewer, labels, milestone, draft status, and date ranges. Returns paginated results.
+List merge requests across all projects visible to the authenticated user. Supports filtering by state (opened/closed/merged/all), author, reviewer, labels, milestone, draft status, non_archived (restrict to merge requests from non-archived projects; default true), and date ranges. Returns paginated results.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_mr_list_group`
 
-List merge requests in a GitLab group. Supports filtering by state (opened/closed/merged/all), author, reviewer, labels, milestone, draft status, and date ranges. Returns paginated results.
+List merge requests in a GitLab group. Supports filtering by state (opened/closed/merged/all), author, reviewer, labels, milestone, draft status, non_archived (restrict to merge requests from non-archived projects; default true), and date ranges. Returns paginated results.
 
 | Annotation | **Read** |
 | ---------- | -------- |

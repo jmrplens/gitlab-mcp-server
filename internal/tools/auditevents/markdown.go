@@ -34,6 +34,21 @@ func FormatMarkdown(e Output) string {
 	if e.Details.EntityPath != "" {
 		fmt.Fprintf(&sb, "| Entity Path | %s |\n", toolutil.EscapeMdTableCell(e.Details.EntityPath))
 	}
+	if len(e.Details.Changes) > 0 {
+		sb.WriteString("\n### Changes\n\n")
+		sb.WriteString("| Change | From | To |\n|--------|------|----|\n")
+		for _, c := range e.Details.Changes {
+			fmt.Fprintf(
+				&sb, "| %s | %s | %s |\n",
+				toolutil.EscapeMdTableCell(c.Change),
+				toolutil.EscapeMdTableCell(c.From),
+				toolutil.EscapeMdTableCell(c.To),
+			)
+		}
+	}
+	if len(e.Details.ChangeObject) > 0 {
+		fmt.Fprintf(&sb, "\n### Change (object)\n\n```json\n%s\n```\n", string(e.Details.ChangeObject))
+	}
 	toolutil.WriteHints(
 		&sb,
 		"Use `gitlab_list_project_audit_events` or `gitlab_list_group_audit_events` to browse more events",

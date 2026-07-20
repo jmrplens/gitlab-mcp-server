@@ -390,14 +390,14 @@ List weight events for an issue (Premium) — every weight value set, with the w
 
 ### `gitlab_get_work_item`
 
-Get a single work item by IID. Experimental: the Work Items API may introduce breaking changes between minor versions.
+Get a single work item by IID. Returns hierarchy child work items (namespace path and IID) alongside linked items. Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 | Annotation | **Read** |
 | ---------- | -------- |
 
 ### `gitlab_list_work_items`
 
-List work items for a project or group. Supports filtering by state, type, labels, author, search. Experimental: the Work Items API may introduce breaking changes between minor versions.
+List work items for a project or group. Supports filtering by state, type, labels, author, search. Each item includes its hierarchy child work items (namespace path and IID). Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 | Annotation | **Read** |
 | ---------- | -------- |

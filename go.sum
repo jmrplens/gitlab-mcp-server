@@ -128,8 +128,8 @@ github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 gitlab.com/gitlab-org/api/client-go v1.46.0 h1:YxBWFZIFYKcGESCb9fpkwzouo+apyB9pr/XTWzNoL24=
 gitlab.com/gitlab-org/api/client-go v1.46.0/go.mod h1:FtgyU6g2HS5+fMhw6nLK96GBEEBx5MzntOiJWfIaiN8=
-gitlab.com/gitlab-org/api/client-go/v2 v2.46.0 h1:t9QSeMck3kuHu9R6C7h8cYk4qBI4ZD4SQ0jspxKYs2E=
-gitlab.com/gitlab-org/api/client-go/v2 v2.46.0/go.mod h1:1LK5UOowqo9apkL+zn7sM8t/hCzBV6F1b2RUIHL9+Oo=
+gitlab.com/gitlab-org/api/client-go/v2 v2.51.0 h1:jP3bsuS3WpiEqhxhG58GJtqCyOnjyACQ8u8oyUg7ru8=
+gitlab.com/gitlab-org/api/client-go/v2 v2.51.0/go.mod h1:P0sRPwCAGIek6HIU0JH5W9Ic5+z3eWvCWwXeg7Pwr7o=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9/go.mod h1:LzIPMQfyMNhhGPhUkYOs5KpL4U8rLKemX1yGLhDgUto=
 golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a/go.mod h1:P+XmwS30IXTQdn5tA2iutPOUgjI07+tq3H3K9MVA1s8=

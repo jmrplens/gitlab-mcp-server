@@ -6,6 +6,7 @@ package groups
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -34,7 +35,7 @@ const (
 var groupListJSON = `[{"id":99,"name":"infrastructure","path":"infra","full_path":"org/infra","full_name":"Org / Infrastructure","description":"Infra group","visibility":"private","web_url":"https://gitlab.example.com/groups/org/infra","parent_id":1,"created_at":"2026-01-15T10:00:00Z"}]`
 
 // groupDetailJSON is a single group detail JSON response fixture.
-var groupDetailJSON = `{"id":99,"name":"infrastructure","path":"infra","full_path":"org/infra","full_name":"Org / Infrastructure","description":"Infra group","visibility":"private","web_url":"https://gitlab.example.com/groups/org/infra","parent_id":1,"created_at":"2026-01-15T10:00:00Z","marked_for_deletion_on":"2026-06-01"}`
+var groupDetailJSON = `{"id":99,"name":"infrastructure","path":"infra","full_path":"org/infra","full_name":"Org / Infrastructure","description":"Infra group","visibility":"private","web_url":"https://gitlab.example.com/groups/org/infra","parent_id":1,"created_at":"2026-01-15T10:00:00Z","marked_for_deletion_on":"2026-06-01","crm_enabled":true}`
 
 // groupMembersJSON is a JSON response fixture containing two group members.
 var groupMembersJSON = `[{"id":10,"username":"devops1","name":"DevOps One","state":"active","access_level":40,"web_url":"https://gitlab.example.com/devops1"},{"id":11,"username":"devops2","name":"DevOps Two","state":"active","access_level":30,"web_url":"https://gitlab.example.com/devops2"}]`
@@ -1236,6 +1237,98 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 	}
 	if out.Name != "updated" {
 		t.Errorf("out.Name = %q, want %q", out.Name, "updated")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// crm_enabled — output mapping + create/update option passthrough (client-go
+// v2.47.0, SDK MR !2933). CRM is a Free-tier feature, so the field carries no
+// tier tag and is exercised on the standard CE round-trip paths.
+// ---------------------------------------------------------------------------.
+
+// TestGroup_CRMEnabled_Get verifies that a crm_enabled=true group response is
+// mapped onto the output shape by ToOutput via the Get handler.
+// The mock GitLab API at /api/v4/groups/99 (GET) returns a body carrying
+// crm_enabled:true. It asserts out.CRMEnabled is decoded as true.
+func TestGroup_CRMEnabled_Get(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathGroup99 {
+			testutil.RespondJSON(w, http.StatusOK, groupDetailJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := Get(context.Background(), client, GetInput{GroupID: "99"})
+	if err != nil {
+		t.Fatalf(fmtGroupGetErr, err)
+	}
+	if !out.CRMEnabled {
+		t.Errorf("out.CRMEnabled = %v, want true", out.CRMEnabled)
+	}
+}
+
+// TestGroup_CRMEnabled_Create verifies that CreateInput.CRMEnabled is forwarded
+// to the GitLab API as crm_enabled and that the response value round-trips back
+// onto the output shape.
+// The mock GitLab API at /api/v4/groups (POST) inspects the request body for
+// crm_enabled:true and echoes a crm_enabled:true group. It asserts both the sent
+// payload and the decoded output.
+func TestGroup_CRMEnabled_Create(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathGroups {
+			body, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(body), `"crm_enabled":true`) {
+				t.Errorf("request body missing crm_enabled:true, got %s", body)
+			}
+			testutil.RespondJSON(w, http.StatusCreated, groupDetailJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	crm := true
+	out, err := Create(context.Background(), client, CreateInput{
+		Name:       testGroupInfra,
+		CRMEnabled: &crm,
+	})
+	if err != nil {
+		t.Fatalf(fmtGroupCreateErr, err)
+	}
+	if !out.CRMEnabled {
+		t.Errorf("out.CRMEnabled = %v, want true", out.CRMEnabled)
+	}
+}
+
+// TestGroup_CRMEnabled_Update verifies that UpdateInput.CRMEnabled is forwarded
+// to the GitLab API as crm_enabled and that the response value round-trips back
+// onto the output shape.
+// The mock GitLab API at /api/v4/groups/99 (PUT) inspects the request body for
+// crm_enabled:false and echoes a group body. It asserts the sent payload
+// preserves the explicit false value.
+func TestGroup_CRMEnabled_Update(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == pathGroup99 {
+			body, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(body), `"crm_enabled":false`) {
+				t.Errorf("request body missing crm_enabled:false, got %s", body)
+			}
+			testutil.RespondJSON(w, http.StatusOK, groupDetailJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	crm := false
+	out, err := Update(context.Background(), client, UpdateInput{
+		GroupID:    "99",
+		CRMEnabled: &crm,
+	})
+	if err != nil {
+		t.Fatalf(fmtGroupUpdateErr, err)
+	}
+	if !out.CRMEnabled {
+		t.Errorf("out.CRMEnabled = %v, want true (from response body)", out.CRMEnabled)
 	}
 }
 

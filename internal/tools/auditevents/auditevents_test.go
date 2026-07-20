@@ -4,6 +4,7 @@ package auditevents
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -865,5 +866,107 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 	md := FormatListMarkdown(out)
 	if !strings.Contains(md, "No audit events found") {
 		t.Error("markdown missing 'No audit events found' for empty list")
+	}
+}
+
+// TestGetInstance_ChangesArray_MapsThrough verifies that a plural "changes"
+// array in details is mapped through to DetailsOutput.Changes with each entry's
+// change/from/to fields preserved (client-go AuditEventChange, SDK !2949).
+// The mock GitLab API at /api/v4/audit_events/7 (GET) returns an event whose
+// details include a two-element changes array.
+func TestGetInstance_ChangesArray_MapsThrough(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/audit_events/7" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id":7,"author_id":10,"entity_id":0,"entity_type":"Group","event_name":"group_settings_updated","event_type":"settings",
+			"details":{"changes":[
+				{"change":"visibility","from":"private","to":"internal"},
+				{"change":"description","from":"old","to":"new"}
+			]},
+			"created_at":"2026-01-15T10:00:00Z"
+		}`)
+	}))
+
+	out, err := GetInstance(context.Background(), client, GetInstanceInput{EventID: 7})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.Details.Changes) != 2 {
+		t.Fatalf("got %d changes, want 2", len(out.Details.Changes))
+	}
+	if out.Details.Changes[0].Change != "visibility" ||
+		out.Details.Changes[0].From != "private" ||
+		out.Details.Changes[0].To != "internal" {
+		t.Errorf("changes[0] mismatch: %+v", out.Details.Changes[0])
+	}
+	if out.Details.Changes[1].Change != "description" ||
+		out.Details.Changes[1].From != "old" ||
+		out.Details.Changes[1].To != "new" {
+		t.Errorf("changes[1] mismatch: %+v", out.Details.Changes[1])
+	}
+}
+
+// TestGetInstance_ObjectValuedChange_LandsInChangeObject verifies that when the
+// API returns "change" as a JSON object rather than a plain string (e.g.
+// project_group_link_updated), the object is preserved in DetailsOutput.ChangeObject
+// as raw JSON, while the plain-string Change field stays empty (SDK !2949 custom
+// AuditEventDetails.UnmarshalJSON).
+func TestGetInstance_ObjectValuedChange_LandsInChangeObject(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/audit_events/8" {
+			http.NotFound(w, r)
+			return
+		}
+		testutil.RespondJSON(w, http.StatusOK, `{
+			"id":8,"author_id":10,"entity_id":0,"entity_type":"Project","event_name":"project_group_link_updated","event_type":"settings",
+			"details":{"change":{"group_access":{"from":10,"to":30}}},
+			"created_at":"2026-01-15T10:00:00Z"
+		}`)
+	}))
+
+	out, err := GetInstance(context.Background(), client, GetInstanceInput{EventID: 8})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Details.Change != "" {
+		t.Errorf("plain-string Change should be empty for object-valued change, got %q", out.Details.Change)
+	}
+	if len(out.Details.ChangeObject) == 0 {
+		t.Fatal("ChangeObject should hold the object-valued change, got empty")
+	}
+	if !strings.Contains(string(out.Details.ChangeObject), "group_access") {
+		t.Errorf("ChangeObject missing expected content, got %s", string(out.Details.ChangeObject))
+	}
+}
+
+// TestFormatMarkdown_ChangesAndChangeObject verifies the single-event Markdown
+// formatter renders the plural changes table and the object-valued change JSON
+// block when those detail fields are present.
+func TestFormatMarkdown_ChangesAndChangeObject(t *testing.T) {
+	e := Output{
+		ID:        9,
+		EventName: "project_group_link_updated",
+		Details: DetailsOutput{
+			Changes: []ChangeEntry{
+				{Change: "visibility", From: "private", To: "internal"},
+			},
+			ChangeObject: json.RawMessage(`{"group_access":{"from":10,"to":30}}`),
+		},
+	}
+	md := FormatMarkdown(e)
+	if !strings.Contains(md, "### Changes") {
+		t.Error("markdown missing Changes section")
+	}
+	if !strings.Contains(md, "| visibility | private | internal |") {
+		t.Error("markdown missing changes row")
+	}
+	if !strings.Contains(md, "### Change (object)") {
+		t.Error("markdown missing Change (object) section")
+	}
+	if !strings.Contains(md, "group_access") {
+		t.Error("markdown missing raw change object JSON")
 	}
 }

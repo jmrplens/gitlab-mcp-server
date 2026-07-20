@@ -3986,6 +3986,9 @@
         "mr_default_target_self": {
           "type": "boolean"
         },
+        "mr_default_title_template": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
