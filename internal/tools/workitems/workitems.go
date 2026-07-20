@@ -262,18 +262,28 @@ type gqlListWorkItem struct {
 	Author       *struct {
 		Username string `json:"username"`
 	} `json:"author"`
-	CreatedAt string `json:"createdAt"`
-	UpdatedAt string `json:"updatedAt"`
-	ClosedAt  string `json:"closedAt"`
-	WebURL    string `json:"webUrl"`
-	Features  struct {
-		Hierarchy *struct {
-			HasChildren bool `json:"hasChildren"`
-			Children    struct {
-				Nodes []gqlWorkItemChild `json:"nodes"`
-			} `json:"children"`
-		} `json:"hierarchy"`
-	} `json:"features"`
+	CreatedAt string              `json:"createdAt"`
+	UpdatedAt string              `json:"updatedAt"`
+	ClosedAt  string              `json:"closedAt"`
+	WebURL    string              `json:"webUrl"`
+	Features  gqlWorkItemFeatures `json:"features"`
+}
+
+// gqlWorkItemFeatures groups the widget sub-objects parsed from the list query.
+type gqlWorkItemFeatures struct {
+	Hierarchy *gqlWorkItemHierarchy `json:"hierarchy"`
+}
+
+// gqlWorkItemHierarchy is the hierarchy widget of the list query, carrying the
+// child work items when the item has any.
+type gqlWorkItemHierarchy struct {
+	HasChildren bool                `json:"hasChildren"`
+	Children    gqlWorkItemChildren `json:"children"`
+}
+
+// gqlWorkItemChildren is the children connection within the hierarchy widget.
+type gqlWorkItemChildren struct {
+	Nodes []gqlWorkItemChild `json:"nodes"`
 }
 
 // gqlWorkItemChild is a child node in the hierarchy widget of the list query.
