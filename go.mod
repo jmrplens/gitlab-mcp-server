@@ -6,16 +6,16 @@ require (
 	charm.land/bubbles/v2 v2.1.1
 	charm.land/bubbletea/v2 v2.0.8
 	charm.land/lipgloss/v2 v2.0.5
-	github.com/creativeprojects/go-selfupdate v1.5.2
+	github.com/creativeprojects/go-selfupdate v1.6.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/joho/godotenv v1.5.1
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/shirou/gopsutil/v4 v4.26.6
-	github.com/tiktoken-go/tokenizer v0.8.0
-	gitlab.com/gitlab-org/api/client-go/v2 v2.46.0
-	golang.org/x/crypto v0.53.0
+	github.com/tiktoken-go/tokenizer v0.8.1
+	gitlab.com/gitlab-org/api/client-go/v2 v2.51.0
+	golang.org/x/crypto v0.54.0
 	golang.org/x/time v0.15.0
-	golang.org/x/tools v0.47.0
+	golang.org/x/tools v0.48.0
 )
 
 require (
@@ -33,12 +33,12 @@ require (
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/davidmz/go-pageant v1.0.2 // indirect
-	github.com/dlclark/regexp2/v2 v2.2.2 // indirect
+	github.com/dlclark/regexp2/v2 v2.5.1 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/go-fed/httpsig v1.1.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/google/go-github/v74 v74.0.0 // indirect
+	github.com/google/go-github/v86 v86.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
@@ -63,10 +63,10 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	gitlab.com/gitlab-org/api/client-go v1.46.0 // indirect
 	golang.org/x/exp v0.0.0-20260603202125-055de637280b // indirect
-	golang.org/x/mod v0.37.0 // indirect
+	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/sync v0.22.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
