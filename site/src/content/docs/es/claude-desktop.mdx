@@ -27,15 +27,15 @@ de Windows — sin Docker, Node.js ni Python.
 
 ## Ajustes
 
-| Ajuste                           | Obligatorio | Por defecto          | Variable de entorno      |
-| -------------------------------- | ----------- | -------------------- | ------------------------ |
-| GitLab URL                       | Sí          | `https://gitlab.com` | `GITLAB_URL`             |
-| GitLab Personal Access Token     | Sí          | —                    | `GITLAB_TOKEN`           |
-| Tool surface                     | No          | `dynamic`            | `TOOL_SURFACE`           |
-| GitLab tier                      | No          | autodetección        | `GITLAB_TIER`            |
-| Read-only mode                   | No          | desactivado          | `GITLAB_READ_ONLY`       |
-| Safe mode                        | No          | desactivado          | `GITLAB_SAFE_MODE`       |
-| Skip TLS verification            | No          | desactivado          | `GITLAB_SKIP_TLS_VERIFY` |
+| Ajuste                       | Obligatorio | Por defecto          | Variable de entorno      |
+| ---------------------------- | ----------- | -------------------- | ------------------------ |
+| GitLab URL                   | Sí          | `https://gitlab.com` | `GITLAB_URL`             |
+| GitLab Personal Access Token | Sí          | —                    | `GITLAB_TOKEN`           |
+| Tool surface                 | No          | `dynamic`            | `TOOL_SURFACE`           |
+| GitLab tier                  | No          | autodetección        | `GITLAB_TIER`            |
+| Read-only mode               | No          | desactivado          | `GITLAB_READ_ONLY`       |
+| Safe mode                    | No          | desactivado          | `GITLAB_SAFE_MODE`       |
+| Skip TLS verification        | No          | desactivado          | `GITLAB_SKIP_TLS_VERIFY` |
 
 :::tip[Almacenamiento del token]
 Claude Desktop guarda el Personal Access Token en el llavero del sistema
@@ -58,7 +58,7 @@ publicadas con cada release, en lugar de reemplazos del binario in situ.
 
 ## Verificación
 
-Pídele a Claude algo como *"¿Con qué usuario de GitLab estoy autenticado?"* —
+Pídele a Claude algo como _"¿Con qué usuario de GitLab estoy autenticado?"_ —
 debería llamar a `gitlab_find_action` y después a `gitlab_execute_action` con
 la acción `user.current` y devolver tu nombre de usuario.
 
