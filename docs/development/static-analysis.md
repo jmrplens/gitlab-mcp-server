@@ -162,6 +162,26 @@ govulncheck -tags e2e ./...
 
 It remains separate because it is a vulnerability database scanner, not a normal lint rule inside `golangci-lint`.
 
+#### Accepted-advisory allowlist
+
+`govulncheck` has no native ignore mechanism, so `make govulncheck` runs through
+[`scripts/govulncheck.sh`](../../scripts/govulncheck.sh). The wrapper runs
+`govulncheck` unchanged and, when advisories are reported, passes **only if every
+reported advisory ID is on its allowlist**. Any advisory not on the list — that
+is, any newly introduced or fixable one — still fails the build. Running
+`govulncheck` directly (as in the example above) shows the raw findings without
+the allowlist.
+
+Accepted advisories (keep the list in the script in sync with this table):
+
+| Advisory                                               | Package                       | Reached via                                                                               | Why accepted                                                                                                                                                                                                                                                          |
+| ------------------------------------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`GO-2026-5932`](https://pkg.go.dev/vuln/GO-2026-5932) | `golang.org/x/crypto/openpgp` | `github.com/creativeprojects/go-selfupdate` (GPG verification of our own signed releases) | The package is unmaintained and unsafe by design with **no fixed version** (`Fixed in: N/A`). `go-selfupdate` imports it unconditionally (no build tag), so no dependency bump removes it. Reachability is limited to verifying signatures of our own release assets. |
+
+To accept a new advisory, add its OSV ID to `ALLOWLIST` in
+`scripts/govulncheck.sh` and add a row here with the justification. To retire one
+(e.g. once a fix ships), remove it from both.
+
 ### markdownlint-cli2
 
 `markdownlint-cli2` checks Markdown style and consistency.
