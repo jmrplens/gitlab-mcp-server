@@ -285,15 +285,41 @@ func runJobExtrasManualLifecycle(ctx context.Context, t *testing.T, proj Project
 		t.Logf("Played manual job %d: status=%s", out.ID, out.Status)
 	})
 
+	// Playing a manual job only queues it. Canceling before the runner has the
+	// sleep job stably running races an optimistic-lock "409 Resource lock", and
+	// retrying a not-yet-canceled job is a "403 not retryable". Gate each action
+	// on the job's actual status so the lifecycle is deterministic.
+	runningStatus := jobExtrasWaitJobStatus(ctx, t, proj.ID, manualJobID, 180*time.Second, "running")
+	t.Logf("Manual job %d reached status %q; safe to cancel", manualJobID, runningStatus)
+
 	t.Run("Cancel", func(t *testing.T) {
-		out, err := callToolOn[jobs.Output](ctx, sess.individual, jobExtrasToolCancel, jobs.CancelInput{
-			ProjectID: proj.pidOf(),
-			JobID:     manualJobID,
+		// The job is running; a rare optimistic-lock 409 can still occur if the
+		// runner updates the build at the same instant, so retry the transient
+		// conflict until the cancel takes.
+		var out jobs.Output
+		err := Poll(ctx, 2*time.Second, 60*time.Second, func() (bool, string, error) {
+			o, cerr := callToolOn[jobs.Output](ctx, sess.individual, jobExtrasToolCancel, jobs.CancelInput{
+				ProjectID: proj.pidOf(),
+				JobID:     manualJobID,
+			})
+			if cerr != nil {
+				if isTransientJobConflict(cerr) {
+					return false, "cancel conflict, retrying: " + cerr.Error(), nil
+				}
+				return false, "", cerr
+			}
+			out = o
+			return true, "canceled", nil
 		})
 		requireNoError(t, err, "job cancel")
 		requireTruef(t, out.ID == manualJobID, "expected canceled job ID %d, got %d", manualJobID, out.ID)
 		t.Logf("Canceled job %d: status=%s", out.ID, out.Status)
 	})
+
+	// Retrying requires the cancel to have settled to the terminal "canceled"
+	// status; a still-canceling job is not yet retryable.
+	canceledStatus := jobExtrasWaitJobStatus(ctx, t, proj.ID, manualJobID, 120*time.Second, "canceled")
+	t.Logf("Manual job %d reached status %q; safe to retry", manualJobID, canceledStatus)
 
 	t.Run("Retry", func(t *testing.T) {
 		out, err := callToolOn[jobs.Output](ctx, sess.individual, "gitlab_job_retry", jobs.ActionInput{
@@ -307,6 +333,43 @@ func runJobExtrasManualLifecycle(ctx context.Context, t *testing.T, proj Project
 	})
 
 	jobExtrasCancelBestEffort(ctx, t, proj, retriedID)
+}
+
+// jobExtrasWaitJobStatus polls a job until its status matches one of want,
+// returning the observed status and failing the test if the budget elapses
+// first. Transient API errors are tolerated and re-polled. Used to gate the
+// manual-job cancel/retry lifecycle on the job's real state instead of racing
+// GitLab's build state machine.
+func jobExtrasWaitJobStatus(ctx context.Context, t *testing.T, projectID, jobID int64, budget time.Duration, want ...string) string {
+	t.Helper()
+	wantSet := make(map[string]bool, len(want))
+	for _, s := range want {
+		wantSet[s] = true
+	}
+	var observed string
+	err := Poll(ctx, 3*time.Second, budget, func() (bool, string, error) {
+		j, _, gerr := sess.glClient.GL().Jobs.GetJob(projectID, jobID, gl.WithContext(ctx))
+		if gerr != nil {
+			return false, fmt.Sprintf("job %d: %v", jobID, gerr), nil
+		}
+		observed = j.Status
+		return wantSet[j.Status], "job status " + j.Status, nil
+	})
+	requireNoError(t, err, fmt.Sprintf("wait job %d for %v", jobID, want))
+	return observed
+}
+
+// isTransientJobConflict reports whether a job action error is a retryable
+// optimistic-lock conflict (HTTP 409 / "Resource lock") that GitLab raises when
+// a build row is updated concurrently, as opposed to a terminal failure.
+func isTransientJobConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "409") ||
+		strings.Contains(msg, "resource lock") ||
+		strings.Contains(msg, "conflict")
 }
 
 // jobExtrasCancelBestEffort cancels a job without failing the test: the
