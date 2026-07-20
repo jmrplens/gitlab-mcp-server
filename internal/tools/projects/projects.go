@@ -124,6 +124,7 @@ type CreateInput struct {
 	MergeTrainsSkipTrainAllowed               *bool  `json:"merge_trains_skip_train_allowed,omitempty" jsonschema:"Allow skipping the merge train"`
 	MergeCommitTemplate                       string `json:"merge_commit_template,omitempty" jsonschema:"Template for merge commit messages"`
 	SquashCommitTemplate                      string `json:"squash_commit_template,omitempty" jsonschema:"Template for squash commit messages"`
+	MRDefaultTitleTemplate                    string `json:"mr_default_title_template,omitempty" jsonschema:"Template for default merge request titles"`
 	SuggestionCommitMessage                   string `json:"suggestion_commit_message,omitempty" jsonschema:"Default commit message for suggestions"`
 	IssueBranchTemplate                       string `json:"issue_branch_template,omitempty" jsonschema:"Template for branch names created from issues"`
 	ApprovalsBeforeMerge                      int64  `json:"approvals_before_merge,omitempty" tier:"premium" jsonschema:"Number of approvals required before merge (deprecated: use Merge Request Approvals API)"`
@@ -248,6 +249,7 @@ type Output struct {
 	ProtectMergeRequestPipelines              *bool    `json:"protect_merge_request_pipelines,omitempty"`
 	MergeCommitTemplate                       string   `json:"merge_commit_template,omitempty"`
 	SquashCommitTemplate                      string   `json:"squash_commit_template,omitempty"`
+	MRDefaultTitleTemplate                    string   `json:"mr_default_title_template,omitempty"`
 	AutocloseReferencedIssues                 bool     `json:"autoclose_referenced_issues"`
 	ResolveOutdatedDiffDiscussions            bool     `json:"resolve_outdated_diff_discussions"`
 	SharedRunnersEnabled                      bool     `json:"shared_runners_enabled,omitempty"`
@@ -482,6 +484,7 @@ type UpdateInput struct {
 	AutocloseReferencedIssues                 *bool                `json:"autoclose_referenced_issues,omitempty" jsonschema:"Auto-close referenced issues on merge"`
 	MergeCommitTemplate                       string               `json:"merge_commit_template,omitempty"    jsonschema:"Template for merge commit messages"`
 	SquashCommitTemplate                      string               `json:"squash_commit_template,omitempty"   jsonschema:"Template for squash commit messages"`
+	MRDefaultTitleTemplate                    string               `json:"mr_default_title_template,omitempty" jsonschema:"Template for default merge request titles"`
 	MergePipelinesEnabled                     *bool                `json:"merge_pipelines_enabled,omitempty"  jsonschema:"Enable merged results pipelines"`
 	MergeTrainsEnabled                        *bool                `json:"merge_trains_enabled,omitempty"     jsonschema:"Enable merge trains"`
 	ProtectMergeRequestPipelines              *bool                `json:"protect_merge_request_pipelines,omitempty" jsonschema:"Prevent merge request pipeline settings from being modified by users with lower permissions"`
@@ -619,6 +622,7 @@ func ToOutput(p *gl.Project) Output {
 		ProtectMergeRequestPipelines:              &p.ProtectMergeRequestPipelines,
 		MergeCommitTemplate:                       p.MergeCommitTemplate,
 		SquashCommitTemplate:                      p.SquashCommitTemplate,
+		MRDefaultTitleTemplate:                    p.MRDefaultTitleTemplate,
 		AutocloseReferencedIssues:                 p.AutocloseReferencedIssues,
 		ResolveOutdatedDiffDiscussions:            p.ResolveOutdatedDiffDiscussions,
 		SharedRunnersEnabled:                      p.SharedRunnersEnabled,
@@ -976,6 +980,9 @@ func applyCreateMergeTemplateOpts(opts *gl.CreateProjectOptions, input CreateInp
 	}
 	if input.SquashCommitTemplate != "" {
 		opts.SquashCommitTemplate = new(input.SquashCommitTemplate)
+	}
+	if input.MRDefaultTitleTemplate != "" {
+		opts.MRDefaultTitleTemplate = new(input.MRDefaultTitleTemplate)
 	}
 	if input.SuggestionCommitMessage != "" {
 		opts.SuggestionCommitMessage = new(input.SuggestionCommitMessage)
@@ -1583,6 +1590,9 @@ func applyUpdateMergeOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	}
 	if input.SquashCommitTemplate != "" {
 		opts.SquashCommitTemplate = new(input.SquashCommitTemplate)
+	}
+	if input.MRDefaultTitleTemplate != "" {
+		opts.MRDefaultTitleTemplate = new(input.MRDefaultTitleTemplate)
 	}
 	if input.MergePipelinesEnabled != nil {
 		opts.MergePipelinesEnabled = input.MergePipelinesEnabled

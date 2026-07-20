@@ -2,6 +2,7 @@ package auditevents
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -52,28 +53,38 @@ type GetProjectInput struct {
 	EventID   int64                `json:"event_id"   jsonschema:"Audit event ID,required"`
 }
 
+// ChangeEntry mirrors a single entry in the client-go AuditEventChange struct,
+// i.e. one element of the plural "changes" array that some audit events emit.
+type ChangeEntry struct {
+	Change string `json:"change,omitempty" jsonschema:"The setting or attribute that was changed"`
+	From   string `json:"from,omitempty"   jsonschema:"Previous value before the change"`
+	To     string `json:"to,omitempty"     jsonschema:"New value after the change"`
+}
+
 // DetailsOutput represents the details of an audit event. The exact fields
 // returned depend on the action being recorded; this mirrors every field of
 // the client-go AuditEventDetails struct for 1:1 API fidelity.
 type DetailsOutput struct {
-	With          string `json:"with,omitempty"`
-	Add           string `json:"add,omitempty"`
-	As            string `json:"as,omitempty"`
-	Change        string `json:"change,omitempty"`
-	From          string `json:"from,omitempty"`
-	To            string `json:"to,omitempty"`
-	Remove        string `json:"remove,omitempty"`
-	CustomMessage string `json:"custom_message,omitempty"`
-	AuthorName    string `json:"author_name,omitempty"`
-	AuthorEmail   string `json:"author_email,omitempty"`
-	AuthorClass   string `json:"author_class,omitempty"`
-	TargetID      string `json:"target_id,omitempty"`
-	TargetType    string `json:"target_type,omitempty"`
-	TargetDetails string `json:"target_details,omitempty"`
-	IPAddress     string `json:"ip_address,omitempty"`
-	EntityPath    string `json:"entity_path,omitempty"`
-	FailedLogin   string `json:"failed_login,omitempty"`
-	EventName     string `json:"event_name,omitempty"`
+	With          string        `json:"with,omitempty"`
+	Add           string        `json:"add,omitempty"`
+	As            string        `json:"as,omitempty"`
+	Change        string        `json:"change,omitempty"`
+	ChangeObject  any           `json:"change_object,omitempty" jsonschema:"Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"`
+	Changes       []ChangeEntry `json:"changes,omitempty" jsonschema:"Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values"`
+	From          string        `json:"from,omitempty"`
+	To            string        `json:"to,omitempty"`
+	Remove        string        `json:"remove,omitempty"`
+	CustomMessage string        `json:"custom_message,omitempty"`
+	AuthorName    string        `json:"author_name,omitempty"`
+	AuthorEmail   string        `json:"author_email,omitempty"`
+	AuthorClass   string        `json:"author_class,omitempty"`
+	TargetID      string        `json:"target_id,omitempty"`
+	TargetType    string        `json:"target_type,omitempty"`
+	TargetDetails string        `json:"target_details,omitempty"`
+	IPAddress     string        `json:"ip_address,omitempty"`
+	EntityPath    string        `json:"entity_path,omitempty"`
+	FailedLogin   string        `json:"failed_login,omitempty"`
+	EventName     string        `json:"event_name,omitempty"`
 }
 
 // Output represents a single audit event.
@@ -112,6 +123,17 @@ func toOutput(e *gl.AuditEvent) Output {
 	o.Details.Add = e.Details.Add
 	o.Details.As = e.Details.As
 	o.Details.Change = e.Details.Change
+	if len(e.Details.ChangeObject) > 0 {
+		// Decode the raw object-valued change into a generic value so the
+		// model-facing schema is an open JSON value rather than a byte array.
+		_ = json.Unmarshal(e.Details.ChangeObject, &o.Details.ChangeObject)
+	}
+	if len(e.Details.Changes) > 0 {
+		o.Details.Changes = make([]ChangeEntry, len(e.Details.Changes))
+		for i, c := range e.Details.Changes {
+			o.Details.Changes[i] = ChangeEntry{Change: c.Change, From: c.From, To: c.To}
+		}
+	}
 	o.Details.From = e.Details.From
 	o.Details.To = e.Details.To
 	o.Details.Remove = e.Details.Remove

@@ -94,6 +94,7 @@ type ListInput struct {
 	WithLabelsDetails      *bool                `json:"with_labels_details,omitempty"        jsonschema:"Include full label details (color, description) in the response"`
 	WithMergeStatusRecheck *bool                `json:"with_merge_status_recheck,omitempty"  jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
 	Draft                  *bool                `json:"draft,omitempty"         jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
+	NonArchived            *bool                `json:"non_archived,omitempty"  jsonschema:"Return merge requests from non-archived projects only. Default is true"`
 	IIDs                   []int64              `json:"iids,omitempty"          jsonschema:"Filter by merge request internal IDs"`
 	CreatedAfter           string               `json:"created_after,omitempty"  jsonschema:"Return MRs created after date (ISO 8601 format, e.g. 2025-01-01T00:00:00Z)"`
 	CreatedBefore          string               `json:"created_before,omitempty" jsonschema:"Return MRs created before date (ISO 8601 format, e.g. 2025-12-31T23:59:59Z)"`
@@ -140,6 +141,7 @@ type mergeRequestListFilters struct {
 	WithLabelsDetails *bool
 	WithMergeRecheck  *bool
 	Draft             *bool
+	NonArchived       *bool
 	CreatedAfter      string
 	CreatedBefore     string
 	UpdatedAfter      string
@@ -179,6 +181,7 @@ type mergeRequestListTarget struct {
 	withLabelsDetails func(*bool)
 	withMergeRecheck  func(*bool)
 	draft             func(*bool)
+	nonArchived       func(*bool)
 	createdAfter      func(*time.Time)
 	createdBefore     func(*time.Time)
 	updatedAfter      func(*time.Time)
@@ -245,6 +248,9 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 	}
 	if input.Draft != nil && target.draft != nil {
 		target.draft(input.Draft)
+	}
+	if input.NonArchived != nil && target.nonArchived != nil {
+		target.nonArchived(input.NonArchived)
 	}
 	setTime(toolutil.ParseOptionalTime(input.CreatedAfter), target.createdAfter)
 	setTime(toolutil.ParseOptionalTime(input.CreatedBefore), target.createdBefore)
@@ -587,7 +593,7 @@ func projectMRListFilters(input ListInput) mergeRequestListFilters {
 		AuthorID: input.AuthorID, AssigneeID: input.AssigneeID, ReviewerID: input.ReviewerID,
 		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs,
 		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
-		Draft: input.Draft, CreatedAfter: input.CreatedAfter,
+		Draft: input.Draft, NonArchived: input.NonArchived, CreatedAfter: input.CreatedAfter,
 		CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
 		DeployedAfter: input.DeployedAfter, DeployedBefore: input.DeployedBefore,
 		OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage, Keyset: input.KeysetPaginationInput,
@@ -602,7 +608,7 @@ func projectMergeRequestListTarget(opts *gl.ListProjectMergeRequestsOptions) mer
 		view: &opts.View, wip: &opts.WIP, environment: &opts.Environment, authorID: &opts.AuthorID,
 		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs,
 		withLabelsDetails: &opts.WithLabelsDetails, withMergeRecheck: &opts.WithMergeStatusRecheck,
-		draft: &opts.Draft, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
+		draft: &opts.Draft, nonArchived: &opts.NonArchived, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
 		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, deployedAfter: &opts.DeployedAfter, deployedBefore: &opts.DeployedBefore,
 		orderBy: &opts.OrderBy, sort: &opts.Sort, listOptions: &opts.ListOptions,
 	})
@@ -1037,6 +1043,7 @@ type ListGlobalInput struct {
 	WithLabelsDetails      *bool    `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`
 	WithMergeStatusRecheck *bool    `json:"with_merge_status_recheck,omitempty" jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
 	Draft                  *bool    `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
+	NonArchived            *bool    `json:"non_archived,omitempty"    jsonschema:"Return merge requests from non-archived projects only. Default is true"`
 	CreatedAfter           string   `json:"created_after,omitempty"   jsonschema:"Return MRs created after date (ISO 8601)"`
 	CreatedBefore          string   `json:"created_before,omitempty"  jsonschema:"Return MRs created before date (ISO 8601)"`
 	UpdatedAfter           string   `json:"updated_after,omitempty"   jsonschema:"Return MRs updated after date (ISO 8601)"`
@@ -1078,7 +1085,7 @@ func globalMRListFilters(input ListGlobalInput) mergeRequestListFilters {
 		AuthorID: input.AuthorID, AssigneeID: input.AssigneeID, ReviewerID: input.ReviewerID,
 		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs,
 		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
-		Draft: input.Draft, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
+		Draft: input.Draft, NonArchived: input.NonArchived, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
 		UpdatedBefore: input.UpdatedBefore, OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
 		Keyset: input.KeysetPaginationInput,
 	}
@@ -1088,11 +1095,13 @@ func globalMergeRequestListTarget(opts *gl.ListMergeRequestsOptions) mergeReques
 	return newMergeRequestListTarget(mergeRequestListTargetFields{
 		state: &opts.State, labels: &opts.Labels, notLabels: &opts.NotLabels, milestone: &opts.Milestone, scope: &opts.Scope,
 		search: &opts.Search, sourceBranch: &opts.SourceBranch, targetBranch: &opts.TargetBranch, authorUsername: &opts.AuthorUsername,
-		notAuthorUsername: &opts.NotAuthorUsername, reviewerUsername: &opts.ReviewerUsername, approved: &opts.Approved, in: &opts.In,
+		notAuthorUsername: &opts.NotAuthorUsername, reviewerUsername: &opts.ReviewerUsername,
+		approved:        &opts.Approved, //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; prefer approved_by_ids.
+		in:              &opts.In,
 		myReactionEmoji: &opts.MyReactionEmoji, view: &opts.View, wip: &opts.WIP, authorID: &opts.AuthorID,
 		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs,
 		withLabelsDetails: &opts.WithLabelsDetails, withMergeRecheck: &opts.WithMergeStatusRecheck,
-		draft: &opts.Draft, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
+		draft: &opts.Draft, nonArchived: &opts.NonArchived, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
 		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, orderBy: &opts.OrderBy, sort: &opts.Sort,
 		listOptions: &opts.ListOptions,
 	})
@@ -1124,6 +1133,7 @@ type mergeRequestListTargetFields struct {
 	withLabelsDetails **bool
 	withMergeRecheck  **bool
 	draft             **bool
+	nonArchived       **bool
 	createdAfter      **time.Time
 	createdBefore     **time.Time
 	updatedAfter      **time.Time
@@ -1147,7 +1157,8 @@ func newMergeRequestListTarget(fields mergeRequestListTargetFields) mergeRequest
 		assigneeID: setAssigneeIDPtr(fields.assigneeID), reviewerID: setReviewerIDPtr(fields.reviewerID),
 		approverIDs: setApproverIDsPtr(fields.approverIDs), approvedByIDs: setApproverIDsPtr(fields.approvedByIDs),
 		withLabelsDetails: setBoolPtr(fields.withLabelsDetails), withMergeRecheck: setBoolPtr(fields.withMergeRecheck),
-		draft: setBoolPtr(fields.draft), createdAfter: setTimePtr(fields.createdAfter), createdBefore: setTimePtr(fields.createdBefore),
+		draft: setBoolPtr(fields.draft), nonArchived: setBoolPtr(fields.nonArchived),
+		createdAfter: setTimePtr(fields.createdAfter), createdBefore: setTimePtr(fields.createdBefore),
 		updatedAfter: setTimePtr(fields.updatedAfter), updatedBefore: setTimePtr(fields.updatedBefore),
 		deployedAfter: setTimePtr(fields.deployedAfter), deployedBefore: setTimePtr(fields.deployedBefore),
 		orderBy: setStringPtr(fields.orderBy), sort: setStringPtr(fields.sort), listOptions: fields.listOptions,
@@ -1224,6 +1235,7 @@ type ListGroupInput struct {
 	WithLabelsDetails      *bool                `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`
 	WithMergeStatusRecheck *bool                `json:"with_merge_status_recheck,omitempty" jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
 	Draft                  *bool                `json:"draft,omitempty"             jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
+	NonArchived            *bool                `json:"non_archived,omitempty"      jsonschema:"Return merge requests from non-archived projects only. Default is true"`
 	CreatedAfter           string               `json:"created_after,omitempty"     jsonschema:"Return MRs created after date (ISO 8601)"`
 	CreatedBefore          string               `json:"created_before,omitempty"    jsonschema:"Return MRs created before date (ISO 8601)"`
 	UpdatedAfter           string               `json:"updated_after,omitempty"     jsonschema:"Return MRs updated after date (ISO 8601)"`
@@ -1271,7 +1283,7 @@ func groupMRListFilters(input ListGroupInput) mergeRequestListFilters {
 		AuthorID: input.AuthorID, AssigneeID: input.AssigneeID, ReviewerID: input.ReviewerID,
 		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs,
 		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
-		Draft: input.Draft, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
+		Draft: input.Draft, NonArchived: input.NonArchived, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
 		UpdatedBefore: input.UpdatedBefore, OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
 		Keyset: input.KeysetPaginationInput,
 	}
@@ -1285,7 +1297,7 @@ func groupMergeRequestListTarget(opts *gl.ListGroupMergeRequestsOptions) mergeRe
 		myReactionEmoji: &opts.MyReactionEmoji, view: &opts.View, wip: &opts.WIP, authorID: &opts.AuthorID,
 		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs,
 		withLabelsDetails: &opts.WithLabelsDetails, withMergeRecheck: &opts.WithMergeStatusRecheck,
-		draft: &opts.Draft, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
+		draft: &opts.Draft, nonArchived: &opts.NonArchived, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
 		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, orderBy: &opts.OrderBy, sort: &opts.Sort,
 		listOptions: &opts.ListOptions,
 	})

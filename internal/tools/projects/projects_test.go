@@ -1302,6 +1302,7 @@ func TestProjectGet_EnrichedOutputFields(t *testing.T) {
 		"package_registry_access_level":"enabled",
 		"build_timeout":7200,
 		"suggestion_commit_message":"Apply suggestion to %{file_path}",
+		"mr_default_title_template":"Draft: %{source_branch}",
 		"compliance_frameworks":["SOC2","HIPAA"],
 		"import_url":"https://github.com/upstream/repo.git"
 	}`
@@ -1340,6 +1341,9 @@ func TestProjectGet_EnrichedOutputFields(t *testing.T) {
 	}
 	if out.SuggestionCommitMessage != "Apply suggestion to %{file_path}" {
 		t.Errorf("out.SuggestionCommitMessage = %q, want %q", out.SuggestionCommitMessage, "Apply suggestion to %{file_path}")
+	}
+	if out.MRDefaultTitleTemplate != "Draft: %{source_branch}" {
+		t.Errorf("out.MRDefaultTitleTemplate = %q, want %q", out.MRDefaultTitleTemplate, "Draft: %{source_branch}")
 	}
 	if len(out.ComplianceFrameworks) != 2 || out.ComplianceFrameworks[0] != "SOC2" {
 		t.Errorf("out.ComplianceFrameworks = %v, want [SOC2 HIPAA]", out.ComplianceFrameworks)
@@ -3897,6 +3901,7 @@ func TestBuildUpdateOpts_AllFields(t *testing.T) {
 		AutocloseReferencedIssues:      &autoclose,
 		MergeCommitTemplate:            "Merge: %{title}",
 		SquashCommitTemplate:           "Squash: %{title}",
+		MRDefaultTitleTemplate:         "Draft: %{source_branch}",
 		MergePipelinesEnabled:          &mergePipelines,
 		MergeTrainsEnabled:             &mergeTrains,
 		ProtectMergeRequestPipelines:   &protectMRPipelines,
@@ -3989,12 +3994,7 @@ func assertEditProjectMergeOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	if opts.AutocloseReferencedIssues == nil {
 		t.Error("AutocloseReferencedIssues not set")
 	}
-	if opts.MergeCommitTemplate == nil || *opts.MergeCommitTemplate != "Merge: %{title}" {
-		t.Error("MergeCommitTemplate not set")
-	}
-	if opts.SquashCommitTemplate == nil || *opts.SquashCommitTemplate != "Squash: %{title}" {
-		t.Error("SquashCommitTemplate not set")
-	}
+	assertEditProjectTemplateOpts(t, opts)
 	if opts.MergePipelinesEnabled == nil {
 		t.Error("MergePipelinesEnabled not set")
 	}
@@ -4012,6 +4012,21 @@ func assertEditProjectMergeOpts(t *testing.T, opts *gl.EditProjectOptions) {
 	}
 	if opts.LFSEnabled == nil {
 		t.Error("LFSEnabled not set")
+	}
+}
+
+// assertEditProjectTemplateOpts checks the commit and merge request title
+// template opts set by buildUpdateOpts.
+func assertEditProjectTemplateOpts(t *testing.T, opts *gl.EditProjectOptions) {
+	t.Helper()
+	if opts.MergeCommitTemplate == nil || *opts.MergeCommitTemplate != "Merge: %{title}" {
+		t.Error("MergeCommitTemplate not set")
+	}
+	if opts.SquashCommitTemplate == nil || *opts.SquashCommitTemplate != "Squash: %{title}" {
+		t.Error("SquashCommitTemplate not set")
+	}
+	if opts.MRDefaultTitleTemplate == nil || *opts.MRDefaultTitleTemplate != "Draft: %{source_branch}" {
+		t.Error("MRDefaultTitleTemplate not set")
 	}
 }
 
@@ -7407,6 +7422,7 @@ func TestBuildCreateOpts_AdditiveFields_AllMapped(t *testing.T) {
 		MergeTrainsSkipTrainAllowed:              new(true),
 		MergeCommitTemplate:                      "mct",
 		SquashCommitTemplate:                     "sct",
+		MRDefaultTitleTemplate:                   "mdtt",
 		SuggestionCommitMessage:                  "scm",
 		IssueBranchTemplate:                      "ibt",
 		ApprovalsBeforeMerge:                     3,
@@ -7451,6 +7467,7 @@ func assertCreateAdditiveScalars(t *testing.T, opts *gl.CreateProjectOptions) {
 		{"TemplateName", opts.TemplateName, "rails"},
 		{"MergeCommitTemplate", opts.MergeCommitTemplate, "mct"},
 		{"SquashCommitTemplate", opts.SquashCommitTemplate, "sct"},
+		{"MRDefaultTitleTemplate", opts.MRDefaultTitleTemplate, "mdtt"},
 		{"SuggestionCommitMessage", opts.SuggestionCommitMessage, "scm"},
 		{"IssueBranchTemplate", opts.IssueBranchTemplate, "ibt"},
 		{"MergeRequestTitleRegex", opts.MergeRequestTitleRegex, "^x"},
@@ -7676,6 +7693,7 @@ func TestBuildUpdateOpts_AdditiveFields_AllMapped(t *testing.T) {
 		MergeTrainsSkipTrainAllowed:              new(true),
 		PrintingMergeRequestLinkEnabled:          new(true),
 		SuggestionCommitMessage:                  "scm",
+		MRDefaultTitleTemplate:                   "mdtt",
 		IssueBranchTemplate:                      "ibt",
 		IssuesTemplate:                           "it",
 		MergeRequestsTemplate:                    "mrt",
@@ -7737,6 +7755,7 @@ func assertUpdateAdditiveScalars(t *testing.T, opts *gl.EditProjectOptions) {
 		{"ImportURL", opts.ImportURL, "https://x"},
 		{"RepositoryStorage", opts.RepositoryStorage, "nfs-02"},
 		{"SuggestionCommitMessage", opts.SuggestionCommitMessage, "scm"},
+		{"MRDefaultTitleTemplate", opts.MRDefaultTitleTemplate, "mdtt"},
 		{"IssueBranchTemplate", opts.IssueBranchTemplate, "ibt"},
 		{"IssuesTemplate", opts.IssuesTemplate, "it"},
 		{"MergeRequestsTemplate", opts.MergeRequestsTemplate, "mrt"},

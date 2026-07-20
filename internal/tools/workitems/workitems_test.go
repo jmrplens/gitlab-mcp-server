@@ -158,6 +158,77 @@ func TestList_Filters(t *testing.T) {
 	}
 }
 
+// TestList_Children verifies List requests the hierarchy children field in its
+// GraphQL query and maps returned child nodes into the WorkItemItem output.
+func TestList_Children(t *testing.T) {
+	var capturedQuery string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Query string `json:"query"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode GraphQL request: %v", err)
+		}
+		capturedQuery = request.Query
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Parent","author":{"username":"dev1"},"features":{"hierarchy":{"hasChildren":true,"children":{"nodes":[{"iid":"20","namespace":{"fullPath":"my-group/child-a"}},{"iid":"21","namespace":{"fullPath":"my-group/child-b"}}]}}}}]}}}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	for _, field := range []string{"hierarchy", "hasChildren", "children"} {
+		if !strings.Contains(capturedQuery, field) {
+			t.Errorf("list query missing %q field:\n%s", field, capturedQuery)
+		}
+	}
+	if len(out.WorkItems) != 1 {
+		t.Fatalf("expected 1 work item, got %d", len(out.WorkItems))
+	}
+	children := out.WorkItems[0].Children
+	if len(children) != 2 {
+		t.Fatalf("Children = %d, want 2", len(children))
+	}
+	if children[0].IID != 20 || children[0].Path != "my-group/child-a" {
+		t.Errorf("children[0] = %+v, want {20 my-group/child-a}", children[0])
+	}
+	if children[1].IID != 21 || children[1].Path != "my-group/child-b" {
+		t.Errorf("children[1] = %+v, want {21 my-group/child-b}", children[1])
+	}
+}
+
+// TestList_ChildrenAbsent verifies List omits Children when the hierarchy widget
+// reports no children, so the omitempty field stays nil.
+func TestList_ChildrenAbsent(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Leaf","author":{"username":"dev1"},"features":{"hierarchy":{"hasChildren":false,"children":{"nodes":[]}}}}]}}}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if len(out.WorkItems) != 1 {
+		t.Fatalf("expected 1 work item, got %d", len(out.WorkItems))
+	}
+	if out.WorkItems[0].Children != nil {
+		t.Errorf("Children = %+v, want nil", out.WorkItems[0].Children)
+	}
+}
+
+// TestList_ChildrenInvalidIID verifies List surfaces a parse error when a child
+// node carries a malformed IID rather than returning a misleading zero.
+func TestList_ChildrenInvalidIID(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Parent","features":{"hierarchy":{"hasChildren":true,"children":{"nodes":[{"iid":"not-a-number","namespace":{"fullPath":"my-group/child"}}]}}}}]}}}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	_, err := List(t.Context(), client, ListInput{FullPath: testFullPath})
+	if err == nil {
+		t.Fatal("expected parse error for malformed child IID, got nil")
+	}
+}
+
 // TestList_Error verifies List when error.
 func TestList_Error(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -454,6 +525,9 @@ func TestWorkItemToItem_FullData(t *testing.T) {
 		LinkedItems: []gl.LinkedWorkItem{
 			{WorkItemIID: gl.WorkItemIID{NamespacePath: "my-group/other", IID: 7}, LinkType: "blocks"},
 		},
+		Children: []gl.WorkItemIID{
+			{NamespacePath: "my-group/child-proj", IID: 5},
+		},
 		CreatedAt: &now,
 		UpdatedAt: &later,
 		ClosedAt:  &closed,
@@ -507,6 +581,15 @@ func assertFullItemCore(t *testing.T, item WorkItemItem) {
 	}
 	if item.LinkedItems[0].Path != "my-group/other" {
 		t.Errorf("LinkedItems[0].Path = %q, want my-group/other", item.LinkedItems[0].Path)
+	}
+	if len(item.Children) != 1 {
+		t.Fatalf("Children = %d, want 1", len(item.Children))
+	}
+	if item.Children[0].IID != 5 {
+		t.Errorf("Children[0].IID = %d, want 5", item.Children[0].IID)
+	}
+	if item.Children[0].Path != "my-group/child-proj" {
+		t.Errorf("Children[0].Path = %q, want my-group/child-proj", item.Children[0].Path)
 	}
 }
 
@@ -646,6 +729,31 @@ func TestFormatGetMarkdown_FullPopulated(t *testing.T) {
 		"A very detailed description.",
 	}
 	for _, s := range expects {
+		if !strings.Contains(text, s) {
+			t.Errorf("missing %q in output:\n%s", s, text)
+		}
+	}
+}
+
+// TestFormatGetMarkdown_Children verifies the Get markdown renders a Children
+// table when the work item has hierarchy children.
+func TestFormatGetMarkdown_Children(t *testing.T) {
+	out := GetOutput{WorkItem: WorkItemItem{
+		IID:   42,
+		Title: "Parent WI",
+		Type:  testTypeTask,
+		State: testStateOpen,
+		Children: []ChildItem{
+			{IID: 20, Path: "my-group/child-a"},
+			{IID: 21, Path: "my-group/child-b"},
+		},
+	}}
+	result := FormatGetMarkdown(out)
+	if result == nil {
+		t.Fatal(errExpNonNilResult)
+	}
+	text := extractText(t, result)
+	for _, s := range []string{"### Children", "| 20 | my-group/child-a |", "| 21 | my-group/child-b |"} {
 		if !strings.Contains(text, s) {
 			t.Errorf("missing %q in output:\n%s", s, text)
 		}

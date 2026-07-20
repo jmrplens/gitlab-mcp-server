@@ -4,6 +4,7 @@ package epics
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -937,6 +938,31 @@ func TestList_WithAllFilters(t *testing.T) {
 	}
 	if len(out.Epics) != 1 {
 		t.Errorf("len(Epics) = %d, want 1", len(out.Epics))
+	}
+}
+
+// TestList_WorkItems_RequestsEEFields verifies the work-items list path opts
+// into the EE work-item fields the epic output maps. As of client-go v2.49.0
+// ListWorkItems returns only CE fields unless ReturnedFields is set; without
+// the opt-in, epic weight/status/color/health_status would silently be empty.
+func TestList_WorkItems_RequestsEEFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		query := string(body)
+		for _, field := range []string{"weight", "healthStatus", "color", "status"} {
+			if !strings.Contains(query, field) {
+				t.Errorf("GraphQL query missing EE field %q; ReturnedFields opt-in not applied\nquery: %s", field, query)
+			}
+		}
+		testutil.RespondJSON(w, http.StatusOK, listResponseJSON)
+	}))
+	boolTrue := true
+	// Confidential set routes List through the work-items (GraphQL) path.
+	if _, err := List(t.Context(), client, ListInput{FullPath: testFullPath, Confidential: &boolTrue}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 

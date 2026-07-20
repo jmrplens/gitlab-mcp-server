@@ -47,6 +47,7 @@ type ListInput struct {
 	UpdatedAfter           string   `json:"updated_after,omitempty"   jsonschema:"Return MRs updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
 	UpdatedBefore          string   `json:"updated_before,omitempty"  jsonschema:"Return MRs updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
 	Draft                  *bool    `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
+	NonArchived            *bool    `json:"non_archived,omitempty"    jsonschema:"Return merge requests from non-archived projects only. Default is true"`
 	In                     string   `json:"in,omitempty"              jsonschema:"Modify the scope of the search attribute (title, description, or title,description)"`
 
 	toolutil.PaginationInput
@@ -124,7 +125,7 @@ func applyStringFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
 		{input.State, &opts.State},
 		{input.OrderBy, &opts.OrderBy},
 		{input.Sort, &opts.Sort},
-		{input.Approved, &opts.Approved},
+		{input.Approved, &opts.Approved}, //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; prefer approved_by_ids
 		{input.AuthorUsername, &opts.AuthorUsername},
 		{input.NotAuthorUsername, &opts.NotAuthorUsername},
 		{input.ReviewerUsername, &opts.ReviewerUsername},
@@ -163,6 +164,9 @@ func applyLabelAndBoolFilters(input ListInput, opts *gl.ListMergeRequestsOptions
 	}
 	if input.Draft != nil {
 		opts.Draft = input.Draft
+	}
+	if input.NonArchived != nil {
+		opts.NonArchived = input.NonArchived
 	}
 }
 

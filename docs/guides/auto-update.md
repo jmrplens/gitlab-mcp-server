@@ -36,7 +36,7 @@ sequenceDiagram
     end
 ```
 
-The update mechanism uses [creativeprojects/go-selfupdate](https://github.com/creativeprojects/go-selfupdate) v1.5.2 with a GitHub source backend. Key properties:
+The update mechanism uses [creativeprojects/go-selfupdate](https://github.com/creativeprojects/go-selfupdate) v1.6.0 with a GitHub source backend. Key properties:
 
 - **GitHub Releases**: Auto-update fetches releases from the GitHub repository configured via `AUTO_UPDATE_REPO` (default: `jmrplens/gitlab-mcp-server`).
 - **Rename trick**: The running binary is renamed to `.old` (allowed even on Windows where executables are locked), and the new binary is placed at the original path. This eliminates the need for deferred scripts or manual intervention.

@@ -15452,7 +15452,7 @@
   },
   {
     "name": "gitlab_create_work_item",
-    "description": "Create a new work item under a namespace. Returns: the created work item with id, iid, type, state, title, description, assignees, labels, linked items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_list_work_items, gitlab_list_work_item_types.",
+    "description": "Create a new work item under a namespace. Returns: the created work item with id, iid, type, state, title, description, assignees, labels, linked items, child work items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_list_work_items, gitlab_list_work_item_types.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -15603,6 +15603,30 @@
             },
             "author": {
               "type": "string"
+            },
+            "children": {
+              "description": "Child work items in the hierarchy (each with namespace path and IID)",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "iid": {
+                    "description": "Internal ID (IID) of the child work item",
+                    "type": "integer"
+                  },
+                  "path": {
+                    "description": "Namespace full path of the child work item",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "iid"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
             },
             "closed_at": {
               "type": "string"
@@ -33339,6 +33363,34 @@
             "change": {
               "type": "string"
             },
+            "change_object": {
+              "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"
+            },
+            "changes": {
+              "description": "Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "change": {
+                    "description": "The setting or attribute that was changed",
+                    "type": "string"
+                  },
+                  "from": {
+                    "description": "Previous value before the change",
+                    "type": "string"
+                  },
+                  "to": {
+                    "description": "New value after the change",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
             "custom_message": {
               "type": "string"
             },
@@ -34761,6 +34813,34 @@
             },
             "change": {
               "type": "string"
+            },
+            "change_object": {
+              "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"
+            },
+            "changes": {
+              "description": "Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "change": {
+                    "description": "The setting or attribute that was changed",
+                    "type": "string"
+                  },
+                  "from": {
+                    "description": "Previous value before the change",
+                    "type": "string"
+                  },
+                  "to": {
+                    "description": "New value after the change",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
             },
             "custom_message": {
               "type": "string"
@@ -36442,6 +36522,34 @@
             },
             "change": {
               "type": "string"
+            },
+            "change_object": {
+              "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"
+            },
+            "changes": {
+              "description": "Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "change": {
+                    "description": "The setting or attribute that was changed",
+                    "type": "string"
+                  },
+                  "from": {
+                    "description": "Previous value before the change",
+                    "type": "string"
+                  },
+                  "to": {
+                    "description": "New value after the change",
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
             },
             "custom_message": {
               "type": "string"
@@ -41046,7 +41154,7 @@
   },
   {
     "name": "gitlab_get_work_item",
-    "description": "Get a single work item by namespace path and IID. Returns: id, iid, type, state, status, title, description, author, assignees, labels, linked items, confidentiality, timestamps, and web URL. Experimental. See also: gitlab_list_work_items, gitlab_update_work_item, gitlab_delete_work_item.",
+    "description": "Get a single work item by namespace path and IID. Returns: id, iid, type, state, status, title, description, author, assignees, labels, linked items, child work items, confidentiality, timestamps, and web URL. Experimental. See also: gitlab_list_work_items, gitlab_update_work_item, gitlab_delete_work_item.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -41091,6 +41199,30 @@
             },
             "author": {
               "type": "string"
+            },
+            "children": {
+              "description": "Child work items in the hierarchy (each with namespace path and IID)",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "iid": {
+                    "description": "Internal ID (IID) of the child work item",
+                    "type": "integer"
+                  },
+                  "path": {
+                    "description": "Namespace full path of the child work item",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "iid"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
             },
             "closed_at": {
               "type": "string"
@@ -44856,6 +44988,13 @@
             "boolean"
           ]
         },
+        "crm_enabled": {
+          "description": "Enable Customer Relations Management (CRM) for the group",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "default_branch": {
           "description": "Default branch name",
           "type": "string"
@@ -45152,6 +45291,10 @@
         },
         "created_at": {
           "type": "string"
+        },
+        "crm_enabled": {
+          "description": "Whether Customer Relations Management (CRM) is enabled for the group",
+          "type": "boolean"
         },
         "custom_attributes": {
           "items": {
@@ -45639,6 +45782,7 @@
         "emails_enabled",
         "emails_disabled",
         "mentions_disabled",
+        "crm_enabled",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -46501,6 +46645,10 @@
         "created_at": {
           "type": "string"
         },
+        "crm_enabled": {
+          "description": "Whether Customer Relations Management (CRM) is enabled for the group",
+          "type": "boolean"
+        },
         "custom_attributes": {
           "items": {
             "additionalProperties": false,
@@ -46987,6 +47135,7 @@
         "emails_enabled",
         "emails_disabled",
         "mentions_disabled",
+        "crm_enabled",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -49190,6 +49339,10 @@
               "created_at": {
                 "type": "string"
               },
+              "crm_enabled": {
+                "description": "Whether Customer Relations Management (CRM) is enabled for the group",
+                "type": "boolean"
+              },
               "custom_attributes": {
                 "items": {
                   "additionalProperties": false,
@@ -49676,6 +49829,7 @@
               "emails_enabled",
               "emails_disabled",
               "mentions_disabled",
+              "crm_enabled",
               "prevent_forking_outside_group",
               "only_allow_merge_if_pipeline_succeeds",
               "allow_merge_on_skipped_pipeline",
@@ -50949,6 +51103,10 @@
               "created_at": {
                 "type": "string"
               },
+              "crm_enabled": {
+                "description": "Whether Customer Relations Management (CRM) is enabled for the group",
+                "type": "boolean"
+              },
               "custom_attributes": {
                 "items": {
                   "additionalProperties": false,
@@ -51435,6 +51593,7 @@
               "emails_enabled",
               "emails_disabled",
               "mentions_disabled",
+              "crm_enabled",
               "prevent_forking_outside_group",
               "only_allow_merge_if_pipeline_succeeds",
               "allow_merge_on_skipped_pipeline",
@@ -57152,6 +57311,10 @@
         "created_at": {
           "type": "string"
         },
+        "crm_enabled": {
+          "description": "Whether Customer Relations Management (CRM) is enabled for the group",
+          "type": "boolean"
+        },
         "custom_attributes": {
           "items": {
             "additionalProperties": false,
@@ -57638,6 +57801,7 @@
         "emails_enabled",
         "emails_disabled",
         "mentions_disabled",
+        "crm_enabled",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -58367,6 +58531,10 @@
               "created_at": {
                 "type": "string"
               },
+              "crm_enabled": {
+                "description": "Whether Customer Relations Management (CRM) is enabled for the group",
+                "type": "boolean"
+              },
               "custom_attributes": {
                 "items": {
                   "additionalProperties": false,
@@ -58853,6 +59021,7 @@
               "emails_enabled",
               "emails_disabled",
               "mentions_disabled",
+              "crm_enabled",
               "prevent_forking_outside_group",
               "only_allow_merge_if_pipeline_succeeds",
               "allow_merge_on_skipped_pipeline",
@@ -60239,6 +60408,10 @@
               "created_at": {
                 "type": "string"
               },
+              "crm_enabled": {
+                "description": "Whether Customer Relations Management (CRM) is enabled for the group",
+                "type": "boolean"
+              },
               "custom_attributes": {
                 "items": {
                   "additionalProperties": false,
@@ -60725,6 +60898,7 @@
               "emails_enabled",
               "emails_disabled",
               "mentions_disabled",
+              "crm_enabled",
               "prevent_forking_outside_group",
               "only_allow_merge_if_pipeline_succeeds",
               "allow_merge_on_skipped_pipeline",
@@ -60839,6 +61013,10 @@
         },
         "created_at": {
           "type": "string"
+        },
+        "crm_enabled": {
+          "description": "Whether Customer Relations Management (CRM) is enabled for the group",
+          "type": "boolean"
         },
         "custom_attributes": {
           "items": {
@@ -61326,6 +61504,7 @@
         "emails_enabled",
         "emails_disabled",
         "mentions_disabled",
+        "crm_enabled",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -61528,6 +61707,10 @@
         "created_at": {
           "type": "string"
         },
+        "crm_enabled": {
+          "description": "Whether Customer Relations Management (CRM) is enabled for the group",
+          "type": "boolean"
+        },
         "custom_attributes": {
           "items": {
             "additionalProperties": false,
@@ -62014,6 +62197,7 @@
         "emails_enabled",
         "emails_disabled",
         "mentions_disabled",
+        "crm_enabled",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -62221,6 +62405,13 @@
         },
         "auto_devops_enabled": {
           "description": "Enable Auto DevOps for projects in this group",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "crm_enabled": {
+          "description": "Enable Customer Relations Management (CRM) for the group",
           "type": [
             "null",
             "boolean"
@@ -62596,6 +62787,10 @@
         "created_at": {
           "type": "string"
         },
+        "crm_enabled": {
+          "description": "Whether Customer Relations Management (CRM) is enabled for the group",
+          "type": "boolean"
+        },
         "custom_attributes": {
           "items": {
             "additionalProperties": false,
@@ -63082,6 +63277,7 @@
         "emails_enabled",
         "emails_disabled",
         "mentions_disabled",
+        "crm_enabled",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -63145,6 +63341,10 @@
         "created_at": {
           "type": "string"
         },
+        "crm_enabled": {
+          "description": "Whether Customer Relations Management (CRM) is enabled for the group",
+          "type": "boolean"
+        },
         "custom_attributes": {
           "items": {
             "additionalProperties": false,
@@ -63631,6 +63831,7 @@
         "emails_enabled",
         "emails_disabled",
         "mentions_disabled",
+        "crm_enabled",
         "prevent_forking_outside_group",
         "only_allow_merge_if_pipeline_succeeds",
         "allow_merge_on_skipped_pipeline",
@@ -67733,6 +67934,9 @@
         },
         "mr_default_target_self": {
           "type": "boolean"
+        },
+        "mr_default_title_template": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -94703,6 +94907,13 @@
           "description": "Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)",
           "type": "string"
         },
+        "non_archived": {
+          "description": "Return merge requests from non-archived projects only. Default is true",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "not_author_username": {
           "description": "Exclude MRs authored by this username",
           "type": "string"
@@ -97713,6 +97924,34 @@
                   "change": {
                     "type": "string"
                   },
+                  "change_object": {
+                    "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"
+                  },
+                  "changes": {
+                    "description": "Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values",
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "change": {
+                          "description": "The setting or attribute that was changed",
+                          "type": "string"
+                        },
+                        "from": {
+                          "description": "Previous value before the change",
+                          "type": "string"
+                        },
+                        "to": {
+                          "description": "New value after the change",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
                   "custom_message": {
                     "type": "string"
                   },
@@ -100246,6 +100485,34 @@
                   "change": {
                     "type": "string"
                   },
+                  "change_object": {
+                    "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"
+                  },
+                  "changes": {
+                    "description": "Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values",
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "change": {
+                          "description": "The setting or attribute that was changed",
+                          "type": "string"
+                        },
+                        "from": {
+                          "description": "Previous value before the change",
+                          "type": "string"
+                        },
+                        "to": {
+                          "description": "New value after the change",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
+                  },
                   "custom_message": {
                     "type": "string"
                   },
@@ -102207,6 +102474,34 @@
                   },
                   "change": {
                     "type": "string"
+                  },
+                  "change_object": {
+                    "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"
+                  },
+                  "changes": {
+                    "description": "Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values",
+                    "items": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "change": {
+                          "description": "The setting or attribute that was changed",
+                          "type": "string"
+                        },
+                        "from": {
+                          "description": "Previous value before the change",
+                          "type": "string"
+                        },
+                        "to": {
+                          "description": "New value after the change",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "type": [
+                      "null",
+                      "array"
+                    ]
                   },
                   "custom_message": {
                     "type": "string"
@@ -108015,7 +108310,7 @@
   },
   {
     "name": "gitlab_list_work_items",
-    "description": "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, labels, and timestamps. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.",
+    "description": "List work items in a project or group namespace with filtering and cursor pagination. Returns: matching work items with type, state, title, author, labels, child work items, and timestamps. Experimental. See also: gitlab_get_work_item, gitlab_create_work_item, gitlab_list_work_item_types.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -108133,6 +108428,30 @@
               },
               "author": {
                 "type": "string"
+              },
+              "children": {
+                "description": "Child work items in the hierarchy (each with namespace path and IID)",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "iid": {
+                      "description": "Internal ID (IID) of the child work item",
+                      "type": "integer"
+                    },
+                    "path": {
+                      "description": "Namespace full path of the child work item",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "iid"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
               },
               "closed_at": {
                 "type": "string"
@@ -123007,6 +123326,13 @@
           "description": "Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)",
           "type": "string"
         },
+        "non_archived": {
+          "description": "Return merge requests from non-archived projects only. Default is true",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "not_author_username": {
           "description": "Exclude MRs authored by this username",
           "type": "string"
@@ -124206,6 +124532,13 @@
           "description": "Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)",
           "type": "string"
         },
+        "non_archived": {
+          "description": "Return merge requests from non-archived projects only. Default is true",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
         "not_author_username": {
           "description": "Exclude MRs authored by this username",
           "type": "string"
@@ -125392,6 +125725,13 @@
         "my_reaction_emoji": {
           "description": "Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)",
           "type": "string"
+        },
+        "non_archived": {
+          "description": "Return merge requests from non-archived projects only. Default is true",
+          "type": [
+            "null",
+            "boolean"
+          ]
         },
         "not_author_username": {
           "description": "Exclude MRs authored by this username",
@@ -147041,6 +147381,9 @@
         "mr_default_target_self": {
           "type": "boolean"
         },
+        "mr_default_title_template": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -147829,6 +148172,10 @@
           "description": "Monitor access level (disabled, private, enabled)",
           "type": "string"
         },
+        "mr_default_title_template": {
+          "description": "Template for default merge request titles",
+          "type": "string"
+        },
         "name": {
           "description": "Project name",
           "type": "string"
@@ -148517,6 +148864,9 @@
         },
         "mr_default_target_self": {
           "type": "boolean"
+        },
+        "mr_default_title_template": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -149305,6 +149655,10 @@
           "description": "Monitor access level (disabled, private, enabled)",
           "type": "string"
         },
+        "mr_default_title_template": {
+          "description": "Template for default merge request titles",
+          "type": "string"
+        },
         "name": {
           "description": "Project name",
           "type": "string"
@@ -149998,6 +150352,9 @@
         },
         "mr_default_target_self": {
           "type": "boolean"
+        },
+        "mr_default_title_template": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -152177,6 +152534,9 @@
         "mr_default_target_self": {
           "type": "boolean"
         },
+        "mr_default_title_template": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -153132,6 +153492,9 @@
         },
         "mr_default_target_self": {
           "type": "boolean"
+        },
+        "mr_default_title_template": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -156360,6 +156723,9 @@
               "mr_default_target_self": {
                 "type": "boolean"
               },
+              "mr_default_title_template": {
+                "type": "string"
+              },
               "name": {
                 "type": "string"
               },
@@ -157506,6 +157872,9 @@
               },
               "mr_default_target_self": {
                 "type": "boolean"
+              },
+              "mr_default_title_template": {
+                "type": "string"
               },
               "name": {
                 "type": "string"
@@ -159323,6 +159692,9 @@
               "mr_default_target_self": {
                 "type": "boolean"
               },
+              "mr_default_title_template": {
+                "type": "string"
+              },
               "name": {
                 "type": "string"
               },
@@ -160515,6 +160887,9 @@
               "mr_default_target_self": {
                 "type": "boolean"
               },
+              "mr_default_title_template": {
+                "type": "string"
+              },
               "name": {
                 "type": "string"
               },
@@ -161706,6 +162081,9 @@
               },
               "mr_default_target_self": {
                 "type": "boolean"
+              },
+              "mr_default_title_template": {
+                "type": "string"
               },
               "name": {
                 "type": "string"
@@ -164290,6 +164668,9 @@
         },
         "mr_default_target_self": {
           "type": "boolean"
+        },
+        "mr_default_title_template": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -167068,6 +167449,9 @@
         "mr_default_target_self": {
           "type": "boolean"
         },
+        "mr_default_title_template": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -168107,6 +168491,9 @@
         "mr_default_target_self": {
           "type": "boolean"
         },
+        "mr_default_title_template": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -169042,6 +169429,9 @@
         },
         "mr_default_target_self": {
           "type": "boolean"
+        },
+        "mr_default_title_template": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -169979,6 +170369,9 @@
         "mr_default_target_self": {
           "type": "boolean"
         },
+        "mr_default_title_template": {
+          "type": "string"
+        },
         "name": {
           "type": "string"
         },
@@ -170860,6 +171253,10 @@
             "boolean"
           ]
         },
+        "mr_default_title_template": {
+          "description": "Template for default merge request titles",
+          "type": "string"
+        },
         "name": {
           "description": "New project name",
           "type": "string"
@@ -171560,6 +171957,9 @@
         },
         "mr_default_target_self": {
           "type": "boolean"
+        },
+        "mr_default_title_template": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -172582,6 +172982,9 @@
         },
         "mr_default_target_self": {
           "type": "boolean"
+        },
+        "mr_default_title_template": {
+          "type": "string"
         },
         "name": {
           "type": "string"
@@ -190860,6 +191263,9 @@
               "mr_default_target_self": {
                 "type": "boolean"
               },
+              "mr_default_title_template": {
+                "type": "string"
+              },
               "name": {
                 "type": "string"
               },
@@ -197127,6 +197533,10 @@
               "created_at": {
                 "type": "string"
               },
+              "crm_enabled": {
+                "description": "Whether Customer Relations Management (CRM) is enabled for the group",
+                "type": "boolean"
+              },
               "custom_attributes": {
                 "items": {
                   "additionalProperties": false,
@@ -197613,6 +198023,7 @@
               "emails_enabled",
               "emails_disabled",
               "mentions_disabled",
+              "crm_enabled",
               "prevent_forking_outside_group",
               "only_allow_merge_if_pipeline_succeeds",
               "allow_merge_on_skipped_pipeline",
@@ -202431,7 +202842,7 @@
   },
   {
     "name": "gitlab_update_work_item",
-    "description": "Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items.",
+    "description": "Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, child work items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -202594,6 +203005,30 @@
             },
             "author": {
               "type": "string"
+            },
+            "children": {
+              "description": "Child work items in the hierarchy (each with namespace path and IID)",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "iid": {
+                    "description": "Internal ID (IID) of the child work item",
+                    "type": "integer"
+                  },
+                  "path": {
+                    "description": "Namespace full path of the child work item",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "iid"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
             },
             "closed_at": {
               "type": "string"

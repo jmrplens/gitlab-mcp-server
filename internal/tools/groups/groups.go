@@ -87,6 +87,7 @@ type Output struct {
 	EmailsEnabled                             bool                      `json:"emails_enabled"`
 	EmailsDisabled                            bool                      `json:"emails_disabled"`
 	MentionsDisabled                          bool                      `json:"mentions_disabled"`
+	CRMEnabled                                bool                      `json:"crm_enabled" jsonschema:"Whether Customer Relations Management (CRM) is enabled for the group"`
 	RunnersToken                              string                    `json:"runners_token,omitempty"`
 	SharedWithGroups                          []SharedWithGroupOutput   `json:"shared_with_groups,omitempty"`
 	LDAPCN                                    string                    `json:"ldap_cn,omitempty" tier:"premium"`
@@ -318,6 +319,7 @@ func ToOutput(g *gl.Group) Output {
 	out.EmailsEnabled = g.EmailsEnabled
 	out.EmailsDisabled = g.EmailsDisabled //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
 	out.MentionsDisabled = g.MentionsDisabled
+	out.CRMEnabled = g.CRMEnabled
 	out.RunnersToken = g.RunnersToken
 	out.LDAPCN = g.LDAPCN
 	out.LDAPAccess = int(g.LDAPAccess)
@@ -848,6 +850,7 @@ type CreateInput struct {
 	MathRenderingLimitsEnabled   *bool  `json:"math_rendering_limits_enabled,omitempty"   jsonschema:"Enable math rendering limits"`
 	WebBasedCommitSigningEnabled *bool  `json:"web_based_commit_signing_enabled,omitempty" jsonschema:"Enable web-based commit signing for projects in this group"`
 	AllowPersonalSnippets        *bool  `json:"allow_personal_snippets,omitempty"          jsonschema:"Allow members to create personal snippets"`
+	CRMEnabled                   *bool  `json:"crm_enabled,omitempty"         jsonschema:"Enable Customer Relations Management (CRM) for the group"`
 
 	AutoDevopsEnabled               *bool                          `json:"auto_devops_enabled,omitempty"                jsonschema:"Enable Auto DevOps for projects in this group"`
 	DefaultBranchProtection         *int64                         `json:"default_branch_protection,omitempty"          jsonschema:"Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults"`
@@ -888,6 +891,7 @@ type UpdateInput struct {
 	MathRenderingLimitsEnabled   *bool                `json:"math_rendering_limits_enabled,omitempty"   jsonschema:"Enable math rendering limits"`
 	WebBasedCommitSigningEnabled *bool                `json:"web_based_commit_signing_enabled,omitempty" jsonschema:"Enable web-based commit signing for projects in this group"`
 	AllowPersonalSnippets        *bool                `json:"allow_personal_snippets,omitempty"          jsonschema:"Allow members to create personal snippets"`
+	CRMEnabled                   *bool                `json:"crm_enabled,omitempty"         jsonschema:"Enable Customer Relations Management (CRM) for the group"`
 
 	AutoDevopsEnabled               *bool                          `json:"auto_devops_enabled,omitempty"                jsonschema:"Enable Auto DevOps for projects in this group"`
 	DefaultBranchProtection         *int64                         `json:"default_branch_protection,omitempty"          jsonschema:"Deprecated: default branch protection level (0=none,1=partial,2=full,3=initial push,4=fully protected). Prefer default_branch_protection_defaults"`
@@ -1080,6 +1084,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 // of Create to keep that handler's cyclomatic complexity flat.
 func applyCreateGroupExtras(input CreateInput, opts *gl.CreateGroupOptions) {
 	opts.AutoDevopsEnabled = input.AutoDevopsEnabled
+	opts.CRMEnabled = input.CRMEnabled
 	opts.DefaultBranchProtection = input.DefaultBranchProtection //nolint:staticcheck // SA1019: mirror deprecated SDK option for 1:1 API coverage
 	opts.EmailsEnabled = input.EmailsEnabled
 	opts.EmailsDisabled = input.EmailsDisabled //nolint:staticcheck // SA1019: mirror deprecated SDK option for 1:1 API coverage
@@ -1165,6 +1170,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 // Split out of Update to keep that handler's cyclomatic complexity flat.
 func applyUpdateGroupPointers(input UpdateInput, opts *gl.UpdateGroupOptions) {
 	opts.AutoDevopsEnabled = input.AutoDevopsEnabled
+	opts.CRMEnabled = input.CRMEnabled
 	opts.DefaultBranchProtection = input.DefaultBranchProtection //nolint:staticcheck // SA1019: mirror deprecated SDK option for 1:1 API coverage
 	opts.DuoFeaturesEnabled = input.DuoFeaturesEnabled
 	opts.LockDuoFeaturesEnabled = input.LockDuoFeaturesEnabled

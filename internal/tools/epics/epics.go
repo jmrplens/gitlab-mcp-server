@@ -479,6 +479,12 @@ func listWithWorkItems(ctx context.Context, client *gitlabclient.Client, input L
 	opts := &gl.ListWorkItemsOptions{
 		First: &defaultFirst,
 		Types: []string{"EPIC"},
+		// As of client-go v2.49.0, ListWorkItems returns only CE fields by
+		// default; EE fields are omitted unless requested via ReturnedFields.
+		// Epics are Premium/Ultimate and the output maps EE fields (weight,
+		// status, color, health_status), so opt into them explicitly or they
+		// silently come back empty.
+		ReturnedFields: append(append([]string(nil), gl.WorkItemDefaultListFields()...), "color", "healthStatus", "status", "weight"),
 	}
 	if input.State != "" {
 		opts.State = &input.State

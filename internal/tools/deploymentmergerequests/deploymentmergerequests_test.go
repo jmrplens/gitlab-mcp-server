@@ -424,6 +424,7 @@ func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 			"not[labels]":               "wontfix",
 			"with_labels_details":       "true",
 			"with_merge_status_recheck": "true",
+			"non_archived":              "true",
 		}
 		for key, want := range checks {
 			if got := q.Get(key); got != want {
@@ -459,6 +460,7 @@ func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 		NotLabels:              []string{"wontfix"},
 		WithLabelsDetails:      &withDetails,
 		WithMergeStatusRecheck: &withRecheck,
+		NonArchived:            &withRecheck,
 		UpdatedAfter:           "2025-02-01T00:00:00Z",
 		UpdatedBefore:          "2025-11-30T23:59:59Z",
 	})

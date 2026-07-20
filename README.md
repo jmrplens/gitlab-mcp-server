@@ -348,7 +348,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | ------------- | ------------------------------------------------ |
 | Language      | Go 1.26+                                         |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.1  |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.46.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.51.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
 ## Privacy Policy
@@ -376,10 +376,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       966 |     192,834 |
-| Unit tests (`_test.go`)  |       535 |     297,899 |
-| End-to-end tests         |       169 |      43,893 |
-| **Total**                | **1,670** | **534,626** |
+| Source (`.go`, non-test) |       966 |     192,976 |
+| Unit tests (`_test.go`)  |       535 |     298,260 |
+| End-to-end tests         |       169 |      43,956 |
+| **Total**                | **1,670** | **535,192** |
 
 ### Functions
 
@@ -388,7 +388,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  7,394 |
 | — exported (public)             |  2,590 |
 | — unexported (private)          |  4,804 |
-| Unit test functions (`TestXxx`) | 11,541 |
+| Unit test functions (`TestXxx`) | 11,552 |
 | Subtests (`t.Run(...)`)         |  2,887 |
 | End-to-end test functions       |    376 |
 
@@ -396,20 +396,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.54× more tests than code |
+| Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~199 lines |
-| Average test file length           |                 ~556 lines |
-| Comment lines in source            |  20,980 (~10.9% of source) |
+| Average test file length           |                 ~557 lines |
+| Comment lines in source            |  20,991 (~10.9% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,605 |
+| `if err != nil` checks             | 6,614 |
 | `defer` statements                 |   828 |
-| `struct` types defined             | 2,708 |
-| `//nolint` suppressions            |   204 |
+| `struct` types defined             | 2,711 |
+| `//nolint` suppressions            |   206 |
 | `TODO` / `FIXME` / `HACK` comments |     3 |
 
 ### Project
@@ -419,22 +419,22 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Go packages                    |   227 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   248 |
+| Git commits                    |   259 |
 | Unique contributors            |     4 |
 
 ### Hall of fame
 
 | Record              | File                                                     |
 | ------------------- | -------------------------------------------------------- |
-| Longest source file | `internal/tools/projects/projects.go` — 3,817 lines      |
-| Longest test file   | `internal/tools/projects/projects_test.go` — 8,076 lines |
+| Longest source file | `internal/tools/projects/projects.go` — 3,827 lines      |
+| Longest test file   | `internal/tools/projects/projects_test.go` — 8,095 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,506 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,488 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,508 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,489 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

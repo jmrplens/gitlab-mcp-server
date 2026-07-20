@@ -416,8 +416,7 @@ golangci-lint:
 ## Only reports vulnerabilities where the vulnerable function is actually called.
 ## Docs: https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck
 govulncheck:
-	@echo === govulncheck ===
-	govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
+	./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
 
 ## sonar: run the full SonarCloud pipeline like CI — unit tests with coverage,
 ## upload via sonar-scanner, poll the Compute Engine task, then print the quality
@@ -503,7 +502,7 @@ analyze:
 	run_check "[1/5] golangci-lint config verify" golangci-lint config verify; \
 	run_check "[2/5] golangci-lint fmt" golangci-lint fmt --diff; \
 	run_check "[3/5] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/5] govulncheck" govulncheck -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/5] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
 	run_check "[5/5] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \

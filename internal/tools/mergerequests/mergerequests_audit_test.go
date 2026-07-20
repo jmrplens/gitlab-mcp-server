@@ -47,8 +47,8 @@ func assertQuery(t *testing.T, q url.Values, key, want string) {
 
 // TestList_NewFilterFields_ReachQuery verifies that every newly added project
 // list filter (author/assignee/reviewer IDs, approvals, environment, reaction,
-// view, wip, deployment dates, label-detail/recheck toggles, not_author) is
-// encoded onto the outgoing project merge requests request.
+// view, wip, deployment dates, label-detail/recheck toggles, non_archived,
+// not_author) is encoded onto the outgoing project merge requests request.
 func TestList_NewFilterFields_ReachQuery(t *testing.T) {
 	var q url.Values
 	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathMRs, &q))
@@ -69,6 +69,7 @@ func TestList_NewFilterFields_ReachQuery(t *testing.T) {
 		ApprovedByIDs:          []int64{13},
 		WithLabelsDetails:      &boolTrue,
 		WithMergeStatusRecheck: &boolTrue,
+		NonArchived:            &boolTrue,
 		DeployedAfter:          "2025-01-01T00:00:00Z",
 		DeployedBefore:         "2025-12-31T00:00:00Z",
 	})
@@ -86,6 +87,7 @@ func TestList_NewFilterFields_ReachQuery(t *testing.T) {
 	assertQuery(t, q, "reviewer_id", "9")
 	assertQuery(t, q, "with_labels_details", "true")
 	assertQuery(t, q, "with_merge_status_recheck", "true")
+	assertQuery(t, q, "non_archived", "true")
 	if got := q["approver_ids[]"]; !slices.Equal(got, []string{"11", "12"}) {
 		t.Errorf("approver_ids[] = %v, want [11 12]", got)
 	}
@@ -119,7 +121,7 @@ func TestList_Keyset_ReachQuery(t *testing.T) {
 
 // TestListGlobal_NewFilterFields_ReachQuery verifies the new global list
 // filters (approved plus author/assignee/reviewer IDs, in, view, wip, reaction,
-// not_author, label toggles) and keyset reach the global request.
+// not_author, label toggles, non_archived) and keyset reach the global request.
 func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 	var q url.Values
 	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, "/api/v4/merge_requests", &q))
@@ -139,6 +141,7 @@ func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 		ApprovedByIDs:          []int64{5, 6},
 		WithLabelsDetails:      &boolTrue,
 		WithMergeStatusRecheck: &boolTrue,
+		NonArchived:            &boolTrue,
 		KeysetPaginationInput:  toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "900"},
 	})
 	if err != nil {
@@ -155,6 +158,7 @@ func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 	assertQuery(t, q, "reviewer_id", "3")
 	assertQuery(t, q, "with_labels_details", "true")
 	assertQuery(t, q, "with_merge_status_recheck", "true")
+	assertQuery(t, q, "non_archived", "true")
 	assertQuery(t, q, "pagination", "keyset")
 	assertQuery(t, q, "page_token", "900")
 	if got := q["approver_ids[]"]; !slices.Equal(got, []string{"4"}) {
@@ -187,6 +191,7 @@ func TestListGroup_NewFilterFields_ReachQuery(t *testing.T) {
 		ApprovedByIDs:          []int64{50},
 		WithLabelsDetails:      &boolTrue,
 		WithMergeStatusRecheck: &boolTrue,
+		NonArchived:            &boolTrue,
 		KeysetPaginationInput:  toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "123"},
 	})
 	if err != nil {
@@ -202,6 +207,7 @@ func TestListGroup_NewFilterFields_ReachQuery(t *testing.T) {
 	assertQuery(t, q, "reviewer_id", "30")
 	assertQuery(t, q, "with_labels_details", "true")
 	assertQuery(t, q, "with_merge_status_recheck", "true")
+	assertQuery(t, q, "non_archived", "true")
 	assertQuery(t, q, "pagination", "keyset")
 	assertQuery(t, q, "page_token", "123")
 	if got := q["approver_ids[]"]; !slices.Equal(got, []string{"40"}) {

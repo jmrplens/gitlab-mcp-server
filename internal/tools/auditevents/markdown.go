@@ -1,6 +1,7 @@
 package auditevents
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -33,6 +34,23 @@ func FormatMarkdown(e Output) string {
 	}
 	if e.Details.EntityPath != "" {
 		fmt.Fprintf(&sb, "| Entity Path | %s |\n", toolutil.EscapeMdTableCell(e.Details.EntityPath))
+	}
+	if len(e.Details.Changes) > 0 {
+		sb.WriteString("\n### Changes\n\n")
+		sb.WriteString("| Change | From | To |\n|--------|------|----|\n")
+		for _, c := range e.Details.Changes {
+			fmt.Fprintf(
+				&sb, "| %s | %s | %s |\n",
+				toolutil.EscapeMdTableCell(c.Change),
+				toolutil.EscapeMdTableCell(c.From),
+				toolutil.EscapeMdTableCell(c.To),
+			)
+		}
+	}
+	if e.Details.ChangeObject != nil {
+		if raw, err := json.Marshal(e.Details.ChangeObject); err == nil {
+			fmt.Fprintf(&sb, "\n### Change (object)\n\n```json\n%s\n```\n", string(raw))
+		}
 	}
 	toolutil.WriteHints(
 		&sb,
