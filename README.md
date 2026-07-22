@@ -90,6 +90,8 @@ Or install the native binary first, then register it:
 brew install jmrplens/tap/gitlab-mcp-server
 # Linux/macOS (script)
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
+# Windows (winget)
+winget install --id jmrplens.gitlab-mcp-server -e
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 

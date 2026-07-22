@@ -48,6 +48,8 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
 brew install jmrplens/tap/gitlab-mcp-server
 # Linux/macOS (script)
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
+# Windows (winget)
+winget install --id jmrplens.gitlab-mcp-server -e
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 
