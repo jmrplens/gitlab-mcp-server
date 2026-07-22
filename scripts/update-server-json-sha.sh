@@ -14,6 +14,10 @@
 #
 # Steps for .plugin/plugin.json:
 #   5. Sets top-level .version to the given version (if file exists)
+#
+# Steps for mcpb/manifest.json (Claude Desktop) and lhm.plugin.json
+# (LobeHub Marketplace):
+#   6-7. Sets top-level .version to the given version (if file exists)
 
 set -euo pipefail
 
@@ -97,4 +101,15 @@ if [[ -f "$MCPB_JSON" ]]; then
   echo "$MCPB_JSON version set to $VERSION"
 else
   echo "NOTE: $MCPB_JSON not found, skipping MCPB manifest update"
+fi
+
+# 7. Update LobeHub Marketplace manifest version (if present). The actual
+# publish to LobeHub is a manual step (`make publish-lobehub`) — the CLI has no
+# non-interactive auth — but the version is kept in sync here on every release.
+LHM_JSON="lhm.plugin.json"
+if [[ -f "$LHM_JSON" ]]; then
+  jq --arg v "$VERSION" '.version = $v' "$LHM_JSON" > tmp.$$.json && mv tmp.$$.json "$LHM_JSON"
+  echo "$LHM_JSON version set to $VERSION"
+else
+  echo "NOTE: $LHM_JSON not found, skipping LobeHub manifest update"
 fi

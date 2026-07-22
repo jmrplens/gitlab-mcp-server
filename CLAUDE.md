@@ -243,7 +243,8 @@ When creating a new release and uploading binaries to GitHub Releases:
    - `gitlab-mcp-server.mcpb` — Claude Desktop extension built by `scripts/build-mcpb.sh` from `mcpb/manifest.json` (validate with `make check-mcpb`, build locally with `make mcpb`)
    - Homebrew formula update pushed to `jmrplens/homebrew-tap` by `scripts/update-homebrew-tap.sh` (secret `TAP_DEPLOY_KEY_B64`)
    - winget version PR to `microsoft/winget-pkgs` via `winget-releaser` (secret `WINGET_TOKEN`)
-   - Version stamping of `server.json`, `.plugin/plugin.json`, and `mcpb/manifest.json` committed back to main by `scripts/update-server-json-sha.sh`
+   - Version stamping of `server.json`, `.plugin/plugin.json`, `mcpb/manifest.json`, and `lhm.plugin.json` (LobeHub Marketplace) committed back to main by `scripts/update-server-json-sha.sh`
+4. **LobeHub Marketplace is a manual publish step.** The stamping script keeps `lhm.plugin.json`'s version current on every release, but the LobeHub CLI (`@lobehub/market-cli`) has no non-interactive publish path (browser OIDC login + GitHub connect are required once), so it cannot run in CI. After a release, run `make publish-lobehub` from a machine with `lhm login` + `lhm github connect` already completed. The listing is `jmrplens-gitlab-mcp-server`.
 
 ### Post-implementation verification
 
