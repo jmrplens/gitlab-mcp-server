@@ -140,10 +140,10 @@ func TestExtractGitLabURL(t *testing.T) {
 			wantErr:    true,
 		},
 		{
-			name:       "no header and no default returns empty",
+			name:       "no header and no default falls back to public gitlab.com",
 			header:     "",
 			defaultURL: "",
-			wantURL:    "",
+			wantURL:    "https://gitlab.com",
 		},
 		{
 			name:       "whitespace-only header falls back to default",

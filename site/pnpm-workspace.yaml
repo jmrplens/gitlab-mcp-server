@@ -9,6 +9,9 @@ overrides:
   # brace-expansion ReDoS (GHSA-3jxr-9vmj-r5cp); dev/build deps only.
   "brace-expansion@<1.1.16": 1.1.16
   "brace-expansion@>=3.0.0 <5.0.7": 5.0.7
+  # fast-uri host confusion via failed IDN / backslash authority
+  # (GHSA-4c8g-83qw-93j6, GHSA-v2hh-gcrm-f6hx); dev/build deps only (serve>ajv).
+  "fast-uri@<3.1.4": ">=3.1.4"
 
 peerDependencyRules:
   allowedVersions:

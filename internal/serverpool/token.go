@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // RequestOptionGitLabURL identifies the per-request GitLab URL header option.
@@ -99,9 +101,11 @@ func ExtractGitLabURL(r *http.Request, defaultURL string) (string, error) {
 
 // ResolveRequestOptions applies server-wide MCP configuration precedence to
 // the request-provided options. When defaultURL is set, it is authoritative and
-// any GITLAB-URL header is ignored. When defaultURL is empty, callers must
-// provide GITLAB-URL per request. Effective URLs are normalized so equivalent
-// values hash to the same server-pool session key.
+// any GITLAB-URL header is ignored. When defaultURL is empty, a GITLAB-URL
+// header selects the instance per request; if that header is also absent, the
+// public GitLab instance (config.DefaultGitLabURL) is used, mirroring the stdio
+// default so HTTP clients may omit the URL entirely. Effective URLs are
+// normalized so equivalent values hash to the same server-pool session key.
 func ResolveRequestOptions(r *http.Request, defaultURL string) (RequestOptions, error) {
 	header := strings.TrimSpace(r.Header.Get(RequestOptionGitLabURL))
 	trimmedDefault := strings.TrimSpace(defaultURL)
@@ -122,7 +126,11 @@ func ResolveRequestOptions(r *http.Request, defaultURL string) (RequestOptions, 
 	}
 
 	if header == "" {
-		return RequestOptions{IgnoredOptions: ignoredOptions, DeprecatedOptions: deprecatedOptions}, nil
+		// No fixed --gitlab-url and no per-request GITLAB-URL header: fall back to
+		// the public GitLab instance instead of leaving the URL empty (which would
+		// surface downstream as "no server available"). DefaultGitLabURL is already
+		// canonical, so it needs no normalization.
+		return RequestOptions{GitLabURL: config.DefaultGitLabURL, IgnoredOptions: ignoredOptions, DeprecatedOptions: deprecatedOptions}, nil
 	}
 	normalizedHeader, err := normalizeGitLabURL(header)
 	if err != nil {

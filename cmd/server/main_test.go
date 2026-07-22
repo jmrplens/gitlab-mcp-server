@@ -1944,14 +1944,22 @@ func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
 	}
 }
 
-// TestServeHTTP_MissingGitLabURLHeader verifies that requests are rejected in
-// HTTP mode when no default --gitlab-url is configured and GITLAB-URL is absent.
-func TestServeHTTP_MissingGitLabURLHeader(t *testing.T) {
+// TestServeHTTP_MissingGitLabURLDefaultsToPublic verifies that in HTTP mode with
+// no default --gitlab-url configured and no GITLAB-URL header, the request falls
+// back to the public gitlab.com instance instead of being rejected (see
+// serverpool.ResolveRequestOptions). TierExplicit and IgnoreScopes are set so the
+// server-pool entry skips live tier/scope detection against gitlab.com, keeping
+// the test hermetic (no outbound network) while still exercising the default-URL
+// resolution path end to end.
+func TestServeHTTP_MissingGitLabURLDefaultsToPublic(t *testing.T) {
 	cfg := &config.Config{
 		GitLabURL:      "",
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
+		Tier:           edition.Free,
+		TierExplicit:   true,
+		IgnoreScopes:   true,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1984,9 +1992,10 @@ func TestServeHTTP_MissingGitLabURLHeader(t *testing.T) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		t.Error("expected non-200 when GITLAB-URL header is missing and no default gitlab-url is configured")
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("expected 200 (missing GITLAB-URL now defaults to gitlab.com), got %d", resp.StatusCode)
 	}
+	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
 
 	cancel()
 	select {
