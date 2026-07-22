@@ -10,7 +10,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin check-mcpb mcpb gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin check-mcpb mcpb publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
@@ -707,6 +707,21 @@ mcpb:
 	lipo -create -output dist/local_darwin_all/gitlab-mcp-server dist/local_darwin_arm64/gitlab-mcp-server dist/local_darwin_amd64/gitlab-mcp-server; \
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_windows_amd64/gitlab-mcp-server.exe ./cmd/server; \
 	bash scripts/build-mcpb.sh "$$VER"
+
+## publish-lobehub: publish the current version to the LobeHub Marketplace.
+## Reads lhm.plugin.json (version kept in sync by scripts/update-server-json-sha.sh
+## on each release) and posts it via the @lobehub/market-cli. Requires a one-time
+## interactive `lhm login` + `lhm github connect` first — LobeHub has no
+## non-interactive publish path, so this cannot run in CI. See the release process in CLAUDE.md.
+publish-lobehub:
+	@command -v node >/dev/null || { echo "ERROR: Node.js >= 22 is required"; exit 1; }
+	@VER=$$(tr -d '[:space:]' < VERSION); \
+	MVER=$$(jq -r '.version' lhm.plugin.json); \
+	if [ "$$VER" != "$$MVER" ]; then \
+		echo "ERROR: VERSION ($$VER) != lhm.plugin.json version ($$MVER); run a release stamp first"; exit 1; \
+	fi; \
+	echo "Publishing jmrplens-gitlab-mcp-server v$$VER to LobeHub..."; \
+	npx -y @lobehub/market-cli plugin publish --dir "$(CURDIR)"
 
 ## gen-readme: regenerate all managed README.md sections (token footprint + stats).
 gen-readme: gen-footprint gen-stats
