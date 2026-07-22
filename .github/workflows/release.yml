@@ -220,10 +220,10 @@ jobs:
 
           git commit -m "chore: update manifests for v${VERSION}
 
-          Updates server.json (MCP Registry), .plugin/plugin.json
-          (Open Plugins), mcpb/manifest.json (Claude Desktop
-          extension), and lhm.plugin.json (LobeHub Marketplace) with
-          version ${VERSION} and pinned SHA256 hashes."
+          Updates server.json (MCP Registry) with version ${VERSION} and
+          pinned SHA256 hashes, and stamps version ${VERSION} into
+          .plugin/plugin.json (Open Plugins), mcpb/manifest.json (Claude
+          Desktop extension), and lhm.plugin.json (LobeHub Marketplace)."
           git push origin main
 
   winget:

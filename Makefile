@@ -715,6 +715,9 @@ mcpb:
 ## non-interactive publish path, so this cannot run in CI. See the release process in CLAUDE.md.
 publish-lobehub:
 	@command -v node >/dev/null || { echo "ERROR: Node.js >= 22 is required"; exit 1; }
+	@NODE_MAJOR=$$(node -v | sed 's/^v\([0-9]*\).*/\1/'); \
+	if [ "$$NODE_MAJOR" -lt 22 ]; then echo "ERROR: Node.js >= 22 is required (found $$(node -v))"; exit 1; fi
+	@command -v jq >/dev/null || { echo "ERROR: jq is required"; exit 1; }
 	@VER=$$(tr -d '[:space:]' < VERSION); \
 	MVER=$$(jq -r '.version' lhm.plugin.json); \
 	if [ "$$VER" != "$$MVER" ]; then \
