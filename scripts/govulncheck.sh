@@ -9,10 +9,19 @@
 #
 # Accepted advisories (keep in sync with docs/development/static-analysis.md):
 #   - GO-2026-5932: golang.org/x/crypto/openpgp is unmaintained and unsafe by
-#     design ("Fixed in: N/A"). It is reached only through
-#     github.com/creativeprojects/go-selfupdate, which imports it unconditionally
-#     (no build tag) to verify the GPG signature of our own signed releases. No
-#     dependency bump removes it and there is no fixed version. Accepted risk.
+#     design. The advisory covers every version of the module
+#     ("introduced: 0" / "Fixed in: N/A"), so no dependency bump can ever clear
+#     it. It enters the build through github.com/creativeprojects/go-selfupdate,
+#     whose validate.go imports the package unconditionally (no build tag) for
+#     its PGPValidator type, which links openpgp into any binary importing the
+#     selfupdate package.
+#
+#     We never execute that code. internal/autoupdate configures
+#     selfupdate.ChecksumValidator (checksums.txt), never a PGP validator, and
+#     our releases are signed with cosign/sigstore
+#     (checksums.txt.sigstore.json), not GPG. Every govulncheck trace is a
+#     package init() call; not one reaches an openpgp cryptographic function.
+#     Reachability is therefore linkage only. Accepted risk.
 #
 # Usage: scripts/govulncheck.sh [-tags <tags>] [packages...]
 set -uo pipefail

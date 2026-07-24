@@ -174,13 +174,19 @@ the allowlist.
 
 Accepted advisories (keep the list in the script in sync with this table):
 
-| Advisory                                               | Package                       | Reached via                                                                               | Why accepted                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------ | ----------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`GO-2026-5932`](https://pkg.go.dev/vuln/GO-2026-5932) | `golang.org/x/crypto/openpgp` | `github.com/creativeprojects/go-selfupdate` (GPG verification of our own signed releases) | The package is unmaintained and unsafe by design with **no fixed version** (`Fixed in: N/A`). `go-selfupdate` imports it unconditionally (no build tag), so no dependency bump removes it. Reachability is limited to verifying signatures of our own release assets. |
+| Advisory                                               | Package                       | Reached via                                                                                                                                                                                          | Why accepted                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`GO-2026-5932`](https://pkg.go.dev/vuln/GO-2026-5932) | `golang.org/x/crypto/openpgp` | `github.com/creativeprojects/go-selfupdate` — its `validate.go` imports the package unconditionally (no build tag) for the `PGPValidator` type, linking it into any binary that imports `selfupdate` | The package is unmaintained and unsafe by design. The advisory covers **every version** of the module (`introduced: 0`, `Fixed in: N/A`), so no dependency bump can clear it. **We never execute it**: `internal/autoupdate` configures `selfupdate.ChecksumValidator`, never a PGP validator, and releases are signed with cosign/sigstore (`checksums.txt.sigstore.json`), not GPG. Every `govulncheck` trace is a package `init()` call — none reaches an openpgp cryptographic function. Reachability is linkage only. |
 
 To accept a new advisory, add its OSV ID to `ALLOWLIST` in
 `scripts/govulncheck.sh` and add a row here with the justification. To retire one
 (e.g. once a fix ships), remove it from both.
+
+The only way to drop `openpgp` from the build is an upstream change in
+`go-selfupdate` — either migrating to the maintained
+`github.com/ProtonMail/go-crypto/openpgp` fork that the advisory recommends, or
+moving the PGP validators into a separate package so consumers that do not use
+them never link it.
 
 ### markdownlint-cli2
 
