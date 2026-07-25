@@ -6,11 +6,16 @@ overrides:
   lodash: 4.18.1
   yaml: 2.9.0
   yaml-language-server@1.20.0>yaml: 2.9.0
-  # brace-expansion ReDoS (GHSA-3jxr-9vmj-r5cp); dev/build deps only.
+  # brace-expansion ReDoS (GHSA-3jxr-9vmj-r5cp) and unbounded-expansion DoS
+  # (GHSA-mh99-v99m-4gvg); dev/build deps only.
+  # The DoS advisory patches only 5.0.8: the 1.x line has no fixed release, and
+  # forcing 5.x there would break its consumers, because v1 exported the expand
+  # function directly while v5 exports an object.
   "brace-expansion@<1.1.16": 1.1.16
-  "brace-expansion@>=3.0.0 <5.0.7": 5.0.7
+  "brace-expansion@>=3.0.0 <5.0.8": 5.0.8
   # fast-uri host confusion via failed IDN / backslash authority
-  # (GHSA-4c8g-83qw-93j6, GHSA-v2hh-gcrm-f6hx); dev/build deps only (serve>ajv).
+  # (GHSA-4c8g-83qw-93j6, GHSA-v2hh-gcrm-f6hx); dev/build deps only
+  # (html-validate > @sidvind/better-ajv-errors > ajv).
   "fast-uri@<3.1.4": ">=3.1.4"
 
 peerDependencyRules:
@@ -25,3 +30,17 @@ allowBuilds:
 # Disable the supply-chain release-age gate so dependencies always resolve to
 # the latest published versions (pnpm 11.8 applies a non-zero default otherwise).
 minimumReleaseAge: 0
+
+# pnpm audit exceptions. Keep each entry justified and re-check on every
+# dependency bump.
+auditConfig:
+  ignoreGhsas:
+    # brace-expansion unbounded-expansion DoS. Only reachable through
+    # pa11y-ci > globby > glob > minimatch@3, which pins brace-expansion ^1.1.7.
+    # The advisory patches 5.0.8 only, with no 1.x release, and v5 cannot be
+    # forced here because it exports an object where v1 exported the function.
+    # pa11y-ci 4.1.1 is the latest release, so no upgrade resolves it.
+    # Accepted: a11y tooling that runs on our own generated HTML at build time,
+    # never on untrusted input, and never shipped to users. The 5.x branch is
+    # pinned to the patched 5.0.8 by the override above.
+    - GHSA-mh99-v99m-4gvg
