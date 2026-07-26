@@ -155,6 +155,14 @@ Docker variant — replace `"command"`/`"args"` with:
 "args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest", "--http=false"]
 ```
 
+Cline (VS Code) — open the Cline sidebar → MCP servers icon → **Edit Global MCP**, or edit the settings file directly:
+
+- **macOS**: `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+- **Linux**: `~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json`
+- **Windows**: `%APPDATA%\Code\User\globalStorage\saoudrizwan.claude-dev\settings\cline_mcp_settings.json`
+
+Cline uses the `mcpServers` shape shown above for the native binary.
+
 For a shared, long-running HTTP deployment instead of per-user stdio, see [HTTP Server Mode](docs/guides/http-server-mode.md).
 
 </details>
