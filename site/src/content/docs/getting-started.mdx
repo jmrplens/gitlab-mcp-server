@@ -1,7 +1,66 @@
 ---
 title: Getting Started
 description: Install and configure GitLab MCP Server in under five minutes — via Docker, native binary, or setup wizard — for VS Code, Claude, Cursor, and other MCP clients.
+datePublished: "2026-04-21"
 head:
+  # The one page on the site with a genuinely procedural shape: token, install,
+  # register, verify. Each step points at the section that documents it.
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "HowTo",
+        "@id": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#howto",
+        "name": "How to install GitLab MCP Server and connect it to an AI assistant",
+        "description": "Create a GitLab personal access token, install the GitLab MCP Server binary or Docker image, register it with an MCP client such as VS Code, Claude Desktop, Cursor or Claude Code, and verify the connection.",
+        "inLanguage": "en",
+        "totalTime": "PT5M",
+        "isPartOf": { "@id": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#article" },
+        "about": { "@id": "https://github.com/jmrplens/gitlab-mcp-server#software" },
+        "supply": [],
+        "tool": [
+          {
+            "@type": "HowToTool",
+            "name": "A GitLab instance — GitLab.com, self-hosted Community Edition, or Enterprise Edition"
+          },
+          {
+            "@type": "HowToTool",
+            "name": "An MCP-compatible AI client (VS Code with Copilot, Claude Desktop, Cursor, or Claude Code)"
+          }
+        ],
+        "step": [
+          {
+            "@type": "HowToStep",
+            "position": 1,
+            "name": "Create a personal access token",
+            "text": "In GitLab, go to Preferences, then Access Tokens, and create a new token with the api scope. Copy it — you need it for configuration. For a read-only setup, use a token with the read_api scope and set GITLAB_READ_ONLY=true, which disables all mutating tools.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#creating-a-personal-access-token"
+          },
+          {
+            "@type": "HowToStep",
+            "position": 2,
+            "name": "Install the server",
+            "text": "Pick one install path. The one-click buttons register a Docker-based server that auto-pulls the image on first run. The one-line installer places the native binary on your PATH via Homebrew, winget, or a shell script. Claude Desktop has a native .mcpb extension that stores the token in the OS keychain. You can also download the binary for your platform from GitHub Releases.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#quick-install"
+          },
+          {
+            "@type": "HowToStep",
+            "position": 3,
+            "name": "Register the server with your MCP client",
+            "text": "Add the server to your client's MCP configuration with GITLAB_TOKEN in its environment. For Claude Code the whole step is one command: claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server. For a self-managed instance also pass GITLAB_URL, plus GITLAB_SKIP_TLS_VERIFY=true for self-signed certificates. The built-in setup wizard, gitlab-mcp-server --setup, does this for you and writes the token outside client JSON files.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#manual-configuration"
+          },
+          {
+            "@type": "HowToStep",
+            "position": 4,
+            "name": "Verify the setup",
+            "text": "Open your AI client and ask \"Who am I on GitLab?\". The server returns your GitLab user profile, confirming the connection works. If you get connection errors, check that GITLAB_URL is correct and reachable, that the token carries the api scope, and that self-signed certificates are handled with GITLAB_SKIP_TLS_VERIFY=true.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#verify-the-setup"
+          }
+        ]
+      }
   - tag: script
     attrs:
       type: application/ld+json

@@ -85,7 +85,7 @@ const sourceCodeId = `${repositoryUrl}#source-code`;
 const siteDescription =
 	"Open source Model Context Protocol server for GitLab, with dynamic, meta-tool, and individual tool surfaces for AI assistants.";
 const socialImageAlt =
-	"GitLab MCP Server Dynamic Toolset reduces MCP context from 570K to 2.2K tokens";
+	"GitLab MCP Server Dynamic Toolset reduces MCP startup context from 964K to 2.2K tokens";
 const socialImage = {
 	"@type": "ImageObject",
 	url: socialImageUrl,
@@ -129,26 +129,77 @@ const softwareRequirements =
 const jsonLd = JSON.stringify({
 	"@context": "https://schema.org",
 	"@graph": [
+		// This node shares its @id with the canonical Person published at
+		// https://jmrp.io/#person. Two nodes under one @id that disagree weaken
+		// the entity rather than reinforcing it, so name, jobTitle, description,
+		// url, identifier and sameAs are byte-identical to the portfolio's — that
+		// site is the source of truth for the identity, this one only restates it.
+		// `image` is the one deliberate divergence: the portfolio points at a
+		// content-hashed Astro asset whose URL changes on every rebuild there, so
+		// this node uses the stable GitHub avatar (already a sameAs origin)
+		// instead of a URL that would silently rot.
 		{
 			"@type": "Person",
 			"@id": authorId,
 			name: "José Manuel Requena Plens",
 			alternateName: "jmrplens",
-			jobTitle: ["R&D Engineer", "Firmware & Software Engineer"],
-			url: authorUrl,
-			image: "https://github.com/jmrplens.png",
+			jobTitle: "R&D · Firmware & Software Engineer",
+			description:
+				"Firmware and software engineer in Valencia, Spain — industrial embedded systems, open-source tooling, and self-hosted infrastructure.",
+			url: `${authorUrl}/`,
+			image: {
+				"@type": "ImageObject",
+				url: "https://github.com/jmrplens.png",
+				width: 460,
+				height: 460,
+			},
+			identifier: {
+				"@type": "PropertyValue",
+				propertyID: "ORCID",
+				value: "0000-0003-1250-6212",
+				url: "https://orcid.org/0000-0003-1250-6212",
+			},
+			// Wikidata-linked rather than bare strings, so an engine resolves each
+			// topic to a known entity instead of guessing from a label. This is a
+			// project-relevant subset of the portfolio's topic set; where a topic
+			// appears in both, it carries the same Q-id there and here, so the two
+			// descriptions of one person never disagree about what a term means.
 			knowsAbout: [
-				"Model Context Protocol",
-				"GitLab",
-				"Go",
-				"DevOps",
-				"AI assistants",
+				{
+					"@type": "Thing",
+					name: "Model Context Protocol",
+					"@id": "http://www.wikidata.org/entity/Q133436854",
+				},
+				{
+					"@type": "Thing",
+					name: "GitLab",
+					"@id": "http://www.wikidata.org/entity/Q16639197",
+				},
+				{
+					"@type": "Thing",
+					name: "Go",
+					"@id": "http://www.wikidata.org/entity/Q37227",
+				},
+				{
+					"@type": "Thing",
+					name: "DevOps",
+					"@id": "http://www.wikidata.org/entity/Q3025536",
+				},
+				{
+					"@type": "Thing",
+					name: "CI/CD",
+					"@id": "http://www.wikidata.org/entity/Q28136854",
+				},
 			],
 			sameAs: [
 				"https://github.com/jmrplens",
-				"https://linkedin.com/in/jmrplens",
+				"https://www.linkedin.com/in/jmrplens",
 				"https://mstdn.jmrp.io/@jmrplens",
+				"https://bsky.app/profile/jmrp.io",
 				"https://scholar.google.com/citations?user=9b0kPaUAAAAJ",
+				"https://orcid.org/0000-0003-1250-6212",
+				"https://www.researchgate.net/profile/Jose-Requena-Plens-2",
+				"https://www.mathworks.com/matlabcentral/profile/authors/5890853",
 				"https://matrix.to/#/@jmrplens:matrix.jmrp.io",
 				"https://keyoxide.org/0A993B268654DBBA52B7E8D3FCF653391E2C91FC",
 			],
@@ -186,6 +237,21 @@ const jsonLd = JSON.stringify({
 			featureList,
 			keywords:
 				"Model Context Protocol, MCP, GitLab, AI assistants, developer tools, Go",
+			// The two subjects this software is about, as Wikidata entities. An
+			// engine that has never heard of this server has certainly heard of
+			// these, which is what lets it place an unknown tool in a known field.
+			about: [
+				{
+					"@type": "Thing",
+					name: "GitLab",
+					"@id": "http://www.wikidata.org/entity/Q16639197",
+				},
+				{
+					"@type": "Thing",
+					name: "Model Context Protocol",
+					"@id": "http://www.wikidata.org/entity/Q133436854",
+				},
+			],
 			description:
 				"Model Context Protocol server that exposes more than 1,000 GitLab operations as AI-accessible tools.",
 			offers: {
@@ -273,7 +339,7 @@ export default defineConfig({
 				{
 					icon: "linkedin",
 					label: "LinkedIn",
-					href: "https://linkedin.com/in/jmrplens",
+					href: "https://www.linkedin.com/in/jmrplens",
 				},
 			],
 			head: [
@@ -348,7 +414,7 @@ export default defineConfig({
 					tag: "link",
 					attrs: {
 						rel: "me",
-						href: "https://linkedin.com/in/jmrplens",
+						href: "https://www.linkedin.com/in/jmrplens",
 					},
 				},
 				{

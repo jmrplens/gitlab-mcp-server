@@ -32,6 +32,60 @@ English (preferred) or Spanish.
 
 These targets are best-effort for a maintainer-driven open-source project. We will keep you informed of progress and any expected delay.
 
+## Threat model
+
+`gitlab-mcp-server` sits between an AI client and a GitLab instance. It holds a
+credential that usually carries the full `api` scope, it takes instructions from
+a model, and it relays content written by other people — issue titles, MR
+descriptions, commit messages, file contents, job logs — back to that model.
+That shape is what determines whether something counts as a vulnerability here.
+
+**Trust boundaries.** Three of them matter:
+
+1. **Model → server.** Tool arguments arrive from a model that may have been
+   influenced by content it read earlier. The server must not treat an argument
+   as authority to exceed the token's own permissions, and must not let an
+   argument redirect a request to an unintended host or path.
+2. **GitLab → server → model.** Everything the GitLab API returns is attacker-
+   influenced whenever an attacker can file an issue, open an MR, or push a
+   commit. It is rendered into tool results through the escaping helpers in
+   `internal/toolutil/text.go`, so a way to break out of a table cell, a code
+   fence, or a heading is a vulnerability.
+3. **Tenant → tenant (HTTP mode).** One process serves many callers. The bounded
+   per-token+URL server pool in `internal/serverpool/` is what keeps one caller's
+   token, client, and cached tier from reaching another caller's session.
+
+**What we consider a vulnerability, specifically:**
+
+- **Credential disclosure.** A PAT or OAuth token reaching a log line, an error
+  message, a tool result, an MCP resource, or a crash dump. Tokens are meant to
+  stay in memory and in the operator's `.env`, never in model-visible output.
+- **Prompt injection escaping its labelling.** Externally controlled GitLab text
+  that can be made to read to the calling model as an instruction rather than as
+  quoted data. The payload originating on GitLab does not put it out of scope —
+  how this server frames that text is our responsibility.
+- **Cross-tenant leakage in HTTP mode.** Any path by which one bearer token
+  observes another's GitLab client, cached identity, tier, or tool results, or by
+  which pool eviction serves a session the wrong client.
+- **Privilege escalation past the configured mode.** `GITLAB_READ_ONLY=true` and
+  `GITLAB_SAFE_MODE=true` are enforcement, not hints. A mutating call that
+  executes despite either flag is a vulnerability, including through the dynamic
+  `gitlab_execute_action` surface.
+- **Path traversal on file operations.** Upload and file-content tools take
+  caller-supplied paths; one that escapes its intended directory or reads
+  something the operator did not expose is a vulnerability.
+- **Server-side request forgery.** A caller-controlled value that redirects an
+  API request away from the configured `GITLAB_URL` to an internal address.
+- **Update-channel compromise.** Auto-update fetches and replaces the running
+  binary. A way to make it install an unverified or substituted artifact is a
+  vulnerability regardless of how the release was produced.
+
+**Assumptions we make.** The operator is trusted and chooses the token and its
+scope; the GitLab instance enforces its own authorization, and this server never
+tries to widen what the token already allows; the host running the server is not
+already compromised. Reports resting on breaking one of those assumptions fall
+under *Out of scope* below.
+
 ## Scope
 
 ### In scope

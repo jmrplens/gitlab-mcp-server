@@ -1,7 +1,118 @@
 ---
 title: Visión general de herramientas
 description: Los tres modos de herramientas de GitLab MCP Server (dinámico, meta-herramientas e individual) y cómo equilibran el coste de tokens con la granularidad.
+datePublished: "2026-04-21"
 head:
+  # La página que una IA lee para responder "¿qué puede hacer este servidor?".
+  # La prosa agrupa las meta-herramientas base en ocho familias, pero el marcado
+  # no lo decía — ahora cada familia tiene un enlace profundo citable.
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/tools/overview/#meta-tool-families",
+        "name": "Familias de meta-herramientas base de GitLab MCP Server",
+        "description": "Las ocho familias en las que se agrupan las meta-herramientas base en modo meta-herramientas. Cada familia cubre un conjunto de dominios de GitLab accesibles mediante un único despachador de dominio.",
+        "itemListOrder": "https://schema.org/ItemListOrderAscending",
+        "numberOfItems": 8,
+        "isPartOf": { "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/tools/overview/#article" },
+        "about": { "@id": "https://github.com/jmrplens/gitlab-mcp-server#software" },
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Gestión de proyectos",
+            "description": "Proyectos, issues, grupos, usuarios y wikis: gitlab_project, gitlab_issue, gitlab_group, gitlab_user, gitlab_wiki.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/es/tools/overview/#gestión-de-proyectos"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Código y repositorio",
+            "description": "Ramas, tags, releases, árboles de repositorio y merge requests: gitlab_branch, gitlab_tag, gitlab_release, gitlab_repository, gitlab_merge_request.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/es/tools/overview/#código-y-repositorio"
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "Revisión de código",
+            "description": "Superficie de revisión de merge requests — aprobaciones, discusiones, notas borrador y diffs: gitlab_mr_review.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/es/tools/overview/#revisión-de-código"
+          },
+          {
+            "@type": "ListItem",
+            "position": 4,
+            "name": "CI/CD",
+            "description": "Pipelines, jobs, runners, variables de CI y entornos: gitlab_pipeline, gitlab_job, gitlab_runner, gitlab_ci_variable, gitlab_environment.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/es/tools/overview/#cicd"
+          },
+          {
+            "@type": "ListItem",
+            "position": 5,
+            "name": "Búsqueda y análisis",
+            "description": "Búsqueda con alcance de instancia, grupo y proyecto sobre código, issues, merge requests, commits y más: gitlab_search.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/es/tools/overview/#búsqueda-y-análisis"
+          },
+          {
+            "@type": "ListItem",
+            "position": 6,
+            "name": "Acceso y credenciales",
+            "description": "Tokens de acceso, deploy keys, deploy tokens y administración de la instancia: gitlab_access, gitlab_admin.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/es/tools/overview/#acceso-y-credenciales"
+          },
+          {
+            "@type": "ListItem",
+            "position": 7,
+            "name": "Paquetes y contenido",
+            "description": "Registro de paquetes, snippets y plantillas de proyecto: gitlab_package, gitlab_snippet, gitlab_template.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/es/tools/overview/#paquetes-y-contenido"
+          },
+          {
+            "@type": "ListItem",
+            "position": 8,
+            "name": "Descubrimiento y utilidades",
+            "description": "Feature flags, registro de modelos, catálogo CI/CD, emoji personalizados y resolución de proyecto desde el remoto git: gitlab_feature_flags, gitlab_model_registry, gitlab_ci_catalog, gitlab_custom_emoji, gitlab_resolve_project.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/es/tools/overview/#descubrimiento-y-utilidades"
+          }
+        ]
+      }
+  # El catálogo de herramientas también se publica como dos archivos legibles por
+  # máquina. Describirlos como Dataset da a un rastreador un motivo para
+  # descargar el catálogo completo en vez de inferirlo de la prosa.
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "@id": "https://github.com/jmrplens/gitlab-mcp-server#tool-catalog",
+        "name": "Catálogo de herramientas de GitLab MCP Server",
+        "description": "El catálogo completo legible por máquina de la superficie MCP de GitLab MCP Server: cada herramienta y acción con su descripción y parámetros, más los recursos, prompts y grupos de meta-herramientas, generado desde el catálogo canónico de acciones en tiempo de compilación.",
+        "inLanguage": "es",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "creator": { "@id": "https://jmrp.io/#person" },
+        "about": { "@id": "https://github.com/jmrplens/gitlab-mcp-server#software" },
+        "keywords": "Model Context Protocol, herramientas MCP, API de GitLab, catálogo de herramientas, llms.txt",
+        "distribution": [
+          {
+            "@type": "DataDownload",
+            "name": "llms.txt — resumen del catálogo",
+            "encodingFormat": "text/markdown",
+            "contentUrl": "https://jmrplens.github.io/gitlab-mcp-server/llms.txt"
+          },
+          {
+            "@type": "DataDownload",
+            "name": "llms-full.txt — referencia completa de herramientas y acciones",
+            "encodingFormat": "text/markdown",
+            "contentUrl": "https://jmrplens.github.io/gitlab-mcp-server/llms-full.txt"
+          }
+        ]
+      }
   - tag: script
     attrs:
       type: application/ld+json
