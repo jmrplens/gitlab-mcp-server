@@ -2,55 +2,27 @@
 title: Modo servidor HTTP
 description: Despliega GitLab MCP Server como servicio HTTP multiusuario con autenticación por token en cada petición, pool aislado, OAuth y rate limiting.
 datePublished: "2026-04-21"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "¿Cuándo debería usar el modo HTTP en lugar del modo stdio?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Usa el modo stdio para un único desarrollador con un cliente de IA local, donde cada cliente inicia su propio proceso de servidor. Usa el modo HTTP cuando un equipo comparte una instancia de servidor, para despliegues remotos o sin pantalla, para integración CI/CD con MCP y para pruebas con curl o clientes HTTP. En modo HTTP un único proceso de servidor atiende a varios clientes por la red, cada uno autenticándose con su propio token de GitLab."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Cómo se autentican los clientes en el modo HTTP de GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Los clientes envían su Token de Acceso Personal de GitLab en cada petición usando la cabecera PRIVATE-TOKEN (recomendada) o una cabecera Authorization: Bearer; si ambas están presentes, PRIVATE-TOKEN tiene precedencia. Cuando el servidor arranca sin --gitlab-url, los clientes también envían una cabecera GITLAB-URL para elegir la instancia destino. Para producción, --auth-mode=oauth habilita OAuth 2.1 con PKCE compatible con RFC 9728, de modo que los clientes descubren el servidor de autorización y autorizan en el navegador en lugar de copiar tokens."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Los clientes del modo HTTP comparten estado o contexto?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "No. El modo HTTP usa un pool LRU limitado de instancias de servidor MCP indexado por el hash SHA-256 del token y la URL de GitLab de cada cliente. Los clientes con el mismo token y la misma URL comparten una instancia, mientras que tokens distintos o URLs distintas obtienen instancias completamente aisladas. Los tokens sin procesar nunca se almacenan, solo los hashes SHA-256, y cuando el pool alcanza --max-http-clients se desaloja la entrada menos usada recientemente."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Por qué se caen mis sesiones MCP o se cortan los streams en modo HTTP?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Dos capas independientes gobiernan la vida útil: el timeout de inactividad de la sesión MCP (--session-timeout, por defecto 30m) y el timeout de conexión HTTP inactiva (--http-idle-timeout, por defecto 0 = desactivado). Como --http-idle-timeout vale 0 por defecto, la capa HTTP no cierra conexiones inactivas y --session-timeout es la vida efectiva de inactividad. Si las sesiones caen pronto, un --http-idle-timeout bajo o un timeout de lectura/inactividad del proxy inverso suele cerrar los streams SSE de larga duración; aumenta el timeout del proxy para streams MCP largos."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "¿Cuándo debería usar el modo HTTP en lugar de stdio?"
+    a: "Usa el **modo stdio** para un único desarrollador con un cliente de IA local, donde cada cliente inicia su propio proceso de servidor. Usa el **modo HTTP** cuando un equipo comparte una instancia de servidor, para despliegues remotos o sin pantalla, para integración CI/CD con MCP y para pruebas con curl o clientes HTTP. En modo HTTP un único proceso de servidor atiende a varios clientes por la red, cada uno autenticándose con su propio token de GitLab."
+  - q: "¿Cómo se autentican los clientes en el modo HTTP?"
+    a: "Los clientes envían su Token de Acceso Personal de GitLab en cada petición usando la cabecera `PRIVATE-TOKEN` (recomendada) o una cabecera `Authorization: Bearer`; si ambas están presentes, `PRIVATE-TOKEN` tiene precedencia. Cuando el servidor arranca sin `--gitlab-url`, los clientes también envían una cabecera `GITLAB-URL` para elegir la instancia destino. Para producción, `--auth-mode=oauth` habilita OAuth 2.1 con PKCE compatible con RFC 9728, de modo que los clientes descubren el servidor de autorización y autorizan en el navegador en lugar de copiar tokens."
+  - q: "¿Los clientes del modo HTTP comparten estado o contexto?"
+    a: "No. El modo HTTP usa un **pool LRU limitado** de instancias de servidor MCP indexado por el hash SHA-256 del token **y** la URL de GitLab de cada cliente. Los clientes con el mismo token y la misma URL comparten una instancia, mientras que tokens distintos o URLs distintas obtienen instancias completamente aisladas. Los tokens sin procesar nunca se almacenan —solo los hashes SHA-256— y cuando el pool alcanza `--max-http-clients` se desaloja la entrada menos usada recientemente."
+  - q: "¿Por qué se caen mis sesiones MCP o se cortan los streams?"
+    a: "Dos capas independientes gobiernan la vida útil: el timeout de inactividad de la **sesión MCP** (`--session-timeout`, por defecto `30m`) y el timeout de **conexión HTTP inactiva** (`--http-idle-timeout`, por defecto `0` = desactivado). Como `--http-idle-timeout` vale `0` por defecto, la capa HTTP no cierra conexiones inactivas, así que `--session-timeout` es la vida efectiva de inactividad. Si las sesiones caen pronto, un `--http-idle-timeout` bajo o un timeout de lectura/inactividad del proxy inverso suele cerrar los streams SSE de larga duración; aumenta el timeout del proxy para streams MCP largos."
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
+import FAQ from "../../../../components/FAQ.astro";
+import stats from "../../../../data/stats.json";
 
-:::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`docs/http-server-mode.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/http-server-mode.md) en el repositorio.
+:::tip[De un vistazo]
+
+- **El modo HTTP atiende a muchos clientes desde un solo proceso**, mientras que stdio arranca un proceso por cliente.
+- **Cada petición lleva su propio token de GitLab.** Las sesiones se aíslan en un pool LRU acotado, indexado por un hash de token + URL de GitLab, así que los clientes nunca comparten estado.
+- **512 MB es el suelo, no el objetivo.** El servidor reposa cerca de 181 MB antes de que se conecte ningún cliente; dimensiona por encima según los pares token+URL concurrentes que esperes, no según el volumen de peticiones.
+
 :::
 
 Por defecto, GitLab MCP Server se ejecuta en **modo stdio** — cada cliente de IA inicia su propio proceso de servidor. El **modo HTTP** es una alternativa donde un único proceso de servidor atiende a múltiples clientes a través de la red, cada uno autenticándose con su propio token de GitLab.
@@ -511,7 +483,7 @@ El `fly.toml` incluido usa el `Dockerfile` multi-stage de la raíz del repositor
 flyctl status              # Estado de máquinas y despliegues recientes
 flyctl logs                # Seguimiento en vivo de logs estructurados
 flyctl scale count 2       # Ejecutar dos máquinas (ej. para HA)
-flyctl scale memory 512    # Subir memoria a 512 MB (por defecto en fly.toml: 256 MB)
+flyctl scale memory 2048   # Redimensionar memoria (el fly.toml de este repo declara 10 GB)
 ```
 
 ### Salud y TLS
@@ -534,6 +506,24 @@ Esto reemplaza las máquinas en ejecución con la nueva versión atómicamente y
 
 El `fly.toml` incluido se ejecuta en **modo de autenticación legacy** (PAT por petición). El modo OAuth también está soportado pero requiere una URL pública estable conocida al inicio para que los endpoints de descubrimiento OAuth (`/.well-known/oauth-protected-resource`) anuncien los metadatos correctos. Para habilitar OAuth, establece `--auth-mode=oauth` y `--gitlab-url=<tu-default>` en el array `cmd`, y redespliega. Consulta [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) para la configuración de la Aplicación OAuth de GitLab.
 
+## ¿Cuánta memoria necesita?
+
+Dimensiona el host por el conjunto residente del servidor HTTP, no por el tamaño del binario. Medido sobre la build v{stats.version} (darwin/arm64, `AUTO_UPDATE=false`, en reposo justo tras arrancar):
+
+| Modo                          | Conjunto residente | Notas                                                      |
+| ----------------------------- | -----------------: | ---------------------------------------------------------- |
+| stdio, cualquier superficie   |          ~29–30 MB | Prácticamente idéntico en `dynamic`, `meta` e `individual` |
+| HTTP, en reposo, sin sesiones |            ~181 MB | Antes de que se conecte ningún cliente                     |
+| Binario en disco              |             ~70 MB | Binario estático único, sin dependencias de runtime        |
+
+De aquí se derivan dos cosas.
+
+**El modo HTTP necesita al menos 512 MB.** Una instancia de 256 MB no basta: el servidor reposa en torno a 181 MB antes de que se conecte nadie, y cada sesión del pool añade su propio catálogo y cliente encima. No es un límite teórico: una VM de Fly.io con 256 MB ejecutando la v2.4.0 fue terminada por OOM durante el arranque. El margen por encima de ese suelo lo marca la concurrencia: el pool mantiene hasta `--max-http-clients` entradas, cada una con su propia instancia del servidor MCP, así que el pico de memoria sigue a los pares token+URL distintos y no al volumen de peticiones. El despliegue de referencia de este repositorio declara `memory = "10gb"` sobre `shared-cpu-8x`, generoso por ese motivo; dimensiona el tuyo según tu concurrencia esperada.
+
+**La superficie de herramientas casi no afecta a la memoria, solo al contexto.** Las tres superficies construyen el mismo catálogo canónico de acciones, así que elegir `dynamic` en vez de `individual` ahorra ventana de contexto del modelo, no RAM del servidor. Elige la superficie por coste de tokens y el tamaño de instancia por concurrencia.
+
+La concurrencia la acotan `--max-http-clients` (100 por defecto) y `--session-timeout` (30m por defecto), que juntos fijan cuántas entradas puede haber en el pool a la vez. Baja ambos si vas justo de memoria y súbelos solo junto con más RAM. Las cifras absolutas varían según plataforma y versión del runtime de Go: tómalas como punto de partida y mide tu propio despliegue.
+
 ## Verificación de salud
 
 Puedes verificar que el servidor está funcionando enviando una solicitud `tools/list`:
@@ -551,20 +541,10 @@ Una respuesta exitosa devuelve un resultado JSON-RPC con la lista de herramienta
 Para despliegues en producción, coloca el servidor detrás de un proxy inverso (nginx, Caddy) que maneje la terminación TLS. El endpoint MCP en `/mcp` soporta balanceo de carga HTTP estándar.
 :::
 
-## Preguntas frecuentes
+<FAQ />
 
-### ¿Cuándo debería usar el modo HTTP en lugar de stdio?
+## Referencia de la fuente
 
-Usa el **modo stdio** para un único desarrollador con un cliente de IA local, donde cada cliente inicia su propio proceso de servidor. Usa el **modo HTTP** cuando un equipo comparte una instancia de servidor, para despliegues remotos o sin pantalla, para integración CI/CD con MCP y para pruebas con curl o clientes HTTP. En modo HTTP un único proceso de servidor atiende a varios clientes por la red, cada uno autenticándose con su propio token de GitLab.
-
-### ¿Cómo se autentican los clientes en el modo HTTP?
-
-Los clientes envían su Token de Acceso Personal de GitLab en cada petición usando la cabecera `PRIVATE-TOKEN` (recomendada) o una cabecera `Authorization: Bearer`; si ambas están presentes, `PRIVATE-TOKEN` tiene precedencia. Cuando el servidor arranca sin `--gitlab-url`, los clientes también envían una cabecera `GITLAB-URL` para elegir la instancia destino. Para producción, `--auth-mode=oauth` habilita OAuth 2.1 con PKCE compatible con RFC 9728, de modo que los clientes descubren el servidor de autorización y autorizan en el navegador en lugar de copiar tokens.
-
-### ¿Los clientes del modo HTTP comparten estado o contexto?
-
-No. El modo HTTP usa un **pool LRU limitado** de instancias de servidor MCP indexado por el hash SHA-256 del token **y** la URL de GitLab de cada cliente. Los clientes con el mismo token y la misma URL comparten una instancia, mientras que tokens distintos o URLs distintas obtienen instancias completamente aisladas. Los tokens sin procesar nunca se almacenan —solo los hashes SHA-256— y cuando el pool alcanza `--max-http-clients` se desaloja la entrada menos usada recientemente.
-
-### ¿Por qué se caen mis sesiones MCP o se cortan los streams?
-
-Dos capas independientes gobiernan la vida útil: el timeout de inactividad de la **sesión MCP** (`--session-timeout`, por defecto `30m`) y el timeout de **conexión HTTP inactiva** (`--http-idle-timeout`, por defecto `0` = desactivado). Como `--http-idle-timeout` vale `0` por defecto, la capa HTTP no cierra conexiones inactivas, así que `--session-timeout` es la vida efectiva de inactividad. Si las sesiones caen pronto, un `--http-idle-timeout` bajo o un timeout de lectura/inactividad del proxy inverso suele cerrar los streams SSE de larga duración; aumenta el timeout del proxy para streams MCP largos.
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`docs/http-server-mode.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/http-server-mode.md) en el repositorio.
+:::

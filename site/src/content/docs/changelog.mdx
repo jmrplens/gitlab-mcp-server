@@ -1,0 +1,64 @@
+---
+title: Releases and versioning
+description: How GitLab MCP Server is versioned and released, what each release ships, how to subscribe to updates, and how to verify and roll back a build.
+datePublished: "2026-07-26"
+faq:
+  - q: "Where is the GitLab MCP Server changelog?"
+    a: "Release notes live on the GitHub Releases page, one entry per version, generated from the commits in that release. There is also an Atom feed at https://github.com/jmrplens/gitlab-mcp-server/releases.atom that any feed reader or automation can subscribe to. This page documents the release process itself — what a version number means, what each release ships, and how to verify a download — rather than duplicating notes that would fall out of date."
+  - q: "How does GitLab MCP Server version its releases?"
+    a: "It follows semantic versioning. The patch number changes for fixes and internal work with no interface change. The minor number changes when tools, actions, resources or prompts are added, or when configuration gains an option — additive changes that leave existing calls working. The major number changes only for a breaking change to the MCP surface or to configuration, such as removing an action or changing a required parameter."
+  - q: "What does each release publish?"
+    a: "Every release publishes signed binaries for Linux, macOS and Windows on both amd64 and arm64, a macOS universal binary, a container image on GHCR and Docker Hub, a Claude Desktop extension (.mcpb), and checksums with a detached GPG signature. Binary signatures can be verified with Cosign before you run anything."
+  - q: "How do I get notified about new GitLab MCP Server releases?"
+    a: "Three ways. Watch the repository on GitHub with the Releases filter; subscribe a feed reader to https://github.com/jmrplens/gitlab-mcp-server/releases.atom; or leave the built-in auto-update enabled, which checks GitHub Releases on startup and can apply the update for you. Set AUTO_UPDATE=check to be told about updates without installing them."
+  - q: "How do I roll back to an earlier version?"
+    a: "Every release remains downloadable from the GitHub Releases page, so rolling back means fetching the previous asset for your platform and replacing the binary — or pinning the previous image tag if you run the container. Pin an exact version rather than latest in environments where an unexpected upgrade would be disruptive, and set AUTO_UPDATE=false so the server does not update itself underneath you."
+---
+
+import FAQ from "../../components/FAQ.astro";
+import stats from "../../data/stats.json";
+
+Release notes for every version live on the [GitHub Releases page](https://github.com/jmrplens/gitlab-mcp-server/releases), with an [Atom feed](https://github.com/jmrplens/gitlab-mcp-server/releases.atom) you can subscribe to. This page documents how releases work — what a version number means, what each one ships, and how to verify or roll one back — rather than repeating notes that would go stale.
+
+The current release is **v{stats.version}**.
+
+## What the version number means
+
+Versioning is semantic, and for this project the interesting boundary is the MCP surface: the tools, actions, resources, prompts and configuration options a client depends on.
+
+| Change                                               | Example                             | Version bump |
+| ---------------------------------------------------- | ----------------------------------- | ------------ |
+| Fixes and internal work with no interface change     | A handler returns a clearer error   | Patch        |
+| New actions, tools, resources or prompts             | A GitLab API domain gains coverage  | Minor        |
+| New optional configuration                           | A flag is added with a safe default | Minor        |
+| Removing an action, or changing a required parameter | An action ID is renamed             | Major        |
+
+Additive releases are the common case. A minor bump can change how many tools you see — the catalog grows — but it does not invalidate a call that already worked.
+
+## What each release ships
+
+| Artifact                 | Detail                                                                  |
+| ------------------------ | ----------------------------------------------------------------------- |
+| Binaries                 | Linux, macOS and Windows; amd64 and arm64; plus a macOS universal build |
+| Container image          | GHCR and Docker Hub                                                     |
+| Claude Desktop extension | A one-click `.mcpb` package                                             |
+| Checksums                | `checksums.txt` with a detached GPG signature                           |
+| Signatures               | Cosign, verifiable before you run the binary                            |
+
+Verification steps are on the [security page](/gitlab-mcp-server/operations/security/). If verification fails, do not run the binary.
+
+## Staying current
+
+Three ways to track releases, in increasing order of automation:
+
+1. **Watch the repository** on GitHub with the Releases filter, for a notification per version.
+2. **Subscribe to the [Atom feed](https://github.com/jmrplens/gitlab-mcp-server/releases.atom)** from a feed reader or from automation.
+3. **Leave auto-update enabled.** The server checks GitHub Releases on startup and can apply updates itself. Set `AUTO_UPDATE=check` to be told without installing, or `AUTO_UPDATE=false` to disable it entirely — see [auto-update](/gitlab-mcp-server/operations/auto-update/).
+
+## Pinning and rolling back
+
+Every published release stays downloadable, so a rollback is just fetching the previous asset for your platform, or pinning the previous image tag if you run the container.
+
+In environments where an unexpected upgrade would be disruptive, pin an exact version instead of `latest` **and** set `AUTO_UPDATE=false`, so the binary cannot replace itself between runs. The Claude Desktop extension ships with auto-update disabled for the same reason.
+
+<FAQ />

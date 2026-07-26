@@ -2,9 +2,19 @@
 title: Code Review Workflow Examples
 description: "Merge request review examples with GitLab MCP Server: list MRs, read diffs, check approvals, leave notes and discussions, merge, rebase, and compare branches."
 datePublished: "2026-04-23"
+faq:
+  - q: "How do I review a GitLab merge request with an AI assistant?"
+    a: "A full review is three calls. `gitlab_merge_request` with `action: list` and `reviewer_id` finds the MRs waiting on you, `action: changes` fetches the diff so the assistant can read the actual code, and `action: discussion_create` posts threaded feedback on specific lines. In the default dynamic surface these resolve as `merge_request.list`, `merge_request.changes`, and `merge_request.discussion_create`. Reviewing a twelve-file MR therefore costs three tool calls, not one per file."
+  - q: "What is the difference between a note, a discussion, and a draft note?"
+    a: "A note (`action: note_create`) is a single standalone comment that posts immediately. A discussion (`action: discussion_create`) opens a resolvable thread that others can reply to and that shows up in the unresolved-threads count gating merge. A draft note (`action: draft_note_create`) is staged privately and stays invisible to the author until you publish the whole review at once — which is what you want when leaving many comments, so the MR author gets one notification instead of twenty."
+  - q: "How do I find unresolved review threads on a merge request?"
+    a: "Call `gitlab_merge_request` with `action: discussion_list` for the MR, then filter the returned threads for `resolved: false`. Notes created with `action: note_create` are not resolvable and never appear as outstanding items, so only discussions show up here. This is the check to run before merging when the project requires all threads resolved."
+  - q: "Can an AI assistant approve and merge a merge request?"
+    a: "Yes, subject to the same permissions and safeguards as any other mutation. Approval is `gitlab_merge_request` with `action: approve`, and merging is `action: merge`. Both are classified as mutating, so they are unavailable under `GITLAB_READ_ONLY=true` and return a preview instead of executing under `GITLAB_SAFE_MODE=true`. GitLab still enforces its own approval rules — an assistant cannot merge an MR that has not met the project's required approvals."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import FAQ from "../../../components/FAQ.astro";
 
 <CardGrid>
 	<LinkCard
@@ -105,6 +115,16 @@ There is no separate "AI review" tool. AI-powered review happens when the assist
 ## MR discussions and notes
 
 Share review feedback directly on the MR. Post a single inline comment, open a threaded discussion for a larger topic, find threads that are still unresolved, or stage draft notes to publish your whole review at once.
+
+The three comment types behave differently, and picking the wrong one is the most common review mistake:
+
+| Type       | Action              | Resolvable?         | Visible immediately?        | Use it for                                    |
+| ---------- | ------------------- | ------------------- | --------------------------- | --------------------------------------------- |
+| Note       | `note_create`       | No                  | Yes                         | A single standalone remark                    |
+| Discussion | `discussion_create` | Yes                 | Yes                         | Feedback that must be resolved before merge   |
+| Draft note | `draft_note_create` | Yes, once published | No — staged until published | A multi-comment review published in one batch |
+
+Only discussions count toward the unresolved-threads gate. Draft notes keep the author from receiving one notification per comment while you work through a large MR.
 
 ### Add a review comment
 
@@ -211,3 +231,5 @@ Returns: list of commits, changed files, and diff statistics between the two bra
 :::tip
 For the best review experience, combine several prompts in sequence: first list MRs, then read changes, then ask for AI analysis. The AI assistant maintains context across prompts.
 :::
+
+<FAQ />

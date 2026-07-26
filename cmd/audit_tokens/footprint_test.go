@@ -43,16 +43,18 @@ func TestRenderReadmeFootprint_DynamicOnlyWithTiers(t *testing.T) {
 // detailed doc match the rendered content, and names exactly the target(s)
 // that diverge otherwise.
 func TestFootprintStaleTargets(t *testing.T) {
-	rows := []tokenFootprintRow{
-		{Tier: "Free/CE", Configuration: "`dynamic` / `full` (default)", VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
-		{Tier: "Ultimate", Configuration: "`individual` / `full`", VisibleTools: 1061, ToolSchemaTokens: 964044, SharedTokens: 31758},
-	}
+	rows := completeFootprintRows()
 	// A README whose managed section already holds the rendered content.
 	readme := footprintStartMarker + "\n\n" + renderReadmeFootprint(rows) + "\n" + footprintEndMarker + "\n"
 	detailed := renderDetailedFootprint(rows)
+	siteJSON, renderErr := renderSiteFootprintJSON(rows)
+	if renderErr != nil {
+		t.Fatalf("renderSiteFootprintJSON() error: %v", renderErr)
+	}
+	site := string(siteJSON)
 
 	t.Run("current content reports no stale targets", func(t *testing.T) {
-		stale, err := footprintStaleTargets(readme, detailed, rows)
+		stale, err := footprintStaleTargets(readme, detailed, site, rows)
 		if err != nil {
 			t.Fatalf("footprintStaleTargets(current) error: %v", err)
 		}
@@ -62,7 +64,7 @@ func TestFootprintStaleTargets(t *testing.T) {
 	})
 
 	t.Run("detailed-doc drift reports only the detailed doc", func(t *testing.T) {
-		stale, err := footprintStaleTargets(readme, detailed+"\nextra drift\n", rows)
+		stale, err := footprintStaleTargets(readme, detailed+"\nextra drift\n", site, rows)
 		if err != nil {
 			t.Fatalf("footprintStaleTargets(stale detailed) error: %v", err)
 		}
@@ -71,11 +73,100 @@ func TestFootprintStaleTargets(t *testing.T) {
 		}
 	})
 
+	t.Run("site JSON drift reports only the site data file", func(t *testing.T) {
+		stale, err := footprintStaleTargets(readme, detailed, `{"tokenizer":"stale"}`, rows)
+		if err != nil {
+			t.Fatalf("footprintStaleTargets(stale site) error: %v", err)
+		}
+		if len(stale) != 1 || !strings.Contains(stale[0], siteFootprintPath) {
+			t.Fatalf("expected only %q stale, got %v", siteFootprintPath, stale)
+		}
+	})
+
 	t.Run("missing README markers returns an error", func(t *testing.T) {
-		if _, err := footprintStaleTargets("no markers here", detailed, rows); err == nil {
+		if _, err := footprintStaleTargets("no markers here", detailed, site, rows); err == nil {
 			t.Fatal("expected error when README lacks the footprint markers")
 		}
 	})
+}
+
+// completeFootprintRows returns a fixture covering every row the site-facing
+// JSON needs: the dynamic default on the Ultimate tier plus one individual row
+// per tier.
+func completeFootprintRows() []tokenFootprintRow {
+	return []tokenFootprintRow{
+		{Tier: "Free/CE", Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
+		{Tier: "Free/CE", Configuration: individualConfiguration, VisibleTools: 847, ToolSchemaTokens: 767793, SharedTokens: 31758},
+		{Tier: "Premium", Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
+		{Tier: "Premium", Configuration: individualConfiguration, VisibleTools: 999, ToolSchemaTokens: 917625, SharedTokens: 31758},
+		{Tier: ultimateTierLabel, Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
+		{Tier: ultimateTierLabel, Configuration: individualConfiguration, VisibleTools: 1065, ToolSchemaTokens: 966698, SharedTokens: 31758},
+	}
+}
+
+// TestRenderSiteFootprintJSON verifies the site-facing headline extract: the
+// dynamic surface is taken from the Ultimate tier, every tier gets an
+// individual-surface entry, and the reduction factor is derived rather than
+// restated. This is the number the docs site publishes as its headline claim,
+// so a wrong ratio would propagate straight into AI answers.
+func TestRenderSiteFootprintJSON(t *testing.T) {
+	raw, renderErr := renderSiteFootprintJSON(completeFootprintRows())
+	if renderErr != nil {
+		t.Fatalf("renderSiteFootprintJSON() error: %v", renderErr)
+	}
+
+	var got siteFootprint
+	if unmarshalErr := json.Unmarshal(raw, &got); unmarshalErr != nil {
+		t.Fatalf("unmarshal site footprint: %v", unmarshalErr)
+	}
+
+	if got.Tokenizer != "cl100k_base" {
+		t.Errorf("Tokenizer = %q, want cl100k_base", got.Tokenizer)
+	}
+	if got.Dynamic.VisibleTools != 2 || got.Dynamic.ToolSchemaTokens != 2180 {
+		t.Errorf("Dynamic = %+v, want {2 2180}", got.Dynamic)
+	}
+	if len(got.Individual) != 3 {
+		t.Fatalf("len(Individual) = %d, want 3", len(got.Individual))
+	}
+	// 966698 / 2180 = 443.4 -> 443
+	if f := got.Individual["ultimate"].ReductionFactor; f != 443 {
+		t.Errorf("ultimate ReductionFactor = %d, want 443", f)
+	}
+	if !strings.HasSuffix(string(raw), "\n") {
+		t.Error("site footprint JSON must end with a trailing newline for prettier")
+	}
+}
+
+// TestRenderSiteFootprintJSON_RejectsIncompleteMatrix verifies generation fails
+// loudly rather than publishing a partial headline claim.
+func TestRenderSiteFootprintJSON_RejectsIncompleteMatrix(t *testing.T) {
+	tests := []struct {
+		name string
+		rows []tokenFootprintRow
+	}{
+		{
+			name: "missing the ultimate dynamic row",
+			rows: []tokenFootprintRow{
+				{Tier: ultimateTierLabel, Configuration: individualConfiguration, VisibleTools: 1065, ToolSchemaTokens: 966698},
+			},
+		},
+		{
+			name: "missing one individual tier",
+			rows: []tokenFootprintRow{
+				{Tier: ultimateTierLabel, Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180},
+				{Tier: ultimateTierLabel, Configuration: individualConfiguration, VisibleTools: 1065, ToolSchemaTokens: 966698},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := renderSiteFootprintJSON(tt.rows); err == nil {
+				t.Fatal("renderSiteFootprintJSON() error = nil, want error")
+			}
+		})
+	}
 }
 
 // TestMeasureTokenFootprintRows_AllTiersAllModes verifies the full measurement

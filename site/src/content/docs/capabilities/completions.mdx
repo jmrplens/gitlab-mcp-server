@@ -2,56 +2,19 @@
 title: Completions
 description: MCP argument completions that suggest GitLab projects, branches, users, and labels in real time while composing tool parameters.
 datePublished: "2026-04-21"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "What are MCP completions in GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Completions are real-time autocomplete suggestions for tool parameters in GitLab MCP Server. Instead of memorizing project IDs, branch names, or user logins, you type a few characters and the server queries GitLab for matching values through the MCP completion/complete protocol method. This turns a multi-step lookup — for example, calling list_projects to find an ID before creating an issue — into a single interactive selection. GitLab MCP Server supports 17 completion argument types, split into global completers that work without a project context and per-project completers that search within a specific project."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Which argument types support completion in GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server supports 17 completion argument types. Four are global completers that need no project context: project, group, user, and namespace. The remaining 13 are per-project completers that search within a selected project: branch, tag, milestone, label, merge_request, issue, pipeline, environment, release, wiki_slug, version, runner, and board. Each suggestion is fetched live from GitLab's search API so results reflect the current state of the instance."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "How do completions improve AI assistant accuracy?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Completions reduce errors in AI tool calls in several ways. They eliminate typos because the assistant selects from validated suggestions instead of typing exact values. They reduce round-trips by removing the need to call list_projects before create_issue. They provide context by including IDs alongside names so the correct value is chosen. And they offer real-time search, with results updated as characters are typed, powered by GitLab's search API. The net effect is fewer failed tool calls caused by invalid identifiers."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "What if my MCP client does not support completions?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Completions require the MCP client to support the completion/complete protocol method. If your client does not support completions, GitLab MCP Server simply does not offer suggestions, and tool functionality is unaffected. You can still discover valid values by calling the list action on any meta-tool — for example, listing projects, branches, or labels — and then supplying the chosen value directly in the tool call."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "What are MCP completions?"
+    a: "Completions are **real-time autocomplete suggestions for tool parameters**. You type a few characters and GitLab MCP Server queries GitLab through the MCP `completion/complete` method, returning matching projects, branches, users, labels, and more. This turns a multi-step lookup — such as calling `list_projects` to find an ID before creating an issue — into a single interactive selection. GitLab MCP Server supports {{completions}} completion argument types across global and per-project completers."
+  - q: "Which argument types support completion?"
+    a: "GitLab MCP Server supports {{completions}} completion argument types. The four global completers need no project context: `project`, `group`, `user`, and `namespace`. The remaining per-project completers search within a selected project: `branch`, `tag`, `milestone`, `label`, `merge_request`, `issue`, `pipeline`, `environment`, `release`, `wiki_slug`, `version`, `runner`, and `board`. Each suggestion is fetched live from GitLab's search API, so results reflect the current state of the instance."
+  - q: "How do completions improve AI assistant accuracy?"
+    a: "Completions cut failed tool calls in four ways: they eliminate typos because the assistant picks from validated suggestions; they reduce round-trips by removing the need to call `list_projects` before `create_issue`; they provide context by pairing IDs with names; and they offer real-time search updated as characters are typed. The net effect is fewer errors caused by invalid identifiers."
+  - q: "What if my MCP client does not support completions?"
+    a: "Completions require the MCP client to support the `completion/complete` protocol method. If your client lacks it, GitLab MCP Server simply does not offer suggestions and tool functionality is unaffected. You can still discover valid values by calling the `list` action on any meta-tool — for example, listing projects, branches, or labels — and then supply the chosen value directly."
 ---
 
 import stats from "../../../data/stats.json";
-
-:::note[Developer Documentation]
-This page is the user-facing overview. For the full completion reference, see [docs/reference/capabilities/completions](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/completions.md).
-:::
+import FAQ from "../../../components/FAQ.astro";
 
 Completions provide **real-time autocomplete suggestions for tool parameters**. Instead of memorizing project IDs, branch names, or user logins, you type a few characters and GitLab MCP Server queries GitLab for matching values, returning them through the MCP `completion/complete` protocol method. This transforms a multi-step lookup into a single, interactive selection.
 
@@ -138,20 +101,10 @@ Completions reduce errors in AI tool calls in several concrete ways. Together th
 Completions work best when the MCP client supports the `completion/complete` protocol method. If your client does not support completions, you can still discover values using the `list` action on any meta-tool.
 :::
 
-## Frequently asked questions
+<FAQ />
 
-### What are MCP completions?
+## Source reference
 
-Completions are **real-time autocomplete suggestions for tool parameters**. You type a few characters and GitLab MCP Server queries GitLab through the MCP `completion/complete` method, returning matching projects, branches, users, labels, and more. This turns a multi-step lookup — such as calling `list_projects` to find an ID before creating an issue — into a single interactive selection. GitLab MCP Server supports {stats.completions} completion argument types across global and per-project completers.
-
-### Which argument types support completion?
-
-GitLab MCP Server supports {stats.completions} completion argument types. The four global completers need no project context: `project`, `group`, `user`, and `namespace`. The remaining per-project completers search within a selected project: `branch`, `tag`, `milestone`, `label`, `merge_request`, `issue`, `pipeline`, `environment`, `release`, `wiki_slug`, `version`, `runner`, and `board`. Each suggestion is fetched live from GitLab's search API, so results reflect the current state of the instance.
-
-### How do completions improve AI assistant accuracy?
-
-Completions cut failed tool calls in four ways: they eliminate typos because the assistant picks from validated suggestions; they reduce round-trips by removing the need to call `list_projects` before `create_issue`; they provide context by pairing IDs with names; and they offer real-time search updated as characters are typed. The net effect is fewer errors caused by invalid identifiers.
-
-### What if my MCP client does not support completions?
-
-Completions require the MCP client to support the `completion/complete` protocol method. If your client lacks it, GitLab MCP Server simply does not offer suggestions and tool functionality is unaffected. You can still discover valid values by calling the `list` action on any meta-tool — for example, listing projects, branches, or labels — and then supply the chosen value directly.
+:::note[Developer Documentation]
+This page is the user-facing overview. For the full completion reference, see [docs/reference/capabilities/completions](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/completions.md).
+:::

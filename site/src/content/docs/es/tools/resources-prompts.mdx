@@ -2,56 +2,21 @@
 title: Recursos y prompts
 description: Recursos MCP de solo lectura y plantillas de prompts reutilizables, las dos primitivas MCP que dan contexto a los asistentes de IA más allá de las herramientas.
 datePublished: "2026-04-21"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "¿Cuál es la diferencia entre recursos, prompts y herramientas MCP?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server expone tres primitivas MCP. Las herramientas ejecutan acciones, como crear una incidencia o fusionar una merge request. Los recursos proporcionan datos de contexto de solo lectura —por ejemplo, los metadatos o los miembros de un proyecto— que un cliente puede solicitar en cualquier momento sin invocar una herramienta. Los prompts son plantillas reutilizables que recopilan datos de GitLab y devuelven contexto estructurado para guiar un flujo de trabajo. En resumen, los recursos y los prompts añaden contexto, mientras que las herramientas cambian el estado."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Cuál es la diferencia entre un recurso estático y una plantilla de recurso?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Un recurso estático es una URI fija que siempre apunta a lo mismo, como gitlab://user/current para el usuario autenticado. Una plantilla de recurso contiene marcadores como {project_id} o {group_id} que el cliente rellena en el momento de la petición para leer un proyecto, grupo, incidencia o merge request concretos. MCP lista los recursos fijos mediante resources/list y las plantillas mediante resources/templates/list."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Cómo leo un recurso MCP de GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Un cliente lee un recurso con el método MCP resources/read, pasando la URI del recurso en los params. Para un recurso estático la URI se usa tal cual, por ejemplo gitlab://user/current. Para una plantilla, el cliente sustituye primero el identificador real o la ruta codificada en URL, por ejemplo gitlab://project/my-group%2Fmy-project/issues. El servidor devuelve el contenido del recurso como JSON estructurado."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Se pueden desactivar los recursos y los prompts en GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Sí. El ajuste CAPABILITY_SURFACE controla qué capacidades se registran. El valor predeterminado full registra recursos, guías de flujo de trabajo, prompts y el manifiesto gitlab://tools dependiente de superficie. Establecer CAPABILITY_SURFACE en minimal mantiene solo el manifiesto gitlab://tools, lo cual es útil cuando un cliente no consume recursos ni prompts y quieres una superficie de capacidades más pequeña."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "¿Cuál es la diferencia entre recursos, prompts y herramientas?"
+    a: "GitLab MCP Server expone tres primitivas MCP. Las **herramientas** ejecutan acciones, como crear una incidencia o fusionar una merge request. Los **recursos** proporcionan datos de contexto de solo lectura —los metadatos o los miembros de un proyecto, por ejemplo— que un cliente puede solicitar en cualquier momento sin invocar una herramienta. Los **prompts** son plantillas reutilizables que recopilan datos de GitLab y devuelven contexto estructurado para guiar un flujo de trabajo. En resumen, los recursos y los prompts añaden contexto, mientras que las herramientas cambian el estado."
+  - q: "¿Cuál es la diferencia entre un recurso estático y una plantilla de recurso?"
+    a: "Un **recurso estático** es una URI fija que siempre apunta a lo mismo, como `gitlab://user/current`. Una **plantilla de recurso** contiene marcadores como `{project_id}` o `{group_id}` que el cliente rellena en el momento de la petición para leer un proyecto, grupo, incidencia o merge request concretos. MCP lista los recursos fijos mediante `resources/list` y las plantillas mediante `resources/templates/list`, de modo que un cliente que solo inspecciona `resources/list` ve los {{resources}} recursos como 8 URIs fijas más 37 plantillas."
+  - q: "¿Se pueden desactivar los recursos y los prompts?"
+    a: "Sí. El ajuste `CAPABILITY_SURFACE` controla qué capacidades se registran. El valor predeterminado `full` registra recursos, guías de flujo de trabajo, prompts y el manifiesto `gitlab://tools` dependiente de superficie. Establecer `CAPABILITY_SURFACE=minimal` mantiene solo el manifiesto `gitlab://tools` —útil cuando un cliente no consume recursos ni prompts y quieres una superficie de capacidades más pequeña."
+  - q: "¿Cuántos recursos y prompts hay disponibles?"
+    a: "El servidor expone **{{resources}} recursos** (8 URIs fijas más 37 plantillas de URI) y **{{prompts}} plantillas de prompts** organizadas en categorías como análisis de MR principal, paneles entre proyectos, informes de equipo, analítica y auditorías. Los recuentos exactos se generan a partir del registro de capacidades en vivo del servidor, por lo que esta página se mantiene sincronizada con el servidor en ejecución."
+  - q: "¿Cómo leo un recurso MCP de GitLab MCP Server?"
+    a: "Un cliente lee un recurso con el método MCP resources/read, pasando la URI del recurso en los params. Para un recurso estático la URI se usa tal cual, por ejemplo gitlab://user/current. Para una plantilla, el cliente sustituye primero el identificador real o la ruta codificada en URL, por ejemplo gitlab://project/my-group%2Fmy-project/issues. El servidor devuelve el contenido del recurso como JSON estructurado."
 ---
 
 import stats from "../../../../data/stats.json";
-
-:::note[Documentación para desarrolladores]
-Esta página es la visión general orientada a usuarios. Para la referencia completa, consulta [docs/reference/resources](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/resources.md) y [docs/reference/prompts](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/prompts.md).
-:::
+import FAQ from "../../../../components/FAQ.astro";
 
 Más allá de las herramientas, GitLab MCP Server expone **recursos** y **prompts** — dos primitivas MCP adicionales que proporcionan contexto y plantillas reutilizables a los asistentes de IA. Las herramientas ejecutan acciones; los recursos aportan contexto de solo lectura bajo demanda; los prompts empaquetan un flujo de recopilación de datos en una única plantilla reutilizable.
 
@@ -327,20 +292,10 @@ El servidor devuelve un prompt estructurado con contenido consciente del context
 Los recursos son particularmente útiles para proporcionar contexto del proyecto al inicio de una conversación. Al leer el recurso del proyecto, el LLM obtiene comprensión inmediata del propósito del repositorio, el equipo y el estado actual.
 :::
 
-## Preguntas frecuentes
+<FAQ />
 
-### ¿Cuál es la diferencia entre recursos, prompts y herramientas?
+## Referencia de la fuente
 
-GitLab MCP Server expone tres primitivas MCP. Las **herramientas** ejecutan acciones, como crear una incidencia o fusionar una merge request. Los **recursos** proporcionan datos de contexto de solo lectura —los metadatos o los miembros de un proyecto, por ejemplo— que un cliente puede solicitar en cualquier momento sin invocar una herramienta. Los **prompts** son plantillas reutilizables que recopilan datos de GitLab y devuelven contexto estructurado para guiar un flujo de trabajo. En resumen, los recursos y los prompts añaden contexto, mientras que las herramientas cambian el estado.
-
-### ¿Cuál es la diferencia entre un recurso estático y una plantilla de recurso?
-
-Un **recurso estático** es una URI fija que siempre apunta a lo mismo, como `gitlab://user/current`. Una **plantilla de recurso** contiene marcadores como `{project_id}` o `{group_id}` que el cliente rellena en el momento de la petición para leer un proyecto, grupo, incidencia o merge request concretos. MCP lista los recursos fijos mediante `resources/list` y las plantillas mediante `resources/templates/list`, de modo que un cliente que solo inspecciona `resources/list` ve los {stats.resources} recursos como 8 URIs fijas más 37 plantillas.
-
-### ¿Se pueden desactivar los recursos y los prompts?
-
-Sí. El ajuste `CAPABILITY_SURFACE` controla qué capacidades se registran. El valor predeterminado `full` registra recursos, guías de flujo de trabajo, prompts y el manifiesto `gitlab://tools` dependiente de superficie. Establecer `CAPABILITY_SURFACE=minimal` mantiene solo el manifiesto `gitlab://tools` —útil cuando un cliente no consume recursos ni prompts y quieres una superficie de capacidades más pequeña.
-
-### ¿Cuántos recursos y prompts hay disponibles?
-
-El servidor expone **{stats.resources} recursos** (8 URIs fijas más 37 plantillas de URI) y **{stats.prompts} plantillas de prompts** organizadas en categorías como análisis de MR principal, paneles entre proyectos, informes de equipo, analítica y auditorías. Los recuentos exactos se generan a partir del registro de capacidades en vivo del servidor, por lo que esta página se mantiene sincronizada con el servidor en ejecución.
+:::note[Documentación para desarrolladores]
+Esta página es la visión general orientada a usuarios. Para la referencia completa, consulta [docs/reference/resources](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/resources.md) y [docs/reference/prompts](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/prompts.md).
+:::

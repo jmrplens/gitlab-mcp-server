@@ -42,9 +42,38 @@ const (
 	// keep the file scannable. When a description exceeds this limit, generation
 	// falls back to its first sentence; if that is still too long, the text is
 	// hard-truncated at the rune boundary.
-	maxFullDescRunes             = 600
-	llmsFileName                 = "llms.txt"
-	llmsFullFileName             = "llms-full.txt"
+	maxFullDescRunes = 600
+	llmsFileName     = "llms.txt"
+	llmsFullFileName = "llms-full.txt"
+
+	// llms-full.txt is ~2.9 MB / ~750K tokens: a good grep and RAG corpus, but
+	// larger than any production context window and beyond the fetch ceiling some
+	// AI crawlers apply. These companions make the same content usable.
+	//
+	// llmsMediumFileName is the one a model can actually load: every tool and
+	// action with its description and action list, but without the per-action
+	// JSON schemas that account for most of the bulk.
+	llmsMediumFileName = "llms-medium.txt"
+
+	// The per-section splits let a consumer fetch only the surface it cares
+	// about instead of the whole catalog.
+	llmsFullMetaFileName       = "llms-full-meta-tools.txt"
+	llmsFullIndividualFileName = "llms-full-individual-tools.txt"
+	llmsFullCapabilityFileName = "llms-full-resources-prompts.txt"
+
+	// repoBlobBaseURL prefixes every repository-relative documentation target in
+	// llms.txt. The file is published at the docs domain
+	// (https://jmrplens.github.io/gitlab-mcp-server/llms.txt), where a relative
+	// path such as "docs/getting-started.md" resolves against that host and 404s
+	// because docs/** is not part of the built site. Absolute blob URLs resolve
+	// from anywhere — the docs domain, the repository, or an AI crawler that
+	// fetched llms.txt with no base context.
+	repoBlobBaseURL = "https://github.com/jmrplens/gitlab-mcp-server/blob/main/"
+
+	// siteBaseURL prefixes AI-facing artifacts that are published as part of the
+	// site rather than living only in the repository.
+	siteBaseURL = "https://jmrplens.github.io/gitlab-mcp-server/"
+
 	dynamicFindToolName          = "gitlab_find_action"
 	dynamicExecuteActionToolName = "gitlab_execute_action"
 	llmsSummaryItemFormat        = "- %s: %s\n"
@@ -413,7 +442,8 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString("```\n\n")
 	b.WriteString("Native binary instead of Docker: download the release asset for the user's OS and architecture from the Releases page, then use its path as `command` with no `args` and the same `env`.\n\n")
 	b.WriteString("Claude Code (CLI): `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false` (Docker), or `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- gitlab-mcp-server` (native binary).\n\n")
-	b.WriteString("The exact config-file path and JSON schema for each client (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth) are in [docs/guides/ide-configuration.md](docs/guides/ide-configuration.md).\n\n")
+	fmt.Fprintf(&b, "The exact config-file path and JSON schema for each client (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth) are in [docs/guides/ide-configuration.md](%s).\n\n",
+		absoluteLLMSTarget("docs/guides/ide-configuration.md"))
 
 	b.WriteString("Setup wizard:\n\n")
 	b.WriteString("- Modes: `--setup-mode web` (browser, inline help tooltips), `tui` (Bubble Tea keyboard UI), `cli` (plain prompts). Default `auto` cascades through them.\n")
@@ -491,7 +521,11 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	writeLLMSLink(&b, "Prompts", "docs/reference/prompts.md", "Reusable MCP prompt templates")
 
 	b.WriteString("\n## Optional\n\n")
-	writeLLMSLink(&b, "Full LLM reference", llmsFullFileName, "Generated companion reference with tool schemas, resource listings, and prompts")
+	writeLLMSLink(&b, "Medium LLM reference", siteBaseURL+llmsMediumFileName, "Every tool and action with descriptions, without per-action schemas — sized to load into a context window")
+	writeLLMSLink(&b, "Full LLM reference", siteBaseURL+llmsFullFileName, "Complete reference with every per-action JSON schema; large, best used with search or retrieval")
+	writeLLMSLink(&b, "Meta-tools reference", siteBaseURL+llmsFullMetaFileName, "Full schemas for the dynamic and meta-tool surfaces only")
+	writeLLMSLink(&b, "Individual tools reference", siteBaseURL+llmsFullIndividualFileName, "Full schemas for the one-tool-per-operation surface only")
+	writeLLMSLink(&b, "Resources and prompts reference", siteBaseURL+llmsFullCapabilityFileName, "MCP resource and prompt definitions only")
 	writeLLMSLink(&b, "Architecture", "docs/concepts/architecture.md", "Internal architecture and catalog-first runtime overview")
 	writeLLMSLink(&b, "Output format", "docs/reference/output-format.md", "Markdown and structured output conventions")
 	writeLLMSLink(&b, "Troubleshooting", "docs/guides/troubleshooting.md", "Common setup and runtime issues")
@@ -507,8 +541,19 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	return nil
 }
 
+// writeLLMSLink emits one llms.txt file-list entry, resolving repository-relative
+// targets to absolute blob URLs. Targets that are already absolute are emitted
+// verbatim.
 func writeLLMSLink(b *strings.Builder, label, target, description string) {
-	fmt.Fprintf(b, "- [%s](%s): %s\n", label, target, description)
+	fmt.Fprintf(b, "- [%s](%s): %s\n", label, absoluteLLMSTarget(target), description)
+}
+
+// absoluteLLMSTarget resolves a llms.txt link target to an absolute URL.
+func absoluteLLMSTarget(target string) string {
+	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
+		return target
+	}
+	return repoBlobBaseURL + target
 }
 
 func validateLLMSTxt(content string) error {
@@ -597,6 +642,12 @@ func validateLLMSFileListItem(line string) error {
 	if url == "" {
 		return fmt.Errorf("file-list entry has empty markdown link target, got %q", line)
 	}
+	// llms.txt is served from the docs domain, where a repository-relative target
+	// resolves against that host and 404s. Absolute URLs are the only form that
+	// works for every consumer, so reject anything else at generation time.
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		return fmt.Errorf("file-list entry target must be an absolute URL, got %q", url)
+	}
 	remainder := strings.TrimSpace(line[urlStart+urlEnd+1:])
 	if remainder != "" && !strings.HasPrefix(remainder, ":") {
 		return fmt.Errorf("file-list entry notes must follow ':' after the markdown link, got %q", line)
@@ -620,7 +671,10 @@ func validateLLMSFullTxt(content string) error {
 // writeLLMSFullTxt generates the detailed llms-full.txt with tool schemas.
 func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	var b strings.Builder
-	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates) + 1
+	// Must match the count in writeLLMSTxt exactly. These two files are the
+	// project's most AI-facing artifacts, and a disagreement between them
+	// propagates a wrong number into model answers.
+	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates)
 
 	b.WriteString("# gitlab-mcp-server — Full Reference\n\n")
 	fmt.Fprintf(&b, "> Version %s | up to %d tools | %d base meta-tools; %d self-managed enterprise meta-tools; %d GitLab.com Enterprise meta-tools | %d dynamic tools | %d resources | %d prompts\n\n",
@@ -640,7 +694,98 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error
 	if err := writeGeneratedFile(llmsFullFileName, content, checkOnly); err != nil {
 		return fmt.Errorf("write llms-full.txt: %w", err)
 	}
+	return writeLLMSCompanions(version, catalog, resourceCount, checkOnly)
+}
+
+// llmsHeader renders the shared title + one-line summary every companion file
+// opens with, so a consumer that fetched only one of them still knows the
+// version and the shape of the surface it is reading.
+func llmsHeader(b *strings.Builder, version, subtitle string, catalog llmsCatalog, resourceCount int) {
+	fmt.Fprintf(b, "# gitlab-mcp-server — %s\n\n", subtitle)
+	fmt.Fprintf(b, "> Version %s | up to %d tools | %d base meta-tools; %d self-managed enterprise meta-tools; %d GitLab.com Enterprise meta-tools | %d dynamic tools | %d resources | %d prompts\n\n",
+		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise),
+		len(catalog.MetaGitLabComEnterprise), len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
+}
+
+// writeLLMSCompanions emits the loadable medium reference and the three
+// per-section splits of llms-full.txt.
+func writeLLMSCompanions(version string, catalog llmsCatalog, resourceCount int, checkOnly bool) error {
+	files := []struct {
+		name  string
+		build func(*strings.Builder)
+	}{
+		{llmsMediumFileName, func(b *strings.Builder) {
+			llmsHeader(b, version, "Medium Reference", catalog, resourceCount)
+			b.WriteString("Every tool and action with its description, without the per-action JSON schemas.\n")
+			fmt.Fprintf(b, "Fetch the exact schema for one action from `gitlab://tools/{id}`, or read %s for the complete schemas.\n\n", llmsFullFileName)
+			writeLLMSFullDynamicTools(b, catalog.Dynamic)
+			writeLLMSMediumMetaTools(b, catalog)
+			writeLLMSMediumIndividualTools(b, catalog)
+			writeLLMSFullResources(b, catalog, resourceCount)
+			writeLLMSFullPrompts(b, catalog.Prompts)
+		}},
+		{llmsFullMetaFileName, func(b *strings.Builder) {
+			llmsHeader(b, version, "Meta-Tools Reference", catalog, resourceCount)
+			writeLLMSFullDynamicTools(b, catalog.Dynamic)
+			writeLLMSFullMetaTools(b, catalog)
+		}},
+		{llmsFullIndividualFileName, func(b *strings.Builder) {
+			llmsHeader(b, version, "Individual Tools Reference", catalog, resourceCount)
+			writeLLMSFullIndividualTools(b, catalog)
+		}},
+		{llmsFullCapabilityFileName, func(b *strings.Builder) {
+			llmsHeader(b, version, "Resources and Prompts Reference", catalog, resourceCount)
+			writeLLMSFullResources(b, catalog, resourceCount)
+			writeLLMSFullPrompts(b, catalog.Prompts)
+		}},
+	}
+
+	for _, f := range files {
+		var b strings.Builder
+		f.build(&b)
+		if err := writeGeneratedFile(f.name, b.String(), checkOnly); err != nil {
+			return fmt.Errorf("write %s: %w", f.name, err)
+		}
+	}
 	return nil
+}
+
+// writeLLMSMediumMetaTools lists each meta-tool with its description and the
+// actions it routes, but omits the per-action schemas — that omission is what
+// takes the file from ~750K tokens to something a model can hold.
+func writeLLMSMediumMetaTools(b *strings.Builder, catalog llmsCatalog) {
+	b.WriteString("## Meta-Tools\n\n")
+	b.WriteString("Enabled with `TOOL_SURFACE=meta`. Each groups related operations under a single tool with an `action` parameter.\n\n")
+	all := append([]*mcp.Tool{}, catalog.MetaBase...)
+	all = append(all, enterpriseOnlyMetaTools(catalog.MetaBase, catalog.MetaGitLabComEnterprise)...)
+	for _, tool := range all {
+		fmt.Fprintf(b, toolutil.FmtMdH3, tool.Name)
+		if tool.Title != "" {
+			fmt.Fprintf(b, llmsBoldTitleFormat, tool.Title)
+		}
+		b.WriteString(firstSentence(toolutil.StripMetaToolDescriptionPrefix(tool.Description)))
+		b.WriteString("\n\n")
+		if routes, ok := catalog.MetaRoutes[tool.Name]; ok {
+			names := make([]string, 0, len(routes))
+			for action := range routes {
+				names = append(names, action)
+			}
+			sort.Strings(names)
+			fmt.Fprintf(b, "Actions (%d): %s\n\n", len(names), strings.Join(names, ", "))
+		}
+	}
+}
+
+// writeLLMSMediumIndividualTools lists the individual surface as one line per
+// tool, which is enough to know an operation exists and what it is called.
+func writeLLMSMediumIndividualTools(b *strings.Builder, catalog llmsCatalog) {
+	b.WriteString("## Individual Tools\n\n")
+	fmt.Fprintf(b, "Enabled with `TOOL_SURFACE=individual`: %d tools, one per operation.\n\n", len(catalog.Individual))
+	for _, tool := range catalog.Individual {
+		desc := truncateRunes(firstSentence(tool.Description), 160)
+		fmt.Fprintf(b, llmsSummaryItemFormat, tool.Name, desc)
+	}
+	b.WriteString("\n")
 }
 
 func writeLLMSFullMetaTools(b *strings.Builder, catalog llmsCatalog) {
@@ -1141,7 +1286,8 @@ func normalizeLineEndings(s string) string {
 
 func isGeneratedLLMSFile(name string) bool {
 	switch name {
-	case llmsFileName, llmsFullFileName:
+	case llmsFileName, llmsFullFileName, llmsMediumFileName,
+		llmsFullMetaFileName, llmsFullIndividualFileName, llmsFullCapabilityFileName:
 		return true
 	default:
 		return false

@@ -1,0 +1,206 @@
+---
+title: Glossary
+description: Definitions of the terms GitLab MCP Server uses — tool surface, action catalog, meta-tool, dynamic mode, tier gating, elicitation, safe mode and more.
+datePublished: "2026-07-26"
+head:
+  # A DefinedTermSet makes each term individually addressable, so an assistant
+  # answering "what is a tool surface?" can cite the definition rather than
+  # inferring it from surrounding prose.
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "DefinedTermSet",
+        "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset",
+        "name": "GitLab MCP Server glossary",
+        "description": "Definitions of the Model Context Protocol and GitLab MCP Server concepts used throughout this documentation.",
+        "inLanguage": "en",
+        "isPartOf": { "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#article" },
+        "about": { "@id": "https://github.com/jmrplens/gitlab-mcp-server#software" },
+        "hasDefinedTerm": [
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#tool-surface",
+            "name": "Tool surface",
+            "description": "The set of MCP tools a client actually sees at startup. GitLab MCP Server has three: dynamic (two tools), meta-tool (one tool per domain) and individual (one tool per operation). All three are projections of the same action catalog, so they differ in packaging and token cost, never in capability. Selected with TOOL_SURFACE.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#action-catalog",
+            "name": "Canonical action catalog",
+            "description": "The single internal definition of every GitLab operation the server exposes. Each entry carries its route, input and output schema, destructive classification and licensing tier. Every visible tool surface is generated from this catalog, which is why behaviour and safety are identical no matter which surface a client uses.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#action-id",
+            "name": "Canonical action ID",
+            "description": "The stable identifier of one operation, written domain.action — for example issue.list or merge_request.approve. Dynamic mode returns these from gitlab_find_action and executes them through gitlab_execute_action.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#meta-tool",
+            "name": "Meta-tool",
+            "description": "A domain-level MCP tool that groups related operations behind a single tool with an action parameter, such as gitlab_issue handling list, get, create, update and delete. Meta-tools cut the visible tool count by more than 95% while keeping every operation reachable as an action.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#dynamic-mode",
+            "name": "Dynamic mode",
+            "description": "The default tool surface, exposing only gitlab_find_action and gitlab_execute_action. The assistant searches the action catalog for the operation it needs, receives that action's exact schema, then executes it. This costs one discovery call per task and keeps startup context roughly 444 times smaller than registering every tool individually.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#tier-gating",
+            "name": "Tier gating",
+            "description": "Registering only the actions and schema fields the connected GitLab licence supports. The tier is taken from GITLAB_TIER when set, otherwise detected from the instance licence, falling back to Free. Input schemas are pruned strictly so a lower tier never sees higher-tier fields; output schemas are pruned leniently so data still comes through.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#safe-mode",
+            "name": "Safe mode",
+            "description": "A deployment setting, GITLAB_SAFE_MODE=true, that intercepts every mutating tool call and returns a JSON preview of what would happen instead of performing it. Distinct from read-only mode, which removes mutating operations from the catalog entirely rather than previewing them.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#read-only-mode",
+            "name": "Read-only mode",
+            "description": "A deployment setting, GITLAB_READ_ONLY=true, that omits every mutating action from the registered catalog. The assistant cannot call a write operation because no such tool exists in its list, which is a stronger guarantee than declining the call at execution time.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#elicitation",
+            "name": "Elicitation",
+            "description": "An MCP capability that lets the server ask the user for input through a structured form mid-conversation, instead of requiring every parameter up front. GitLab MCP Server uses it for interactive creation flows and falls back to standard parameterised tools on clients that do not support it.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#capability-surface",
+            "name": "Capability surface",
+            "description": "Which MCP resources and prompts are registered, selected with CAPABILITY_SURFACE. full registers all of them; minimal registers only the gitlab://tools manifest, cutting shared startup context from roughly 31,800 tokens to about 1,100 while keeping per-action schema discovery available.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#tool-manifest",
+            "name": "Tool manifest resource",
+            "description": "The MCP resources gitlab://tools and gitlab://tools/{id}. The first lists every visible tool and executable action for the active surface; the second returns the accepted call shape and JSON Schema for one action. They stay available even under a minimal capability surface, which is how a client discovers exact parameters without inflating the tool list.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#destructive-action",
+            "name": "Destructive action",
+            "description": "An action classified in the catalog as irreversible or data-losing, such as deleting a project or erasing job artifacts. These require explicit confirmation before executing, and dynamic mode additionally suppresses weak fuzzy-match results for them so a typo cannot select one.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#stdio-transport",
+            "name": "stdio transport",
+            "description": "The default transport, in which the AI client spawns the server as a child process and exchanges JSON-RPC over stdin and stdout. The token is supplied as an environment variable and never leaves the local machine, and there is no network exposure.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#http-transport",
+            "name": "HTTP transport",
+            "description": "A multi-user mode in which one process serves many clients over the network, each authenticating with its own GitLab token. Sessions are isolated in a bounded LRU pool keyed by a hash of token and GitLab URL, so no state is shared between clients.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          },
+          {
+            "@type": "DefinedTerm",
+            "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#tool-schema-tokens",
+            "name": "Tool schema tokens",
+            "description": "The token cost of the visible tool definitions a client receives on every tools/list — input schemas, annotations and descriptions. It is the figure that distinguishes the tool surfaces from one another, measured with the cl100k_base tokenizer, and excludes MCP resources and prompts, which are counted separately as shared tokens.",
+            "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
+          }
+        ]
+      }
+---
+
+import FAQ from "../../components/FAQ.astro";
+import stats from "../../data/stats.json";
+import footprint from "../../data/token-footprint.json";
+
+These are the terms this documentation uses that are specific to GitLab MCP Server or to the Model Context Protocol. Each definition stands on its own, so you can read just the one you need.
+
+## Tool surface
+
+A **tool surface** is the set of MCP tools a client actually sees at startup. GitLab MCP Server has three, selected with `TOOL_SURFACE`:
+
+| Surface             | Visible tools                                         | Selected with                          |
+| ------------------- | ----------------------------------------------------- | -------------------------------------- |
+| Dynamic _(default)_ | {footprint.dynamic.visible_tools}                     | `TOOL_SURFACE=dynamic`, or leave unset |
+| Meta-tool           | {stats.meta.base} domain tools (more with Enterprise) | `TOOL_SURFACE=meta`                    |
+| Individual          | {stats.tools.free}–{stats.tools.gitlab_com}           | `TOOL_SURFACE=individual`              |
+
+All three are projections of the same [action catalog](#canonical-action-catalog), so they differ in packaging and token cost, never in capability. See [tools overview](/gitlab-mcp-server/tools/overview/).
+
+## Canonical action catalog
+
+The **canonical action catalog** is the single internal definition of every GitLab operation the server exposes. Each entry carries its route, input and output schema, destructive classification, and licensing tier. Every visible tool surface is generated from this catalog, which is why behaviour and safety are identical no matter which surface a client uses.
+
+## Canonical action ID
+
+A **canonical action ID** identifies one operation, written `domain.action` — for example `issue.list` or `merge_request.approve`. Dynamic mode returns these from `gitlab_find_action` and executes them through `gitlab_execute_action`.
+
+## Meta-tool
+
+A **meta-tool** is a domain-level MCP tool that groups related operations behind a single tool with an `action` parameter. `gitlab_issue`, for instance, handles `list`, `get`, `create`, `update` and `delete`. Meta-tools cut the visible tool count by more than 95% while keeping every operation reachable as an action. See [meta-tools](/gitlab-mcp-server/tools/meta-tools/).
+
+## Dynamic mode
+
+**Dynamic mode** is the default tool surface, exposing only `gitlab_find_action` and `gitlab_execute_action`. The assistant searches the catalog for the operation it needs, receives that action's exact schema, then executes it. This costs one discovery call per task and keeps startup context about {footprint.individual.ultimate.reduction_factor_vs_dynamic}× smaller than registering every tool individually. See [dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/).
+
+## Tier gating
+
+**Tier gating** registers only the actions and schema fields the connected GitLab licence supports. The tier comes from `GITLAB_TIER` when set, otherwise it is detected from the instance licence, falling back to Free. Input schemas are pruned strictly, so a lower tier never sees higher-tier fields; output schemas are pruned leniently, so data still reaches the client.
+
+## Safe mode
+
+**Safe mode** (`GITLAB_SAFE_MODE=true`) intercepts every mutating tool call and returns a JSON preview of what would happen, instead of performing it. It is distinct from read-only mode, which removes the operations altogether rather than previewing them.
+
+## Read-only mode
+
+**Read-only mode** (`GITLAB_READ_ONLY=true`) omits every mutating action from the registered catalog. The assistant cannot call a write operation because no such tool exists in its list — a stronger guarantee than declining the call at execution time.
+
+## Elicitation
+
+**Elicitation** is an MCP capability that lets the server ask the user for input through a structured form mid-conversation, instead of requiring every parameter up front. GitLab MCP Server uses it for interactive creation flows, and falls back to standard parameterised tools on clients that do not support it. See [elicitation](/gitlab-mcp-server/capabilities/elicitation/).
+
+## Capability surface
+
+The **capability surface** decides which MCP resources and prompts are registered, selected with `CAPABILITY_SURFACE`. `full` registers all of them; `minimal` registers only the `gitlab://tools` manifest, cutting shared startup context from roughly 31,800 tokens to about 1,100 while keeping per-action schema discovery available.
+
+## Tool manifest resource
+
+The **tool manifest resources** are `gitlab://tools` and `gitlab://tools/{id}`. The first lists every visible tool and executable action for the active surface; the second returns the accepted call shape and JSON Schema for one action. Both stay available under a minimal capability surface, which is how a client discovers exact parameters without inflating the tool list.
+
+## Destructive action
+
+A **destructive action** is one the catalog classifies as irreversible or data-losing — deleting a project, erasing job artifacts. These require explicit confirmation before executing, and dynamic mode additionally suppresses weak fuzzy-match results for them, so a typo cannot select one.
+
+## stdio transport
+
+**stdio transport** is the default: the AI client spawns the server as a child process and exchanges JSON-RPC over stdin and stdout. The token is supplied as an environment variable, never leaves the local machine, and there is no network exposure.
+
+## HTTP transport
+
+**HTTP transport** is the multi-user mode: one process serves many clients over the network, each authenticating with its own GitLab token. Sessions are isolated in a bounded LRU pool keyed by a hash of token and GitLab URL, so no state is shared between clients. See [HTTP server mode](/gitlab-mcp-server/operations/http-server/).
+
+## Tool schema tokens
+
+**Tool schema tokens** are the token cost of the visible tool definitions a client receives on every `tools/list` — input schemas, annotations and descriptions. This is the figure that distinguishes the tool surfaces from one another. It is measured with the `{footprint.tokenizer}` tokenizer and excludes MCP resources and prompts, which are counted separately as shared tokens.
+
+<FAQ />

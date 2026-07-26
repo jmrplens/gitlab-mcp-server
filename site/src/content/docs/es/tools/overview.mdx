@@ -89,7 +89,9 @@ head:
       {
         "@context": "https://schema.org",
         "@type": "Dataset",
-        "@id": "https://github.com/jmrplens/gitlab-mcp-server#tool-catalog",
+        "@id": "https://github.com/jmrplens/gitlab-mcp-server#tool-catalog-es",
+        "workTranslationOf": { "@id": "https://github.com/jmrplens/gitlab-mcp-server#tool-catalog" },
+        "isPartOf": { "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/tools/overview/#article" },
         "name": "Catálogo de herramientas de GitLab MCP Server",
         "description": "El catálogo completo legible por máquina de la superficie MCP de GitLab MCP Server: cada herramienta y acción con su descripción y parámetros, más los recursos, prompts y grupos de meta-herramientas, generado desde el catálogo canónico de acciones en tiempo de compilación.",
         "inLanguage": "es",
@@ -113,63 +115,31 @@ head:
           }
         ]
       }
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "¿Cuáles son los tres modos de herramientas de GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server ofrece tres modos de herramientas que exponen la misma superficie de API de GitLab con distinto empaquetado. El modo dinámico (predeterminado) expone dos herramientas públicas que buscan y ejecutan un catálogo canónico de acciones. El modo meta-herramientas agrupa operaciones relacionadas en herramientas a nivel de dominio que enrutan según un parámetro de acción. El modo individual registra una herramienta MCP por operación de GitLab. Los tres modos comparten los mismos handlers, esquemas y comportamiento de seguridad."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Qué modo de herramientas es más eficiente en tokens?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "El modo dinámico es el más eficiente en tokens porque expone solo dos herramientas públicas, sin importar cuántas operaciones de GitLab existan. El asistente primero llama a gitlab_find_action para obtener una acción y su esquema, y luego llama a gitlab_execute_action. Así la lista de herramientas se mantiene pequeña en la ventana de contexto del modelo y, a la vez, se alcanza cualquier operación de GitLab a través del catálogo de acciones compartido."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Todos los modos admiten las mismas operaciones de GitLab?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Sí. Los modos dinámico, meta-herramientas e individual cubren las mismas operaciones REST y GraphQL de GitLab porque se proyectan desde un único catálogo canónico de acciones. Solo se diferencian en el empaquetado —cómo se agrupan y presentan las operaciones al asistente de IA— no en la capacidad. El filtrado de solo lectura, las vistas previas de modo seguro, las confirmaciones de acciones destructivas y el formato de resultados son idénticos en todos los modos."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Las herramientas Enterprise requieren una licencia de pago?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Sí. Las meta-herramientas Enterprise, como merge trains, métricas DORA, vulnerabilidades y políticas de cumplimiento, requieren una licencia de GitLab Premium o Ultimate en la instancia conectada. Forzar el catálogo Enterprise en una instancia Community Edition registra las herramientas, pero las llamadas a la API subyacente devuelven errores de permiso porque las funciones no están licenciadas."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "¿Cuál es la diferencia entre el modo meta-herramientas y el modo dinámico?"
+    a: "Tanto el modo meta-herramientas como el dinámico reducen el coste de tokens frente al modo individual, pero empaquetan las operaciones de forma distinta. El **modo meta-herramientas** expone una lista fija de {{meta.base}} herramientas a nivel de dominio, cada una enrutando según un parámetro `action` —útil cuando un cliente funciona mejor con una lista de herramientas estable y explorable. El **modo dinámico** expone solo dos herramientas y resuelve las operaciones bajo demanda mediante búsqueda, ofreciendo la lista de herramientas más pequeña posible. Ambos comparten los mismos handlers y comportamiento de seguridad."
+  - q: "¿Todos los modos admiten las mismas operaciones de GitLab?"
+    a: "Sí. Los modos dinámico, meta-herramientas e individual se proyectan desde un único catálogo canónico de acciones, por lo que cubren las mismas operaciones REST y GraphQL de GitLab. Solo se diferencian en el empaquetado, no en la capacidad. El filtrado de solo lectura, las vistas previas de modo seguro, las confirmaciones de acciones destructivas, el filtrado por alcance de token y el formato de resultados se comportan de forma idéntica sea cual sea el modo que elijas."
+  - q: "¿Cuántas herramientas expone cada modo?"
+    a: "El modo individual expone {{tools.free}} herramientas en CE, {{tools.ultimate_self_managed}} en Enterprise/Premium autoalojado y {{tools.gitlab_com}} en GitLab.com cuando Orbit está disponible. El modo meta-herramientas expone {{meta.base}} herramientas de dominio base (más con el catálogo Enterprise). El modo dinámico expone siempre exactamente dos herramientas públicas, sin importar cuántas operaciones de GitLab estén disponibles."
+  - q: "¿Las herramientas Enterprise requieren una licencia de GitLab de pago?"
+    a: "Sí. Las meta-herramientas Enterprise —como merge trains, métricas DORA, vulnerabilidades y políticas de cumplimiento— requieren una licencia de GitLab Premium o Ultimate en la instancia conectada. Forzar el catálogo Enterprise en una instancia Community Edition registra las herramientas, pero las llamadas a la API subyacente devuelven errores de permiso porque las funciones no están licenciadas."
+  - q: "¿Cuáles son los tres modos de herramientas de GitLab MCP Server?"
+    a: "GitLab MCP Server ofrece tres modos de herramientas que exponen la misma superficie de API de GitLab con distinto empaquetado. El modo dinámico (predeterminado) expone dos herramientas públicas que buscan y ejecutan un catálogo canónico de acciones. El modo meta-herramientas agrupa operaciones relacionadas en herramientas a nivel de dominio que enrutan según un parámetro de acción. El modo individual registra una herramienta MCP por operación de GitLab. Los tres modos comparten los mismos handlers, esquemas y comportamiento de seguridad."
+  - q: "¿Qué modo de herramientas es más eficiente en tokens?"
+    a: "El modo dinámico es el más eficiente en tokens porque expone solo dos herramientas públicas, sin importar cuántas operaciones de GitLab existan. El asistente primero llama a gitlab_find_action para obtener una acción y su esquema, y luego llama a gitlab_execute_action. Así la lista de herramientas se mantiene pequeña en la ventana de contexto del modelo y, a la vez, se alcanza cualquier operación de GitLab a través del catálogo de acciones compartido."
 ---
 
 import stats from "../../../../data/stats.json";
+import FAQ from "../../../../components/FAQ.astro";
 
-:::note[Documentación para desarrolladores]
-Esta página es la visión general orientada a usuarios. Para la referencia completa de herramientas por dominio, consulta [docs/reference/tools](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/README.md).
-:::
+GitLab MCP Server expone las operaciones de GitLab como herramientas MCP que los asistentes de IA pueden invocar directamente. Ofrece **tres modos de herramientas**: dinámico, meta-herramientas e individual. Los tres alcanzan la misma superficie de API de GitLab. Solo cambian en el empaquetado, así que la elección equilibra coste de contexto y granularidad de la lista, nunca capacidad.
 
-GitLab MCP Server expone las operaciones de GitLab como herramientas MCP que los asistentes de IA pueden invocar directamente. Ofrece **tres modos de herramientas** —dinámico, meta-herramientas e individual— que exponen la misma superficie de API de GitLab con distinto empaquetado, de modo que puedes equilibrar el coste de contexto del LLM con la granularidad de la lista de herramientas sin perder ninguna capacidad.
-
-Los tres modos se proyectan desde un único **catálogo canónico de acciones**, por lo que comparten los mismos handlers, esquemas tipados y comportamiento de seguridad. Solo se diferencian en cómo se presentan las operaciones al asistente: el modo dinámico busca y ejecuta IDs canónicos `domain.action`, el modo meta-herramientas agrupa acciones por dominio y el modo individual registra una herramienta por operación.
+Cada modo se proyecta desde un único **catálogo canónico de acciones**. Eso da a los tres los mismos handlers, esquemas tipados y comportamiento de seguridad. Lo único que cambia es la presentación. El modo dinámico busca y ejecuta IDs canónicos `domain.action`. El modo meta-herramientas agrupa acciones por dominio. El modo individual registra una herramienta por operación.
 
 ## ¿Qué modo de herramientas debería usar?
 
-Elige el modo que se ajuste a cómo tu cliente MCP descubre herramientas y a cuánto presupuesto de contexto puedes dedicar a la lista de herramientas. **El modo dinámico es el predeterminado y la opción adecuada para la mayoría de los asistentes**, porque mantiene solo dos herramientas en el contexto del modelo y aun así alcanza cualquier operación de GitLab. Pasa al modo meta-herramientas cuando tu cliente funcione mejor con una lista fija de herramientas a nivel de dominio, y usa el modo individual solo cuando un cliente necesite enumerar por adelantado todas las operaciones.
+**El modo dinámico es el predeterminado y la opción adecuada para la mayoría de los asistentes.** Mantiene dos herramientas en el contexto del modelo y aun así alcanza cualquier operación de GitLab. Elige el modo meta-herramientas cuando tu cliente funcione mejor con una lista fija de herramientas a nivel de dominio. Elige el modo individual solo cuando un cliente necesite enumerar por adelantado todas las operaciones.
 
 | Modo                     | Herramientas públicas expuestas                                     | Ideal para                                               | Coste relativo de tokens |
 | ------------------------ | ------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------ |
@@ -307,23 +277,7 @@ En GitLab.com Enterprise/Premium, el catálogo también registra `gitlab_orbit` 
 Las herramientas Enterprise requieren una licencia de GitLab Premium o Ultimate en tu instancia. Forzar el catálogo Enterprise/Premium en una instancia Community Edition registrará las herramientas, pero las llamadas a la API devolverán errores de permiso.
 :::
 
-## Preguntas frecuentes
-
-### ¿Cuál es la diferencia entre el modo meta-herramientas y el modo dinámico?
-
-Tanto el modo meta-herramientas como el dinámico reducen el coste de tokens frente al modo individual, pero empaquetan las operaciones de forma distinta. El **modo meta-herramientas** expone una lista fija de {stats.meta.base} herramientas a nivel de dominio, cada una enrutando según un parámetro `action` —útil cuando un cliente funciona mejor con una lista de herramientas estable y explorable. El **modo dinámico** expone solo dos herramientas y resuelve las operaciones bajo demanda mediante búsqueda, ofreciendo la lista de herramientas más pequeña posible. Ambos comparten los mismos handlers y comportamiento de seguridad.
-
-### ¿Todos los modos admiten las mismas operaciones de GitLab?
-
-Sí. Los modos dinámico, meta-herramientas e individual se proyectan desde un único catálogo canónico de acciones, por lo que cubren las mismas operaciones REST y GraphQL de GitLab. Solo se diferencian en el empaquetado, no en la capacidad. El filtrado de solo lectura, las vistas previas de modo seguro, las confirmaciones de acciones destructivas, el filtrado por alcance de token y el formato de resultados se comportan de forma idéntica sea cual sea el modo que elijas.
-
-### ¿Cuántas herramientas expone cada modo?
-
-El modo individual expone {stats.tools.free} herramientas en CE, {stats.tools.ultimate_self_managed} en Enterprise/Premium autoalojado y {stats.tools.gitlab_com} en GitLab.com cuando Orbit está disponible. El modo meta-herramientas expone {stats.meta.base} herramientas de dominio base (más con el catálogo Enterprise). El modo dinámico expone siempre exactamente dos herramientas públicas, sin importar cuántas operaciones de GitLab estén disponibles.
-
-### ¿Las herramientas Enterprise requieren una licencia de GitLab de pago?
-
-Sí. Las meta-herramientas Enterprise —como merge trains, métricas DORA, vulnerabilidades y políticas de cumplimiento— requieren una licencia de GitLab Premium o Ultimate en la instancia conectada. Forzar el catálogo Enterprise en una instancia Community Edition registra las herramientas, pero las llamadas a la API subyacente devuelven errores de permiso porque las funciones no están licenciadas.
+<FAQ />
 
 ## Lectura adicional
 
@@ -337,3 +291,9 @@ Sí. Las meta-herramientas Enterprise —como merge trains, métricas DORA, vuln
 - [Especificación del Model Context Protocol](https://modelcontextprotocol.io/) — el protocolo que implementan estas herramientas
 - [API REST v4 de GitLab](https://docs.gitlab.com/api/rest/) — la superficie REST que llama la mayoría de las herramientas
 - [API GraphQL de GitLab](https://docs.gitlab.com/api/graphql/) — la superficie GraphQL que usan el resto de dominios
+
+## Referencia de la fuente
+
+:::note[Documentación para desarrolladores]
+Esta página es la visión general orientada a usuarios. Para la referencia completa de herramientas por dominio, consulta [docs/reference/tools](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/README.md).
+:::

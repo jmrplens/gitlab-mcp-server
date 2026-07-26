@@ -7,6 +7,7 @@ hero:
   image:
     dark: ../../assets/logo-dark.svg
     light: ../../assets/logo-light.svg
+    alt: GitLab MCP Server logo
   actions:
     - text: Get Started
       link: /gitlab-mcp-server/getting-started/
@@ -19,52 +20,15 @@ hero:
 head:
   - tag: title
     content: GitLab MCP Server — MCP server for GitLab + AI assistants
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "speakable": {
-          "@type": "SpeakableSpecification",
-          "cssSelector": ["h1", ".sl-markdown-content > p:first-of-type"]
-        },
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "What is GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server is a free, open-source Model Context Protocol (MCP) server that lets AI assistants interact with GitLab through natural language. It exposes the GitLab REST v4 and GraphQL APIs as MCP tools, so an assistant can review merge requests, triage pipelines, manage issues, and draft releases on your behalf. It ships as a single Go binary and runs locally over stdio or remotely over HTTP."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Which AI assistants work with GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Any MCP-compatible client works. This includes VS Code with GitHub Copilot, Claude Desktop, Cursor, and Claude Code, plus any other client that speaks the Model Context Protocol over stdio or HTTP transport. Configuration is a small JSON snippet per client."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Is GitLab MCP Server free and open source?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Yes. GitLab MCP Server is free and open source under the MIT license, with the full source on GitHub. There is no paid tier of the server itself; GitLab Premium or Ultimate features are only gated by your own GitLab instance license, not by the MCP server."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Does GitLab MCP Server work with self-hosted GitLab and Community Edition?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Yes. It works with GitLab.com and self-hosted instances, and with both Community Edition (CE) and Enterprise Edition (EE). Point it at any GitLab URL with a personal access token. Premium and Ultimate tools register only when the connected instance is licensed for them."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "What is GitLab MCP Server?"
+    a: "GitLab MCP Server is a free, open-source [Model Context Protocol](https://modelcontextprotocol.io/) server that lets AI assistants interact with GitLab through natural language. It exposes the GitLab REST v4 and GraphQL APIs as MCP tools, so an assistant can review merge requests, triage pipelines, manage issues, and draft releases on your behalf. It ships as a single Go binary and runs locally over stdio or remotely over HTTP."
+  - q: "Which AI assistants work with GitLab MCP Server?"
+    a: "Any MCP-compatible client works — including VS Code with GitHub Copilot, Claude Desktop, Cursor, and Claude Code, plus any other client that speaks the Model Context Protocol over stdio or HTTP transport. Configuration is a small JSON snippet per client."
+  - q: "Is GitLab MCP Server free and open source?"
+    a: "Yes. GitLab MCP Server is free and open source under the MIT license, with the full source on GitHub. There is no paid tier of the server itself; GitLab Premium or Ultimate features are gated only by your own GitLab instance license, not by the MCP server."
+  - q: "Does it work with self-hosted GitLab and Community Edition?"
+    a: "Yes. It works with GitLab.com and self-hosted instances, and with both Community Edition and Enterprise Edition. Point it at any GitLab URL with a personal access token. Premium and Ultimate tools register only when the connected instance is licensed for them."
 ---
 
 import {
@@ -74,6 +38,7 @@ import {
 	Tabs,
 	TabItem,
 } from "@astrojs/starlight/components";
+import FAQ from "../../components/FAQ.astro";
 import stats from "../../data/stats.json";
 
 **GitLab MCP Server** is a [Model Context Protocol](https://modelcontextprotocol.io/) server that enables AI assistants to interact with GitLab through natural language. Ask your AI to create issues, review merge requests, analyze pipelines, and much more — all without leaving your editor.
@@ -237,20 +202,4 @@ GitLab MCP Server works with any MCP-compatible client:
 - **Claude Code** — via `claude code mcp add`
 - **Any MCP client** — stdio or HTTP transport
 
-## Frequently asked questions
-
-### What is GitLab MCP Server?
-
-GitLab MCP Server is a free, open-source [Model Context Protocol](https://modelcontextprotocol.io/) server that lets AI assistants interact with GitLab through natural language. It exposes the GitLab REST v4 and GraphQL APIs as MCP tools, so an assistant can review merge requests, triage pipelines, manage issues, and draft releases on your behalf. It ships as a single Go binary and runs locally over stdio or remotely over HTTP.
-
-### Which AI assistants work with GitLab MCP Server?
-
-Any MCP-compatible client works — including VS Code with GitHub Copilot, Claude Desktop, Cursor, and Claude Code, plus any other client that speaks the Model Context Protocol over stdio or HTTP transport. Configuration is a small JSON snippet per client.
-
-### Is GitLab MCP Server free and open source?
-
-Yes. GitLab MCP Server is free and open source under the MIT license, with the full source on GitHub. There is no paid tier of the server itself; GitLab Premium or Ultimate features are gated only by your own GitLab instance license, not by the MCP server.
-
-### Does it work with self-hosted GitLab and Community Edition?
-
-Yes. It works with GitLab.com and self-hosted instances, and with both Community Edition and Enterprise Edition. Point it at any GitLab URL with a personal access token. Premium and Ultimate tools register only when the connected instance is licensed for them.
+<FAQ />

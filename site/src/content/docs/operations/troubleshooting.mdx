@@ -2,57 +2,20 @@
 title: Troubleshooting
 description: Troubleshooting guide for GitLab MCP Server setup, authentication, transport, Docker, and tool execution issues.
 datePublished: "2026-04-21"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "Why does my MCP client show hundreds of GitLab tools?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "The client is using the individual tool surface, which registers one tool per GitLab operation. Set TOOL_SURFACE=meta to consolidate them into domain-level meta-tools, or use the default dynamic surface, which exposes only gitlab_find_action and gitlab_execute_action. Tool names also differ by surface: individual mode uses gitlab_create_issue, meta mode uses gitlab_issue with action create, and dynamic mode uses find and execute."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "How do I fix 401 Unauthorized or 403 Forbidden errors from GitLab?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "A 401 Unauthorized means the Personal Access Token is invalid or expired — generate a new token with the api scope at GitLab, Preferences, Access Tokens. A 403 Forbidden on specific operations means the token lacks the required scope; ensure it has the api scope, not just read_api. If the server will not start with GITLAB_TOKEN is required, set GITLAB_TOKEN in your .env file or environment."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Why are Enterprise tools missing in GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "The Enterprise/Premium catalog is disabled. In stdio mode, set GITLAB_TIER=premium or GITLAB_TIER=ultimate. In HTTP mode, set --tier=premium or --tier=ultimate to force the catalog, or let CE/EE auto-detection enable it when GitLab reports its edition. The legacy GITLAB_ENTERPRISE=true and --enterprise flags still work but are deprecated. Enterprise tools also require a Premium or Ultimate license on the connected instance."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "How do I enable debug logging for GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Set LOG_LEVEL=debug and redirect stderr to a file, for example LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log, then reproduce the failing operation. Debug logs include every tool call with input parameters, GitLab API request and response details, token validation events (last 4 characters only), and HTTP session pool operations. Logs go to stderr and JSON-RPC messages go to stdout, so always redirect stderr to avoid mixing the two."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "Why does my MCP client show hundreds of tools?"
+    a: "The client is using the **individual tool surface**, which registers one tool per GitLab operation. Set `TOOL_SURFACE=meta` to consolidate them into {{meta.base}} domain-level meta-tools, or use the default **dynamic** surface, which exposes only `gitlab_find_action` and `gitlab_execute_action`. Tool names also differ by surface: individual mode uses `gitlab_create_issue`, meta mode uses `gitlab_issue` with `action: create`, and dynamic mode uses find and execute."
+  - q: "How do I fix 401 or 403 errors from GitLab?"
+    a: "A **401 Unauthorized** means the Personal Access Token is invalid or expired — generate a new token with the `api` scope at GitLab → Preferences → Access Tokens. A **403 Forbidden** on specific operations means the token lacks the required scope; ensure it has the `api` scope, not just `read_api`. If the server will not start with `GITLAB_TOKEN is required`, set `GITLAB_TOKEN` in your `.env` file or environment."
+  - q: "Why are Enterprise tools missing?"
+    a: "The **Enterprise/Premium catalog is disabled**. In stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`. In HTTP mode, set `--tier=premium` or `--tier=ultimate` to force the catalog, or let CE/EE auto-detection enable it when GitLab reports its edition. The legacy `GITLAB_ENTERPRISE=true` and `--enterprise` flags still work but are deprecated. Enterprise tools also require a Premium or Ultimate license on the connected instance."
+  - q: "How do I enable debug logging?"
+    a: "Set `LOG_LEVEL=debug` and redirect stderr to a file — for example `LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log` — then reproduce the failing operation. Debug logs include every tool call with input parameters, GitLab API request and response details, token validation events (last 4 characters only), and HTTP session pool operations. Logs go to **stderr** and JSON-RPC messages go to **stdout**, so always redirect stderr to avoid mixing the two."
 ---
 
 import { Tabs, TabItem, Steps } from "@astrojs/starlight/components";
+import FAQ from "../../../components/FAQ.astro";
 import stats from "../../../data/stats.json";
-
-:::note[Developer Documentation]
-For the complete technical reference, see [`docs/troubleshooting.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/troubleshooting.md) in the repository.
-:::
 
 ## Connection and authentication
 
@@ -255,20 +218,10 @@ If you cannot resolve an issue:
 
 </Steps>
 
-## Frequently asked questions
+<FAQ />
 
-### Why does my MCP client show hundreds of tools?
+## Source reference
 
-The client is using the **individual tool surface**, which registers one tool per GitLab operation. Set `TOOL_SURFACE=meta` to consolidate them into {stats.meta.base} domain-level meta-tools, or use the default **dynamic** surface, which exposes only `gitlab_find_action` and `gitlab_execute_action`. Tool names also differ by surface: individual mode uses `gitlab_create_issue`, meta mode uses `gitlab_issue` with `action: create`, and dynamic mode uses find and execute.
-
-### How do I fix 401 or 403 errors from GitLab?
-
-A **401 Unauthorized** means the Personal Access Token is invalid or expired — generate a new token with the `api` scope at GitLab → Preferences → Access Tokens. A **403 Forbidden** on specific operations means the token lacks the required scope; ensure it has the `api` scope, not just `read_api`. If the server will not start with `GITLAB_TOKEN is required`, set `GITLAB_TOKEN` in your `.env` file or environment.
-
-### Why are Enterprise tools missing?
-
-The **Enterprise/Premium catalog is disabled**. In stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`. In HTTP mode, set `--tier=premium` or `--tier=ultimate` to force the catalog, or let CE/EE auto-detection enable it when GitLab reports its edition. The legacy `GITLAB_ENTERPRISE=true` and `--enterprise` flags still work but are deprecated. Enterprise tools also require a Premium or Ultimate license on the connected instance.
-
-### How do I enable debug logging?
-
-Set `LOG_LEVEL=debug` and redirect stderr to a file — for example `LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log` — then reproduce the failing operation. Debug logs include every tool call with input parameters, GitLab API request and response details, token validation events (last 4 characters only), and HTTP session pool operations. Logs go to **stderr** and JSON-RPC messages go to **stdout**, so always redirect stderr to avoid mixing the two.
+:::note[Developer Documentation]
+For the complete technical reference, see [`docs/troubleshooting.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/troubleshooting.md) in the repository.
+:::

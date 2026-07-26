@@ -2,55 +2,28 @@
 title: Configuration
 description: Configure GitLab MCP Server with environment variables for stdio mode and CLI flags for HTTP mode, plus client setup and deployment options.
 datePublished: "2026-04-21"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "What is the minimum configuration for GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "In stdio mode a single GITLAB_TOKEN with the api scope is enough to start, and every other variable is optional with a safe default. GITLAB_URL defaults to https://gitlab.com, so you set it only when connecting to a self-managed instance. For a read-only setup, use a read_api token and add GITLAB_READ_ONLY=true. In HTTP mode no token is configured on the server at all; each client sends its own token with every request."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Should I use stdio mode or HTTP mode for GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Use stdio mode, the default, for local single-user setups such as IDE integrations like VS Code, Cursor, and Claude Desktop; it is configured through environment variables or a .env file. Use HTTP mode, enabled with --http, for shared or remote deployments such as Docker, Fly.io, or Kubernetes, where configuration uses CLI flags and each client authenticates with its own GitLab token per request."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "How do I point GitLab MCP Server at a self-managed GitLab instance?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Set GITLAB_URL to your instance base URL, for example GITLAB_URL=https://gitlab.example.com; in HTTP mode use the --gitlab-url flag instead. If the instance uses a self-signed or internal CA certificate, also set GITLAB_SKIP_TLS_VERIFY=true, or --skip-tls-verify in HTTP mode, but only on a trusted network because it disables certificate verification for all connections to GitLab."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "How do I choose a tool surface in GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Set the TOOL_SURFACE variable, or the --tool-surface flag in HTTP mode. The dynamic surface is the default and lowest-token catalog: it exposes gitlab_find_action and gitlab_execute_action while keeping every GitLab action reachable through the canonical action catalog. Choose meta when a client prefers consolidated domain dispatchers with an action parameter, and individual to register one MCP tool per GitLab operation."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "What is the minimum configuration?"
+    a: "In stdio mode, a single `GITLAB_TOKEN` with the `api` scope is enough to start — every other variable is optional and defaults to a safe value. `GITLAB_URL` defaults to `https://gitlab.com`, so you set it only when connecting to a self-managed instance. For a read-only setup, use a `read_api` token and add `GITLAB_READ_ONLY=true`. In HTTP mode, no token is configured on the server at all; each client sends its own token with every request."
+  - q: "stdio vs HTTP — which mode do I use?"
+    a: "Use **stdio mode** (the default) for local, single-user setups such as IDE integrations like VS Code, Cursor, and Claude Desktop; it is configured through environment variables or a `.env` file. Use **HTTP mode** (`--http`) for shared or remote deployments such as Docker, Fly.io, or Kubernetes, where configuration uses CLI flags and each client authenticates with its own GitLab token per request."
+  - q: "How do I point at a self-managed GitLab instance?"
+    a: "Set `GITLAB_URL` to your instance base URL, for example `GITLAB_URL=https://gitlab.example.com` (in HTTP mode, use the `--gitlab-url` flag instead). If the instance uses a self-signed or internal CA certificate, also set `GITLAB_SKIP_TLS_VERIFY=true` (or `--skip-tls-verify` in HTTP mode), but only on a trusted network — it disables certificate verification for all connections to GitLab."
+  - q: "How do I pick a tool surface (dynamic, meta, or individual)?"
+    a: "Set the `TOOL_SURFACE` variable (or the `--tool-surface` flag in HTTP mode). `dynamic` is the default and lowest-token catalog: it exposes `gitlab_find_action` and `gitlab_execute_action` while keeping every GitLab action reachable through the canonical action catalog. Choose `meta` when a client prefers consolidated domain dispatchers with an `action` parameter, and `individual` to register one MCP tool per GitLab operation."
+  - q: "How do I choose a tool surface in GitLab MCP Server?"
+    a: "Set the TOOL_SURFACE variable, or the --tool-surface flag in HTTP mode. The dynamic surface is the default and lowest-token catalog: it exposes gitlab_find_action and gitlab_execute_action while keeping every GitLab action reachable through the canonical action catalog. Choose meta when a client prefers consolidated domain dispatchers with an action parameter, and individual to register one MCP tool per GitLab operation."
 ---
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
+import FAQ from "../../components/FAQ.astro";
 
-:::note[Developer Documentation]
-For the complete technical reference, see [`docs/configuration.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/configuration.md) in the repository.
+:::tip[At a glance]
+
+- **stdio mode reads environment variables** (or a `.env` file); **HTTP mode reads CLI flags**. The option names mirror each other.
+- **Only `GITLAB_TOKEN` is always required.** `GITLAB_URL` defaults to `https://gitlab.com`, so self-managed instances are the only ones that must set it.
+- **Three switches shape behaviour**: `TOOL_SURFACE` picks dynamic, meta or individual; `GITLAB_READ_ONLY` removes every write operation; `GITLAB_SAFE_MODE` previews writes instead of performing them.
+
 :::
 
 GitLab MCP Server needs almost nothing to start. In **stdio mode** — the default used by IDE integrations — you set just two things: which GitLab instance to talk to (`GITLAB_URL`) and a personal access token to talk with (`GITLAB_TOKEN`). On GitLab.com even the URL is optional, because `GITLAB_URL` defaults to `https://gitlab.com`, so a single `GITLAB_TOKEN` is enough; point `GITLAB_URL` at your own host for self-managed instances. In **HTTP mode** the server holds no credentials at all — each client sends its own token (and optionally its own GitLab URL) with every request. Everything else on this page is optional and ships with a safe default.
@@ -416,20 +389,10 @@ Enable `GITLAB_SAFE_MODE=true` to intercept mutating tools and return a structur
 If `GITLAB_READ_ONLY=true` is also set, it takes precedence — mutating tools are fully disabled rather than previewed.
 :::
 
-## Frequently asked questions
+<FAQ />
 
-### What is the minimum configuration?
+## Source reference
 
-In stdio mode, a single `GITLAB_TOKEN` with the `api` scope is enough to start — every other variable is optional and defaults to a safe value. `GITLAB_URL` defaults to `https://gitlab.com`, so you set it only when connecting to a self-managed instance. For a read-only setup, use a `read_api` token and add `GITLAB_READ_ONLY=true`. In HTTP mode, no token is configured on the server at all; each client sends its own token with every request.
-
-### stdio vs HTTP — which mode do I use?
-
-Use **stdio mode** (the default) for local, single-user setups such as IDE integrations like VS Code, Cursor, and Claude Desktop; it is configured through environment variables or a `.env` file. Use **HTTP mode** (`--http`) for shared or remote deployments such as Docker, Fly.io, or Kubernetes, where configuration uses CLI flags and each client authenticates with its own GitLab token per request.
-
-### How do I point at a self-managed GitLab instance?
-
-Set `GITLAB_URL` to your instance base URL, for example `GITLAB_URL=https://gitlab.example.com` (in HTTP mode, use the `--gitlab-url` flag instead). If the instance uses a self-signed or internal CA certificate, also set `GITLAB_SKIP_TLS_VERIFY=true` (or `--skip-tls-verify` in HTTP mode), but only on a trusted network — it disables certificate verification for all connections to GitLab.
-
-### How do I pick a tool surface (dynamic, meta, or individual)?
-
-Set the `TOOL_SURFACE` variable (or the `--tool-surface` flag in HTTP mode). `dynamic` is the default and lowest-token catalog: it exposes `gitlab_find_action` and `gitlab_execute_action` while keeping every GitLab action reachable through the canonical action catalog. Choose `meta` when a client prefers consolidated domain dispatchers with an `action` parameter, and `individual` to register one MCP tool per GitLab operation.
+:::note[Developer Documentation]
+For the complete technical reference, see [`docs/configuration.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/configuration.md) in the repository.
+:::

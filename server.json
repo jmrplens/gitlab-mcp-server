@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.jmrplens/gitlab-mcp-server",
   "title": "GitLab MCP Server",
-  "description": "Manage GitLab projects, issues, merge requests, pipelines, repositories, and admin workflows.",
+  "description": "Go MCP server for GitLab: 2 dynamic tools reach 1000+ REST/GraphQL actions. Free/CE, no paid tier.",
   "version": "2.5.2",
   "repository": {
     "url": "https://github.com/jmrplens/gitlab-mcp-server",

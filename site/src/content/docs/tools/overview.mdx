@@ -90,6 +90,8 @@ head:
         "@context": "https://schema.org",
         "@type": "Dataset",
         "@id": "https://github.com/jmrplens/gitlab-mcp-server#tool-catalog",
+        "translationOfWork": { "@id": "https://github.com/jmrplens/gitlab-mcp-server#tool-catalog-es" },
+        "isPartOf": { "@id": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#article" },
         "name": "GitLab MCP Server tool catalog",
         "description": "The complete machine-readable catalog of GitLab MCP Server's MCP surface: every tool and action name with its description and parameters, plus the resources, prompts and meta-tool groups, generated from the canonical action catalog at build time.",
         "inLanguage": "en",
@@ -113,63 +115,31 @@ head:
           }
         ]
       }
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "What are the three tool modes in GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server offers three tool modes that expose the same GitLab API surface with different packaging. Dynamic mode (the default) exposes two public tools that search and execute a canonical action catalog. Meta-tool mode groups related operations into domain-level tools that route on an action parameter. Individual mode registers one MCP tool per GitLab operation. All three modes share identical handlers, schemas, and safety behavior."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Which tool mode is the most token-efficient?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Dynamic mode is the most token-efficient because it exposes only two public tools regardless of how many GitLab operations exist. The assistant first calls gitlab_find_action to retrieve an action and its schema, then calls gitlab_execute_action. This keeps the tool list small in the model's context window while still reaching every GitLab operation through the shared action catalog."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Do all tool modes support the same GitLab operations?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Yes. Dynamic, meta-tool, and individual modes all cover the same GitLab REST and GraphQL operations because they are projected from one canonical action catalog. They differ only in packaging — how operations are grouped and presented to the AI assistant — not in capability. Read-only filtering, safe-mode previews, destructive-action confirmations, and result formatting are identical across modes."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Do GitLab MCP Server Enterprise tools require a paid license?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Yes. Enterprise meta-tools such as merge trains, DORA metrics, vulnerabilities, and compliance policies require a GitLab Premium or Ultimate license on the connected instance. Forcing the Enterprise catalog on a Community Edition instance registers the tools, but the underlying API calls return permission errors because the features are not licensed."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "What is the difference between meta-tool mode and dynamic mode?"
+    a: "Both meta-tool and dynamic mode reduce token cost compared with individual mode, but they package operations differently. **Meta-tool mode** exposes a fixed list of {{meta.base}} domain-level tools, each routing on an `action` parameter — useful when a client works best with a stable, browsable tool list. **Dynamic mode** exposes only two tools and resolves operations on demand through search, giving the smallest possible tool list. Both share the same handlers and safety behavior."
+  - q: "Do all modes support the same GitLab operations?"
+    a: "Yes. Dynamic, meta-tool, and individual modes are all projected from one canonical action catalog, so they cover the same GitLab REST and GraphQL operations. They differ only in packaging, not capability. Read-only filtering, safe-mode previews, destructive-action confirmations, token-scope filtering, and result formatting behave identically regardless of the mode you choose."
+  - q: "How many tools does each mode expose?"
+    a: "Individual mode exposes {{tools.free}} tools on CE, {{tools.ultimate_self_managed}} on self-managed Enterprise/Premium, and {{tools.gitlab_com}} on GitLab.com when Orbit is available. Meta-tool mode exposes {{meta.base}} base domain tools (more with the Enterprise catalog). Dynamic mode always exposes exactly two public tools, regardless of how many GitLab operations are available."
+  - q: "Do Enterprise tools require a paid GitLab license?"
+    a: "Yes. Enterprise meta-tools — such as merge trains, DORA metrics, vulnerabilities, and compliance policies — require a GitLab Premium or Ultimate license on the connected instance. Forcing the Enterprise catalog on a Community Edition instance registers the tools, but the underlying API calls return permission errors because the features are not licensed."
+  - q: "What are the three tool modes in GitLab MCP Server?"
+    a: "GitLab MCP Server offers three tool modes that expose the same GitLab API surface with different packaging. Dynamic mode (the default) exposes two public tools that search and execute a canonical action catalog. Meta-tool mode groups related operations into domain-level tools that route on an action parameter. Individual mode registers one MCP tool per GitLab operation. All three modes share identical handlers, schemas, and safety behavior."
+  - q: "Which tool mode is the most token-efficient?"
+    a: "Dynamic mode is the most token-efficient because it exposes only two public tools regardless of how many GitLab operations exist. The assistant first calls gitlab_find_action to retrieve an action and its schema, then calls gitlab_execute_action. This keeps the tool list small in the model's context window while still reaching every GitLab operation through the shared action catalog."
 ---
 
 import stats from "../../../data/stats.json";
+import FAQ from "../../../components/FAQ.astro";
 
-:::note[Developer Documentation]
-This page is the user-facing overview. For the full per-domain tool reference, see [docs/reference/tools](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/README.md).
-:::
+GitLab MCP Server exposes GitLab operations as MCP tools that AI assistants can invoke directly. It offers **three tool modes**: dynamic, meta-tool, and individual. All three reach the same GitLab API surface. They differ only in packaging, so the choice trades context cost against tool-list granularity — never capability.
 
-GitLab MCP Server exposes GitLab operations as MCP tools that AI assistants can invoke directly. It offers **three tool modes** — dynamic, meta-tool, and individual — that expose the same GitLab API surface with different packaging, so you can trade LLM context cost for tool-list granularity without losing any capability.
-
-All three modes are projected from one **canonical action catalog**, so they share identical handlers, typed schemas, and safety behavior. They differ only in how operations are presented to the assistant: dynamic mode searches and executes canonical `domain.action` IDs, meta-tool mode groups actions by domain, and individual mode registers one tool per operation.
+Every mode is projected from one **canonical action catalog**. That gives all three identical handlers, typed schemas, and safety behavior. Only the presentation changes. Dynamic mode searches and executes canonical `domain.action` IDs. Meta-tool mode groups actions by domain. Individual mode registers one tool per operation.
 
 ## Which tool mode should I use?
 
-Choose the mode that matches how your MCP client discovers tools and how much context budget you can spend on the tool list. **Dynamic mode is the default and the right choice for most assistants**, because it keeps only two tools in the model's context while still reaching every GitLab operation. Step up to meta-tool mode when your client works better with a fixed, domain-level tool list, and use individual mode only when a client needs every operation enumerated up front.
+**Dynamic mode is the default, and the right choice for most assistants.** It keeps two tools in the model's context and still reaches every GitLab operation. Choose meta-tool mode when your client works better with a fixed, domain-level tool list. Choose individual mode only when a client needs every operation enumerated up front.
 
 | Mode                    | Public tools exposed                                       | Best for                                      | Relative token cost |
 | ----------------------- | ---------------------------------------------------------- | --------------------------------------------- | ------------------- |
@@ -307,23 +277,7 @@ On GitLab.com Enterprise/Premium, the catalog also registers `gitlab_orbit` with
 Enterprise tools require a GitLab Premium or Ultimate license on your instance. Forcing the Enterprise/Premium catalog on a Community Edition instance will register the tools but API calls will return permission errors.
 :::
 
-## Frequently asked questions
-
-### What is the difference between meta-tool mode and dynamic mode?
-
-Both meta-tool and dynamic mode reduce token cost compared with individual mode, but they package operations differently. **Meta-tool mode** exposes a fixed list of {stats.meta.base} domain-level tools, each routing on an `action` parameter — useful when a client works best with a stable, browsable tool list. **Dynamic mode** exposes only two tools and resolves operations on demand through search, giving the smallest possible tool list. Both share the same handlers and safety behavior.
-
-### Do all modes support the same GitLab operations?
-
-Yes. Dynamic, meta-tool, and individual modes are all projected from one canonical action catalog, so they cover the same GitLab REST and GraphQL operations. They differ only in packaging, not capability. Read-only filtering, safe-mode previews, destructive-action confirmations, token-scope filtering, and result formatting behave identically regardless of the mode you choose.
-
-### How many tools does each mode expose?
-
-Individual mode exposes {stats.tools.free} tools on CE, {stats.tools.ultimate_self_managed} on self-managed Enterprise/Premium, and {stats.tools.gitlab_com} on GitLab.com when Orbit is available. Meta-tool mode exposes {stats.meta.base} base domain tools (more with the Enterprise catalog). Dynamic mode always exposes exactly two public tools, regardless of how many GitLab operations are available.
-
-### Do Enterprise tools require a paid GitLab license?
-
-Yes. Enterprise meta-tools — such as merge trains, DORA metrics, vulnerabilities, and compliance policies — require a GitLab Premium or Ultimate license on the connected instance. Forcing the Enterprise catalog on a Community Edition instance registers the tools, but the underlying API calls return permission errors because the features are not licensed.
+<FAQ />
 
 ## Further reading
 
@@ -337,3 +291,9 @@ Yes. Enterprise meta-tools — such as merge trains, DORA metrics, vulnerabiliti
 - [Model Context Protocol specification](https://modelcontextprotocol.io/) — the protocol these tools implement
 - [GitLab REST API v4](https://docs.gitlab.com/api/rest/) — the REST surface most tools call
 - [GitLab GraphQL API](https://docs.gitlab.com/api/graphql/) — the GraphQL surface used by the remaining domains
+
+## Source reference
+
+:::note[Developer Documentation]
+This page is the user-facing overview. For the full per-domain tool reference, see [docs/reference/tools](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/README.md).
+:::

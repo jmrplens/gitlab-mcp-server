@@ -1,3 +1,7 @@
 # Published from repo-root by scripts/copy-llms.mjs (prebuild)
 public/llms.txt
+public/llms-medium.txt
 public/llms-full.txt
+public/llms-full-meta-tools.txt
+public/llms-full-individual-tools.txt
+public/llms-full-resources-prompts.txt

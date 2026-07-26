@@ -2,9 +2,19 @@
 title: Ejemplos de flujos CI/CD
 description: "Ejemplos CI/CD con GitLab MCP Server — diagnosticar pipelines fallidos, gestionar variables, programar builds, controlar entornos y leer métricas DORA."
 datePublished: "2026-04-23"
+faq:
+  - q: "¿Cómo depuro un pipeline de GitLab que falla con un asistente de IA?"
+    a: "Se baja desde el pipeline hasta el log del job. Llama a `gitlab_pipeline` con `action: list` y `status: failed` para localizar la ejecución, a `gitlab_job` con `action: list` y el ID del pipeline para ver qué job falló, y después a `gitlab_job` con `action: trace` para obtener la traza de ese job y que el asistente lea el error real. En la superficie dinámica son `pipeline.list`, `job.list` y `job.trace`. Leer el log es el paso decisivo: el estado del pipeline rara vez explica el fallo."
+  - q: "¿Puede un asistente de IA reintentar o cancelar un pipeline?"
+    a: "Sí. `gitlab_pipeline` acepta `action: retry` y `action: cancel`, y `gitlab_job` admite las mismas dos para un job concreto. Reintentar un pipeline vuelve a ejecutar solo sus jobs fallidos, mientras que reintentar un job vuelve a ejecutar únicamente ese job. Ambas son acciones mutantes, así que no están disponibles con `GITLAB_READ_ONLY=true` y devuelven una previsualización con `GITLAB_SAFE_MODE=true`."
+  - q: "¿Cómo valido mi configuración de CI antes de hacer push?"
+    a: "Usa `gitlab_ci_lint` para validar `.gitlab-ci.yml` contra el propio linter de GitLab sin llegar a commitear nada. Informa de errores de sintaxis y de la configuración fusionada tras resolver los `include:`, que es la forma más rápida de detectar un `extends:` roto o una errata en el nombre de un job. Como solo valida, está disponible en despliegues de solo lectura."
+  - q: "¿El asistente de IA puede ver los valores de las variables CI/CD?"
+    a: "Listar variables con `gitlab_ci_variable` y `action: list` devuelve los valores que el token tenga permiso para leer, así que trata esa salida como sensible: las variables enmascaradas y protegidas se rigen por las reglas de GitLab, no por el servidor MCP. Si un asistente no debe verlas nunca, usa un token sin el scope necesario, o ejecuta con `GITLAB_READ_ONLY=true` para que ninguna variable pueda crearse ni modificarse."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import FAQ from "../../../../components/FAQ.astro";
 
 <CardGrid>
 	<LinkCard
@@ -44,11 +54,11 @@ sequenceDiagram
     MCP-->>AI: Pipelines fallidos
     AI->>U: "Se encontraron 2 pipelines fallidos"
     U->>AI: "Muéstrame los jobs fallidos en #45892"
-    AI->>MCP: gitlab_pipeline (action: job_list)
+    AI->>MCP: gitlab_job (action: list)
     MCP->>GL: GET /projects/:id/pipelines/:id/jobs
     GL-->>MCP: Detalles de jobs
     MCP-->>AI: Jobs fallidos
-    AI->>MCP: gitlab_pipeline (action: job_log)
+    AI->>MCP: gitlab_job (action: trace)
     MCP->>GL: GET /projects/:id/jobs/:id/trace
     GL-->>MCP: Salida del log
     MCP-->>AI: Logs del job
@@ -70,7 +80,7 @@ Devuelve: IDs de pipelines, ramas, razones de fallo y duraciones.
 **Prompt**: "Muéstrame los jobs fallidos en el pipeline #45892"
 
 ```text
-gitlab_pipeline → action: job_list, project_id: "my-group/backend", pipeline_id: 45892, scope: "failed"
+gitlab_job → action: list, project_id: "my-group/backend", pipeline_id: 45892, scope: "failed"
 ```
 
 Devuelve: nombres de jobs, stages, mensajes de error e información del runner.
@@ -80,7 +90,7 @@ Devuelve: nombres de jobs, stages, mensajes de error e información del runner.
 **Prompt**: "Obtén la salida del log del job 'test-integration' en el pipeline #45892"
 
 ```text
-gitlab_pipeline → action: job_log, project_id: "my-group/backend", job_id: 98765
+gitlab_job → action: trace, project_id: "my-group/backend", job_id: 98765
 ```
 
 Devuelve: salida completa del log del job. Útil para diagnosticar fallos en tests sin abrir la interfaz de GitLab.
@@ -241,3 +251,5 @@ gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_i
 :::tip
 Estos prompts CI/CD funcionan con la superficie dinámica predeterminada. Con `TOOL_SURFACE=meta`, el asistente de IA mapea las mismas solicitudes a la meta-herramienta de dominio y al parámetro `action` apropiados.
 :::
+
+<FAQ />

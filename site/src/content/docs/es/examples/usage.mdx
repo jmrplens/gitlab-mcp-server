@@ -2,8 +2,18 @@
 title: Ejemplos de uso
 description: Ejemplos prácticos de GitLab MCP Server para issues, merge requests, CI/CD, releases y flujos de repositorio.
 datePublished: "2026-04-21"
+faq:
+  - q: "¿Qué puedo pedirle a un asistente de IA con GitLab MCP Server?"
+    a: "Cualquier cosa que expongan las API REST v4 y GraphQL de GitLab: {{tools.free}} operaciones en Community Edition y hasta {{tools.gitlab_com}} en GitLab.com. En la práctica eso incluye listar y crear proyectos e issues, revisar merge requests, consultar y reintentar pipelines, publicar releases, gestionar etiquetas e hitos, buscar código en todo un grupo y administrar miembros. Formulas la petición en lenguaje natural y el servidor la resuelve a una acción canónica de GitLab."
+  - q: "¿Necesito conocer los nombres de las herramientas para usar GitLab MCP Server?"
+    a: "No. En la superficie dinámica predeterminada describes lo que quieres y el asistente llama a `gitlab_find_action` para localizar la acción y su esquema exacto, y después a `gitlab_execute_action` para ejecutarla. Los nombres como `gitlab_issue` solo se hacen visibles si cambias a `TOOL_SURFACE=meta` o `TOOL_SURFACE=individual`, que intercambian contexto de arranque por una lista navegable de herramientas."
+  - q: "¿Cómo le indico al asistente qué proyecto de GitLab usar?"
+    a: "Pasa la ruta del proyecto en `project_id`, con la forma `grupo/proyecto` — por ejemplo `mi-grupo/backend`. Los IDs numéricos también funcionan. Si trabajas dentro de un repositorio clonado, `gitlab_resolve_project` traduce la URL del remoto git al proyecto correcto de GitLab, así que no necesitas indicarlo."
+  - q: "¿Un asistente de IA puede modificar mis datos de GitLab sin preguntar?"
+    a: "No sin desactivar antes alguna salvaguarda. Las acciones destructivas exigen confirmación explícita antes de ejecutarse, `GITLAB_READ_ONLY=true` elimina del catálogo todas las acciones de escritura, y `GITLAB_SAFE_MODE=true` intercepta las mutaciones y devuelve una previsualización JSON de lo que ocurriría en vez de aplicarlo. Las operaciones de lectura, como listar y buscar, son siempre seguras."
 ---
 
+import FAQ from "../../../../components/FAQ.astro";
 import {
 	CardGrid,
 	LinkCard,
@@ -124,3 +134,5 @@ gitlab_execute_action → action: "analyze.pipeline_failure", params: { project_
 :::tip
 Estos ejemplos funcionan con la superficie dinámica predeterminada. Si configuras explícitamente `TOOL_SURFACE=meta`, el asistente mapea los mismos prompts a meta-herramientas de dominio con el parámetro `action` apropiado.
 :::
+
+<FAQ />

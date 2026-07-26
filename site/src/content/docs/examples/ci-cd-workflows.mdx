@@ -2,9 +2,19 @@
 title: CI/CD Workflow Examples
 description: "Step-by-step CI/CD examples with GitLab MCP Server: diagnose failed pipelines, manage variables, schedule builds, control environments, read DORA metrics."
 datePublished: "2026-04-23"
+faq:
+  - q: "How do I debug a failing GitLab pipeline with an AI assistant?"
+    a: "Work down from the pipeline to the job log. Call `gitlab_pipeline` with `action: list` and `status: failed` to find the run, `gitlab_job` with `action: list` and the pipeline ID to see which job failed, then `gitlab_job` with `action: trace` to fetch that job's log so the assistant can read the actual error. In the default dynamic surface these are `pipeline.list`, `job.list`, and `job.trace`. Reading the log is the step that matters — pipeline status alone rarely explains a failure."
+  - q: "Can an AI assistant retry or cancel a GitLab pipeline?"
+    a: "Yes. `gitlab_pipeline` accepts `action: retry` and `action: cancel`, and `gitlab_job` accepts the same two for a single job. Retrying a pipeline reruns only its failed jobs, while retrying one job reruns just that job. Both are mutating actions, so they are unavailable under `GITLAB_READ_ONLY=true` and return a preview under `GITLAB_SAFE_MODE=true`."
+  - q: "How do I check my CI configuration before pushing?"
+    a: "Use `gitlab_ci_lint` to validate `.gitlab-ci.yml` against GitLab's own linter without committing anything. It reports syntax errors and the merged configuration after `include:` resolution, which is the fastest way to catch a broken `extends:` or a typo in a job name. Because it only validates, it is available in read-only deployments."
+  - q: "Are CI/CD variable values visible to the AI assistant?"
+    a: "Listing variables with `gitlab_ci_variable` `action: list` returns values for variables the token is allowed to read, so treat that output as sensitive — masked and protected variables are governed by GitLab's own rules, not by the MCP server. If an assistant should never see them, use a token without the required scope, or run with `GITLAB_READ_ONLY=true` so no variable can be created or changed."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import FAQ from "../../../components/FAQ.astro";
 
 <CardGrid>
 	<LinkCard
@@ -44,11 +54,11 @@ sequenceDiagram
     MCP-->>AI: Failed pipelines
     AI->>U: "Found 2 failed pipelines"
     U->>AI: "Show failed jobs in #45892"
-    AI->>MCP: gitlab_pipeline (action: job_list)
+    AI->>MCP: gitlab_job (action: list)
     MCP->>GL: GET /projects/:id/pipelines/:id/jobs
     GL-->>MCP: Job details
     MCP-->>AI: Failed jobs
-    AI->>MCP: gitlab_pipeline (action: job_log)
+    AI->>MCP: gitlab_job (action: trace)
     MCP->>GL: GET /projects/:id/jobs/:id/trace
     GL-->>MCP: Log output
     MCP-->>AI: Job logs
@@ -70,7 +80,7 @@ Returns: pipeline IDs, branches, failure reasons, and durations.
 **Prompt**: "Show me the failed jobs in pipeline #45892"
 
 ```text
-gitlab_pipeline → action: job_list, project_id: "my-group/backend", pipeline_id: 45892, scope: "failed"
+gitlab_job → action: list, project_id: "my-group/backend", pipeline_id: 45892, scope: "failed"
 ```
 
 Returns: job names, stages, failure messages, and runner info.
@@ -80,7 +90,7 @@ Returns: job names, stages, failure messages, and runner info.
 **Prompt**: "Get the log output from the 'test-integration' job in pipeline #45892"
 
 ```text
-gitlab_pipeline → action: job_log, project_id: "my-group/backend", job_id: 98765
+gitlab_job → action: trace, project_id: "my-group/backend", job_id: 98765
 ```
 
 Returns: full job log output. Useful for diagnosing test failures without opening the GitLab UI.
@@ -241,3 +251,5 @@ gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_i
 :::tip
 These CI/CD prompts work with the default dynamic surface. With `TOOL_SURFACE=meta`, the AI assistant maps the same requests to the appropriate domain meta-tool and `action` parameter.
 :::
+
+<FAQ />

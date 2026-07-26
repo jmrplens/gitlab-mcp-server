@@ -1,0 +1,2114 @@
+# gitlab-mcp-server — Medium Reference
+
+> Version 2.5.2 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+
+Every tool and action with its description, without the per-action JSON schemas.
+Fetch the exact schema for one action from `gitlab://tools/{id}`, or read llms-full.txt for the complete schemas.
+
+## Dynamic Toolset
+
+Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It exposes `gitlab_find_action` and `gitlab_execute_action` over the same canonical action catalog used by the meta-tool catalog. Models should find candidate actions with exact input schemas and safety metadata, then execute the canonical `domain.action` ID. Set `TOOL_SURFACE=meta` to use consolidated domain meta-tools instead.
+
+### gitlab_find_action
+
+**GitLab Find Action**
+
+Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples.
+
+**Parameters:**
+
+- `explain` (boolean): When true, include deterministic scoring reasons for each returned action. Defaults to false to keep responses compact.
+- `limit` (integer): Maximum number of matches to return. Defaults to 20 and is capped at 50.
+- `query` (string) (required): Search terms combining a GitLab domain or resource with a verb, filter, or object name, such as project create, merge request approve, pipeline retry, issue delete, or ci variable.
+
+Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+
+### gitlab_execute_action
+
+**GitLab Execute Action**
+
+Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear.
+
+**Parameters:**
+
+- `action` (string) (required): Canonical action ID returned by gitlab_find_action, or a supported compatibility alias, such as project.list, issue.update, or issue.close.
+- `confirm` (boolean): Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_action.
+- `params` (object) (required): Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters.
+
+Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
+
+## Meta-Tools
+
+Enabled with `TOOL_SURFACE=meta`. Each groups related operations under a single tool with an `action` parameter.
+
+### gitlab_access
+
+**Access**
+
+Manage GitLab access credentials: access tokens (project/group/personal), deploy tokens, deploy keys, access requests, and invitations.
+
+Actions (48): approve_group, approve_project, deny_group, deny_project, deploy_key_add, deploy_key_add_instance, deploy_key_delete, deploy_key_enable, deploy_key_get, deploy_key_list_all, deploy_key_list_project, deploy_key_list_user_project, deploy_key_update, deploy_token_create_group, deploy_token_create_project, deploy_token_delete_group, deploy_token_delete_project, deploy_token_get_group, deploy_token_get_project, deploy_token_list_all, deploy_token_list_group, deploy_token_list_project, invite_group, invite_list_group, invite_list_project, invite_project, request_group, request_list_group, request_list_project, request_project, token_group_create, token_group_get, token_group_list, token_group_revoke, token_group_rotate, token_group_rotate_self, token_personal_get, token_personal_list, token_personal_revoke, token_personal_revoke_self, token_personal_rotate, token_personal_rotate_self, token_project_create, token_project_get, token_project_list, token_project_revoke, token_project_rotate, token_project_rotate_self
+
+### gitlab_admin
+
+**Admin**
+
+GitLab self-managed instance administration: settings, license, broadcast messages, system hooks, Sidekiq monitoring, plan limits, OAuth applications, secure files, Terraform states, cluster agents, dependency proxy cache, plus bulk imports (GitLab→GitLab migrations) and external imports (GitHub/Bitbucket).
+
+Actions (92): alert_metric_image_delete, alert_metric_image_list, alert_metric_image_update, alert_metric_image_upload, app_statistics_get, appearance_get, appearance_update, application_create, application_delete, application_list, application_renew_secret, broadcast_message_create, broadcast_message_delete, broadcast_message_get, broadcast_message_list, broadcast_message_update, bulk_import_cancel, bulk_import_entity_failures, bulk_import_entity_get, bulk_import_entity_list, bulk_import_get, bulk_import_list, bulk_import_start, cluster_agent_delete, cluster_agent_get, cluster_agent_list, cluster_agent_register, cluster_agent_token_create, cluster_agent_token_get, cluster_agent_token_list, cluster_agent_token_revoke, custom_attr_delete, custom_attr_get, custom_attr_list, custom_attr_set, db_migration_mark, dependency_proxy_delete, error_tracking_create, error_tracking_delete, error_tracking_get_settings, error_tracking_list, error_tracking_update_settings, feature_delete, feature_list, feature_list_definitions, feature_set, import_bitbucket, import_bitbucket_server, import_cancel_github, import_gists, import_github, license_add, license_delete, license_get, metadata_get, plan_limits_change, plan_limits_get, secure_file_create, secure_file_delete, secure_file_get, secure_file_list, settings_get, settings_update, sidekiq_compound_metrics, sidekiq_job_stats, sidekiq_process_metrics, sidekiq_queue_metrics, system_hook_add, system_hook_delete, system_hook_delete_url_variable, system_hook_edit, system_hook_get, system_hook_list, system_hook_set_url_variable, system_hook_test, terraform_state_delete, terraform_state_get, terraform_state_list, terraform_state_lock, terraform_state_unlock, terraform_version_delete, topic_create, topic_delete, topic_get, topic_list, topic_update, usage_data_metric_definitions, usage_data_non_sql_metrics, usage_data_queries, usage_data_service_ping, usage_data_track_event, usage_data_track_events
+
+### gitlab_branch
+
+**Branch**
+
+Manage Git branches and branch protections in a project, plus aggregated branch rules (GraphQL).
+
+Actions (11): create, delete, delete_merged, get, get_protected, list, list_protected, protect, rule_list, unprotect, update_protected
+
+### gitlab_ci_catalog
+
+**CI Catalog**
+
+Discover and inspect CI/CD Catalog resources (reusable pipeline components and templates published by groups for import into .gitlab-ci.yml).
+
+Actions (2): get, list
+
+### gitlab_ci_variable
+
+**CI Variable**
+
+Manage GitLab CI/CD variables at instance, group, and project scope.
+
+Actions (15): create, delete, get, group_create, group_delete, group_get, group_list, group_update, instance_create, instance_delete, instance_get, instance_list, instance_update, list, update
+
+### gitlab_custom_emoji
+
+**Custom Emoji**
+
+Manage group-level custom emoji via GraphQL.
+
+Actions (3): create, delete, list
+
+### gitlab_discover_project
+
+**Discover Project**
+
+Resolve a full git remote URL to a GitLab project and return its project_id and metadata.
+
+### gitlab_environment
+
+**Environment**
+
+Manage GitLab deployment environments, protected environments, freeze (deploy block) periods, and the deployment record audit trail.
+
+Actions (23): create, delete, deployment_approve_or_reject, deployment_create, deployment_delete, deployment_get, deployment_list, deployment_merge_requests, deployment_update, freeze_create, freeze_delete, freeze_get, freeze_list, freeze_update, get, list, protected_get, protected_list, protected_protect, protected_unprotect, protected_update, stop, update
+
+### gitlab_feature_flags
+
+**Feature Flags**
+
+Manage project feature flags and feature-flag user lists for gradual rollouts.
+
+Actions (10): feature_flag_create, feature_flag_delete, feature_flag_get, feature_flag_list, feature_flag_update, ff_user_list_create, ff_user_list_delete, ff_user_list_get, ff_user_list_list, ff_user_list_update
+
+### gitlab_group
+
+**Group**
+
+Manage GitLab groups: CRUD, subgroups, members, labels, milestones, webhooks, badges, boards, uploads, and import/export.
+
+Actions (157): analytics_issues_count, analytics_members_count, analytics_mr_count, archive, badge_add, badge_delete, badge_edit, badge_get, badge_list, badge_preview, create, credential_delete_ssh_key, credential_list_pats, credential_list_ssh_keys, credential_revoke_pat, delete, epic_board_get, epic_board_list, epic_create, epic_delete, epic_discussion_add_note, epic_discussion_create, epic_discussion_delete_note, epic_discussion_get, epic_discussion_list, epic_discussion_update_note, epic_get, epic_get_links, epic_issue_assign, epic_issue_list, epic_issue_remove, epic_issue_update, epic_list, epic_note_create, epic_note_delete, epic_note_get, epic_note_list, epic_note_update, epic_update, event_epic_label_get, event_epic_label_list, get, group_billable_member_memberships_list, group_billable_member_remove, group_billable_members_list, group_board_create, group_board_create_list, group_board_delete, group_board_delete_list, group_board_get, group_board_get_list, group_board_list, group_board_list_lists, group_board_update, group_board_update_list, group_export_download, group_export_schedule, group_import_file, group_label_create, group_label_delete, group_label_get, group_label_list, group_label_subscribe, group_label_unsubscribe, group_label_update, group_member_add, group_member_edit, group_member_get, group_member_get_inherited, group_member_remove, group_member_share, group_member_unshare, group_milestone_burndown, group_milestone_create, group_milestone_delete, group_milestone_get, group_milestone_issues, group_milestone_list, group_milestone_merge_requests, group_milestone_update, group_relations_list_status, group_relations_schedule, group_upload_delete_by_id, group_upload_delete_by_secret, group_upload_list, hook_add, hook_delete, hook_delete_custom_header, hook_delete_url_variable, hook_edit, hook_get, hook_list, hook_resend_event, hook_set_custom_header, hook_set_url_variable, hook_test, invited_groups, issues, ldap_link_add, ldap_link_delete, ldap_link_delete_for_provider, ldap_link_list, ldap_sync, list, list_provisioned_users, members, projects, protected_branch_get, protected_branch_list, protected_branch_protect, protected_branch_unprotect, protected_branch_update, protected_env_get, protected_env_list, protected_env_protect, protected_env_unprotect, protected_env_update, push_rule_add, push_rule_delete, push_rule_edit, push_rule_get, release_list, restore, saml_link_add, saml_link_delete, saml_link_get, saml_link_list, saml_users_list, search, security_settings_update, service_account_create, service_account_delete, service_account_list, service_account_pat_create, service_account_pat_list, service_account_pat_revoke, service_account_pat_rotate, service_account_update, share_with_group, shared_projects, shared_with, ssh_cert_create, ssh_cert_delete, ssh_cert_list, subgroups, transfer, transfer_locations, transfer_project, unarchive, unshare_from_group, update, upload_avatar, wiki_create, wiki_delete, wiki_edit, wiki_get, wiki_list
+
+### gitlab_interactive_issue_create
+
+**Interactive Issue Create**
+
+Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API.
+
+### gitlab_interactive_mr_create
+
+**Interactive MR Create**
+
+Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API.
+
+### gitlab_interactive_project_create
+
+**Interactive Project Create**
+
+Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API.
+
+### gitlab_interactive_release_create
+
+**Interactive Release Create**
+
+Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API.
+
+### gitlab_issue
+
+**Issue**
+
+Manage GitLab issues: CRUD, notes, discussions, links, time tracking, work items, award emoji, statistics, and resource events.
+
+Actions (64): create, create_todo, delete, discussion_add_note, discussion_create, discussion_delete_note, discussion_get, discussion_list, discussion_update_note, emoji_issue_create, emoji_issue_delete, emoji_issue_get, emoji_issue_list, emoji_issue_note_create, emoji_issue_note_delete, emoji_issue_note_get, emoji_issue_note_list, event_issue_iteration_get, event_issue_iteration_list, event_issue_label_get, event_issue_label_list, event_issue_milestone_get, event_issue_milestone_list, event_issue_state_get, event_issue_state_list, event_issue_weight_list, get, get_by_id, iteration_list_group, iteration_list_project, link_create, link_delete, link_get, link_list, list, list_all, list_group, move, mrs_closing, mrs_related, note_create, note_delete, note_get, note_list, note_update, participants, reorder, spent_time_add, spent_time_reset, statistics_get, statistics_get_group, statistics_get_project, subscribe, time_estimate_reset, time_estimate_set, time_stats_get, unsubscribe, update, work_item_create, work_item_delete, work_item_get, work_item_list, work_item_type_list, work_item_update
+
+### gitlab_job
+
+**Job**
+
+Manage GitLab CI/CD jobs and the CI/CD job token scope: lifecycle, manual play, log/artifact retrieval, and inbound trust boundaries.
+
+Actions (25): artifacts, cancel, delete_artifacts, delete_project_artifacts, download_artifacts, download_single_artifact, download_single_artifact_by_ref, erase, get, keep_artifacts, list, list_bridges, list_project, play, retry, token_scope_add_group, token_scope_add_project, token_scope_get, token_scope_list_groups, token_scope_list_inbound, token_scope_patch, token_scope_remove_group, token_scope_remove_project, trace, wait
+
+### gitlab_merge_request
+
+**Merge Request**
+
+Manage GitLab merge request lifecycle plus approval rules and settings, time tracking, subscriptions, context commits, MR dependencies (blocking MRs), todos, related issues, award emoji, and resource events.
+
+Actions (58): approval_config, approval_reset, approval_rule_create, approval_rule_delete, approval_rule_update, approval_rules, approval_settings_group_get, approval_settings_group_update, approval_settings_project_get, approval_settings_project_update, approval_state, approve, cancel_auto_merge, commits, context_commits_create, context_commits_delete, context_commits_list, create, create_pipeline, create_todo, delete, dependencies_list, dependency_create, dependency_delete, emoji_mr_create, emoji_mr_delete, emoji_mr_get, emoji_mr_list, emoji_mr_note_create, emoji_mr_note_delete, emoji_mr_note_get, emoji_mr_note_list, event_mr_label_get, event_mr_label_list, event_mr_milestone_get, event_mr_milestone_list, event_mr_state_get, event_mr_state_list, get, issues_closed, list, list_global, list_group, merge, participants, pipelines, rebase, related_issues, reviewers, spent_time_add, spent_time_reset, subscribe, time_estimate_reset, time_estimate_set, time_stats, unapprove, unsubscribe, update
+
+### gitlab_model_registry
+
+**Model Registry**
+
+Download ML model package files from the GitLab Model Registry.
+
+Actions (1): download
+
+### gitlab_mr_review
+
+**MR Review**
+
+Review and comment on GitLab merge requests: notes, threaded discussions (inline + general), code diffs, draft notes (batch review), diff versions, and the per-version diff payload.
+
+Actions (23): changes_get, diff_version_get, diff_versions_list, discussion_create, discussion_get, discussion_list, discussion_note_delete, discussion_note_update, discussion_reply, discussion_resolve, draft_note_create, draft_note_delete, draft_note_get, draft_note_list, draft_note_publish, draft_note_publish_all, draft_note_update, note_create, note_delete, note_get, note_list, note_update, raw_diffs
+
+### gitlab_package
+
+**Package**
+
+Manage GitLab package registry, container registry, and protection rules.
+
+Actions (29): delete, download, file_delete, file_list, group_list, list, protection_rule_create, protection_rule_delete, protection_rule_list, protection_rule_update, publish, publish_and_link, publish_directory, registry_delete, registry_get, registry_list_group, registry_list_project, registry_rule_create, registry_rule_delete, registry_rule_list, registry_rule_update, registry_tag_delete, registry_tag_delete_bulk, registry_tag_get, registry_tag_list, registry_tag_rule_create, registry_tag_rule_delete, registry_tag_rule_list, registry_tag_rule_update
+
+### gitlab_pipeline
+
+**Pipeline**
+
+Manage GitLab CI/CD pipelines plus trigger tokens, resource groups (mutual-exclusion locks), JUnit test reports, and pipeline schedules.
+
+Actions (33): cancel, create, delete, get, latest, list, resource_group_edit, resource_group_get, resource_group_list, resource_group_upcoming_jobs, retry, schedule_create, schedule_create_variable, schedule_delete, schedule_delete_variable, schedule_edit_variable, schedule_get, schedule_list, schedule_list_triggered_pipelines, schedule_run, schedule_take_ownership, schedule_update, test_report, test_report_summary, trigger_create, trigger_delete, trigger_get, trigger_list, trigger_run, trigger_update, update_metadata, variables, wait
+
+### gitlab_project
+
+**Project**
+
+Manage GitLab projects end-to-end: lifecycle (create/fork/transfer/archive/delete), visibility & access (members, share, approval rules, integrations, webhooks), and advanced features (mirrors, Pages, badges, boards, labels, milestones, uploads, avatars, import/export, housekeeping).
+
+Actions (142): approval_config_change, approval_config_get, approval_rule_create, approval_rule_delete, approval_rule_get, approval_rule_list, approval_rule_update, archive, badge_add, badge_delete, badge_edit, badge_get, badge_list, badge_preview, board_create, board_delete, board_get, board_list, board_list_create, board_list_delete, board_list_get, board_list_list, board_list_update, board_update, create, create_for_user, create_fork_relation, delete, delete_fork_relation, delete_shared_group, download_avatar, export_download, export_schedule, export_status, fork, get, hook_add, hook_delete, hook_delete_custom_header, hook_delete_url_variable, hook_edit, hook_get, hook_list, hook_set_custom_header, hook_set_url_variable, hook_test, import_from_file, import_status, integration_delete, integration_delete_group, integration_delete_group_datadog, integration_get, integration_get_group, integration_get_group_datadog, integration_list, integration_list_group, integration_set, integration_set_group, integration_set_group_datadog, integration_set_jira, label_create, label_delete, label_get, label_list, label_promote, label_subscribe, label_unsubscribe, label_update, languages, list, list_forks, list_groups, list_invited_groups, list_starrers, list_user_contributed, list_user_projects, list_user_starred, list_users, member_add, member_delete, member_edit, member_get, member_inherited, members, milestone_create, milestone_delete, milestone_get, milestone_issues, milestone_list, milestone_merge_requests, milestone_update, mirror_add, mirror_delete, mirror_edit, mirror_force_push, mirror_get, mirror_get_public_key, mirror_list, pages_domain_create, pages_domain_delete, pages_domain_get, pages_domain_list, pages_domain_list_all, pages_domain_update, pages_get, pages_unpublish, pages_update, pull_mirror_configure, pull_mirror_get, push_rule_add, push_rule_delete, push_rule_edit, push_rule_get, repository_storage_get, restore, security_settings_get, security_settings_update, service_account_create, service_account_delete, service_account_list, service_account_pat_create, service_account_pat_list, service_account_pat_revoke, service_account_pat_rotate, service_account_update, share_with_group, star, start_housekeeping, start_mirroring, statistics_get, target_branch_rule_create, target_branch_rule_delete, target_branch_rule_list, transfer, unarchive, unstar, update, upload, upload_avatar, upload_delete, upload_delete_by_secret, upload_list
+
+### gitlab_release
+
+**Release**
+
+Manage GitLab releases and their asset links (binaries, packages, runbooks).
+
+Actions (12): create, delete, get, get_latest, link_create, link_create_batch, link_delete, link_get, link_list, link_update, list, update
+
+### gitlab_repository
+
+**Repository**
+
+Browse and manage GitLab repository content: file tree, read/write/delete files, commits, diffs, cherry-pick, revert, blame, compare branches, contributors, archives, changelogs, submodules, render markdown, and commit discussions.
+
+Actions (41): archive, blob, changelog_add, changelog_generate, commit_cherry_pick, commit_comment_create, commit_comments, commit_create, commit_diff, commit_discussion_add_note, commit_discussion_create, commit_discussion_delete_note, commit_discussion_get, commit_discussion_list, commit_discussion_update_note, commit_get, commit_list, commit_merge_requests, commit_refs, commit_revert, commit_signature, commit_status_set, commit_statuses, compare, contributors, file_blame, file_create, file_delete, file_get, file_history, file_metadata, file_raw, file_raw_metadata, file_update, list_submodules, markdown_render, merge_base, raw_blob, read_submodule_file, tree, update_submodule
+
+### gitlab_runner
+
+**Runner**
+
+Manage GitLab CI/CD runners (instance, group, project) and runner controllers (admin, experimental): CRUD, registration tokens, and job assignments.
+
+Actions (34): controller_create, controller_delete, controller_get, controller_list, controller_scope_add_instance, controller_scope_add_runner, controller_scope_list, controller_scope_remove_instance, controller_scope_remove_runner, controller_token_create, controller_token_get, controller_token_list, controller_token_revoke, controller_token_rotate, controller_update, delete_by_token, delete_registered, disable_project, enable_project, get, jobs, list, list_all, list_group, list_managers, list_project, register, remove, reset_group_reg_token, reset_instance_reg_token, reset_project_reg_token, reset_token, update, verify
+
+### gitlab_search
+
+**Search**
+
+Search GitLab by scope (instance / group / project) for code, MRs, issues, commits, milestones, notes, projects, snippets, users, or wiki pages.
+
+Actions (10): code, commits, issues, merge_requests, milestones, notes, projects, snippets, users, wiki
+
+### gitlab_snippet
+
+**Snippet**
+
+Manage GitLab snippets (personal, project-scoped, and explore feed): CRUD snippet metadata and content, threaded discussions, notes (project snippets only), and award emoji on snippets and snippet notes.
+
+Actions (34): content, create, delete, discussion_add_note, discussion_create, discussion_delete_note, discussion_get, discussion_list, discussion_update_note, emoji_snippet_create, emoji_snippet_delete, emoji_snippet_get, emoji_snippet_list, emoji_snippet_note_create, emoji_snippet_note_delete, emoji_snippet_note_get, emoji_snippet_note_list, explore, file_content, get, list, list_all, note_create, note_delete, note_get, note_list, note_update, project_content, project_create, project_delete, project_get, project_list, project_update, update
+
+### gitlab_storage_move
+
+**Storage Move**
+
+Manage repository storage moves for projects, groups, and snippets (admin only).
+
+Actions (18): get_group, get_group_for_group, get_project, get_project_for_project, get_snippet, get_snippet_for_snippet, retrieve_all_group, retrieve_all_project, retrieve_all_snippet, retrieve_group, retrieve_project, retrieve_snippet, schedule_all_group, schedule_all_project, schedule_all_snippet, schedule_group, schedule_project, schedule_snippet
+
+### gitlab_tag
+
+**Tag**
+
+Manage Git tags and tag protections in a project, plus GPG signature inspection.
+
+Actions (9): create, delete, get, get_protected, get_signature, list, list_protected, protect, unprotect
+
+### gitlab_template
+
+**Template**
+
+Browse GitLab built-in templates (gitignore, CI/CD YAML, Dockerfile, license, project scaffolding) and lint CI configuration.
+
+Actions (12): ci_yml_get, ci_yml_list, dockerfile_get, dockerfile_list, gitignore_get, gitignore_list, license_get, license_list, lint, lint_project, project_template_get, project_template_list
+
+### gitlab_user
+
+**User**
+
+User management for GitLab: full user account CRUD plus SSH/GPG keys, emails, personal access tokens (PATs), impersonation tokens, user status, todos, contribution events, notification settings, namespaces, and avatars.
+
+Actions (76): activate, activities, add_email, add_email_for_user, add_gpg_key, add_gpg_key_for_user, add_ssh_key, add_ssh_key_for_user, approve, associations_count, avatar_get, ban, block, contribution_events, create, create_current_user_pat, create_impersonation_token, create_personal_access_token, create_runner, create_service_account, current, current_user_status, deactivate, delete, delete_email, delete_email_for_user, delete_gpg_key, delete_gpg_key_for_user, delete_identity, delete_ssh_key, delete_ssh_key_for_user, disable_two_factor, emails, emails_for_user, event_list_contributions, event_list_project, get, get_email, get_gpg_key, get_gpg_key_for_user, get_impersonation_token, get_ssh_key, get_ssh_key_for_user, get_status, gpg_keys, gpg_keys_for_user, key_get_by_fingerprint, key_get_with_user, list, list_impersonation_tokens, list_service_accounts, me, memberships, modify, namespace_exists, namespace_get, namespace_list, namespace_search, notification_global_get, notification_global_update, notification_group_get, notification_group_update, notification_project_get, notification_project_update, reject, revoke_impersonation_token, set_status, ssh_keys, ssh_keys_for_user, todo_list, todo_mark_all_done, todo_mark_done, unban, unblock, update_service_account, upload_avatar
+
+### gitlab_wiki
+
+**Wiki**
+
+CRUD project wiki pages and upload attachments to wikis.
+
+Actions (6): create, delete, get, list, update, upload_attachment
+
+### gitlab_attestation
+
+**Attestation**
+
+List and download build attestations (SLSA provenance) for project artifacts.
+
+Actions (2): download, list
+
+### gitlab_audit_event
+
+**Audit Event**
+
+List and get GitLab audit events at instance, group, and project levels for compliance tracking.
+
+Actions (6): get_group, get_instance, get_project, list_group, list_instance, list_project
+
+### gitlab_compliance_policy
+
+**Compliance Policy**
+
+Get and update admin compliance policy settings (CSP namespace configuration).
+
+Actions (2): get, update
+
+### gitlab_dependency
+
+**Dependency**
+
+List project dependencies and create/download SBOM exports (CycloneDX).
+
+Actions (4): export_create, export_download, export_get, list
+
+### gitlab_dora_metrics
+
+**Dora Metrics**
+
+Get DORA metrics: deployment frequency, lead time, MTTR, change failure rate.
+
+Actions (2): group, project
+
+### gitlab_enterprise_user
+
+**Enterprise User**
+
+Manage enterprise users for a GitLab group: list, get, disable 2FA, delete.
+
+Actions (4): delete, disable_2fa, get, list
+
+### gitlab_external_status_check
+
+**External Status Check**
+
+Manage external status checks for MRs and projects.
+
+Actions (8): create_project, delete_project, list_project, list_project_checks, list_project_mr_checks, retry_project, set_project_mr_status, update_project
+
+### gitlab_geo
+
+**Geo**
+
+Manage Geo replication sites: CRUD, repair OAuth, and check replication status (admin, Premium/Ultimate).
+
+Actions (8): create, delete, edit, get, get_status, list, list_status, repair
+
+### gitlab_group_scim
+
+**Group Scim**
+
+Manage SCIM identities for GitLab group provisioning.
+
+Actions (4): delete, get, list, update
+
+### gitlab_member_role
+
+**Member Role**
+
+Manage custom member roles at instance or group level.
+
+Actions (6): create_group, create_instance, delete_group, delete_instance, list_group, list_instance
+
+### gitlab_merge_train
+
+**Merge Train**
+
+Manage GitLab merge trains (automated merge queues).
+
+Actions (4): add, get, list_branch, list_project
+
+### gitlab_orbit
+
+**Orbit**
+
+GitLab orbit actions.
+
+Actions (6): dsl, graph_status, query, schema, status, tools
+
+### gitlab_project_alias
+
+**Project Alias**
+
+CRUD project aliases: short names that redirect to projects (admin, Premium/Ultimate).
+
+Actions (4): create, delete, get, list
+
+### gitlab_security_attribute
+
+**Security Attribute**
+
+Manage GitLab security attributes via GraphQL (Premium/Ultimate).
+
+Actions (5): bulk_update, create, delete, project_update, update
+
+### gitlab_security_category
+
+**Security Category**
+
+Manage GitLab security categories via GraphQL (Premium/Ultimate).
+
+Actions (3): create, delete, update
+
+### gitlab_security_finding
+
+**Security Finding**
+
+List pipeline security report findings via GraphQL (Premium/Ultimate).
+
+Actions (1): list
+
+### gitlab_security_scan_profile
+
+**Security Scan Profile**
+
+Attach, detach, and inspect GitLab security scan profiles via GraphQL (Ultimate).
+
+Actions (3): attach, detach, list_project_statuses
+
+### gitlab_vulnerability
+
+**Vulnerability**
+
+List, triage, and summarize project vulnerabilities (Premium/Ultimate, GraphQL).
+
+Actions (8): confirm, dismiss, get, list, pipeline_security_summary, resolve, revert, severity_count
+
+## Individual Tools
+
+Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
+
+- gitlab_access_request_approve_group: Approve a pending group access request, granting the user membership.
+- gitlab_access_request_approve_project: Approve a pending project access request, granting the user membership.
+- gitlab_access_request_deny_group: Deny a pending group access request, removing it without granting membership.
+- gitlab_access_request_deny_project: Deny a pending project access request, removing it without granting membership.
+- gitlab_access_request_list_group: List pending access requests for a group.
+- gitlab_access_request_list_project: List pending access requests for a project.
+- gitlab_access_request_request_group: Request access to a group as the authenticated user.
+- gitlab_access_request_request_project: Request access to a project as the authenticated user.
+- gitlab_activate_user: Activate a deactivated user.
+- gitlab_add_commit_discussion_note: Add a reply note to an existing commit discussion thread.
+- gitlab_add_email: Add an email address to the authenticated user's account.
+- gitlab_add_email_for_user: Add an email address to a specific user's account (admin only).
+- gitlab_add_epic_discussion_note: Add a reply note to an existing epic discussion thread.
+- gitlab_add_gpg_key: Add a GPG key to the authenticated user's account.
+- gitlab_add_gpg_key_for_user: Add a GPG key to a specific user's account (admin only).
+- gitlab_add_group_badge: Add a badge to a group.
+- gitlab_add_group_job_token_allowlist: Add a group to a project's CI/CD job token allowlist.
+- gitlab_add_issue_discussion_note: Add a reply note to an existing issue discussion thread.
+- gitlab_add_license: Add a GitLab Enterprise license.
+- gitlab_add_merge_request_to_merge_train: Add a merge request to a merge train.
+- gitlab_add_project_badge: Add a badge to a project.
+- gitlab_add_project_job_token_allowlist: Add a project to a project's CI/CD job token inbound allowlist.
+- gitlab_add_project_mirror: Create a push (remote) mirror on a project.
+- gitlab_add_snippet_discussion_note: Add a reply note to an existing snippet discussion thread.
+- gitlab_add_ssh_key: Add an SSH key to the current user.
+- gitlab_add_ssh_key_for_user: Add an SSH key to a specific user.
+- gitlab_add_system_hook: Add an instance system hook.
+- gitlab_approve_user: Approve a pending user sign-up.
+- gitlab_attach_security_scan_profile: Attach a GitLab security scan profile to one or more projects and/or groups via GraphQL.
+- gitlab_ban_user: Ban a user.
+- gitlab_block_user: Block a user from signing in.
+- gitlab_board_create: Create a new issue board in a project.
+- gitlab_board_delete: Delete an issue board permanently.
+- gitlab_board_get: Get a single issue board by board_id.
+- gitlab_board_list: List a project's issue boards with pagination.
+- gitlab_board_list_create: Create a board list (column) scoped to a label, assignee, milestone, or iteration.
+- gitlab_board_list_delete: Delete a board list (column) permanently.
+- gitlab_board_list_get: Get a single board list by list_id.
+- gitlab_board_list_lists: List the lists (columns) in an issue board with pagination.
+- gitlab_board_list_update: Reorder a board list to a new position.
+- gitlab_board_update: Update an issue board's name, scope (assignee, milestone, labels, weight), or list visibility.
+- gitlab_branch_create: Create a branch from a source ref (branch, tag, or commit SHA).
+- gitlab_branch_delete: Delete a single branch by name.
+- gitlab_branch_delete_merged: Delete all branches merged into the default branch.
+- gitlab_branch_get: Get a single branch by name.
+- gitlab_branch_list: List repository branches in one project with optional search/regex filtering, ordering, and offset or keyset pagination.
+- gitlab_branch_protect: Protect a branch or wildcard with push/merge/unprotect access levels and optional fine-grained allowed_to_push/merge/unprotect entries.
+- gitlab_branch_unprotect: Remove protection from a branch (idempotent).
+- gitlab_bulk_update_security_attributes: Add, remove, or replace GitLab security attributes on multiple groups and projects via GraphQL.
+- gitlab_cancel_bulk_import: Cancel a bulk import.
+- gitlab_cancel_github_import: Cancel a GitHub import.
+- gitlab_change_plan_limits: Change plan limits.
+- gitlab_ci_lint: Validate inline .gitlab-ci.yml content within a project namespace.
+- gitlab_ci_lint_project: Validate a project's committed .gitlab-ci.yml at a branch or tag.
+- gitlab_ci_variable_create: Create a CI/CD variable in a project with type, environment scope, and protected/masked/raw/masked_and_hidden flags.
+- gitlab_ci_variable_delete: Delete a CI/CD variable by key, selecting an environment-scoped instance via the filter.
+- gitlab_ci_variable_get: Get a single CI/CD variable by key, optionally selecting an environment-scoped instance via the filter.
+- gitlab_ci_variable_list: List a project's CI/CD variables with order_by, sort, and offset or keyset pagination.
+- gitlab_ci_variable_update: Update a CI/CD variable, selecting an environment-scoped instance via the filter.
+- gitlab_commit_cherry_pick: Cherry-pick a commit onto a target branch, optionally as a dry run.
+- gitlab_commit_comment_create: Post a comment on a commit, optionally inline on a specific file path and line.
+- gitlab_commit_comments: List the comments on a commit.
+- gitlab_commit_create: Create a commit with multiple file actions (create/update/delete/move/chmod) on a branch in one call.
+- gitlab_commit_diff: Get the file diffs of a single commit, optionally in unified-diff format.
+- gitlab_commit_get: Get a single commit from a project by SHA (full, short, branch, or tag).
+- gitlab_commit_list: List repository commits for a project, optionally filtered by ref_name, since/until, path, or author.
+- gitlab_commit_merge_requests: List merge requests associated with a commit.
+- gitlab_commit_refs: List branches and tags that reference (contain) a commit, optionally filtered by ref type.
+- gitlab_commit_revert: Revert a commit on a target branch, creating a new commit that undoes it.
+- gitlab_commit_signature: Get the signature (GPG/X.509/SSH) of a commit for authenticity verification.
+- gitlab_commit_status_set: Set or update the pipeline status of a commit (used by external CI/reporting integrations).
+- gitlab_commit_statuses: List the statuses of a commit (CI jobs and external integrations), filtered by ref, stage, name, or pipeline.
+- gitlab_confirm_vulnerability: Confirm a vulnerability as a real finding.
+- gitlab_create_application: Create an instance OAuth application.
+- gitlab_create_broadcast_message: Create a broadcast message.
+- gitlab_create_cluster_agent_token: Create a cluster agent token.
+- gitlab_create_commit_discussion: Create a new discussion thread on a commit, optionally as an inline diff comment.
+- gitlab_create_current_user_pat: Create a personal access token for the current user.
+- gitlab_create_custom_emoji: Create a custom emoji in a GitLab group via GraphQL API.
+- gitlab_create_dependency_list_export: Create a dependency list export (SBOM) for a pipeline.
+- gitlab_create_epic_discussion: Create a new discussion thread on a group epic with an initial note.
+- gitlab_create_error_tracking_client_key: Create an error-tracking client key.
+- gitlab_create_freeze_period: Create a deploy freeze period with cron-based start and end times.
+- gitlab_create_geo_site: Create a new Geo site.
+- gitlab_create_group_member_role: Create a group-level custom member role.
+- gitlab_create_group_ssh_certificate: Register a new SSH CA certificate on a group from a CA public key and title.
+- gitlab_create_impersonation_token: Create an impersonation token for a user with the given scopes and optional expiry.
+- gitlab_create_instance_member_role: Create an instance-level custom member role.
+- gitlab_create_issue_discussion: Create a new discussion thread on an issue with an initial note.
+- gitlab_create_mr_context_commits: Attach existing repository commit SHAs to a merge request as context commits.
+- gitlab_create_package_protection_rule: Create a package protection rule for a project.
+- gitlab_create_personal_access_token: Create a personal access token for a user with the given scopes, optional description, and optional expiry.
+- gitlab_create_project_alias: Create a project alias mapping a unique name to a numeric project_id (admin-only).
+- gitlab_create_project_external_status_check: Create an external status check service for a project.
+- gitlab_create_secure_file: Create a secure file.
+- gitlab_create_security_attribute: Create one or more GitLab security attributes under a security category via GraphQL.
+- gitlab_create_security_category: Create a GitLab security category in a namespace via GraphQL.
+- gitlab_create_service_account: Create an instance-level service account.
+- gitlab_create_snippet_discussion: Create a new discussion thread on a project snippet with an initial note.
+- gitlab_create_topic: Create an instance project topic.
+- gitlab_create_user: Create a user account.
+- gitlab_create_user_runner: Create a runner linked to the current user.
+- gitlab_create_work_item: Create a new work item under a namespace.
+- gitlab_current_user_status: Get the current user's status.
+- gitlab_deactivate_user: Deactivate an active user.
+- gitlab_delete_alert_metric_image: Delete an alert metric image.
+- gitlab_delete_application: Delete an instance OAuth application.
+- gitlab_delete_broadcast_message: Delete a broadcast message.
+- gitlab_delete_cluster_agent: Delete a cluster agent.
+- gitlab_delete_commit_discussion_note: Delete a note from a commit discussion thread (destructive).
+- gitlab_delete_custom_attribute: Delete a custom attribute.
+- gitlab_delete_custom_emoji: Delete a custom emoji from a GitLab group via GraphQL API.
+- gitlab_delete_email: Delete an email address from the authenticated user's account.
+- gitlab_delete_email_for_user: Delete an email address from a specific user's account (admin only).
+- gitlab_delete_enterprise_user: Delete an enterprise user, optionally with hard_delete.
+- gitlab_delete_epic_discussion_note: Delete a note from an epic discussion thread (destructive).
+- gitlab_delete_error_tracking_client_key: Delete an error-tracking client key.
+- gitlab_delete_feature_flag: Delete a feature flag.
+- gitlab_delete_freeze_period: Delete a deploy freeze period from a project.
+- gitlab_delete_geo_site: Delete a Geo site permanently.
+- gitlab_delete_gpg_key: Delete a GPG key from the authenticated user's account.
+- gitlab_delete_gpg_key_for_user: Delete a GPG key from a specific user's account (admin only).
+- gitlab_delete_group_badge: Delete a group badge by badge_id.
+- gitlab_delete_group_datadog_integration: Remove the Datadog integration from a group.
+- gitlab_delete_group_integration: Delete (disable) a group integration by slug.
+- gitlab_delete_group_markdown_upload_by_id: Delete a group Markdown upload by its numeric upload ID.
+- gitlab_delete_group_markdown_upload_by_secret: Delete a group Markdown upload by its 32-character secret and filename.
+- gitlab_delete_group_member_role: Delete a group-level custom member role.
+- gitlab_delete_group_scim_identity: Delete a SCIM identity from a top-level group by its SCIM external UID.
+- gitlab_delete_group_ssh_certificate: Revoke an SSH CA certificate from a group by certificate id.
+- gitlab_delete_group_ssh_key: Delete an enterprise SSH key in a group.
+- gitlab_delete_instance_member_role: Delete an instance-level custom member role.
+- gitlab_delete_integration: Delete (disable) a project integration by slug.
+- gitlab_delete_issue_discussion_note: Delete a note from an issue discussion thread (destructive).
+- gitlab_delete_license: Delete an instance license.
+- gitlab_delete_mr_context_commits: Remove context commits from a merge request by SHA, detaching them from the review.
+- gitlab_delete_package_protection_rule: Delete a package protection rule from a project by its id (cannot be undone).
+- gitlab_delete_project_alias: Delete a project alias by its exact name (admin-only).
+- gitlab_delete_project_badge: Delete a project badge by badge_id.
+- gitlab_delete_project_external_status_check: Delete a project external status check service permanently.
+- gitlab_delete_project_mirror: Delete a push mirror from a project permanently.
+- gitlab_delete_security_attribute: Delete a GitLab security attribute via GraphQL.
+- gitlab_delete_security_category: Delete a GitLab security category and its associated security attributes via GraphQL.
+- gitlab_delete_snippet_discussion_note: Delete a note from a snippet discussion thread (destructive).
+- gitlab_delete_ssh_key: Delete one of the current user's SSH keys.
+- gitlab_delete_ssh_key_for_user: Delete a specific user's SSH key.
+- gitlab_delete_system_hook: Delete an instance system hook.
+- gitlab_delete_system_hook_url_variable: Delete one URL variable from an instance system hook.
+- gitlab_delete_terraform_state: Delete a Terraform state.
+- gitlab_delete_terraform_state_version: Delete a Terraform state version.
+- gitlab_delete_topic: Delete a project topic.
+- gitlab_delete_user: Delete a user account.
+- gitlab_delete_user_identity: Delete a user's external identity.
+- gitlab_delete_work_item: Delete a work item permanently by namespace path and IID.
+- gitlab_deploy_key_add: Add a new SSH deploy key to a project.
+- gitlab_deploy_key_add_instance: Create an instance-level deploy key (admin only).
+- gitlab_deploy_key_delete: Delete a deploy key from a project (removes it from all projects where it is enabled).
+- gitlab_deploy_key_enable: Enable an existing deploy key for a project.
+- gitlab_deploy_key_get: Get a single project deploy key by id.
+- gitlab_deploy_key_list_all: List ALL instance-level SSH deploy keys in one call (admin only).
+- gitlab_deploy_key_list_project: List a project's SSH deploy keys with ordering and pagination.
+- gitlab_deploy_key_list_user_project: List the deploy keys across a user's projects (admin only) with ordering and pagination.
+- gitlab_deploy_key_update: Update a project deploy key's title or push permission.
+- gitlab_deploy_token_create_group: Create a deploy token for a group.
+- gitlab_deploy_token_create_project: Create a deploy token for a project.
+- gitlab_deploy_token_delete_group: Permanently delete a group deploy token by ID.
+- gitlab_deploy_token_delete_project: Permanently delete a project deploy token by ID.
+- gitlab_deploy_token_get_group: Get a single group deploy token by ID.
+- gitlab_deploy_token_get_project: Get a single project deploy token by ID.
+- gitlab_deploy_token_list_all: List ALL deploy tokens across the GitLab instance in one call (admin only).
+- gitlab_deploy_token_list_group: List deploy tokens owned by a group.
+- gitlab_deploy_token_list_project: List deploy tokens owned by a project.
+- gitlab_deployment_approve_or_reject: Approve or reject a blocked deployment awaiting protected-environment approval, optionally with a comment and an approval rule to represent.
+- gitlab_deployment_create: Create a deployment record for an environment at a given ref and sha with an initial status.
+- gitlab_deployment_delete: Delete a deployment record by deployment_id within a project.
+- gitlab_deployment_get: Get details of a specific deployment in a GitLab project by its ID.
+- gitlab_deployment_list: List deployments in a project with environment, status, and date filters plus offset or keyset pagination.
+- gitlab_deployment_update: Update a deployment's status by deployment_id within a project.
+- gitlab_detach_security_scan_profile: Detach a GitLab security scan profile from one or more projects and/or groups via GraphQL.
+- gitlab_disable_2fa_enterprise_user: Disable two-factor authentication for an enterprise user.
+- gitlab_disable_two_factor: Disable 2FA for a user.
+- gitlab_discover_project: Resolve a full git remote URL to a GitLab project and return its project_id and metadata.
+- gitlab_dismiss_vulnerability: Dismiss a vulnerability with a dismissal reason.
+- gitlab_download_attestation: Download the raw in-toto attestation bundle for one attestation by IID (Ultimate).
+- gitlab_download_dependency_list_export: Download a completed dependency list export (CycloneDX SBOM JSON).
+- gitlab_download_group_export: Download a group's finished export archive.
+- gitlab_download_ml_model_package: Download one artifact file from a project ML model registry package version by project, model version, path, and filename.
+- gitlab_download_project_export: Download a finished project export archive as base64.
+- gitlab_edit_geo_site: Edit a Geo site's settings.
+- gitlab_edit_group_badge: Edit a group badge's name, link_url, or image_url.
+- gitlab_edit_project_badge: Edit a project badge's name, link_url, or image_url.
+- gitlab_edit_project_mirror: Update a push mirror's attributes (enabled, branch filtering, divergent refs, auth method).
+- gitlab_edit_resource_group: Update the process mode of one CI resource group by key.
+- gitlab_edit_system_hook: Edit an instance system hook, including event triggers, SSL verification, and URL settings.
+- gitlab_enable_disable_error_tracking: Enable or disable error tracking.
+- gitlab_environment_create: Create a new environment in a GitLab project.
+- gitlab_environment_delete: Delete a stopped environment from a project.
+- gitlab_environment_get: Get details of a specific environment in a GitLab project by its ID.
+- gitlab_environment_list: List environments for a GitLab project.
+- gitlab_environment_stop: Stop a running environment in a GitLab project.
+- gitlab_environment_update: Update an existing environment in a project.
+- gitlab_epic_create: Create a new epic in a group.
+- gitlab_epic_delete: Permanently delete an epic from a group.
+- gitlab_epic_get: Get a single epic from a group by epic IID.
+- gitlab_epic_get_links: List child epics linked to a parent epic.
+- gitlab_epic_issue_assign: Assign an existing project issue as a child of a group epic.
+- gitlab_epic_issue_list: List the issues linked to a group epic via the Work Items hierarchy.
+- gitlab_epic_issue_remove: Unlink a child issue from a group epic (destructive; requires confirmation).
+- gitlab_epic_issue_update: Reorder an issue within a group epic by moving it before or after another linked issue.
+- gitlab_epic_list: List epics in a group with filtering and pagination.
+- gitlab_epic_note_create: Add a comment (note) to an epic.
+- gitlab_epic_note_delete: Delete an epic note permanently.
+- gitlab_epic_note_get: Get a single epic note by its ID.
+- gitlab_epic_note_list: List all notes (comments) on an epic.
+- gitlab_epic_note_update: Update an epic note's body.
+- gitlab_epic_update: Update an existing epic; supports close/reopen via state_event.
+- gitlab_feature_flag_create: Create a feature flag with optional activation strategies and scopes.
+- gitlab_feature_flag_delete: Delete a feature flag permanently.
+- gitlab_feature_flag_get: Get a single feature flag by name.
+- gitlab_feature_flag_list: List feature flags in a project with optional scope filter, ordering, and pagination.
+- gitlab_feature_flag_update: Update a feature flag's name, description, active state, or strategies.
+- gitlab_ff_user_list_create: Create a feature flag user list in a project.
+- gitlab_ff_user_list_delete: Delete a feature flag user list by its user_list_iid.
+- gitlab_ff_user_list_get: Get a single feature flag user list by its user_list_iid.
+- gitlab_ff_user_list_list: List feature flag user lists for a project with search, ordering, and offset or keyset pagination.
+- gitlab_ff_user_list_update: Update a feature flag user list's name or user_xids by its user_list_iid.
+- gitlab_file_blame: Get blame information for a file, optionally for a line range.
+- gitlab_file_create: Create a new file in a repository in a single commit.
+- gitlab_file_delete: Delete a file from a repository in a single commit.
+- gitlab_file_get: Get a single file's decoded content and metadata from a repository.
+- gitlab_file_metadata: Get a file's metadata without content (HEAD request).
+- gitlab_file_raw: Get the raw content of a file from a repository.
+- gitlab_file_raw_metadata: Get raw file metadata without content (HEAD request to the raw endpoint).
+- gitlab_file_update: Update an existing file in a repository in a single commit.
+- gitlab_force_push_mirror_update: Trigger an immediate update of a push mirror.
+- gitlab_get_appearance: Get the current GitLab application appearance and branding settings.
+- gitlab_get_application_statistics: Get GitLab application statistics for the current instance.
+- gitlab_get_avatar: Get the avatar URL for an email address.
+- gitlab_get_broadcast_message: Get a broadcast message by id.
+- gitlab_get_bulk_import: Get a bulk import by id.
+- gitlab_get_bulk_import_entity: Get a bulk import entity.
+- gitlab_get_catalog_resource: Get a single CI/CD Catalog resource by GID or full path.
+- gitlab_get_ci_yml_template: Get a single GitLab CI/CD pipeline YAML template by key.
+- gitlab_get_cluster_agent: Get a cluster agent.
+- gitlab_get_cluster_agent_token: Get a cluster agent token.
+- gitlab_get_commit_discussion: Get a single commit discussion thread by its discussion id.
+- gitlab_get_compliance_policy_settings: Get the instance compliance policy settings.
+- gitlab_get_custom_attribute: Get a custom attribute by key.
+- gitlab_get_dependency_list_export: Check the status of a dependency list export.
+- gitlab_get_dockerfile_template: Get a single Dockerfile template by key.
+- gitlab_get_email: Get one email address from the authenticated user's account by ID.
+- gitlab_get_enterprise_user: Get a single enterprise user by group_id and user_id.
+- gitlab_get_epic_discussion: Get a single epic discussion thread by its discussion id.
+- gitlab_get_error_tracking_settings: Get error-tracking settings.
+- gitlab_get_freeze_period: Get a single deploy freeze period by ID.
+- gitlab_get_geo_site: Get a single Geo site by id.
+- gitlab_get_gitignore_template: Get one .gitignore template by key (e.g. Go, Python, Node).
+- gitlab_get_gpg_key: Get one GPG key from the authenticated user's account by ID.
+- gitlab_get_gpg_key_for_user: Get one GPG key from a specific user's account by ID.
+- gitlab_get_group_audit_event: Get a single group-level audit event by group_id and ID.
+- gitlab_get_group_badge: Get a single group badge by badge_id.
+- gitlab_get_group_datadog_integration: Read the Datadog integration configured on a group.
+- gitlab_get_group_dora_metrics: Get the four DORA DevOps performance metrics aggregated across a group over a date window.
+- gitlab_get_group_epic_label_event: Get a single label event for a group epic (Premium/Ultimate).
+- gitlab_get_group_integration: Get details of a specific group integration by slug.
+- gitlab_get_group_issue_statistics: Get issue count statistics for a group and its descendant projects.
+- gitlab_get_group_mr_approval_settings: Read the merge request approval settings of a group.
+- gitlab_get_group_scim_identity: Get one SCIM identity of a top-level group by its SCIM external UID.
+- gitlab_get_group_storage_move: Get a single group repository storage move by ID.
+- gitlab_get_group_storage_move_for_group: Get a single repository storage move for a specific group.
+- gitlab_get_impersonation_token: Get a single impersonation token for a user by token id.
+- gitlab_get_instance_audit_event: Get a single instance-level audit event by ID (administrator only).
+- gitlab_get_integration: Get details of a specific project integration by slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, emails-on-push, pipel...
+- gitlab_get_issue_discussion: Get a single issue discussion thread by its discussion id.
+- gitlab_get_issue_statistics: Get global issue count statistics across all visible projects.
+- gitlab_get_job_token_access_settings: Get a project's CI/CD job token access settings.
+- gitlab_get_key_by_fingerprint: Look up an SSH key or deploy key by fingerprint and return the owning user.
+- gitlab_get_key_with_user: Look up an SSH key by its global ID and return the owning user.
+- gitlab_get_license: Get the active instance license.
+- gitlab_get_license_template: Get a single license template by key, optionally substituting project and fullname placeholders.
+- gitlab_get_merge_request_on_merge_train: Get the merge train status of a single merge request. Returns: the merge train entry with the merge request, user, pipeline, target branch, status, and duration...
+- gitlab_get_metadata: Get GitLab instance metadata such as version, revision, KAS endpoints, and enterprise edition flag.
+- gitlab_get_metric_definitions: Get usage metric definitions.
+- gitlab_get_non_sql_metrics: Get non-SQL usage metrics.
+- gitlab_get_plan_limits: Get plan limits for a plan.
+- gitlab_get_project_alias: Get one project alias by its exact name.
+- gitlab_get_project_audit_event: Get a single project-level audit event by project_id and ID.
+- gitlab_get_project_badge: Get a single project badge by badge_id.
+- gitlab_get_project_dora_metrics: Get the four DORA DevOps performance metrics for a project over a date window.
+- gitlab_get_project_export_status: Get the export status of a project.
+- gitlab_get_project_import_status: Get the import status of a project.
+- gitlab_get_project_issue_statistics: Get issue count statistics for a single project.
+- gitlab_get_project_mirror: Get a single push mirror of a project by mirror id.
+- gitlab_get_project_mirror_public_key: Get the SSH public key for an SSH-authenticated push mirror.
+- gitlab_get_project_mr_approval_settings: Read the merge request approval settings of a project.
+- gitlab_get_project_security_settings: Read a project's security settings (Ultimate).
+- gitlab_get_project_statistics: Get a project's last-30-days git fetch (clone/pull) statistics.
+- gitlab_get_project_storage_move: Get a single project repository storage move by its global move id.
+- gitlab_get_project_storage_move_for_project: Get a single repository storage move for a specific project by project_id and move id.
+- gitlab_get_project_template: Returns: one project template's full content by template_type and key.
+- gitlab_get_recently_added_members_count: Get the count of recently added members across a group.
+- gitlab_get_recently_created_issues_count: Get the count of recently created issues across a group.
+- gitlab_get_recently_created_mr_count: Get the count of recently created merge requests across a group.
+- gitlab_get_resource_group: Get one CI resource group in a project by key.
+- gitlab_get_service_ping: Get the Service Ping payload.
+- gitlab_get_settings: Get the current GitLab application (instance) settings.
+- gitlab_get_sidekiq_compound_metrics: Get combined Sidekiq metrics.
+- gitlab_get_sidekiq_job_stats: Get Sidekiq job statistics.
+- gitlab_get_sidekiq_process_metrics: Get Sidekiq process metrics.
+- gitlab_get_sidekiq_queue_metrics: Get Sidekiq queue metrics.
+- gitlab_get_snippet_discussion: Get a single snippet discussion thread by its discussion id.
+- gitlab_get_snippet_storage_move: Get a single snippet repository storage move by its ID.
+- gitlab_get_snippet_storage_move_for_snippet: Get a single repository storage move scoped to one snippet by snippet ID and move ID.
+- gitlab_get_ssh_key: Get one of the current user's SSH keys by ID.
+- gitlab_get_ssh_key_for_user: Get a specific user's SSH key by ID.
+- gitlab_get_status_geo_site: Get replication status for one Geo site.
+- gitlab_get_system_hook: Get a system hook by id.
+- gitlab_get_terraform_state: Get a Terraform state.
+- gitlab_get_topic: Get a single project topic by id.
+- gitlab_get_usage_queries: Get usage data queries.
+- gitlab_get_user: Get one user by ID.
+- gitlab_get_user_activities: List user activities (admin).
+- gitlab_get_user_associations_count: Get a user's association counts.
+- gitlab_get_user_memberships: List a user's memberships.
+- gitlab_get_user_status: Get a user's status by ID.
+- gitlab_get_vulnerability: Get a single vulnerability by global ID.
+- gitlab_get_work_item: Get a single work item by namespace path and IID.
+- gitlab_group_access_token_create: Create a new group access token with specified name, scopes, access level, and optional expiry date.
+- gitlab_group_access_token_get: Get a specific group access token by its ID.
+- gitlab_group_access_token_list: List all access tokens for a GitLab group.
+- gitlab_group_access_token_revoke: Revoke a group access token.
+- gitlab_group_access_token_rotate: Rotate a group access token, generating a new token value.
+- gitlab_group_access_token_rotate_self: Rotate the group access token used for the current request. Returns the new token value.
+- gitlab_group_add_push_rule: Add push rules to a GitLab group.
+- gitlab_group_archive: Archive a GitLab group (read-only).
+- gitlab_group_board_create: Create a new group issue board (Premium/Ultimate).
+- gitlab_group_board_delete: Delete a group issue board permanently.
+- gitlab_group_board_get: Get a single group issue board by ID.
+- gitlab_group_board_list: List all issue boards in a group with pagination.
+- gitlab_group_board_list_create: Create a new list (column) on a group issue board from a group label.
+- gitlab_group_board_list_delete: Delete a list (column) from a group issue board.
+- gitlab_group_board_list_get: Get a single list (column) of a group issue board.
+- gitlab_group_board_list_lists: List the lists (columns) of a group issue board with pagination.
+- gitlab_group_board_list_update: Reorder a list (column) within a group issue board.
+- gitlab_group_board_update: Update a group issue board's name and scope (assignee, milestone, labels, weight).
+- gitlab_group_create: Create a GitLab group or subgroup.
+- gitlab_group_delete: Delete a GitLab group and its projects.
+- gitlab_group_delete_push_rule: Delete a GitLab group's push rules.
+- gitlab_group_edit_push_rule: Edit a GitLab group's push rules.
+- gitlab_group_epic_board_get: Get a single group epic board by ID (Premium/Ultimate).
+- gitlab_group_epic_board_list: List all epic boards in a group with pagination (Premium/Ultimate).
+- gitlab_group_get: Get one GitLab group by ID or path.
+- gitlab_group_get_push_rules: Get a GitLab group's push rules.
+- gitlab_group_hook_add: Create a webhook on a GitLab group.
+- gitlab_group_hook_delete: Delete a GitLab group webhook.
+- gitlab_group_hook_delete_custom_header: Delete a custom header from a GitLab group webhook.
+- gitlab_group_hook_delete_url_variable: Delete a URL variable from a GitLab group webhook.
+- gitlab_group_hook_edit: Update a GitLab group webhook.
+- gitlab_group_hook_get: Get a single GitLab group webhook by ID.
+- gitlab_group_hook_list: List the webhooks on a GitLab group.
+- gitlab_group_hook_resend_event: Resend a GitLab group hook event.
+- gitlab_group_hook_set_custom_header: Set a custom header on a GitLab group webhook.
+- gitlab_group_hook_set_url_variable: Set a URL variable on a GitLab group webhook.
+- gitlab_group_hook_test: Trigger a test event for a GitLab group webhook.
+- gitlab_group_invite: Invite a user to a group by email or user ID with an access level.
+- gitlab_group_invite_list_pending: List a group's pending invitations.
+- gitlab_group_invited_list: List groups invited to a GitLab group.
+- gitlab_group_label_create: Create a new group label.
+- gitlab_group_label_delete: Delete a group label permanently.
+- gitlab_group_label_get: Get a single group label by ID or name.
+- gitlab_group_label_list: List labels in a group with filtering and pagination.
+- gitlab_group_label_subscribe: Subscribe to a group label's notifications.
+- gitlab_group_label_unsubscribe: Unsubscribe from a group label's notifications.
+- gitlab_group_label_update: Update a group label.
+- gitlab_group_ldap_link_add: Add an LDAP group link to a GitLab group by CN or filter (Premium/Ultimate).
+- gitlab_group_ldap_link_delete: Delete a GitLab group's LDAP link by CN or filter (Premium/Ultimate).
+- gitlab_group_ldap_link_delete_for_provider: Delete a GitLab group's LDAP link for a specific provider by CN (Premium/Ultimate).
+- gitlab_group_ldap_link_list: List a GitLab group's LDAP group links.
+- gitlab_group_ldap_sync: Trigger an asynchronous LDAP sync for a GitLab group's LDAP links.
+- gitlab_group_list: List accessible GitLab groups with filtering and pagination.
+- gitlab_group_list_provisioned_users: List the users provisioned for a GitLab group via SAML/SCIM (Premium/Ultimate).
+- gitlab_group_member_add: Add a user as a direct member of a group.
+- gitlab_group_member_edit: Edit a direct group member's access level, expiry, or custom member role.
+- gitlab_group_member_get: Get a single direct member of a group by user ID.
+- gitlab_group_member_get_inherited: Get a single member of a group including inherited memberships from ancestor groups.
+- gitlab_group_member_remove: Remove a direct member from a group (destructive, requires confirmation).
+- gitlab_group_members_list: List the members of a GitLab group (direct and inherited).
+- gitlab_group_milestone_burndown_events: List burndown chart events for a group milestone.
+- gitlab_group_milestone_create: Create a new group milestone.
+- gitlab_group_milestone_delete: Delete a group milestone permanently.
+- gitlab_group_milestone_get: Get a single group milestone by IID.
+- gitlab_group_milestone_issues: List issues assigned to a group milestone.
+- gitlab_group_milestone_list: List milestones in a group with filtering and pagination.
+- gitlab_group_milestone_merge_requests: List merge requests assigned to a group milestone.
+- gitlab_group_milestone_update: Update an existing group milestone.
+- gitlab_group_projects: List the projects in a GitLab group.
+- gitlab_group_protected_branch_get: Get a single group-level protected branch by name or wildcard.
+- gitlab_group_protected_branch_list: List group-level protected branches with search and offset or keyset pagination.
+- gitlab_group_protected_branch_protect: Protect a group-level branch or wildcard, optionally with per-user/per-group allowed-to-push, merge, and unprotect entries.
+- gitlab_group_protected_branch_unprotect: Unprotect a group-level branch, cascading the removal to all subgroup projects.
+- gitlab_group_protected_branch_update: Update a group-level protected branch, adding or removing (_destroy) allowed-to-push, merge, and unprotect entries.
+- gitlab_group_protected_environment_get: Get a single group-level protected environment by tier name.
+- gitlab_group_protected_environment_list: List group-level protected environments with order_by/sort and offset or keyset pagination.
+- gitlab_group_protected_environment_protect: Protect a group-level environment tier with deploy access levels and approval rules; protection cascades to all subgroup projects.
+- gitlab_group_protected_environment_unprotect: Unprotect a group-level environment tier, removing its deployment gates from the group and its subgroup projects.
+- gitlab_group_protected_environment_update: Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry).
+- gitlab_group_release_list: List releases across all projects in a group with pagination, ordering, and keyset support.
+- gitlab_group_restore: Restore a GitLab group marked for deletion.
+- gitlab_group_saml_link_add: Add a SAML group link to a GitLab group.
+- gitlab_group_saml_link_delete: Delete a SAML group link from a GitLab group by SAML group name.
+- gitlab_group_saml_link_get: Get one SAML group link of a GitLab group by SAML group name.
+- gitlab_group_saml_link_list: List a GitLab group's SAML group links.
+- gitlab_group_saml_users_list: List SAML SSO-provisioned users of a top-level GitLab group, with keyset pagination.
+- gitlab_group_search: Search GitLab groups by name or path.
+- gitlab_group_service_account_create: Create a service account in a GitLab group (top-level only).
+- gitlab_group_service_account_delete: Delete a service account from a GitLab group (top-level only).
+- gitlab_group_service_account_list: List all service accounts for a GitLab group.
+- gitlab_group_service_account_pat_create: Create a personal access token for a group service account.
+- gitlab_group_service_account_pat_list: List personal access tokens for a group service account.
+- gitlab_group_service_account_pat_revoke: Revoke a personal access token for a group service account.
+- gitlab_group_service_account_pat_rotate: Rotate a group service account's personal access token: revokes the supplied token_id and issues a replacement in one step (all tiers, Owner role).
+- gitlab_group_service_account_update: Update a service account in a GitLab group (top-level only).
+- gitlab_group_share: Share a group with another group at a chosen access level.
+- gitlab_group_share_with_group: Share a GitLab group with another group (Groups API).
+- gitlab_group_shared_projects_list: List projects shared with a GitLab group.
+- gitlab_group_shared_with_list: List groups shared with a GitLab group (group-to-group shares).
+- gitlab_group_transfer: Transfer a GitLab group under a new parent (or to top level).
+- gitlab_group_transfer_locations: List candidate parent groups for transferring a GitLab group.
+- gitlab_group_transfer_project: Transfer a project into a GitLab group namespace.
+- gitlab_group_unarchive: Unarchive a GitLab group (restore write access).
+- gitlab_group_unshare: Revoke an existing group-to-group share (destructive, requires confirmation).
+- gitlab_group_unshare_from_group: Revoke a group-to-group share (Groups API).
+- gitlab_group_update: Update a GitLab group's settings.
+- gitlab_group_upload_avatar: Upload or replace a GitLab group's avatar image.
+- gitlab_group_variable_create: Create a CI/CD variable in a group with type, environment scope, and protected/masked/raw/masked_and_hidden flags.
+- gitlab_group_variable_delete: Delete a group CI/CD variable by key, selecting an environment-scoped instance via the filter.
+- gitlab_group_variable_get: Get a single group CI/CD variable by key, optionally selecting an environment-scoped instance via the filter.
+- gitlab_group_variable_list: List a group's CI/CD variables with order_by, sort, and offset or keyset pagination.
+- gitlab_group_variable_update: Update a group CI/CD variable, selecting an environment-scoped instance via the filter.
+- gitlab_group_wiki_create: Create a new group wiki page.
+- gitlab_group_wiki_delete: Delete a group wiki page permanently.
+- gitlab_group_wiki_edit: Update an existing group wiki page by slug.
+- gitlab_group_wiki_get: Get a single group wiki page by slug.
+- gitlab_group_wiki_list: List a group's wiki pages (GitLab Premium).
+- gitlab_import_from_bitbucket_cloud: Import a repository from Bitbucket Cloud.
+- gitlab_import_from_bitbucket_server: Import a repository from Bitbucket Server.
+- gitlab_import_from_github: Import a repository from GitHub.
+- gitlab_import_github_gists: Import GitHub gists into snippets.
+- gitlab_import_group_from_file: Import a group from a local export archive.
+- gitlab_import_project_from_file: Import a project from an export archive.
+- gitlab_instance_variable_create: Create an instance-level CI/CD variable with type and protected/masked/raw flags (admin-only).
+- gitlab_instance_variable_delete: Delete an instance-level CI/CD variable by key (admin-only).
+- gitlab_instance_variable_get: Get a single instance-level CI/CD variable by key (admin-only).
+- gitlab_instance_variable_list: List instance-level CI/CD variables with order_by, sort, and offset or keyset pagination (admin-only).
+- gitlab_instance_variable_update: Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only).
+- gitlab_interactive_issue_create: Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API.
+- gitlab_interactive_mr_create: Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API.
+- gitlab_interactive_project_create: Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API.
+- gitlab_interactive_release_create: Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API.
+- gitlab_issue_create: Create a new issue in a project.
+- gitlab_issue_create_todo: Create a to-do for an issue.
+- gitlab_issue_delete: Delete an issue permanently.
+- gitlab_issue_emoji_create: Add an emoji reaction to an issue.
+- gitlab_issue_emoji_delete: Remove an emoji reaction from an issue by award id.
+- gitlab_issue_emoji_get: Get a single emoji reaction on an issue by award id.
+- gitlab_issue_emoji_list: List all emoji reactions on an issue.
+- gitlab_issue_get: Get a single issue from a project by issue IID.
+- gitlab_issue_get_by_id: Get a single issue by its global ID.
+- gitlab_issue_iteration_event_get: Get a single iteration event for an issue (Premium/Ultimate).
+- gitlab_issue_iteration_event_list: List iteration events for an issue (Premium/Ultimate).
+- gitlab_issue_label_event_get: Get a single label event for an issue.
+- gitlab_issue_label_event_list: List label events for an issue.
+- gitlab_issue_link_create: Create a link between two issues (optionally across projects).
+- gitlab_issue_link_delete: Remove an existing issue link by its issue_link_id.
+- gitlab_issue_link_get: Get one issue link by its issue_link_id.
+- gitlab_issue_link_list: List all issues linked to a source issue.
+- gitlab_issue_list: List issues in one project with filtering and pagination.
+- gitlab_issue_list_all: List issues across accessible projects.
+- gitlab_issue_list_group: List issues across a group.
+- gitlab_issue_milestone_event_get: Get a single milestone event for an issue.
+- gitlab_issue_milestone_event_list: List milestone events for an issue.
+- gitlab_issue_move: Move an issue to another project.
+- gitlab_issue_mrs_closing: List MRs that close this issue on merge.
+- gitlab_issue_mrs_related: List MRs related to this issue.
+- gitlab_issue_note_create: Add a comment (note) to an issue.
+- gitlab_issue_note_delete: Delete an issue note permanently.
+- gitlab_issue_note_emoji_create: Add an emoji reaction to an issue note.
+- gitlab_issue_note_emoji_delete: Remove an emoji reaction from an issue note by award id.
+- gitlab_issue_note_emoji_get: Get a single emoji reaction on an issue note by award id.
+- gitlab_issue_note_emoji_list: List all emoji reactions on an issue note (comment).
+- gitlab_issue_note_get: Get a single issue note by its ID.
+- gitlab_issue_note_list: List all notes (comments) on an issue.
+- gitlab_issue_note_update: Update an issue note's body.
+- gitlab_issue_participants: List an issue's participants.
+- gitlab_issue_reorder: Reorder an issue within its list.
+- gitlab_issue_spent_time_add: Add spent time to an issue.
+- gitlab_issue_spent_time_reset: Reset an issue's spent time.
+- gitlab_issue_state_event_get: Get a single state event for an issue.
+- gitlab_issue_state_event_list: List state events for an issue.
+- gitlab_issue_subscribe: Subscribe to an issue's notifications.
+- gitlab_issue_time_estimate_reset: Clear an issue's time estimate.
+- gitlab_issue_time_estimate_set: Set an issue's time estimate.
+- gitlab_issue_time_stats_get: Read an issue's time tracking totals.
+- gitlab_issue_unsubscribe: Unsubscribe from an issue's notifications.
+- gitlab_issue_update: Update a GitLab issue.
+- gitlab_issue_weight_event_list: List weight events for an issue (Premium/Ultimate).
+- gitlab_job_artifacts: Download the full artifact archive for a CI job (base64-encoded, truncated at 1MB).
+- gitlab_job_cancel: Cancel a CI job.
+- gitlab_job_delete_artifacts: Delete the artifacts for one CI job (destructive).
+- gitlab_job_delete_project_artifacts: Delete every eligible artifact across a project (destructive, irreversible).
+- gitlab_job_download_artifacts: Download the latest successful artifacts archive for a ref and job name.
+- gitlab_job_download_single_artifact: Download one artifact file from a job by job_id and artifact_path.
+- gitlab_job_download_single_artifact_by_ref: Download one artifact file from the latest successful job on a ref by name and path.
+- gitlab_job_erase: Erase a finished CI job's trace log and artifacts (destructive).
+- gitlab_job_get: Get one CI job.
+- gitlab_job_keep_artifacts: Keep a CI job's artifacts by clearing their expiration.
+- gitlab_job_list: List CI jobs for one pipeline with status filters, keyset pagination, and ordering.
+- gitlab_job_list_bridges: List CI bridge (trigger) jobs for one pipeline with keyset pagination.
+- gitlab_job_list_project: List CI jobs in one project with filters, keyset pagination, and ordering.
+- gitlab_job_play: Run a manual CI job with optional variable overrides.
+- gitlab_job_retry: Retry a failed or canceled CI job.
+- gitlab_job_trace: Get CI job trace output.
+- gitlab_job_wait: Wait for a CI job to finish, polling until terminal state or timeout.
+- gitlab_label_create: Create a project label with required name and hex color, plus optional description, priority, and archived state.
+- gitlab_label_delete: Delete a project label by ID or name.
+- gitlab_label_get: Get a single project label by ID or name.
+- gitlab_label_list: List labels in a project with optional search, counts, ancestor-group inclusion, ordering, and offset or keyset pagination.
+- gitlab_label_promote: Promote a project label to a group label, sharing it across the group's projects.
+- gitlab_label_subscribe: Subscribe the authenticated user to a project label for notifications.
+- gitlab_label_unsubscribe: Unsubscribe the authenticated user from a project label.
+- gitlab_label_update: Update an existing project label (new_name, color, description, priority, archived).
+- gitlab_list_alert_metric_images: List alert metric images.
+- gitlab_list_applications: List instance OAuth applications.
+- gitlab_list_attestations: List SLSA build provenance attestations for a project artifact by subject digest (Ultimate).
+- gitlab_list_billable_group_members: List the billable members of a group (Premium/Ultimate).
+- gitlab_list_billable_member_memberships: List the memberships of a billable group member (Premium/Ultimate).
+- gitlab_list_branch_rules: List a project's aggregated branch protection rules by full project path.
+- gitlab_list_broadcast_messages: List instance broadcast messages.
+- gitlab_list_bulk_import_entities: List bulk import entities.
+- gitlab_list_bulk_import_entity_failures: List bulk import entity failures.
+- gitlab_list_bulk_imports: List bulk imports.
+- gitlab_list_catalog_resources: List published CI/CD Catalog resources (component projects) with optional search, scope, and sort.
+- gitlab_list_ci_yml_templates: List the GitLab-provided CI/CD pipeline YAML templates.
+- gitlab_list_cluster_agent_tokens: List cluster agent tokens.
+- gitlab_list_cluster_agents: List project cluster agents.
+- gitlab_list_commit_discussions: List discussion threads on a commit with ordering and keyset pagination.
+- gitlab_list_custom_attributes: List custom attributes for a resource.
+- gitlab_list_custom_emoji: List custom emoji for a GitLab group via GraphQL API.
+- gitlab_list_deployment_merge_requests: List the merge requests associated with a deployment, with merge-request filtering (state, approval, author, assignee, draft, created date) and offset or keyset...
+- gitlab_list_dockerfile_templates: List available Dockerfile templates with pagination and sorting.
+- gitlab_list_emails: List the current user's email addresses.
+- gitlab_list_emails_for_user: List all email addresses registered to a specific user account.
+- gitlab_list_enterprise_users: List enterprise users for a top-level group with filtering and pagination.
+- gitlab_list_epic_discussions: List discussion threads on a group epic with cursor-based keyset pagination.
+- gitlab_list_error_tracking_client_keys: List error-tracking client keys.
+- gitlab_list_feature_definitions: List feature flag definitions.
+- gitlab_list_features: List instance feature flags.
+- gitlab_list_freeze_periods: List deploy freeze periods for a GitLab project.
+- gitlab_list_geo_sites: List all Geo sites.
+- gitlab_list_gitignore_templates: List available .gitignore templates with order_by, sort, and offset or keyset pagination.
+- gitlab_list_gpg_keys: List the authenticated user's GPG keys.
+- gitlab_list_gpg_keys_for_user: List a specific user's GPG keys.
+- gitlab_list_group_audit_events: List group-level audit events for a group.
+- gitlab_list_group_badges: List badges for a group, including inherited group badges.
+- gitlab_list_group_epic_label_events: List label events for a group epic (Premium/Ultimate).
+- gitlab_list_group_integrations: List all active integrations configured on a group.
+- gitlab_list_group_iterations: List a group's iterations (sprints), optionally filtered by state, search term, or ancestor groups.
+- gitlab_list_group_markdown_uploads: List all Markdown uploads in a group.
+- gitlab_list_group_member_roles: List group-level custom member roles.
+- gitlab_list_group_packages: List packages across a group and its descendant projects with optional filters and ordering.
+- gitlab_list_group_personal_access_tokens: List a group's enterprise personal access tokens.
+- gitlab_list_group_relations_export_status: List the status of a group's relations export, optionally filtered by relation.
+- gitlab_list_group_scim_identities: List a top-level group's SCIM identities provisioned through SAML SSO SCIM.
+- gitlab_list_group_ssh_certificates: List the SSH CA certificates registered on a group.
+- gitlab_list_group_ssh_keys: List a group's enterprise SSH keys.
+- gitlab_list_impersonation_tokens: List all impersonation tokens for a user.
+- gitlab_list_instance_audit_events: List instance-level audit events (administrator only).
+- gitlab_list_instance_member_roles: List instance-level custom member roles.
+- gitlab_list_integrations: List all integrations (services) configured for a project, including their active status.
+- gitlab_list_issue_discussions: List discussion threads on an issue with ordering and keyset pagination.
+- gitlab_list_job_token_group_allowlist: List groups on a project's CI/CD job token allowlist.
+- gitlab_list_job_token_inbound_allowlist: List projects on a project's CI/CD job token inbound allowlist.
+- gitlab_list_license_templates: List available license templates with an optional popular filter, order_by/sort, and offset or keyset pagination.
+- gitlab_list_merge_request_in_merge_train: List the merge requests on a merge train for a target branch.
+- gitlab_list_mr_context_commits: List the context commits pinned to a merge request for review.
+- gitlab_list_package_protection_rules: List package protection rules for a project.
+- gitlab_list_project_aliases: List every project alias the authenticated administrator can see.
+- gitlab_list_project_audit_events: List project-level audit events for a project.
+- gitlab_list_project_badges: List badges for a project, including inherited group badges.
+- gitlab_list_project_dependencies: List dependencies for a GitLab project.
+- gitlab_list_project_external_status_checks: List a project's external status check services.
+- gitlab_list_project_iterations: List iterations (sprints) for a project, optionally including ancestor-group iterations.
+- gitlab_list_project_merge_trains: List all merge trains in a project.
+- gitlab_list_project_mirrors: List a project's push (remote) mirrors.
+- gitlab_list_project_mr_external_status_checks: List the external status checks for a merge request and their status.
+- gitlab_list_project_scan_profile_statuses: List the security scan profile statuses for a GitLab project via GraphQL.
+- gitlab_list_project_status_checks: List a project's external status check services (deprecated endpoint).
+- gitlab_list_project_templates: List project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination.
+- gitlab_list_repository_submodules: List the Git submodules defined in a repository's .gitmodules.
+- gitlab_list_resource_group_upcoming_jobs: List the upcoming CI jobs queued for one resource group by key.
+- gitlab_list_resource_groups: List the CI resource groups configured for a project.
+- gitlab_list_secure_files: List project secure files.
+- gitlab_list_security_findings: List a pipeline's security report findings with severity, confidence, scanner, and report-type filters plus keyset pagination.
+- gitlab_list_service_accounts: List instance-level service accounts.
+- gitlab_list_snippet_discussions: List discussion threads on a project snippet with ordering and keyset pagination.
+- gitlab_list_ssh_keys: List the current user's SSH keys.
+- gitlab_list_ssh_keys_for_user: List a specific user's SSH keys.
+- gitlab_list_status_all_geo_sites: List replication status for all Geo sites.
+- gitlab_list_system_hooks: List instance system hooks.
+- gitlab_list_terraform_states: List Terraform states.
+- gitlab_list_topics: List instance project topics.
+- gitlab_list_user_contribution_events: List a user's contribution events.
+- gitlab_list_users: List users with filtering and pagination support.
+- gitlab_list_vulnerabilities: List a project's vulnerabilities with severity, state, scanner, and report-type filters plus keyset pagination.
+- gitlab_list_work_item_types: List work item types for a namespace.
+- gitlab_list_work_items: List work items in a project or group namespace with filtering and cursor pagination.
+- gitlab_lock_terraform_state: Lock a Terraform state.
+- gitlab_mark_migration: Mark a database migration as complete.
+- gitlab_milestone_create: Create a new milestone in a project with title and optional description, start date, and due date.
+- gitlab_milestone_delete: Delete a milestone permanently from a project by milestone IID.
+- gitlab_milestone_get: Get a single milestone from a project by milestone IID.
+- gitlab_milestone_issues: List issues assigned to a single milestone with ordering and pagination.
+- gitlab_milestone_list: List milestones in one project with state/title/search filters, ancestor inclusion, ordering, and pagination.
+- gitlab_milestone_merge_requests: List merge requests assigned to a single milestone with ordering and pagination.
+- gitlab_milestone_update: Update an existing milestone's title, description, start/due dates, or state (state_event close/activate) by milestone IID.
+- gitlab_modify_user: Modify an existing user.
+- gitlab_mr_add_spent_time: Add spent time to a merge request. Returns: the updated time tracking stats (estimate and spent time, seconds and human-readable).
+- gitlab_mr_approval_config: Get the approval configuration of a merge request. Returns: approvals required and left, approved-by users with timestamps, suggested approvers, approver groups...
+- gitlab_mr_approval_reset: Reset all approvals on a merge request. Returns: a success confirmation.
+- gitlab_mr_approval_rule_create: Create an approval rule on a merge request. Returns: the created rule with its type, required count, eligible approvers, users, and groups.
+- gitlab_mr_approval_rule_delete: Delete an approval rule from a merge request. Returns: a success confirmation.
+- gitlab_mr_approval_rule_update: Update an approval rule on a merge request. Returns: the updated rule with its type, required count, eligible approvers, users, and groups.
+- gitlab_mr_approval_rules: List the approval rules of a merge request. Returns: each rule with its type, required count, approved flag, eligible approvers, users, groups, and source rule.
+- gitlab_mr_approval_state: Get the approval state of a merge request. Returns: whether project rules were overwritten and each applicable rule with its type, required count, approved flag...
+- gitlab_mr_approve: Approve a merge request on behalf of the caller.
+- gitlab_mr_cancel_auto_merge: Cancel auto-merge (merge-when-pipeline-succeeds) on a merge request. Returns: the MR with auto-merge disabled.
+- gitlab_mr_changes_get: Get the current file diffs (changes) for a merge request. Returns: per-file diffs with old_path, new_path, diff content, file status (added/deleted/renamed), fi...
+- gitlab_mr_commits: List the commits that make up a merge request. Returns: commit SHAs, titles, authors, and timestamps with pagination metadata.
+- gitlab_mr_create: Open a new merge request from a source branch into a target branch.
+- gitlab_mr_create_pipeline: Trigger a new CI/CD pipeline for a merge request. Returns: the created pipeline with id, status, ref, sha, and web URL.
+- gitlab_mr_create_todo: Create a to-do for a merge request for the caller.
+- gitlab_mr_delete: Delete a merge request permanently.
+- gitlab_mr_dependencies_list: List a merge request's blocking dependencies.
+- gitlab_mr_dependency_create: Add a blocking dependency to a merge request. Returns: the created dependency linking the MR to its blocking MR.
+- gitlab_mr_dependency_delete: Remove a blocking dependency from a merge request. Returns: a success confirmation naming the MR, blocking MR, and project.
+- gitlab_mr_diff_version_get: Get a single merge request diff version with its commits and file diffs.
+- gitlab_mr_diff_versions_list: List all diff versions (historical snapshots) of a merge request. Returns: an array of diff versions with id, head/base/start SHAs, state, real_size, and create...
+- gitlab_mr_discussion_create: Create a new discussion thread on a merge request, optionally as an inline diff comment.
+- gitlab_mr_discussion_get: Get a single merge request discussion thread by its discussion id.
+- gitlab_mr_discussion_list: List discussion threads on a merge request with ordering and keyset pagination.
+- gitlab_mr_discussion_note_delete: Delete a note from a merge request discussion thread (destructive).
+- gitlab_mr_discussion_note_update: Update the body or resolved state of a note in a merge request discussion thread.
+- gitlab_mr_discussion_reply: Add a reply note to an existing merge request discussion thread.
+- gitlab_mr_discussion_resolve: Resolve or unresolve a merge request discussion thread.
+- gitlab_mr_draft_note_create: Create a pending draft note on a merge request. Returns: the created draft note with ID, author, body, and inline position.
+- gitlab_mr_draft_note_delete: Delete a pending draft note permanently.
+- gitlab_mr_draft_note_get: Get a single draft note from a merge request. Returns: the draft note with author, body, resolve flag, line code, and inline diff position.
+- gitlab_mr_draft_note_list: List pending draft notes on a merge request. Returns: each draft note with author, body, optional inline position, line code, and pagination metadata.
+- gitlab_mr_draft_note_publish: Publish a single draft note as a regular merge request note.
+- gitlab_mr_draft_note_publish_all: Publish all of the user's pending draft notes on a merge request. Returns: a success confirmation naming the merge request and project.
+- gitlab_mr_draft_note_update: Update a pending draft note's body or position.
+- gitlab_mr_emoji_create: Add an emoji reaction to a merge request. Returns: the created award with its emoji name, awarding user object, timestamps, and awardable id/type.
+- gitlab_mr_emoji_delete: Remove an emoji reaction from a merge request by award id.
+- gitlab_mr_emoji_get: Get a single emoji reaction on a merge request by award id.
+- gitlab_mr_emoji_list: List all emoji reactions on a merge request. Returns: each award with its emoji name, the awarding user object, awardable id/type, and pagination metadata.
+- gitlab_mr_get: Get a single merge request from a project by its IID.
+- gitlab_mr_issues_closed: List issues that will be closed when the merge request is merged.
+- gitlab_mr_label_event_get: Get a single label event for a merge request. Returns: the event with action, the label object, and the acting user.
+- gitlab_mr_label_event_list: List label events for a merge request. Returns: label events with action, the label object, the acting user, and pagination metadata.
+- gitlab_mr_list: List merge requests in one project with filtering and pagination.
+- gitlab_mr_list_global: List merge requests across all accessible projects.
+- gitlab_mr_list_group: List merge requests across a group and its projects.
+- gitlab_mr_merge: Merge a merge request now, or schedule auto-merge when its pipeline succeeds.
+- gitlab_mr_milestone_event_get: Get a single milestone event for a merge request. Returns: the event with action, the milestone object, and the acting user.
+- gitlab_mr_milestone_event_list: List milestone events for a merge request. Returns: milestone events with action, the milestone object, the acting user, and pagination metadata.
+- gitlab_mr_note_create: Add a general comment (note) to a merge request. Returns: the created note with id, author, body, timestamps, and resolvable/internal flags.
+- gitlab_mr_note_delete: Delete a merge request note permanently.
+- gitlab_mr_note_emoji_create: Add an emoji reaction to a merge request note.
+- gitlab_mr_note_emoji_delete: Remove an emoji reaction from a merge request note by award id.
+- gitlab_mr_note_emoji_get: Get a single emoji reaction on a merge request note by award id.
+- gitlab_mr_note_emoji_list: List all emoji reactions on a merge request note (comment).
+- gitlab_mr_note_get: Get a single merge request note by its ID.
+- gitlab_mr_note_update: Update a merge request note's body.
+- gitlab_mr_notes_list: List all notes (comments) on a merge request. Returns: notes with author, body, system/internal flags, and pagination metadata.
+- gitlab_mr_participants: List the participants of a merge request. Returns: participating users with username, name, and state.
+- gitlab_mr_pipelines: List the CI/CD pipelines attached to a merge request. Returns: pipelines with id, status, ref, sha, and web URL.
+- gitlab_mr_raw_diffs: Get the raw unified-diff output for a merge request in plain-text git-apply format.
+- gitlab_mr_rebase: Rebase a merge request's source branch onto its target.
+- gitlab_mr_related_issues: List issues related to a merge request. Returns: issues with state, labels, assignees, and web URL plus pagination metadata.
+- gitlab_mr_reset_spent_time: Reset a merge request's spent time.
+- gitlab_mr_reset_time_estimate: Clear a merge request's time estimate.
+- gitlab_mr_reviewers: List the reviewers of a merge request. Returns: reviewer users with username, name, and review state.
+- gitlab_mr_set_time_estimate: Set a merge request's time estimate.
+- gitlab_mr_state_event_get: Get a single state event for a merge request. Returns: the event with the state value and the acting user.
+- gitlab_mr_state_event_list: List state events for a merge request. Returns: state events with the state value, the acting user, and pagination metadata.
+- gitlab_mr_subscribe: Subscribe the caller to a merge request's notifications.
+- gitlab_mr_time_stats: Read a merge request's time tracking totals.
+- gitlab_mr_unapprove: Remove the caller's approval from a merge request. Returns: a success confirmation naming the MR and project.
+- gitlab_mr_unsubscribe: Unsubscribe the caller from a merge request's notifications.
+- gitlab_mr_update: Update an existing merge request's fields or state.
+- gitlab_namespace_exists: Check whether a namespace path is taken.
+- gitlab_namespace_get: Get a single namespace by ID or path.
+- gitlab_namespace_list: List namespaces visible to the authenticated user.
+- gitlab_namespace_search: Search namespaces by name or path.
+- gitlab_notification_global_get: Get the authenticated user's global notification settings.
+- gitlab_notification_global_update: Update the authenticated user's global notification settings.
+- gitlab_notification_group_get: Get the authenticated user's notification settings for a group.
+- gitlab_notification_group_update: Update the authenticated user's notification settings for a group.
+- gitlab_notification_project_get: Get the authenticated user's notification settings for a project.
+- gitlab_notification_project_update: Update the authenticated user's notification settings for a project.
+- gitlab_orbit_dsl: Retrieve the GitLab Orbit (Knowledge Graph) query DSL schema or LLM grammar.
+- gitlab_orbit_graph_status: Inspect GitLab Orbit (Knowledge Graph) indexing status for one namespace, project, or full_path.
+- gitlab_orbit_query: Execute a read-only GitLab Orbit (Knowledge Graph) query (traversal, aggregation, neighbors, or path_finding).
+- gitlab_orbit_schema: Inspect the GitLab Orbit (Knowledge Graph) ontology: domains, node types, edge types.
+- gitlab_orbit_status: Inspect GitLab Orbit (Knowledge Graph) cluster health on GitLab.com.
+- gitlab_orbit_tools: List the GitLab Orbit (Knowledge Graph) MCP tool manifest and parameter schemas.
+- gitlab_package_delete: Delete a package permanently.
+- gitlab_package_download: Download a single file from the Generic Package Registry to a local path.
+- gitlab_package_file_delete: Delete a single file from a package permanently.
+- gitlab_package_file_list: List the files within a single package.
+- gitlab_package_list: List packages in a project with optional filters and ordering.
+- gitlab_package_publish: Publish a single file to the Generic Package Registry.
+- gitlab_package_publish_and_link: Publish a file to the Generic Package Registry and link it to a release in one call.
+- gitlab_package_publish_directory: Publish every regular file from a local directory to the Generic Package Registry.
+- gitlab_pages_domain_create: Add a new custom Pages domain to a project.
+- gitlab_pages_domain_delete: Remove a custom Pages domain from a project (destructive).
+- gitlab_pages_domain_get: Get a single Pages custom domain by name.
+- gitlab_pages_domain_list: List the custom Pages domains for a project with pagination.
+- gitlab_pages_domain_list_all: List ALL GitLab Pages custom domains across the whole instance in one call (admin only).
+- gitlab_pages_domain_update: Update an existing Pages custom domain's auto-SSL flag or certificate.
+- gitlab_pages_get: Get the Pages settings for a project.
+- gitlab_pages_unpublish: Unpublish a project's Pages site (destructive).
+- gitlab_pages_update: Update the Pages settings for a project.
+- gitlab_patch_job_token_access_settings: Update a project's CI/CD job token access settings.
+- gitlab_personal_access_token_get: Get a personal access token by ID.
+- gitlab_personal_access_token_list: List personal access tokens.
+- gitlab_personal_access_token_revoke: Revoke a personal access token by ID.
+- gitlab_personal_access_token_revoke_self: Revoke the personal access token used for the current request. This action cannot be undone.
+- gitlab_personal_access_token_rotate: Rotate a personal access token, generating a new token value.
+- gitlab_personal_access_token_rotate_self: Rotate the personal access token used for the current request. Returns the new token value.
+- gitlab_pipeline_cancel: Cancel a running pipeline.
+- gitlab_pipeline_create: Create a new pipeline.
+- gitlab_pipeline_delete: Delete a pipeline and all its jobs.
+- gitlab_pipeline_get: Get one pipeline by ID.
+- gitlab_pipeline_latest: Get the latest pipeline for a ref.
+- gitlab_pipeline_list: List project pipelines with filters and pagination.
+- gitlab_pipeline_retry: Retry failed and canceled jobs in a pipeline.
+- gitlab_pipeline_schedule_create: Create a pipeline schedule.
+- gitlab_pipeline_schedule_create_variable: Create a pipeline schedule variable.
+- gitlab_pipeline_schedule_delete: Delete a pipeline schedule permanently.
+- gitlab_pipeline_schedule_delete_variable: Delete a pipeline schedule variable.
+- gitlab_pipeline_schedule_edit_variable: Edit a pipeline schedule variable.
+- gitlab_pipeline_schedule_get: Get a single pipeline schedule by ID.
+- gitlab_pipeline_schedule_list: List pipeline schedules in a project.
+- gitlab_pipeline_schedule_list_triggered_pipelines: List pipelines triggered by a schedule.
+- gitlab_pipeline_schedule_run: Run a pipeline schedule immediately.
+- gitlab_pipeline_schedule_take_ownership: Take ownership of a pipeline schedule.
+- gitlab_pipeline_schedule_update: Update a pipeline schedule.
+- gitlab_pipeline_security_summary: Summarize a pipeline's security scan results.
+- gitlab_pipeline_test_report: Get a pipeline's full test report.
+- gitlab_pipeline_test_report_summary: Get a pipeline's test report summary.
+- gitlab_pipeline_trigger_create: Create a pipeline trigger token.
+- gitlab_pipeline_trigger_delete: Delete a pipeline trigger token.
+- gitlab_pipeline_trigger_get: Get a single pipeline trigger token.
+- gitlab_pipeline_trigger_list: List a project's pipeline trigger tokens.
+- gitlab_pipeline_trigger_run: Trigger a pipeline using a trigger token.
+- gitlab_pipeline_trigger_update: Update a pipeline trigger token's description.
+- gitlab_pipeline_update_metadata: Update a pipeline's name.
+- gitlab_pipeline_variables: List a pipeline's runtime variables.
+- gitlab_pipeline_wait: Wait for a pipeline to reach a terminal state (success, failed, canceled, skipped, manual).
+- gitlab_preview_group_badge: Preview how a group badge's link_url and image_url resolve after placeholder interpolation, without persisting it.
+- gitlab_preview_project_badge: Preview how a project badge's link_url and image_url resolve after placeholder interpolation, without persisting it.
+- gitlab_project_access_token_create: Create a new project access token with specified name, scopes, access level, and optional expiry date.
+- gitlab_project_access_token_get: Get a specific project access token by its ID.
+- gitlab_project_access_token_list: List all access tokens for a GitLab project.
+- gitlab_project_access_token_revoke: Revoke a project access token.
+- gitlab_project_access_token_rotate: Rotate a project access token, generating a new token value.
+- gitlab_project_access_token_rotate_self: Rotate the project access token used for the current request. Returns the new token value.
+- gitlab_project_add_push_rule: Add push rules to a project.
+- gitlab_project_approval_config_change: Change a project's approval configuration.
+- gitlab_project_approval_config_get: Get a project's approval configuration.
+- gitlab_project_approval_rule_create: Create a project approval rule.
+- gitlab_project_approval_rule_delete: Delete a project approval rule.
+- gitlab_project_approval_rule_get: Get a single project approval rule.
+- gitlab_project_approval_rule_list: List a project's approval rules.
+- gitlab_project_approval_rule_update: Update a project approval rule.
+- gitlab_project_archive: Archive a project (read-only).
+- gitlab_project_create: Create a new GitLab project.
+- gitlab_project_create_for_user: Create a project on behalf of a user (admin).
+- gitlab_project_create_fork_relation: Create a fork relationship to an upstream project.
+- gitlab_project_create_target_branch_rule: Create a target branch rule.
+- gitlab_project_delete: Delete a project.
+- gitlab_project_delete_fork_relation: Remove a project's fork relationship.
+- gitlab_project_delete_push_rule: Delete a project's push rules.
+- gitlab_project_delete_shared_group: Remove a group share from a project.
+- gitlab_project_delete_target_branch_rule: Delete a target branch rule.
+- gitlab_project_download_avatar: Download a project's avatar.
+- gitlab_project_edit_push_rule: Edit a project's push rules.
+- gitlab_project_event_list: List a project's visible activity events.
+- gitlab_project_fork: Fork a project.
+- gitlab_project_get: Get a single project by ID or namespace path.
+- gitlab_project_get_push_rules: Get a project's push rules.
+- gitlab_project_hook_add: Add a webhook to a project.
+- gitlab_project_hook_delete: Delete a project webhook.
+- gitlab_project_hook_delete_custom_header: Delete a custom header from a project webhook.
+- gitlab_project_hook_delete_url_variable: Delete a URL variable from a project webhook.
+- gitlab_project_hook_edit: Edit a project webhook.
+- gitlab_project_hook_get: Get a single project webhook.
+- gitlab_project_hook_list: List a project's webhooks.
+- gitlab_project_hook_set_custom_header: Set a custom header on a project webhook.
+- gitlab_project_hook_set_url_variable: Set a URL variable on a project webhook.
+- gitlab_project_hook_test: Trigger a test event for a project webhook.
+- gitlab_project_invite: Invite a user to a project by email or user ID with an access level.
+- gitlab_project_invite_list_pending: List a project's pending invitations.
+- gitlab_project_languages: Get a project's detected languages.
+- gitlab_project_list: List projects accessible to the user with filtering and pagination.
+- gitlab_project_list_forks: List a project's forks.
+- gitlab_project_list_groups: List a project's associated groups.
+- gitlab_project_list_invited_groups: List groups invited to a project.
+- gitlab_project_list_starrers: List a project's starrers.
+- gitlab_project_list_target_branch_rules: List a project's target branch rules.
+- gitlab_project_list_user_contributed: List projects a user contributed to.
+- gitlab_project_list_user_projects: List a user's owned projects.
+- gitlab_project_list_user_starred: List projects a user starred.
+- gitlab_project_list_users: List a project's users.
+- gitlab_project_member_add: Add a user to a project team by user_id or username with an access level.
+- gitlab_project_member_delete: Remove a member from a project (destructive, requires confirmation).
+- gitlab_project_member_edit: Edit a project member's access level, expiry, or custom member role.
+- gitlab_project_member_get: Get a single direct project member by user ID.
+- gitlab_project_member_get_inherited: Get a project member including membership inherited from parent groups.
+- gitlab_project_members_list: List a project's members (direct plus inherited from parent groups).
+- gitlab_project_pull_mirror_configure: Configure a project's pull mirror.
+- gitlab_project_pull_mirror_get: Get a project's pull-mirror configuration.
+- gitlab_project_repository_storage_get: Get a project's repository storage shard.
+- gitlab_project_restore: Restore a project marked for deletion.
+- gitlab_project_service_account_create: Create a GitLab project service account.
+- gitlab_project_service_account_delete: Delete a GitLab project service account.
+- gitlab_project_service_account_list: List GitLab project service accounts.
+- gitlab_project_service_account_pat_create: Create a personal access token for a GitLab project service account.
+- gitlab_project_service_account_pat_list: List personal access tokens for a GitLab project service account.
+- gitlab_project_service_account_pat_revoke: Revoke a personal access token for a GitLab project service account.
+- gitlab_project_service_account_pat_rotate: Rotate a personal access token for a GitLab project service account.
+- gitlab_project_service_account_update: Update a GitLab project service account.
+- gitlab_project_share_with_group: Share a project with a group.
+- gitlab_project_snippet_content: Read a project snippet's raw content.
+- gitlab_project_snippet_create: Create a project snippet.
+- gitlab_project_snippet_delete: Delete a project snippet permanently.
+- gitlab_project_snippet_get: Get a single project snippet.
+- gitlab_project_snippet_list: List a project's snippets.
+- gitlab_project_snippet_update: Update a project snippet.
+- gitlab_project_star: Star a project.
+- gitlab_project_start_housekeeping: Start housekeeping for a project.
+- gitlab_project_start_mirroring: Trigger a pull-mirror sync.
+- gitlab_project_transfer: Transfer a project to another namespace.
+- gitlab_project_unarchive: Unarchive a project.
+- gitlab_project_unstar: Unstar a project.
+- gitlab_project_update: Update a project's settings.
+- gitlab_project_upload: Upload a file (via local file_path or base64 content) to a project's Markdown attachments store.
+- gitlab_project_upload_avatar: Upload a project avatar.
+- gitlab_project_upload_delete: Delete a project Markdown upload by its numeric upload ID.
+- gitlab_project_upload_delete_by_secret: Delete a project Markdown upload by its 32-character secret and filename (the /uploads/<secret>/<filename> reference).
+- gitlab_project_upload_list: List all Markdown uploads in a project.
+- gitlab_protected_branch_get: Get a single protected branch or wildcard rule by name.
+- gitlab_protected_branch_update: Update an existing protected branch rule: allow-force-push, CODEOWNERS approval, rename, or fine-grained allowed_to_push/merge/unprotect entries.
+- gitlab_protected_branches_list: List protected branches and wildcard rules for a project with optional search, ordering, and offset or keyset pagination.
+- gitlab_protected_environment_get: Get a single protected (or wildcard) environment by name.
+- gitlab_protected_environment_list: List protected environments in a project with order_by/sort and offset or keyset pagination.
+- gitlab_protected_environment_protect: Protect a single environment or wildcard with deploy access levels and approval rules.
+- gitlab_protected_environment_unprotect: Unprotect a single environment or wildcard, removing its deployment gates.
+- gitlab_protected_environment_update: Update a protected environment's deploy access levels and approval rules (use _destroy to remove an entry).
+- gitlab_purge_dependency_proxy: Purge a group's dependency proxy cache.
+- gitlab_read_repository_submodule_file: Read a file from inside a submodule at the parent-pinned commit.
+- gitlab_register_cluster_agent: Register a cluster agent.
+- gitlab_registry_delete_repository: Delete one container registry repository (cannot be undone).
+- gitlab_registry_delete_tag: Delete one container registry tag (cannot be undone).
+- gitlab_registry_delete_tags_bulk: Delete container registry tags in bulk by name patterns and age (cannot be undone).
+- gitlab_registry_get_repository: Get details of one container registry repository by its id.
+- gitlab_registry_get_tag: Get metadata of one container registry tag.
+- gitlab_registry_list_group: List container registry image repositories across a group.
+- gitlab_registry_list_project: List container registry image repositories in a project.
+- gitlab_registry_list_tags: List tags for a container registry repository.
+- gitlab_registry_protection_create: Create a container registry protection rule to restrict push/delete access by minimum access level.
+- gitlab_registry_protection_delete: Delete a container registry repository-path protection rule (cannot be undone).
+- gitlab_registry_protection_list: List container registry repository-path protection rules for a project.
+- gitlab_registry_protection_update: Update a container registry repository-path protection rule.
+- gitlab_registry_tag_protection_create: Create a container registry tag protection rule.
+- gitlab_registry_tag_protection_delete: Delete a container registry tag protection rule (cannot be undone).
+- gitlab_registry_tag_protection_list: List container registry tag protection rules for a project.
+- gitlab_registry_tag_protection_update: Update a container registry tag protection rule.
+- gitlab_reject_user: Reject a pending user sign-up.
+- gitlab_release_create: Create a release for a tag, optionally creating the tag from a ref and attaching asset links.
+- gitlab_release_delete: Delete a release by tag_name (the Git tag itself is preserved).
+- gitlab_release_get: Get a single release by project_id and tag_name.
+- gitlab_release_latest: Get the most recent release for a project.
+- gitlab_release_link_create: Create a single release asset link.
+- gitlab_release_link_create_batch: Create multiple release asset links in one call.
+- gitlab_release_link_delete: Delete a release asset link by link_id.
+- gitlab_release_link_get: Get one release asset link by link_id.
+- gitlab_release_link_list: List asset links for a release with offset or keyset pagination.
+- gitlab_release_link_update: Update an existing release asset link by link_id.
+- gitlab_release_list: List releases in a project with pagination.
+- gitlab_release_update: Update an existing release's title, notes, release date, or milestones.
+- gitlab_remove_billable_group_member: Remove a billable member from a group, freeing a seat (Premium/Ultimate, destructive, requires confirmation).
+- gitlab_remove_group_job_token_allowlist: Remove a group from a project's CI/CD job token allowlist.
+- gitlab_remove_project_job_token_allowlist: Remove a project from a project's CI/CD job token inbound allowlist.
+- gitlab_remove_secure_file: Remove a secure file.
+- gitlab_render_markdown: Render arbitrary Markdown text to HTML using the GitLab Markdown API.
+- gitlab_renew_application_secret: Renew an instance OAuth application secret.
+- gitlab_repair_geo_site: Repair a Geo site's OAuth application.
+- gitlab_repository_archive: Build the download URL for a repository archive.
+- gitlab_repository_blob: Get a git blob by SHA.
+- gitlab_repository_changelog_add: Add changelog data to a changelog file by committing the generated entries.
+- gitlab_repository_changelog_generate: Generate changelog notes for a version range without committing.
+- gitlab_repository_compare: Compare two refs (branches, tags, or commits) in a project.
+- gitlab_repository_contributors: List repository contributors.
+- gitlab_repository_merge_base: Find the common ancestor (merge base) of two or more refs.
+- gitlab_repository_raw_blob: Get the raw content of a git blob by SHA.
+- gitlab_repository_tree: List repository tree items.
+- gitlab_resolve_vulnerability: Resolve a vulnerability after it is fixed.
+- gitlab_retrieve_all_group_storage_moves: List all group repository storage moves across the instance.
+- gitlab_retrieve_all_project_storage_moves: List all project repository storage moves on the instance.
+- gitlab_retrieve_all_snippet_storage_moves: List every snippet repository storage move on the instance with ordering and pagination.
+- gitlab_retrieve_group_storage_moves: List repository storage moves for a single group.
+- gitlab_retrieve_project_storage_moves: List repository storage moves for a single project.
+- gitlab_retrieve_snippet_storage_moves: List repository storage moves for one snippet with ordering and pagination.
+- gitlab_retry_failed_external_status_check_for_project_mr: Retry a failed external status check for a merge request. Returns: a success confirmation.
+- gitlab_revert_vulnerability: Revert a vulnerability back to the detected state.
+- gitlab_revoke_cluster_agent_token: Revoke a cluster agent token.
+- gitlab_revoke_group_personal_access_token: Revoke an enterprise personal access token in a group.
+- gitlab_revoke_impersonation_token: Revoke an impersonation token for a user by token id.
+- gitlab_runner_controller_create: Register a new runner controller (admin-only, experimental API) with optional description and state (enabled/disabled/dry_run).
+- gitlab_runner_controller_delete: Delete a runner controller by controller_id (destructive, admin-only, experimental API).
+- gitlab_runner_controller_get: Get one runner controller by controller_id (admin-only, experimental API).
+- gitlab_runner_controller_list: List registered runner controllers (admin-only, experimental API) with offset or keyset pagination.
+- gitlab_runner_controller_scope_add_instance: Grant a runner controller the instance-level scope (admin only).
+- gitlab_runner_controller_scope_add_runner: Scope a runner controller to a specific instance runner by runner ID (admin only).
+- gitlab_runner_controller_scope_list: List every scope assigned to a runner controller (admin only).
+- gitlab_runner_controller_scope_remove_instance: Revoke a runner controller's instance-level scope (admin only, destructive).
+- gitlab_runner_controller_scope_remove_runner: Remove a specific runner from a runner controller's scope by runner ID (admin only, destructive).
+- gitlab_runner_controller_token_create: Create a runner controller token (admin-only).
+- gitlab_runner_controller_token_get: Get one runner controller token by id (admin-only).
+- gitlab_runner_controller_token_list: List runner controller tokens for a controller (admin-only).
+- gitlab_runner_controller_token_revoke: Revoke a runner controller token permanently (admin-only).
+- gitlab_runner_controller_token_rotate: Rotate a runner controller token (admin-only).
+- gitlab_runner_controller_update: Update a runner controller's description or state (enabled/disabled/dry_run) by controller_id (admin-only, experimental API).
+- gitlab_runner_delete_by_token: Delete a registered runner by its authentication token.
+- gitlab_runner_delete_registered: Delete a registered runner by its numeric runner_id.
+- gitlab_runner_disable_project: Remove a runner assignment from a project by project_id and runner_id.
+- gitlab_runner_enable_project: Assign an existing runner to a project by project_id and runner_id.
+- gitlab_runner_get: Get full configuration for one runner by numeric runner_id.
+- gitlab_runner_jobs: List jobs processed by a runner, with status/order/sort filters and pagination.
+- gitlab_runner_list: List runners owned by the authenticated user, with type/status/tag/scope filters and pagination.
+- gitlab_runner_list_all: List every runner on the instance (admin token required), with type/status/tag/scope filters and pagination.
+- gitlab_runner_list_group: List runners available in a group (specific and shared), with type/status/tag filters and pagination.
+- gitlab_runner_list_managers: List the managers of a runner by runner_id.
+- gitlab_runner_list_project: List runners assigned to a project, with type/status/tag/scope filters and pagination.
+- gitlab_runner_register: Register a new runner with a registration token, optional info hashmap, tags, and configuration.
+- gitlab_runner_remove: Remove (unregister) a runner by numeric runner_id.
+- gitlab_runner_reset_group_reg_token: Reset a group's runner registration token by group_id (deprecated).
+- gitlab_runner_reset_instance_reg_token: Reset the instance-level runner registration token (deprecated, admin only).
+- gitlab_runner_reset_project_reg_token: Reset a project's runner registration token by project_id (deprecated).
+- gitlab_runner_reset_token: Reset a runner's authentication token by runner_id.
+- gitlab_runner_update: Update a runner's configuration (description, pause state, tags, locked, access level, timeout) by runner_id.
+- gitlab_runner_verify: Verify that a runner authentication token is valid.
+- gitlab_schedule_all_group_storage_moves: Schedule repository storage moves for all groups on a source storage shard.
+- gitlab_schedule_all_project_storage_moves: Schedule repository storage moves for all projects on a Gitaly storage shard.
+- gitlab_schedule_all_snippet_storage_moves: Schedule repository storage moves for all snippets on a source Gitaly storage shard.
+- gitlab_schedule_group_export: Schedule an asynchronous export of a GitLab group.
+- gitlab_schedule_group_relations_export: Schedule a new export of a group's relations (issues, labels, milestones, and more).
+- gitlab_schedule_group_storage_move: Schedule a repository storage move for a single group.
+- gitlab_schedule_project_export: Schedule an asynchronous project export.
+- gitlab_schedule_project_storage_move: Schedule a repository storage move for a single project to another Gitaly storage shard.
+- gitlab_schedule_snippet_storage_move: Schedule a repository storage move for one snippet to a destination Gitaly storage shard.
+- gitlab_search_code: Search code blobs across global, group, or project scope.
+- gitlab_search_commits: Search commit messages across global, group, or project scope.
+- gitlab_search_issues: Search issues across global, group, or project scope.
+- gitlab_search_merge_requests: Search merge requests across global, group, or project scope.
+- gitlab_search_milestones: Search milestones across global, group, or project scope.
+- gitlab_search_notes: Search note bodies within one project.
+- gitlab_search_projects: Search projects globally or within a group by name, path, or description.
+- gitlab_search_snippets: Search snippet titles globally.
+- gitlab_search_users: Search users across global, group, or project scope.
+- gitlab_search_wiki: Search wiki blobs across global, group, or project scope.
+- gitlab_server_status: Check MCP server connectivity, GitLab reachability, and authenticated identity details.
+- gitlab_set_custom_attribute: Set a custom attribute.
+- gitlab_set_feature_flag: Set a feature flag gate.
+- gitlab_set_group_datadog_integration: Create or update the Datadog integration on a group.
+- gitlab_set_group_integration: Configure (create or update) any group integration by slug, passing the integration's documented parameters in a free-form `config` object.
+- gitlab_set_integration: Configure (create or update) any project integration by slug, passing the integration's documented parameters in a free-form `config` object.
+- gitlab_set_jira_integration: Configure the Jira integration for a project.
+- gitlab_set_project_mr_external_status_check_status: Set the status of an external status check for a merge request. Returns: a success confirmation.
+- gitlab_set_system_hook_url_variable: Create or update one URL variable for an instance system hook.
+- gitlab_set_user_status: Set the current user's status.
+- gitlab_show_secure_file: Show a secure file.
+- gitlab_snippet_content: Read a personal snippet's raw content.
+- gitlab_snippet_create: Create a personal snippet.
+- gitlab_snippet_delete: Delete a personal snippet permanently.
+- gitlab_snippet_emoji_create: Add an emoji reaction to a project snippet.
+- gitlab_snippet_emoji_delete: Remove an emoji reaction from a project snippet by award id.
+- gitlab_snippet_emoji_get: Get a single emoji reaction on a project snippet by award id.
+- gitlab_snippet_emoji_list: List all emoji reactions on a project snippet.
+- gitlab_snippet_explore: List public snippets across the instance.
+- gitlab_snippet_file_content: Read one file from a multi-file personal snippet at a ref.
+- gitlab_snippet_get: Get a single personal snippet by ID.
+- gitlab_snippet_list: List snippets owned by the authenticated user.
+- gitlab_snippet_list_all: List all snippets on the instance (admin).
+- gitlab_snippet_note_create: Add a comment (note) to a project snippet.
+- gitlab_snippet_note_delete: Delete a snippet note permanently.
+- gitlab_snippet_note_emoji_create: Add an emoji reaction to a project snippet note.
+- gitlab_snippet_note_emoji_delete: Remove an emoji reaction from a project snippet note by award id.
+- gitlab_snippet_note_emoji_get: Get a single emoji reaction on a project snippet note by award id.
+- gitlab_snippet_note_emoji_list: List all emoji reactions on a project snippet note (comment).
+- gitlab_snippet_note_get: Get a single snippet note by its ID.
+- gitlab_snippet_note_list: List all notes (comments) on a project snippet.
+- gitlab_snippet_note_update: Update a snippet note's body.
+- gitlab_snippet_update: Update a personal snippet.
+- gitlab_start_bulk_import: Start a bulk import (direct transfer).
+- gitlab_subgroups_list: List the subgroups (descendant groups) of a GitLab group.
+- gitlab_tag_create: Create a new tag in a project pointing at a ref.
+- gitlab_tag_delete: Delete a tag from a project permanently.
+- gitlab_tag_get: Get a single tag from a project by name.
+- gitlab_tag_get_protected: Get a single protected tag or wildcard rule by name.
+- gitlab_tag_get_signature: Get the X.509 signature of a tag.
+- gitlab_tag_list: List tags in one project with optional search and offset or keyset pagination.
+- gitlab_tag_list_protected: List protected tags in one project with offset or keyset pagination.
+- gitlab_tag_protect: Protect a tag or wildcard pattern with create access levels.
+- gitlab_tag_unprotect: Remove protection from a tag or wildcard pattern.
+- gitlab_test_system_hook: Send a test event to a system hook.
+- gitlab_todo_list: List the authenticated user's to-do items with optional filtering and pagination.
+- gitlab_todo_mark_all_done: Mark all pending to-do items as done.
+- gitlab_todo_mark_done: Mark a single to-do item as done.
+- gitlab_track_event: Track one usage event.
+- gitlab_track_events: Track multiple usage events.
+- gitlab_unban_user: Unban a previously banned user.
+- gitlab_unblock_user: Unblock a previously blocked user.
+- gitlab_unlock_terraform_state: Unlock a project Terraform state by project_id and state name.
+- gitlab_update_alert_metric_image: Update an alert metric image.
+- gitlab_update_appearance: Update GitLab application appearance and branding settings.
+- gitlab_update_broadcast_message: Update a broadcast message.
+- gitlab_update_commit_discussion_note: Update the body of a note in a commit discussion thread.
+- gitlab_update_compliance_policy_settings: Update the instance compliance policy settings.
+- gitlab_update_epic_discussion_note: Update the body of a note in an epic discussion thread.
+- gitlab_update_freeze_period: Update a deploy freeze period's cron schedule or timezone.
+- gitlab_update_group_mr_approval_settings: Update the merge request approval settings of a group.
+- gitlab_update_group_scim_identity: Update the extern_uid of an existing group SCIM identity.
+- gitlab_update_group_secret_push_protection: Enable or disable secret push protection for a whole group, inherited by its projects (Ultimate).
+- gitlab_update_instance_service_account: Update an instance-level service account.
+- gitlab_update_issue_discussion_note: Update the body of a note in an issue discussion thread.
+- gitlab_update_package_protection_rule: Update an existing package protection rule by its id.
+- gitlab_update_project_external_status_check: Update a project external status check service.
+- gitlab_update_project_mr_approval_settings: Update the merge request approval settings of a project.
+- gitlab_update_project_secret_push_protection: Enable or disable secret push protection for a project (Ultimate).
+- gitlab_update_project_security_attributes: Add or remove GitLab security attributes on a project via GraphQL.
+- gitlab_update_repository_submodule: Update a submodule pointer to a new commit SHA on a branch.
+- gitlab_update_security_attribute: Update a GitLab security attribute name, description, or color via GraphQL.
+- gitlab_update_security_category: Update a GitLab security category name or description via GraphQL.
+- gitlab_update_settings: Update GitLab application settings.
+- gitlab_update_snippet_discussion_note: Update the body of a note in a snippet discussion thread.
+- gitlab_update_topic: Update a project topic.
+- gitlab_update_work_item: Update an existing work item by namespace path and IID.
+- gitlab_upload_alert_metric_image: Upload an alert metric image.
+- gitlab_upload_user_avatar: Upload the current user's avatar.
+- gitlab_user_contribution_event_list: List the current user's contribution events.
+- gitlab_user_current: Get the current authenticated user.
+- gitlab_vulnerability_severity_count: Count a project's vulnerabilities grouped by severity.
+- gitlab_wiki_create: Create a new wiki page.
+- gitlab_wiki_delete: Delete a wiki page permanently.
+- gitlab_wiki_get: Get a single wiki page by slug.
+- gitlab_wiki_list: List a project's wiki pages.
+- gitlab_wiki_update: Update an existing wiki page by slug.
+- gitlab_wiki_upload_attachment: Upload an attachment to the project wiki repository.
+
+## Resources
+
+45 resources providing read-only access to GitLab data.
+
+### groups
+
+- **URI**: `gitlab://groups`
+- **MIME**: application/json
+- **Description**: List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.
+
+### code_review
+
+- **URI**: `gitlab://guides/code-review`
+- **MIME**: text/markdown
+- **Description**: Code review checklist and best practices for GitLab merge request reviews.
+
+### conventional_commits
+
+- **URI**: `gitlab://guides/conventional-commits`
+- **MIME**: text/markdown
+- **Description**: Conventional commit message format and examples for consistent Git history.
+
+### git_workflow
+
+- **URI**: `gitlab://guides/git-workflow`
+- **MIME**: text/markdown
+- **Description**: Best practices for Git branching strategies with GitLab (feature branches, trunk-based, GitLab Flow).
+
+### merge_request_hygiene
+
+- **URI**: `gitlab://guides/merge-request-hygiene`
+- **MIME**: text/markdown
+- **Description**: Guidelines for creating and reviewing high-quality merge requests.
+
+### pipeline_troubleshooting
+
+- **URI**: `gitlab://guides/pipeline-troubleshooting`
+- **MIME**: text/markdown
+- **Description**: Common GitLab CI/CD pipeline issues and how to diagnose and fix them.
+
+### tool_manifest
+
+- **URI**: `gitlab://tools`
+- **MIME**: application/json
+- **Description**: Surface-aware manifest of the tools and executable actions available in this server instance. Use gitlab://tools/{id} to fetch one entry's accepted call shape and input schema.
+
+### current_user
+
+- **URI**: `gitlab://user/current`
+- **MIME**: application/json
+- **Description**: Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL.
+
+### group
+
+- **URI Template**: `gitlab://group/{group_id}`
+- **MIME**: application/json
+- **Description**: Get details for a specific GitLab group by numeric ID or URL-encoded path. Returns name, full path, description, visibility, and web URL.
+
+### group_label
+
+- **URI Template**: `gitlab://group/{group_id}/label/{label_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single group label by numeric ID or name. Returns id, name, color, description, and open issue/MR counts.
+
+### group_members
+
+- **URI Template**: `gitlab://group/{group_id}/members`
+- **MIME**: application/json
+- **Description**: List all members of a GitLab group with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members.
+
+### group_milestone
+
+- **URI Template**: `gitlab://group/{group_id}/milestone/{milestone_iid}`
+- **MIME**: application/json
+- **Description**: Get details for a single group milestone by IID. Returns id, iid, title, description, state, due date, and web URL.
+
+### group_projects
+
+- **URI Template**: `gitlab://group/{group_id}/projects`
+- **MIME**: application/json
+- **Description**: List all projects within a GitLab group. Returns each project's ID, name, namespace path, visibility, web URL, description, and default branch.
+
+### project
+
+- **URI Template**: `gitlab://project/{project_id}`
+- **MIME**: application/json
+- **Description**: Get basic metadata for a GitLab project by numeric ID or URL-encoded path. Returns name, namespace path, visibility, web URL, description, and default branch.
+
+### board
+
+- **URI Template**: `gitlab://project/{project_id}/board/{board_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single project issue board by numeric ID. Returns id and name.
+
+### branch
+
+- **URI Template**: `gitlab://project/{project_id}/branch/{branch}`
+- **MIME**: application/json
+- **Description**: Get details for a single repository branch. Returns name, protection status, merge status, default flag, and web URL.
+
+### project_branches
+
+- **URI Template**: `gitlab://project/{project_id}/branches`
+- **MIME**: application/json
+- **Description**: List all branches in a GitLab project. Returns each branch's name, protection status, merge status, default flag, and web URL.
+
+### commit
+
+- **URI Template**: `gitlab://project/{project_id}/commit/{sha}`
+- **MIME**: application/json
+- **Description**: Get details for a single commit by SHA. Returns short_id, title, message, author, committer, authored/committed dates, parent commits, web URL, and stats (additions/deletions).
+
+### deploy_key
+
+- **URI Template**: `gitlab://project/{project_id}/deploy_key/{deploy_key_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single project deploy key by numeric ID. Returns id, title, key, and fingerprint.
+
+### deployment
+
+- **URI Template**: `gitlab://project/{project_id}/deployment/{deployment_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single project deployment by numeric ID. Returns id, iid, ref, sha, status, and environment name.
+
+### environment
+
+- **URI Template**: `gitlab://project/{project_id}/environment/{environment_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single project environment by numeric ID. Returns id, name, slug, state, and tier.
+
+### feature_flag
+
+- **URI Template**: `gitlab://project/{project_id}/feature_flag/{name}`
+- **MIME**: application/json
+- **Description**: Get details for a single project feature flag by name. Returns name, description, active, and version.
+
+### file_blob
+
+- **URI Template**: `gitlab://project/{project_id}/file/{ref}/{+path}`
+- **MIME**: application/json
+- **Description**: Get the contents of a repository file at a specific ref (branch, tag, or SHA). Path may include slashes. Files over 1 MiB return metadata only with truncated=true. Binary files return metadata with empty content.
+
+### issue
+
+- **URI Template**: `gitlab://project/{project_id}/issue/{issue_iid}`
+- **MIME**: application/json
+- **Description**: Get details of a specific issue by its IID (project-scoped ID). Returns title, state, labels, assignees, author, web URL, and creation date.
+
+### project_issues
+
+- **URI Template**: `gitlab://project/{project_id}/issues`
+- **MIME**: application/json
+- **Description**: List open issues for a GitLab project. Returns each issue's IID, title, state, labels, assignees, author, web URL, and creation date.
+
+### job
+
+- **URI Template**: `gitlab://project/{project_id}/job/{job_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single CI job by numeric ID. Returns id, name, stage, status, ref, duration, and web URL.
+
+### label
+
+- **URI Template**: `gitlab://project/{project_id}/label/{label_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single project label by numeric ID or label name. Returns id, name, color, description, and open issue/MR counts.
+
+### project_labels
+
+- **URI Template**: `gitlab://project/{project_id}/labels`
+- **MIME**: application/json
+- **Description**: List all labels defined in a GitLab project. Returns each label's name, color, description, and counts of open issues and merge requests using the label.
+
+### project_members
+
+- **URI Template**: `gitlab://project/{project_id}/members`
+- **MIME**: application/json
+- **Description**: List all members of a GitLab project with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members from parent groups.
+
+### milestone
+
+- **URI Template**: `gitlab://project/{project_id}/milestone/{milestone_iid}`
+- **MIME**: application/json
+- **Description**: Get details for a single project milestone by IID. Returns id, iid, title, description, state, due date, and web URL.
+
+### project_milestones
+
+- **URI Template**: `gitlab://project/{project_id}/milestones`
+- **MIME**: application/json
+- **Description**: List all milestones in a GitLab project. Returns each milestone's title, description, state (active/closed), due date, and web URL.
+
+### merge_request
+
+- **URI Template**: `gitlab://project/{project_id}/mr/{merge_request_iid}`
+- **MIME**: application/json
+- **Description**: Get details of a specific merge request by its IID (project-scoped ID). Returns title, state, source/target branches, author, merge status, and web URL.
+
+### merge_request_discussions
+
+- **URI Template**: `gitlab://project/{project_id}/mr/{merge_request_iid}/discussions`
+- **MIME**: application/json
+- **Description**: List discussion threads on a merge request. Each discussion has an id, individual_note flag, and an array of notes (id, author, body, system, resolved/resolvable, created_at).
+
+### merge_request_notes
+
+- **URI Template**: `gitlab://project/{project_id}/mr/{merge_request_iid}/notes`
+- **MIME**: application/json
+- **Description**: List notes (comments) on a merge request. Returns each note's id, author username, body, system flag, resolvable/resolved flags, and timestamps.
+
+### pipeline
+
+- **URI Template**: `gitlab://project/{project_id}/pipeline/{pipeline_id}`
+- **MIME**: application/json
+- **Description**: Get details of a specific CI/CD pipeline by its numeric ID. Returns pipeline status, ref, SHA, source, and web URL.
+
+### pipeline_jobs
+
+- **URI Template**: `gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs`
+- **MIME**: application/json
+- **Description**: List all jobs for a specific CI/CD pipeline including each job's name, stage, status, duration, failure reason (if failed), and web URL.
+
+### latest_pipeline
+
+- **URI Template**: `gitlab://project/{project_id}/pipelines/latest`
+- **MIME**: application/json
+- **Description**: Get the most recent CI/CD pipeline for a GitLab project. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL.
+
+### release
+
+- **URI Template**: `gitlab://project/{project_id}/release/{tag_name}`
+- **MIME**: application/json
+- **Description**: Get details for a single GitLab release by tag name. Returns tag_name, name, description, author, creation/release dates.
+
+### project_releases
+
+- **URI Template**: `gitlab://project/{project_id}/releases`
+- **MIME**: application/json
+- **Description**: List all releases for a GitLab project. Returns each release's tag name, name, description, author, and creation/release dates.
+
+### project_snippet
+
+- **URI Template**: `gitlab://project/{project_id}/snippet/{snippet_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single project snippet by numeric ID. Returns id, title, file_name, description, visibility, and web URL.
+
+### tag
+
+- **URI Template**: `gitlab://project/{project_id}/tag/{tag_name}`
+- **MIME**: application/json
+- **Description**: Get details for a single Git tag. Returns name, target commit SHA, annotation message, and protection status.
+
+### project_tags
+
+- **URI Template**: `gitlab://project/{project_id}/tags`
+- **MIME**: application/json
+- **Description**: List all repository tags for a GitLab project. Returns each tag's name, message, target commit SHA, protection status, and creation date.
+
+### wiki_page
+
+- **URI Template**: `gitlab://project/{project_id}/wiki/{slug}`
+- **MIME**: application/json
+- **Description**: Get a wiki page by slug. Returns title, slug, format (markdown/rdoc/asciidoc/org), and raw content. Slugs are case-sensitive and use hyphens for spaces.
+
+### snippet
+
+- **URI Template**: `gitlab://snippet/{snippet_id}`
+- **MIME**: application/json
+- **Description**: Get details for a single personal/global snippet by numeric ID. Returns id, title, file_name, description, visibility, and web URL.
+
+### tool_detail
+
+- **URI Template**: `gitlab://tools/{id}`
+- **MIME**: application/json
+- **Description**: Accepted call shape and input schema for one entry from gitlab://tools. Replace {id} with an entry ID from the active surface, such as project.get in dynamic mode, gitlab_project.get in meta mode, or gitlab_get_project in individual mode.
+
+## Prompts
+
+37 prompt templates for AI-assisted GitLab workflows.
+
+### audit_commit_hygiene
+
+Audit commit message quality between two refs. Scores Conventional Commit usage, merge commits, breaking-change markers, body/detail quality, and linked work references for release and contribution readiness.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `from` (required): Starting ref: tag name, branch name, or commit SHA
+- `to`: Ending ref: tag name, branch name, or commit SHA (defaults to HEAD if omitted)
+
+### audit_project_full
+
+Run a comprehensive audit of a GitLab project covering settings, branch protection, access management, labels, milestones, and templates in a single report. Use this for a complete project health assessment with actionable recommendations.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+
+### audit_project_workflow
+
+Audit workflow configuration for a GitLab project: labels (names, colors, descriptions), milestones (open/closed, due dates), and issue/MR templates. Identifies gaps like labels without descriptions, milestones without due dates, or missing templates.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+
+### branch_mr_summary
+
+List all MRs targeting a specific branch in a project. Shows readiness summary with conflict/draft/approval counts. Ideal for release branch reviews.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `target_branch` (required): Target branch name to filter MRs (e.g. 'develop_5.4.0')
+- `state`: State filter: opened, closed, merged, all (default: opened)
+
+### compare_branches
+
+Compare commit and file differences between two Git refs. Use for release branch preparation, feature branch divergence analysis, or deciding whether a merge/backport needs deeper review.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `from` (required): Source branch name, tag, or commit SHA to compare from
+- `to` (required): Target branch name, tag, or commit SHA to compare to
+
+### daily_standup
+
+Generate a daily standup summary based on the user's GitLab activity in the last 24 hours: contribution events, authored MRs, assigned MRs, MRs under review, assigned issues, and created issues. Produces a comprehensive report with done/planned/blockers sections.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `username`: GitLab username to generate the standup for (defaults to the authenticated user if omitted)
+
+### generate_release_notes
+
+Generate comprehensive release notes from commits, merge requests, and file changes between two Git refs (tags, branches, or SHAs). Produces a structured document with commits, merged MRs with labels, contributors, and statistics for organizing into user-friendly release notes.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `from` (required): Starting ref: tag name (e.g. 'v1.0.0'), branch name, or commit SHA
+- `to`: Ending ref: tag name, branch name, or commit SHA (defaults to HEAD if omitted)
+
+### group_milestone_progress
+
+Track milestone progress across all projects in a group. Shows issue/MR completion per milestone with progress bars.
+
+**Arguments:**
+
+- `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
+
+### group_mr_dashboard
+
+List merge requests across a GitLab group with optional state and target branch filters. Shows MRs grouped by project with blocker and readiness summary statistics.
+
+**Arguments:**
+
+- `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
+- `state`: State filter: opened, closed, merged, all (default: opened)
+- `target_branch`: Target branch name to filter MRs (e.g. 'develop_5.4.0')
+
+### label_distribution
+
+Analyze label usage distribution in a project. Shows open/closed issue counts and open MR counts per label. Zero additional API calls beyond label list.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+
+### merge_velocity
+
+Analyze MR throughput metrics for a project. Shows merge rate, average time-to-merge, and daily merged count chart. Ideal for tracking team delivery pace.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `days`: Number of days to look back (default: 30)
+
+### milestone_progress
+
+Track milestone progress for a project. Shows issue/MR completion, progress bar, and due date risk. Omit milestone argument to see all active milestones.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `milestone`: Specific milestone title (omit for all active)
+
+### mr_description_quality
+
+Score a merge request description for reviewer readiness. Checks context, linked work, test evidence, rollout/risk notes, checklists, and whether changed files suggest missing screenshots or migration notes.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
+
+### mr_discussion_health
+
+Analyze unresolved discussion threads across open MRs in a project. Use this for review follow-up and merge-readiness cleanup, not approval-rule status.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+
+### mr_risk_assessment
+
+Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request based on size (lines added/removed), number of changed files, new/deleted files, sensitive file patterns (env, auth, migration, CI, security), and conflict status.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
+
+### my_activity_summary
+
+Generate a personal activity summary for a configurable time period. Includes contribution events breakdown, MRs created/merged/reviewed, issues created/closed, and a daily activity chart. Aggregates across all projects.
+
+**Arguments:**
+
+- `username`: GitLab username to query
+- `days`: Number of days to look back (default: 7)
+
+### my_issues
+
+Show all issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your full issue backlog without specifying a project.
+
+**Arguments:**
+
+- `username`: GitLab username to query
+- `state`: State filter: opened, closed, merged, all (default: opened)
+
+### my_open_mrs
+
+Show all open merge requests across all projects where you are author or assignee. Results are grouped by project for easy scanning. Use this to get a personal MR dashboard without specifying a project.
+
+**Arguments:**
+
+- `username`: GitLab username to query
+
+### my_pending_reviews
+
+Show all open merge requests where you are assigned as reviewer across all projects. Helps track which MRs are waiting for your review. Results grouped by project.
+
+**Arguments:**
+
+- `username`: GitLab username to query
+
+### project_activity_report
+
+Generate a project activity report including recent events, merged MRs, and open issues. Shows daily activity chart and contributor breakdown.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `days`: Number of days to look back (default: 7)
+
+### project_contributors
+
+Rank project contributors by commits, additions, and deletions. Uses the repository contributors API for accurate stats.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+
+### project_health_check
+
+Comprehensive project health assessment combining latest pipeline status, open merge requests, and branch hygiene (merged/stale branch counts). Provides actionable recommendations for project maintenance.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+
+### release_cadence
+
+Analyze release frequency for a project. Shows time between releases, average cadence, and release history chart.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `days`: Number of days to look back (default: 90)
+
+### release_readiness
+
+Check readiness of a release branch by analyzing open MRs targeting it, draft/conflict counts, and unresolved discussion threads.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `branch`: Target release branch (default: main)
+
+### review_mr
+
+Generate a structured code review for a merge request. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics, branch context, and a review plan. Full diffs are included without truncation.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
+
+### reviewer_workload
+
+Analyze review distribution across group members. Shows how many open MRs each member is reviewing and identifies imbalances. Useful for managers to ensure fair review distribution.
+
+**Arguments:**
+
+- `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
+
+### stale_items_report
+
+Find MRs and issues in a project that haven't been updated for a configurable number of days. Helps identify forgotten or blocked items.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `stale_days`: Days without update to consider stale (default: 14)
+
+### suggest_mr_reviewers
+
+Suggest suitable merge request reviewers based on the files changed and the list of active project members. Excludes the MR author and asks the model to consider ownership, approval-rule fit, and workload balance.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
+
+### summarize_mr_changes
+
+Summarize the changed files and key modifications in a merge request. Lists each file with its change type (new/modified/deleted/renamed). Use this to quickly understand the scope of a merge request.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `merge_request_iid` (required): Merge request IID (project-scoped numeric ID, visible as !N in GitLab)
+
+### summarize_open_mrs
+
+Summarize all open merge requests in a project including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) and blockers. For one target branch, use branch_mr_summary.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+
+### summarize_pipeline_status
+
+Summarize the latest CI/CD pipeline status for a project. Groups jobs by outcome (failed/passed/other) and includes failure reasons for debugging.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+
+### team_member_workload
+
+Generate a comprehensive workload summary for a specific team member over a configurable time period. Includes contribution events, authored and assigned merge requests, MRs under review, authored and assigned issues. Use this for team management and capacity planning.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `username` (required): GitLab username of the team member to analyze
+- `days`: Number of days to look back for activity (default: 7)
+
+### team_overview
+
+Generate a team dashboard showing all group members with their open MR counts and recently merged MRs. Includes a workload distribution pie chart. Requires a GitLab group ID.
+
+**Arguments:**
+
+- `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
+- `days`: Number of days to look back (default: 7)
+
+### unassigned_items
+
+Find open MRs and issues in a project that have no assignee. Helps identify ownership gaps and items needing attention.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+
+### user_activity_report
+
+Generate a detailed activity report for a specific user: contribution events, merged MRs, reviewed MRs, daily activity chart. Designed for managers to review team member productivity.
+
+**Arguments:**
+
+- `username` (required): GitLab username to report on
+- `days`: Number of days to look back (default: 7)
+
+### user_stats
+
+Generate comprehensive user statistics from GitLab: contribution events breakdown, merge request stats (authored/assigned/reviewed by state), issue stats (authored/assigned by state), daily activity trends, and a Mermaid activity chart. Use this for performance reviews, productivity tracking, or personal dashboards.
+
+**Arguments:**
+
+- `project_id` (required): Project ID (numeric) or URL-encoded path (e.g. 'group/project')
+- `username`: GitLab username to generate stats for (defaults to the authenticated user if omitted)
+- `days`: Number of days to look back for activity (default: 30)
+
+### weekly_team_recap
+
+Generate a comprehensive weekly recap for a team. Combines merged MRs, open MRs, issues activity, and events into a single summary with Mermaid charts.
+
+**Arguments:**
+
+- `group_id` (required): GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')
+- `days`: Number of days to look back (default: 7)
+

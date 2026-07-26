@@ -2,54 +2,18 @@
 title: Pruebas E2E con Docker
 description: Ejecuta la suite end-to-end de GitLab MCP Server contra una instancia efímera de GitLab CE o EE con runner de CI y fixtures deterministas.
 datePublished: "2026-05-16"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "¿Cómo ejecuto la suite E2E contra una instancia efímera de GitLab?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Ejecuta make test-e2e-docker. Ese objetivo orquesta el stack Docker, espera a GitLab, configura el usuario y el runner de CI de pruebas, ejecuta la suite E2E de Go con el build tag e2e y escribe reportes JUnit y JSON. La ruta por defecto usa GitLab CE y crea datos temporales que se eliminan al desmontar el stack."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Cómo ejecuto la cobertura Enterprise/Premium de E2E con Docker?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Define ENTERPRISE_LICENSE en .env o en la shell y ejecuta make test-e2e-docker-enterprise. Ese objetivo usa la imagen GitLab EE más los build tags e2e enterprise, así que se compilan y ejecutan los archivos comunes de harness y los tests Enterprise/Premium de test/e2e/suite/*_ee_test.go. Cuando ENTERPRISE_LICENSE contiene un activation code de 24 caracteres, la primera ejecución correcta exporta una licencia reutilizable a test/e2e/.enterprise-license para no consumir otra vez el activation code."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Cuándo debería usar el modo E2E con Docker en lugar de tests unitarios?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Usa E2E con Docker al cambiar el registro de herramientas, la proyección del catálogo o los schemas; al cambiar el comportamiento de pipelines, jobs, webhooks, emoji personalizados o mirrors; y al verificar release candidates antes de publicar binarios. Normalmente no hace falta para editar una página Markdown estrecha o depurar un test unitario fallando con respuestas mock de GitLab. E2E con Docker es más lento que los tests unitarios pero es la ruta de validación preferida para migraciones de arquitectura porque ejercita la API real de GitLab, el transporte MCP y todas las superficies públicas a la vez."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Cómo limpio los datos de prueba de E2E con Docker?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Ejecuta docker compose -f test/e2e/docker-compose.yml down -v para eliminar todos los contenedores y volúmenes, incluidos los datos temporales de GitLab. Si una ejecución falla, mantén el stack levantado mientras inspeccionas los datos de GitLab, los logs del runner y los reportes E2E generados, y desmóntalo al terminar el diagnóstico. Una repetición que ve datos antiguos suele indicar que el stack anterior no se eliminó con down -v."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "¿Cómo ejecuto la suite E2E contra una instancia efímera de GitLab?"
+    a: "Ejecuta `make test-e2e-docker`. Ese objetivo orquesta el stack Docker, espera a GitLab, configura el usuario y el runner de CI de pruebas, ejecuta la suite E2E de Go con el build tag `e2e` y escribe reportes JUnit y JSON. La ruta por defecto usa GitLab CE y crea datos temporales que se eliminan al desmontar el stack, de modo que obtienes validación de alta confianza sin depender de una instancia real configurada en `.env`."
+  - q: "¿Cómo ejecuto la cobertura Enterprise/Premium de E2E con Docker?"
+    a: "Define `ENTERPRISE_LICENSE` en `.env` o en la shell y ejecuta `make test-e2e-docker-enterprise`. Ese objetivo usa la imagen GitLab EE más los build tags `e2e enterprise`, así que se compilan y ejecutan los archivos comunes de harness y los tests Enterprise/Premium de `test/e2e/suite/*_ee_test.go`. Cuando `ENTERPRISE_LICENSE` contiene un activation code de 24 caracteres, la primera ejecución correcta exporta una licencia reutilizable a `test/e2e/.enterprise-license`, de modo que las siguientes ejecuciones la instalan mediante la License API en lugar de consumir otra vez el activation code."
+  - q: "¿Cuándo debería usar el modo E2E con Docker en lugar de tests unitarios?"
+    a: "Usa E2E con Docker al cambiar el registro de herramientas, la proyección del catálogo o los schemas; al cambiar el comportamiento de pipelines, jobs, webhooks, emoji personalizados o mirrors; y al verificar release candidates antes de publicar binarios. Normalmente no hace falta para editar una página Markdown estrecha o depurar un test unitario fallando con respuestas mock de GitLab. E2E con Docker es más lento que los tests unitarios pero es la ruta de validación preferida para migraciones de arquitectura porque ejercita la API real de GitLab junto con el transporte MCP."
+  - q: "¿Cómo limpio los datos de prueba de E2E con Docker?"
+    a: "Ejecuta `docker compose -f test/e2e/docker-compose.yml down -v` para eliminar todos los contenedores y volúmenes, incluidos los datos temporales de GitLab. Si una ejecución falla, mantén el stack levantado mientras inspeccionas los datos de GitLab, los logs del runner y los reportes E2E generados, y desmóntalo al terminar el diagnóstico. Una repetición que ve datos antiguos suele indicar que el stack anterior no se eliminó con `down -v`."
 ---
 
-:::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`test/e2e/README.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/test/e2e/README.md) en el repositorio.
-:::
+import FAQ from "../../../../components/FAQ.astro";
 
 El modo E2E con Docker arranca un entorno desechable de GitLab, provisiona fixtures, registra un runner de CI y ejecuta la suite end-to-end de MCP contra esa instancia local. La ruta por defecto usa GitLab CE; el modo Enterprise usa la imagen EE más una licencia Ultimate local. Úsalo cuando necesites validación de alta confianza sin depender de una instancia real configurada en `.env`.
 
@@ -145,20 +109,10 @@ docker compose -f test/e2e/docker-compose.yml down -v
 
 Docker E2E es más lento que los tests unitarios, pero es la ruta de validación preferida para migraciones de arquitectura porque ejercita la API real de GitLab, el transporte MCP y todas las superficies públicas de herramientas a la vez.
 
-## Preguntas frecuentes
+<FAQ />
 
-### ¿Cómo ejecuto la suite E2E contra una instancia efímera de GitLab?
+## Referencia de la fuente
 
-Ejecuta `make test-e2e-docker`. Ese objetivo orquesta el stack Docker, espera a GitLab, configura el usuario y el runner de CI de pruebas, ejecuta la suite E2E de Go con el build tag `e2e` y escribe reportes JUnit y JSON. La ruta por defecto usa GitLab CE y crea datos temporales que se eliminan al desmontar el stack, de modo que obtienes validación de alta confianza sin depender de una instancia real configurada en `.env`.
-
-### ¿Cómo ejecuto la cobertura Enterprise/Premium de E2E con Docker?
-
-Define `ENTERPRISE_LICENSE` en `.env` o en la shell y ejecuta `make test-e2e-docker-enterprise`. Ese objetivo usa la imagen GitLab EE más los build tags `e2e enterprise`, así que se compilan y ejecutan los archivos comunes de harness y los tests Enterprise/Premium de `test/e2e/suite/*_ee_test.go`. Cuando `ENTERPRISE_LICENSE` contiene un activation code de 24 caracteres, la primera ejecución correcta exporta una licencia reutilizable a `test/e2e/.enterprise-license`, de modo que las siguientes ejecuciones la instalan mediante la License API en lugar de consumir otra vez el activation code.
-
-### ¿Cuándo debería usar el modo E2E con Docker en lugar de tests unitarios?
-
-Usa E2E con Docker al cambiar el registro de herramientas, la proyección del catálogo o los schemas; al cambiar el comportamiento de pipelines, jobs, webhooks, emoji personalizados o mirrors; y al verificar release candidates antes de publicar binarios. Normalmente no hace falta para editar una página Markdown estrecha o depurar un test unitario fallando con respuestas mock de GitLab. E2E con Docker es más lento que los tests unitarios pero es la ruta de validación preferida para migraciones de arquitectura porque ejercita la API real de GitLab junto con el transporte MCP.
-
-### ¿Cómo limpio los datos de prueba de E2E con Docker?
-
-Ejecuta `docker compose -f test/e2e/docker-compose.yml down -v` para eliminar todos los contenedores y volúmenes, incluidos los datos temporales de GitLab. Si una ejecución falla, mantén el stack levantado mientras inspeccionas los datos de GitLab, los logs del runner y los reportes E2E generados, y desmóntalo al terminar el diagnóstico. Una repetición que ve datos antiguos suele indicar que el stack anterior no se eliminó con `down -v`.
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`test/e2e/README.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/test/e2e/README.md) en el repositorio.
+:::

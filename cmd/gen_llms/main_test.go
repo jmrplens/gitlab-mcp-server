@@ -21,6 +21,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // newGenLLMSClient creates a [gitlabclient.Client] backed by a mock
@@ -159,17 +160,83 @@ func TestValidateLLMSTxt_AcceptsSpecFileListSections(t *testing.T) {
 		"",
 		"## Docs",
 		"",
-		"- [Guide](docs/guide.md): Short guide",
-		"- [Reference](docs/reference.md)",
+		"- [Guide](https://example.test/docs/guide.md): Short guide",
+		"- [Reference](https://example.test/docs/reference.md)",
 		"",
 		"## Optional",
 		"",
-		"- [Full reference](llms-full.txt): Expanded context",
+		"- [Full reference](https://example.test/llms-full.txt): Expanded context",
 		"",
 	}, "\n")
 
 	if err := validateLLMSTxt(content); err != nil {
 		t.Fatalf("validateLLMSTxt() error: %v", err)
+	}
+}
+
+// TestValidateLLMSTxt_RejectsRelativeFileListTarget guards the GEO regression
+// where every llms.txt link was a repository-relative path. llms.txt is served
+// from the docs domain, so "docs/getting-started.md" resolved against that host
+// and 404'd — 17 of 18 links were dead. Only absolute URLs work for every
+// consumer, so generation must fail rather than publish dead links again.
+func TestValidateLLMSTxt_RejectsRelativeFileListTarget(t *testing.T) {
+	content := strings.Join([]string{
+		"# Example",
+		"",
+		"> Short project summary.",
+		"",
+		"## Docs",
+		"",
+		"- [Guide](docs/guide.md): Short guide",
+		"",
+	}, "\n")
+
+	err := validateLLMSTxt(content)
+	if err == nil {
+		t.Fatal("validateLLMSTxt() error = nil, want error for a relative link target")
+	}
+	if !strings.Contains(err.Error(), "absolute URL") {
+		t.Fatalf("validateLLMSTxt() error = %v, want it to mention the absolute-URL requirement", err)
+	}
+}
+
+// TestAbsoluteLLMSTarget_ResolvesRepoRelativeAndPreservesAbsolute verifies both
+// branches of the link resolver: repository-relative documentation paths gain
+// the blob prefix, while already-absolute targets are emitted untouched.
+func TestAbsoluteLLMSTarget_ResolvesRepoRelativeAndPreservesAbsolute(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		want   string
+	}{
+		{
+			name:   "repo relative doc path gains the blob prefix",
+			target: "docs/getting-started.md",
+			want:   repoBlobBaseURL + "docs/getting-started.md",
+		},
+		{
+			name:   "repo root file gains the blob prefix",
+			target: "PRIVACY.md",
+			want:   repoBlobBaseURL + "PRIVACY.md",
+		},
+		{
+			name:   "absolute https target is preserved",
+			target: siteBaseURL + "llms-full.txt",
+			want:   siteBaseURL + "llms-full.txt",
+		},
+		{
+			name:   "absolute http target is preserved",
+			target: "http://example.test/a.md",
+			want:   "http://example.test/a.md",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := absoluteLLMSTarget(tt.target); got != tt.want {
+				t.Errorf("absoluteLLMSTarget(%q) = %q, want %q", tt.target, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -195,7 +262,7 @@ func TestValidateLLMSTxt_AcceptsPreambleCodeBlock(t *testing.T) {
 		"",
 		"## Docs",
 		"",
-		"- [Guide](docs/guide.md): Short guide",
+		"- [Guide](https://example.test/docs/guide.md): Short guide",
 		"",
 	}, "\n")
 
@@ -373,5 +440,60 @@ func TestSchemaTypeLabel_ArrayAndNullableTypes(t *testing.T) {
 				t.Fatalf("schemaTypeLabel() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestIsGeneratedLLMSFile_CoversEveryCompanion pins the write allowlist. The
+// companion files exist because llms-full.txt is ~750K tokens — larger than any
+// production context window — so a new companion silently failing to write
+// would quietly undo that fix.
+func TestIsGeneratedLLMSFile_CoversEveryCompanion(t *testing.T) {
+	for _, name := range []string{
+		llmsFileName, llmsFullFileName, llmsMediumFileName,
+		llmsFullMetaFileName, llmsFullIndividualFileName, llmsFullCapabilityFileName,
+	} {
+		if !isGeneratedLLMSFile(name) {
+			t.Errorf("isGeneratedLLMSFile(%q) = false, want true", name)
+		}
+	}
+	for _, name := range []string{"README.md", "llms.txt.bak", "../llms.txt", ""} {
+		if isGeneratedLLMSFile(name) {
+			t.Errorf("isGeneratedLLMSFile(%q) = true, want false", name)
+		}
+	}
+}
+
+// TestWriteLLMSMediumMetaTools_OmitsSchemas verifies the medium reference keeps
+// the action inventory but drops the per-action JSON schemas. Those schemas are
+// what make the full file unloadable, so their absence here is the whole point.
+func TestWriteLLMSMediumMetaTools_OmitsSchemas(t *testing.T) {
+	catalog := llmsCatalog{
+		MetaBase: []*mcp.Tool{{
+			Name:        "gitlab_issue",
+			Title:       "Issue",
+			Description: "Manage issues. Use {\"action\":\"list\"}.",
+		}},
+		MetaRoutes: map[string]toolutil.ActionMap{
+			"gitlab_issue": {"list": {}, "create": {}, "get": {}},
+		},
+	}
+
+	var b strings.Builder
+	writeLLMSMediumMetaTools(&b, catalog)
+	got := b.String()
+
+	for _, want := range []string{"### gitlab_issue", "**Issue**", "Actions (3):", "create, get, list"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("medium meta-tools output missing %q\ngot:\n%s", want, got)
+		}
+	}
+	// Actions must be sorted so regeneration is deterministic.
+	if strings.Index(got, "create") > strings.Index(got, "get") {
+		t.Error("actions are not sorted alphabetically")
+	}
+	for _, unwanted := range []string{"inputSchema", "\"properties\"", "Input Schema"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("medium meta-tools output must not embed schemas, found %q", unwanted)
+		}
 	}
 }

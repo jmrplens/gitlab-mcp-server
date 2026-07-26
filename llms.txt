@@ -34,7 +34,7 @@ Native binary instead of Docker: download the release asset for the user's OS an
 
 Claude Code (CLI): `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false` (Docker), or `claude mcp add gitlab -e GITLAB_TOKEN=<token> -- gitlab-mcp-server` (native binary).
 
-The exact config-file path and JSON schema for each client (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth) are in [docs/guides/ide-configuration.md](docs/guides/ide-configuration.md).
+The exact config-file path and JSON schema for each client (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth) are in [docs/guides/ide-configuration.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/ide-configuration.md).
 
 Setup wizard:
 
@@ -198,26 +198,30 @@ Prompts:
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md): Installation and first-run guide
-- [Claude Desktop extension](docs/guides/claude-desktop-extension.md): One-click .mcpb install for Claude Desktop (macOS universal + Windows)
-- [Configuration](docs/reference/configuration.md): Full configuration reference
-- [Environment variables](docs/reference/env.md): Environment variable reference
-- [HTTP server mode](docs/guides/http-server-mode.md): Remote MCP transport setup
-- [Security model](docs/concepts/security.md): Authentication, read-only mode, safe mode, and security controls
-- [Privacy policy](PRIVACY.md): No telemetry; data flows only to the configured GitLab instance
+- [Getting started](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/getting-started.md): Installation and first-run guide
+- [Claude Desktop extension](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/claude-desktop-extension.md): One-click .mcpb install for Claude Desktop (macOS universal + Windows)
+- [Configuration](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/configuration.md): Full configuration reference
+- [Environment variables](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/env.md): Environment variable reference
+- [HTTP server mode](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/http-server-mode.md): Remote MCP transport setup
+- [Security model](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/security.md): Authentication, read-only mode, safe mode, and security controls
+- [Privacy policy](https://github.com/jmrplens/gitlab-mcp-server/blob/main/PRIVACY.md): No telemetry; data flows only to the configured GitLab instance
 
 ## Tool References
 
-- [Dynamic tools](docs/concepts/dynamic-tools.md): Low-token find/execute mode and usage pattern
-- [Meta-tools](docs/concepts/meta-tools.md): Consolidated domain meta-tool action reference
-- [All tools](docs/reference/tools/README.md): Complete per-domain tool reference
-- [Resources](docs/reference/resources.md): Read-only MCP resource reference
-- [Prompts](docs/reference/prompts.md): Reusable MCP prompt templates
+- [Dynamic tools](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/dynamic-tools.md): Low-token find/execute mode and usage pattern
+- [Meta-tools](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/meta-tools.md): Consolidated domain meta-tool action reference
+- [All tools](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/tools/README.md): Complete per-domain tool reference
+- [Resources](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/resources.md): Read-only MCP resource reference
+- [Prompts](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/prompts.md): Reusable MCP prompt templates
 
 ## Optional
 
-- [Full LLM reference](llms-full.txt): Generated companion reference with tool schemas, resource listings, and prompts
-- [Architecture](docs/concepts/architecture.md): Internal architecture and catalog-first runtime overview
-- [Output format](docs/reference/output-format.md): Markdown and structured output conventions
-- [Troubleshooting](docs/guides/troubleshooting.md): Common setup and runtime issues
-- [Evaluation results](docs/development/testing/model-results.md): Surface evaluation summaries for model behavior
+- [Medium LLM reference](https://jmrplens.github.io/gitlab-mcp-server/llms-medium.txt): Every tool and action with descriptions, without per-action schemas — sized to load into a context window
+- [Full LLM reference](https://jmrplens.github.io/gitlab-mcp-server/llms-full.txt): Complete reference with every per-action JSON schema; large, best used with search or retrieval
+- [Meta-tools reference](https://jmrplens.github.io/gitlab-mcp-server/llms-full-meta-tools.txt): Full schemas for the dynamic and meta-tool surfaces only
+- [Individual tools reference](https://jmrplens.github.io/gitlab-mcp-server/llms-full-individual-tools.txt): Full schemas for the one-tool-per-operation surface only
+- [Resources and prompts reference](https://jmrplens.github.io/gitlab-mcp-server/llms-full-resources-prompts.txt): MCP resource and prompt definitions only
+- [Architecture](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md): Internal architecture and catalog-first runtime overview
+- [Output format](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/output-format.md): Markdown and structured output conventions
+- [Troubleshooting](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/troubleshooting.md): Common setup and runtime issues
+- [Evaluation results](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/testing/model-results.md): Surface evaluation summaries for model behavior

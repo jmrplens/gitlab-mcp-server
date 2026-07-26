@@ -2,9 +2,19 @@
 title: Ejemplos de revisión de código
 description: "Ejemplos de revisión de merge requests con GitLab MCP Server — listar MRs, leer diffs, aprobaciones, notas y discusiones, fusionar y comparar ramas."
 datePublished: "2026-04-23"
+faq:
+  - q: "¿Cómo reviso un merge request de GitLab con un asistente de IA?"
+    a: "Una revisión completa son tres llamadas. `gitlab_merge_request` con `action: list` y `reviewer_id` encuentra los MR que esperan por ti, `action: changes` obtiene el diff para que el asistente lea el código real, y `action: discussion_create` publica comentarios en hilo sobre líneas concretas. En la superficie dinámica se resuelven como `merge_request.list`, `merge_request.changes` y `merge_request.discussion_create`. Revisar un MR de doce ficheros cuesta por tanto tres llamadas, no una por fichero."
+  - q: "¿Cuál es la diferencia entre una nota, una discusión y una nota borrador?"
+    a: "Una nota (`action: note_create`) es un comentario suelto que se publica de inmediato. Una discusión (`action: discussion_create`) abre un hilo resoluble al que otros pueden responder y que cuenta para los hilos sin resolver que condicionan el merge. Una nota borrador (`action: draft_note_create`) queda guardada en privado y es invisible para el autor hasta que publicas toda la revisión de golpe, que es lo que interesa al dejar muchos comentarios: el autor recibe una notificación en vez de veinte."
+  - q: "¿Cómo encuentro hilos de revisión sin resolver en un merge request?"
+    a: "Llama a `gitlab_merge_request` con `action: discussion_list` para el MR y filtra los hilos devueltos por `resolved: false`. Las notas creadas con `action: note_create` no son resolubles y nunca aparecen como pendientes, así que aquí solo salen las discusiones. Esta es la comprobación previa al merge cuando el proyecto exige resolver todos los hilos."
+  - q: "¿Puede un asistente de IA aprobar y fusionar un merge request?"
+    a: "Sí, sujeto a los mismos permisos y salvaguardas que cualquier otra mutación. Aprobar es `gitlab_merge_request` con `action: approve` y fusionar es `action: merge`. Ambas se clasifican como mutantes, así que no están disponibles con `GITLAB_READ_ONLY=true` y devuelven una previsualización con `GITLAB_SAFE_MODE=true`. GitLab sigue aplicando sus propias reglas de aprobación: un asistente no puede fusionar un MR que no cumpla las aprobaciones requeridas del proyecto."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import FAQ from "../../../../components/FAQ.astro";
 
 <CardGrid>
 	<LinkCard
@@ -105,6 +115,16 @@ No existe una herramienta de "revisión con IA" separada. La revisión asistida 
 ## Discusiones y notas de MR
 
 Comparte el feedback de revisión directamente en el MR. Publica un único comentario en línea, abre una discusión en hilo para un tema más amplio, encuentra los hilos que siguen sin resolver o prepara notas en borrador para publicar toda tu revisión a la vez.
+
+Los tres tipos de comentario se comportan de forma distinta, y elegir mal es el error de revisión más habitual:
+
+| Tipo          | Acción              | ¿Resoluble?       | ¿Visible al instante?         | Úsalo para                                         |
+| ------------- | ------------------- | ----------------- | ----------------------------- | -------------------------------------------------- |
+| Nota          | `note_create`       | No                | Sí                            | Un comentario suelto                               |
+| Discusión     | `discussion_create` | Sí                | Sí                            | Feedback que debe resolverse antes del merge       |
+| Nota borrador | `draft_note_create` | Sí, al publicarse | No — en espera hasta publicar | Una revisión de varios comentarios publicada junta |
+
+Solo las discusiones cuentan para el control de hilos sin resolver. Las notas borrador evitan que el autor reciba una notificación por cada comentario mientras revisas un MR grande.
 
 ### Añadir un comentario de revisión
 
@@ -211,3 +231,5 @@ Devuelve: lista de commits, archivos modificados y estadísticas del diff entre 
 :::tip
 Para la mejor experiencia de revisión, combina varios prompts en secuencia: primero lista los MRs, luego lee los cambios y después solicita análisis con IA. El asistente de IA mantiene el contexto entre prompts.
 :::
+
+<FAQ />

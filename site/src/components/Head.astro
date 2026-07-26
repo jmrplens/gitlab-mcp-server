@@ -5,6 +5,22 @@
 // The site-wide @graph (Person / WebSite / SoftwareApplication) lives in
 // astro.config.mjs; these IDs link the per-page nodes back into that graph.
 import Default from "@astrojs/starlight/components/Head.astro";
+import { getCollection } from "astro:content";
+import { faqPlainText } from "../utils/faq";
+
+// Route paths that actually resolve to a built page. Breadcrumbs are assembled
+// per path segment, but section segments like /tools/ or /operations/ have no
+// index page — emitting them as linked `item` URLs pointed 44 of 60 pages at
+// 404s, which invalidates the breadcrumb for Google and dead-ends AI crawlers.
+// Deriving the set from the content collection means adding a real section
+// index later re-links it automatically, with no code change here.
+const EXISTING_ROUTES = new Set(
+	(await getCollection("docs")).map((entry: { id: string }) => {
+		const id = entry.id.replace(/\.mdx?$/, "");
+		const slug = id === "index" ? "" : id.replace(/\/index$/, "");
+		return slug ? `/${slug}/` : "/";
+	}),
+);
 
 // Derive origin + base path from Astro config so a domain/base rename needs no
 // code change here. PERSON_ID mirrors `authorId` in astro.config.mjs (an
@@ -18,6 +34,14 @@ const WEBSITE_ID = `${SITE}${BASE}/#website`;
 const SOFTWARE_ID = "https://github.com/jmrplens/gitlab-mcp-server#software";
 // Google's Article family requires an image; the social card doubles as one.
 const OG_IMAGE = `${SITE}${BASE}/og-image.png`;
+// Typed rather than a bare URL string so consumers get the dimensions without
+// having to fetch the file.
+const OG_IMAGE_OBJECT = {
+	"@type": "ImageObject",
+	url: OG_IMAGE,
+	width: 1200,
+	height: 630,
+};
 // These pages document tool call shapes, parameters and return values rather
 // than explaining a concept. APIReference is the TechArticle subtype for that.
 const API_REFERENCE_PAGES = [
@@ -32,7 +56,12 @@ const API_REFERENCE_PAGES = [
 // Minimal typed view of the Starlight route data we consume.
 interface RouteData {
 	entry?: {
-		data?: { title?: string; description?: string; datePublished?: string };
+		data?: {
+			title?: string;
+			description?: string;
+			datePublished?: string;
+			faq?: { q: string; a: string }[];
+		};
 	};
 	lastUpdated?: Date;
 }
@@ -75,7 +104,7 @@ const techArticle =
 			inLanguage: lang,
 			url: canonical,
 			mainEntityOfPage: canonical,
-			image: OG_IMAGE,
+			image: OG_IMAGE_OBJECT,
 			// Point voice/AI assistants at the page title and lead paragraph.
 			speakable: {
 				"@type": "SpeakableSpecification",
@@ -92,6 +121,57 @@ const techArticle =
 			isPartOf: { "@id": WEBSITE_ID },
 			about: { "@id": SOFTWARE_ID },
 		};
+
+// The splash homepages get no TechArticle — they are not articles — but they
+// still need a page-level node. Without one, each locale's home was described
+// only by a free-floating FAQPage, leaving the site's two most important URLs
+// with no document entity to anchor `isPartOf` / `about` / `speakable`.
+const webPage =
+	isHome && !isNotFound
+		? {
+			"@context": "https://schema.org",
+			"@type": "WebPage",
+			"@id": `${canonical}#webpage`,
+			url: canonical,
+			name: title,
+			...(description ? { description } : {}),
+			inLanguage: lang,
+			primaryImageOfPage: OG_IMAGE_OBJECT,
+			speakable: {
+				"@type": "SpeakableSpecification",
+				cssSelector: ["h1", ".sl-markdown-content > p:first-of-type"],
+			},
+			...(updated ? { dateModified: updated } : {}),
+			...(data.datePublished ? { datePublished: data.datePublished } : {}),
+			isPartOf: { "@id": WEBSITE_ID },
+			about: { "@id": SOFTWARE_ID },
+			publisher: { "@id": PERSON_ID },
+		}
+		: null;
+
+// FAQPage built from the page's `faq:` frontmatter. Always addressable and
+// always anchored to the page's own document node (the article, or the WebPage
+// on the two splash homepages) so it reads as part of that page rather than as
+// a second, unrelated document claiming the same URL.
+const faqEntries = data.faq ?? [];
+const faq =
+	faqEntries.length > 0 && !isNotFound
+		? {
+			"@context": "https://schema.org",
+			"@type": "FAQPage",
+			"@id": `${canonical}#faq`,
+			inLanguage: lang,
+			isPartOf: { "@id": `${canonical}#${isHome ? "webpage" : "article"}` },
+			about: { "@id": SOFTWARE_ID },
+			mainEntity: faqEntries.map((item) => ({
+				"@type": "Question",
+				name: item.q,
+				// Same source as the rendered section, resolved to the plain text
+				// schema.org requires (stat tokens expanded, inline markers removed).
+				acceptedAnswer: { "@type": "Answer", text: faqPlainText(item.a) },
+			})),
+		}
+		: null;
 
 // BreadcrumbList for every non-home page, with locale-aware labels.
 function titleCase(seg: string) {
@@ -112,22 +192,39 @@ let breadcrumb = null;
 if (!isHome && !isNotFound) {
 	const homeUrl = lang === "es" ? `${SITE}${BASE}/es/` : `${SITE}${BASE}/`;
 	const homeName = lang === "es" ? "Inicio" : "Home";
-	const items = [{ "@type": "ListItem", position: 1, name: homeName, item: homeUrl }];
+	// `item` is optional: intermediate segments with no built page are emitted
+	// name-only rather than linked to a 404.
+	interface ListItem {
+		"@type": string;
+		position: number;
+		name: string;
+		item?: string;
+	}
+	const items: ListItem[] = [
+		{ "@type": "ListItem", position: 1, name: homeName, item: homeUrl },
+	];
 	const segs = rel.split("/").filter(Boolean).filter((s) => s !== "es");
 	let acc = lang === "es" ? `${BASE}/es` : BASE;
+	let relAcc = lang === "es" ? "/es" : "";
 	segs.forEach((seg, i) => {
 		acc += `/${seg}`;
+		relAcc += `/${seg}`;
 		const last = i === segs.length - 1;
+		// A ListItem with `name` but no `item` is the documented form for a
+		// breadcrumb level that is not a link, so unbuilt section segments stay in
+		// the trail without pointing at a 404.
+		const linked = last || EXISTING_ROUTES.has(`${relAcc}/`);
 		items.push({
 			"@type": "ListItem",
 			position: i + 2,
 			name: last ? title : segLabel(seg, lang),
-			item: new URL(`${acc}/`, SITE).href,
+			...(linked ? { item: new URL(`${acc}/`, SITE).href } : {}),
 		});
 	});
 	breadcrumb = {
 		"@context": "https://schema.org",
 		"@type": "BreadcrumbList",
+		"@id": `${canonical}#breadcrumb`,
 		itemListElement: items,
 	};
 }
@@ -137,6 +234,10 @@ if (!isHome && !isNotFound) {
 
 {isNotFound && <meta name="robots" content="noindex, follow" />}
 {techArticle && <script type="application/ld+json" is:inline set:html={JSON.stringify(techArticle)} />}
+{webPage && <script type="application/ld+json" is:inline set:html={JSON.stringify(webPage)} />}
+{faq && <script type="application/ld+json" is:inline set:html={JSON.stringify(faq)} />}
 {breadcrumb && <script type="application/ld+json" is:inline set:html={JSON.stringify(breadcrumb)} />}
+<link rel="alternate" type="text/plain" href={`${BASE}/llms.txt`} title="llms.txt" />
+<link rel="alternate" type="text/plain" href={`${BASE}/llms-full.txt`} title="llms-full.txt" />
 <meta name="twitter:title" content={title} />
 {description && <meta name="twitter:description" content={description} />}
