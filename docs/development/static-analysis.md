@@ -269,6 +269,29 @@ The configured timeout is in [`.golangci.yml`](../../.golangci.yml). For one-off
 golangci-lint run --timeout 20m ./...
 ```
 
+If a cold run hits the timeout, suspect concurrency before suspecting the
+timeout. `golangci-lint` defaults to one worker per logical CPU, and across 226
+packages and 55 linters that working set does not fit comfortably in memory on a
+many-threaded machine — it thrashes rather than going faster. Measured on a cold
+cache on the same 16-thread machine:
+
+| Concurrency         | Peak RSS | Cold run    |
+| ------------------- | -------- | ----------- |
+| 16 (former default) | 4.4 GB   | >18m, unfinished |
+| 4 (`run.concurrency`) | 3.6 GB | **3m01s**   |
+
+`run.concurrency: 4` is therefore set in `.golangci.yml`. CI runners have 4 vCPUs
+and were already getting this implicitly, which is why CI completed in ~4 minutes
+while a much larger local machine timed out. Raising it is unlikely to help; if
+you need to experiment, override per-run with `-j`:
+
+```bash
+golangci-lint run -j 8 ./...
+```
+
+The analysis cache matters too — a warm run takes seconds against minutes cold —
+but it is rebuilt automatically and needs no manual warming.
+
 ### Need a standalone tool during investigation
 
 Use standalone commands temporarily for debugging if they provide more focused output, but do not add them back to `make analyze` or CI when the same check is already enforced through `golangci-lint`.

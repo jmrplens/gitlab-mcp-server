@@ -13,6 +13,14 @@ run:
   go: "1.26"
   timeout: 15m
   tests: true
+  # golangci-lint defaults to one worker per logical CPU. Across 226 packages
+  # and 55 linters that working set does not fit comfortably in memory on a
+  # many-threaded machine: measured on a cold cache, the default (16 workers on
+  # a 16-thread laptop) peaked at 4.4GB and had not finished after 18 minutes,
+  # while the same run capped at 4 workers peaked at 3.6GB and took 3m01s.
+  # CI runners have 4 vCPUs, so this matches what CI already does implicitly and
+  # only changes behaviour on bigger machines — where it is 6x faster.
+  concurrency: 4
   build-tags:
     - e2e
 
