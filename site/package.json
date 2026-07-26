@@ -12,6 +12,7 @@
     "postbuild": "node scripts/normalize-html.mjs && node scripts/add-sitemap-lastmod.mjs",
     "preview": "astro preview",
     "check": "astro check",
+    "identity:sync": "node scripts/sync-identity.mjs",
     "eslint": "eslint .",
     "html-validate": "html-validate 'dist/**/*.html'",
     "htmlhint": "htmlhint 'dist/**/*.html'",

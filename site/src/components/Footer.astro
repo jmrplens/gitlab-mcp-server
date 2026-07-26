@@ -12,6 +12,16 @@ const rel = pathname.startsWith(BASE) ? pathname.slice(BASE.length) : pathname;
 const isES = rel === "/es" || rel.startsWith("/es/");
 
 const label = isES ? "Mantenido por" : "Maintained by";
+
+// The maintainer's project index. Gives a reader — and a crawler — a path from
+// this project to the whole portfolio, where every #software node in the
+// identity graph is listed together. Not `rel="me"`: it is a page, not an
+// identity profile.
+const projectsUrl = isES
+	? "https://jmrp.io/es/projects/"
+	: "https://jmrp.io/projects/";
+const projectsText = isES ? "Todos los proyectos" : "All projects";
+
 // Curated subset of the Person `sameAs` set in the site-wide @graph — the
 // human-relevant profiles; machine-oriented entries (Matrix, Keyoxide) stay
 // JSON-LD-only.
@@ -40,6 +50,9 @@ const links = [
 				</a>
 			))
 		}
+	<a href={projectsUrl} rel="noopener noreferrer" target="_blank">
+			{projectsText}
+		</a>
 	</span>
 </div>
 
