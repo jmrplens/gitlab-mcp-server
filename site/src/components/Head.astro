@@ -16,10 +16,24 @@ const WEBSITE_ID = `${SITE}${BASE}/#website`;
 // Matches the SoftwareApplication @id in the site-wide @graph (astro.config.mjs),
 // which carries the directory-listing sameAs — so each page's TechArticle ties back to it.
 const SOFTWARE_ID = "https://github.com/jmrplens/gitlab-mcp-server#software";
+// Google's Article family requires an image; the social card doubles as one.
+const OG_IMAGE = `${SITE}${BASE}/og-image.png`;
+// These pages document tool call shapes, parameters and return values rather
+// than explaining a concept. APIReference is the TechArticle subtype for that.
+const API_REFERENCE_PAGES = [
+	"/tools/meta-tools/",
+	"/tools/dynamic-tools/",
+	"/tools/orbit/",
+	"/es/tools/meta-tools/",
+	"/es/tools/dynamic-tools/",
+	"/es/tools/orbit/",
+];
 
 // Minimal typed view of the Starlight route data we consume.
 interface RouteData {
-	entry?: { data?: { title?: string; description?: string } };
+	entry?: {
+		data?: { title?: string; description?: string; datePublished?: string };
+	};
 	lastUpdated?: Date;
 }
 const route = (Astro.locals as { starlightRoute?: RouteData }).starlightRoute;
@@ -32,28 +46,47 @@ const canonical = new URL(pathname, SITE).href;
 const rel = pathname.startsWith(BASE) ? pathname.slice(BASE.length) : pathname; // /tools/overview/
 const lang = rel.startsWith("/es/") || rel === "/es" ? "es" : "en";
 const isHome = rel === "/" || rel === "" || rel === "/es/" || rel === "/es";
+// Starlight emits the not-found page as dist/404.html, which GitHub Pages serves
+// with a real HTTP 404 — but its canonical still points at /404/, a URL that does
+// not exist. Marking it noindex keeps a soft-404 out of the index and stops that
+// dangling canonical from being consulted at all. It gets no article node either:
+// an error page is not a document worth describing.
+const isNotFound = rel === "/404/" || rel === "/404";
 
 // Git-derived last-updated date (Starlight `lastUpdated: true`).
 const updated =
 	route?.lastUpdated instanceof Date ? route.lastUpdated.toISOString() : undefined;
 
-// TechArticle for every content page (not the splash home).
-const techArticle = isHome
-	? null
-	: {
+// TechArticle for every content page (not the splash home or the 404).
+const techArticle =
+	isHome || isNotFound
+		? null
+		: {
 			"@context": "https://schema.org",
-			"@type": "TechArticle",
+			"@type": API_REFERENCE_PAGES.includes(rel)
+				? "APIReference"
+				: "TechArticle",
+			// Addressable, so a page's other nodes (FAQPage, HowTo, ItemList,
+			// Dataset) can point at this one instead of standing beside it as an
+			// unrelated second document.
+			"@id": `${canonical}#article`,
 			headline: title,
 			...(description ? { description } : {}),
 			inLanguage: lang,
 			url: canonical,
 			mainEntityOfPage: canonical,
+			image: OG_IMAGE,
 			// Point voice/AI assistants at the page title and lead paragraph.
 			speakable: {
 				"@type": "SpeakableSpecification",
 				cssSelector: ["h1", ".sl-markdown-content > p:first-of-type"],
 			},
-			...(updated ? { datePublished: updated, dateModified: updated } : {}),
+			// Git only knows when a page last changed. Deriving `datePublished`
+			// from that same value made every page claim it was first published on
+			// the day it was last edited, so first publication is opt-in per page
+			// via frontmatter and only `dateModified` comes from git.
+			...(updated ? { dateModified: updated } : {}),
+			...(data.datePublished ? { datePublished: data.datePublished } : {}),
 			author: { "@id": PERSON_ID },
 			publisher: { "@id": PERSON_ID },
 			isPartOf: { "@id": WEBSITE_ID },
@@ -76,7 +109,7 @@ function segLabel(seg: string, locale: "en" | "es") {
 	return SECTION_LABELS[seg]?.[locale] ?? titleCase(seg);
 }
 let breadcrumb = null;
-if (!isHome) {
+if (!isHome && !isNotFound) {
 	const homeUrl = lang === "es" ? `${SITE}${BASE}/es/` : `${SITE}${BASE}/`;
 	const homeName = lang === "es" ? "Inicio" : "Home";
 	const items = [{ "@type": "ListItem", position: 1, name: homeName, item: homeUrl }];
@@ -102,6 +135,7 @@ if (!isHome) {
 
 <Default />
 
+{isNotFound && <meta name="robots" content="noindex, follow" />}
 {techArticle && <script type="application/ld+json" is:inline set:html={JSON.stringify(techArticle)} />}
 {breadcrumb && <script type="application/ld+json" is:inline set:html={JSON.stringify(breadcrumb)} />}
 <meta name="twitter:title" content={title} />

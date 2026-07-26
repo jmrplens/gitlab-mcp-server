@@ -1,7 +1,118 @@
 ---
 title: Tools Overview
 description: How GitLab MCP Server's three tool modes — dynamic, meta-tool, and individual — expose 1,000+ GitLab operations while trading token cost for granularity.
+datePublished: "2026-04-21"
 head:
+  # The page an AI reads to answer "what can this server do?". The prose groups
+  # the base meta-tools into eight families, but nothing in the markup said so —
+  # each family now has a citable deep link.
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "@id": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#meta-tool-families",
+        "name": "GitLab MCP Server base meta-tool families",
+        "description": "The eight families the base meta-tools are grouped into in meta-tool mode. Each family covers a set of GitLab domains reachable through a single domain dispatcher tool.",
+        "itemListOrder": "https://schema.org/ItemListOrderAscending",
+        "numberOfItems": 8,
+        "isPartOf": { "@id": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#article" },
+        "about": { "@id": "https://github.com/jmrplens/gitlab-mcp-server#software" },
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Project management",
+            "description": "Projects, issues, groups, users and wikis: gitlab_project, gitlab_issue, gitlab_group, gitlab_user, gitlab_wiki.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#project-management"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Code & repository",
+            "description": "Branches, tags, releases, repository trees and merge requests: gitlab_branch, gitlab_tag, gitlab_release, gitlab_repository, gitlab_merge_request.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#code--repository"
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "Code review",
+            "description": "Merge request review surface — approvals, discussions, draft notes and diffs: gitlab_mr_review.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#code-review"
+          },
+          {
+            "@type": "ListItem",
+            "position": 4,
+            "name": "CI/CD",
+            "description": "Pipelines, jobs, runners, CI variables and environments: gitlab_pipeline, gitlab_job, gitlab_runner, gitlab_ci_variable, gitlab_environment.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#cicd"
+          },
+          {
+            "@type": "ListItem",
+            "position": 5,
+            "name": "Search & analysis",
+            "description": "Instance, group and project scoped search across code, issues, merge requests, commits and more: gitlab_search.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#search--analysis"
+          },
+          {
+            "@type": "ListItem",
+            "position": 6,
+            "name": "Access & credentials",
+            "description": "Access tokens, deploy keys, deploy tokens and instance administration: gitlab_access, gitlab_admin.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#access--credentials"
+          },
+          {
+            "@type": "ListItem",
+            "position": 7,
+            "name": "Packages & content",
+            "description": "Package registry, snippets and project templates: gitlab_package, gitlab_snippet, gitlab_template.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#packages--content"
+          },
+          {
+            "@type": "ListItem",
+            "position": 8,
+            "name": "Discovery & utilities",
+            "description": "Feature flags, model registry, CI/CD catalog, custom emoji and git-remote project resolution: gitlab_feature_flags, gitlab_model_registry, gitlab_ci_catalog, gitlab_custom_emoji, gitlab_resolve_project.",
+            "url": "https://jmrplens.github.io/gitlab-mcp-server/tools/overview/#discovery--utilities"
+          }
+        ]
+      }
+  # The tool catalog is also published as two machine-readable files. Describing
+  # them as a Dataset gives a crawler a reason to fetch the full catalog instead
+  # of inferring it from prose.
+  - tag: script
+    attrs:
+      type: application/ld+json
+    content: |
+      {
+        "@context": "https://schema.org",
+        "@type": "Dataset",
+        "@id": "https://github.com/jmrplens/gitlab-mcp-server#tool-catalog",
+        "name": "GitLab MCP Server tool catalog",
+        "description": "The complete machine-readable catalog of GitLab MCP Server's MCP surface: every tool and action name with its description and parameters, plus the resources, prompts and meta-tool groups, generated from the canonical action catalog at build time.",
+        "inLanguage": "en",
+        "license": "https://opensource.org/licenses/MIT",
+        "isAccessibleForFree": true,
+        "creator": { "@id": "https://jmrp.io/#person" },
+        "about": { "@id": "https://github.com/jmrplens/gitlab-mcp-server#software" },
+        "keywords": "Model Context Protocol, MCP tools, GitLab API, tool catalog, llms.txt",
+        "distribution": [
+          {
+            "@type": "DataDownload",
+            "name": "llms.txt — catalog summary",
+            "encodingFormat": "text/markdown",
+            "contentUrl": "https://jmrplens.github.io/gitlab-mcp-server/llms.txt"
+          },
+          {
+            "@type": "DataDownload",
+            "name": "llms-full.txt — full tool and action reference",
+            "encodingFormat": "text/markdown",
+            "contentUrl": "https://jmrplens.github.io/gitlab-mcp-server/llms-full.txt"
+          }
+        ]
+      }
   - tag: script
     attrs:
       type: application/ld+json
