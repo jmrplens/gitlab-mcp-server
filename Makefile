@@ -412,6 +412,15 @@ golangci-lint:
 	@echo === golangci-lint run ===
 	golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS)
 
+## lint-warm: rebuild the golangci-lint analysis cache, showing progress.
+## For use after a wholesale cache invalidation (Go or golangci-lint upgrade,
+## .golangci.yml change), where a cold `golangci-lint run ./...` takes minutes
+## and prints nothing until it ends. Trades some wall-clock time for a real
+## percentage. Everyday linting should still use `make golangci-lint`.
+## Optional batch count: make lint-warm BATCHES=20
+lint-warm:
+	./scripts/lint-warm.sh $(BATCHES)
+
 ## govulncheck: scan Go dependencies for known CVEs using call-graph analysis.
 ## Only reports vulnerabilities where the vulnerable function is actually called.
 ## Docs: https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck

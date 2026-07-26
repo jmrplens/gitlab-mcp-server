@@ -86,6 +86,7 @@ gotestsum --version
 | Target               | Description                                                                           |
 | -------------------- | ------------------------------------------------------------------------------------- |
 | `make golangci-lint` | Verify `.golangci.yml`, check configured Go formatting, and run configured Go linters |
+| `make lint-warm`     | Rebuild the golangci-lint analysis cache with per-batch progress                      |
 | `make fmt`           | Apply configured Go formatters through `golangci-lint fmt`                            |
 | `make govulncheck`   | Scan Go dependencies and reachable calls for known CVEs                               |
 | `make mdlint`        | Lint all Markdown files, excluding `plan/`                                            |
@@ -268,6 +269,26 @@ The configured timeout is in [`.golangci.yml`](../../.golangci.yml). For one-off
 ```bash
 golangci-lint run --timeout 20m ./...
 ```
+
+A timeout almost always means the analysis cache was invalidated wholesale — by a
+Go or golangci-lint upgrade, or a `.golangci.yml` change — rather than that the
+code got slower. The cache is worth a great deal: measured on 25 packages, a cold
+run took 49.8s against 1.5s warm, a 33x difference. CI pays the cold cost on every
+run (a fresh runner has no cache) and completes in about four minutes; a slower
+local machine can exceed the configured 15m.
+
+When you know the cache is cold and would rather rebuild it deliberately than pay
+for it inside your next lint, use:
+
+```bash
+make lint-warm            # 12 batches by default
+make lint-warm BATCHES=20 # finer-grained progress
+```
+
+It reports progress per batch, which a plain `golangci-lint run ./...` cannot do —
+`-v` prints phases, never items. Batching costs some wall-clock time because it
+gives up cross-package parallelism, so it is a warm-up tool, not a replacement for
+`make golangci-lint`.
 
 ### Need a standalone tool during investigation
 
