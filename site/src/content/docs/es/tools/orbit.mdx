@@ -2,58 +2,22 @@
 title: Orbit
 description: Seis herramientas MCP de solo lectura para la API experimental Knowledge Graph de GitLab.com, disponibles solo en GitLab.com Ultimate.
 datePublished: "2026-05-06"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "¿Qué es Orbit en GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Orbit expone la API experimental Knowledge Graph de GitLab.com mediante seis herramientas MCP de solo lectura: status, schema, tools, dsl, query y graph_status. Estas herramientas permiten a un asistente de IA comprobar la salud del servicio, inspeccionar la ontología del grafo, descubrir el manifiesto vivo de consultas, obtener el DSL de consulta, ejecutar consultas de solo lectura sobre el Knowledge Graph y comprobar el estado de indexación. Orbit no realiza escrituras. Solo se registra cuando el servidor se conecta a https://gitlab.com y el catálogo Enterprise/Premium está habilitado con Ultimate, y aparece como la meta-herramienta gitlab_orbit con seis acciones o como seis herramientas individuales gitlab_orbit_*."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Orbit está disponible en GitLab autoalojado?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "No. Orbit solo está disponible cuando GitLab MCP Server se conecta a https://gitlab.com. Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuando el catálogo Enterprise/Premium está habilitado, porque la API experimental Knowledge Graph subyacente está alojada en GitLab.com."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Qué licencia requiere Orbit?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Orbit requiere GitLab Ultimate en una conexión a GitLab.com. Actívalo con GITLAB_TIER=ultimate en modo stdio o --tier=ultimate en modo HTTP. Los flags heredados GITLAB_ENTERPRISE=true y --enterprise siguen funcionando pero están deprecados. Las instancias autoalojadas nunca registran Orbit, sea cual sea el tier."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Orbit es de solo lectura?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Sí. Las seis herramientas Orbit son de solo lectura. Inspeccionan la salud del servicio, la ontología del grafo, el manifiesto de consultas, el DSL de consulta y el estado de indexación, y ejecutan consultas de solo lectura sobre el Knowledge Graph. La acción query ejecuta objetos de consulta contra un índice y nunca modifica datos de GitLab."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Cuáles son las cuatro variantes de query_type de Orbit?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "La acción query acepta un objeto JSON de consulta cuyo query_type selecciona una de cuatro variantes: traversal (recorrer nodos por entity, filters o id_range), aggregation (agrupar y agregar sobre nodos), neighbors (expandir los vecinos de un nodo acotado) y path_finding (encontrar caminos entre dos o más nodos acotados, con max_depth de 1 a 3). Las cuatro comparten el único discriminador query_type y solo divergen en sus claves hermanas."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "¿Qué es Orbit en GitLab MCP Server?"
+    a: "Orbit expone la API experimental Knowledge Graph de GitLab.com mediante seis herramientas MCP de solo lectura: status, schema, tools, dsl, query y graph_status. Estas herramientas permiten a un asistente de IA comprobar la salud del servicio, inspeccionar la ontología del grafo, descubrir el manifiesto vivo de consultas, obtener el DSL de consulta, ejecutar consultas de solo lectura sobre el Knowledge Graph y comprobar el estado de indexación. Orbit no realiza escrituras. Solo se registra cuando el servidor se conecta a https://gitlab.com y el catálogo Enterprise/Premium está habilitado con Ultimate, y aparece como la meta-herramienta gitlab_orbit con seis acciones o como seis herramientas individuales gitlab_orbit_*."
+  - q: "¿Orbit está disponible en GitLab autoalojado?"
+    a: "No. Orbit solo está disponible cuando GitLab MCP Server se conecta a `https://gitlab.com`. Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuando el catálogo Enterprise/Premium está habilitado, porque la API experimental Knowledge Graph subyacente está alojada en GitLab.com. No existe ningún flag que añada Orbit a una conexión autoalojada."
+  - q: "¿Qué licencia y configuración requiere Orbit?"
+    a: "Orbit requiere GitLab Ultimate en una conexión a GitLab.com. Actívalo con `GITLAB_TIER=ultimate` en modo stdio o `--tier=ultimate` en modo HTTP. Los flags heredados `GITLAB_ENTERPRISE=true` y `--enterprise` siguen funcionando como alternativa pero están deprecados. Cuando se cumplen estas condiciones, Orbit aparece como la meta-herramienta `gitlab_orbit` (seis acciones) o seis herramientas individuales `gitlab_orbit_*`."
+  - q: "¿Orbit es de solo lectura?"
+    a: "Sí. Las seis herramientas Orbit son de solo lectura. `status`, `schema`, `tools`, `dsl` y `graph_status` solo inspeccionan salud, ontología, manifiesto, DSL y estado de indexación, y `query` ejecuta objetos de consulta de solo lectura sobre el Knowledge Graph contra el índice. Ninguna acción de Orbit modifica datos de GitLab, así que Orbit es seguro de exponer incluso en despliegues cautelosos."
+  - q: "¿Cuáles son las cuatro variantes de query_type de Orbit?"
+    a: "La acción `query` acepta un objeto JSON de consulta cuyo `query_type` selecciona una de cuatro variantes: **traversal** (recorrer nodos por entity, `node_ids`, `filters` o `id_range`), **aggregation** (agrupar y agregar sobre nodos), **neighbors** (expandir los vecinos de un nodo acotado) y **path_finding** (encontrar caminos entre dos o más nodos acotados, con `max_depth` de 1 a 3). Las cuatro comparten el único discriminador `query_type` y solo divergen en sus claves hermanas."
+  - q: "¿Cómo conozco los parámetros exactos de una acción Orbit?"
+    a: 'En modo meta-herramientas, lee el recurso MCP por acción: por ejemplo, `gitlab://tools/gitlab_orbit.query` devuelve el schema de parámetros de la acción `query`. Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` o `minimal` y en cualquier modo de `META_PARAM_SCHEMA`. También puedes llamar a `action: "tools"` para obtener el manifiesto vivo de consultas servido por GitLab.com antes de construir una consulta.'
 ---
+
+import FAQ from "../../../../components/FAQ.astro";
 
 Orbit expone la API experimental Knowledge Graph de GitLab.com mediante **seis herramientas MCP de solo lectura** —`status`, `schema`, `tools`, `dsl`, `query` y `graph_status`—. Solo está disponible cuando el servidor se conecta a `https://gitlab.com` y el catálogo Enterprise/Premium está habilitado con Ultimate (`GITLAB_TIER=ultimate`, o `--tier=ultimate` en modo HTTP). Los flags heredados `GITLAB_ENTERPRISE=true`/`--enterprise` siguen funcionando pero están deprecados. Orbit nunca escribe: cada herramienta inspecciona salud, esquema o datos indexados, o ejecuta una consulta de solo lectura sobre el grafo.
 
@@ -298,24 +262,4 @@ GITLAB_COM_TOKEN=glpat-... \
 
 Consulta [Orbit live test fixtures](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/orbit-fixtures.md) para ver la disposición de los fixtures, el reproductor `scripts/setup-orbit-fixtures.sh`, y la advertencia sobre el indexer (el estado `error` transitorio es normal y las pruebas son informativas, no de igualdad estricta).
 
-## Preguntas frecuentes
-
-### ¿Orbit está disponible en GitLab autoalojado?
-
-No. Orbit solo está disponible cuando GitLab MCP Server se conecta a `https://gitlab.com`. Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuando el catálogo Enterprise/Premium está habilitado, porque la API experimental Knowledge Graph subyacente está alojada en GitLab.com. No existe ningún flag que añada Orbit a una conexión autoalojada.
-
-### ¿Qué licencia y configuración requiere Orbit?
-
-Orbit requiere GitLab Ultimate en una conexión a GitLab.com. Actívalo con `GITLAB_TIER=ultimate` en modo stdio o `--tier=ultimate` en modo HTTP. Los flags heredados `GITLAB_ENTERPRISE=true` y `--enterprise` siguen funcionando como alternativa pero están deprecados. Cuando se cumplen estas condiciones, Orbit aparece como la meta-herramienta `gitlab_orbit` (seis acciones) o seis herramientas individuales `gitlab_orbit_*`.
-
-### ¿Orbit es de solo lectura?
-
-Sí. Las seis herramientas Orbit son de solo lectura. `status`, `schema`, `tools`, `dsl` y `graph_status` solo inspeccionan salud, ontología, manifiesto, DSL y estado de indexación, y `query` ejecuta objetos de consulta de solo lectura sobre el Knowledge Graph contra el índice. Ninguna acción de Orbit modifica datos de GitLab, así que Orbit es seguro de exponer incluso en despliegues cautelosos.
-
-### ¿Cuáles son las cuatro variantes de query_type de Orbit?
-
-La acción `query` acepta un objeto JSON de consulta cuyo `query_type` selecciona una de cuatro variantes: **traversal** (recorrer nodos por entity, `node_ids`, `filters` o `id_range`), **aggregation** (agrupar y agregar sobre nodos), **neighbors** (expandir los vecinos de un nodo acotado) y **path_finding** (encontrar caminos entre dos o más nodos acotados, con `max_depth` de 1 a 3). Las cuatro comparten el único discriminador `query_type` y solo divergen en sus claves hermanas.
-
-### ¿Cómo conozco los parámetros exactos de una acción Orbit?
-
-En modo meta-herramientas, lee el recurso MCP por acción: por ejemplo, `gitlab://tools/gitlab_orbit.query` devuelve el schema de parámetros de la acción `query`. Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` o `minimal` y en cualquier modo de `META_PARAM_SCHEMA`. También puedes llamar a `action: "tools"` para obtener el manifiesto vivo de consultas servido por GitLab.com antes de construir una consulta.
+<FAQ />

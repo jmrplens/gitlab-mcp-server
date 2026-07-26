@@ -2,56 +2,19 @@
 title: Use Cases
 description: Common GitLab MCP Server workflows — code review, CI/CD debugging, issue management, releases, reports, and security review, all in natural language.
 datePublished: "2026-04-21"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "What can I do with GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server lets an AI assistant drive GitLab through natural language across eight common workflows: code review, CI/CD automation, issue management, release management, team management, code search, reports and analytics, and security review. Instead of switching to the GitLab web UI, you describe the outcome — for example, 'Summarize the changes in MR !42 and check for security issues' — and the assistant calls the matching GitLab tools, executes them, and returns the result. Every workflow maps to real GitLab REST and GraphQL operations exposed as MCP tools."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Can GitLab MCP Server review merge requests and leave comments?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Yes. The code review workflow uses the gitlab_merge_request, gitlab_mr_changes, and gitlab_mr_discussion tools so an assistant can list MRs awaiting review, summarize diffs, run a security pass, post review comments, and approve. A typical conversation is: 'Show open MRs in my-app that need review', then 'Summarize the changes in MR !42', 'Check MR !42 for security issues', 'Leave a comment suggesting input validation', and 'Approve MR !42'. Each step is a separate tool call against the GitLab API."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "How does GitLab MCP Server help debug CI/CD pipelines?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "The CI/CD workflow uses gitlab_pipeline, gitlab_job, and gitlab_ci_variable to inspect and recover failing pipelines without leaving the editor. You can ask for the latest pipeline status, list the failed jobs in a specific pipeline, retrieve a job's logs to find the error, check the project's CI variables, and retry failed jobs. For example, 'Why did the last pipeline fail on branch feature/auth?' returns the failing stage and job so the assistant can explain the error and suggest a fix."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Can GitLab MCP Server generate reports and release notes?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Yes. The reports workflow relies on pre-built MCP prompts such as standup, risk-assessment, workload, and milestone-report to produce daily standup summaries, risk assessments, milestone progress reports, and team workload analysis. Release management combines gitlab_release, gitlab_tag, and gitlab_release_link to create releases, manage tags, and upload assets — for instance, 'Generate release notes comparing v1.0 to v2.0' assembles a changelog from the commits between two refs."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "What can I do with GitLab MCP Server?"
+    a: 'GitLab MCP Server lets an AI assistant drive GitLab through natural language across eight common workflows: code review, CI/CD automation, issue management, release management, team management, code search, reports and analytics, and security review. Instead of switching to the GitLab web UI, you describe the outcome — for example, _"Summarize the changes in MR !42 and check for security issues"_ — and the assistant calls the matching GitLab tools, executes them, and returns the result. Every workflow maps to real GitLab REST and GraphQL operations exposed as MCP tools.'
+  - q: "Can GitLab MCP Server review merge requests and leave comments?"
+    a: 'Yes. The code review workflow uses the `gitlab_merge_request`, `gitlab_mr_changes`, and `gitlab_mr_discussion` tools so an assistant can list MRs awaiting review, summarize diffs, run a security pass, post review comments, and approve. A typical conversation is: _"Show open MRs in my-app that need review"_, then _"Summarize the changes in MR !42"_, _"Check MR !42 for security issues"_, _"Leave a comment suggesting input validation"_, and _"Approve MR !42"_. Each step is a separate tool call against the GitLab API.'
+  - q: "How does GitLab MCP Server help debug CI/CD pipelines?"
+    a: 'The CI/CD workflow uses `gitlab_pipeline`, `gitlab_job`, and `gitlab_ci_variable` to inspect and recover failing pipelines without leaving the editor. You can ask for the latest pipeline status, list the failed jobs in a specific pipeline, retrieve a job''s logs to find the error, check the project''s CI variables, and retry failed jobs. For example, _"Why did the last pipeline fail on branch feature/auth?"_ returns the failing stage and job so the assistant can explain the error and suggest a fix.'
+  - q: "Can GitLab MCP Server generate reports and release notes?"
+    a: 'Yes. The reports workflow relies on pre-built MCP prompts such as standup, risk-assessment, workload, and milestone-report to produce daily standup summaries, risk assessments, milestone progress reports, and team workload analysis. Release management combines `gitlab_release`, `gitlab_tag`, and `gitlab_release_link` to create releases, manage tags, and upload assets — for instance, _"Generate release notes comparing v1.0 to v2.0"_ assembles a changelog from the commits between two refs.'
 ---
 
 import { Card, CardGrid } from "@astrojs/starlight/components";
-
-:::note[Developer Documentation]
-This page groups capabilities by workflow. For copy-paste command transcripts and end-to-end recipes, see [docs/guides/examples](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/examples/usage-examples.md).
-:::
+import FAQ from "../../components/FAQ.astro";
 
 With GitLab MCP Server you can review merge requests, debug failing CI/CD pipelines, create and triage issues, cut releases and changelogs, manage team access, search across code and issues, generate standup and milestone reports, and run security reviews — all from your AI assistant in plain language, without opening the GitLab web UI. These map to eight common workflows — code review, CI/CD automation, issue management, release management, team management, code search, reports and analytics, and security review — each backed by real GitLab REST and GraphQL operations exposed as MCP tools. The cards below group those capabilities by workflow rather than by API domain.
 
@@ -150,20 +113,10 @@ With GitLab MCP Server you can review merge requests, debug failing CI/CD pipeli
 4. _"Assign issue #234 to @alice"_ — distributes work
 5. _"Generate a milestone progress report for v3.0"_ — creates status overview
 
-## Frequently asked questions
+<FAQ />
 
-### What can I do with GitLab MCP Server?
+## Source reference
 
-GitLab MCP Server lets an AI assistant drive GitLab through natural language across eight common workflows: code review, CI/CD automation, issue management, release management, team management, code search, reports and analytics, and security review. Instead of switching to the GitLab web UI, you describe the outcome — for example, _"Summarize the changes in MR !42 and check for security issues"_ — and the assistant calls the matching GitLab tools, executes them, and returns the result. Every workflow maps to real GitLab REST and GraphQL operations exposed as MCP tools.
-
-### Can GitLab MCP Server review merge requests and leave comments?
-
-Yes. The code review workflow uses the `gitlab_merge_request`, `gitlab_mr_changes`, and `gitlab_mr_discussion` tools so an assistant can list MRs awaiting review, summarize diffs, run a security pass, post review comments, and approve. A typical conversation is: _"Show open MRs in my-app that need review"_, then _"Summarize the changes in MR !42"_, _"Check MR !42 for security issues"_, _"Leave a comment suggesting input validation"_, and _"Approve MR !42"_. Each step is a separate tool call against the GitLab API.
-
-### How does GitLab MCP Server help debug CI/CD pipelines?
-
-The CI/CD workflow uses `gitlab_pipeline`, `gitlab_job`, and `gitlab_ci_variable` to inspect and recover failing pipelines without leaving the editor. You can ask for the latest pipeline status, list the failed jobs in a specific pipeline, retrieve a job's logs to find the error, check the project's CI variables, and retry failed jobs. For example, _"Why did the last pipeline fail on branch feature/auth?"_ returns the failing stage and job so the assistant can explain the error and suggest a fix.
-
-### Can GitLab MCP Server generate reports and release notes?
-
-Yes. The reports workflow relies on pre-built MCP prompts such as standup, risk-assessment, workload, and milestone-report to produce daily standup summaries, risk assessments, milestone progress reports, and team workload analysis. Release management combines `gitlab_release`, `gitlab_tag`, and `gitlab_release_link` to create releases, manage tags, and upload assets — for instance, _"Generate release notes comparing v1.0 to v2.0"_ assembles a changelog from the commits between two refs.
+:::note[Developer Documentation]
+This page groups capabilities by workflow. For copy-paste command transcripts and end-to-end recipes, see [docs/guides/examples](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/examples/usage-examples.md).
+:::

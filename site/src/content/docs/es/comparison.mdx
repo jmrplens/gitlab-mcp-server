@@ -1,0 +1,64 @@
+---
+title: Comparar servidores MCP de GitLab
+description: Cómo se compara GitLab MCP Server con el servidor MCP oficial de GitLab y otras opciones de la comunidad — cobertura de API, licencia, transporte, runtime y controles de seguridad.
+datePublished: "2026-07-26"
+faq:
+  - q: "¿Cuál es la diferencia entre este proyecto y el servidor MCP oficial de GitLab?"
+    a: "Resuelven problemas distintos. El servidor MCP oficial de GitLab es un endpoint alojado dentro de tu propia instancia, en /api/v4/mcp: no hay nada que instalar, usa OAuth con registro dinámico de clientes y ofrece unas dos docenas de herramientas curadas para issues, merge requests, pipelines, work items y búsqueda. Este proyecto es un binario que ejecutas tú y que proyecta toda la superficie REST v4 y GraphQL — {{tools.free}} operaciones en Community Edition y hasta {{tools.gitlab_com}} en GitLab.com — tras una interfaz dinámica de dos herramientas. Elige el oficial si el conjunto curado cubre tu flujo de trabajo; elige este cuando necesites una operación que ese conjunto no expone, o cuando no puedas activar las funciones beta de GitLab Duo en la instancia."
+  - q: "¿Necesito un tier de pago de GitLab para usar GitLab MCP Server?"
+    a: "No. Funciona en GitLab Community Edition con un token de acceso personal y sin ningún tier de pago, exponiendo allí {{tools.free}} operaciones. Las herramientas Premium y Ultimate se registran solo cuando la instancia a la que te conectas ya tiene licencia para esas funciones: la restricción es tu licencia de GitLab, no este servidor. Ten en cuenta que el servidor MCP oficial de GitLab también está disponible en el tier Free, así que «gratis» no es un diferenciador entre ambos; lo son la cobertura y el modelo de despliegue."
+  - q: "¿Qué servidor MCP de GitLab tiene más herramientas?"
+    a: "Este proyecto, por aproximadamente un orden de magnitud, porque se genera desde la superficie completa de la API en lugar de curarse a mano: {{tools.free}} operaciones en Community Edition y hasta {{tools.gitlab_com}} en GitLab.com. El servidor oficial de GitLab expone unas dos docenas de herramientas curadas. Más herramientas no es automáticamente mejor —un conjunto curado es más fácil de razonar— pero marca la diferencia entre que una operación esté disponible o no lo esté."
+  - q: "¿Un servidor MCP con 1000 herramientas satura el contexto del modelo?"
+    a: "No en el modo predeterminado, que existe precisamente por eso. Registrar cada operación por separado costaría del orden de {{tools.gitlab_com}} definiciones de herramienta en el contexto de arranque. La superficie dinámica predeterminada expone en su lugar dos herramientas que buscan y ejecutan ese mismo catálogo, así que el cliente paga dos definiciones sin importar cuántas operaciones existan. Las cifras medidas están en la página del conjunto dinámico."
+  - q: "¿Puedo usar varios servidores MCP de GitLab a la vez?"
+    a: "Sí. Los clientes MCP separan los servidores por espacios de nombres, así que puedes registrar el endpoint oficial de GitLab y este binario en paralelo y dejar que el asistente elija. La pega práctica es el coste de contexto, no la corrección: cada servidor registrado aporta sus propias definiciones de herramienta a cada petición, así que combina un servidor curado con este en su modo predeterminado de dos herramientas, no en modo individual."
+---
+
+import FAQ from "../../../components/FAQ.astro";
+import stats from "../../../data/stats.json";
+import footprint from "../../../data/token-footprint.json";
+
+Varios servidores MCP conectan un asistente de IA con GitLab, y no son intercambiables: se diferencian en cuánta API alcanzan, dónde se ejecutan y qué exigen de tu instancia. Esta página expone esas diferencias con cifras contrastadas para que elijas de forma deliberada.
+
+## De un vistazo
+
+|                                   | **GitLab MCP Server** (este proyecto)                                                                                   | **MCP oficial de GitLab**                                       | **zereight/gitlab-mcp**     |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- | --------------------------- |
+| Herramientas expuestas            | {stats.tools.free} en CE, hasta {stats.tools.gitlab_com} en GitLab.com                                                  | ~23 curadas                                                     | ~216                        |
+| Herramientas visibles por defecto | {footprint.dynamic.visible_tools} (find/execute dinámico)                                                               | Todas                                                           | Todas                       |
+| Dónde se ejecuta                  | Binario que ejecutas tú (stdio o HTTP)                                                                                  | Alojado en tu instancia (`/api/v4/mcp`)                         | Proceso Node.js             |
+| Runtime necesario                 | Ninguno — binario Go estático                                                                                           | Ninguno — integrado en GitLab                                   | Node.js                     |
+| Tier de GitLab                    | Free/CE, Premium y Ultimate — las herramientas Premium y Ultimate se registran solas cuando la instancia tiene licencia | Free, Premium, Ultimate                                         | Free/CE, Premium y Ultimate |
+| Requisitos de la instancia        | Un token de acceso personal                                                                                             | GitLab Duo activo, funciones beta activas, acceso MCP permitido | Un token de acceso personal |
+| Estado                            | Estable, v{stats.version}                                                                                               | Beta                                                            | Estable                     |
+| Licencia                          | MIT                                                                                                                     | Función provista por GitLab                                     | MIT                         |
+| Solo lectura / safe mode          | Sí — ambos                                                                                                              | No aplica                                                       | No                          |
+| Autoalojado y CE                  | Sí                                                                                                                      | Sí                                                              | Sí                          |
+
+Fuentes: la [documentación del servidor MCP](https://docs.gitlab.com/user/model_context_protocol/mcp_server/) y la [lista de herramientas](https://docs.gitlab.com/user/model_context_protocol/mcp_server_tools/) de GitLab; metadatos públicos de los repositorios de GitHub. Las cifras de este proyecto salen de la [referencia generada de huella de tokens](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/token-footprint.md). Los datos de terceros cambian: verifícalos antes de basarte en ellos.
+
+## Una corrección que conviene dejar clara
+
+Varios artículos comparativos de terceros afirman que el servidor MCP oficial de GitLab exige un tier de pago. **No es cierto.** La propia documentación de GitLab lo lista como disponible en Free, Premium y Ultimate, en GitLab.com, autoalojado y Dedicated. Solo dos de sus herramientas tienen requisitos adicionales: `semantic_code_search` necesita un add-on de GitLab Duo, y los tipos de enlace `blocks`/`blocked_by` entre work items requieren Premium o superior.
+
+Así que «funciona sin pagar» **no** es una razón para elegir este proyecto frente al oficial. Las diferencias reales son la cobertura, el modelo de despliegue y los requisitos de la instancia.
+
+## Cuándo elegir cada uno
+
+**Elige el servidor MCP oficial de GitLab** cuando el conjunto curado cubra lo que haces —leer y crear issues y merge requests, inspeccionar pipelines y logs de jobs, buscar— y prefieras no ejecutar nada por tu cuenta. Está alojado en tu instancia, se autentica con OAuth y registro dinámico de clientes, y no requiere instalación. Eso sí, exige tener GitLab Duo disponible y las funciones beta activadas, una decisión que corresponde a quien administre la instancia.
+
+**Elige este proyecto** cuando se cumpla alguna de estas condiciones:
+
+- Necesitas una operación que el conjunto curado no expone. Cubre {stats.tools.free} operaciones en Community Edition, y hasta {stats.tools.gitlab_com} en GitLab.com, frente a unas dos docenas: releases, tags, entornos, deploy keys, ramas protegidas, registro de paquetes, runners, wikis, snippets, milestones, etc.
+- No puedes activar GitLab Duo ni las funciones beta en la instancia, sea por política o por tratarse de un despliegue autoalojado antiguo.
+- Quieres limitar al asistente. `GITLAB_READ_ONLY=true` elimina del catálogo toda operación de escritura, y `GITLAB_SAFE_MODE=true` devuelve una previsualización de la mutación en vez de ejecutarla.
+- No quieres dependencias de runtime: un único binario Go estático en lugar de un proceso Node.js.
+
+**Considera otro servidor de la comunidad** como `zereight/gitlab-mcp` si ya te resulta cómodo ejecutar Node.js y sus aproximadamente 216 herramientas cubren tus flujos. Es con diferencia la opción comunitaria más adoptada y su cobertura es amplia; las diferencias prácticas con este proyecto son la dependencia de runtime, la ausencia de modos de solo lectura y safe mode, y que registra sus herramientas de forma individual en lugar de tras una superficie de descubrimiento de bajo consumo.
+
+## Sobre el número de herramientas
+
+Un catálogo grande solo sirve si no ahoga al modelo. Registrar {stats.tools.gitlab_com} herramientas individualmente cuesta {footprint.individual.ultimate.tool_schema_tokens.toLocaleString("es-ES")} tokens de schema en el arranque; la superficie dinámica predeterminada cuesta {footprint.dynamic.tool_schema_tokens.toLocaleString("es-ES")} —una reducción de {footprint.individual.ultimate.reduction_factor_vs_dynamic}×— porque el cliente ve dos herramientas que resuelven el resto bajo demanda. Eso es lo que hace practicable una cobertura completa en lugar de solo voluminosa. La medición y su metodología están en la [página del conjunto dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/).
+
+<FAQ />

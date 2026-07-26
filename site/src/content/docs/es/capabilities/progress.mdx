@@ -2,54 +2,18 @@
 title: Progreso
 description: Notificaciones MCP de progreso en tiempo real que informan del estado página a página y paso a paso de operaciones largas de GitLab.
 datePublished: "2026-04-21"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "¿Qué son las notificaciones de progreso MCP en GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Las notificaciones de progreso son mensajes de estado en tiempo real que GitLab MCP Server envía durante operaciones de larga duración para que los clientes MCP puedan mostrar indicadores de progreso al usuario. Cuando una herramienta realiza varios pasos o procesa grandes conjuntos de datos —como la recuperación de listas paginadas, operaciones masivas, importaciones CSV o la actualización automática— el servidor emite mensajes notifications/progress que informan del paso actual, del total cuando se conoce y de una descripción legible. El progreso es de mejor esfuerzo: los clientes que no pueden mostrarlo ignoran silenciosamente las notificaciones y la herramienta se completa con normalidad."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Cuándo envía GitLab MCP Server actualizaciones de progreso?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server envía actualizaciones de progreso para operaciones que pueden tardar varios segundos. Los casos habituales incluyen la recuperación de listas paginadas, donde informa del progreso de obtención página por página; las operaciones masivas, donde informa del progreso por elemento, como una actualización masiva de issues; las importaciones CSV, donde informa del progreso fila por fila; y la actualización automática, donde informa de los pasos de descarga y aplicación. Cada notificación se correlaciona con la llamada original a la herramienta mediante un progressToken para que el cliente pueda asociar la actualización a la solicitud correcta."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Qué contiene una notificación de progreso MCP?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Una notificación de progreso MCP sigue el formato JSON-RPC notifications/progress y contiene cuatro campos en sus params. El progressToken es un ID de correlación que vincula la actualización con la llamada original a la herramienta. El campo progress es el número de paso actual. El campo total es el número total de pasos cuando se conoce. El campo message es una descripción legible del paso actual, como 'Fetching page 2 of 4...'. Los clientes usan estos campos para renderizar barras de progreso o texto de estado."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Qué ocurre si mi cliente MCP no admite las notificaciones de progreso?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Las notificaciones de progreso en GitLab MCP Server son de mejor esfuerzo. Si el cliente MCP no admite la visualización de progreso, las notificaciones se ignoran silenciosamente y la herramienta se completa con normalidad con su resultado completo. No hace falta ninguna configuración y no se pierde funcionalidad — el progreso es puramente una mejora de la experiencia de usuario superpuesta a la respuesta normal de la herramienta."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "¿Qué son las notificaciones de progreso MCP?"
+    a: "Las notificaciones de progreso son **mensajes de estado en tiempo real** que GitLab MCP Server envía durante operaciones de larga duración para mostrar el progreso al usuario. Cuando una herramienta ejecuta varios pasos o procesa grandes conjuntos de datos —recuperación paginada, operaciones masivas, importaciones CSV o actualización automática— el servidor emite mensajes `notifications/progress` que informan del paso actual, del total cuando se conoce y de una descripción legible. El progreso es de mejor esfuerzo, así que los clientes que no pueden mostrarlo ignoran los mensajes y la herramienta se completa igualmente."
+  - q: "¿Cuándo envía GitLab MCP Server actualizaciones de progreso?"
+    a: "GitLab MCP Server envía actualizaciones de progreso para operaciones que pueden tardar varios segundos: **recuperación de listas paginadas** (progreso de obtención página por página), **operaciones masivas** (progreso por elemento, como una actualización masiva de issues), **importaciones CSV** (progreso fila por fila) y **actualización automática** (pasos de descarga y aplicación). Cada notificación lleva un `progressToken` que la correlaciona con la llamada original a la herramienta."
+  - q: "¿Qué contiene una notificación de progreso?"
+    a: 'Una notificación de progreso sigue el formato JSON-RPC `notifications/progress` y lleva cuatro campos en sus `params`: `progressToken` (un ID de correlación que vincula la actualización con la llamada original a la herramienta), `progress` (el número de paso actual), `total` (el número total de pasos, cuando se conoce) y `message` (una descripción legible como `"Fetching page 2 of 4..."`). Los clientes los usan para renderizar barras de progreso o texto de estado.'
+  - q: "¿Qué ocurre si mi cliente no admite las notificaciones de progreso?"
+    a: "Las notificaciones de progreso son de mejor esfuerzo. Si el cliente MCP no admite la visualización de progreso, las notificaciones se ignoran silenciosamente y la herramienta se completa con normalidad con su resultado completo. No hace falta ninguna configuración y no se pierde funcionalidad — el progreso es puramente una mejora de la experiencia de usuario sobre la respuesta normal de la herramienta."
 ---
 
-:::note[Documentación para desarrolladores]
-Esta página es la visión general orientada a usuarios. Para la referencia completa de progreso, consulta [docs/reference/capabilities/progress](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/progress.md).
-:::
+import FAQ from "../../../../components/FAQ.astro";
 
 GitLab MCP Server envía **notificaciones de progreso en tiempo real durante operaciones de larga duración**, para que los clientes MCP puedan mostrar indicadores de progreso al usuario en lugar de una espera opaca. Cuando una herramienta abarca varios pasos o procesa grandes conjuntos de datos, el servidor emite mensajes `notifications/progress` que informan de cuánto ha avanzado el trabajo.
 
@@ -125,20 +89,10 @@ Las notificaciones de progreso siguen el formato JSON-RPC del protocolo MCP. El 
 Las notificaciones de progreso son de mejor esfuerzo. Si el cliente MCP no soporta la visualización de progreso, las notificaciones se ignoran silenciosamente y la herramienta se completa normalmente.
 :::
 
-## Preguntas frecuentes
+<FAQ />
 
-### ¿Qué son las notificaciones de progreso MCP?
+## Referencia de la fuente
 
-Las notificaciones de progreso son **mensajes de estado en tiempo real** que GitLab MCP Server envía durante operaciones de larga duración para mostrar el progreso al usuario. Cuando una herramienta ejecuta varios pasos o procesa grandes conjuntos de datos —recuperación paginada, operaciones masivas, importaciones CSV o actualización automática— el servidor emite mensajes `notifications/progress` que informan del paso actual, del total cuando se conoce y de una descripción legible. El progreso es de mejor esfuerzo, así que los clientes que no pueden mostrarlo ignoran los mensajes y la herramienta se completa igualmente.
-
-### ¿Cuándo envía GitLab MCP Server actualizaciones de progreso?
-
-GitLab MCP Server envía actualizaciones de progreso para operaciones que pueden tardar varios segundos: **recuperación de listas paginadas** (progreso de obtención página por página), **operaciones masivas** (progreso por elemento, como una actualización masiva de issues), **importaciones CSV** (progreso fila por fila) y **actualización automática** (pasos de descarga y aplicación). Cada notificación lleva un `progressToken` que la correlaciona con la llamada original a la herramienta.
-
-### ¿Qué contiene una notificación de progreso?
-
-Una notificación de progreso sigue el formato JSON-RPC `notifications/progress` y lleva cuatro campos en sus `params`: `progressToken` (un ID de correlación que vincula la actualización con la llamada original a la herramienta), `progress` (el número de paso actual), `total` (el número total de pasos, cuando se conoce) y `message` (una descripción legible como `"Fetching page 2 of 4..."`). Los clientes los usan para renderizar barras de progreso o texto de estado.
-
-### ¿Qué ocurre si mi cliente no admite las notificaciones de progreso?
-
-Las notificaciones de progreso son de mejor esfuerzo. Si el cliente MCP no admite la visualización de progreso, las notificaciones se ignoran silenciosamente y la herramienta se completa con normalidad con su resultado completo. No hace falta ninguna configuración y no se pierde funcionalidad — el progreso es puramente una mejora de la experiencia de usuario sobre la respuesta normal de la herramienta.
+:::note[Documentación para desarrolladores]
+Esta página es la visión general orientada a usuarios. Para la referencia completa de progreso, consulta [docs/reference/capabilities/progress](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/progress.md).
+:::

@@ -113,7 +113,11 @@ site/.astro/
 # these two are generated into it — `copy-llms.mjs` republishes them from the
 # canonical root-level files on every prebuild.
 site/public/llms.txt
+site/public/llms-medium.txt
 site/public/llms-full.txt
+site/public/llms-full-meta-tools.txt
+site/public/llms-full-individual-tools.txt
+site/public/llms-full-resources-prompts.txt
 .scannerwork/
 .sonarlint/
 image.png

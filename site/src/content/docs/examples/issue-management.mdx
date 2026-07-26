@@ -2,9 +2,19 @@
 title: Issue Management Examples
 description: "Issue management examples with GitLab MCP Server — triage, assign and label, link related issues, track milestones, discuss, and search."
 datePublished: "2026-04-23"
+faq:
+  - q: "How do I triage GitLab issues with an AI assistant?"
+    a: "Ask your assistant to list the open issues you care about, then to assign, label, and link them. A typical triage loop is four calls: `gitlab_issue` with `action: list` (filtered by `state: opened` and a label) to see the backlog, `action: update` to set `assignee_ids`, `labels`, and `milestone_id`, `action: link_create` to record dependencies, and `action: update` with `state_event: close` once resolved. In the default dynamic surface the same operations resolve through `gitlab_find_action` as `issue.list`, `issue.update`, and `issue.link_create`."
+  - q: "What is the difference between relates_to, blocks, and is_blocked_by?"
+    a: "They are the three `link_type` values accepted by `gitlab_issue` with `action: link_create`. `relates_to` is a symmetric, non-blocking association — neither issue gates the other. `blocks` means the source issue must be resolved before the target can proceed. `is_blocked_by` is the inverse direction of the same relationship, so creating a `blocks` link from #300 to #400 is what makes #400 report `is_blocked_by` #300. Listing links with `action: link_list` returns the relationship type alongside each linked issue."
+  - q: "Can an AI assistant close a GitLab issue for me?"
+    a: "Yes, but closing is a state change, so it follows the same safety rules as any other mutation. The call is `gitlab_issue` with `action: update` and `state_event: close`. If the deployment runs with `GITLAB_READ_ONLY=true` the action is not registered at all, and under `GITLAB_SAFE_MODE=true` the server returns a JSON preview of the change instead of applying it."
+  - q: "How do I search issues across several GitLab projects at once?"
+    a: "Use `gitlab_search` rather than `gitlab_issue`, because issue listing is scoped to one project. Search accepts an instance, group, or project scope, so `scope: issues` with a `group_id` searches every project in that group in one call. Results come back with the project path on each hit, so an assistant can follow up with `gitlab_issue` `action: get` on whichever project owns the issue."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import FAQ from "../../../components/FAQ.astro";
 
 <CardGrid>
 	<LinkCard
@@ -126,6 +136,16 @@ gitlab_issue → action: link_list, project_id: "my-group/backend", issue_iid: 1
 
 Returns: linked issues with relationship types (relates_to, blocks, is_blocked_by).
 
+The three link types answer different questions, and choosing the wrong one hides a real dependency:
+
+| `link_type`     | Meaning                                                       | Direction       | Blocks progress? |
+| --------------- | ------------------------------------------------------------- | --------------- | ---------------- |
+| `relates_to`    | The two issues are associated but neither gates the other     | Symmetric       | No               |
+| `blocks`        | The source issue must be resolved before the target can start | Source → target | Yes              |
+| `is_blocked_by` | The inverse view of `blocks`, as seen from the target issue   | Target → source | Yes              |
+
+Creating a `blocks` link from #300 to #400 is what makes #400 report `is_blocked_by` #300 — you do not create both sides.
+
 ---
 
 ## Labels and milestones
@@ -216,3 +236,5 @@ Returns: security-related issues across all projects in the group.
 :::tip
 Combine search with triage for an efficient workflow: first search for issues matching a pattern, then assign, label, and link them in sequence. The AI assistant maintains context across prompts.
 :::
+
+<FAQ />

@@ -7,6 +7,7 @@ hero:
   image:
     dark: ../../../assets/logo-dark.svg
     light: ../../../assets/logo-light.svg
+    alt: Logotipo de GitLab MCP Server
   actions:
     - text: Primeros pasos
       link: /gitlab-mcp-server/es/getting-started/
@@ -19,52 +20,15 @@ hero:
 head:
   - tag: title
     content: GitLab MCP Server — servidor MCP para GitLab y asistentes de IA
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "speakable": {
-          "@type": "SpeakableSpecification",
-          "cssSelector": ["h1", ".sl-markdown-content > p:first-of-type"]
-        },
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "¿Qué es GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server es un servidor del Model Context Protocol (MCP), libre y de código abierto, que permite a los asistentes de IA interactuar con GitLab mediante lenguaje natural. Expone las APIs REST v4 y GraphQL de GitLab como herramientas MCP, de modo que un asistente puede revisar merge requests, diagnosticar pipelines, gestionar incidencias y redactar releases por ti. Se distribuye como un único binario de Go y se ejecuta localmente por stdio o de forma remota por HTTP."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Con qué asistentes de IA funciona GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Funciona con cualquier cliente compatible con MCP, incluidos VS Code con GitHub Copilot, Claude Desktop, Cursor y Claude Code, además de cualquier otro cliente que hable el Model Context Protocol por transporte stdio o HTTP. La configuración es un pequeño fragmento JSON por cliente."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿GitLab MCP Server es gratuito y de código abierto?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Sí. GitLab MCP Server es gratuito y de código abierto bajo la licencia MIT, con todo el código fuente en GitHub. No existe una versión de pago del servidor; las funciones de GitLab Premium o Ultimate dependen únicamente de la licencia de tu propia instancia de GitLab, no del servidor MCP."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Funciona con GitLab autoalojado y Community Edition?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Sí. Funciona con GitLab.com y con instancias autoalojadas, y tanto con Community Edition como con Enterprise Edition. Apúntalo a cualquier URL de GitLab con un token de acceso personal. Las herramientas Premium y Ultimate se registran solo cuando la instancia conectada tiene la licencia correspondiente."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "¿Qué es GitLab MCP Server?"
+    a: "GitLab MCP Server es un servidor [Model Context Protocol](https://modelcontextprotocol.io/), libre y de código abierto, que permite a los asistentes de IA interactuar con GitLab mediante lenguaje natural. Expone las APIs REST v4 y GraphQL de GitLab como herramientas MCP, de modo que un asistente puede revisar merge requests, diagnosticar pipelines, gestionar incidencias y redactar releases por ti. Se distribuye como un único binario de Go y se ejecuta localmente por stdio o de forma remota por HTTP."
+  - q: "¿Con qué asistentes de IA funciona?"
+    a: "Funciona con cualquier cliente compatible con MCP — incluidos VS Code con GitHub Copilot, Claude Desktop, Cursor y Claude Code, además de cualquier otro cliente que hable el Model Context Protocol por transporte stdio o HTTP. La configuración es un pequeño fragmento JSON por cliente."
+  - q: "¿Es gratuito y de código abierto?"
+    a: "Sí. GitLab MCP Server es gratuito y de código abierto bajo la licencia MIT, con todo el código fuente en GitHub. No existe una versión de pago del servidor; las funciones de GitLab Premium o Ultimate dependen únicamente de la licencia de tu propia instancia de GitLab, no del servidor MCP."
+  - q: "¿Funciona con GitLab autoalojado y Community Edition?"
+    a: "Sí. Funciona con GitLab.com y con instancias autoalojadas, y tanto con Community Edition como con Enterprise Edition. Apúntalo a cualquier URL de GitLab con un token de acceso personal. Las herramientas Premium y Ultimate se registran solo cuando la instancia conectada tiene la licencia correspondiente."
 ---
 
 import {
@@ -74,6 +38,7 @@ import {
 	Tabs,
 	TabItem,
 } from "@astrojs/starlight/components";
+import FAQ from "../../../components/FAQ.astro";
 import stats from "../../../data/stats.json";
 
 **GitLab MCP Server** es un servidor [Model Context Protocol](https://modelcontextprotocol.io/) que permite a los asistentes de IA interactuar con GitLab a través de lenguaje natural. Pide a tu IA que cree issues, revise merge requests, analice pipelines y mucho más — todo sin salir de tu editor.
@@ -239,20 +204,4 @@ GitLab MCP Server funciona con cualquier cliente compatible con MCP:
 - **Claude Code** — mediante `claude code mcp add`
 - **Cualquier cliente MCP** — transporte stdio o HTTP
 
-## Preguntas frecuentes
-
-### ¿Qué es GitLab MCP Server?
-
-GitLab MCP Server es un servidor [Model Context Protocol](https://modelcontextprotocol.io/), libre y de código abierto, que permite a los asistentes de IA interactuar con GitLab mediante lenguaje natural. Expone las APIs REST v4 y GraphQL de GitLab como herramientas MCP, de modo que un asistente puede revisar merge requests, diagnosticar pipelines, gestionar incidencias y redactar releases por ti. Se distribuye como un único binario de Go y se ejecuta localmente por stdio o de forma remota por HTTP.
-
-### ¿Con qué asistentes de IA funciona?
-
-Funciona con cualquier cliente compatible con MCP — incluidos VS Code con GitHub Copilot, Claude Desktop, Cursor y Claude Code, además de cualquier otro cliente que hable el Model Context Protocol por transporte stdio o HTTP. La configuración es un pequeño fragmento JSON por cliente.
-
-### ¿Es gratuito y de código abierto?
-
-Sí. GitLab MCP Server es gratuito y de código abierto bajo la licencia MIT, con todo el código fuente en GitHub. No existe una versión de pago del servidor; las funciones de GitLab Premium o Ultimate dependen únicamente de la licencia de tu propia instancia de GitLab, no del servidor MCP.
-
-### ¿Funciona con GitLab autoalojado y Community Edition?
-
-Sí. Funciona con GitLab.com y con instancias autoalojadas, y tanto con Community Edition como con Enterprise Edition. Apúntalo a cualquier URL de GitLab con un token de acceso personal. Las herramientas Premium y Ultimate se registran solo cuando la instancia conectada tiene la licencia correspondiente.
+<FAQ />

@@ -2,9 +2,19 @@
 title: Ejemplos de gestión de issues
 description: "Ejemplos de gestión de issues con GitLab MCP Server — triar, asignar y etiquetar, vincular issues, seguir milestones, discutir y buscar."
 datePublished: "2026-04-23"
+faq:
+  - q: "¿Cómo triago issues de GitLab con un asistente de IA?"
+    a: "Se trabaja de arriba abajo: pide al asistente que liste los issues abiertos que te interesan y después que los asigne, etiquete y enlace. Un ciclo típico son cuatro llamadas: `gitlab_issue` con `action: list` (filtrando por `state: opened` y una etiqueta) para ver el backlog, `action: update` para fijar `assignee_ids`, `labels` y `milestone_id`, `action: link_create` para registrar dependencias, y `action: update` con `state_event: close` al resolverlo. En la superficie dinámica se resuelven como `issue.list`, `issue.update` e `issue.link_create`."
+  - q: "¿Cuál es la diferencia entre relates_to, blocks y is_blocked_by?"
+    a: "Son los tres valores de `link_type` que acepta `gitlab_issue` con `action: link_create`. `relates_to` es una asociación simétrica y no bloqueante: ningún issue condiciona al otro. `blocks` significa que el issue de origen debe resolverse antes de que el destino pueda avanzar. `is_blocked_by` es la dirección inversa de esa misma relación, así que crear un enlace `blocks` de #300 a #400 es lo que hace que #400 aparezca como `is_blocked_by` #300. Listar los enlaces con `action: link_list` devuelve el tipo de relación junto a cada issue enlazado."
+  - q: "¿Puede un asistente de IA cerrar un issue por mí?"
+    a: "Sí, pero cerrar es un cambio de estado y sigue las mismas reglas de seguridad que cualquier otra mutación. La llamada es `gitlab_issue` con `action: update` y `state_event: close`. Si el despliegue usa `GITLAB_READ_ONLY=true` la acción ni siquiera se registra, y con `GITLAB_SAFE_MODE=true` el servidor devuelve una previsualización JSON del cambio en lugar de aplicarlo."
+  - q: "¿Cómo busco issues en varios proyectos de GitLab a la vez?"
+    a: "Usa `gitlab_search` en lugar de `gitlab_issue`, porque el listado de issues está limitado a un proyecto. La búsqueda acepta alcance de instancia, grupo o proyecto, así que `scope: issues` con un `group_id` busca en todos los proyectos de ese grupo en una sola llamada. Los resultados incluyen la ruta del proyecto en cada coincidencia, de modo que el asistente puede continuar con `gitlab_issue` y `action: get` sobre el proyecto propietario."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+import FAQ from "../../../../components/FAQ.astro";
 
 <CardGrid>
 	<LinkCard
@@ -126,6 +136,16 @@ gitlab_issue → action: link_list, project_id: "my-group/backend", issue_iid: 1
 
 Devuelve: issues vinculados con tipos de relación (relates_to, blocks, is_blocked_by).
 
+Los tres tipos de enlace responden a preguntas distintas, y elegir el equivocado oculta una dependencia real:
+
+| `link_type`     | Significado                                                       | Dirección        | ¿Bloquea? |
+| --------------- | ----------------------------------------------------------------- | ---------------- | --------- |
+| `relates_to`    | Los dos issues están asociados pero ninguno condiciona al otro    | Simétrica        | No        |
+| `blocks`        | El issue de origen debe resolverse antes de que el destino avance | Origen → destino | Sí        |
+| `is_blocked_by` | La vista inversa de `blocks`, desde el punto de vista del destino | Destino → origen | Sí        |
+
+Crear un enlace `blocks` de #300 a #400 es lo que hace que #400 aparezca como `is_blocked_by` #300 — no se crean los dos lados.
+
 ---
 
 ## Etiquetas y milestones
@@ -216,3 +236,5 @@ Devuelve: issues relacionados con seguridad en todos los proyectos del grupo.
 :::tip
 Combina búsqueda con triaje para un flujo eficiente: primero busca issues que coincidan con un patrón, luego asígnalos, etiquétalos y vincúlalos en secuencia. El asistente de IA mantiene el contexto entre prompts.
 :::
+
+<FAQ />

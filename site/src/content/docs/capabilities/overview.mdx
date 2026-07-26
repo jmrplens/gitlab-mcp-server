@@ -2,54 +2,18 @@
 title: MCP Capabilities
 description: GitLab MCP Server implements three MCP protocol capabilities — progress, elicitation, and completions — plus icon metadata on every tool, resource, and prompt.
 datePublished: "2026-04-21"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "What MCP capabilities does GitLab MCP Server implement?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server implements three MCP protocol capabilities beyond basic tool calling: progress (server-to-client notifications for long-running operations), elicitation (server-to-client interactive forms for wizard-style resource creation), and completions (client-to-server argument autocompletion for project names, branches, users, and labels). It also attaches icon metadata — an SVG icon on every tool, resource, and prompt — which is presentation metadata rather than a negotiated protocol capability. Capabilities are negotiated during the MCP initialization handshake so each side knows what the other supports."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "What is the difference between server-declared and client-dependent MCP capabilities?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Server-declared capabilities, such as completions, are always advertised by GitLab MCP Server and available to any client that calls them. Client-dependent capabilities, such as elicitation, require the MCP client to declare support during the initialization handshake. The server checks for that declared support before using the capability and gracefully degrades when it is absent — for elicitation, it falls back to standard parameterized tools so no functionality is lost, only the interactive experience."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "What happens if my MCP client does not support a GitLab MCP Server capability?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server adapts automatically when a client lacks a capability. Progress notifications are best-effort and silently ignored if unsupported, so tools still complete normally. Elicitation falls back to standard parameterized tools where the assistant supplies all parameters in a single call. Completions are simply not offered, and values can still be discovered with the list action on any meta-tool. Icons are optional metadata that non-rendering clients ignore. No capability is required for core tool functionality."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Which MCP clients support elicitation in GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Elicitation — the interactive, wizard-style form capability — is supported by Claude Desktop and Claude Code. VS Code Copilot and Cursor do not yet support it, so on those clients GitLab MCP Server falls back to standard parameterized creation tools. Client capability support evolves quickly, so the current support of any specific client should be confirmed against that client's own documentation."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "What is the difference between server-declared and client-dependent capabilities?"
+    a: "Server-declared capabilities, such as **completions**, are advertised unconditionally by GitLab MCP Server and available to any client that calls them. Client-dependent capabilities, such as **elicitation**, require the MCP client to declare support during initialization. The server checks for that support before using the capability and degrades gracefully when it is missing — for elicitation, it falls back to standard parameterized tools, so functionality is preserved and only the interactive experience is reduced."
+  - q: "What MCP capabilities does GitLab MCP Server implement?"
+    a: "GitLab MCP Server implements **three MCP protocol capabilities** — progress, elicitation, and completions — plus **icon metadata** on every tool, resource, and prompt. Progress sends real-time updates during long-running operations, elicitation lets the server ask the user for input through structured forms, and completions autocomplete argument values such as project names, branches, users, and labels. Icons are presentation metadata, not a negotiated protocol capability. The three capabilities are negotiated during the MCP initialization handshake."
+  - q: "What happens if my MCP client does not support a capability?"
+    a: "GitLab MCP Server adapts automatically. **Progress** notifications are best-effort and silently ignored when unsupported, so tools still complete. **Elicitation** falls back to standard parameterized tools where the assistant supplies all parameters in one call. **Completions** are simply not offered, and values remain discoverable through the `list` action on any meta-tool. **Icons** are optional metadata that non-rendering clients ignore. No capability is required for core tool functionality."
+  - q: "Which MCP clients support elicitation?"
+    a: "Elicitation is supported by **Claude Desktop** and **Claude Code**. **VS Code Copilot** and **Cursor** do not yet support it, so on those clients GitLab MCP Server falls back to standard parameterized creation tools. Because client capability support changes frequently, confirm the current state against the specific client's documentation."
 ---
 
-:::note[Developer Documentation]
-This page is the user-facing overview. For the full capability reference, see [docs/reference/capabilities](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/README.md).
-:::
+import FAQ from "../../../components/FAQ.astro";
 
 GitLab MCP Server implements **three MCP protocol capabilities** — progress, elicitation, and completions — that go beyond basic tool calling to make AI assistants more accurate and interactive when working with GitLab. It also attaches **icon metadata** to every tool, resource, and prompt. Together these features let assistants report progress, ask the user for input through structured forms, autocomplete argument values, and present recognizable per-domain icons.
 
@@ -101,20 +65,10 @@ Capability support varies by MCP client, and GitLab MCP Server adapts automatica
 Client support evolves rapidly. Check your MCP client's documentation for the latest capability support.
 :::
 
-## Frequently asked questions
+<FAQ />
 
-### What MCP capabilities does GitLab MCP Server implement?
+## Source reference
 
-GitLab MCP Server implements **three MCP protocol capabilities** — progress, elicitation, and completions — plus **icon metadata** on every tool, resource, and prompt. Progress sends real-time updates during long-running operations, elicitation lets the server ask the user for input through structured forms, and completions autocomplete argument values such as project names, branches, users, and labels. Icons are presentation metadata, not a negotiated protocol capability. The three capabilities are negotiated during the MCP initialization handshake.
-
-### What is the difference between server-declared and client-dependent capabilities?
-
-Server-declared capabilities, such as **completions**, are advertised unconditionally by GitLab MCP Server and available to any client that calls them. Client-dependent capabilities, such as **elicitation**, require the MCP client to declare support during initialization. The server checks for that support before using the capability and degrades gracefully when it is missing — for elicitation, it falls back to standard parameterized tools, so functionality is preserved and only the interactive experience is reduced.
-
-### What happens if my MCP client does not support a capability?
-
-GitLab MCP Server adapts automatically. **Progress** notifications are best-effort and silently ignored when unsupported, so tools still complete. **Elicitation** falls back to standard parameterized tools where the assistant supplies all parameters in one call. **Completions** are simply not offered, and values remain discoverable through the `list` action on any meta-tool. **Icons** are optional metadata that non-rendering clients ignore. No capability is required for core tool functionality.
-
-### Which MCP clients support elicitation?
-
-Elicitation is supported by **Claude Desktop** and **Claude Code**. **VS Code Copilot** and **Cursor** do not yet support it, so on those clients GitLab MCP Server falls back to standard parameterized creation tools. Because client capability support changes frequently, confirm the current state against the specific client's documentation.
+:::note[Developer Documentation]
+This page is the user-facing overview. For the full capability reference, see [docs/reference/capabilities](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/README.md).
+:::

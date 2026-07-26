@@ -2,55 +2,31 @@
 title: Conjunto de herramientas dinámico
 description: El modo predeterminado de bajo consumo de tokens — dos herramientas buscan y ejecutan un catálogo canónico de acciones de GitLab.
 datePublished: "2026-05-10"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "¿Qué es el conjunto de herramientas dinámico de GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "El conjunto de herramientas dinámico es el modo predeterminado de bajo consumo de tokens de GitLab MCP Server. Mantiene disponible todo el catálogo de acciones de GitLab mientras expone al cliente de IA solo dos herramientas públicas: gitlab_find_action encuentra la acción correcta de GitLab y devuelve sus parámetros exactos, ejemplos y metadatos de seguridad, y gitlab_execute_action ejecuta la acción elegida tras validar el ID de acción y los parámetros. El modelo descubre solo los schemas que necesita para la tarea actual, lo que mantiene muy pequeño el contexto inicial de herramientas MCP. El modo dinámico está activo cuando TOOL_SURFACE no está definido; usa TOOL_SURFACE=meta para usar meta-herramientas de dominio consolidadas."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Por qué el modo dinámico muestra solo dos herramientas?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Mostrar solo dos herramientas es intencionado y esperado en el modo dinámico. Los servidores MCP grandes pueden gastar mucho contexto en descubrimiento de herramientas antes de que el usuario pida nada: GitLab MCP Server puede exponer hasta todo su catálogo de herramientas individuales en GitLab.com Enterprise/Premium con Orbit. El modo dinámico expone ese catálogo completo mediante gitlab_find_action y gitlab_execute_action, así que el tools/list inicial se mantiene mínimo. El asistente debe encontrar una acción antes de ejecutarla. Esto suele añadir una llamada de descubrimiento por tarea, dejando libre el presupuesto de contexto del modelo para la conversación real."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Las acciones destructivas siguen protegidas en el modo dinámico?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Sí. El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramientas porque ambos comparten el catálogo canónico de acciones. Las acciones destructivas siguen requiriendo confirmación explícita salvo que el despliegue haya desactivado intencionadamente las confirmaciones con YOLO_MODE o AUTOPILOT. Sin confirmación, el servidor devuelve un resultado de error en lugar de realizar la acción; para ejecutarla intencionadamente, pasa confirm: true a nivel superior en los argumentos de gitlab_execute_action. La ejecución dinámica también valida los parámetros antes de despachar y rechaza campos desconocidos con guía de reparación. Para despliegues más seguros, usa GITLAB_READ_ONLY=true para eliminar acciones mutantes o GITLAB_SAFE_MODE=true para previsualizar mutaciones sin aplicarlas."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Cómo ordena los resultados gitlab_find_action?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "gitlab_find_action es más que una búsqueda de subcadenas. Normaliza la consulta, elimina palabras frecuentes, expande sinónimos como mr a merge request y show a get, y luego puntúa primero los IDs canónicos exactos, seguidos de alias, etiquetas, nombres de dominio y acción, parámetros requeridos, valores enum del schema, campos del schema y metadatos más amplios. La recuperación fuzzy de errores tipográficos se ejecuta solo cuando la búsqueda léxica no devuelve resultados o solo devuelve resultados de baja confianza, permitiendo hasta dos ediciones para términos de al menos tres caracteres. Find devuelve hasta 20 resultados (máximo 50) y considera un resultado de alta confianza cuando puntúa al menos 80 y supera al siguiente por al menos 15 puntos."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "¿Qué es el conjunto de herramientas dinámico de GitLab MCP Server?"
+    a: "El conjunto de herramientas dinámico es el modo predeterminado de bajo consumo de tokens de GitLab MCP Server. Mantiene disponible todo el catálogo de acciones de GitLab mientras expone al cliente de IA solo dos herramientas públicas: gitlab_find_action encuentra la acción correcta de GitLab y devuelve sus parámetros exactos, ejemplos y metadatos de seguridad, y gitlab_execute_action ejecuta la acción elegida tras validar el ID de acción y los parámetros. El modelo descubre solo los schemas que necesita para la tarea actual, lo que mantiene muy pequeño el contexto inicial de herramientas MCP. El modo dinámico está activo cuando TOOL_SURFACE no está definido; usa TOOL_SURFACE=meta para usar meta-herramientas de dominio consolidadas."
+  - q: "¿Cuál es la diferencia entre gitlab_find_action y gitlab_execute_action?"
+    a: "`gitlab_find_action` y `gitlab_execute_action` son las dos herramientas públicas del modo dinámico, y tienen funciones distintas. `gitlab_find_action` busca en el catálogo canónico de acciones y devuelve acciones candidatas ordenadas con su `input_schema` exacto, meta-herramienta base, indicador destructivo, parámetros requeridos, pistas de uso y ejemplos —el asistente la usa para elegir el mejor ID `domain.action` y construir los parámetros. `gitlab_execute_action` ejecuta entonces esa acción tras validar el ID de acción y los parámetros, devolviendo la respuesta real del handler base como Markdown y JSON estructurado. El ritmo recomendado es encontrar y luego ejecutar: descubrir primero el esquema y después despachar el ID canónico de la acción."
+  - q: "¿Por qué el modo dinámico muestra solo dos herramientas?"
+    a: "Mostrar solo dos herramientas es intencionado y esperado en el modo dinámico. Los servidores MCP grandes pueden gastar mucho contexto en descubrimiento de herramientas antes de que el usuario pida nada; GitLab MCP Server puede exponer hasta {{tools.gitlab_com}} operaciones individuales en GitLab.com Enterprise/Premium con Orbit. El modo dinámico expone ese catálogo completo mediante `gitlab_find_action` y `gitlab_execute_action`, así que el `tools/list` inicial se mantiene mínimo y el presupuesto de contexto del modelo queda libre para la conversación. El compromiso es una llamada de descubrimiento por tarea: el asistente debe encontrar una acción antes de ejecutarla."
+  - q: "¿Las acciones destructivas siguen protegidas en el modo dinámico?"
+    a: "Sí. El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramientas porque ambos comparten el catálogo canónico de acciones. Las acciones destructivas siguen requiriendo confirmación explícita salvo que el despliegue haya desactivado intencionadamente las confirmaciones con `YOLO_MODE` o `AUTOPILOT`. Sin confirmación, el servidor devuelve un resultado de error en lugar de realizar la acción; para ejecutarla intencionadamente, pasa `confirm: true` a nivel superior en los argumentos de `gitlab_execute_action`. La ejecución dinámica también valida los parámetros antes de despachar y rechaza campos desconocidos con guía de reparación. Para despliegues más seguros, usa `GITLAB_READ_ONLY=true` o `GITLAB_SAFE_MODE=true`."
+  - q: "¿Cómo hago que el modo dinámico use aún menos contexto de inicio?"
+    a: "Para minimizar el contexto de inicio, combina el modo dinámico con la superficie mínima de capacidades añadiendo `CAPABILITY_SURFACE=minimal` (o `--capability-surface=minimal` en modo HTTP). Minimal mantiene los recursos de manifiesto de herramientas `gitlab://tools` y `gitlab://tools/{id}` y omite recursos opcionales, prompts y guías de flujo. El modo dinámico conserva el descubrimiento completo de schemas porque `gitlab_find_action` devuelve los schemas exactos inline. Deja `META_PARAM_SCHEMA` en su valor predeterminado `opaque`, ya que solo afecta a los schemas de las meta-herramientas y no tiene efecto en despliegues dinámicos."
+  - q: "¿Cómo ordena los resultados gitlab_find_action?"
+    a: "gitlab_find_action es más que una búsqueda de subcadenas. Normaliza la consulta, elimina palabras frecuentes, expande sinónimos como mr a merge request y show a get, y luego puntúa primero los IDs canónicos exactos, seguidos de alias, etiquetas, nombres de dominio y acción, parámetros requeridos, valores enum del schema, campos del schema y metadatos más amplios. La recuperación fuzzy de errores tipográficos se ejecuta solo cuando la búsqueda léxica no devuelve resultados o solo devuelve resultados de baja confianza, permitiendo hasta dos ediciones para términos de al menos tres caracteres. Find devuelve hasta 20 resultados (máximo 50) y considera un resultado de alta confianza cuando puntúa al menos 80 y supera al siguiente por al menos 15 puntos."
 ---
 
 import stats from "../../../../data/stats.json";
+import FAQ from "../../../../components/FAQ.astro";
+import footprint from "../../../../data/token-footprint.json";
 
-:::note[Documentación para desarrolladores]
-Esta página es la guía de usuario. Para el contrato autoritativo a nivel de campos y las notas de implementación, consulta [`docs/dynamic-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/dynamic-tools.md) en el repositorio.
+:::tip[De un vistazo]
+
+- **Dos herramientas visibles, cobertura completa.** `gitlab_find_action` localiza una acción y devuelve su esquema exacto; `gitlab_execute_action` la ejecuta.
+- **{footprint.individual.ultimate.reduction_factor_vs_dynamic}× menos contexto de arranque** que registrar cada herramienta por separado: {footprint.dynamic.tool_schema_tokens.toLocaleString("es-ES")} tokens de esquema frente a {footprint.individual.ultimate.tool_schema_tokens.toLocaleString("es-ES")}.
+- **Mismo catálogo, mismas salvaguardas.** La confirmación de acciones destructivas, el filtrado de solo lectura, las previsualizaciones de safe mode y el formato de resultados se comportan igual que en las demás superficies.
+
 :::
 
 El conjunto de herramientas dinámico es el **modo predeterminado de bajo consumo de tokens** de GitLab MCP Server. Mantiene disponible todo el catálogo de acciones de GitLab, pero muestra a tu cliente de IA solo dos herramientas públicas:
@@ -78,6 +54,19 @@ flowchart LR
 
 Esto suele añadir una llamada de descubrimiento por tarea, pero mantiene muy pequeño el contexto inicial de herramientas MCP.
 El catálogo se comparte con las meta-herramientas, así que el modo dinámico reutiliza los mismos schemas, protecciones de acciones destructivas, filtrado de solo lectura, previsualizaciones de safe mode, filtrado por scopes del token y formato de resultados.
+
+## ¿Cuánto contexto de arranque ahorra el modo dinámico?
+
+El modo dinámico cuesta {footprint.dynamic.tool_schema_tokens.toLocaleString("es-ES")} tokens de schema de herramientas al arrancar, frente a {footprint.individual.ultimate.tool_schema_tokens.toLocaleString("es-ES")} tokens de la superficie individual en una instancia GitLab Ultimate: una **reducción de {footprint.individual.ultimate.reduction_factor_vs_dynamic}×**, porque el cliente recibe {footprint.dynamic.visible_tools} definiciones de herramienta en lugar de {footprint.individual.ultimate.visible_tools.toLocaleString("es-ES")}.
+
+| Superficie          | Tier     |                                                 Herramientas visibles |                                                           Tokens de schema |                                                    Reducción |
+| ------------------- | -------- | --------------------------------------------------------------------: | -------------------------------------------------------------------------: | -----------------------------------------------------------: |
+| `dynamic` (predet.) | Cualquie |                                     {footprint.dynamic.visible_tools} |             {footprint.dynamic.tool_schema_tokens.toLocaleString("es-ES")} |                                                   referencia |
+| `individual`        | Free/CE  |     {footprint.individual.free.visible_tools.toLocaleString("es-ES")} |     {footprint.individual.free.tool_schema_tokens.toLocaleString("es-ES")} |     {footprint.individual.free.reduction_factor_vs_dynamic}× |
+| `individual`        | Premium  |  {footprint.individual.premium.visible_tools.toLocaleString("es-ES")} |  {footprint.individual.premium.tool_schema_tokens.toLocaleString("es-ES")} |  {footprint.individual.premium.reduction_factor_vs_dynamic}× |
+| `individual`        | Ultimate | {footprint.individual.ultimate.visible_tools.toLocaleString("es-ES")} | {footprint.individual.ultimate.tool_schema_tokens.toLocaleString("es-ES")} | {footprint.individual.ultimate.reduction_factor_vs_dynamic}× |
+
+**Metodología.** Los recuentos usan el tokenizador <code>{footprint.tokenizer}</code> (la codificación de GPT-4 / GPT-3.5) mediante [tiktoken-go](https://github.com/tiktoken-go/tokenizer), medidos sobre el árbol de código de la v{stats.version} con el catálogo construido en memoria y sin llamadas de red. «Tokens de schema» cubre solo las definiciones de herramienta visibles —schemas de entrada, anotaciones y descripciones—, que es lo que el cliente paga en cada `tools/list`. Los recursos y prompts MCP añaden otros 31.758 tokens con `CAPABILITY_SURFACE=full`, o 1.088 con `minimal`, por igual en todas las superficies. Estas cifras se regeneran con `make gen-footprint`; la matriz completa de tier × superficie × modo de schema está en [la referencia de huella de tokens](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/token-footprint.md).
 
 ## ¿Cómo activo el modo dinámico?
 
@@ -290,23 +279,7 @@ El modo dinámico y las meta-herramientas comparten un catálogo y un modelo de 
 | Recursos y prompts siguen consumiendo contexto    | Añade `CAPABILITY_SURFACE=minimal` o `--capability-surface=minimal`                                                                                                                                       |
 | Los metadatos de descubrimiento parecen escasos   | Ejecuta `go run ./cmd/audit_discovery_completeness/` para confirmar que cada acción tiene alias, uso, guía de parámetros y acciones relacionadas; rellena huecos con el estándar de oro link-create-batch |
 
-## Preguntas frecuentes
-
-### ¿Cuál es la diferencia entre gitlab_find_action y gitlab_execute_action?
-
-`gitlab_find_action` y `gitlab_execute_action` son las dos herramientas públicas del modo dinámico, y tienen funciones distintas. `gitlab_find_action` busca en el catálogo canónico de acciones y devuelve acciones candidatas ordenadas con su `input_schema` exacto, meta-herramienta base, indicador destructivo, parámetros requeridos, pistas de uso y ejemplos —el asistente la usa para elegir el mejor ID `domain.action` y construir los parámetros. `gitlab_execute_action` ejecuta entonces esa acción tras validar el ID de acción y los parámetros, devolviendo la respuesta real del handler base como Markdown y JSON estructurado. El ritmo recomendado es encontrar y luego ejecutar: descubrir primero el esquema y después despachar el ID canónico de la acción.
-
-### ¿Por qué el modo dinámico muestra solo dos herramientas?
-
-Mostrar solo dos herramientas es intencionado y esperado en el modo dinámico. Los servidores MCP grandes pueden gastar mucho contexto en descubrimiento de herramientas antes de que el usuario pida nada; GitLab MCP Server puede exponer hasta {stats.tools.gitlab_com} operaciones individuales en GitLab.com Enterprise/Premium con Orbit. El modo dinámico expone ese catálogo completo mediante `gitlab_find_action` y `gitlab_execute_action`, así que el `tools/list` inicial se mantiene mínimo y el presupuesto de contexto del modelo queda libre para la conversación. El compromiso es una llamada de descubrimiento por tarea: el asistente debe encontrar una acción antes de ejecutarla.
-
-### ¿Las acciones destructivas siguen protegidas en el modo dinámico?
-
-Sí. El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herramientas porque ambos comparten el catálogo canónico de acciones. Las acciones destructivas siguen requiriendo confirmación explícita salvo que el despliegue haya desactivado intencionadamente las confirmaciones con `YOLO_MODE` o `AUTOPILOT`. Sin confirmación, el servidor devuelve un resultado de error en lugar de realizar la acción; para ejecutarla intencionadamente, pasa `confirm: true` a nivel superior en los argumentos de `gitlab_execute_action`. La ejecución dinámica también valida los parámetros antes de despachar y rechaza campos desconocidos con guía de reparación. Para despliegues más seguros, usa `GITLAB_READ_ONLY=true` o `GITLAB_SAFE_MODE=true`.
-
-### ¿Cómo hago que el modo dinámico use aún menos contexto de inicio?
-
-Para minimizar el contexto de inicio, combina el modo dinámico con la superficie mínima de capacidades añadiendo `CAPABILITY_SURFACE=minimal` (o `--capability-surface=minimal` en modo HTTP). Minimal mantiene los recursos de manifiesto de herramientas `gitlab://tools` y `gitlab://tools/{id}` y omite recursos opcionales, prompts y guías de flujo. El modo dinámico conserva el descubrimiento completo de schemas porque `gitlab_find_action` devuelve los schemas exactos inline. Deja `META_PARAM_SCHEMA` en su valor predeterminado `opaque`, ya que solo afecta a los schemas de las meta-herramientas y no tiene efecto en despliegues dinámicos.
+<FAQ />
 
 ## Lectura adicional
 
@@ -314,3 +287,9 @@ Para minimizar el contexto de inicio, combina el modo dinámico con la superfici
 - [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/)
 - [Configuración](/gitlab-mcp-server/es/configuration/)
 - [Arquitectura](/gitlab-mcp-server/es/architecture/)
+
+## Referencia de la fuente
+
+:::note[Documentación para desarrolladores]
+Esta página es la guía de usuario. Para el contrato autoritativo a nivel de campos y las notas de implementación, consulta [`docs/dynamic-tools.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/dynamic-tools.md) en el repositorio.
+:::

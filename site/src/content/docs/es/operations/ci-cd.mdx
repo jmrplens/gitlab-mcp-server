@@ -2,56 +2,19 @@
 title: Uso en CI/CD
 description: Ejecuta gitlab-mcp-server en jobs CI/CD de GitLab en modo determinista JSON-RPC o con LLM para revisiones automáticas y flujos de release.
 datePublished: "2026-04-21"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "¿Puedo usar gitlab-mcp-server en CI/CD sin un LLM?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Sí. El modo determinista envía mensajes JSON-RPC 2.0 directamente al servidor por stdio, sin LLM ni API externa. Cada interacción realiza un handshake initialize, envía un mensaje notifications/initialized y luego emite una o más solicitudes tools/call, y el resultado se parsea con jq. Este modo es totalmente determinista y es la opción adecuada para operaciones scriptadas como listar issues, publicar comentarios o crear releases."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Qué tipo de token de GitLab debería usar en pipelines CI/CD?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Usa un Project Access Token limitado a un solo proyecto y almacénalo como variable CI/CD enmascarada, nunca commiteada al repositorio. Elige el scope api para acceso completo o read_api para flujos de solo lectura, define una expiración máxima de 90 días y rota el token antes de que expire. Para flujos que abarcan varios proyectos, usa un Group Access Token."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Cómo bloqueo un script CI hasta que un pipeline de GitLab termine?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Llama a la meta-herramienta gitlab_pipeline con la acción wait. Consulta el pipeline hasta que alcanza un estado terminal (success, failed o canceled), lo que permite que un script CI se bloquee hasta que un pipeline disparado termine. La meta-herramienta gitlab_job ofrece una acción wait equivalente para jobs individuales."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Debería usar transporte stdio o HTTP para gitlab-mcp-server en CI?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Usa stdio para llamadas ocasionales, porque cada llamada inicia y termina un proceso de servidor. Para pipelines con muchas llamadas a herramientas, arranca el servidor una vez en modo HTTP con --http y llámalo en http://127.0.0.1:8080/mcp para evitar la sobrecarga de inicio de proceso por llamada. Ambos transportes se autentican con un Personal Access Token o un Project Access Token."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "¿Puedo usar gitlab-mcp-server en CI/CD sin un LLM?"
+    a: "Sí. El **modo determinista** envía mensajes JSON-RPC 2.0 directamente al servidor por stdio, sin LLM ni API externa. Cada interacción realiza un handshake `initialize`, envía un mensaje `notifications/initialized` y luego emite una o más solicitudes `tools/call`, y el resultado se parsea con `jq`. Este modo es totalmente determinista, lo que lo hace ideal para operaciones scriptadas como listar issues, publicar comentarios o crear releases."
+  - q: "¿Qué tipo de token de GitLab debería usar en pipelines CI/CD?"
+    a: "Usa un **Project Access Token** limitado a un solo proyecto y almacénalo como variable CI/CD enmascarada, nunca commiteada al repositorio. Elige el scope `api` para acceso completo o `read_api` para flujos de solo lectura, define una expiración máxima de 90 días y rota el token antes de que expire. Para flujos que abarcan varios proyectos, usa un **Group Access Token**."
+  - q: "¿Cómo bloqueo un script CI hasta que un pipeline de GitLab termine?"
+    a: "Llama a la meta-herramienta `gitlab_pipeline` con la acción `wait`. Consulta el pipeline hasta que alcanza un estado terminal (success, failed o canceled), lo que permite que un script CI se bloquee hasta que un pipeline disparado termine. La meta-herramienta `gitlab_job` ofrece una acción `wait` equivalente para jobs individuales."
+  - q: "¿Debería usar transporte stdio o HTTP en CI?"
+    a: "Usa stdio para llamadas ocasionales, porque cada llamada inicia y termina un proceso de servidor. Para pipelines con muchas llamadas a herramientas, arranca el servidor una vez en modo HTTP con `--http` y llámalo en `http://127.0.0.1:8080/mcp` para evitar la sobrecarga de inicio de proceso por llamada. Ambos transportes se autentican con un Personal Access Token o un Project Access Token."
 ---
 
 import { Steps, Tabs, TabItem } from "@astrojs/starlight/components";
-
-:::note[Documentación para desarrolladores]
-Para la referencia técnica completa, consulta [`docs/ci-cd.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/ci-cd.md) en el repositorio.
-:::
+import FAQ from "../../../../components/FAQ.astro";
 
 gitlab-mcp-server puede ejecutarse dentro de jobs CI/CD como cualquier otra herramienta CLI. Hay dos modos de uso disponibles:
 
@@ -361,20 +324,10 @@ Para la referencia completa de herramientas, consulta [Resumen de herramientas](
 | Timeout en respuestas grandes                   | Añade argumento `per_page` para limitar resultados                                  |
 | Errores de proveedor en mcp-cli                 | Verifica las variables de API key, prueba `pip install --upgrade mcp-cli`           |
 
-## Preguntas frecuentes
+<FAQ />
 
-### ¿Puedo usar gitlab-mcp-server en CI/CD sin un LLM?
+## Referencia de la fuente
 
-Sí. El **modo determinista** envía mensajes JSON-RPC 2.0 directamente al servidor por stdio, sin LLM ni API externa. Cada interacción realiza un handshake `initialize`, envía un mensaje `notifications/initialized` y luego emite una o más solicitudes `tools/call`, y el resultado se parsea con `jq`. Este modo es totalmente determinista, lo que lo hace ideal para operaciones scriptadas como listar issues, publicar comentarios o crear releases.
-
-### ¿Qué tipo de token de GitLab debería usar en pipelines CI/CD?
-
-Usa un **Project Access Token** limitado a un solo proyecto y almacénalo como variable CI/CD enmascarada, nunca commiteada al repositorio. Elige el scope `api` para acceso completo o `read_api` para flujos de solo lectura, define una expiración máxima de 90 días y rota el token antes de que expire. Para flujos que abarcan varios proyectos, usa un **Group Access Token**.
-
-### ¿Cómo bloqueo un script CI hasta que un pipeline de GitLab termine?
-
-Llama a la meta-herramienta `gitlab_pipeline` con la acción `wait`. Consulta el pipeline hasta que alcanza un estado terminal (success, failed o canceled), lo que permite que un script CI se bloquee hasta que un pipeline disparado termine. La meta-herramienta `gitlab_job` ofrece una acción `wait` equivalente para jobs individuales.
-
-### ¿Debería usar transporte stdio o HTTP en CI?
-
-Usa stdio para llamadas ocasionales, porque cada llamada inicia y termina un proceso de servidor. Para pipelines con muchas llamadas a herramientas, arranca el servidor una vez en modo HTTP con `--http` y llámalo en `http://127.0.0.1:8080/mcp` para evitar la sobrecarga de inicio de proceso por llamada. Ambos transportes se autentican con un Personal Access Token o un Project Access Token.
+:::note[Documentación para desarrolladores]
+Para la referencia técnica completa, consulta [`docs/ci-cd.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/ci-cd.md) en el repositorio.
+:::

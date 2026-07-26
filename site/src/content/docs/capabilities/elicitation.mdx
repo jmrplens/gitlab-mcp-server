@@ -2,54 +2,18 @@
 title: Elicitation
 description: Interactive MCP elicitation workflows that guide GitLab issue, merge request, release, and project creation through step-by-step forms.
 datePublished: "2026-04-21"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "What is MCP elicitation in GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Elicitation is an MCP capability that lets GitLab MCP Server pause execution and ask the user for input through structured forms rendered by the MCP client. It enables wizard-style creation flows for complex resources such as issues, merge requests, releases, and projects. Standard tools require the AI to supply all parameters upfront in one call; with elicitation, the server collects fields one step at a time, validates each answer, and can adapt the next question based on the previous one. Every flow ends with an explicit user confirmation before the resource is created."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Which interactive wizard tools does GitLab MCP Server provide?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server provides four interactive wizard tools that use elicitation: gitlab_interactive_issue_create for step-by-step issue creation with project selection, labels, and assignment; gitlab_interactive_mr_create for guided merge request creation with branch selection and options; gitlab_interactive_release_create for release creation with tag and milestone selection; and gitlab_interactive_project_create for project creation with namespace selection and configuration. Each one confirms with the user before performing the final GitLab API call."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "What happens when an MCP client does not support elicitation?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "When elicitation is not available, GitLab MCP Server gracefully degrades to standard parameterized tools. The AI assistant provides all parameters directly in a single call instead of using the interactive wizard flow. Functionality is fully preserved — only the step-by-step interactive experience is reduced. For example, you can call gitlab_issue with action create and pass every field at once, achieving the same result without elicitation support."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Which MCP clients support elicitation?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Elicitation is supported by Claude Desktop and Claude Code. VS Code Copilot and Cursor do not yet support it. On clients without elicitation support, GitLab MCP Server falls back to standard parameterized creation tools, so resource creation still works. Because MCP client capability support changes frequently, confirm the current state against the specific client's documentation."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "What is MCP elicitation?"
+    a: "Elicitation is an MCP capability that lets GitLab MCP Server **pause and ask the user for input through structured forms** rendered by the client. It powers wizard-style creation of complex resources such as issues, merge requests, releases, and projects. Rather than requiring all parameters upfront, the server collects fields one step at a time, validates each answer, adapts later questions to earlier ones, and confirms before creating the resource."
+  - q: "Which interactive wizard tools are available?"
+    a: "GitLab MCP Server provides four elicitation wizards: `gitlab_interactive_issue_create` (project selection, labels, assignment), `gitlab_interactive_mr_create` (branch selection and options), `gitlab_interactive_release_create` (tag and milestone selection), and `gitlab_interactive_project_create` (namespace selection and configuration). Each confirms with the user before performing the final GitLab API call."
+  - q: "What happens when a client does not support elicitation?"
+    a: "GitLab MCP Server gracefully degrades to standard parameterized tools. The assistant supplies all parameters directly in a single call instead of using the wizard flow. Functionality is fully preserved — only the step-by-step experience is lost. For example, calling `gitlab_issue` with `action: create` and passing every field at once produces the same result without elicitation support."
+  - q: "Which MCP clients support elicitation?"
+    a: "Elicitation is supported by **Claude Desktop** and **Claude Code**. **VS Code Copilot** and **Cursor** do not yet support it, so on those clients GitLab MCP Server falls back to standard parameterized creation tools. Because client capability support changes frequently, confirm the current state against the specific client's documentation."
 ---
 
-:::note[Developer Documentation]
-This page is the user-facing overview. For the full elicitation reference, see [docs/reference/capabilities/elicitation](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/elicitation.md).
-:::
+import FAQ from "../../../components/FAQ.astro";
 
 Elicitation lets GitLab MCP Server **ask the user for input through structured forms**, enabling wizard-style creation flows for complex resources such as issues, merge requests, releases, and projects. Instead of requiring the AI to supply every parameter upfront, the server collects fields one step at a time, validates each answer, and confirms before creating the resource.
 
@@ -126,20 +90,10 @@ When elicitation is not available, the server falls back to standard parameteriz
 Even without elicitation support, you can use the standard creation tools (e.g., `gitlab_issue` with `action: create`) by providing all parameters in a single call.
 :::
 
-## Frequently asked questions
+<FAQ />
 
-### What is MCP elicitation?
+## Source reference
 
-Elicitation is an MCP capability that lets GitLab MCP Server **pause and ask the user for input through structured forms** rendered by the client. It powers wizard-style creation of complex resources such as issues, merge requests, releases, and projects. Rather than requiring all parameters upfront, the server collects fields one step at a time, validates each answer, adapts later questions to earlier ones, and confirms before creating the resource.
-
-### Which interactive wizard tools are available?
-
-GitLab MCP Server provides four elicitation wizards: `gitlab_interactive_issue_create` (project selection, labels, assignment), `gitlab_interactive_mr_create` (branch selection and options), `gitlab_interactive_release_create` (tag and milestone selection), and `gitlab_interactive_project_create` (namespace selection and configuration). Each confirms with the user before performing the final GitLab API call.
-
-### What happens when a client does not support elicitation?
-
-GitLab MCP Server gracefully degrades to standard parameterized tools. The assistant supplies all parameters directly in a single call instead of using the wizard flow. Functionality is fully preserved — only the step-by-step experience is lost. For example, calling `gitlab_issue` with `action: create` and passing every field at once produces the same result without elicitation support.
-
-### Which MCP clients support elicitation?
-
-Elicitation is supported by **Claude Desktop** and **Claude Code**. **VS Code Copilot** and **Cursor** do not yet support it, so on those clients GitLab MCP Server falls back to standard parameterized creation tools. Because client capability support changes frequently, confirm the current state against the specific client's documentation.
+:::note[Developer Documentation]
+This page is the user-facing overview. For the full elicitation reference, see [docs/reference/capabilities/elicitation](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/elicitation.md).
+:::

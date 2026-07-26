@@ -1,0 +1,58 @@
+---
+title: About this project
+description: Who maintains GitLab MCP Server, why it exists, how it is licensed and versioned, and how to report problems or contribute.
+datePublished: "2026-07-26"
+faq:
+  - q: "Who maintains GitLab MCP Server?"
+    a: "GitLab MCP Server is built and maintained by José Manuel Requena Plens (jmrplens), an R&D firmware and software engineer based in Valencia, Spain, working on industrial embedded systems, open-source tooling, and self-hosted infrastructure. Research identity: ORCID 0000-0003-1250-6212. It is an independent open-source project and is not affiliated with, endorsed by, or operated by GitLab Inc."
+  - q: "Is GitLab MCP Server affiliated with GitLab Inc.?"
+    a: "No. It is an independent open-source project that talks to GitLab through the public REST v4 and GraphQL APIs, exactly as any other API client would. GitLab is a trademark of GitLab Inc.; this project uses the name only to describe what it connects to. GitLab also publishes its own official MCP integration, which is a separate product with different instance prerequisites."
+  - q: "How is GitLab MCP Server licensed?"
+    a: "Under the MIT license, with the full source on GitHub. There is no paid tier, no license key, and no hosted service you must subscribe to. GitLab Premium and Ultimate tools register only when the GitLab instance you connect to is licensed for those features — that gating comes from your own GitLab licence, not from this server."
+  - q: "How do I report a bug or request a feature?"
+    a: "Open an issue on the GitHub repository. For security vulnerabilities, do not open a public issue — use GitHub Security Advisories instead, as described on the security page. Bug reports are most useful when they include the output of `gitlab-mcp-server --version`, the transport in use (stdio or HTTP), the tool surface (`TOOL_SURFACE`), and the GitLab edition and version you connect to."
+  - q: "How often is GitLab MCP Server released?"
+    a: "Releases are cut as work lands rather than on a fixed calendar, and versioning follows semantic versioning. Every release publishes signed cross-platform binaries for Linux, macOS, and Windows on amd64 and arm64, a container image, and a Claude Desktop extension. The built-in auto-update checks GitHub Releases and can apply updates for you; it is documented on the auto-update page."
+---
+
+import FAQ from "../../components/FAQ.astro";
+import stats from "../../data/stats.json";
+
+GitLab MCP Server is an independent, MIT-licensed [Model Context Protocol](https://modelcontextprotocol.io/) server that exposes the GitLab REST v4 and GraphQL APIs as tools an AI assistant can call. It is written in Go, ships as a single static binary, and currently covers {stats.tools.free} operations on GitLab Community Edition and up to {stats.tools.gitlab_com} on GitLab.com.
+
+## Who maintains it
+
+The project is built and maintained by **José Manuel Requena Plens** ([jmrplens](https://github.com/jmrplens)), an R&D firmware and software engineer based in Valencia, Spain, working on industrial embedded systems, open-source tooling, and self-hosted infrastructure.
+
+|                |                                                                   |
+| -------------- | ----------------------------------------------------------------- |
+| GitHub         | [github.com/jmrplens](https://github.com/jmrplens)                |
+| Website        | [jmrp.io](https://jmrp.io/)                                       |
+| ORCID          | [0000-0003-1250-6212](https://orcid.org/0000-0003-1250-6212)      |
+| Google Scholar | [Profile](https://scholar.google.com/citations?user=9b0kPaUAAAAJ) |
+| Mastodon       | [@jmrplens@mstdn.jmrp.io](https://mstdn.jmrp.io/@jmrplens)        |
+| LinkedIn       | [in/jmrplens](https://www.linkedin.com/in/jmrplens)               |
+
+## Why it exists
+
+Most GitLab MCP integrations expose a curated slice of the API — enough to read a merge request or open an issue — because a hand-maintained tool list is easier to keep coherent. This project started from the opposite premise: generate the _whole_ API surface from the catalog, so an operation is never missing merely because nobody got round to adding it, and keep it working on Community Edition with nothing but a personal access token.
+
+That created a second problem. A server that registers a thousand tools costs more startup context than most models can spare, which is why the default surface is two tools rather than a thousand. The [dynamic toolset](/gitlab-mcp-server/tools/dynamic-tools/) resolves any operation on demand, and the [architecture page](/gitlab-mcp-server/architecture/) records the design decisions that follow from it.
+
+## Not affiliated with GitLab Inc
+
+This is an independent open-source project. It is not affiliated with, endorsed by, or operated by GitLab Inc., and it communicates with GitLab only through the documented public APIs. GitLab is a trademark of its respective owner. GitLab publishes its own official MCP integration separately; see the [comparison page](/gitlab-mcp-server/comparison/) for how the two differ.
+
+## Licence, versioning and releases
+
+The project is released under the [MIT license](https://github.com/jmrplens/gitlab-mcp-server/blob/main/LICENSE) and follows semantic versioning. Current version: **{stats.version}**.
+
+Every release publishes signed binaries for Linux, macOS and Windows on both amd64 and arm64, a container image on GHCR and Docker Hub, and a Claude Desktop extension. Release notes and downloads are on the [Releases page](https://github.com/jmrplens/gitlab-mcp-server/releases); binary signatures can be verified with Cosign as described under [release integrity](/gitlab-mcp-server/operations/security/).
+
+## Reporting problems and contributing
+
+Bug reports and feature requests belong in [GitHub Issues](https://github.com/jmrplens/gitlab-mcp-server/issues). Include the output of `gitlab-mcp-server --version`, the transport (stdio or HTTP), the `TOOL_SURFACE` in use, and the GitLab edition and version you connect to — those four facts resolve most reports immediately.
+
+**Security vulnerabilities are different: do not open a public issue.** Use [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new), which keeps the report private until a fix ships. The full policy is in [SECURITY.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/SECURITY.md).
+
+<FAQ />

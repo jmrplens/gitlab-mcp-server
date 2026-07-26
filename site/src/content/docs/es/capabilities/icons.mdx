@@ -2,57 +2,20 @@
 title: Iconos
 description: GitLab MCP Server asigna 50 iconos SVG únicos a cada herramienta, recurso y prompt como data URIs base64 que se adaptan a temas claro y oscuro.
 datePublished: "2026-04-21"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "¿Qué son los iconos en GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server asigna 50 iconos SVG únicos a cada herramienta, recurso y prompt que expone, para que los clientes MCP puedan mostrar elementos de interfaz reconocibles para cada dominio de GitLab. Las herramientas relacionadas comparten un mismo icono para agrupación visual — por ejemplo, branches, repository y submodules usan todos IconBranch. Los iconos se almacenan como data URIs SVG codificados en base64 con Sizes igual a any para escalabilidad, dibujados en un viewport de 16x16 y rellenados con currentColor para que se adapten automáticamente a los temas claro y oscuro. Los iconos son metadatos de presentación opcionales, no una capacidad de protocolo MCP negociada."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Cómo se diseñan y codifican los iconos de GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Cada icono de GitLab MCP Server usa un viewport mínimo de 16x16 optimizado para listas de herramientas y barras laterales, con un relleno currentColor para que se adapte a los temas claro y oscuro. Los iconos se incrustan en línea como data URIs SVG codificados en base64 (data:image/svg+xml;base64,...) directamente en el binario, sin necesidad de peticiones de red, y se comparte un icono por dominio para que las herramientas relacionadas se agrupen visualmente. Se registran mediante specs de acciones y grupos del catálogo, y luego se proyectan en las superficies meta, individual y dinámica. El código fuente está en internal/toolutil/icons.go."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Qué clientes MCP renderizan los iconos de herramientas de GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "El renderizado de iconos varía según el cliente MCP. VS Code con GitHub Copilot renderiza por completo los iconos SVG de herramientas. Continue.dev ofrece soporte parcial según la versión. Claude Desktop no renderiza iconos de herramientas, y Claude Code es una interfaz solo de texto que no los muestra. Los iconos son metadatos opcionales: los clientes que no admiten el renderizado de iconos simplemente los ignoran, y la funcionalidad de las herramientas no se ve afectada de ningún modo."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Afectan los iconos a la funcionalidad de las herramientas de GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "No. Los iconos son metadatos de presentación opcionales adjuntos a herramientas, recursos y prompts en GitLab MCP Server. Los clientes que no pueden renderizar iconos los ignoran, y cada herramienta se comporta de forma idéntica se muestre o no su icono. Los iconos existen únicamente para ayudar a los usuarios a reconocer visualmente los dominios de GitLab en clientes que admiten el renderizado SVG; nunca cambian los parámetros, el comportamiento ni los resultados de una herramienta."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "¿Qué son los iconos en GitLab MCP Server?"
+    a: 'GitLab MCP Server asigna **50 iconos SVG únicos** a cada herramienta, recurso y prompt que expone, para que los clientes MCP puedan mostrar elementos de interfaz reconocibles para cada dominio de GitLab. Las herramientas relacionadas comparten un mismo icono para agrupación visual — por ejemplo, branches, repository y submodules usan todos `IconBranch`. Los iconos se almacenan como data URIs SVG codificados en base64 con `Sizes: ["any"]` para escalabilidad, dibujados en un viewport de 16×16 y rellenados con `currentColor` para que se adapten automáticamente a los temas claro y oscuro. Son metadatos de presentación opcionales, no una capacidad de protocolo MCP negociada.'
+  - q: "¿Cómo se diseñan y codifican los iconos de GitLab MCP Server?"
+    a: "Cada icono usa un **viewport mínimo de 16×16** optimizado para listas de herramientas y barras laterales, con un relleno `currentColor` para que se adapte a los temas claro y oscuro. Los iconos se incrustan en línea como data URIs SVG codificados en base64 (`data:image/svg+xml;base64,...`) directamente en el binario, sin necesidad de peticiones de red, y se comparte un icono por dominio para que las herramientas relacionadas se agrupen visualmente. Se registran mediante specs de acciones y grupos del catálogo, y luego se proyectan en las superficies meta, individual y dinámica. El código fuente está en [`internal/toolutil/icons.go`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/internal/toolutil/icons.go)."
+  - q: "¿Qué clientes MCP renderizan los iconos de herramientas?"
+    a: "El renderizado de iconos varía según el cliente. **VS Code con GitHub Copilot** renderiza por completo los iconos SVG de herramientas, y **Continue.dev** ofrece soporte parcial según la versión. **Claude Desktop** no renderiza iconos de herramientas, y **Claude Code** es una interfaz solo de texto que no los muestra. Como los iconos son metadatos opcionales, los clientes que no admiten su renderizado simplemente los ignoran y la funcionalidad de las herramientas no se ve afectada."
+  - q: "¿Afectan los iconos a la funcionalidad de las herramientas?"
+    a: "No. Los iconos son metadatos de presentación opcionales adjuntos a herramientas, recursos y prompts. Los clientes que no pueden renderizar iconos los ignoran, y cada herramienta se comporta de forma idéntica se muestre o no su icono. Los iconos existen únicamente para ayudar a los usuarios a reconocer visualmente los dominios de GitLab en clientes que admiten el renderizado SVG; nunca cambian los parámetros, el comportamiento ni los resultados de una herramienta."
 ---
 
 import { Badge } from "@astrojs/starlight/components";
+import FAQ from "../../../../components/FAQ.astro";
 import stats from "../../../../data/stats.json";
-
-:::note[Documentación para desarrolladores]
-Esta página es la galería de iconos orientada a usuarios. Para la referencia para desarrolladores, consulta [docs/reference/capabilities/icons](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/icons.md).
-:::
 
 GitLab MCP Server asigna **50 iconos SVG únicos** a las {stats.tools.ultimate_self_managed} herramientas Enterprise/Premium autoalojadas ({stats.tools.gitlab_com} en GitLab.com Enterprise/Premium con Orbit), {stats.meta.base} meta-herramientas base ({stats.meta.self_managed_enterprise} enterprise autoalojadas, {stats.meta.gitlab_com} GitLab.com Enterprise), {stats.resources} recursos y {stats.prompts} prompts. Los iconos se almacenan como SVG codificados en base64 (`data:image/svg+xml;base64,...`) con `Sizes: ["any"]` para escalabilidad, y ayudan a los clientes MCP a mostrar elementos de interfaz reconocibles para cada dominio de GitLab. Son metadatos de presentación opcionales, no una capacidad de protocolo MCP negociada: un cliente que no puede renderizar iconos simplemente los ignora, y el comportamiento de las herramientas no cambia.
 
@@ -902,20 +865,10 @@ Los iconos son metadatos opcionales. Los clientes que no soportan renderizado de
 - **Viewport**: Todos los iconos usan 16×16 con `currentColor` para adaptación al tema
 - **Registro**: Los iconos se asignan mediante specs de acciones y grupos del catálogo, y luego se proyectan en las superficies meta, individual y dinámica
 
-## Preguntas frecuentes
+<FAQ />
 
-### ¿Qué son los iconos en GitLab MCP Server?
+## Referencia de la fuente
 
-GitLab MCP Server asigna **50 iconos SVG únicos** a cada herramienta, recurso y prompt que expone, para que los clientes MCP puedan mostrar elementos de interfaz reconocibles para cada dominio de GitLab. Las herramientas relacionadas comparten un mismo icono para agrupación visual — por ejemplo, branches, repository y submodules usan todos `IconBranch`. Los iconos se almacenan como data URIs SVG codificados en base64 con `Sizes: ["any"]` para escalabilidad, dibujados en un viewport de 16×16 y rellenados con `currentColor` para que se adapten automáticamente a los temas claro y oscuro. Son metadatos de presentación opcionales, no una capacidad de protocolo MCP negociada.
-
-### ¿Cómo se diseñan y codifican los iconos de GitLab MCP Server?
-
-Cada icono usa un **viewport mínimo de 16×16** optimizado para listas de herramientas y barras laterales, con un relleno `currentColor` para que se adapte a los temas claro y oscuro. Los iconos se incrustan en línea como data URIs SVG codificados en base64 (`data:image/svg+xml;base64,...`) directamente en el binario, sin necesidad de peticiones de red, y se comparte un icono por dominio para que las herramientas relacionadas se agrupen visualmente. Se registran mediante specs de acciones y grupos del catálogo, y luego se proyectan en las superficies meta, individual y dinámica. El código fuente está en [`internal/toolutil/icons.go`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/internal/toolutil/icons.go).
-
-### ¿Qué clientes MCP renderizan los iconos de herramientas?
-
-El renderizado de iconos varía según el cliente. **VS Code con GitHub Copilot** renderiza por completo los iconos SVG de herramientas, y **Continue.dev** ofrece soporte parcial según la versión. **Claude Desktop** no renderiza iconos de herramientas, y **Claude Code** es una interfaz solo de texto que no los muestra. Como los iconos son metadatos opcionales, los clientes que no admiten su renderizado simplemente los ignoran y la funcionalidad de las herramientas no se ve afectada.
-
-### ¿Afectan los iconos a la funcionalidad de las herramientas?
-
-No. Los iconos son metadatos de presentación opcionales adjuntos a herramientas, recursos y prompts. Los clientes que no pueden renderizar iconos los ignoran, y cada herramienta se comporta de forma idéntica se muestre o no su icono. Los iconos existen únicamente para ayudar a los usuarios a reconocer visualmente los dominios de GitLab en clientes que admiten el renderizado SVG; nunca cambian los parámetros, el comportamiento ni los resultados de una herramienta.
+:::note[Documentación para desarrolladores]
+Esta página es la galería de iconos orientada a usuarios. Para la referencia para desarrolladores, consulta [docs/reference/capabilities/icons](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/icons.md).
+:::

@@ -1,0 +1,58 @@
+---
+title: Sobre este proyecto
+description: Quién mantiene GitLab MCP Server, por qué existe, cómo se licencia y versiona, y cómo reportar problemas o contribuir.
+datePublished: "2026-07-26"
+faq:
+  - q: "¿Quién mantiene GitLab MCP Server?"
+    a: "GitLab MCP Server lo desarrolla y mantiene José Manuel Requena Plens (jmrplens), ingeniero de I+D de firmware y software afincado en Valencia, España, que trabaja en sistemas embebidos industriales, herramientas de código abierto e infraestructura autoalojada. Identidad de investigación: ORCID 0000-0003-1250-6212. Es un proyecto de código abierto independiente, no afiliado ni respaldado por GitLab Inc."
+  - q: "¿Está GitLab MCP Server afiliado a GitLab Inc.?"
+    a: "No. Es un proyecto de código abierto independiente que se comunica con GitLab mediante las API públicas REST v4 y GraphQL, igual que cualquier otro cliente de la API. GitLab es una marca registrada de GitLab Inc.; este proyecto usa el nombre únicamente para describir aquello a lo que se conecta. GitLab también publica su propia integración MCP oficial, que es un producto distinto con otros requisitos de instancia."
+  - q: "¿Bajo qué licencia se publica GitLab MCP Server?"
+    a: "Bajo licencia MIT, con todo el código fuente en GitHub. No hay versión de pago, ni clave de licencia, ni servicio alojado al que haya que suscribirse. Las herramientas de GitLab Premium y Ultimate se registran solo cuando la instancia a la que te conectas tiene licencia para esas funciones: esa restricción viene de tu propia licencia de GitLab, no de este servidor."
+  - q: "¿Cómo reporto un error o pido una funcionalidad?"
+    a: "Abre un issue en el repositorio de GitHub. Para vulnerabilidades de seguridad no abras un issue público: usa GitHub Security Advisories, como se describe en la página de seguridad. Los reportes más útiles incluyen la salida de `gitlab-mcp-server --version`, el transporte en uso (stdio o HTTP), la superficie de herramientas (`TOOL_SURFACE`) y la edición y versión de GitLab a la que te conectas."
+  - q: "¿Con qué frecuencia se publican versiones?"
+    a: "Las versiones se publican a medida que el trabajo se completa, no en un calendario fijo, y el versionado sigue versionado semántico. Cada release publica binarios firmados multiplataforma para Linux, macOS y Windows en amd64 y arm64, una imagen de contenedor y una extensión para Claude Desktop. La actualización automática integrada consulta GitHub Releases y puede aplicar las actualizaciones por ti; está documentada en la página de auto-actualización."
+---
+
+import FAQ from "../../../components/FAQ.astro";
+import stats from "../../../data/stats.json";
+
+GitLab MCP Server es un servidor [Model Context Protocol](https://modelcontextprotocol.io/) independiente y con licencia MIT que expone las API REST v4 y GraphQL de GitLab como herramientas que un asistente de IA puede invocar. Está escrito en Go, se distribuye como un único binario estático y cubre actualmente {stats.tools.free} operaciones en GitLab Community Edition y hasta {stats.tools.gitlab_com} en GitLab.com.
+
+## Quién lo mantiene
+
+El proyecto lo desarrolla y mantiene **José Manuel Requena Plens** ([jmrplens](https://github.com/jmrplens)), ingeniero de I+D de firmware y software afincado en Valencia, España, que trabaja en sistemas embebidos industriales, herramientas de código abierto e infraestructura autoalojada.
+
+|                |                                                                  |
+| -------------- | ---------------------------------------------------------------- |
+| GitHub         | [github.com/jmrplens](https://github.com/jmrplens)               |
+| Web            | [jmrp.io](https://jmrp.io/)                                      |
+| ORCID          | [0000-0003-1250-6212](https://orcid.org/0000-0003-1250-6212)     |
+| Google Scholar | [Perfil](https://scholar.google.com/citations?user=9b0kPaUAAAAJ) |
+| Mastodon       | [@jmrplens@mstdn.jmrp.io](https://mstdn.jmrp.io/@jmrplens)       |
+| LinkedIn       | [in/jmrplens](https://www.linkedin.com/in/jmrplens)              |
+
+## Por qué existe
+
+La mayoría de integraciones MCP para GitLab exponen una porción curada de la API —lo justo para leer un merge request o abrir un issue— porque una lista de herramientas mantenida a mano es más fácil de mantener coherente. Este proyecto partió de la premisa contraria: generar _toda_ la superficie de la API desde el catálogo, para que ninguna operación falte simplemente porque nadie llegó a añadirla, y que siga funcionando en Community Edition con solo un token de acceso personal.
+
+Eso creó un segundo problema. Un servidor que registra mil herramientas consume más contexto de arranque del que la mayoría de modelos puede permitirse, y por eso la superficie predeterminada son dos herramientas y no mil. El [conjunto de herramientas dinámico](/gitlab-mcp-server/tools/dynamic-tools/) resuelve cualquier operación bajo demanda, y la [página de arquitectura](/gitlab-mcp-server/architecture/) recoge las decisiones de diseño que se derivan de ello.
+
+## Sin afiliación con GitLab Inc
+
+Este es un proyecto de código abierto independiente. No está afiliado ni respaldado por GitLab Inc., ni es operado por ellos, y se comunica con GitLab únicamente a través de las API públicas documentadas. GitLab es una marca registrada de su propietario. GitLab publica su propia integración MCP oficial por separado; consulta la [página de comparación](/gitlab-mcp-server/comparison/) para ver en qué se diferencian.
+
+## Licencia, versionado y releases
+
+El proyecto se publica bajo [licencia MIT](https://github.com/jmrplens/gitlab-mcp-server/blob/main/LICENSE) y sigue versionado semántico. Versión actual: **{stats.version}**.
+
+Cada release publica binarios firmados para Linux, macOS y Windows en amd64 y arm64, una imagen de contenedor en GHCR y Docker Hub, y una extensión para Claude Desktop. Las notas de versión y las descargas están en la [página de Releases](https://github.com/jmrplens/gitlab-mcp-server/releases); las firmas de los binarios se verifican con Cosign como se describe en [integridad del release](/gitlab-mcp-server/es/operations/security/).
+
+## Reportar problemas y contribuir
+
+Los errores y las peticiones de funcionalidad van a [GitHub Issues](https://github.com/jmrplens/gitlab-mcp-server/issues). Incluye la salida de `gitlab-mcp-server --version`, el transporte (stdio o HTTP), el `TOOL_SURFACE` en uso y la edición y versión de GitLab a la que te conectas: esos cuatro datos resuelven la mayoría de reportes de inmediato.
+
+**Las vulnerabilidades de seguridad son distintas: no abras un issue público.** Usa [GitHub Security Advisories](https://github.com/jmrplens/gitlab-mcp-server/security/advisories/new), que mantiene el reporte privado hasta que haya corrección. La política completa está en [SECURITY.md](https://github.com/jmrplens/gitlab-mcp-server/blob/main/SECURITY.md).
+
+<FAQ />

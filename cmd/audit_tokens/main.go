@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -769,6 +770,21 @@ const (
 	footprintEndMarker    = "<!-- END TOKEN FOOTPRINT -->"
 	detailedFootprintPath = "docs/development/token-footprint.md"
 	readmePath            = "README.md"
+	// siteFootprintPath receives the headline figures the documentation site
+	// quotes. The site used to carry the startup-context reduction only as text
+	// baked into a social-card image, with no measured figure anywhere in the
+	// prose. Emitting it from the same measurement run that produces the README
+	// and the reference doc means the published claim cannot drift from what the
+	// tokenizer actually measured.
+	siteFootprintPath = "site/src/data/token-footprint.json"
+)
+
+// Row identifiers used to pick the headline configurations out of the full
+// footprint matrix.
+const (
+	dynamicDefaultConfiguration = "`dynamic` / `full` (default)"
+	individualConfiguration     = "`individual` / `full`"
+	ultimateTierLabel           = "Ultimate"
 )
 
 // tokenFootprintRow is a README-facing token measurement for one runtime
@@ -848,8 +864,12 @@ func runFootprintCheck(client *gitlabclient.Client) error {
 	if err != nil {
 		return fmt.Errorf("reading %s: %w", detailedFootprintPath, err)
 	}
+	siteData, err := os.ReadFile(filepath.Clean(siteFootprintPath)) //#nosec G304 -- generated data path is a compile-time constant
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", siteFootprintPath, err)
+	}
 
-	stale, err := footprintStaleTargets(string(readmeData), string(detailedData), rows)
+	stale, err := footprintStaleTargets(string(readmeData), string(detailedData), string(siteData), rows)
 	if err != nil {
 		return err
 	}
@@ -864,7 +884,7 @@ func runFootprintCheck(client *gitlabclient.Client) error {
 // against the freshly rendered footprint content and returns the human-readable
 // names of any targets that are out of date. An empty slice means both are
 // current. Kept pure (no I/O) so the drift logic is unit-testable.
-func footprintStaleTargets(readmeText, detailedText string, rows []tokenFootprintRow) ([]string, error) {
+func footprintStaleTargets(readmeText, detailedText, siteText string, rows []tokenFootprintRow) ([]string, error) {
 	var stale []string
 
 	updated, err := docgen.ComputeReplacedSection(readmeText, footprintStartMarker, footprintEndMarker, renderReadmeFootprint(rows))
@@ -876,6 +896,13 @@ func footprintStaleTargets(readmeText, detailedText string, rows []tokenFootprin
 	}
 	if detailedText != renderDetailedFootprint(rows) {
 		stale = append(stale, detailedFootprintPath)
+	}
+	siteDoc, err := renderSiteFootprintJSON(rows)
+	if err != nil {
+		return nil, err
+	}
+	if siteText != string(siteDoc) {
+		stale = append(stale, siteFootprintPath)
 	}
 	return stale, nil
 }
@@ -894,8 +921,80 @@ func runFootprint(client *gitlabclient.Client) error {
 	if writeErr := os.WriteFile(filepath.Clean(detailedFootprintPath), []byte(detailedDoc), 0o600); writeErr != nil { //#nosec G306,G703 -- generated doc path is a compile-time constant
 		return fmt.Errorf("writing %s: %w", detailedFootprintPath, writeErr)
 	}
-	fmt.Printf("Updated %s token-footprint section and %s (%d rows across all tiers/surfaces/modes)\n", readmePath, detailedFootprintPath, len(rows))
+	siteDoc, err := renderSiteFootprintJSON(rows)
+	if err != nil {
+		return err
+	}
+	if writeErr := os.WriteFile(filepath.Clean(siteFootprintPath), siteDoc, 0o600); writeErr != nil { //#nosec G306,G703 -- generated data path is a compile-time constant
+		return fmt.Errorf("writing %s: %w", siteFootprintPath, writeErr)
+	}
+	fmt.Printf("Updated %s token-footprint section, %s and %s (%d rows across all tiers/surfaces/modes)\n", readmePath, detailedFootprintPath, siteFootprintPath, len(rows))
 	return nil
+}
+
+// siteFootprint is the headline subset of the footprint matrix consumed by the
+// documentation site (site/src/data/token-footprint.json).
+type siteFootprint struct {
+	Tokenizer  string                             `json:"tokenizer"`
+	Dynamic    siteFootprintSurface               `json:"dynamic"`
+	Individual map[string]siteFootprintIndividual `json:"individual"`
+}
+
+// siteFootprintSurface is one measured surface: how many tool definitions the
+// client receives at startup and what they cost.
+type siteFootprintSurface struct {
+	VisibleTools     int `json:"visible_tools"`
+	ToolSchemaTokens int `json:"tool_schema_tokens"`
+}
+
+// siteFootprintIndividual adds the reduction factor against the dynamic surface, so the
+// site never has to compute (and risk mis-stating) the ratio itself.
+type siteFootprintIndividual struct {
+	VisibleTools     int `json:"visible_tools"`
+	ToolSchemaTokens int `json:"tool_schema_tokens"`
+	ReductionFactor  int `json:"reduction_factor_vs_dynamic"`
+}
+
+// renderSiteFootprintJSON extracts the dynamic and individual headline rows and
+// marshals them to prettier-compatible JSON (2-space indent, trailing newline).
+func renderSiteFootprintJSON(rows []tokenFootprintRow) ([]byte, error) {
+	tierKeys := map[string]string{"Free/CE": "free", "Premium": "premium", ultimateTierLabel: "ultimate"}
+
+	var dynamic siteFootprintSurface
+	for _, r := range rows {
+		if r.Configuration == dynamicDefaultConfiguration && r.Tier == ultimateTierLabel {
+			dynamic = siteFootprintSurface{VisibleTools: r.VisibleTools, ToolSchemaTokens: r.ToolSchemaTokens}
+		}
+	}
+	if dynamic.ToolSchemaTokens == 0 {
+		return nil, fmt.Errorf("no %s row found for the %s tier", dynamicDefaultConfiguration, ultimateTierLabel)
+	}
+
+	individual := make(map[string]siteFootprintIndividual, len(tierKeys))
+	for _, r := range rows {
+		key, ok := tierKeys[r.Tier]
+		if !ok || r.Configuration != individualConfiguration {
+			continue
+		}
+		individual[key] = siteFootprintIndividual{
+			VisibleTools:     r.VisibleTools,
+			ToolSchemaTokens: r.ToolSchemaTokens,
+			ReductionFactor:  int(math.Round(float64(r.ToolSchemaTokens) / float64(dynamic.ToolSchemaTokens))),
+		}
+	}
+	if len(individual) != len(tierKeys) {
+		return nil, fmt.Errorf("expected %d individual-surface rows, found %d", len(tierKeys), len(individual))
+	}
+
+	raw, err := json.MarshalIndent(siteFootprint{
+		Tokenizer:  "cl100k_base",
+		Dynamic:    dynamic,
+		Individual: individual,
+	}, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("marshal site footprint: %w", err)
+	}
+	return append(raw, '\n'), nil
 }
 
 func measureTokenFootprintRows(client *gitlabclient.Client) ([]tokenFootprintRow, error) {

@@ -1,0 +1,64 @@
+---
+title: Releases y versionado
+description: Cómo se versiona y publica GitLab MCP Server, qué incluye cada release, cómo suscribirse a las novedades y cómo verificar o revertir una build.
+datePublished: "2026-07-26"
+faq:
+  - q: "¿Dónde está el changelog de GitLab MCP Server?"
+    a: "Las notas de versión están en la página de GitHub Releases, una entrada por versión, generadas a partir de los commits de ese release. También hay un feed Atom en https://github.com/jmrplens/gitlab-mcp-server/releases.atom al que puede suscribirse cualquier lector de feeds o automatización. Esta página documenta el proceso de publicación en sí — qué significa un número de versión, qué incluye cada release y cómo verificar una descarga — en lugar de duplicar unas notas que quedarían obsoletas."
+  - q: "¿Cómo versiona GitLab MCP Server sus releases?"
+    a: "Sigue versionado semántico. El número de parche cambia con correcciones y trabajo interno que no altera la interfaz. El número menor cambia cuando se añaden herramientas, acciones, recursos o prompts, o cuando la configuración gana una opción: cambios aditivos que dejan funcionando las llamadas existentes. El número mayor solo cambia ante una ruptura de la superficie MCP o de la configuración, como eliminar una acción o cambiar un parámetro obligatorio."
+  - q: "¿Qué publica cada release?"
+    a: "Cada release publica binarios firmados para Linux, macOS y Windows en amd64 y arm64, un binario universal de macOS, una imagen de contenedor en GHCR y Docker Hub, una extensión para Claude Desktop (.mcpb), y checksums con firma GPG desprendida. Las firmas de los binarios se pueden verificar con Cosign antes de ejecutar nada."
+  - q: "¿Cómo me entero de los nuevos releases?"
+    a: "De tres formas. Observa el repositorio en GitHub con el filtro de Releases; suscribe un lector de feeds a https://github.com/jmrplens/gitlab-mcp-server/releases.atom; o deja activada la auto-actualización integrada, que consulta GitHub Releases al arrancar y puede aplicar la actualización por ti. Usa AUTO_UPDATE=check para que te avise sin instalar nada."
+  - q: "¿Cómo vuelvo a una versión anterior?"
+    a: "Todos los releases siguen descargables desde la página de GitHub Releases, así que revertir consiste en descargar el asset anterior para tu plataforma y sustituir el binario, o fijar la etiqueta de imagen anterior si usas el contenedor. Fija una versión exacta en lugar de latest en entornos donde una actualización inesperada sería disruptiva, y pon AUTO_UPDATE=false para que el servidor no se actualice solo."
+---
+
+import FAQ from "../../../components/FAQ.astro";
+import stats from "../../../data/stats.json";
+
+Las notas de cada versión están en la [página de GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases), con un [feed Atom](https://github.com/jmrplens/gitlab-mcp-server/releases.atom) al que puedes suscribirte. Esta página documenta cómo funcionan los releases — qué significa un número de versión, qué incluye cada uno y cómo verificarlo o revertirlo — en lugar de repetir unas notas que quedarían obsoletas.
+
+El release actual es la **v{stats.version}**.
+
+## Qué significa el número de versión
+
+El versionado es semántico y, en este proyecto, la frontera relevante es la superficie MCP: las herramientas, acciones, recursos, prompts y opciones de configuración de las que depende un cliente.
+
+| Cambio                                                 | Ejemplo                                          | Incremento |
+| ------------------------------------------------------ | ------------------------------------------------ | ---------- |
+| Correcciones y trabajo interno sin cambio de interfaz  | Un handler devuelve un error más claro           | Parche     |
+| Nuevas acciones, herramientas, recursos o prompts      | Un dominio de la API de GitLab gana cobertura    | Menor      |
+| Nueva configuración opcional                           | Se añade un flag con un valor por defecto seguro | Menor      |
+| Eliminar una acción o cambiar un parámetro obligatorio | Se renombra un ID de acción                      | Mayor      |
+
+Lo habitual son releases aditivos. Un incremento menor puede cambiar cuántas herramientas ves —el catálogo crece— pero no invalida una llamada que ya funcionaba.
+
+## Qué incluye cada release
+
+| Artefacto                     | Detalle                                                                 |
+| ----------------------------- | ----------------------------------------------------------------------- |
+| Binarios                      | Linux, macOS y Windows; amd64 y arm64; más una build universal de macOS |
+| Imagen de contenedor          | GHCR y Docker Hub                                                       |
+| Extensión para Claude Desktop | Un paquete `.mcpb` de un clic                                           |
+| Checksums                     | `checksums.txt` con firma GPG desprendida                               |
+| Firmas                        | Cosign, verificable antes de ejecutar el binario                        |
+
+Los pasos de verificación están en la [página de seguridad](/gitlab-mcp-server/operations/security/). Si la verificación falla, no ejecutes el binario.
+
+## Mantenerse al día
+
+Tres formas de seguir los releases, de menos a más automática:
+
+1. **Observa el repositorio** en GitHub con el filtro de Releases, para recibir una notificación por versión.
+2. **Suscríbete al [feed Atom](https://github.com/jmrplens/gitlab-mcp-server/releases.atom)** desde un lector de feeds o desde tu automatización.
+3. **Deja activada la auto-actualización.** El servidor consulta GitHub Releases al arrancar y puede aplicar las actualizaciones por sí mismo. Usa `AUTO_UPDATE=check` para que te avise sin instalar, o `AUTO_UPDATE=false` para desactivarla — ver [auto-actualización](/gitlab-mcp-server/operations/auto-update/).
+
+## Fijar versión y revertir
+
+Todos los releases publicados siguen descargables, así que revertir es simplemente descargar el asset anterior para tu plataforma, o fijar la etiqueta de imagen previa si usas el contenedor.
+
+En entornos donde una actualización inesperada sería disruptiva, fija una versión exacta en lugar de `latest` **y** pon `AUTO_UPDATE=false`, para que el binario no pueda sustituirse a sí mismo entre ejecuciones. La extensión para Claude Desktop se distribuye con la auto-actualización desactivada por ese mismo motivo.
+
+<FAQ />

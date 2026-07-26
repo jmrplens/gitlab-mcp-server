@@ -65,3 +65,110 @@
 		transform: none;
 	}
 }
+
+/* --- Mermaid diagrams -----------------------------------------------------
+ * Diagrams are rendered to inline SVG at build time (rehype-mermaid,
+ * strategy: inline-svg), so no Mermaid runtime is shipped to the browser.
+ * The generated SVG carries the light palette baked in; these custom
+ * properties re-colour it, so a single SVG serves both themes and toggling
+ * the theme repaints rather than re-renders. Starlight sets
+ * `data-theme="dark"` on :root, which is what the dark block keys off.
+ * Selectors need !important because Mermaid writes presentation attributes
+ * and inline styles directly onto the SVG elements.
+ */
+:root {
+	--mermaid-text: #000;
+	--mermaid-bg: #f6f8fa;
+	--mermaid-border: #d0d7de;
+	--mermaid-line: #000;
+	--mermaid-secondary-bg: #f6f8fa;
+	--mermaid-note-bg: #fff9c4;
+	--mermaid-note-border: #d4a72c;
+	--mermaid-note-text: #000;
+}
+
+:root[data-theme="dark"] {
+	--mermaid-text: #fff;
+	--mermaid-bg: #161b22;
+	--mermaid-border: #30363d;
+	--mermaid-line: #fff;
+	--mermaid-secondary-bg: #0d1117;
+	--mermaid-note-bg: #2d2606;
+	--mermaid-note-border: #d4a72c;
+	--mermaid-note-text: #fff;
+}
+
+.sl-markdown-content svg[id^="mermaid"] {
+	display: block;
+	max-width: 100%;
+	height: auto;
+	margin: 0 auto;
+	background-color: transparent !important;
+}
+
+/* Text: colour only — never font-family, because Mermaid sized every node
+   against its own metrics at build time and a different face would overflow.
+   Flowchart labels are HTML inside <foreignObject>, so they need `color`;
+   sequence-diagram labels are real <text>, so they need `fill`. */
+.sl-markdown-content svg[id^="mermaid"] text,
+.sl-markdown-content svg[id^="mermaid"] tspan,
+.sl-markdown-content svg[id^="mermaid"] .nodeLabel,
+.sl-markdown-content svg[id^="mermaid"] .edgeLabel,
+.sl-markdown-content svg[id^="mermaid"] span.label,
+.sl-markdown-content svg[id^="mermaid"] foreignObject p {
+	fill: var(--mermaid-text) !important;
+	color: var(--mermaid-text) !important;
+	stroke: none !important;
+}
+
+.sl-markdown-content svg[id^="mermaid"] .node rect,
+.sl-markdown-content svg[id^="mermaid"] .node circle,
+.sl-markdown-content svg[id^="mermaid"] .node polygon,
+.sl-markdown-content svg[id^="mermaid"] .node path {
+	fill: var(--mermaid-bg) !important;
+	stroke: var(--mermaid-border) !important;
+}
+
+.sl-markdown-content svg[id^="mermaid"] .edgePath path,
+.sl-markdown-content svg[id^="mermaid"] .flowchart-link,
+.sl-markdown-content svg[id^="mermaid"] line.messageLine0,
+.sl-markdown-content svg[id^="mermaid"] line.messageLine1 {
+	stroke: var(--mermaid-line) !important;
+}
+
+/* Edge-label backing plate. Mermaid puts it on the div.labelBkg wrapper inside
+   the foreignObject, so the SVG rect selector that works elsewhere does not
+   apply here. Without this the label text sits directly on the connector line. */
+.sl-markdown-content svg[id^="mermaid"] .labelBkg,
+.sl-markdown-content svg[id^="mermaid"] .edgeLabel rect {
+	background-color: var(--mermaid-bg) !important;
+	fill: var(--mermaid-bg) !important;
+}
+
+.sl-markdown-content svg[id^="mermaid"] .cluster rect,
+.sl-markdown-content svg[id^="mermaid"] g.cluster > rect {
+	fill: var(--mermaid-secondary-bg) !important;
+	stroke: var(--mermaid-border) !important;
+}
+
+/* Sequence diagrams */
+.sl-markdown-content svg[id^="mermaid"] .actor,
+.sl-markdown-content svg[id^="mermaid"] rect.actor {
+	fill: var(--mermaid-bg) !important;
+	stroke: var(--mermaid-border) !important;
+}
+
+.sl-markdown-content svg[id^="mermaid"] .labelBox {
+	fill: var(--mermaid-secondary-bg) !important;
+	stroke: var(--mermaid-border) !important;
+}
+
+.sl-markdown-content svg[id^="mermaid"] .note {
+	fill: var(--mermaid-note-bg) !important;
+	stroke: var(--mermaid-note-border) !important;
+}
+
+.sl-markdown-content svg[id^="mermaid"] .noteText,
+.sl-markdown-content svg[id^="mermaid"] .noteText tspan {
+	fill: var(--mermaid-note-text) !important;
+}

@@ -2,54 +2,18 @@
 title: Elicitación
 description: Flujos interactivos de elicitación MCP que guían la creación de issues, merge requests, releases y proyectos de GitLab mediante formularios paso a paso.
 datePublished: "2026-04-21"
-head:
-  - tag: script
-    attrs:
-      type: application/ld+json
-    content: |
-      {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "¿Qué es la elicitación MCP en GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "La elicitación es una capacidad MCP que permite a GitLab MCP Server pausar la ejecución y solicitar información al usuario mediante formularios estructurados renderizados por el cliente MCP. Habilita flujos de creación tipo asistente para recursos complejos como issues, merge requests, releases y proyectos. Las herramientas estándar requieren que la IA proporcione todos los parámetros de antemano en una sola llamada; con la elicitación, el servidor recopila los campos paso a paso, valida cada respuesta y puede adaptar la siguiente pregunta según la anterior. Cada flujo termina con una confirmación explícita del usuario antes de crear el recurso."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Qué herramientas de asistente interactivo proporciona GitLab MCP Server?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "GitLab MCP Server proporciona cuatro herramientas de asistente interactivo que usan elicitación: gitlab_interactive_issue_create para crear issues paso a paso con selección de proyecto, etiquetas y asignación; gitlab_interactive_mr_create para la creación guiada de merge requests con selección de ramas y opciones; gitlab_interactive_release_create para crear releases con selección de tags y milestones; y gitlab_interactive_project_create para crear proyectos con selección de namespace y configuración. Cada una confirma con el usuario antes de realizar la llamada final a la API de GitLab."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Qué ocurre cuando un cliente MCP no admite la elicitación?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Cuando la elicitación no está disponible, GitLab MCP Server degrada de forma elegante a las herramientas parametrizadas estándar. El asistente de IA proporciona todos los parámetros directamente en una sola llamada en lugar de usar el flujo interactivo del asistente. La funcionalidad se preserva por completo — solo se reduce la experiencia interactiva paso a paso. Por ejemplo, puedes llamar a gitlab_issue con action create y pasar todos los campos a la vez, logrando el mismo resultado sin soporte de elicitación."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "¿Qué clientes MCP admiten la elicitación?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "La elicitación la admiten Claude Desktop y Claude Code. VS Code Copilot y Cursor aún no la admiten. En los clientes sin soporte de elicitación, GitLab MCP Server recurre a las herramientas de creación parametrizadas estándar, por lo que la creación de recursos sigue funcionando. Como el soporte de capacidades de los clientes MCP cambia con frecuencia, confirma el estado actual en la documentación del cliente específico."
-            }
-          }
-        ]
-      }
+faq:
+  - q: "¿Qué es la elicitación MCP?"
+    a: "La elicitación es una capacidad MCP que permite a GitLab MCP Server **pausar y solicitar información al usuario mediante formularios estructurados** renderizados por el cliente. Impulsa la creación tipo asistente de recursos complejos como issues, merge requests, releases y proyectos. En lugar de exigir todos los parámetros de antemano, el servidor recopila los campos paso a paso, valida cada respuesta, adapta las preguntas posteriores a las anteriores y confirma antes de crear el recurso."
+  - q: "¿Qué herramientas de asistente interactivo están disponibles?"
+    a: "GitLab MCP Server proporciona cuatro asistentes de elicitación: `gitlab_interactive_issue_create` (selección de proyecto, etiquetas, asignación), `gitlab_interactive_mr_create` (selección de ramas y opciones), `gitlab_interactive_release_create` (selección de tags y milestones) y `gitlab_interactive_project_create` (selección de namespace y configuración). Cada uno confirma con el usuario antes de realizar la llamada final a la API de GitLab."
+  - q: "¿Qué ocurre cuando un cliente no admite la elicitación?"
+    a: "GitLab MCP Server degrada de forma elegante a las herramientas parametrizadas estándar. El asistente proporciona todos los parámetros directamente en una sola llamada en lugar de usar el flujo del asistente. La funcionalidad se preserva por completo — solo se pierde la experiencia paso a paso. Por ejemplo, llamar a `gitlab_issue` con `action: create` y pasar todos los campos a la vez produce el mismo resultado sin soporte de elicitación."
+  - q: "¿Qué clientes MCP admiten la elicitación?"
+    a: "La elicitación la admiten **Claude Desktop** y **Claude Code**. **VS Code Copilot** y **Cursor** aún no la admiten, por lo que en esos clientes GitLab MCP Server recurre a las herramientas de creación parametrizadas estándar. Como el soporte de capacidades de los clientes cambia con frecuencia, confirma el estado actual en la documentación del cliente específico."
 ---
 
-:::note[Documentación para desarrolladores]
-Esta página es la visión general orientada a usuarios. Para la referencia completa de elicitación, consulta [docs/reference/capabilities/elicitation](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/elicitation.md).
-:::
+import FAQ from "../../../../components/FAQ.astro";
 
 La elicitación permite a GitLab MCP Server **solicitar información al usuario mediante formularios estructurados**, habilitando flujos de creación tipo asistente para recursos complejos como issues, merge requests, releases y proyectos. En lugar de exigir que la IA proporcione todos los parámetros de antemano, el servidor recopila los campos paso a paso, valida cada respuesta y confirma antes de crear el recurso.
 
@@ -126,20 +90,10 @@ Cuando la elicitación no está disponible, el servidor recurre a las herramient
 Incluso sin soporte de elicitación, puedes usar las herramientas de creación estándar (por ejemplo, `gitlab_issue` con `action: create`) proporcionando todos los parámetros en una única llamada.
 :::
 
-## Preguntas frecuentes
+<FAQ />
 
-### ¿Qué es la elicitación MCP?
+## Referencia de la fuente
 
-La elicitación es una capacidad MCP que permite a GitLab MCP Server **pausar y solicitar información al usuario mediante formularios estructurados** renderizados por el cliente. Impulsa la creación tipo asistente de recursos complejos como issues, merge requests, releases y proyectos. En lugar de exigir todos los parámetros de antemano, el servidor recopila los campos paso a paso, valida cada respuesta, adapta las preguntas posteriores a las anteriores y confirma antes de crear el recurso.
-
-### ¿Qué herramientas de asistente interactivo están disponibles?
-
-GitLab MCP Server proporciona cuatro asistentes de elicitación: `gitlab_interactive_issue_create` (selección de proyecto, etiquetas, asignación), `gitlab_interactive_mr_create` (selección de ramas y opciones), `gitlab_interactive_release_create` (selección de tags y milestones) y `gitlab_interactive_project_create` (selección de namespace y configuración). Cada uno confirma con el usuario antes de realizar la llamada final a la API de GitLab.
-
-### ¿Qué ocurre cuando un cliente no admite la elicitación?
-
-GitLab MCP Server degrada de forma elegante a las herramientas parametrizadas estándar. El asistente proporciona todos los parámetros directamente en una sola llamada en lugar de usar el flujo del asistente. La funcionalidad se preserva por completo — solo se pierde la experiencia paso a paso. Por ejemplo, llamar a `gitlab_issue` con `action: create` y pasar todos los campos a la vez produce el mismo resultado sin soporte de elicitación.
-
-### ¿Qué clientes MCP admiten la elicitación?
-
-La elicitación la admiten **Claude Desktop** y **Claude Code**. **VS Code Copilot** y **Cursor** aún no la admiten, por lo que en esos clientes GitLab MCP Server recurre a las herramientas de creación parametrizadas estándar. Como el soporte de capacidades de los clientes cambia con frecuencia, confirma el estado actual en la documentación del cliente específico.
+:::note[Documentación para desarrolladores]
+Esta página es la visión general orientada a usuarios. Para la referencia completa de elicitación, consulta [docs/reference/capabilities/elicitation](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/elicitation.md).
+:::
