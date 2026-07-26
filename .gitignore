@@ -109,7 +109,11 @@ test/e2e/.enterprise-license*
 site/node_modules/
 site/dist/
 site/.astro/
-public/
+# site/public/ is Astro's static asset *source* directory and is committed. Only
+# these two are generated into it — `copy-llms.mjs` republishes them from the
+# canonical root-level files on every prebuild.
+site/public/llms.txt
+site/public/llms-full.txt
 .scannerwork/
 .sonarlint/
 image.png
