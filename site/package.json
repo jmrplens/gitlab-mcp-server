@@ -30,12 +30,12 @@
   "type": "module",
   "dependencies": {
     "@astrojs/starlight": "^0.41.4",
-    "astro": "^7.1.3",
+    "astro": "^7.1.4",
     "mermaid": "^11.16.0",
     "sharp": "^0.35.3"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.9",
+    "@astrojs/check": "^0.9.10",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
     "eslint": "^10.8.0",
