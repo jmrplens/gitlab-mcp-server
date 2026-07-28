@@ -1228,3 +1228,39 @@ func TestProjectPathFromWebURL(t *testing.T) {
 		}
 	})
 }
+
+// TestIssueStateArg_OmitsMergedState verifies the issue state filter offers only
+// the states GitLab accepts for an issue.
+//
+// "merged" is a merge-request state; advertising it to a model on an issue
+// prompt only earns a 400 from the API, so the description must not list it.
+func TestIssueStateArg_OmitsMergedState(t *testing.T) {
+	got := issueStateArg("opened")
+
+	if got.Name != argState || got.Required {
+		t.Fatalf("issueStateArg() = %+v, want an optional %q argument", got, argState)
+	}
+	if strings.Contains(got.Description, "merged") {
+		t.Fatalf("issueStateArg() description = %q, want no merged state", got.Description)
+	}
+	for _, state := range []string{"opened", "closed", "all"} {
+		if !strings.Contains(got.Description, state) {
+			t.Fatalf("issueStateArg() description = %q, want it to offer %q", got.Description, state)
+		}
+	}
+	if !strings.Contains(got.Description, "default: opened") {
+		t.Fatalf("issueStateArg() description = %q, want the default named", got.Description)
+	}
+}
+
+// TestMRStateArg_OffersMergedState verifies the merge-request state filter keeps
+// the merged state, which is valid there.
+func TestMRStateArg_OffersMergedState(t *testing.T) {
+	got := mrStateArg("opened")
+
+	for _, state := range []string{"opened", "closed", "merged", "all"} {
+		if !strings.Contains(got.Description, state) {
+			t.Fatalf("mrStateArg() description = %q, want it to offer %q", got.Description, state)
+		}
+	}
+}

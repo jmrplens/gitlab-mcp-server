@@ -395,7 +395,7 @@
         {
           "name": "state",
           "title": "State",
-          "description": "State filter: opened, closed, merged, all (default: opened)"
+          "description": "State filter: opened, closed, all (default: opened)"
         }
       ]
     },

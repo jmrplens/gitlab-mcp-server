@@ -171,7 +171,7 @@ func registerMyIssuesPrompt(server *mcp.Server, client *gitlabclient.Client) {
 		Icons:       toolutil.IconIssue,
 		Arguments: []*mcp.PromptArgument{
 			usernameArg(),
-			stateArg("opened"),
+			issueStateArg("opened"),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		return handleMyIssues(ctx, client, req)

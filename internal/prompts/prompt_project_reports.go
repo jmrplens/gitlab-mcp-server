@@ -41,7 +41,7 @@ func registerBranchMRSummaryPrompt(server *mcp.Server, client *gitlabclient.Clie
 		Arguments: []*mcp.PromptArgument{
 			projectIDArg(),
 			targetBranchArg(true),
-			stateArg("opened"),
+			mrStateArg("opened"),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		return handleBranchMRSummary(ctx, client, req)

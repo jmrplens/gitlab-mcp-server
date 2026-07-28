@@ -25,8 +25,14 @@ const (
 	descGroupID      = "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')"
 	descUsername     = "GitLab username to query"
 	descDays         = "Number of days to look back (default: %d)"
-	descState        = "State filter: opened, closed, merged, all (default: %s)"
+	descState        = "State filter: %s (default: %s)"
 	descTargetBranch = "Target branch name to filter MRs (e.g. 'develop_5.4.0')"
+
+	// GitLab accepts a different state vocabulary per resource: an issue is
+	// never "merged", so offering that value to a model only earns a 400 from
+	// the API.
+	statesIssue        = "opened, closed, all"
+	statesMergeRequest = "opened, closed, merged, all"
 
 	maxListItems = 100
 )
@@ -61,12 +67,24 @@ func daysArg(defaultDays int) *mcp.PromptArgument {
 	}
 }
 
-// stateArg returns an optional prompt argument for state filtering.
-func stateArg(defaultState string) *mcp.PromptArgument {
+// issueStateArg returns an optional state filter for a prompt that lists
+// issues.
+func issueStateArg(defaultState string) *mcp.PromptArgument {
+	return stateArg(statesIssue, defaultState)
+}
+
+// mrStateArg returns an optional state filter for a prompt that lists merge
+// requests.
+func mrStateArg(defaultState string) *mcp.PromptArgument {
+	return stateArg(statesMergeRequest, defaultState)
+}
+
+// stateArg returns an optional prompt argument offering states for filtering.
+func stateArg(states, defaultState string) *mcp.PromptArgument {
 	return &mcp.PromptArgument{
 		Name:        argState,
 		Title:       toolutil.TitleFromName(argState),
-		Description: fmt.Sprintf(descState, defaultState),
+		Description: fmt.Sprintf(descState, states, defaultState),
 		Required:    false,
 	}
 }
