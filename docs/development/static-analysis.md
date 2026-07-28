@@ -275,10 +275,10 @@ packages and 55 linters that working set does not fit comfortably in memory on a
 many-threaded machine — it thrashes rather than going faster. Measured on a cold
 cache on the same 16-thread machine:
 
-| Concurrency         | Peak RSS | Cold run    |
-| ------------------- | -------- | ----------- |
-| 16 (former default) | 4.4 GB   | >18m, unfinished |
-| 4 (`run.concurrency`) | 3.6 GB | **3m01s**   |
+| Concurrency           | Peak RSS | Cold run         |
+| --------------------- | -------- | ---------------- |
+| 16 (former default)   | 4.4 GB   | >18m, unfinished |
+| 4 (`run.concurrency`) | 3.6 GB   | **3m01s**        |
 
 `run.concurrency: 4` is therefore set in `.golangci.yml`. CI runners have 4 vCPUs
 and were already getting this implicitly, which is why CI completed in ~4 minutes
