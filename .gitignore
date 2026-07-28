@@ -146,6 +146,7 @@ image.png
 /format_md_tables
 /gen_action_catalog_manifest
 /gen_docker_tools
+/gen_lhm_manifest
 /gen_llms
 /gen_stats
 /gen_testing_docs

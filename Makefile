@@ -10,7 +10,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms check-server-json check-openplugin check-mcpb mcpb publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest check-server-json check-openplugin check-mcpb mcpb publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        fly-check fly-deploy fly-deploy-release fly-status fly-logs fly-ssh fly-restart \
@@ -452,6 +452,7 @@ audit-docs:
 	npx markdownlint-cli2 README.md AGENTS.md CLAUDE.md CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md "docs/**/*.md" "test/e2e/**/*.md" "cmd/eval_mcp_surfaces/**/*.md" "site/src/content/docs/**/*.mdx" "site/src/content/i18n/**/*.md"
 	go run ./cmd/format_md_tables/ --check
 	go run ./cmd/gen_llms/ --check
+	go run ./cmd/gen_lhm_manifest/ --check
 	go run ./cmd/gen_testing_docs/ --check
 	go run ./cmd/audit_metrics/ -site-stats site/src/data/stats.json -check
 	$(MAKE) check-doc-links
@@ -678,6 +679,14 @@ gen-llms:
 check-llms:
 	go run ./cmd/gen_llms/ --check
 
+## gen-lhm-manifest: regenerate the tools/prompts/resources arrays in lhm.plugin.json.
+gen-lhm-manifest:
+	go run ./cmd/gen_lhm_manifest/
+
+## check-lhm-manifest: verify lhm.plugin.json declares the registered MCP surface.
+check-lhm-manifest:
+	go run ./cmd/gen_lhm_manifest/ --check
+
 ## check-server-json: validate server.json with the official MCP Registry publisher.
 check-server-json:
 	go run github.com/modelcontextprotocol/registry/cmd/publisher@$(MCP_PUBLISHER_VERSION) validate server.json
@@ -713,7 +722,7 @@ mcpb:
 ## on each release) and posts it via the @lobehub/market-cli. Requires a one-time
 ## interactive `lhm login` + `lhm github connect` first — LobeHub has no
 ## non-interactive publish path, so this cannot run in CI. See the release process in CLAUDE.md.
-publish-lobehub:
+publish-lobehub: check-lhm-manifest
 	@command -v node >/dev/null || { echo "ERROR: Node.js >= 22 is required"; exit 1; }
 	@NODE_MAJOR=$$(node -v | sed 's/^v\([0-9]*\).*/\1/'); \
 	if [ "$$NODE_MAJOR" -lt 22 ]; then echo "ERROR: Node.js >= 22 is required (found $$(node -v))"; exit 1; fi
@@ -731,7 +740,7 @@ gen-readme: gen-footprint gen-stats
 
 ## update-all: run every generator and doc updater in one pass.
 ## Generates: token footprint, repo stats, site stats, llms.txt, testing docs, action catalog manifest, markdown table formatting.
-update-all: gen-footprint gen-stats gen-site-stats gen-llms gen-testing-docs gen-action-catalog-manifest
+update-all: gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen-testing-docs gen-action-catalog-manifest
 	go run ./cmd/format_md_tables/
 	@echo "All generators and formatters complete."
 

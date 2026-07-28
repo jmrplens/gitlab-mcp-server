@@ -5,6 +5,7 @@
   "description": "Model Context Protocol server exposing 1000+ GitLab REST + GraphQL operations as AI tools — merge requests, pipelines, issues, releases, milestones, and more. One static Go binary; stdio or HTTP transport, with dynamic/meta/individual tool surfaces.",
   "author": "José M. Requena Plens",
   "authorUrl": "https://github.com/jmrplens",
+  "icon": "https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/mcpb/icon.png",
   "tags": [
     "gitlab",
     "mcp",
@@ -16,6 +17,75 @@
     "git",
     "go",
     "graphql"
+  ],
+  "tools": [
+    {
+      "name": "gitlab_execute_action",
+      "title": "GitLab Execute Action",
+      "description": "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "Canonical action ID returned by gitlab_find_action, or a supported compatibility alias, such as project.list, issue.update, or issue.close.",
+            "type": "string"
+          },
+          "confirm": {
+            "description": "Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_action.",
+            "type": "boolean"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters.",
+            "properties": {},
+            "type": "object"
+          }
+        },
+        "required": [
+          "action",
+          "params"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": true,
+        "title": "GitLab Execute Action"
+      }
+    },
+    {
+      "name": "gitlab_find_action",
+      "title": "GitLab Find Action",
+      "description": "Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "explain": {
+            "description": "When true, include deterministic scoring reasons for each returned action. Defaults to false to keep responses compact.",
+            "type": "boolean"
+          },
+          "limit": {
+            "description": "Maximum number of matches to return. Defaults to 20 and is capped at 50.",
+            "type": "integer"
+          },
+          "query": {
+            "description": "Search terms combining a GitLab domain or resource with a verb, filter, or object name, such as project create, merge request approve, pipeline retry, issue delete, or ci variable.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true,
+        "readOnlyHint": true,
+        "title": "GitLab Find Action"
+      }
+    }
   ],
   "prompts": [
     {
@@ -730,75 +800,6 @@
           "assistant"
         ],
         "priority": 0.4
-      }
-    }
-  ],
-  "tools": [
-    {
-      "name": "gitlab_execute_action",
-      "title": "GitLab Execute Action",
-      "description": "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "action": {
-            "description": "Canonical action ID returned by gitlab_find_action, or a supported compatibility alias, such as project.list, issue.update, or issue.close.",
-            "type": "string"
-          },
-          "confirm": {
-            "description": "Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_action.",
-            "type": "boolean"
-          },
-          "params": {
-            "additionalProperties": true,
-            "description": "Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters.",
-            "properties": {},
-            "type": "object"
-          }
-        },
-        "required": [
-          "action",
-          "params"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "destructiveHint": true,
-        "openWorldHint": true,
-        "title": "GitLab Execute Action"
-      }
-    },
-    {
-      "name": "gitlab_find_action",
-      "title": "GitLab Find Action",
-      "description": "Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples.",
-      "inputSchema": {
-        "additionalProperties": false,
-        "properties": {
-          "explain": {
-            "description": "When true, include deterministic scoring reasons for each returned action. Defaults to false to keep responses compact.",
-            "type": "boolean"
-          },
-          "limit": {
-            "description": "Maximum number of matches to return. Defaults to 20 and is capped at 50.",
-            "type": "integer"
-          },
-          "query": {
-            "description": "Search terms combining a GitLab domain or resource with a verb, filter, or object name, such as project create, merge request approve, pipeline retry, issue delete, or ci variable.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "query"
-        ],
-        "type": "object"
-      },
-      "annotations": {
-        "destructiveHint": false,
-        "idempotentHint": true,
-        "openWorldHint": true,
-        "readOnlyHint": true,
-        "title": "GitLab Find Action"
       }
     }
   ]
