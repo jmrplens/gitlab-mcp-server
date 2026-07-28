@@ -60,6 +60,7 @@ gitlab-mcp-server/
 │   ├── format_md_tables/        # Formats Markdown pipe tables in README.md and docs/
 │   ├── gen_action_catalog_manifest/ # Generates audited action catalog manifest
 │   ├── gen_docker_tools/        # Generates Docker-related tool metadata
+│   ├── gen_lhm_manifest/        # Generates the capability arrays in lhm.plugin.json (LobeHub)
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt for LLM discovery
 │   ├── gen_stats/               # Generates README stats section from codebase metrics
 │   └── gen_testing_docs/        # Generates docs/development/testing/testing.md
@@ -245,6 +246,9 @@ When creating a new release and uploading binaries to GitHub Releases:
    - winget version PR to `microsoft/winget-pkgs` via `winget-releaser` (secret `WINGET_TOKEN`)
    - Version stamping of `server.json`, `.plugin/plugin.json`, `mcpb/manifest.json`, and `lhm.plugin.json` (LobeHub Marketplace) committed back to main by `scripts/update-server-json-sha.sh`
 4. **LobeHub Marketplace is a manual publish step.** The stamping script keeps `lhm.plugin.json`'s version current on every release, but the LobeHub CLI (`@lobehub/market-cli`) has no non-interactive publish path (browser OIDC login + GitHub connect are required once), so it cannot run in CI. After a release, run `make publish-lobehub` from a machine with `lhm login` + `lhm github connect` already completed. The listing is `jmrplens-gitlab-mcp-server`.
+5. **The manifest's capability arrays are generated, its version is not.** LobeHub derives the listing's capability badges from the `tools`, `prompts`, and `resources` arrays in `lhm.plugin.json` — its scanner cannot introspect a server shipped as a binary or an image, so a manifest without them advertises zero tools. `make gen-lhm-manifest` rewrites those three arrays from a live `tools/list` + `prompts/list` + `resources/list` round-trip and leaves every other field, `version` included, to the release stamp. `make check-lhm-manifest` gates freshness in CI and runs before `make publish-lobehub`.
+
+   The generator declares the **default** surface: it pins `dynamic` and talks to an in-process stub client instead of reading `TOOL_SURFACE`, `GITLAB_URL` or `GITLAB_TOKEN`. Anything a generator reads from the environment ships in the committed file, so a developer machine with `TOOL_SURFACE=individual` exported would otherwise publish a different manifest than CI checks. New environment-sensitive inputs belong in `cmd/internal/mcpsurface`, pinned there once for every generator, not read at the call site.
 
 ### Post-implementation verification
 

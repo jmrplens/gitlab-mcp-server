@@ -89,7 +89,7 @@ make inspector-stop
 | ActionSpec metadata (catalog routes)                | `go run ./cmd/gen_action_catalog_manifest/` (and `--check` in CI) |
 | Pipe tables in `README.md` or `docs/`               | `go run ./cmd/format_md_tables/` (and `--check`)                  |
 | Tests, after a test phase                           | `go run ./cmd/gen_testing_docs/` (and `--check`)                  |
-| Tool surface (registered tools, resources, prompts) | `go run ./cmd/gen_llms/` (and `--check` via `make check-llms`)    |
+| Tool surface (registered tools, resources, prompts) | `go run ./cmd/gen_llms/` (and `--check` via `make check-llms`), plus `go run ./cmd/gen_lhm_manifest/` (and `--check` via `make check-lhm-manifest`) |
 | `server.json`                                       | `make check-server-json` (uses MCP publisher)                     |
 
 The combined gate is `make audit-docs`. CI runs it on every PR.
@@ -112,7 +112,7 @@ For a full walkthrough use the `create-mcp-tool` skill
    in the sub-package `markdown.go` `init()`. List formatters must add
    `toolutil.HintPreserveLinks` as the first hint in `WriteHints()`.
 6. **Refresh**: `audit_tokens -footprint` + `gen_stats`, `gen_action_catalog_manifest`, `format_md_tables`,
-   `gen_testing_docs`, `gen_llms` (run `--check` on each before pushing).
+   `gen_testing_docs`, `gen_llms`, `gen_lhm_manifest` (run `--check` on each before pushing).
 7. **Verify**: `make test-pkg PKG={domain}` and
    `golangci-lint run --build-tags e2e ./internal/tools/{domain}/`.
 8. **Document**: `docs/tools/{domain}.md` and `docs/reference/tools/README.md`.

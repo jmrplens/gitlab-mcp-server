@@ -23,6 +23,7 @@ Every utility can be run directly with `go run ./cmd/<name>/ [flags]`, or throug
 | `audit_test_names`             | Source quality audits     | Classifies `Test*` functions by naming pattern; emits rename hints                                                                | `make audit-test-names`                   |
 | `audit_string_dupes`           | Source quality audits     | Finds duplicated string literals missing `const`/`var` declarations                                                               | —                                         |
 | `gen_action_catalog_manifest`  | Generators                | Generates the ActionSpec group-builder manifest                                                                                   | `make gen-action-catalog-manifest`        |
+| `gen_lhm_manifest`             | Generators                | Generates the tools/prompts/resources arrays in `lhm.plugin.json` (LobeHub Marketplace)                                           | `make gen-lhm-manifest`                   |
 | `gen_llms`                     | Generators                | Generates `llms.txt` and `llms-full.txt`                                                                                          | `make gen-llms`                           |
 | `gen_stats`                    | Generators                | Regenerates the managed repository statistics section in `README.md`                                                              | `make gen-stats`                          |
 | `gen_testing_docs`             | Generators                | Regenerates the test-metrics block in `docs/development/testing/testing.md`                                                       | `make gen-testing-docs`                   |
@@ -517,6 +518,37 @@ Rewrites the manifest Go file in place, or (with `-check`) verifies it is curren
 - `make gen-action-catalog-manifest`
 - `make check-action-catalog-manifest` — CI gate.
 
+### gen_lhm_manifest
+
+Regenerates the `tools`, `prompts`, and `resources` arrays in `lhm.plugin.json`, the manifest published to the LobeHub Marketplace. LobeHub derives the listing's capability badges from those arrays — its scanner cannot introspect a server distributed as a Go binary or a Docker image — so a manifest without them advertises zero tools no matter what the server registers.
+
+The declared tool surface is the default one, `dynamic`, pinned explicitly rather than read from `TOOL_SURFACE`; the round-trip runs against an in-process stub client rather than `GITLAB_URL`/`GITLAB_TOKEN`. Both keep the committed file independent of the machine that generated it. Output schemas and tool icons are dropped: neither is part of the shape LobeHub documents, and the base64 icon data URIs alone would triple the file. Every other field is preserved, `version` included — the release stamp owns that one.
+
+#### Usage
+
+```bash
+# Rewrite the capability arrays
+go run ./cmd/gen_lhm_manifest/
+
+# CI gate
+go run ./cmd/gen_lhm_manifest/ --check
+```
+
+#### Flags
+
+| Flag      | Type   | Default | Description                                                                   |
+| --------- | ------ | ------- | ----------------------------------------------------------------------------- |
+| `--check` | `bool` | `false` | Verify the committed manifest matches the registered surface, without writing |
+
+#### Output
+
+Rewrites `lhm.plugin.json` at the project root.
+
+#### Make targets
+
+- `make gen-lhm-manifest`
+- `make check-lhm-manifest` — CI gate; also runs before `make publish-lobehub`.
+
 ### gen_llms
 
 Generates `llms.txt` (the concise llmstxt.org index) and `llms-full.txt` (detailed per-tool schemas) by introspecting all surfaces, resources, and prompts via in-memory MCP.
@@ -709,6 +741,7 @@ The following utilities expose a verification mode (`--check` or `-check`, or an
 | ---------------------------------------- | ------------------------------ | ------------------------------------------------------------------------------------ | --------------------------------------------------------- |
 | `check-action-catalog-manifest`          | `gen_action_catalog_manifest`  | Generated ActionSpec manifest is current                                             | Non-zero if the manifest is stale                         |
 | `check-llms`                             | `gen_llms`                     | `llms.txt` and `llms-full.txt` are current and structurally valid                    | Non-zero if either file is stale or malformed             |
+| `check-lhm-manifest`                     | `gen_lhm_manifest`             | `lhm.plugin.json` declares the registered tools, prompts, and resources              | Non-zero if the manifest is stale                         |
 | `check-footprint`                        | `audit_tokens -footprint`      | README token-footprint section and `docs/development/token-footprint.md` are current | Non-zero if either is stale                               |
 | `check-stats`                            | `gen_stats`                    | README repository-statistics section is current                                      | Non-zero if the section is stale                          |
 | `audit-discovery-check`                  | `audit_discovery_completeness` | No META-001 finding meets the configured severity threshold                          | Non-zero if any finding meets `-severity` (default error) |

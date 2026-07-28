@@ -5,6 +5,7 @@
   "description": "Model Context Protocol server exposing 1000+ GitLab REST + GraphQL operations as AI tools — merge requests, pipelines, issues, releases, milestones, and more. One static Go binary; stdio or HTTP transport, with dynamic/meta/individual tool surfaces.",
   "author": "José M. Requena Plens",
   "authorUrl": "https://github.com/jmrplens",
+  "icon": "https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/mcpb/icon.png",
   "tags": [
     "gitlab",
     "mcp",
@@ -16,5 +17,790 @@
     "git",
     "go",
     "graphql"
+  ],
+  "tools": [
+    {
+      "name": "gitlab_execute_action",
+      "title": "GitLab Execute Action",
+      "description": "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "Canonical action ID returned by gitlab_find_action, or a supported compatibility alias, such as project.list, issue.update, or issue.close.",
+            "type": "string"
+          },
+          "confirm": {
+            "description": "Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_action.",
+            "type": "boolean"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters.",
+            "properties": {},
+            "type": "object"
+          }
+        },
+        "required": [
+          "action",
+          "params"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "destructiveHint": true,
+        "openWorldHint": true,
+        "title": "GitLab Execute Action"
+      }
+    },
+    {
+      "name": "gitlab_find_action",
+      "title": "GitLab Find Action",
+      "description": "Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "explain": {
+            "description": "When true, include deterministic scoring reasons for each returned action. Defaults to false to keep responses compact.",
+            "type": "boolean"
+          },
+          "limit": {
+            "description": "Maximum number of matches to return. Defaults to 20 and is capped at 50.",
+            "type": "integer"
+          },
+          "query": {
+            "description": "Search terms combining a GitLab domain or resource with a verb, filter, or object name, such as project create, merge request approve, pipeline retry, issue delete, or ci variable.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": true,
+        "readOnlyHint": true,
+        "title": "GitLab Find Action"
+      }
+    }
+  ],
+  "prompts": [
+    {
+      "name": "audit_commit_hygiene",
+      "title": "Audit Commit Hygiene",
+      "description": "Audit commit message quality between two refs. Scores Conventional Commit usage, merge commits, breaking-change markers, body/detail quality, and linked work references for release and contribution readiness.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "from",
+          "title": "From",
+          "description": "Starting ref: tag name, branch name, or commit SHA",
+          "required": true
+        },
+        {
+          "name": "to",
+          "title": "To",
+          "description": "Ending ref: tag name, branch name, or commit SHA (defaults to HEAD if omitted)"
+        }
+      ]
+    },
+    {
+      "name": "audit_project_full",
+      "title": "Audit Project Full",
+      "description": "Run a comprehensive audit of a GitLab project covering settings, branch protection, access management, labels, milestones, and templates in a single report. Use this for a complete project health assessment with actionable recommendations.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "audit_project_workflow",
+      "title": "Audit Project Workflow",
+      "description": "Audit workflow configuration for a GitLab project: labels (names, colors, descriptions), milestones (open/closed, due dates), and issue/MR templates. Identifies gaps like labels without descriptions, milestones without due dates, or missing templates.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "branch_mr_summary",
+      "title": "Branch MR Summary",
+      "description": "List all MRs targeting a specific branch in a project. Shows readiness summary with conflict/draft/approval counts. Ideal for release branch reviews.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "target_branch",
+          "title": "Target Branch",
+          "description": "Target branch name to filter MRs (e.g. 'develop_5.4.0')",
+          "required": true
+        },
+        {
+          "name": "state",
+          "title": "State",
+          "description": "State filter: opened, closed, merged, all (default: opened)"
+        }
+      ]
+    },
+    {
+      "name": "compare_branches",
+      "title": "Compare Branches",
+      "description": "Compare commit and file differences between two Git refs. Use for release branch preparation, feature branch divergence analysis, or deciding whether a merge/backport needs deeper review.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "from",
+          "title": "From",
+          "description": "Source branch name, tag, or commit SHA to compare from",
+          "required": true
+        },
+        {
+          "name": "to",
+          "title": "To",
+          "description": "Target branch name, tag, or commit SHA to compare to",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "daily_standup",
+      "title": "Daily Standup",
+      "description": "Generate a daily standup summary based on the user's GitLab activity in the last 24 hours: contribution events, authored MRs, assigned MRs, MRs under review, assigned issues, and created issues. Produces a comprehensive report with done/planned/blockers sections.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "username",
+          "title": "Username",
+          "description": "GitLab username to generate the standup for (defaults to the authenticated user if omitted)"
+        }
+      ]
+    },
+    {
+      "name": "generate_release_notes",
+      "title": "Generate Release Notes",
+      "description": "Generate comprehensive release notes from commits, merge requests, and file changes between two Git refs (tags, branches, or SHAs). Produces a structured document with commits, merged MRs with labels, contributors, and statistics for organizing into user-friendly release notes.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "from",
+          "title": "From",
+          "description": "Starting ref: tag name (e.g. 'v1.0.0'), branch name, or commit SHA",
+          "required": true
+        },
+        {
+          "name": "to",
+          "title": "To",
+          "description": "Ending ref: tag name, branch name, or commit SHA (defaults to HEAD if omitted)"
+        }
+      ]
+    },
+    {
+      "name": "group_milestone_progress",
+      "title": "Group Milestone Progress",
+      "description": "Track milestone progress across all projects in a group. Shows issue/MR completion per milestone with progress bars.",
+      "arguments": [
+        {
+          "name": "group_id",
+          "title": "Group ID",
+          "description": "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "group_mr_dashboard",
+      "title": "Group MR Dashboard",
+      "description": "List merge requests across a GitLab group with optional state and target branch filters. Shows MRs grouped by project with blocker and readiness summary statistics.",
+      "arguments": [
+        {
+          "name": "group_id",
+          "title": "Group ID",
+          "description": "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')",
+          "required": true
+        },
+        {
+          "name": "state",
+          "title": "State",
+          "description": "State filter: opened, closed, merged, all (default: opened)"
+        },
+        {
+          "name": "target_branch",
+          "title": "Target Branch",
+          "description": "Target branch name to filter MRs (e.g. 'develop_5.4.0')"
+        }
+      ]
+    },
+    {
+      "name": "label_distribution",
+      "title": "Label Distribution",
+      "description": "Analyze label usage distribution in a project. Shows open/closed issue counts and open MR counts per label. Zero additional API calls beyond label list.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "merge_velocity",
+      "title": "Merge Velocity",
+      "description": "Analyze MR throughput metrics for a project. Shows merge rate, average time-to-merge, and daily merged count chart. Ideal for tracking team delivery pace.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "days",
+          "title": "Days",
+          "description": "Number of days to look back (default: 30)"
+        }
+      ]
+    },
+    {
+      "name": "milestone_progress",
+      "title": "Milestone Progress",
+      "description": "Track milestone progress for a project. Shows issue/MR completion, progress bar, and due date risk. Omit milestone argument to see all active milestones.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "milestone",
+          "title": "Milestone",
+          "description": "Specific milestone title (omit for all active)"
+        }
+      ]
+    },
+    {
+      "name": "mr_description_quality",
+      "title": "MR Description Quality",
+      "description": "Score a merge request description for reviewer readiness. Checks context, linked work, test evidence, rollout/risk notes, checklists, and whether changed files suggest missing screenshots or migration notes.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "merge_request_iid",
+          "title": "Merge Request IID",
+          "description": "Merge request IID (project-scoped numeric ID, visible as !N in GitLab)",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "mr_discussion_health",
+      "title": "MR Discussion Health",
+      "description": "Analyze unresolved discussion threads across open MRs in a project. Use this for review follow-up and merge-readiness cleanup, not approval-rule status.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "mr_risk_assessment",
+      "title": "MR Risk Assessment",
+      "description": "Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request based on size (lines added/removed), number of changed files, new/deleted files, sensitive file patterns (env, auth, migration, CI, security), and conflict status.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "merge_request_iid",
+          "title": "Merge Request IID",
+          "description": "Merge request IID (project-scoped numeric ID, visible as !N in GitLab)",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "my_activity_summary",
+      "title": "My Activity Summary",
+      "description": "Generate a personal activity summary for a configurable time period. Includes contribution events breakdown, MRs created/merged/reviewed, issues created/closed, and a daily activity chart. Aggregates across all projects.",
+      "arguments": [
+        {
+          "name": "username",
+          "title": "Username",
+          "description": "GitLab username to query"
+        },
+        {
+          "name": "days",
+          "title": "Days",
+          "description": "Number of days to look back (default: 7)"
+        }
+      ]
+    },
+    {
+      "name": "my_issues",
+      "title": "My Issues",
+      "description": "Show all issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your full issue backlog without specifying a project.",
+      "arguments": [
+        {
+          "name": "username",
+          "title": "Username",
+          "description": "GitLab username to query"
+        },
+        {
+          "name": "state",
+          "title": "State",
+          "description": "State filter: opened, closed, all (default: opened)"
+        }
+      ]
+    },
+    {
+      "name": "my_open_mrs",
+      "title": "My Open MRs",
+      "description": "Show all open merge requests across all projects where you are author or assignee. Results are grouped by project for easy scanning. Use this to get a personal MR dashboard without specifying a project.",
+      "arguments": [
+        {
+          "name": "username",
+          "title": "Username",
+          "description": "GitLab username to query"
+        }
+      ]
+    },
+    {
+      "name": "my_pending_reviews",
+      "title": "My Pending Reviews",
+      "description": "Show all open merge requests where you are assigned as reviewer across all projects. Helps track which MRs are waiting for your review. Results grouped by project.",
+      "arguments": [
+        {
+          "name": "username",
+          "title": "Username",
+          "description": "GitLab username to query"
+        }
+      ]
+    },
+    {
+      "name": "project_activity_report",
+      "title": "Project Activity Report",
+      "description": "Generate a project activity report including recent events, merged MRs, and open issues. Shows daily activity chart and contributor breakdown.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "days",
+          "title": "Days",
+          "description": "Number of days to look back (default: 7)"
+        }
+      ]
+    },
+    {
+      "name": "project_contributors",
+      "title": "Project Contributors",
+      "description": "Rank project contributors by commits, additions, and deletions. Uses the repository contributors API for accurate stats.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "project_health_check",
+      "title": "Project Health Check",
+      "description": "Comprehensive project health assessment combining latest pipeline status, open merge requests, and branch hygiene (merged/stale branch counts). Provides actionable recommendations for project maintenance.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "release_cadence",
+      "title": "Release Cadence",
+      "description": "Analyze release frequency for a project. Shows time between releases, average cadence, and release history chart.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "days",
+          "title": "Days",
+          "description": "Number of days to look back (default: 90)"
+        }
+      ]
+    },
+    {
+      "name": "release_readiness",
+      "title": "Release Readiness",
+      "description": "Check readiness of a release branch by analyzing open MRs targeting it, draft/conflict counts, and unresolved discussion threads.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "branch",
+          "title": "Branch",
+          "description": "Target release branch (default: main)"
+        }
+      ]
+    },
+    {
+      "name": "review_mr",
+      "title": "Review MR",
+      "description": "Generate a structured code review for a merge request. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics, branch context, and a review plan. Full diffs are included without truncation.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "merge_request_iid",
+          "title": "Merge Request IID",
+          "description": "Merge request IID (project-scoped numeric ID, visible as !N in GitLab)",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "reviewer_workload",
+      "title": "Reviewer Workload",
+      "description": "Analyze review distribution across group members. Shows how many open MRs each member is reviewing and identifies imbalances. Useful for managers to ensure fair review distribution.",
+      "arguments": [
+        {
+          "name": "group_id",
+          "title": "Group ID",
+          "description": "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "stale_items_report",
+      "title": "Stale Items Report",
+      "description": "Find MRs and issues in a project that haven't been updated for a configurable number of days. Helps identify forgotten or blocked items.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "stale_days",
+          "title": "Stale Days",
+          "description": "Days without update to consider stale (default: 14)"
+        }
+      ]
+    },
+    {
+      "name": "suggest_mr_reviewers",
+      "title": "Suggest MR Reviewers",
+      "description": "Suggest suitable merge request reviewers based on the files changed and the list of active project members. Excludes the MR author and asks the model to consider ownership, approval-rule fit, and workload balance.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "merge_request_iid",
+          "title": "Merge Request IID",
+          "description": "Merge request IID (project-scoped numeric ID, visible as !N in GitLab)",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "summarize_mr_changes",
+      "title": "Summarize MR Changes",
+      "description": "Summarize the changed files and key modifications in a merge request. Lists each file with its change type (new/modified/deleted/renamed). Use this to quickly understand the scope of a merge request.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "merge_request_iid",
+          "title": "Merge Request IID",
+          "description": "Merge request IID (project-scoped numeric ID, visible as !N in GitLab)",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "summarize_open_mrs",
+      "title": "Summarize Open MRs",
+      "description": "Summarize all open merge requests in a project including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) and blockers. For one target branch, use branch_mr_summary.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "summarize_pipeline_status",
+      "title": "Summarize Pipeline Status",
+      "description": "Summarize the latest CI/CD pipeline status for a project. Groups jobs by outcome (failed/passed/other) and includes failure reasons for debugging.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "team_member_workload",
+      "title": "Team Member Workload",
+      "description": "Generate a comprehensive workload summary for a specific team member over a configurable time period. Includes contribution events, authored and assigned merge requests, MRs under review, authored and assigned issues. Use this for team management and capacity planning.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "username",
+          "title": "Username",
+          "description": "GitLab username of the team member to analyze",
+          "required": true
+        },
+        {
+          "name": "days",
+          "title": "Days",
+          "description": "Number of days to look back for activity (default: 7)"
+        }
+      ]
+    },
+    {
+      "name": "team_overview",
+      "title": "Team Overview",
+      "description": "Generate a team dashboard showing all group members with their open MR counts and recently merged MRs. Includes a workload distribution pie chart. Requires a GitLab group ID.",
+      "arguments": [
+        {
+          "name": "group_id",
+          "title": "Group ID",
+          "description": "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')",
+          "required": true
+        },
+        {
+          "name": "days",
+          "title": "Days",
+          "description": "Number of days to look back (default: 7)"
+        }
+      ]
+    },
+    {
+      "name": "unassigned_items",
+      "title": "Unassigned Items",
+      "description": "Find open MRs and issues in a project that have no assignee. Helps identify ownership gaps and items needing attention.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "user_activity_report",
+      "title": "User Activity Report",
+      "description": "Generate a detailed activity report for a specific user: contribution events, merged MRs, reviewed MRs, daily activity chart. Designed for managers to review team member productivity.",
+      "arguments": [
+        {
+          "name": "username",
+          "title": "Username",
+          "description": "GitLab username to report on",
+          "required": true
+        },
+        {
+          "name": "days",
+          "title": "Days",
+          "description": "Number of days to look back (default: 7)"
+        }
+      ]
+    },
+    {
+      "name": "user_stats",
+      "title": "User Stats",
+      "description": "Generate comprehensive user statistics from GitLab: contribution events breakdown, merge request stats (authored/assigned/reviewed by state), issue stats (authored/assigned by state), daily activity trends, and a Mermaid activity chart. Use this for performance reviews, productivity tracking, or personal dashboards.",
+      "arguments": [
+        {
+          "name": "project_id",
+          "title": "Project ID",
+          "description": "Project ID (numeric) or URL-encoded path (e.g. 'group/project')",
+          "required": true
+        },
+        {
+          "name": "username",
+          "title": "Username",
+          "description": "GitLab username to generate stats for (defaults to the authenticated user if omitted)"
+        },
+        {
+          "name": "days",
+          "title": "Days",
+          "description": "Number of days to look back for activity (default: 30)"
+        }
+      ]
+    },
+    {
+      "name": "weekly_team_recap",
+      "title": "Weekly Team Recap",
+      "description": "Generate a comprehensive weekly recap for a team. Combines merged MRs, open MRs, issues activity, and events into a single summary with Mermaid charts.",
+      "arguments": [
+        {
+          "name": "group_id",
+          "title": "Group ID",
+          "description": "GitLab group ID (numeric) or URL-encoded path (e.g. 'my-group' or 'parent/child')",
+          "required": true
+        },
+        {
+          "name": "days",
+          "title": "Days",
+          "description": "Number of days to look back (default: 7)"
+        }
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "uri": "gitlab://guides/code-review",
+      "name": "code_review",
+      "description": "Code review checklist and best practices for GitLab merge request reviews.",
+      "mimeType": "text/markdown"
+    },
+    {
+      "uri": "gitlab://guides/conventional-commits",
+      "name": "conventional_commits",
+      "description": "Conventional commit message format and examples for consistent Git history.",
+      "mimeType": "text/markdown"
+    },
+    {
+      "uri": "gitlab://user/current",
+      "name": "current_user",
+      "title": "Current User Profile",
+      "description": "Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL.",
+      "mimeType": "application/json",
+      "annotations": {
+        "audience": [
+          "assistant"
+        ],
+        "priority": 0.6
+      }
+    },
+    {
+      "uri": "gitlab://guides/git-workflow",
+      "name": "git_workflow",
+      "description": "Best practices for Git branching strategies with GitLab (feature branches, trunk-based, GitLab Flow).",
+      "mimeType": "text/markdown"
+    },
+    {
+      "uri": "gitlab://groups",
+      "name": "groups",
+      "title": "All Groups",
+      "description": "List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.",
+      "mimeType": "application/json",
+      "annotations": {
+        "audience": [
+          "assistant"
+        ],
+        "priority": 0.4
+      }
+    },
+    {
+      "uri": "gitlab://guides/merge-request-hygiene",
+      "name": "merge_request_hygiene",
+      "description": "Guidelines for creating and reviewing high-quality merge requests.",
+      "mimeType": "text/markdown"
+    },
+    {
+      "uri": "gitlab://guides/pipeline-troubleshooting",
+      "name": "pipeline_troubleshooting",
+      "description": "Common GitLab CI/CD pipeline issues and how to diagnose and fix them.",
+      "mimeType": "text/markdown"
+    },
+    {
+      "uri": "gitlab://tools",
+      "name": "tool_manifest",
+      "title": "Tool Manifest",
+      "description": "Surface-aware manifest of the tools and executable actions available in this server instance. Use gitlab://tools/{id} to fetch one entry's accepted call shape and input schema.",
+      "mimeType": "application/json",
+      "annotations": {
+        "audience": [
+          "assistant"
+        ],
+        "priority": 0.4
+      }
+    }
   ]
 }

@@ -431,7 +431,7 @@ Show all issues assigned to you across all projects. Includes overdue detection 
 **Arguments:**
 
 - `username`: GitLab username to query
-- `state`: State filter: opened, closed, merged, all (default: opened)
+- `state`: State filter: opened, closed, all (default: opened)
 
 ### my_open_mrs
 

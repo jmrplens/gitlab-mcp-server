@@ -211,10 +211,19 @@ func IsBinaryFile(filename string) bool {
 	}
 }
 
+// titleAcronyms are the name segments that render fully capitalized in a title.
+// A segment also matches in its plural form, which keeps the "s" lowercase:
+// "mrs" becomes "MRs", not "MRS".
+var titleAcronyms = map[string]bool{
+	"mr": true, "ci": true, "ssh": true, "api": true, "url": true, "id": true,
+	"iid": true, "gpg": true, "ssl": true, "ip": true, "yaml": true, "ui": true,
+}
+
 // TitleFromName generates a human-readable UI title from a snake_case MCP tool
 // name by stripping the "gitlab_" prefix and converting to Title Case.
 //
 //	TitleFromName("gitlab_list_projects") // returns "List Projects"
+//	TitleFromName("my_open_mrs")          // returns "My Open MRs"
 func TitleFromName(name string) string {
 	s := strings.TrimPrefix(name, "gitlab_")
 	parts := strings.Split(s, "_")
@@ -222,13 +231,21 @@ func TitleFromName(name string) string {
 		if p == "" {
 			continue
 		}
-		// Capitalize well-known acronyms
-		switch strings.ToLower(p) {
-		case "mr", "ci", "ssh", "api", "url", "id", "iid", "gpg", "ssl", "ip", "yaml", "ui":
-			parts[i] = strings.ToUpper(p)
-		default:
-			parts[i] = strings.ToUpper(p[:1]) + p[1:]
-		}
+		parts[i] = titleSegment(p)
 	}
 	return strings.Join(parts, " ")
+}
+
+// titleSegment capitalizes one underscore-separated name segment: a well-known
+// acronym in full, a plural acronym with a lowercase "s", anything else as a
+// leading capital.
+func titleSegment(segment string) string {
+	lower := strings.ToLower(segment)
+	if titleAcronyms[lower] {
+		return strings.ToUpper(segment)
+	}
+	if stem, ok := strings.CutSuffix(lower, "s"); ok && titleAcronyms[stem] {
+		return strings.ToUpper(segment[:len(segment)-1]) + "s"
+	}
+	return strings.ToUpper(segment[:1]) + segment[1:]
 }

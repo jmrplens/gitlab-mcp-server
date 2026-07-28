@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -1227,4 +1228,50 @@ func TestProjectPathFromWebURL(t *testing.T) {
 			t.Errorf("expected empty for /-/ at path root, got %q", got)
 		}
 	})
+}
+
+// TestStateArg_PerResourceVocabulary verifies each state filter offers exactly
+// the states GitLab accepts for that resource.
+//
+// "merged" is a merge-request state: advertising it on an issue prompt only
+// earns a 400 from the issues API, and the description is what a model reads.
+func TestStateArg_PerResourceVocabulary(t *testing.T) {
+	tests := []struct {
+		name     string
+		arg      *mcp.PromptArgument
+		want     []string
+		unwanted []string
+	}{
+		{
+			name:     "issue states",
+			arg:      issueStateArg("opened"),
+			want:     []string{"opened", "closed", "all"},
+			unwanted: []string{"merged"},
+		},
+		{
+			name: "merge request states",
+			arg:  mrStateArg("opened"),
+			want: []string{"opened", "closed", "merged", "all"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.arg.Name != argState || tt.arg.Required {
+				t.Fatalf("%s = %+v, want an optional %q argument", tt.name, tt.arg, argState)
+			}
+			for _, state := range tt.want {
+				if !strings.Contains(tt.arg.Description, state) {
+					t.Errorf("%s description = %q, want it to offer %q", tt.name, tt.arg.Description, state)
+				}
+			}
+			for _, state := range tt.unwanted {
+				if strings.Contains(tt.arg.Description, state) {
+					t.Errorf("%s description = %q, want no %q state", tt.name, tt.arg.Description, state)
+				}
+			}
+			if !strings.Contains(tt.arg.Description, "default: opened") {
+				t.Errorf("%s description = %q, want the default named", tt.name, tt.arg.Description)
+			}
+		})
+	}
 }

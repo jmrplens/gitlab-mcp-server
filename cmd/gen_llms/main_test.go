@@ -8,94 +8,15 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
-	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
-
-// newGenLLMSClient creates a [gitlabclient.Client] backed by a mock
-// /api/v4/version endpoint for gen_llms tests.
-func newGenLLMSClient(t *testing.T) *gitlabclient.Client {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"version":"17.0.0"}`)
-	}))
-	t.Cleanup(srv.Close)
-
-	client, err := gitlabclient.NewClient(&config.Config{GitLabURL: srv.URL, GitLabToken: "gen-llms-token"})
-	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
-	}
-	return client
-}
-
-// TestListDynamicTools_ExposesFindAndExecute verifies dynamic llms generation
-// exposes only the find and execute tools in deterministic order.
-//
-// The test builds a mock GitLab-backed client, lists dynamic tools, and checks
-// the execute input schema for action, params, and confirm fields. This protects
-// the low-token dynamic contract consumed by generated LLM discovery files.
-func TestListDynamicTools_ExposesFindAndExecute(t *testing.T) {
-	tools, err := listDynamicTools(newGenLLMSClient(t))
-	if err != nil {
-		t.Fatalf("listDynamicTools() error: %v", err)
-	}
-	if len(tools) != 2 {
-		t.Fatalf("len(listDynamicTools()) = %d, want 2", len(tools))
-	}
-	names := []string{tools[0].Name, tools[1].Name}
-	if names[0] != dynamicFindToolName || names[1] != dynamicExecuteActionToolName {
-		t.Fatalf("dynamic tools = %v, want find before execute", names)
-	}
-
-	executeSchema, ok := tools[1].InputSchema.(map[string]any)
-	if !ok {
-		t.Fatalf("execute InputSchema has type %T, want map[string]any", tools[1].InputSchema)
-	}
-	executeProperties, ok := executeSchema["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("execute InputSchema properties has type %T, want map[string]any", executeSchema["properties"])
-	}
-	for _, property := range []string{"action", "params", "confirm"} {
-		if _, exists := executeProperties[property]; !exists {
-			t.Fatalf("execute InputSchema missing %q property: %v", property, executeProperties)
-		}
-	}
-	required, ok := executeSchema["required"].([]any)
-	if !ok {
-		t.Fatalf("execute InputSchema required has type %T, want []any", executeSchema["required"])
-	}
-	if !slices.Contains(required, any("action")) || !slices.Contains(required, any("params")) {
-		t.Fatalf("execute InputSchema required = %v, want action and params", required)
-	}
-}
-
-// TestValidateDynamicToolContract_RejectsDrift verifies the generated dynamic
-// tool contract fails when the expected find/execute pair changes.
-//
-// The happy-path assertion accepts the canonical two-tool list, while the drift
-// assertion removes find and expects validation to fail. This keeps accidental
-// dynamic surface changes visible during llms generation.
-func TestValidateDynamicToolContract_RejectsDrift(t *testing.T) {
-	if err := validateDynamicToolContract([]*mcp.Tool{{Name: dynamicFindToolName}, {Name: dynamicExecuteActionToolName}}); err != nil {
-		t.Fatalf("validateDynamicToolContract() error = %v", err)
-	}
-	if err := validateDynamicToolContract([]*mcp.Tool{{Name: dynamicExecuteActionToolName}}); err == nil {
-		t.Fatal("validateDynamicToolContract() error = nil, want error")
-	}
-}
 
 // TestReadVersion_UsesProjectRoot verifies readVersion reads VERSION from the
 // supplied project root and trims trailing whitespace.
@@ -111,34 +32,6 @@ func TestReadVersion_UsesProjectRoot(t *testing.T) {
 
 	if got := readVersion(dir); got != "2.1.0" {
 		t.Fatalf("readVersion() = %q, want 2.1.0", got)
-	}
-}
-
-// TestListResources_IncludesToolManifestTemplate verifies llms generation sees
-// the unified tool manifest template alongside regular resources.
-func TestListResources_IncludesToolManifestTemplate(t *testing.T) {
-	resources, templates, err := listResources(newGenLLMSClient(t))
-	if err != nil {
-		t.Fatalf("listResources() error: %v", err)
-	}
-	if len(resources) == 0 {
-		t.Fatal("listResources() returned no static resources")
-	}
-	wantTemplates := map[string]bool{
-		"gitlab://tools/{id}": false,
-	}
-	for _, template := range templates {
-		if template.URITemplate == "gitlab://schema/meta/{tool}/{action}" || template.URITemplate == "gitlab://schema/dynamic/{action}" {
-			t.Fatalf("listResources() exposed legacy schema template %s: %v", template.URITemplate, templates)
-		}
-		if _, ok := wantTemplates[template.URITemplate]; ok {
-			wantTemplates[template.URITemplate] = true
-		}
-	}
-	for uri, found := range wantTemplates {
-		if !found {
-			t.Fatalf("listResources() templates missing %s: %v", uri, templates)
-		}
 	}
 }
 

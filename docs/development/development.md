@@ -39,6 +39,7 @@ gitlab-mcp-server/
 │   ├── format_md_tables/        # Normalizes Markdown pipe tables
 │   ├── gen_action_catalog_manifest/ # Generates ActionSpec manifest
 │   ├── gen_docker_tools/        # Generates Docker MCP Registry tools.json
+│   ├── gen_lhm_manifest/        # Generates the LobeHub manifest capability arrays
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt
 │   ├── gen_stats/               # Regenerates README stats section
 │   ├── gen_testing_docs/        # Regenerates testing.md managed sections

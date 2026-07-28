@@ -18,7 +18,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -26,14 +25,11 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
+	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/mcpsurface"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
-	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -74,10 +70,8 @@ const (
 	// site rather than living only in the repository.
 	siteBaseURL = "https://jmrplens.github.io/gitlab-mcp-server/"
 
-	dynamicFindToolName          = "gitlab_find_action"
-	dynamicExecuteActionToolName = "gitlab_execute_action"
-	llmsSummaryItemFormat        = "- %s: %s\n"
-	llmsBoldTitleFormat          = "**%s**\n\n"
+	llmsSummaryItemFormat = "- %s: %s\n"
+	llmsBoldTitleFormat   = "**%s**\n\n"
 )
 
 // llmsCatalog holds the full introspection result of one MCP server build,
@@ -116,25 +110,22 @@ func main() {
 // run introspects the live MCP catalog and regenerates llms.txt and
 // llms-full.txt in the project root.
 func run(checkOnly bool) error {
-	rootDir, err := findProjectRoot()
+	rootDir, err := mcpsurface.ProjectRoot()
 	if err != nil {
 		return err
 	}
 
-	client, closeStub, err := auditshared.NewStubGitLabClient("gen-llms-token") //#nosec G101 -- not a real credential, test-only dummy token
+	client, closeStub, err := mcpsurface.NewStubClient()
 	if err != nil {
 		return fmt.Errorf("create client: %w", err)
 	}
 	defer closeStub()
-	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, test-only dummy token
-		GitLabURL:   config.DefaultGitLabURL,
-		GitLabToken: "gen-llms-token",
-	})
+	gitLabComClient, err := mcpsurface.NewGitLabComClient()
 	if err != nil {
-		return fmt.Errorf("create gitlab.com client: %w", err)
+		return err
 	}
 	version := readVersion(rootDir)
-	res, resTpl, err := listResources(client)
+	res, resTpl, err := mcpsurface.Resources(client)
 	if err != nil {
 		return err
 	}
@@ -158,7 +149,7 @@ func run(checkOnly bool) error {
 	if err != nil {
 		return err
 	}
-	dynamicTools, err := listDynamicTools(gitLabComClient)
+	dynamicTools, err := mcpsurface.DynamicTools(gitLabComClient)
 	if err != nil {
 		return err
 	}
@@ -166,7 +157,7 @@ func run(checkOnly bool) error {
 	if err != nil {
 		return fmt.Errorf("build meta action catalog: %w", err)
 	}
-	promptList, err := listPrompts(client)
+	promptList, err := mcpsurface.Prompts(client)
 	if err != nil {
 		return err
 	}
@@ -215,41 +206,10 @@ func readVersion(rootDir string) string {
 	return strings.TrimSpace(string(data))
 }
 
-// newSession creates an in-memory MCP server+client session with high page size.
-func newSession(setupServer func(*mcp.Server) error) (session *mcp.ClientSession, cleanup func(), err error) {
-	opts := &mcp.ServerOptions{PageSize: 2000}
-	server := mcp.NewServer(&mcp.Implementation{Name: "gen-llms", Version: "0.0.1"}, opts)
-	if setupErr := setupServer(server); setupErr != nil {
-		return nil, nil, setupErr
-	}
-	toolutil.LockdownInputSchemas(server)
-
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	serverSession, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("server connect: %w", err)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "gen-llms-client", Version: "0.0.1"}, nil)
-	session, err = mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		_ = serverSession.Close()
-		_ = serverSession.Wait()
-		return nil, nil, fmt.Errorf("client connect: %w", err)
-	}
-
-	return session, func() {
-		_ = session.Close()
-		_ = serverSession.Wait()
-	}, nil
-}
-
 // listTools returns either the enterprise individual catalog or the base
 // meta-tool catalog, depending on meta.
 func listTools(client *gitlabclient.Client, meta bool) ([]*mcp.Tool, error) {
-	session, cleanup, err := newSession(func(server *mcp.Server) error {
+	session, cleanup, err := mcpsurface.Session(func(server *mcp.Server) error {
 		if meta {
 			return tools.RegisterAllMeta(server, client, edition.Free)
 		}
@@ -270,7 +230,7 @@ func listTools(client *gitlabclient.Client, meta bool) ([]*mcp.Tool, error) {
 
 // listToolsEnterprise returns the Enterprise/Premium meta-tool catalog.
 func listToolsEnterprise(client *gitlabclient.Client) ([]*mcp.Tool, error) {
-	session, cleanup, err := newSession(func(server *mcp.Server) error {
+	session, cleanup, err := mcpsurface.Session(func(server *mcp.Server) error {
 		return tools.RegisterAllMeta(server, client, edition.Ultimate)
 	})
 	if err != nil {
@@ -283,128 +243,6 @@ func listToolsEnterprise(client *gitlabclient.Client) ([]*mcp.Tool, error) {
 		return nil, fmt.Errorf("list enterprise tools: %w", err)
 	}
 	return result.Tools, nil
-}
-
-// listDynamicTools returns the visible two-tool dynamic catalog from a real MCP
-// tools/list session.
-func listDynamicTools(client *gitlabclient.Client) ([]*mcp.Tool, error) {
-	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
-	if err != nil {
-		return nil, fmt.Errorf("build dynamic action catalog: %w", err)
-	}
-	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("add dynamic standalone catalog: %w", err)
-	}
-	session, cleanup, err := newSession(func(server *mcp.Server) error {
-		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer cleanup()
-
-	result, err := session.ListTools(context.Background(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("list dynamic tools: %w", err)
-	}
-	sortDynamicTools(result.Tools)
-	if contractErr := validateDynamicToolContract(result.Tools); contractErr != nil {
-		return nil, contractErr
-	}
-	return result.Tools, nil
-}
-
-func sortDynamicTools(dynamicTools []*mcp.Tool) {
-	order := map[string]int{
-		dynamicFindToolName:          0,
-		dynamicExecuteActionToolName: 1,
-	}
-	sort.SliceStable(dynamicTools, func(i, j int) bool {
-		left, leftOK := order[dynamicTools[i].Name]
-		right, rightOK := order[dynamicTools[j].Name]
-		if leftOK && rightOK {
-			return left < right
-		}
-		if leftOK != rightOK {
-			return leftOK
-		}
-		return dynamicTools[i].Name < dynamicTools[j].Name
-	})
-}
-
-func validateDynamicToolContract(dynamicTools []*mcp.Tool) error {
-	expected := []string{dynamicFindToolName, dynamicExecuteActionToolName}
-	if len(dynamicTools) != len(expected) {
-		return fmt.Errorf("expected %d dynamic tools, got %d", len(expected), len(dynamicTools))
-	}
-	for i, name := range expected {
-		if dynamicTools[i].Name != name {
-			return fmt.Errorf("unexpected dynamic tool %q at position %d", dynamicTools[i].Name, i)
-		}
-	}
-	return nil
-}
-
-// listResources returns the static resources and resource templates advertised
-// by the MCP server, including the surface-aware tool manifest template.
-func listResources(client *gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate, error) {
-	dynamicCatalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{IncludeMCP: true})
-	if err != nil {
-		return nil, nil, fmt.Errorf("build dynamic action catalog: %w", err)
-	}
-	dynamicCatalog, err = dynamictools.AddStandaloneCatalog(dynamicCatalog, client, dynamictools.StandaloneOptions{})
-	if err != nil {
-		return nil, nil, fmt.Errorf("add dynamic standalone catalog: %w", err)
-	}
-	dynamicTools, err := listDynamicTools(client)
-	if err != nil {
-		return nil, nil, err
-	}
-	session, cleanup, err := newSession(func(server *mcp.Server) error {
-		resources.Register(server, client)
-		resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
-			Surface: config.ToolSurfaceDynamic,
-			Tools:   dynamicTools,
-			Catalog: dynamicCatalog,
-		})
-		resources.RegisterWorkflowGuides(server)
-		return nil
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	defer cleanup()
-
-	ctx := context.Background()
-	res, err := session.ListResources(ctx, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("list resources: %w", err)
-	}
-	tpl, err := session.ListResourceTemplates(ctx, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("list resource templates: %w", err)
-	}
-	return res.Resources, tpl.ResourceTemplates, nil
-}
-
-// listPrompts returns all registered MCP prompt definitions for llms output.
-func listPrompts(client *gitlabclient.Client) ([]*mcp.Prompt, error) {
-	session, cleanup, err := newSession(func(server *mcp.Server) error {
-		prompts.Register(server, client)
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	defer cleanup()
-
-	result, err := session.ListPrompts(context.Background(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("list prompts: %w", err)
-	}
-	return result.Prompts, nil
 }
 
 // writeLLMSTxt generates the concise llms.txt overview.
@@ -1257,7 +1095,7 @@ func writeGeneratedFile(name, content string, checkOnly bool) error {
 	if !isGeneratedLLMSFile(name) {
 		return fmt.Errorf("unexpected generated file %q", name)
 	}
-	dir, err := findProjectRoot()
+	dir, err := mcpsurface.ProjectRoot()
 	if err != nil {
 		return err
 	}
@@ -1291,23 +1129,5 @@ func isGeneratedLLMSFile(name string) bool {
 		return true
 	default:
 		return false
-	}
-}
-
-// findProjectRoot walks up from cwd looking for go.mod.
-func findProjectRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, statErr := os.Stat(filepath.Join(dir, "go.mod")); statErr == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", errors.New("could not find project root (no go.mod found)")
-		}
-		dir = parent
 	}
 }

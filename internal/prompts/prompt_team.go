@@ -294,7 +294,7 @@ func registerGroupMRDashboardPrompt(server *mcp.Server, client *gitlabclient.Cli
 		Icons:       toolutil.IconMR,
 		Arguments: []*mcp.PromptArgument{
 			groupIDArg(),
-			stateArg("opened"),
+			mrStateArg("opened"),
 			targetBranchArg(false),
 		},
 	}, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
