@@ -272,6 +272,10 @@ func TestTitleFromName(t *testing.T) {
 		{name: "no prefix", in: "list_projects", want: "List Projects"},
 		{name: "long name", in: "gitlab_create_merge_request", want: "Create Merge Request"},
 		{name: "meta tool", in: "gitlab_project", want: "Project"},
+		{name: "plural acronym MR", in: "my_open_mrs", want: "My Open MRs"},
+		{name: "plural acronym ID", in: "gitlab_list_user_ids", want: "List User IDs"},
+		{name: "plural non-acronym", in: "gitlab_list_projects", want: "List Projects"},
+		{name: "acronym-like word", in: "gitlab_list_users", want: "List Users"},
 		{name: "empty", in: "", want: ""},
 	}
 	for _, tt := range tests {

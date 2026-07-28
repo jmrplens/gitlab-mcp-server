@@ -401,7 +401,7 @@
     },
     {
       "name": "my_open_mrs",
-      "title": "My Open Mrs",
+      "title": "My Open MRs",
       "description": "Show all open merge requests across all projects where you are author or assignee. Results are grouped by project for easy scanning. Use this to get a personal MR dashboard without specifying a project.",
       "arguments": [
         {
@@ -593,7 +593,7 @@
     },
     {
       "name": "summarize_open_mrs",
-      "title": "Summarize Open Mrs",
+      "title": "Summarize Open MRs",
       "description": "Summarize all open merge requests in a project including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) and blockers. For one target branch, use branch_mr_summary.",
       "arguments": [
         {
