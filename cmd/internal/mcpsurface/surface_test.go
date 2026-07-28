@@ -8,10 +8,12 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
@@ -92,21 +94,52 @@ func TestSortDynamicTools_PutsFindBeforeExecute(t *testing.T) {
 }
 
 // TestValidateDynamicToolContract_RejectsDrift verifies the dynamic tool
-// contract fails when the expected find/execute pair changes.
+// contract accepts the canonical pair and fails on every way it can drift.
 //
-// The happy-path assertion accepts the canonical two-tool list, while the drift
-// assertions drop find and rename execute. This keeps accidental dynamic surface
-// changes visible during generation instead of silently rewriting every
-// generated artifact.
+// A rename, a dropped tool, an extra tool, or a swapped order all have to abort
+// generation: the alternative is silently rewriting every generated artifact
+// around a surface nobody meant to change.
 func TestValidateDynamicToolContract_RejectsDrift(t *testing.T) {
-	if err := ValidateDynamicToolContract([]*mcp.Tool{{Name: DynamicFindToolName}, {Name: DynamicExecuteActionToolName}}); err != nil {
-		t.Fatalf("ValidateDynamicToolContract() error = %v", err)
+	tests := []struct {
+		name    string
+		tools   []*mcp.Tool
+		wantErr bool
+	}{
+		{
+			name:  "canonical pair",
+			tools: []*mcp.Tool{{Name: DynamicFindToolName}, {Name: DynamicExecuteActionToolName}},
+		},
+		{
+			name:    "missing tool",
+			tools:   []*mcp.Tool{{Name: DynamicExecuteActionToolName}},
+			wantErr: true,
+		},
+		{
+			name:    "renamed tool",
+			tools:   []*mcp.Tool{{Name: DynamicFindToolName}, {Name: "gitlab_renamed"}},
+			wantErr: true,
+		},
+		{
+			name:    "extra tool",
+			tools:   []*mcp.Tool{{Name: DynamicFindToolName}, {Name: DynamicExecuteActionToolName}, {Name: "gitlab_extra"}},
+			wantErr: true,
+		},
+		{
+			name:    "swapped order",
+			tools:   []*mcp.Tool{{Name: DynamicExecuteActionToolName}, {Name: DynamicFindToolName}},
+			wantErr: true,
+		},
 	}
-	if err := ValidateDynamicToolContract([]*mcp.Tool{{Name: DynamicExecuteActionToolName}}); err == nil {
-		t.Fatal("ValidateDynamicToolContract() error = nil, want error for a missing tool")
-	}
-	if err := ValidateDynamicToolContract([]*mcp.Tool{{Name: DynamicFindToolName}, {Name: "gitlab_renamed"}}); err == nil {
-		t.Fatal("ValidateDynamicToolContract() error = nil, want error for a renamed tool")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDynamicToolContract(tt.tools)
+			if tt.wantErr && err == nil {
+				t.Fatalf("ValidateDynamicToolContract(%s) error = nil, want an error", tt.name)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("ValidateDynamicToolContract(%s) error = %v", tt.name, err)
+			}
+		})
 	}
 }
 
@@ -181,8 +214,12 @@ func TestNewGitLabComClient_UsesPublicHost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewGitLabComClient() error: %v", err)
 	}
-	if client == nil {
-		t.Fatal("NewGitLabComClient() returned no client")
+	if !client.IsGitLabDotCom() {
+		t.Error("NewGitLabComClient() is not configured for GitLab.com")
+	}
+	got := client.GL().BaseURL().String()
+	if !strings.HasPrefix(got, config.DefaultGitLabURL) {
+		t.Errorf("base URL = %q, want it under %q", got, config.DefaultGitLabURL)
 	}
 }
 

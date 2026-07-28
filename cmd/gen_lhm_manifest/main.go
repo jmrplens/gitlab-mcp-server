@@ -27,11 +27,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
-	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -124,9 +126,15 @@ func run(checkOnly bool) error {
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(rootDir, manifestFileName)
+	// The manifest is addressed relative to an os.Root rooted at the project
+	// directory, so the command can only ever read and write that one file.
+	root, err := os.OpenRoot(rootDir)
+	if err != nil {
+		return fmt.Errorf("open project root: %w", err)
+	}
+	defer func() { _ = root.Close() }()
 
-	current, err := os.ReadFile(path) //#nosec G304 -- path is the manifest at the resolved project root
+	current, err := root.ReadFile(manifestFileName)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", manifestFileName, err)
 	}
@@ -144,7 +152,7 @@ func run(checkOnly bool) error {
 		return nil
 	}
 
-	if writeErr := os.WriteFile(path, generated, 0o600); writeErr != nil {
+	if writeErr := root.WriteFile(manifestFileName, generated, 0o600); writeErr != nil {
 		return fmt.Errorf("write %s: %w", manifestFileName, writeErr)
 	}
 	fmt.Printf("Generated %s (%s)\n", manifestFileName, counts)
@@ -155,11 +163,9 @@ func run(checkOnly bool) error {
 // capability arrays replaced by the registered surface and every other field
 // left untouched.
 func generate(current []byte) (out []byte, counts string, err error) {
-	decoder := json.NewDecoder(bytes.NewReader(current))
-	decoder.DisallowUnknownFields()
-	var m manifest
-	if err = decoder.Decode(&m); err != nil {
-		return nil, "", fmt.Errorf("parse %s: %w", manifestFileName, err)
+	m, err := decodeManifest(current)
+	if err != nil {
+		return nil, "", err
 	}
 
 	registered, err := readSurface()
@@ -179,6 +185,50 @@ func generate(current []byte) (out []byte, counts string, err error) {
 	}
 	return buf.Bytes(), fmt.Sprintf("%d tools, %d prompts, %d resources",
 		len(m.Tools), len(m.Prompts), len(m.Resources)), nil
+}
+
+// decodeManifest parses the committed manifest and rejects anything the publish
+// endpoint would not accept: an unknown field, a missing required field, or a
+// second JSON value after the manifest object. Without the trailing-value check
+// a decoder that reads only the first value would let the rest be dropped on the
+// next rewrite; without the required-field check --check would certify a
+// manifest that cannot be published.
+func decodeManifest(current []byte) (manifest, error) {
+	decoder := json.NewDecoder(bytes.NewReader(current))
+	decoder.DisallowUnknownFields()
+	var m manifest
+	if err := decoder.Decode(&m); err != nil {
+		return manifest{}, fmt.Errorf("parse %s: %w", manifestFileName, err)
+	}
+	if _, err := decoder.Token(); !errors.Is(err, io.EOF) {
+		return manifest{}, fmt.Errorf("parse %s: unexpected content after the manifest object", manifestFileName)
+	}
+	if err := requireManifestFields(m); err != nil {
+		return manifest{}, err
+	}
+	return m, nil
+}
+
+// requireManifestFields reports the manifest fields the LobeHub publish endpoint
+// treats as mandatory and that this command never fills in.
+func requireManifestFields(m manifest) error {
+	var missing []string
+	for _, field := range []struct {
+		name  string
+		value string
+	}{
+		{"identifier", m.Identifier},
+		{"name", m.Name},
+		{"version", m.Version},
+	} {
+		if strings.TrimSpace(field.value) == "" {
+			missing = append(missing, field.name)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("%s is missing required field(s): %s", manifestFileName, strings.Join(missing, ", "))
+	}
+	return nil
 }
 
 // readSurface introspects the registered capabilities over real MCP list

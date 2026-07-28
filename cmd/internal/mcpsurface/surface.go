@@ -81,7 +81,7 @@ func Session(setup func(*mcp.Server) error) (session *mcp.ClientSession, cleanup
 	opts := &mcp.ServerOptions{PageSize: listPageSize}
 	server := mcp.NewServer(&mcp.Implementation{Name: "mcpsurface", Version: "0.0.1"}, opts)
 	if setupErr := setup(server); setupErr != nil {
-		return nil, nil, setupErr
+		return nil, nil, fmt.Errorf("set up MCP server: %w", setupErr)
 	}
 	toolutil.LockdownInputSchemas(server)
 

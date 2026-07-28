@@ -37,8 +37,8 @@ const populatedManifest = `{
   "resources": []
 }`
 
-// decodeManifest runs generate over in and returns the decoded result.
-func decodeManifest(t *testing.T, in string) manifest {
+// generatedManifest runs generate over in and returns the decoded result.
+func generatedManifest(t *testing.T, in string) manifest {
 	t.Helper()
 	out, _, err := generate([]byte(in))
 	if err != nil {
@@ -58,7 +58,7 @@ func decodeManifest(t *testing.T, in string) manifest {
 // because the release stamp writes it, and a generator that reset it would
 // publish the previous release's number.
 func TestGenerate_PreservesManifestMetadata(t *testing.T) {
-	m := decodeManifest(t, populatedManifest)
+	m := generatedManifest(t, populatedManifest)
 
 	if m.Identifier != "jmrplens-gitlab-mcp-server" || m.Version != "9.9.9" || m.Description != "desc" {
 		t.Fatalf("metadata was not preserved: %+v", m)
@@ -77,7 +77,7 @@ func TestGenerate_PreservesManifestMetadata(t *testing.T) {
 // A tool without a description or an input schema, or a resource without a URI,
 // still counts toward the capability badge but shows up blank in the listing.
 func TestGenerate_FillsEveryCapabilityArray(t *testing.T) {
-	m := decodeManifest(t, populatedManifest)
+	m := generatedManifest(t, populatedManifest)
 
 	if len(m.Tools) == 0 || len(m.Prompts) == 0 || len(m.Resources) == 0 {
 		t.Fatalf("got %d tools, %d prompts, %d resources; want all non-zero", len(m.Tools), len(m.Prompts), len(m.Resources))
@@ -123,7 +123,7 @@ func TestGenerate_ReportsCapabilityCounts(t *testing.T) {
 func TestGenerate_DeclaresDefaultDynamicSurface(t *testing.T) {
 	t.Setenv("TOOL_SURFACE", "individual")
 
-	m := decodeManifest(t, minimalManifest)
+	m := generatedManifest(t, minimalManifest)
 
 	if len(m.Tools) != 2 {
 		t.Fatalf("len(tools) = %d, want the 2 dynamic tools", len(m.Tools))
@@ -207,11 +207,39 @@ func TestGenerate_RejectsUnknownField(t *testing.T) {
 	}
 }
 
-// TestGenerate_InvalidJSON verifies a malformed manifest is reported rather than
-// silently overwritten with a freshly generated one.
-func TestGenerate_InvalidJSON(t *testing.T) {
-	if _, _, err := generate([]byte("{not json")); err == nil {
-		t.Fatal("generate() error = nil, want a parse error")
+// TestGenerate_RejectsUnpublishableManifest verifies a manifest the publish
+// endpoint would reject fails here instead of being rewritten and certified by
+// --check.
+//
+// Malformed JSON, a manifest missing a required field, and a second JSON value
+// after the object all have to fail: the decoder reads one value, so trailing
+// content would otherwise be dropped silently on the next rewrite.
+func TestGenerate_RejectsUnpublishableManifest(t *testing.T) {
+	tests := []struct {
+		name    string
+		in      string
+		wantErr string
+	}{
+		{name: "malformed json", in: "{not json", wantErr: "parse"},
+		{name: "missing identifier", in: `{"name": "y", "version": "1.0.0"}`, wantErr: "identifier"},
+		{name: "missing name and version", in: `{"identifier": "x"}`, wantErr: "name, version"},
+		{name: "blank version", in: `{"identifier": "x", "name": "y", "version": "  "}`, wantErr: "version"},
+		{
+			name:    "trailing json value",
+			in:      `{"identifier": "x", "name": "y", "version": "1.0.0"} {"identifier": "z"}`,
+			wantErr: "unexpected content",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, err := generate([]byte(tt.in))
+			if err == nil {
+				t.Fatalf("generate(%s) error = nil, want an error", tt.name)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("generate(%s) error = %v, want it to mention %q", tt.name, err, tt.wantErr)
+			}
+		})
 	}
 }
 

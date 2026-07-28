@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
 
@@ -1229,38 +1230,48 @@ func TestProjectPathFromWebURL(t *testing.T) {
 	})
 }
 
-// TestIssueStateArg_OmitsMergedState verifies the issue state filter offers only
-// the states GitLab accepts for an issue.
+// TestStateArg_PerResourceVocabulary verifies each state filter offers exactly
+// the states GitLab accepts for that resource.
 //
-// "merged" is a merge-request state; advertising it to a model on an issue
-// prompt only earns a 400 from the API, so the description must not list it.
-func TestIssueStateArg_OmitsMergedState(t *testing.T) {
-	got := issueStateArg("opened")
-
-	if got.Name != argState || got.Required {
-		t.Fatalf("issueStateArg() = %+v, want an optional %q argument", got, argState)
+// "merged" is a merge-request state: advertising it on an issue prompt only
+// earns a 400 from the issues API, and the description is what a model reads.
+func TestStateArg_PerResourceVocabulary(t *testing.T) {
+	tests := []struct {
+		name     string
+		arg      *mcp.PromptArgument
+		want     []string
+		unwanted []string
+	}{
+		{
+			name:     "issue states",
+			arg:      issueStateArg("opened"),
+			want:     []string{"opened", "closed", "all"},
+			unwanted: []string{"merged"},
+		},
+		{
+			name: "merge request states",
+			arg:  mrStateArg("opened"),
+			want: []string{"opened", "closed", "merged", "all"},
+		},
 	}
-	if strings.Contains(got.Description, "merged") {
-		t.Fatalf("issueStateArg() description = %q, want no merged state", got.Description)
-	}
-	for _, state := range []string{"opened", "closed", "all"} {
-		if !strings.Contains(got.Description, state) {
-			t.Fatalf("issueStateArg() description = %q, want it to offer %q", got.Description, state)
-		}
-	}
-	if !strings.Contains(got.Description, "default: opened") {
-		t.Fatalf("issueStateArg() description = %q, want the default named", got.Description)
-	}
-}
-
-// TestMRStateArg_OffersMergedState verifies the merge-request state filter keeps
-// the merged state, which is valid there.
-func TestMRStateArg_OffersMergedState(t *testing.T) {
-	got := mrStateArg("opened")
-
-	for _, state := range []string{"opened", "closed", "merged", "all"} {
-		if !strings.Contains(got.Description, state) {
-			t.Fatalf("mrStateArg() description = %q, want it to offer %q", got.Description, state)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.arg.Name != argState || tt.arg.Required {
+				t.Fatalf("%s = %+v, want an optional %q argument", tt.name, tt.arg, argState)
+			}
+			for _, state := range tt.want {
+				if !strings.Contains(tt.arg.Description, state) {
+					t.Errorf("%s description = %q, want it to offer %q", tt.name, tt.arg.Description, state)
+				}
+			}
+			for _, state := range tt.unwanted {
+				if strings.Contains(tt.arg.Description, state) {
+					t.Errorf("%s description = %q, want no %q state", tt.name, tt.arg.Description, state)
+				}
+			}
+			if !strings.Contains(tt.arg.Description, "default: opened") {
+				t.Errorf("%s description = %q, want the default named", tt.name, tt.arg.Description)
+			}
+		})
 	}
 }
