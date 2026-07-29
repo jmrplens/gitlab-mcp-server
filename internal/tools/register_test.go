@@ -2778,6 +2778,73 @@ type toolSnapshot struct {
 	Annotations  *mcp.ToolAnnotations `json:"annotations,omitempty"`
 }
 
+// TestClassifySnapshots verifies how a golden file is classified against the
+// generated output. The byte-stale case is the important one: it regressed
+// once, when a go-sdk upgrade stopped applying omitempty to
+// ToolAnnotations.ReadOnlyHint and IdempotentHint. The golden files kept
+// omitting those fields, an omitted false unmarshals to the same value as an
+// explicit one, so the semantic comparison found nothing and the stale files
+// went unnoticed until the next regeneration.
+func TestClassifySnapshots(t *testing.T) {
+	tests := []struct {
+		name  string
+		want  []byte
+		got   []byte
+		diffs []string
+		out   snapshotComparison
+	}{
+		{
+			name: "identical bytes match",
+			want: []byte(`[{"name":"a"}]`),
+			got:  []byte(`[{"name":"a"}]`),
+			out:  snapshotMatches,
+		},
+		{
+			name:  "semantic differences are reported as drift",
+			want:  []byte(`[{"name":"a"}]`),
+			got:   []byte(`[{"name":"b"}]`),
+			diffs: []string{"ADDED tool: b", "REMOVED tool: a"},
+			out:   snapshotSemanticDrift,
+		},
+		{
+			name: "serialization-only change is reported as stale",
+			want: []byte(`[{"name":"a","annotations":{}}]`),
+			got:  []byte(`[{"name":"a","annotations":{"readOnlyHint":false}}]`),
+			out:  snapshotByteStale,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := classifySnapshots(tt.want, tt.got, tt.diffs); got != tt.out {
+				t.Errorf("classifySnapshots() = %d, want %d", got, tt.out)
+			}
+		})
+	}
+}
+
+// TestDiffSnapshots_OmittedZeroValueIsNotSemanticDrift documents the premise
+// behind [snapshotByteStale]: an annotation omitted from the golden file and
+// one written as an explicit false describe the same tool, so the semantic
+// comparison cannot be the only guard against golden files going stale.
+func TestDiffSnapshots_OmittedZeroValueIsNotSemanticDrift(t *testing.T) {
+	var omitted []toolSnapshot
+	if err := json.Unmarshal([]byte(`[{"name":"a","annotations":{}}]`), &omitted); err != nil {
+		t.Fatalf("unmarshal omitted: %v", err)
+	}
+	var explicit []toolSnapshot
+	if err := json.Unmarshal([]byte(`[{"name":"a","annotations":{"readOnlyHint":false}}]`), &explicit); err != nil {
+		t.Fatalf("unmarshal explicit: %v", err)
+	}
+
+	diffs, err := diffSnapshots(omitted, explicit)
+	if err != nil {
+		t.Fatalf("diffSnapshots: %v", err)
+	}
+	if len(diffs) != 0 {
+		t.Errorf("diffSnapshots() = %v, want no semantic differences", diffs)
+	}
+}
+
 // TestToolSnapshots_Individual compares individual-mode tool definitions
 // against the golden file testdata/tools_individual.json.
 func TestToolSnapshots_Individual(t *testing.T) {
@@ -2873,24 +2940,70 @@ func compareOrUpdate(t *testing.T, goldenPath string, current []toolSnapshot) {
 		t.Fatalf("read golden file %s: %v\nRun with UPDATE_TOOLSNAPS=true to generate", goldenPath, err)
 	}
 
-	if string(got) == string(want) {
-		return
-	}
-
-	// Parse both for structured diff
+	// Parse the golden file for the structured diff even when the bytes
+	// match, so a malformed golden file is always reported.
 	var wantSnaps []toolSnapshot
 	if unmarshalErr := json.Unmarshal(want, &wantSnaps); unmarshalErr != nil {
 		t.Fatalf("parse golden file: %v", unmarshalErr)
 	}
 
-	reportDiff(t, goldenPath, wantSnaps, current)
+	diffs, err := diffSnapshots(wantSnaps, current)
+	if err != nil {
+		t.Fatalf("diff snapshots: %v", err)
+	}
+
+	switch classifySnapshots(want, got, diffs) {
+	case snapshotMatches:
+		return
+	case snapshotSemanticDrift:
+		t.Errorf("Tool snapshots changed (%s). Found %d difference(s):\n%s\n\nRun with UPDATE_TOOLSNAPS=true to update golden files.",
+			goldenPath, len(diffs), strings.Join(diffs, "\n"))
+	case snapshotByteStale:
+		t.Errorf("Golden file %s is stale: every tool is semantically unchanged, but the stored bytes no longer match the generator output.\n"+
+			"This happens when serialization changes without changing meaning — for example a dependency dropping omitempty, so a field that was omitted is now written as an explicit zero value.\n\n"+
+			"Run with UPDATE_TOOLSNAPS=true to update golden files.", goldenPath)
+	}
 }
 
-// reportDiff produces a human-readable diff showing which tools were
-// added, removed, or changed between the golden and current snapshots.
-func reportDiff(t *testing.T, goldenPath string, want, got []toolSnapshot) {
-	t.Helper()
+// snapshotComparison classifies how a golden file relates to the freshly
+// generated snapshots.
+type snapshotComparison int
 
+const (
+	// snapshotMatches means the golden file is byte-identical to the
+	// generated output.
+	snapshotMatches snapshotComparison = iota
+	// snapshotSemanticDrift means at least one tool changed in a way that
+	// alters its meaning (added, removed, or with a different description,
+	// schema, or annotations).
+	snapshotSemanticDrift
+	// snapshotByteStale means every tool is semantically unchanged but the
+	// stored bytes differ, so the golden file no longer reflects what the
+	// generator writes.
+	snapshotByteStale
+)
+
+// classifySnapshots decides how a golden file relates to the generated
+// output. Byte equality alone is authoritative for a match: a semantic
+// comparison cannot see serialization changes that preserve meaning, such
+// as a zero value switching between omitted and explicitly written, so
+// those must still be reported rather than silently tolerated.
+func classifySnapshots(want, got []byte, diffs []string) snapshotComparison {
+	switch {
+	case bytes.Equal(want, got):
+		return snapshotMatches
+	case len(diffs) > 0:
+		return snapshotSemanticDrift
+	default:
+		return snapshotByteStale
+	}
+}
+
+// diffSnapshots returns human-readable descriptions of every semantic
+// difference between the golden and current snapshots. An empty result means
+// the two sets describe the same tools, which does not imply the serialized
+// bytes are identical — see [classifySnapshots].
+func diffSnapshots(want, got []toolSnapshot) ([]string, error) {
 	wantMap := make(map[string]toolSnapshot, len(want))
 	for _, s := range want {
 		wantMap[s.Name] = s
@@ -2933,11 +3046,11 @@ func reportDiff(t *testing.T, goldenPath string, want, got []toolSnapshot) {
 		}
 		wAnn, err := json.Marshal(wSnap.Annotations)
 		if err != nil {
-			t.Fatalf("marshal want annotations for %s: %v", name, err)
+			return nil, fmt.Errorf("marshal want annotations for %s: %w", name, err)
 		}
 		gAnn, err := json.Marshal(gSnap.Annotations)
 		if err != nil {
-			t.Fatalf("marshal got annotations for %s: %v", name, err)
+			return nil, fmt.Errorf("marshal got annotations for %s: %w", name, err)
 		}
 		if string(wAnn) != string(gAnn) {
 			diffs = append(diffs, "CHANGED "+name+" annotations:\n  old: "+string(wAnn)+"\n  new: "+string(gAnn))
@@ -2945,12 +3058,7 @@ func reportDiff(t *testing.T, goldenPath string, want, got []toolSnapshot) {
 	}
 
 	slices.Sort(diffs)
-	if len(diffs) == 0 {
-		return
-	}
-
-	t.Errorf("Tool snapshots changed (%s). Found %d difference(s):\n%s\n\nRun with UPDATE_TOOLSNAPS=true to update golden files.",
-		goldenPath, len(diffs), strings.Join(diffs, "\n"))
+	return diffs, nil
 }
 
 // rawJSONEqual compares JSON values after compaction so golden snapshots are

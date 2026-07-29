@@ -631,7 +631,14 @@ func compareSnapshotSlices(t *testing.T, goldenPath string, want, got []toolSnap
 	sortToolSnapshots(want)
 	sortToolSnapshots(got)
 	if len(want) != len(got) {
-		reportDiff(t, goldenPath, want, got)
+		diffs, err := diffSnapshots(want, got)
+		if err != nil {
+			t.Fatalf("diff snapshots: %v", err)
+		}
+		if len(diffs) > 0 {
+			t.Errorf("Tool snapshots changed (%s). Found %d difference(s):\n%s\n\nRun with UPDATE_TOOLSNAPS=true to update golden files.",
+				goldenPath, len(diffs), strings.Join(diffs, "\n"))
+		}
 		return
 	}
 	var diffs []string
