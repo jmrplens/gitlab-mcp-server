@@ -70,7 +70,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -144,7 +145,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -201,7 +203,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -258,7 +261,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -638,7 +642,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -702,7 +708,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -744,7 +752,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -1023,7 +1032,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -1076,7 +1087,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -1134,7 +1147,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -1210,7 +1225,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -1259,7 +1276,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -1313,7 +1332,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -1400,7 +1421,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -1451,7 +1474,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -1531,7 +1556,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -1669,7 +1696,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -2076,7 +2105,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -2163,7 +2194,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -2214,7 +2247,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -2357,7 +2392,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -2437,7 +2474,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -2506,7 +2545,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -2580,7 +2621,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -2752,7 +2795,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -2794,7 +2839,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -2890,7 +2936,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -2937,7 +2985,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -2984,7 +3033,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -3432,7 +3482,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -3489,7 +3541,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -4704,7 +4757,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -4766,7 +4821,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -5514,7 +5570,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -6003,7 +6060,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -6233,7 +6291,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -6290,7 +6350,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -6342,7 +6403,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -7257,7 +7319,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -7314,7 +7377,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -7440,7 +7504,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -7498,7 +7563,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -7558,7 +7624,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -7685,7 +7752,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -8056,7 +8124,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -8132,7 +8202,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -8541,7 +8612,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -8737,7 +8809,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -8844,7 +8918,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -9293,7 +9369,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -10378,7 +10456,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -10695,7 +10775,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -11142,7 +11223,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -11230,7 +11312,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -11361,7 +11445,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -11445,7 +11531,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -11864,7 +11952,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -11958,7 +12048,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -12035,7 +12127,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -12093,7 +12187,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -12192,7 +12288,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -12246,7 +12344,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -12320,7 +12420,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -12549,7 +12651,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -12899,7 +13003,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -12962,7 +13068,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -13059,7 +13167,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -13404,7 +13514,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -13511,7 +13623,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -13603,7 +13717,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -13681,7 +13797,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -13789,7 +13907,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -13844,7 +13964,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -13969,7 +14091,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -14127,7 +14251,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -14276,7 +14402,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -14381,7 +14509,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -14678,7 +14808,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -14785,7 +14917,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -14863,7 +14997,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -15338,7 +15474,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -15447,7 +15585,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -15716,7 +15856,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -15808,7 +15950,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -15870,7 +16013,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -15922,7 +16066,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -15974,7 +16119,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16031,7 +16177,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16098,7 +16245,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16160,7 +16308,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16212,7 +16361,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16255,7 +16405,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16303,7 +16454,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16367,7 +16519,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16429,7 +16582,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16486,7 +16640,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16538,7 +16693,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16595,7 +16751,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16647,7 +16804,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16690,7 +16848,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16738,7 +16897,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16795,7 +16955,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16847,7 +17008,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16904,7 +17066,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -16961,7 +17124,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17023,7 +17187,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17080,7 +17245,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17137,7 +17303,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17194,7 +17361,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17251,7 +17419,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17303,7 +17472,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17360,7 +17530,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17427,7 +17598,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17479,7 +17651,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17547,7 +17720,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17604,7 +17778,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17656,7 +17831,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17713,7 +17889,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17770,7 +17947,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17827,7 +18005,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17879,7 +18058,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17931,7 +18111,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -17998,7 +18179,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18041,7 +18223,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18089,7 +18272,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18141,7 +18325,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18198,7 +18383,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18255,7 +18441,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18318,7 +18505,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18370,7 +18558,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18413,7 +18602,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18465,7 +18655,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18522,7 +18713,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18610,7 +18802,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18758,7 +18952,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18815,7 +19011,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -18887,7 +19084,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -19595,7 +19793,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -19694,7 +19893,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -19793,7 +19994,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -19850,7 +20053,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -19907,7 +20111,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -20599,7 +20804,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -20966,7 +21172,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -21023,7 +21231,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -22188,7 +22397,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -22290,7 +22500,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -22347,7 +22558,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -22394,7 +22606,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -22701,7 +22914,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -23200,7 +23414,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -23291,7 +23506,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -23382,7 +23598,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -23525,7 +23742,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -23586,7 +23804,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -23763,7 +23982,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -23836,7 +24056,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -24300,7 +24521,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -24357,7 +24580,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -25741,7 +25965,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -26210,7 +26435,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -26523,7 +26749,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -26580,7 +26808,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -27074,7 +27303,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -27283,7 +27514,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -27415,7 +27647,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -27916,7 +28149,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -27978,7 +28213,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -28337,7 +28573,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -28684,7 +28921,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -28928,7 +29166,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -28985,7 +29225,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -29639,7 +29880,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -29713,7 +29955,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -29770,7 +30014,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -30081,7 +30326,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -30297,7 +30543,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -30380,7 +30628,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -30844,7 +31093,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -30901,7 +31151,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -41427,7 +41678,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -41802,7 +42055,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -41896,7 +42150,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -41985,7 +42241,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -42153,7 +42411,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -42200,7 +42460,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -42592,7 +42853,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -42649,7 +42912,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -43738,7 +44002,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -43800,7 +44066,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -44539,7 +44806,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -44958,7 +45226,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -45792,7 +46061,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -45852,7 +46123,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -45904,7 +46176,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -46088,7 +46361,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -47660,7 +47934,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -47717,7 +47993,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -47779,7 +48056,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -47841,7 +48119,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -48266,7 +48545,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -48840,7 +49120,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -48902,7 +49183,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -48964,7 +49246,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -49021,7 +49304,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -49091,7 +49375,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -50009,7 +50295,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -50066,7 +50354,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -50458,7 +50747,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -50510,7 +50800,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -50625,7 +50916,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -50706,7 +50998,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -50770,7 +51064,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -50832,7 +51127,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -50960,7 +51256,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -50986,6 +51284,14 @@
             "null",
             "boolean"
           ]
+        },
+        "custom_attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Filter groups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response",
+          "properties": {},
+          "type": "object"
         },
         "marked_for_deletion_on": {
           "description": "Filter to groups marked for deletion on this date (YYYY-MM-DD)",
@@ -52303,7 +52609,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -52548,7 +52856,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -53079,7 +53388,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -53659,7 +53969,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -53716,7 +54028,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -54472,7 +54785,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -55516,7 +55830,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -55573,7 +55889,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -55924,7 +56241,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -56499,7 +56817,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -56556,7 +56876,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -56819,7 +57140,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -57812,7 +58134,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -57885,7 +58208,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -57942,7 +58267,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -59156,7 +59482,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -59217,7 +59545,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -59478,7 +59807,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -59771,7 +60102,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -59870,7 +60202,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -59942,7 +60275,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -60014,7 +60348,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -60087,7 +60423,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -61515,7 +61853,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -62208,7 +62547,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -62255,7 +62595,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -62312,7 +62653,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -62369,7 +62711,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -63288,7 +63631,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -63842,7 +64186,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -63970,7 +64315,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -64045,7 +64392,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -64447,7 +64795,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -64517,7 +64866,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -64574,7 +64925,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -64648,7 +65000,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -64890,7 +65243,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -64968,7 +65323,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -65089,7 +65446,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -65135,7 +65494,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -65194,7 +65555,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -65378,7 +65741,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -65482,7 +65847,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -65534,7 +65901,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -65859,7 +66227,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -66546,7 +66915,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -67474,7 +67845,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -67625,6 +67998,9 @@
           "type": "string"
         },
         "ci_separated_caches": {
+          "type": "boolean"
+        },
+        "cicd_catalog_enabled": {
           "type": "boolean"
         },
         "compliance_frameworks": {
@@ -68369,6 +68745,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -68404,7 +68781,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -68766,7 +69145,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -69536,7 +69917,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -69609,7 +69992,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -69666,7 +70051,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -69771,7 +70157,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -69833,7 +70221,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -73647,7 +74036,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -73709,7 +74100,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -79453,7 +79845,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -81233,7 +81626,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -81295,7 +81690,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -81405,7 +81801,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -81472,7 +81870,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -82687,7 +83086,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -83470,7 +83870,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -83539,7 +83940,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -83599,7 +84001,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -84595,7 +84998,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -84655,7 +85059,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -84720,7 +85125,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -85474,7 +85880,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -86275,7 +86682,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -86934,7 +87342,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -86991,7 +87400,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -87043,7 +87453,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -87657,7 +88068,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -88460,7 +88872,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -90277,7 +90690,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -90678,7 +91092,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -91297,7 +91712,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -91358,7 +91775,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -91695,7 +92113,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -91787,7 +92206,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -91839,7 +92259,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -91958,7 +92379,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -108600,7 +109022,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -108656,7 +109079,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -108764,7 +109188,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -108821,7 +109247,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -109567,7 +109994,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -109998,7 +110426,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -110067,7 +110496,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -110874,7 +111304,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -111362,7 +111793,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -111424,7 +111857,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -111916,7 +112350,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -112934,7 +113369,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -113889,7 +114325,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -115330,7 +115767,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -115417,7 +115856,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -115490,7 +115931,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -115547,7 +115990,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -116742,7 +117186,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -116804,7 +117250,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -117804,7 +118251,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -118572,7 +119021,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -118863,7 +119313,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -119142,7 +119593,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -119453,7 +119906,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -119760,7 +120214,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -119822,7 +120278,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -120302,7 +120759,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -120354,7 +120812,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -120651,7 +121110,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -120756,7 +121216,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -120818,7 +121280,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -127818,7 +128281,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -128527,7 +128991,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -128589,7 +129055,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -128699,7 +129166,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -128766,7 +129235,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -129623,7 +130093,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -130281,7 +130752,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -131148,7 +131620,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -131229,7 +131702,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -131382,7 +131856,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -132640,7 +133115,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -132783,7 +133259,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -133738,7 +134215,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -134778,7 +135256,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -135667,7 +136146,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -136068,7 +136548,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -136469,7 +136950,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -136526,7 +137008,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -136660,7 +137143,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -137324,7 +137808,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -137501,7 +137987,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -137614,7 +138102,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -137725,7 +138215,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -137782,7 +138274,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -138286,7 +138779,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -138424,7 +138918,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -138527,7 +139022,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -138579,7 +139075,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -138941,7 +139438,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -138986,7 +139484,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -139075,7 +139574,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -139157,7 +139658,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -139366,7 +139869,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -139609,7 +140113,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -139666,7 +140172,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -140655,7 +141162,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -140902,7 +141410,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -140975,7 +141485,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -141032,7 +141544,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -141094,7 +141607,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -141168,7 +141682,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -142018,7 +142533,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -142215,7 +142731,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -142465,7 +142982,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -143036,7 +143554,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -143093,7 +143613,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -143626,7 +144147,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -143743,7 +144266,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -143957,7 +144481,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -144575,7 +145100,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -144909,7 +145436,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -145003,7 +145531,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -145092,7 +145622,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -145264,7 +145796,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -145520,7 +146054,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -146012,7 +146547,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -146069,7 +146606,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -146912,7 +147450,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -147071,6 +147610,9 @@
           "type": "string"
         },
         "ci_separated_caches": {
+          "type": "boolean"
+        },
+        "cicd_catalog_enabled": {
           "type": "boolean"
         },
         "compliance_frameworks": {
@@ -147815,6 +148357,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -147851,7 +148394,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -147932,6 +148476,13 @@
         },
         "ci_forward_deployment_enabled": {
           "description": "Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "cicd_catalog_enabled": {
+          "description": "Publish the project as a CI/CD catalog resource",
           "type": [
             "null",
             "boolean"
@@ -148557,6 +149108,9 @@
         "ci_separated_caches": {
           "type": "boolean"
         },
+        "cicd_catalog_enabled": {
+          "type": "boolean"
+        },
         "compliance_frameworks": {
           "items": {
             "type": "string"
@@ -149299,6 +149853,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -149334,7 +149889,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -149415,6 +149972,13 @@
         },
         "ci_forward_deployment_enabled": {
           "description": "Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "cicd_catalog_enabled": {
+          "description": "Publish the project as a CI/CD catalog resource",
           "type": [
             "null",
             "boolean"
@@ -150045,6 +150609,9 @@
         "ci_separated_caches": {
           "type": "boolean"
         },
+        "cicd_catalog_enabled": {
+          "type": "boolean"
+        },
         "compliance_frameworks": {
           "items": {
             "type": "string"
@@ -150787,6 +151354,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -150822,7 +151390,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -150883,7 +151453,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -150937,7 +151509,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -151004,7 +151578,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -151056,7 +151631,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -151108,7 +151684,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -151165,7 +151742,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -151217,7 +151795,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -151453,7 +152032,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -152226,6 +152806,9 @@
         "ci_separated_caches": {
           "type": "boolean"
         },
+        "cicd_catalog_enabled": {
+          "type": "boolean"
+        },
         "compliance_frameworks": {
           "items": {
             "type": "string"
@@ -152968,6 +153551,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -153003,7 +153587,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -153185,6 +153771,9 @@
         "ci_separated_caches": {
           "type": "boolean"
         },
+        "cicd_catalog_enabled": {
+          "type": "boolean"
+        },
         "compliance_frameworks": {
           "items": {
             "type": "string"
@@ -153927,6 +154516,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -154461,7 +155051,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -154518,7 +155110,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -154580,7 +155173,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -154642,7 +155236,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -155046,7 +155641,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -155619,7 +156215,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -155681,7 +156278,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -155734,7 +156332,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -155804,7 +156403,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -156415,6 +157016,9 @@
               "ci_separated_caches": {
                 "type": "boolean"
               },
+              "cicd_catalog_enabled": {
+                "type": "boolean"
+              },
               "compliance_frameworks": {
                 "items": {
                   "type": "string"
@@ -157157,6 +157761,7 @@
               "allow_pipeline_trigger_approve_deployment",
               "prevent_merge_without_jira_issue",
               "printing_merge_request_link_enabled",
+              "cicd_catalog_enabled",
               "ci_forward_deployment_enabled",
               "ci_forward_deployment_rollback_allowed",
               "ci_push_repository_for_job_token_allowed",
@@ -157565,6 +158170,9 @@
               "ci_separated_caches": {
                 "type": "boolean"
               },
+              "cicd_catalog_enabled": {
+                "type": "boolean"
+              },
               "compliance_frameworks": {
                 "items": {
                   "type": "string"
@@ -158307,6 +158915,7 @@
               "allow_pipeline_trigger_approve_deployment",
               "prevent_merge_without_jira_issue",
               "printing_merge_request_link_enabled",
+              "cicd_catalog_enabled",
               "ci_forward_deployment_enabled",
               "ci_forward_deployment_rollback_allowed",
               "ci_push_repository_for_job_token_allowed",
@@ -159384,6 +159993,9 @@
               "ci_separated_caches": {
                 "type": "boolean"
               },
+              "cicd_catalog_enabled": {
+                "type": "boolean"
+              },
               "compliance_frameworks": {
                 "items": {
                   "type": "string"
@@ -160126,6 +160738,7 @@
               "allow_pipeline_trigger_approve_deployment",
               "prevent_merge_without_jira_issue",
               "printing_merge_request_link_enabled",
+              "cicd_catalog_enabled",
               "ci_forward_deployment_enabled",
               "ci_forward_deployment_rollback_allowed",
               "ci_push_repository_for_job_token_allowed",
@@ -160579,6 +161192,9 @@
               "ci_separated_caches": {
                 "type": "boolean"
               },
+              "cicd_catalog_enabled": {
+                "type": "boolean"
+              },
               "compliance_frameworks": {
                 "items": {
                   "type": "string"
@@ -161321,6 +161937,7 @@
               "allow_pipeline_trigger_approve_deployment",
               "prevent_merge_without_jira_issue",
               "printing_merge_request_link_enabled",
+              "cicd_catalog_enabled",
               "ci_forward_deployment_enabled",
               "ci_forward_deployment_rollback_allowed",
               "ci_push_repository_for_job_token_allowed",
@@ -161774,6 +162391,9 @@
               "ci_separated_caches": {
                 "type": "boolean"
               },
+              "cicd_catalog_enabled": {
+                "type": "boolean"
+              },
               "compliance_frameworks": {
                 "items": {
                   "type": "string"
@@ -162516,6 +163136,7 @@
               "allow_pipeline_trigger_approve_deployment",
               "prevent_merge_without_jira_issue",
               "printing_merge_request_link_enabled",
+              "cicd_catalog_enabled",
               "ci_forward_deployment_enabled",
               "ci_forward_deployment_rollback_allowed",
               "ci_push_repository_for_job_token_allowed",
@@ -162936,7 +163557,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -162993,7 +163616,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -163213,7 +163837,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -164064,7 +164689,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -164359,6 +164985,9 @@
           "type": "string"
         },
         "ci_separated_caches": {
+          "type": "boolean"
+        },
+        "cicd_catalog_enabled": {
           "type": "boolean"
         },
         "compliance_frameworks": {
@@ -165103,6 +165732,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -165139,7 +165769,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -165208,7 +165839,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -165272,7 +165905,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -165536,7 +166170,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -165829,7 +166465,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -165927,7 +166564,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -166002,7 +166641,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -166068,7 +166708,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -166329,7 +166971,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -166386,7 +167030,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -166980,7 +167625,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -167139,6 +167785,9 @@
           "type": "string"
         },
         "ci_separated_caches": {
+          "type": "boolean"
+        },
+        "cicd_catalog_enabled": {
           "type": "boolean"
         },
         "compliance_frameworks": {
@@ -167883,6 +168532,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -167918,7 +168568,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -167965,7 +168617,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -168012,7 +168665,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -168183,6 +168837,9 @@
         "ci_separated_caches": {
           "type": "boolean"
         },
+        "cicd_catalog_enabled": {
+          "type": "boolean"
+        },
         "compliance_frameworks": {
           "items": {
             "type": "string"
@@ -168925,6 +169582,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -168961,7 +169619,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -169122,6 +169781,9 @@
         "ci_separated_caches": {
           "type": "boolean"
         },
+        "cicd_catalog_enabled": {
+          "type": "boolean"
+        },
         "compliance_frameworks": {
           "items": {
             "type": "string"
@@ -169864,6 +170526,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -169900,7 +170563,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -170061,6 +170725,9 @@
         "ci_separated_caches": {
           "type": "boolean"
         },
+        "cicd_catalog_enabled": {
+          "type": "boolean"
+        },
         "compliance_frameworks": {
           "items": {
             "type": "string"
@@ -170803,6 +171470,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -170839,7 +171507,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -170988,6 +171657,13 @@
         },
         "ci_separated_caches": {
           "description": "Use separate caches for protected branches",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "cicd_catalog_enabled": {
+          "description": "Publish the project as a CI/CD catalog resource",
           "type": [
             "null",
             "boolean"
@@ -171650,6 +172326,9 @@
         "ci_separated_caches": {
           "type": "boolean"
         },
+        "cicd_catalog_enabled": {
+          "type": "boolean"
+        },
         "compliance_frameworks": {
           "items": {
             "type": "string"
@@ -172392,6 +173071,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -172428,7 +173108,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -172501,7 +173182,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -172675,6 +173358,9 @@
         "ci_separated_caches": {
           "type": "boolean"
         },
+        "cicd_catalog_enabled": {
+          "type": "boolean"
+        },
         "compliance_frameworks": {
           "items": {
             "type": "string"
@@ -173417,6 +174103,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -173453,7 +174140,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -173510,7 +174198,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -173572,7 +174261,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -174247,7 +174937,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -175079,7 +175770,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -175136,7 +175829,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -175399,7 +176093,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -175451,7 +176146,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -175626,7 +176322,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -175683,7 +176381,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -175745,7 +176444,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -175822,7 +176522,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -176708,7 +177409,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -176765,7 +177468,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -176962,7 +177666,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -177033,7 +177738,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -177090,7 +177797,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -177287,7 +177995,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -177334,7 +178043,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -177774,7 +178484,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -178147,7 +178859,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -178976,7 +179689,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -179115,7 +179830,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -179192,7 +179909,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -179525,7 +180243,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -180375,7 +181094,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -180432,7 +181152,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -180489,7 +181210,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -180546,7 +181268,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -180603,7 +181326,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -180726,7 +181450,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -180859,7 +181585,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -181070,7 +181797,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -182348,7 +183077,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -183520,7 +184250,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -183736,7 +184467,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -183798,7 +184530,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -183855,7 +184588,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -183916,7 +184650,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -183973,7 +184708,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -184025,7 +184762,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -184272,7 +185010,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -184325,7 +185065,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -184461,7 +185203,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -184518,7 +185261,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -184584,7 +185328,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -184866,7 +185612,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -184934,7 +185681,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -184999,7 +185747,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -185052,7 +185801,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -185104,7 +185854,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -185161,7 +185912,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -185249,7 +186001,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187033,7 +187787,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187085,7 +187841,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187131,7 +187888,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187169,7 +187927,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187215,7 +187974,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187261,7 +188021,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187501,7 +188262,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187599,7 +188361,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187648,7 +188412,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187697,7 +188463,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187739,7 +188507,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187792,7 +188562,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187879,7 +188651,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -187951,7 +188725,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -188054,7 +188830,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -188171,7 +188949,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -190955,6 +191735,9 @@
               "ci_separated_caches": {
                 "type": "boolean"
               },
+              "cicd_catalog_enabled": {
+                "type": "boolean"
+              },
               "compliance_frameworks": {
                 "items": {
                   "type": "string"
@@ -191697,6 +192480,7 @@
               "allow_pipeline_trigger_approve_deployment",
               "prevent_merge_without_jira_issue",
               "printing_merge_request_link_enabled",
+              "cicd_catalog_enabled",
               "ci_forward_deployment_enabled",
               "ci_forward_deployment_rollback_allowed",
               "ci_push_repository_for_job_token_allowed",
@@ -192317,7 +193101,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -192477,7 +193263,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -192681,7 +193469,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -192837,7 +193627,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -192993,7 +193785,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -193291,7 +194085,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -193358,7 +194154,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -193415,7 +194212,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -193489,7 +194287,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -193892,7 +194691,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -193944,7 +194745,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -194049,7 +194851,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -194111,7 +194915,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -195599,7 +196404,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -195661,7 +196468,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -195771,7 +196579,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -195838,7 +196648,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -197050,7 +197861,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -197252,7 +198064,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -197383,7 +198196,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -198236,7 +199051,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -198293,7 +199110,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -199141,7 +199959,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -199198,7 +200018,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -199967,7 +200788,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -200014,7 +200836,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -200085,7 +200908,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -200176,7 +201001,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -200218,7 +201045,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -200260,7 +201088,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -200317,7 +201146,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -200405,7 +201235,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -200575,7 +201406,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -200711,7 +201543,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -200996,7 +201829,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -201042,7 +201876,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -201119,7 +201954,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -201197,7 +202033,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -201411,7 +202248,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -201468,7 +202306,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -201535,7 +202374,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -201595,7 +202435,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -201681,7 +202522,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -201763,7 +202605,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -201892,7 +202735,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -202113,7 +202957,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -202195,7 +203040,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -202275,7 +203121,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -202384,7 +203231,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -202504,7 +203352,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -202622,7 +203471,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -202668,7 +203518,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -202754,7 +203605,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -202837,7 +203689,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -203119,7 +203972,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -203214,7 +204068,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -203515,7 +204371,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -204432,7 +205289,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -204489,7 +205348,8 @@
     "annotations": {
       "destructiveHint": true,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -204720,7 +205580,8 @@
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": true
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -204795,7 +205656,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   }
 ]

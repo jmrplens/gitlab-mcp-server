@@ -5099,6 +5099,7 @@ List accessible GitLab groups with filtering and pagination. Returns: matching g
 - `active` (boolean): Filter by active (true) or inactive/archived (false) groups
 - `all_available` (boolean): Show all groups accessible by the authenticated user
 - `archived` (boolean): Limit to archived groups (true) or non-archived (false)
+- `custom_attributes` (object): Filter groups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response
 - `marked_for_deletion_on` (string): Filter to groups marked for deletion on this date (YYYY-MM-DD)
 - `min_access_level` (integer): Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)
 - `order_by` (string): Order groups by field (name, path, id, similarity)
@@ -11260,6 +11261,7 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
 - `ci_config_path` (string): Custom CI/CD configuration file path
 - `ci_forward_deployment_enabled` (boolean): Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)
+- `cicd_catalog_enabled` (boolean): Publish the project as a CI/CD catalog resource
 - `container_expiration_policy_attributes` (object): Container registry cleanup policy attributes
 - `container_registry_access_level` (string): Container registry access level (disabled, private, enabled)
 - `container_registry_enabled` (boolean): Enable container registry (deprecated: use container_registry_access_level)
@@ -11361,6 +11363,7 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
 - `ci_config_path` (string): Custom CI/CD configuration file path
 - `ci_forward_deployment_enabled` (boolean): Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)
+- `cicd_catalog_enabled` (boolean): Publish the project as a CI/CD catalog resource
 - `container_expiration_policy_attributes` (object): Container registry cleanup policy attributes
 - `container_registry_access_level` (string): Container registry access level (disabled, private, enabled)
 - `container_registry_enabled` (boolean): Enable container registry (deprecated: use container_registry_access_level)
@@ -12578,6 +12581,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `ci_push_repository_for_job_token_allowed` (boolean): Allow CI job tokens to push to the repository
 - `ci_restrict_pipeline_cancellation_role` (string): Role required to cancel pipelines/jobs (developer, maintainer, no_one)
 - `ci_separated_caches` (boolean): Use separate caches for protected branches
+- `cicd_catalog_enabled` (boolean): Publish the project as a CI/CD catalog resource
 - `container_expiration_policy_attributes` (object): Container registry cleanup policy attributes
 - `container_registry_access_level` (string): Container registry access level (disabled, private, enabled)
 - `container_registry_enabled` (boolean): Enable container registry (deprecated: use container_registry_access_level)

@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 11,959 |
-| Unit test functions                                   | 11,587 |
+| Total test functions                                  | 11,961 |
+| Unit test functions                                   | 11,589 |
 | E2E test functions                                    |    372 |
 | cmd test functions                                    |    933 |
 | Test files (internal/)                                |    468 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,582 | 88.5% |
+| `TestFunc_Scenario` (2-part)           | 10,584 | 88.5% |
 | `TestFunc` (no underscore)             |    964 |  8.1% |
 | `TestFunc_Scenario_Expected` (3+ part) |    413 |  3.5% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,045 |        105 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            283 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          8,326 |        349 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          8,328 |        349 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            372 |        166 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            933 |         72 | server entry point and developer command utilities                                              |
-| **Total**               |     **11,959** |    **706** |                                                                                                 |
+| **Total**               |     **11,961** |    **706** |                                                                                                 |
 
 ### Core Packages
 
@@ -78,8 +78,8 @@
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   387 |   100.0% |    57 |
-| groups            |   243 |    99.7% |    37 |
+| projects          |   388 |   100.0% |    57 |
+| groups            |   244 |    99.7% |    37 |
 | mergerequests     |   239 |   100.0% |    30 |
 | issues            |   223 |   100.0% |    21 |
 | users             |   209 |   100.0% |    38 |
@@ -184,7 +184,7 @@
 | groupprotectedenvs      |        19 |          2 |   100.0% |         5 |
 | grouprelationsexport    |        26 |          2 |   100.0% |         2 |
 | groupreleases           |        18 |          3 |   100.0% |         1 |
-| groups                  |       243 |          8 |    99.7% |        37 |
+| groups                  |       244 |          8 |    99.7% |        37 |
 | groupsaml               |        33 |          3 |   100.0% |         5 |
 | groupscim               |        31 |          3 |   100.0% |         4 |
 | groupserviceaccounts    |        20 |          2 |   100.0% |         8 |
@@ -240,7 +240,7 @@
 | projectimportexport     |        40 |          1 |   100.0% |         5 |
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        63 |          2 |   100.0% |         7 |
-| projects                |       387 |          6 |   100.0% |        57 |
+| projects                |       388 |          6 |   100.0% |        57 |
 | projectserviceaccounts  |        11 |          2 |   100.0% |         8 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        19 |          2 |   100.0% |         6 |
@@ -286,7 +286,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        84 |          2 |   100.0% |         6 |
-| **Total**               | **8,326** |    **349** |          | **1,169** |
+| **Total**               | **8,328** |    **349** |          | **1,169** |
 
 </details>
 
