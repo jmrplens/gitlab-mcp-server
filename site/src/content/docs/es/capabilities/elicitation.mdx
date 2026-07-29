@@ -51,6 +51,8 @@ sequenceDiagram
     S-->>AI: MR !123 creado exitosamente
 ```
 
+El mecanismo de transporte se adapta a la versión del protocolo MCP negociada: en sesiones anteriores a `2026-07-28` el servidor envía peticiones `elicitation/create` durante la llamada, mientras que en `2026-07-28` y posteriores los formularios viajan como peticiones de entrada multi-ronda (SEP-2322): el resultado de la herramienta solicita la entrada y el cliente reintenta la llamada con las respuestas adjuntas. La experiencia de usuario es idéntica en ambos casos.
+
 ## ¿Qué asistentes interactivos están disponibles?
 
 GitLab MCP Server proporciona cuatro herramientas de creación tipo asistente. Cada una guía al usuario por los campos que necesita un recurso y confirma antes de realizar la llamada final a la API.

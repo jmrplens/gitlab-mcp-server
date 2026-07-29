@@ -80,7 +80,7 @@ graph TD
         PROG[progress<br/>Progress notifications]
         ELICIT[elicitation<br/>User input client]
         ICN[icons<br/>50 SVG domain icons]
-        SRV[MCP Server<br/>go-sdk/mcp v1.6.1]
+        SRV[MCP Server<br/>go-sdk/mcp v1.7.0]
         STDIO[StdioTransport]
         HTTP[StreamableHTTPHandler]
         POOL[serverpool<br/>Per-token+URL server pool & LRU cache]

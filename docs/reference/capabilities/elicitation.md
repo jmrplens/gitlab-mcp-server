@@ -16,6 +16,7 @@
 - [How It Works](#how-it-works)
 - [API](#api)
   - [Client](#client)
+  - [Flow](#flow)
   - [Methods](#methods)
   - [Error Types](#error-types)
 - [Security](#security)
@@ -92,6 +93,28 @@ Each step in the flow is a separate `elicitation/create` request from the server
 
 The user can **decline** at the confirmation step or **cancel** at any step, aborting the entire flow cleanly.
 
+### Two Wire Mechanisms, One Flow API
+
+How prompts travel over the wire depends on the negotiated MCP protocol version. The `elicitation.Flow` type selects the mechanism automatically per session, so tool code is written once:
+
+| Session protocol        | Mechanism                                  | Wire shape                                                                                                                 |
+| ----------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `< 2026-07-28` (legacy) | Synchronous server-initiated requests      | The server sends `elicitation/create` requests mid-call and blocks for each answer                                         |
+| `>= 2026-07-28`         | Multi round-trip requests (MRTR, SEP-2322) | The tool result carries an `inputRequests` map; the client fulfills it and retries the call with `inputResponses` attached |
+
+On the multi round-trip path the handler is **re-invoked from the start on every round**. Answers gathered in earlier rounds are carried in the opaque `requestState` string that the client echoes back, so multi-step wizards replay previously answered prompts from state instead of re-asking the user. From the user's perspective both mechanisms look identical: the same sequential forms in the same order.
+
+```go
+flow, err := elicitation.FlowFromRequest(req)
+if err != nil { /* malformed client-echoed state */ }
+title, err := flow.PromptText(ctx, "title", "Enter the issue title", "title")
+if errors.Is(err, elicitation.ErrInputPending) {
+    return flow.InputRequiredResult(), nil, nil // client answers and retries
+}
+```
+
+Handlers that report outcomes through an error return use `flow.PendingError()` instead; the surface wrappers unwrap the `*elicitation.InputRequiredError` and return the embedded input-required result.
+
 ## API
 
 ### Client
@@ -103,6 +126,15 @@ elicitClient := elicitation.FromRequest(req)
 if !elicitClient.IsSupported() {
     return ..., elicitation.ErrElicitationNotSupported
 }
+```
+
+### Flow
+
+`Flow` (built with `FlowFromRequest(req)`) is the protocol-aware entry point used by all wizards and confirmation guards. It mirrors every `Client` prompt method with one extra leading argument: a **stable exchange id** (unique per prompt within one tool call) that identifies the exchange across handler re-invocations on the multi round-trip path. On legacy sessions each method delegates to the synchronous `Client` internally.
+
+```go
+flow, err := elicitation.FlowFromRequest(req)
+visibility, err := flow.SelectOne(ctx, "visibility", "Select the project visibility", options)
 ```
 
 ### Methods
@@ -134,12 +166,13 @@ if !elicitClient.IsSupported() {
 
 ### Error Types
 
-| Error                           | Meaning                                      | Tool Handler Action                                     |
-| ------------------------------- | -------------------------------------------- | ------------------------------------------------------- |
-| `ErrElicitationNotSupported`    | Client does not support elicitation          | Return informational message explaining the requirement |
-| `ErrURLElicitationNotSupported` | Client does not support URL mode elicitation | Fall back to text-based workflow                        |
-| `ErrDeclined`                   | User declined the elicitation request        | Return cancellation message via `CancelledResult`       |
-| `ErrCancelled`                  | User cancelled the elicitation flow          | Return cancellation message via `CancelledResult`       |
+| Error                           | Meaning                                      | Tool Handler Action                                                                               |
+| ------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `ErrElicitationNotSupported`    | Client does not support elicitation          | Return informational message explaining the requirement                                           |
+| `ErrURLElicitationNotSupported` | Client does not support URL mode elicitation | Fall back to text-based workflow                                                                  |
+| `ErrInputPending`               | Multi round-trip answer not yet available    | Return `flow.InputRequiredResult()` (or `flow.PendingError()`) so the client can answer and retry |
+| `ErrDeclined`                   | User declined the elicitation request        | Return cancellation message via `CancelledResult`                                                 |
+| `ErrCancelled`                  | User cancelled the elicitation flow          | Return cancellation message via `CancelledResult`                                                 |
 
 ### Cancellation Helper
 
