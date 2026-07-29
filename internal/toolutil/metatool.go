@@ -20,6 +20,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
@@ -2274,6 +2275,9 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 
 		start := time.Now()
 		result, err := route.Handler(actionCtx, input.Params)
+		if inputErr, matched := errors.AsType[*elicitation.InputRequiredError](err); matched {
+			return inputErr.Result(), nil, nil
+		}
 		LogToolCallAll(ctx, req, fmt.Sprintf("%s/%s", toolName, input.Action), start, err)
 
 		if err != nil {

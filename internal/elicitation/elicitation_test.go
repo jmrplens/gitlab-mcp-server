@@ -128,32 +128,19 @@ func TestElicit_ContextCancelled(t *testing.T) {
 // Integration tests using InMemoryTransports.
 
 // setupElicitSession creates an in-memory MCP server/client pair with the
-// given elicitation handler. Returns the server, its session, and a cleanup
-// function that closes both sessions.
+// given elicitation handler. The client performs the legacy 2025-11-25
+// handshake (via testutil.ConnectLegacyElicitationClient) because the
+// synchronous [Client] path only exists on sessions negotiated below
+// protocol 2026-07-28. Returns the server, its session, and a cleanup
+// function (a no-op; teardown is registered via t.Cleanup).
 func setupElicitSession(t *testing.T, ctx context.Context, handler func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)) (*mcp.Server, *mcp.ServerSession, func()) {
 	t.Helper()
 
 	server := mcp.NewServer(testImpl, nil)
-	client := mcp.NewClient(testImpl, &mcp.ClientOptions{
-		ElicitationHandler: handler,
-	})
-
-	st, ct := mcp.NewInMemoryTransports()
-	ss, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	cs, err := client.Connect(ctx, ct, nil)
-	if err != nil {
-		ss.Close()
-		t.Fatalf("client connect: %v", err)
-	}
-
-	cleanup := func() {
-		cs.Close()
-		ss.Close()
-	}
-	return server, ss, cleanup
+	ss := testutil.ConnectLegacyElicitationClient(ctx, t, server, func(ctx context.Context, params *mcp.ElicitParams) (*mcp.ElicitResult, error) {
+		return handler(ctx, &mcp.ElicitRequest{Params: params})
+	}, testutil.LegacyClientOptions{})
+	return server, ss, func() {}
 }
 
 // TestConfirm_Accept verifies that [Client.Confirm] returns true when the
@@ -749,37 +736,15 @@ func TestPromptNumber_Decline(t *testing.T) {
 }
 
 // setupElicitURLSession creates an in-memory MCP client/server pair where
-// the client advertises both form and URL elicitation capabilities.
+// the legacy client advertises both form and URL elicitation capabilities.
 func setupElicitURLSession(t *testing.T, ctx context.Context, handler func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)) (*mcp.Server, *mcp.ServerSession, func()) {
 	t.Helper()
 
 	server := mcp.NewServer(testImpl, nil)
-	client := mcp.NewClient(testImpl, &mcp.ClientOptions{
-		ElicitationHandler: handler,
-		Capabilities: &mcp.ClientCapabilities{
-			Elicitation: &mcp.ElicitationCapabilities{
-				Form: &mcp.FormElicitationCapabilities{},
-				URL:  &mcp.URLElicitationCapabilities{},
-			},
-		},
-	})
-
-	st, ct := mcp.NewInMemoryTransports()
-	ss, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	cs, err := client.Connect(ctx, ct, nil)
-	if err != nil {
-		ss.Close()
-		t.Fatalf("client connect: %v", err)
-	}
-
-	cleanup := func() {
-		cs.Close()
-		ss.Close()
-	}
-	return server, ss, cleanup
+	ss := testutil.ConnectLegacyElicitationClient(ctx, t, server, func(ctx context.Context, params *mcp.ElicitParams) (*mcp.ElicitResult, error) {
+		return handler(ctx, &mcp.ElicitRequest{Params: params})
+	}, testutil.LegacyClientOptions{URLElicitation: true})
+	return server, ss, func() {}
 }
 
 // URL Mode Tests.

@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
 const testConfirmPrompt = "Delete project?"
@@ -168,29 +170,18 @@ func TestCancelledResult(t *testing.T) {
 // confirm sessions.
 var confirmTestImpl = &mcp.Implementation{Name: "confirm-test", Version: "1.0.0"}
 
-// newConfirmSession wires a server and client with the supplied elicitation
-// handler so tests can drive the user confirmation path end-to-end.
+// newConfirmSession wires a server and a legacy (protocol 2025-11-25) fake
+// client with the supplied elicitation handler so direct guard invocations
+// deterministically exercise the synchronous confirmation path. The multi
+// round-trip confirmation path is covered by the surface/catalog tests that
+// drive real tools/call round-trips.
 func newConfirmSession(t *testing.T, handler func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)) *mcp.ServerSession {
 	t.Helper()
 
 	server := mcp.NewServer(confirmTestImpl, nil)
-	client := mcp.NewClient(confirmTestImpl, &mcp.ClientOptions{ElicitationHandler: handler})
-
-	st, ct := mcp.NewInMemoryTransports()
-	ss, err := server.Connect(context.Background(), st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-	cs, err := client.Connect(context.Background(), ct, nil)
-	if err != nil {
-		_ = ss.Close()
-		t.Fatalf("client connect: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = cs.Close()
-		_ = ss.Close()
-	})
-	return ss
+	return testutil.ConnectLegacyElicitationClient(t.Context(), t, server, func(ctx context.Context, params *mcp.ElicitParams) (*mcp.ElicitResult, error) {
+		return handler(ctx, &mcp.ElicitRequest{Params: params})
+	}, testutil.LegacyClientOptions{})
 }
 
 // TestConfirmAction_UnsupportedProceeds verifies that [ConfirmAction] returns

@@ -2,12 +2,14 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -255,6 +257,9 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 		actionCtx := toolutil.ContextWithRequest(ctx, req)
 		start := time.Now()
 		result, err := action.Route.Handler(actionCtx, input)
+		if inputErr, matched := errors.AsType[*elicitation.InputRequiredError](err); matched {
+			return inputErr.Result(), nil, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, toolName, start, err)
 		if err != nil {
 			return nil, nil, err

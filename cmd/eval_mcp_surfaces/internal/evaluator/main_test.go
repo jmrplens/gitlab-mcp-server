@@ -22,6 +22,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -4485,30 +4486,33 @@ func TestCallFixtureSetupTool_FallsBackToSplitMetaTool(t *testing.T) {
 func TestEvalElicitationHandler_AdvertisesElicitationToMCPServer(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "elicitation-probe", Version: "0"}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "elicitation_probe", Description: "elicitation probe"}, func(ctx context.Context, req *mcp.CallToolRequest, _ map[string]any) (*mcp.CallToolResult, any, error) {
-		params := req.Session.InitializeParams()
-		if params == nil || params.Capabilities.Elicitation == nil {
-			return nil, nil, errors.New("elicitation capability not advertised")
-		}
-		result, err := req.Session.Elicit(ctx, &mcp.ElicitParams{
-			Message: "probe",
-			RequestedSchema: map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"title":     map[string]any{"type": "string"},
-					"confirmed": map[string]any{"type": "boolean"},
-					"count":     map[string]any{"type": "integer"},
-					"enabled":   map[string]any{"type": "boolean"},
-					"selection": map[string]any{"type": "string", "enum": []any{"private", "internal"}},
-				},
-			},
-		})
+		flow, err := elicitation.FlowFromRequest(req)
 		if err != nil {
 			return nil, nil, err
 		}
-		if validationErr := validateElicitationProbeResult(result); validationErr != nil {
+		if !flow.IsSupported() {
+			return nil, nil, errors.New("elicitation capability not advertised")
+		}
+		content, err := flow.GatherData(ctx, "probe", "probe", map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"title":     map[string]any{"type": "string"},
+				"confirmed": map[string]any{"type": "boolean"},
+				"count":     map[string]any{"type": "integer"},
+				"enabled":   map[string]any{"type": "boolean"},
+				"selection": map[string]any{"type": "string", "enum": []any{"private", "internal"}},
+			},
+		})
+		if errors.Is(err, elicitation.ErrInputPending) {
+			return flow.InputRequiredResult(), nil, nil
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		if validationErr := validateElicitationProbeResult(content); validationErr != nil {
 			return nil, nil, validationErr
 		}
-		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprint(result.Content["title"])}}}, nil, nil
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprint(content["title"])}}}, nil, nil
 	})
 
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
@@ -4533,18 +4537,18 @@ func TestEvalElicitationHandler_AdvertisesElicitationToMCPServer(t *testing.T) {
 	}
 }
 
-func validateElicitationProbeResult(result *mcp.ElicitResult) error {
-	if result.Action != "accept" || result.Content["confirmed"] != true {
-		return fmt.Errorf("elicitation result = %+v, want accepted confirmation", result)
+func validateElicitationProbeResult(content map[string]any) error {
+	if content["confirmed"] != true {
+		return fmt.Errorf("elicitation content = %+v, want accepted confirmation", content)
 	}
-	if _, ok := result.Content["enabled"].(bool); !ok {
-		return fmt.Errorf("elicitation enabled = %T, want bool", result.Content["enabled"])
+	if _, ok := content["enabled"].(bool); !ok {
+		return fmt.Errorf("elicitation enabled = %T, want bool", content["enabled"])
 	}
-	if err := validateElicitationNumericZero(result.Content["count"]); err != nil {
+	if err := validateElicitationNumericZero(content["count"]); err != nil {
 		return err
 	}
-	if result.Content["selection"] != "private" {
-		return fmt.Errorf("elicitation selection = %v, want private", result.Content["selection"])
+	if content["selection"] != "private" {
+		return fmt.Errorf("elicitation selection = %v, want private", content["selection"])
 	}
 	return nil
 }

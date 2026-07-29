@@ -19,8 +19,8 @@ import (
 )
 
 const (
-	// fmtCollectingDesc identifies the fmt collecting desc constant used by this package.
-	fmtCollectingDesc = "collecting description: %w"
+	// labelCollectingDesc identifies the description-collection step in wrapped errors.
+	labelCollectingDesc = "collecting description"
 	// fmtDescSummary identifies the fmt desc summary constant used by this package.
 	fmtDescSummary = "\n**Description**: %.100s..."
 )
@@ -90,44 +90,70 @@ func parseCSVLabels(s string) []string {
 	return labels
 }
 
+// flowError converts an elicitation prompt error into the error a wizard
+// should return: pending input becomes the flow's input-required error
+// (surfaced to the client as a multi round-trip request), anything else is
+// wrapped with the step label.
+func flowError(fl *elicitation.Flow, err error, label string) error {
+	if errors.Is(err, elicitation.ErrInputPending) {
+		return fl.PendingError()
+	}
+	return fmt.Errorf("%s: %w", label, err)
+}
+
+// newWizardFlow builds the elicitation flow shared by the interactive
+// creation wizards, translating flow construction failures and missing
+// client support into wizard-level errors.
+func newWizardFlow(req *mcp.CallToolRequest) (*elicitation.Flow, error) {
+	fl, err := elicitation.FlowFromRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	if !fl.IsSupported() {
+		return nil, elicitation.ErrElicitationNotSupported
+	}
+	return fl, nil
+}
+
 // Interactive issue creation.
 
 // IssueCreate guides the user through creating a GitLab issue via
 // step-by-step elicitation prompts for title, description, labels, and
-// confidentiality, then confirms before calling [issues.Create].
+// confidentiality, then confirms before calling [issues.Create]. On multi
+// round-trip sessions each prompt travels as an input request and the
+// handler is re-invoked with the accumulated answers.
 func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input IssueInput) (issues.Output, error) {
 	if input.ProjectID == "" {
 		return issues.Output{}, toolutil.ErrFieldRequired("project_id")
 	}
 
 	tracker := progress.FromRequest(req)
-	ec := elicitation.FromRequest(req)
-
-	if !ec.IsSupported() {
-		return issues.Output{}, elicitation.ErrElicitationNotSupported
+	fl, err := newWizardFlow(req)
+	if err != nil {
+		return issues.Output{}, err
 	}
 
 	tracker.Step(ctx, 1, 4, "Collecting issue details...")
 
-	title, err := ec.PromptText(ctx, "Enter the issue title", "title")
+	title, err := fl.PromptText(ctx, "title", "Enter the issue title", "title")
 	if err != nil {
-		return issues.Output{}, fmt.Errorf("collecting title: %w", err)
+		return issues.Output{}, flowError(fl, err, "collecting title")
 	}
 
-	description, err := ec.PromptText(ctx, "Enter the issue description (Markdown supported, or leave empty)", "description")
+	description, err := fl.PromptText(ctx, "description", "Enter the issue description (Markdown supported, or leave empty)", "description")
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
-		return issues.Output{}, fmt.Errorf(fmtCollectingDesc, err)
+		return issues.Output{}, flowError(fl, err, labelCollectingDesc)
 	}
 
 	tracker.Step(ctx, 2, 4, "Collecting optional fields...")
 
-	labelsStr, err := ec.PromptText(ctx, "Enter comma-separated labels (or leave empty)", "labels")
+	labelsStr, err := fl.PromptText(ctx, "labels", "Enter comma-separated labels (or leave empty)", "labels")
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
-		return issues.Output{}, fmt.Errorf("collecting labels: %w", err)
+		return issues.Output{}, flowError(fl, err, "collecting labels")
 	}
 	labels := parseCSVLabels(labelsStr)
 
-	confidentialChoice, err := confirmOptionalBool(ctx, ec, "Should this issue be confidential?", "confidentiality")
+	confidentialChoice, err := confirmOptionalBool(ctx, fl, "confidential", "Should this issue be confidential?", "confidentiality")
 	if err != nil {
 		return issues.Output{}, err
 	}
@@ -146,15 +172,8 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 		summary += "\n**Confidential**: Yes"
 	}
 
-	confirmed, err := ec.Confirm(ctx, summary)
-	if err != nil {
-		if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
-			return issues.Output{}, fmt.Errorf("issue creation canceled by user: %w", err)
-		}
-		return issues.Output{}, fmt.Errorf("issue creation confirmation failed: %w", err)
-	}
-	if !confirmed {
-		return issues.Output{}, fmt.Errorf("issue creation canceled by user: %w", elicitation.ErrCancelled)
+	if confirmErr := confirmCreation(ctx, fl, summary, "issue creation"); confirmErr != nil {
+		return issues.Output{}, confirmErr
 	}
 
 	tracker.Step(ctx, 4, 4, "Creating issue...")
@@ -173,45 +192,46 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 // MRCreate guides the user through creating a GitLab merge request
 // via step-by-step elicitation prompts for branches, title, description,
 // labels, and merge options, then confirms before calling [mergerequests.Create].
+// On multi round-trip sessions each prompt travels as an input request and
+// the handler is re-invoked with the accumulated answers.
 func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input MRInput) (mergerequests.Output, error) {
 	if input.ProjectID == "" {
 		return mergerequests.Output{}, toolutil.ErrFieldRequired("project_id")
 	}
 
 	tracker := progress.FromRequest(req)
-	ec := elicitation.FromRequest(req)
-
-	if !ec.IsSupported() {
-		return mergerequests.Output{}, elicitation.ErrElicitationNotSupported
+	fl, err := newWizardFlow(req)
+	if err != nil {
+		return mergerequests.Output{}, err
 	}
 
 	tracker.Step(ctx, 1, 5, "Collecting branch information...")
 
-	sourceBranch, err := ec.PromptText(ctx, "Enter the source branch name", "source_branch")
+	sourceBranch, err := fl.PromptText(ctx, "source_branch", "Enter the source branch name", "source_branch")
 	if err != nil {
-		return mergerequests.Output{}, fmt.Errorf("collecting source branch: %w", err)
+		return mergerequests.Output{}, flowError(fl, err, "collecting source branch")
 	}
 
-	targetBranch, err := ec.PromptText(ctx, "Enter the target branch name (e.g. main, develop)", "target_branch")
+	targetBranch, err := fl.PromptText(ctx, "target_branch", "Enter the target branch name (e.g. main, develop)", "target_branch")
 	if err != nil {
-		return mergerequests.Output{}, fmt.Errorf("collecting target branch: %w", err)
+		return mergerequests.Output{}, flowError(fl, err, "collecting target branch")
 	}
 
 	tracker.Step(ctx, 2, 5, "Collecting MR details...")
 
-	title, err := ec.PromptText(ctx, "Enter the merge request title", "title")
+	title, err := fl.PromptText(ctx, "title", "Enter the merge request title", "title")
 	if err != nil {
-		return mergerequests.Output{}, fmt.Errorf("collecting title: %w", err)
+		return mergerequests.Output{}, flowError(fl, err, "collecting title")
 	}
 
-	description, err := ec.PromptText(ctx, "Enter the MR description (Markdown supported, or leave empty)", "description")
+	description, err := fl.PromptText(ctx, "description", "Enter the MR description (Markdown supported, or leave empty)", "description")
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
-		return mergerequests.Output{}, fmt.Errorf(fmtCollectingDesc, err)
+		return mergerequests.Output{}, flowError(fl, err, labelCollectingDesc)
 	}
 
 	tracker.Step(ctx, 3, 5, "Collecting optional fields...")
 
-	labels, removeSource, squash, err := collectMROptions(ctx, ec)
+	labels, removeSource, squash, err := collectMROptions(ctx, fl)
 	if err != nil {
 		return mergerequests.Output{}, err
 	}
@@ -229,15 +249,8 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 		Squash:       squash,
 	})
 
-	confirmed, err := ec.Confirm(ctx, summary)
-	if err != nil {
-		if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
-			return mergerequests.Output{}, fmt.Errorf("merge request creation canceled by user: %w", err)
-		}
-		return mergerequests.Output{}, fmt.Errorf("merge request creation confirmation failed: %w", err)
-	}
-	if !confirmed {
-		return mergerequests.Output{}, fmt.Errorf("merge request creation canceled by user: %w", elicitation.ErrCancelled)
+	if confirmErr := confirmCreation(ctx, fl, summary, "merge request creation"); confirmErr != nil {
+		return mergerequests.Output{}, confirmErr
 	}
 
 	tracker.Step(ctx, 5, 5, "Creating merge request...")
@@ -255,20 +268,20 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 }
 
 // collectMROptions asks for optional merge request labels and merge behavior.
-func collectMROptions(ctx context.Context, ec elicitation.Client) (_ []string, _, _ *bool, _ error) {
-	labelsStr, err := ec.PromptText(ctx, "Enter comma-separated labels (or leave empty)", "labels")
+func collectMROptions(ctx context.Context, fl *elicitation.Flow) (_ []string, _, _ *bool, _ error) {
+	labelsStr, err := fl.PromptText(ctx, "labels", "Enter comma-separated labels (or leave empty)", "labels")
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
-		return nil, nil, nil, fmt.Errorf("collecting labels: %w", err)
+		return nil, nil, nil, flowError(fl, err, "collecting labels")
 	}
 	labels := parseCSVLabels(labelsStr)
 
-	removeSourceChoice, err := confirmOptionalBool(ctx, ec, "Remove source branch after merge?", "source branch removal")
+	removeSourceChoice, err := confirmOptionalBool(ctx, fl, "remove_source_branch", "Remove source branch after merge?", "source branch removal")
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	removeSource := removeSourceChoice.Value
 
-	squashChoice, err := confirmOptionalBool(ctx, ec, "Squash commits on merge?", "squash option")
+	squashChoice, err := confirmOptionalBool(ctx, fl, "squash", "Squash commits on merge?", "squash option")
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -283,16 +296,36 @@ type optionalBoolChoice struct {
 }
 
 // confirmOptionalBool returns an optional boolean prompt result and reports an
-// error when the user cancels the flow.
-func confirmOptionalBool(ctx context.Context, ec elicitation.Client, prompt, field string) (optionalBoolChoice, error) {
-	confirmed, err := ec.Confirm(ctx, prompt)
+// error when the user cancels the flow or the answer is still pending.
+func confirmOptionalBool(ctx context.Context, fl *elicitation.Flow, id, prompt, field string) (optionalBoolChoice, error) {
+	confirmed, err := fl.Confirm(ctx, id, prompt)
 	if err == nil {
 		return optionalBoolChoice{Value: &confirmed}, nil
 	}
 	if errors.Is(err, elicitation.ErrDeclined) {
 		return optionalBoolChoice{}, nil
 	}
-	return optionalBoolChoice{}, fmt.Errorf("collecting %s: %w", field, err)
+	return optionalBoolChoice{}, flowError(fl, err, "collecting "+field)
+}
+
+// confirmCreation runs the final confirmation prompt of a creation wizard
+// and converts declines, cancellations, and pending input into the
+// appropriate wizard error.
+func confirmCreation(ctx context.Context, fl *elicitation.Flow, summary, operation string) error {
+	confirmed, err := fl.Confirm(ctx, elicitation.ConfirmExchangeID, summary)
+	if err != nil {
+		if errors.Is(err, elicitation.ErrInputPending) {
+			return fl.PendingError()
+		}
+		if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
+			return fmt.Errorf("%s canceled by user: %w", operation, err)
+		}
+		return fmt.Errorf("%s confirmation failed: %w", operation, err)
+	}
+	if !confirmed {
+		return fmt.Errorf("%s canceled by user: %w", operation, elicitation.ErrCancelled)
+	}
+	return nil
 }
 
 // mrSummaryParams groups the parameters for building an MR confirmation summary.
@@ -333,36 +366,37 @@ func buildMRSummary(p mrSummaryParams) string {
 
 // ReleaseCreate guides the user through creating a GitLab release
 // via step-by-step elicitation prompts for tag name, release name, and
-// description, then confirms before calling [releases.Create].
+// description, then confirms before calling [releases.Create]. On multi
+// round-trip sessions each prompt travels as an input request and the
+// handler is re-invoked with the accumulated answers.
 func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input ReleaseInput) (releases.Output, error) {
 	if input.ProjectID == "" {
 		return releases.Output{}, toolutil.ErrFieldRequired("project_id")
 	}
 
 	tracker := progress.FromRequest(req)
-	ec := elicitation.FromRequest(req)
-
-	if !ec.IsSupported() {
-		return releases.Output{}, elicitation.ErrElicitationNotSupported
+	fl, err := newWizardFlow(req)
+	if err != nil {
+		return releases.Output{}, err
 	}
 
 	tracker.Step(ctx, 1, 4, "Collecting release details...")
 
-	tagName, err := ec.PromptText(ctx, "Enter the tag name for the release (must already exist)", "tag_name")
+	tagName, err := fl.PromptText(ctx, "tag_name", "Enter the tag name for the release (must already exist)", "tag_name")
 	if err != nil {
-		return releases.Output{}, fmt.Errorf("collecting tag name: %w", err)
+		return releases.Output{}, flowError(fl, err, "collecting tag name")
 	}
 
-	name, err := ec.PromptText(ctx, "Enter the release name/title", "name")
+	name, err := fl.PromptText(ctx, "name", "Enter the release name/title", "name")
 	if err != nil {
-		return releases.Output{}, fmt.Errorf("collecting release name: %w", err)
+		return releases.Output{}, flowError(fl, err, "collecting release name")
 	}
 
 	tracker.Step(ctx, 2, 4, "Collecting release description...")
 
-	description, err := ec.PromptText(ctx, "Enter the release description/notes (Markdown supported, or leave empty)", "description")
+	description, err := fl.PromptText(ctx, "description", "Enter the release description/notes (Markdown supported, or leave empty)", "description")
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
-		return releases.Output{}, fmt.Errorf(fmtCollectingDesc, err)
+		return releases.Output{}, flowError(fl, err, labelCollectingDesc)
 	}
 
 	tracker.Step(ctx, 3, 4, "Confirming release creation...")
@@ -373,15 +407,8 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 		summary += fmt.Sprintf(fmtDescSummary, description)
 	}
 
-	confirmed, err := ec.Confirm(ctx, summary)
-	if err != nil {
-		if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
-			return releases.Output{}, fmt.Errorf("release creation canceled by user: %w", err)
-		}
-		return releases.Output{}, fmt.Errorf("release creation confirmation failed: %w", err)
-	}
-	if !confirmed {
-		return releases.Output{}, fmt.Errorf("release creation canceled by user: %w", elicitation.ErrCancelled)
+	if confirmErr := confirmCreation(ctx, fl, summary, "release creation"); confirmErr != nil {
+		return releases.Output{}, confirmErr
 	}
 
 	tracker.Step(ctx, 4, 4, "Creating release...")
@@ -399,43 +426,43 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 // ProjectCreate guides the user through creating a GitLab project
 // via step-by-step elicitation prompts for name, description, visibility,
 // README initialization, and default branch, then confirms before calling
-// [projects.Create].
+// [projects.Create]. On multi round-trip sessions each prompt travels as an
+// input request and the handler is re-invoked with the accumulated answers.
 func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, _ ProjectInput) (projects.Output, error) {
 	tracker := progress.FromRequest(req)
-	ec := elicitation.FromRequest(req)
-
-	if !ec.IsSupported() {
-		return projects.Output{}, elicitation.ErrElicitationNotSupported
+	fl, err := newWizardFlow(req)
+	if err != nil {
+		return projects.Output{}, err
 	}
 
 	tracker.Step(ctx, 1, 4, "Collecting project details...")
 
-	name, err := ec.PromptText(ctx, "Enter the project name", "name")
+	name, err := fl.PromptText(ctx, "name", "Enter the project name", "name")
 	if err != nil {
-		return projects.Output{}, fmt.Errorf("collecting project name: %w", err)
+		return projects.Output{}, flowError(fl, err, "collecting project name")
 	}
 
-	description, err := ec.PromptText(ctx, "Enter the project description (or leave empty)", "description")
+	description, err := fl.PromptText(ctx, "description", "Enter the project description (or leave empty)", "description")
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
-		return projects.Output{}, fmt.Errorf(fmtCollectingDesc, err)
+		return projects.Output{}, flowError(fl, err, labelCollectingDesc)
 	}
 
 	tracker.Step(ctx, 2, 4, "Collecting project settings...")
 
-	visibility, err := ec.SelectOne(ctx, "Select the project visibility", []string{"private", "internal", "public"})
+	visibility, err := fl.SelectOne(ctx, "visibility", "Select the project visibility", []string{"private", "internal", "public"})
 	if err != nil {
-		return projects.Output{}, fmt.Errorf("collecting visibility: %w", err)
+		return projects.Output{}, flowError(fl, err, "collecting visibility")
 	}
 
-	initReadmeChoice, err := confirmOptionalBool(ctx, ec, "Initialize the repository with a README file?", "README initialization")
+	initReadmeChoice, err := confirmOptionalBool(ctx, fl, "initialize_with_readme", "Initialize the repository with a README file?", "README initialization")
 	if err != nil {
 		return projects.Output{}, err
 	}
 	initReadme := initReadmeChoice.Value != nil && *initReadmeChoice.Value
 
-	defaultBranch, err := ec.PromptText(ctx, "Enter the default branch name (or leave empty for 'main')", "default_branch")
+	defaultBranch, err := fl.PromptText(ctx, "default_branch", "Enter the default branch name (or leave empty for 'main')", "default_branch")
 	if err != nil && !errors.Is(err, elicitation.ErrDeclined) {
-		return projects.Output{}, fmt.Errorf("collecting default branch: %w", err)
+		return projects.Output{}, flowError(fl, err, "collecting default branch")
 	}
 
 	tracker.Step(ctx, 3, 4, "Confirming project creation...")
@@ -451,15 +478,8 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 		summary += "\n**Default Branch**: " + defaultBranch
 	}
 
-	confirmed, err := ec.Confirm(ctx, summary)
-	if err != nil {
-		if errors.Is(err, elicitation.ErrCancelled) || errors.Is(err, elicitation.ErrDeclined) {
-			return projects.Output{}, fmt.Errorf("project creation canceled by user: %w", err)
-		}
-		return projects.Output{}, fmt.Errorf("project creation confirmation failed: %w", err)
-	}
-	if !confirmed {
-		return projects.Output{}, fmt.Errorf("project creation canceled by user: %w", elicitation.ErrCancelled)
+	if confirmErr := confirmCreation(ctx, fl, summary, "project creation"); confirmErr != nil {
+		return projects.Output{}, confirmErr
 	}
 
 	tracker.Step(ctx, 4, 4, "Creating project...")

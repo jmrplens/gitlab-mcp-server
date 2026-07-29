@@ -69,6 +69,44 @@ func TestRegisterSurfaceToolFromSpec_DestructiveDeclineStopsRoute(t *testing.T) 
 	}
 }
 
+// TestRegisterSurfaceToolFromSpec_DestructiveConfirmAcceptedRunsRoute
+// verifies that an accepted elicitation confirmation lets the destructive
+// route execute. On protocol 2026-07-28 sessions this exercises the full
+// multi round-trip loop: the first call returns an input-required result and
+// the SDK client middleware retries with the user's answer attached.
+func TestRegisterSurfaceToolFromSpec_DestructiveConfirmAcceptedRunsRoute(t *testing.T) {
+	var called atomic.Bool
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	route := RouteFunc(func(_ context.Context, _ surfaceToolTestInput) (DeleteOutput, error) {
+		called.Store(true)
+		return DeleteOutput{Status: "success", Message: "deleted"}, nil
+	})
+	route.Destructive = true
+	spec := NewActionSpec("delete", route, ActionSpecOptions{
+		IndividualTool: IndividualToolSpec{Name: "gitlab_test_delete", Title: "Test Delete"},
+	})
+	RegisterSurfaceToolFromSpec(server, spec, SurfaceToolRegisterOptions{Description: "Test destructive tool."})
+
+	var elicitations atomic.Int32
+	session := newSurfaceToolSession(t, server, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		elicitations.Add(1)
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": true}}, nil
+	})
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "gitlab_test_delete", Arguments: map[string]any{"id": 1}})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if !called.Load() {
+		t.Fatal("destructive route was not called after accepted confirmation")
+	}
+	if elicitations.Load() != 1 {
+		t.Errorf("elicitations = %d, want 1", elicitations.Load())
+	}
+	if result == nil {
+		t.Fatal("expected non-nil success result")
+	}
+}
+
 // TestRegisterSurfaceToolFromSpec_ExplicitConfirmBypassesPrompt verifies confirm:true proceeds without elicitation.
 func TestRegisterSurfaceToolFromSpec_ExplicitConfirmBypassesPrompt(t *testing.T) {
 	var called atomic.Bool

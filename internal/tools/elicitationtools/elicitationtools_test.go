@@ -504,35 +504,21 @@ func TestProjectCreate_UserDeclinesConfirmation(t *testing.T) {
 }
 
 // setupElicitationSession creates a connected MCP server+client pair where
-// the client supports elicitation. Returns the server, server session, and a
-// cleanup function. The server session can be used to construct CallToolRequests
-// with elicitation support.
+// the client supports elicitation. The client performs the legacy 2025-11-25
+// handshake (via testutil.ConnectLegacyElicitationClient) so direct wizard
+// invocations deterministically exercise the synchronous elicitation path;
+// the multi round-trip path is covered by the TestCatalogSurface_* tests
+// that drive real tools/call round-trips. Returns the server, server
+// session, and a cleanup function (a no-op; teardown is via t.Cleanup).
 func setupElicitationSession(t *testing.T, ctx context.Context, handler func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)) (*mcp.Server, *mcp.ServerSession, func()) {
 	t.Helper()
 
 	impl := &mcp.Implementation{Name: "test", Version: "1.0.0"}
 	server := mcp.NewServer(impl, nil)
-	client := mcp.NewClient(impl, &mcp.ClientOptions{
-		ElicitationHandler: handler,
-	})
-
-	st, ct := mcp.NewInMemoryTransports()
-	ss, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	cs, err := client.Connect(ctx, ct, nil)
-	if err != nil {
-		ss.Close()
-		t.Fatalf("client connect: %v", err)
-	}
-
-	cleanup := func() {
-		cs.Close()
-		ss.Close()
-	}
-	return server, ss, cleanup
+	ss := testutil.ConnectLegacyElicitationClient(ctx, t, server, func(ctx context.Context, params *mcp.ElicitParams) (*mcp.ElicitResult, error) {
+		return handler(ctx, &mcp.ElicitRequest{Params: params})
+	}, testutil.LegacyClientOptions{})
+	return server, ss, func() {}
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.

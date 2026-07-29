@@ -21,7 +21,6 @@ import (
 	"log/slog"
 	"math"
 	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -89,25 +88,11 @@ func (c Client) Confirm(ctx context.Context, message string) (bool, error) {
 		return false, ErrElicitationNotSupported
 	}
 
-	schema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"confirmed": map[string]any{
-				"type":        "boolean",
-				"title":       "Confirm",
-				"description": message,
-			},
-		},
-		"required": []string{"confirmed"},
-	}
-
-	result, err := c.elicit(ctx, message, schema)
+	result, err := c.elicit(ctx, message, confirmSchema(message))
 	if err != nil {
 		return false, err
 	}
-
-	confirmed, ok := result["confirmed"].(bool)
-	return ok && confirmed, nil
+	return parseConfirmContent(result), nil
 }
 
 // PromptText asks the user for free-form text input and returns the value.
@@ -119,28 +104,11 @@ func (c Client) PromptText(ctx context.Context, message, fieldName string) (stri
 		fieldName = "value"
 	}
 
-	schema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			fieldName: map[string]any{
-				"type":        "string",
-				"title":       fieldName,
-				"description": message,
-			},
-		},
-		"required": []string{fieldName},
-	}
-
-	result, err := c.elicit(ctx, message, schema)
+	result, err := c.elicit(ctx, message, textSchema(message, fieldName))
 	if err != nil {
 		return "", err
 	}
-
-	text, ok := result[fieldName].(string)
-	if !ok {
-		return "", fmt.Errorf("elicitation: response field %q is not a string", fieldName)
-	}
-	return text, nil
+	return parseTextContent(result, fieldName)
 }
 
 // SelectOne asks the user to pick one option from a list.
@@ -152,39 +120,11 @@ func (c Client) SelectOne(ctx context.Context, message string, options []string)
 		return "", errors.New(errOptionsEmpty)
 	}
 
-	enumValues := make([]any, len(options))
-	for i, o := range options {
-		enumValues[i] = o
-	}
-
-	schema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"selection": map[string]any{
-				"type":        "string",
-				"title":       "Selection",
-				"description": message,
-				"enum":        enumValues,
-			},
-		},
-		"required": []string{"selection"},
-	}
-
-	result, err := c.elicit(ctx, message, schema)
+	result, err := c.elicit(ctx, message, selectOneSchema(message, options))
 	if err != nil {
 		return "", err
 	}
-
-	selection, ok := result["selection"].(string)
-	if !ok {
-		return "", errors.New("elicitation: response field 'selection' is not a string")
-	}
-
-	// Validate against allowed options (defense in depth)
-	if slices.Contains(options, selection) {
-		return selection, nil
-	}
-	return "", fmt.Errorf("elicitation: selected value %q is not in the allowed options", selection)
+	return parseSelectOneContent(result, options)
 }
 
 // SelectMulti asks the user to pick one or more options from a list.
@@ -197,59 +137,11 @@ func (c Client) SelectMulti(ctx context.Context, message string, options []strin
 		return nil, errors.New(errOptionsEmpty)
 	}
 
-	enumValues := make([]any, len(options))
-	for i, o := range options {
-		enumValues[i] = o
-	}
-
-	items := map[string]any{
-		"type": "string",
-		"enum": enumValues,
-	}
-	arraySchema := map[string]any{
-		"type":        "array",
-		"title":       "Selections",
-		"description": message,
-		"items":       items,
-	}
-	if minItems > 0 {
-		arraySchema["minItems"] = minItems
-	}
-	if maxItems > 0 {
-		arraySchema["maxItems"] = maxItems
-	}
-
-	schema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"selections": arraySchema,
-		},
-		"required": []string{"selections"},
-	}
-
-	result, err := c.elicit(ctx, message, schema)
+	result, err := c.elicit(ctx, message, selectMultiSchema(message, options, minItems, maxItems))
 	if err != nil {
 		return nil, err
 	}
-
-	raw, ok := result["selections"].([]any)
-	if !ok {
-		return nil, errors.New("elicitation: response field 'selections' is not an array")
-	}
-
-	selections := make([]string, 0, len(raw))
-	for _, v := range raw {
-		var s string
-		s, ok = v.(string)
-		if !ok {
-			return nil, fmt.Errorf("elicitation: selection element is not a string: %v", v)
-		}
-		if !slices.Contains(options, s) {
-			return nil, fmt.Errorf("elicitation: selected value %q is not in the allowed options", s)
-		}
-		selections = append(selections, s)
-	}
-	return selections, nil
+	return parseSelectMultiContent(result, options)
 }
 
 // SelectOneInt asks the user to pick one integer from a list of allowed values.
@@ -261,46 +153,11 @@ func (c Client) SelectOneInt(ctx context.Context, message string, options []int)
 		return 0, errors.New(errOptionsEmpty)
 	}
 
-	enumValues := make([]any, len(options))
-	for i, o := range options {
-		enumValues[i] = o
-	}
-
-	schema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"selection": map[string]any{
-				"type":        "integer",
-				"title":       "Selection",
-				"description": message,
-				"enum":        enumValues,
-			},
-		},
-		"required": []string{"selection"},
-	}
-
-	result, err := c.elicit(ctx, message, schema)
+	result, err := c.elicit(ctx, message, selectOneIntSchema(message, options))
 	if err != nil {
 		return 0, err
 	}
-
-	// JSON numbers are float64 by default
-	f, ok := result["selection"].(float64)
-	if !ok {
-		return 0, errors.New("elicitation: response field 'selection' is not a number")
-	}
-	if math.IsNaN(f) || math.IsInf(f, 0) {
-		return 0, errors.New("elicitation: response field 'selection' is not a finite number")
-	}
-	if f != math.Trunc(f) {
-		return 0, fmt.Errorf("elicitation: response value %g is not an integer", f)
-	}
-	selected := int(f)
-
-	if !slices.Contains(options, selected) {
-		return 0, fmt.Errorf("elicitation: selected value %d is not in the allowed options", selected)
-	}
-	return selected, nil
+	return parseSelectOneIntContent(result, options)
 }
 
 // PromptNumber asks the user for a numeric input within a range.
@@ -313,39 +170,11 @@ func (c Client) PromptNumber(ctx context.Context, message, fieldName string, min
 		fieldName = "value"
 	}
 
-	prop := map[string]any{
-		"type":        "number",
-		"title":       fieldName,
-		"description": message,
-	}
-	if !isInf(minVal) {
-		prop["minimum"] = minVal
-	}
-	if !isInf(maxVal) {
-		prop["maximum"] = maxVal
-	}
-
-	schema := map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			fieldName: prop,
-		},
-		"required": []string{fieldName},
-	}
-
-	result, err := c.elicit(ctx, message, schema)
+	result, err := c.elicit(ctx, message, numberSchema(message, fieldName, minVal, maxVal))
 	if err != nil {
 		return 0, err
 	}
-
-	f, ok := result[fieldName].(float64)
-	if !ok {
-		return 0, fmt.Errorf("elicitation: response field %q is not a number", fieldName)
-	}
-	if math.IsNaN(f) {
-		return 0, fmt.Errorf("elicitation: response field %q is NaN", fieldName)
-	}
-	return f, nil
+	return parseNumberContent(result, fieldName)
 }
 
 // isInf reports whether f is +Inf or -Inf.
@@ -382,17 +211,7 @@ func (c Client) elicit(ctx context.Context, message string, schema map[string]an
 	if err != nil {
 		return nil, fmt.Errorf("elicitation: request failed: %w", err)
 	}
-
-	switch result.Action {
-	case "accept":
-		return result.Content, nil
-	case "decline":
-		return nil, ErrDeclined
-	case "cancel":
-		return nil, ErrCancelled
-	default:
-		return nil, fmt.Errorf("elicitation: unknown action %q", result.Action)
-	}
+	return contentForAction(result.Action, result.Content)
 }
 
 // ElicitURL sends a URL-mode elicitation request, directing the user to
@@ -488,19 +307,33 @@ func validateGitLabURL(gitlabBaseURL, targetURL string) error {
 	return nil
 }
 
+// ConfirmExchangeID is the stable input-request id used by single-round
+// confirmation guards on the multi round-trip elicitation path.
+const ConfirmExchangeID = "confirm"
+
 // ConfirmAction asks the user to confirm an action via elicitation.
 // Returns nil if confirmed or elicitation is not supported (backward compatible).
-// Returns a non-nil *mcp.CallToolResult if the user declined or canceled.
+// Returns a non-nil *mcp.CallToolResult if the user declined or canceled, or
+// an input-required result when the session uses multi round-trip requests
+// and the client has not answered yet.
 func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string) *mcp.CallToolResult {
-	ec := FromRequest(req)
-	if !ec.IsSupported() {
+	flow, err := FlowFromRequest(req)
+	if err != nil {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}},
+			IsError: true,
+		}
+	}
+	if !flow.IsSupported() {
 		return nil
 	}
-	confirmed, err := ec.Confirm(ctx, message)
-	if err != nil {
-		if errors.Is(err, ErrDeclined) || errors.Is(err, ErrCancelled) {
-			return CancelledResult("Operation canceled by user.")
-		}
+	confirmed, err := flow.Confirm(ctx, ConfirmExchangeID, message)
+	switch {
+	case errors.Is(err, ErrInputPending):
+		return flow.InputRequiredResult()
+	case errors.Is(err, ErrDeclined), errors.Is(err, ErrCancelled):
+		return CancelledResult("Operation canceled by user.")
+	case err != nil:
 		return nil
 	}
 	if !confirmed {
