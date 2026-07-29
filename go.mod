@@ -9,7 +9,7 @@ require (
 	github.com/creativeprojects/go-selfupdate v1.6.0
 	github.com/google/jsonschema-go v0.4.3
 	github.com/joho/godotenv v1.5.1
-	github.com/modelcontextprotocol/go-sdk v1.6.1
+	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/shirou/gopsutil/v4 v4.26.6
 	github.com/tiktoken-go/tokenizer v0.8.1
 	gitlab.com/gitlab-org/api/client-go/v2 v2.51.0
