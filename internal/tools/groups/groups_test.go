@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -612,6 +613,78 @@ func TestGroupList_EnrichedNewFilters(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf(fmtGroupListErr, err)
+	}
+}
+
+// TestGroupList_CustomAttributesFilter_IndexedQuery verifies that the
+// custom_attributes input map is encoded as indexed query parameters
+// (custom_attributes[key]=value), which is the filtering form the GitLab API
+// expects and is distinct from the with_custom_attributes response flag.
+// The same encoding is asserted for descendant-group listing, whose
+// ListDescendantGroupsOptions is a defined type over ListGroupsOptions and so
+// inherited the filter.
+func TestGroupList_CustomAttributesFilter_IndexedQuery(t *testing.T) {
+	tests := []struct {
+		name       string
+		path       string
+		attributes map[string]string
+		wantParams map[string]string
+		call       func(client *gitlabclient.Client, attributes map[string]string) error
+	}{
+		{
+			name:       "single attribute on group list",
+			path:       pathGroups,
+			attributes: map[string]string{"team": "platform"},
+			wantParams: map[string]string{"custom_attributes[team]": "platform"},
+			call: func(client *gitlabclient.Client, attributes map[string]string) error {
+				_, err := List(context.Background(), client, ListInput{CustomAttributes: attributes})
+				return err
+			},
+		},
+		{
+			name:       "multiple attributes on group list",
+			path:       pathGroups,
+			attributes: map[string]string{"team": "platform", "tier": "gold"},
+			wantParams: map[string]string{"custom_attributes[team]": "platform", "custom_attributes[tier]": "gold"},
+			call: func(client *gitlabclient.Client, attributes map[string]string) error {
+				_, err := List(context.Background(), client, ListInput{CustomAttributes: attributes})
+				return err
+			},
+		},
+		{
+			name:       "single attribute on descendant group list",
+			path:       pathGroupSubgroups,
+			attributes: map[string]string{"team": "platform"},
+			wantParams: map[string]string{"custom_attributes[team]": "platform"},
+			call: func(client *gitlabclient.Client, attributes map[string]string) error {
+				_, err := SubgroupsList(context.Background(), client, SubgroupsListInput{GroupID: "99", CustomAttributes: attributes})
+				return err
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != tt.path {
+					http.NotFound(w, r)
+					return
+				}
+				q := r.URL.Query()
+				for key, want := range tt.wantParams {
+					if got := q.Get(key); got != want {
+						t.Errorf("query param %s = %q, want %q", key, got, want)
+					}
+				}
+				if q.Has("custom_attributes") {
+					t.Error("query contains a bare custom_attributes parameter, want only indexed keys")
+				}
+				testutil.RespondJSON(w, http.StatusOK, `[]`)
+			}))
+
+			if err := tt.call(client, tt.attributes); err != nil {
+				t.Fatalf("list unexpected error: %v", err)
+			}
+		})
 	}
 }
 

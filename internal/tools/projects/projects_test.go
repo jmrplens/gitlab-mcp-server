@@ -4581,6 +4581,41 @@ func TestGet_WithOptions(t *testing.T) {
 	}
 }
 
+// TestGet_CICDCatalogEnabled_MirrorsPayload verifies that the
+// cicd_catalog_enabled field of the GitLab project payload is mirrored into
+// the tool output, so clients can tell whether a project is published as a
+// CI/CD catalog resource. A payload omitting the field must read as false
+// rather than surfacing an unset value.
+func TestGet_CICDCatalogEnabled_MirrorsPayload(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		want    bool
+	}{
+		{"enabled in payload", `{"id":42,"name":"test","cicd_catalog_enabled":true}`, true},
+		{"disabled in payload", `{"id":42,"name":"test","cicd_catalog_enabled":false}`, false},
+		{"absent from payload", `{"id":42,"name":"test"}`, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == pathProject42 {
+					testutil.RespondJSON(w, http.StatusOK, tt.payload)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := Get(context.Background(), client, GetInput{ProjectID: "42"})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if out.CICDCatalogEnabled != tt.want {
+				t.Errorf("CICDCatalogEnabled = %v, want %v", out.CICDCatalogEnabled, tt.want)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // ListProjectGroups with all filter options
 // ---------------------------------------------------------------------------.
@@ -7439,6 +7474,7 @@ func TestBuildCreateOpts_AdditiveFields_AllMapped(t *testing.T) {
 		BuildGitStrategy:                         "fetch",
 		BuildCoverageRegex:                       "cov",
 		AutoCancelPendingPipelines:               "enabled",
+		CICDCatalogEnabled:                       new(true),
 		CIForwardDeploymentEnabled:               new(true),
 		ResourceGroupDefaultProcessMode:          "oldest_first",
 		GroupRunnersEnabled:                      new(true),
@@ -7516,6 +7552,7 @@ func assertCreateAdditiveBools(t *testing.T, opts *gl.CreateProjectOptions) {
 		"EmailsDisabled":                        opts.EmailsDisabled, //nolint:staticcheck // 1:1 parity test.
 		"ShowDefaultAwardEmojis":                opts.ShowDefaultAwardEmojis,
 		"AutoDevopsEnabled":                     opts.AutoDevopsEnabled,
+		"CICDCatalogEnabled":                    opts.CICDCatalogEnabled,
 		"CIForwardDeploymentEnabled":            opts.CIForwardDeploymentEnabled, //nolint:staticcheck // 1:1 parity test.
 		"GroupRunnersEnabled":                   opts.GroupRunnersEnabled,
 		"PublicJobs":                            opts.PublicJobs,
@@ -7713,6 +7750,7 @@ func TestBuildUpdateOpts_AdditiveFields_AllMapped(t *testing.T) {
 		BuildGitStrategy:                         "clone",
 		BuildCoverageRegex:                       "cov",
 		AutoCancelPendingPipelines:               "enabled",
+		CICDCatalogEnabled:                       new(true),
 		CIDefaultGitDepth:                        20,
 		CIDeletePipelinesInSeconds:               86400,
 		CIDisplayPipelineVariables:               new(true),
@@ -7793,6 +7831,7 @@ func assertUpdateAdditiveBools(t *testing.T, opts *gl.EditProjectOptions) {
 		"KeepLatestArtifact":                    opts.KeepLatestArtifact,
 		"AutoDevopsEnabled":                     opts.AutoDevopsEnabled,
 		"AutoDuoCodeReviewEnabled":              opts.AutoDuoCodeReviewEnabled,
+		"CICDCatalogEnabled":                    opts.CICDCatalogEnabled,
 		"CIDisplayPipelineVariables":            opts.CIDisplayPipelineVariables,
 		"CIForwardDeploymentEnabled":            opts.CIForwardDeploymentEnabled,
 		"CIForwardDeploymentRollbackAllowed":    opts.CIForwardDeploymentRollbackAllowed,

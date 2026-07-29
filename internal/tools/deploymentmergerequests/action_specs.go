@@ -13,6 +13,10 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 			RelatedActions: []string{"environment.deployment_get", "mergerequest.get", "mergerequest.list"},
 			OpenWorld:      true,
 			OwnerPackage:   "deploymentmergerequests",
+			InputSchemaOverrides: []toolutil.InputSchemaOverride{
+				toolutil.SchemaApproverIDsOverride("approver_ids"),
+				toolutil.SchemaApproverIDsOverride("approved_by_ids"),
+			},
 			IndividualTool: toolutil.IndividualToolSpec{
 				Name:        "gitlab_list_deployment_merge_requests",
 				Title:       toolutil.TitleFromName("gitlab_list_deployment_merge_requests"),

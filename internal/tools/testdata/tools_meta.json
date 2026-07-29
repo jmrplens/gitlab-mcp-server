@@ -122,7 +122,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Access"
     }
   },
@@ -293,7 +295,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Admin"
     }
   },
@@ -553,7 +557,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Branch"
     }
   },
@@ -730,7 +736,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "CI Variable"
     }
   },
@@ -811,7 +819,9 @@
     },
     "annotations": {
       "destructiveHint": false,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Compliance Policy"
     }
   },
@@ -893,7 +903,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Custom Emoji"
     }
   },
@@ -976,7 +988,9 @@
     },
     "annotations": {
       "destructiveHint": false,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Dependency"
     }
   },
@@ -1225,7 +1239,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Enterprise User"
     }
   },
@@ -1327,7 +1343,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Environment"
     }
   },
@@ -1414,7 +1432,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "External Status Check"
     }
   },
@@ -1503,7 +1523,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Feature Flags"
     }
   },
@@ -1590,7 +1612,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Geo"
     }
   },
@@ -1826,7 +1850,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Group"
     }
   },
@@ -1909,7 +1935,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Group Scim"
     }
   },
@@ -2597,7 +2625,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -3525,7 +3555,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -3676,6 +3708,9 @@
           "type": "string"
         },
         "ci_separated_caches": {
+          "type": "boolean"
+        },
+        "cicd_catalog_enabled": {
           "type": "boolean"
         },
         "compliance_frameworks": {
@@ -4420,6 +4455,7 @@
         "allow_pipeline_trigger_approve_deployment",
         "prevent_merge_without_jira_issue",
         "printing_merge_request_link_enabled",
+        "cicd_catalog_enabled",
         "ci_forward_deployment_enabled",
         "ci_forward_deployment_rollback_allowed",
         "ci_push_repository_for_job_token_allowed",
@@ -4455,7 +4491,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -4817,7 +4855,9 @@
     },
     "annotations": {
       "destructiveHint": false,
-      "openWorldHint": true
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false
     }
   },
   {
@@ -4959,7 +4999,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Issue"
     }
   },
@@ -5063,7 +5105,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Job"
     }
   },
@@ -5148,7 +5192,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Member Role"
     }
   },
@@ -5285,7 +5331,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Merge Request"
     }
   },
@@ -5368,7 +5416,9 @@
     },
     "annotations": {
       "destructiveHint": false,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Merge Train"
     }
   },
@@ -5552,7 +5602,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "MR Review"
     }
   },
@@ -5660,7 +5712,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Package"
     }
   },
@@ -5772,7 +5826,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Pipeline"
     }
   },
@@ -5993,7 +6049,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Project"
     }
   },
@@ -6076,7 +6134,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Project Alias"
     }
   },
@@ -6167,7 +6227,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Release"
     }
   },
@@ -6287,7 +6349,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Repository"
     }
   },
@@ -6400,7 +6464,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Runner"
     }
   },
@@ -6575,7 +6641,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Security Attribute"
     }
   },
@@ -6657,7 +6725,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Security Category"
     }
   },
@@ -6821,7 +6891,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Security Scan Profile"
     }
   },
@@ -6934,7 +7006,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Snippet"
     }
   },
@@ -7031,7 +7105,9 @@
     },
     "annotations": {
       "destructiveHint": false,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Storage Move"
     }
   },
@@ -7119,7 +7195,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Tag"
     }
   },
@@ -7367,7 +7445,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "User"
     }
   },
@@ -7454,7 +7534,9 @@
     },
     "annotations": {
       "destructiveHint": false,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Vulnerability"
     }
   },
@@ -7539,7 +7621,9 @@
     },
     "annotations": {
       "destructiveHint": true,
+      "idempotentHint": false,
       "openWorldHint": true,
+      "readOnlyHint": false,
       "title": "Wiki"
     }
   }

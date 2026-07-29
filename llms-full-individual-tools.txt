@@ -5099,6 +5099,7 @@ List accessible GitLab groups with filtering and pagination. Returns: matching g
 - `active` (boolean): Filter by active (true) or inactive/archived (false) groups
 - `all_available` (boolean): Show all groups accessible by the authenticated user
 - `archived` (boolean): Limit to archived groups (true) or non-archived (false)
+- `custom_attributes` (object): Filter groups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response
 - `marked_for_deletion_on` (string): Filter to groups marked for deletion on this date (YYYY-MM-DD)
 - `min_access_level` (integer): Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)
 - `order_by` (string): Order groups by field (name, path, id, similarity)
@@ -7669,8 +7670,9 @@ List the merge requests associated with a deployment, with merge-request filteri
 **Parameters:**
 
 - `approved` (string): Filter by approval status: yes or no
-- `approved_by_ids` (array of integers): Filter by MRs approved by all listed user IDs
-- `approver_ids` (array of integers): Filter by MRs with all listed users as eligible approvers
+- `approved_by_ids` (array of values): Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)
+- `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
+- `approver_ids` (array of values): Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)
 - `assignee_id` (integer): Filter by assignee user ID
 - `author_id` (integer): Filter by author user ID
 - `author_username` (string): Filter by author username
@@ -9491,8 +9493,9 @@ List merge requests in one project with filtering and pagination. Returns: match
 
 **Parameters:**
 
-- `approved_by_ids` (array of integers): Filter by MRs approved by all listed user IDs
-- `approver_ids` (array of integers): Filter by MRs with all listed users as eligible approvers
+- `approved_by_ids` (array of values): Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)
+- `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
+- `approver_ids` (array of values): Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)
 - `assignee_id` (integer): Filter by assignee user ID
 - `author_id` (integer): Filter by author user ID
 - `author_username` (string): Filter by author username
@@ -9539,8 +9542,9 @@ List merge requests across all accessible projects. Returns: visible MRs with pr
 **Parameters:**
 
 - `approved` (string): Filter by approval status: 'yes' or 'no' (Premium)
-- `approved_by_ids` (array of integers): Filter by MRs approved by all listed user IDs
-- `approver_ids` (array of integers): Filter by MRs with all listed users as eligible approvers
+- `approved_by_ids` (array of values): Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)
+- `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
+- `approver_ids` (array of values): Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)
 - `assignee_id` (integer): Filter by assignee user ID
 - `author_id` (integer): Filter by author user ID
 - `author_username` (string): Filter by author username
@@ -9582,8 +9586,9 @@ List merge requests across a group and its projects. Returns: visible MRs with p
 
 **Parameters:**
 
-- `approved_by_ids` (array of integers): Filter by MRs approved by all listed user IDs
-- `approver_ids` (array of integers): Filter by MRs with all listed users as eligible approvers
+- `approved_by_ids` (array of values): Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)
+- `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
+- `approver_ids` (array of values): Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)
 - `assignee_id` (integer): Filter by assignee user ID
 - `author_id` (integer): Filter by author user ID
 - `author_username` (string): Filter by author username
@@ -11260,6 +11265,7 @@ Create a new GitLab project. Returns: the created project with id, path_with_nam
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
 - `ci_config_path` (string): Custom CI/CD configuration file path
 - `ci_forward_deployment_enabled` (boolean): Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)
+- `cicd_catalog_enabled` (boolean): Publish the project as a CI/CD catalog resource
 - `container_expiration_policy_attributes` (object): Container registry cleanup policy attributes
 - `container_registry_access_level` (string): Container registry access level (disabled, private, enabled)
 - `container_registry_enabled` (boolean): Enable container registry (deprecated: use container_registry_access_level)
@@ -11361,6 +11367,7 @@ Create a project on behalf of a user (admin). Returns: the created project with 
 - `builds_access_level` (string): CI/CD builds access level (disabled, private, enabled)
 - `ci_config_path` (string): Custom CI/CD configuration file path
 - `ci_forward_deployment_enabled` (boolean): Enable CI/CD forward deployment (deprecated: no longer supported in recent versions)
+- `cicd_catalog_enabled` (boolean): Publish the project as a CI/CD catalog resource
 - `container_expiration_policy_attributes` (object): Container registry cleanup policy attributes
 - `container_registry_access_level` (string): Container registry access level (disabled, private, enabled)
 - `container_registry_enabled` (boolean): Enable container registry (deprecated: use container_registry_access_level)
@@ -12578,6 +12585,7 @@ Update a project's settings. Returns: the updated project with its current confi
 - `ci_push_repository_for_job_token_allowed` (boolean): Allow CI job tokens to push to the repository
 - `ci_restrict_pipeline_cancellation_role` (string): Role required to cancel pipelines/jobs (developer, maintainer, no_one)
 - `ci_separated_caches` (boolean): Use separate caches for protected branches
+- `cicd_catalog_enabled` (boolean): Publish the project as a CI/CD catalog resource
 - `container_expiration_policy_attributes` (object): Container registry cleanup policy attributes
 - `container_registry_access_level` (string): Container registry access level (disabled, private, enabled)
 - `container_registry_enabled` (boolean): Enable container registry (deprecated: use container_registry_access_level)
@@ -14867,6 +14875,7 @@ List the subgroups (descendant groups) of a GitLab group. Returns: descendant gr
 - `active` (boolean): Filter by active (true) or inactive/archived (false) subgroups
 - `all_available` (boolean): Show all subgroups accessible by the authenticated user
 - `archived` (boolean): Limit to archived subgroups (true) or non-archived (false)
+- `custom_attributes` (object): Filter subgroups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `marked_for_deletion_on` (string): Filter to subgroups marked for deletion on this date (YYYY-MM-DD)
 - `min_access_level` (integer): Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)

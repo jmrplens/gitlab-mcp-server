@@ -30,6 +30,17 @@ func SchemaFormatOverride(propertyPath, format string) InputSchemaOverride {
 	return SchemaPropertyOverride(propertyPath, map[string]any{"format": format})
 }
 
+// SchemaApproverIDsOverride widens the array item type of an
+// [ApproverIDsFilter] parameter so both numeric user IDs and the "Any"/"None"
+// literals pass input validation. Without it the reflected schema advertises
+// strings only, which would reject the numeric IDs every existing caller
+// sends.
+func SchemaApproverIDsOverride(propertyPath string) InputSchemaOverride {
+	return SchemaPropertyOverride(propertyPath, map[string]any{
+		"items": map[string]any{"type": []any{"integer", "string"}},
+	})
+}
+
 // SchemaRootOverride returns an input-schema override applied at the schema root.
 func SchemaRootOverride(values map[string]any) InputSchemaOverride {
 	return InputSchemaOverride{Values: cloneSchemaMap(values)}

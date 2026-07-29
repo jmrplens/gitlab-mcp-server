@@ -14,21 +14,22 @@ import (
 
 // ListInput defines parameters for listing groups.
 type ListInput struct {
-	Search               string  `json:"search,omitempty"                jsonschema:"Filter groups by name or path"`
-	Owned                bool    `json:"owned,omitempty"                 jsonschema:"Limit to groups explicitly owned by the authenticated user"`
-	TopLevelOnly         bool    `json:"top_level_only,omitempty"        jsonschema:"Limit to top-level groups (exclude subgroups)"`
-	OrderBy              string  `json:"order_by,omitempty"              jsonschema:"Order groups by field (name, path, id, similarity)"`
-	Sort                 string  `json:"sort,omitempty"                  jsonschema:"Sort direction (asc, desc)"`
-	Visibility           string  `json:"visibility,omitempty"            jsonschema:"Filter by visibility (public, internal, private)"`
-	AllAvailable         bool    `json:"all_available,omitempty"         jsonschema:"Show all groups accessible by the authenticated user"`
-	Statistics           bool    `json:"statistics,omitempty"            jsonschema:"Include group statistics (storage, counts)"`
-	WithCustomAttributes bool    `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
-	SkipGroups           []int64 `json:"skip_groups,omitempty"           jsonschema:"Group IDs to exclude from results"`
-	MinAccessLevel       int     `json:"min_access_level,omitempty"      jsonschema:"Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
-	RepositoryStorage    string  `json:"repository_storage,omitempty"    jsonschema:"Filter by repository storage shard (administrators only)"`
-	Active               *bool   `json:"active,omitempty"                jsonschema:"Filter by active (true) or inactive/archived (false) groups"`
-	Archived             *bool   `json:"archived,omitempty"              jsonschema:"Limit to archived groups (true) or non-archived (false)"`
-	MarkedForDeletionOn  string  `json:"marked_for_deletion_on,omitempty" jsonschema:"Filter to groups marked for deletion on this date (YYYY-MM-DD)"`
+	Search               string            `json:"search,omitempty"                jsonschema:"Filter groups by name or path"`
+	Owned                bool              `json:"owned,omitempty"                 jsonschema:"Limit to groups explicitly owned by the authenticated user"`
+	TopLevelOnly         bool              `json:"top_level_only,omitempty"        jsonschema:"Limit to top-level groups (exclude subgroups)"`
+	OrderBy              string            `json:"order_by,omitempty"              jsonschema:"Order groups by field (name, path, id, similarity)"`
+	Sort                 string            `json:"sort,omitempty"                  jsonschema:"Sort direction (asc, desc)"`
+	Visibility           string            `json:"visibility,omitempty"            jsonschema:"Filter by visibility (public, internal, private)"`
+	AllAvailable         bool              `json:"all_available,omitempty"         jsonschema:"Show all groups accessible by the authenticated user"`
+	Statistics           bool              `json:"statistics,omitempty"            jsonschema:"Include group statistics (storage, counts)"`
+	WithCustomAttributes bool              `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
+	CustomAttributes     map[string]string `json:"custom_attributes,omitempty" jsonschema:"Filter groups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response"`
+	SkipGroups           []int64           `json:"skip_groups,omitempty"           jsonschema:"Group IDs to exclude from results"`
+	MinAccessLevel       int               `json:"min_access_level,omitempty"      jsonschema:"Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
+	RepositoryStorage    string            `json:"repository_storage,omitempty"    jsonschema:"Filter by repository storage shard (administrators only)"`
+	Active               *bool             `json:"active,omitempty"                jsonschema:"Filter by active (true) or inactive/archived (false) groups"`
+	Archived             *bool             `json:"archived,omitempty"              jsonschema:"Limit to archived groups (true) or non-archived (false)"`
+	MarkedForDeletionOn  string            `json:"marked_for_deletion_on,omitempty" jsonschema:"Filter to groups marked for deletion on this date (YYYY-MM-DD)"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
@@ -262,6 +263,7 @@ type SubgroupsListInput struct {
 	Visibility           string               `json:"visibility,omitempty"    jsonschema:"Filter by visibility (public, internal, private)"`
 	TopLevelOnly         bool                 `json:"top_level_only,omitempty" jsonschema:"Limit to top-level subgroups (exclude nested descendants)"`
 	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
+	CustomAttributes     map[string]string    `json:"custom_attributes,omitempty" jsonschema:"Filter subgroups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response"`
 	SkipGroups           []int64              `json:"skip_groups,omitempty"   jsonschema:"Group IDs to exclude from results"`
 	RepositoryStorage    string               `json:"repository_storage,omitempty" jsonschema:"Filter by repository storage shard (administrators only)"`
 	Active               *bool                `json:"active,omitempty"        jsonschema:"Filter by active (true) or inactive/archived (false) subgroups"`
@@ -549,14 +551,9 @@ func memberRoleOutput(r *gl.MemberRole) *MemberRoleOutput {
 	return toolutil.NewMemberRoleOutput(r)
 }
 
-// List retrieves a paginated list of GitLab groups visible to the
-// authenticated user. Supports filtering by search term, ownership, and
-// top-level-only restriction. Returns the groups with pagination metadata.
-func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
-	if err := ctx.Err(); err != nil {
-		return ListOutput{}, err
-	}
-
+// listGroupsOptions builds the SDK options for [List] from the tool input,
+// applying pagination and every supported group filter.
+func listGroupsOptions(input ListInput) *gl.ListGroupsOptions {
 	opts := &gl.ListGroupsOptions{}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	if input.Search != "" {
@@ -586,6 +583,9 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if input.WithCustomAttributes {
 		opts.WithCustomAttributes = new(true)
 	}
+	if len(input.CustomAttributes) > 0 {
+		opts.CustomAttributes = gl.CustomAttributesFilter(input.CustomAttributes)
+	}
 	if len(input.SkipGroups) > 0 {
 		opts.SkipGroups = &input.SkipGroups
 	}
@@ -606,6 +606,18 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 			opts.MarkedForDeletionOn = &t
 		}
 	}
+	return opts
+}
+
+// List retrieves a paginated list of GitLab groups visible to the
+// authenticated user. Supports filtering by search term, ownership, and
+// top-level-only restriction. Returns the groups with pagination metadata.
+func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (ListOutput, error) {
+	if err := ctx.Err(); err != nil {
+		return ListOutput{}, err
+	}
+
+	opts := listGroupsOptions(input)
 
 	groups, resp, err := client.GL().Groups.ListGroups(opts, gl.WithContext(ctx))
 	if err != nil {
@@ -766,6 +778,9 @@ func subgroupsListOptions(input SubgroupsListInput) *gl.ListDescendantGroupsOpti
 	}
 	if input.WithCustomAttributes {
 		opts.WithCustomAttributes = new(true)
+	}
+	if len(input.CustomAttributes) > 0 {
+		opts.CustomAttributes = gl.CustomAttributesFilter(input.CustomAttributes)
 	}
 	if len(input.SkipGroups) > 0 {
 		opts.SkipGroups = &input.SkipGroups

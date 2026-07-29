@@ -153,6 +153,7 @@ type CreateInput struct {
 
 	// CI/CD settings
 	CIConfigPath                    string `json:"ci_config_path,omitempty" jsonschema:"Custom CI/CD configuration file path"`
+	CICDCatalogEnabled              *bool  `json:"cicd_catalog_enabled,omitempty" jsonschema:"Publish the project as a CI/CD catalog resource"`
 	BuildTimeout                    int64  `json:"build_timeout,omitempty" jsonschema:"Build timeout in seconds"`
 	BuildGitStrategy                string `json:"build_git_strategy,omitempty" jsonschema:"Git strategy for builds (fetch, clone)"`
 	BuildCoverageRegex              string `json:"build_coverage_regex,omitempty" jsonschema:"Regex used to extract test coverage from job logs"`
@@ -289,6 +290,7 @@ type Output struct {
 	AllowPipelineTriggerApproveDeployment    bool     `json:"allow_pipeline_trigger_approve_deployment" tier:"premium"`
 	PreventMergeWithoutJiraIssue             bool     `json:"prevent_merge_without_jira_issue" tier:"ultimate"`
 	PrintingMergeRequestLinkEnabled          bool     `json:"printing_merge_request_link_enabled"`
+	CICDCatalogEnabled                       bool     `json:"cicd_catalog_enabled"`
 	CIDefaultGitDepth                        int64    `json:"ci_default_git_depth,omitempty"`
 	CIDeletePipelinesInSeconds               int64    `json:"ci_delete_pipelines_in_seconds,omitempty"`
 	CIForwardDeploymentEnabled               bool     `json:"ci_forward_deployment_enabled"`
@@ -533,6 +535,7 @@ type UpdateInput struct {
 	BuildGitStrategy                       string   `json:"build_git_strategy,omitempty" jsonschema:"Git strategy for builds (fetch, clone)"`
 	BuildCoverageRegex                     string   `json:"build_coverage_regex,omitempty" jsonschema:"Regex used to extract test coverage from job logs"`
 	AutoCancelPendingPipelines             string   `json:"auto_cancel_pending_pipelines,omitempty" jsonschema:"Auto-cancel pending pipelines (enabled, disabled)"`
+	CICDCatalogEnabled                     *bool    `json:"cicd_catalog_enabled,omitempty" jsonschema:"Publish the project as a CI/CD catalog resource"`
 	CIDefaultGitDepth                      int64    `json:"ci_default_git_depth,omitempty" jsonschema:"Default Git clone depth for CI/CD"`
 	CIDeletePipelinesInSeconds             int64    `json:"ci_delete_pipelines_in_seconds,omitempty" jsonschema:"Auto-delete pipelines older than this many seconds"`
 	CIDisplayPipelineVariables             *bool    `json:"ci_display_pipeline_variables,omitempty" jsonschema:"Display pipeline variables in the UI"`
@@ -660,6 +663,7 @@ func ToOutput(p *gl.Project) Output {
 		AllowPipelineTriggerApproveDeployment:    p.AllowPipelineTriggerApproveDeployment,
 		PreventMergeWithoutJiraIssue:             p.PreventMergeWithoutJiraIssue,
 		PrintingMergeRequestLinkEnabled:          p.PrintingMergeRequestLinkEnabled,
+		CICDCatalogEnabled:                       p.CICDCatalogEnabled,
 		CIDefaultGitDepth:                        p.CIDefaultGitDepth,
 		CIDeletePipelinesInSeconds:               p.CIDeletePipelinesInSeconds,
 		CIForwardDeploymentEnabled:               p.CIForwardDeploymentEnabled,
@@ -864,6 +868,9 @@ func applyCreateBuildOpts(opts *gl.CreateProjectOptions, input CreateInput) {
 	}
 	if input.CIConfigPath != "" {
 		opts.CIConfigPath = new(input.CIConfigPath)
+	}
+	if input.CICDCatalogEnabled != nil {
+		opts.CICDCatalogEnabled = input.CICDCatalogEnabled
 	}
 	if input.BuildTimeout > 0 {
 		opts.BuildTimeout = new(input.BuildTimeout)
@@ -1444,6 +1451,9 @@ func applyUpdatePipelineOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 func applyUpdateCIOpts(opts *gl.EditProjectOptions, input UpdateInput) {
 	if input.CIDefaultGitDepth > 0 {
 		opts.CIDefaultGitDepth = new(input.CIDefaultGitDepth)
+	}
+	if input.CICDCatalogEnabled != nil {
+		opts.CICDCatalogEnabled = input.CICDCatalogEnabled
 	}
 	if input.CIDeletePipelinesInSeconds > 0 {
 		opts.CIDeletePipelinesInSeconds = new(input.CIDeletePipelinesInSeconds)
