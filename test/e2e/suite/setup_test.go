@@ -114,6 +114,7 @@ func TestMain(m *testing.M) {
 	sess.glClient = glClient
 	sess.enterprise = enterprise
 	captureE2ESnapshot(glClient)
+	materializeGlobalNotificationSetting(glClient)
 
 	code := m.Run()
 	code = verifyE2ESnapshotAfterRun(glClient, code)
@@ -222,6 +223,54 @@ func configureSafeModeE2EServer(glClient *gitlabclient.Client, enterprise bool) 
 func elicitationClientOptions() *mcp.ClientOptions {
 	return &mcp.ClientOptions{ElicitationHandler: mockElicitHandler}
 }
+
+// materializeGlobalNotificationSetting forces the authenticated user's global
+// notification setting row to exist before any parallel test runs.
+//
+// GitLab creates that row lazily on first access: User#global_notification_setting
+// does notification_settings.find_or_initialize_by(source: nil) and then saves
+// the record when it is not persisted, so even a plain GET /notification_settings
+// writes. Two concurrent callers therefore both build an unpersisted record and
+// both INSERT, and the loser fails the uniqueness validation on
+// (user_id, source_type, source_id) with a 400 "already exists in source".
+//
+// Reading it once here, serially, closes that window for the whole suite: from
+// this point on the row exists, so find_or_initialize_by always finds it and no
+// caller can insert a duplicate.
+//
+// This is defense in depth, not the correctness mechanism. Every test that
+// touches the global setting runs under CapabilityCurrentUserState, including
+// the ledger restore: RunWithCapabilities registers its unlock before
+// NewE2EContext registers the cleanup, and t.Cleanup runs LIFO, so the restore
+// still holds the lock. Materializing the row additionally protects callers
+// that predate or forget that lock. A failure here is therefore retried but
+// never fatal: aborting the whole suite over a transient read would be a worse
+// outcome than losing a redundant safety net, and the tests that actually
+// assert on notification settings report their own failures.
+func materializeGlobalNotificationSetting(glClient *gitlabclient.Client) {
+	if glClient == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var err error
+	for attempt := 1; attempt <= materializeNotificationAttempts; attempt++ {
+		if _, _, err = glClient.GL().NotificationSettings.GetGlobalSettings(gl.WithContext(ctx)); err == nil {
+			return
+		}
+		if attempt < materializeNotificationAttempts {
+			time.Sleep(time.Duration(attempt) * time.Second)
+		}
+	}
+	log.Printf("e2e: could not materialize the global notification setting after %d attempts: %v; "+
+		"CapabilityCurrentUserState still serializes the tests that use it, but the extra guard against "+
+		"GitLab's lazy create is not in place for this run", materializeNotificationAttempts, err)
+}
+
+// materializeNotificationAttempts bounds the retries used to materialize the
+// global notification setting at suite start.
+const materializeNotificationAttempts = 3
 
 func captureE2ESnapshot(glClient *gitlabclient.Client) {
 	if isDockerMode() {
