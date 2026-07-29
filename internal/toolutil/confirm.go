@@ -81,24 +81,37 @@ func hasExplicitConfirm(params map[string]any) bool {
 // ConfirmAction uses MCP elicitation to ask the user for confirmation before
 // a destructive action. Returns nil if the user confirmed or elicitation is
 // unsupported (fallback: action proceeds). Returns a non-error tool result
-// if the user declined or canceled.
+// if the user declined or canceled. On sessions negotiated at protocol
+// >= 2026-07-28 the confirmation travels as a multi round-trip input request
+// (SEP-2322): the first pass returns an input-required result and the client
+// retries the call with the user's answer attached.
 func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string) *mcp.CallToolResult {
 	tool := ""
 	if req != nil {
 		tool = req.Params.Name
 	}
 
-	ec := elicitation.FromRequest(req)
-	if !ec.IsSupported() {
+	flow, err := elicitation.FlowFromRequest(req)
+	if err != nil {
+		slog.Warn("destructive confirmation state invalid", "tool", tool, "error", err)
+		return ErrorResult(err.Error())
+	}
+	if !flow.IsSupported() {
 		return nil
 	}
-	confirmed, err := ec.Confirm(ctx, message)
-	if err != nil {
-		if errors.Is(err, elicitation.ErrDeclined) || errors.Is(err, elicitation.ErrCancelled) {
-			slog.Info("destructive action canceled by user", "tool", tool)
-			return CancelledResult("Operation canceled by user.")
-		}
-		return nil
+	confirmed, err := flow.Confirm(ctx, elicitation.ConfirmExchangeID, message)
+	switch {
+	case errors.Is(err, elicitation.ErrInputPending):
+		slog.Debug("destructive confirmation pending client input", "tool", tool)
+		return flow.InputRequiredResult()
+	case errors.Is(err, elicitation.ErrDeclined), errors.Is(err, elicitation.ErrCancelled):
+		slog.Info("destructive action canceled by user", "tool", tool)
+		return CancelledResult("Operation canceled by user.")
+	case err != nil:
+		// Fail closed: a destructive action must never proceed on a
+		// malformed or failed confirmation exchange.
+		slog.Warn("destructive confirmation failed", "tool", tool, "error", err)
+		return elicitation.ConfirmFailedResult(err)
 	}
 	if !confirmed {
 		slog.Info("destructive action denied by user", "tool", tool)
@@ -115,4 +128,15 @@ func CancelledResult(message string) *mcp.CallToolResult {
 			&mcp.TextContent{Text: message},
 		},
 	}
+}
+
+// InputRequiredResultFromError extracts the input-required tool result from a
+// handler error produced by [elicitation.Flow.PendingError]. Surface
+// dispatchers call this before logging so a pending multi round-trip exchange
+// is returned to the client instead of being reported as a handler failure.
+func InputRequiredResultFromError(err error) (*mcp.CallToolResult, bool) {
+	if inputErr, ok := errors.AsType[*elicitation.InputRequiredError](err); ok {
+		return inputErr.Result(), true
+	}
+	return nil, false
 }

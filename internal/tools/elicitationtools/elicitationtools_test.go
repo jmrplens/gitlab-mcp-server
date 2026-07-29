@@ -504,35 +504,21 @@ func TestProjectCreate_UserDeclinesConfirmation(t *testing.T) {
 }
 
 // setupElicitationSession creates a connected MCP server+client pair where
-// the client supports elicitation. Returns the server, server session, and a
-// cleanup function. The server session can be used to construct CallToolRequests
-// with elicitation support.
+// the client supports elicitation. The client performs the legacy 2025-11-25
+// handshake (via testutil.ConnectLegacyElicitationClient) so direct wizard
+// invocations deterministically exercise the synchronous elicitation path;
+// the multi round-trip path is covered by the TestCatalogSurface_* tests
+// that drive real tools/call round-trips. Returns the server, server
+// session, and a cleanup function (a no-op; teardown is via t.Cleanup).
 func setupElicitationSession(t *testing.T, ctx context.Context, handler func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error)) (*mcp.Server, *mcp.ServerSession, func()) {
 	t.Helper()
 
 	impl := &mcp.Implementation{Name: "test", Version: "1.0.0"}
 	server := mcp.NewServer(impl, nil)
-	client := mcp.NewClient(impl, &mcp.ClientOptions{
-		ElicitationHandler: handler,
-	})
-
-	st, ct := mcp.NewInMemoryTransports()
-	ss, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		t.Fatalf("server connect: %v", err)
-	}
-
-	cs, err := client.Connect(ctx, ct, nil)
-	if err != nil {
-		ss.Close()
-		t.Fatalf("client connect: %v", err)
-	}
-
-	cleanup := func() {
-		cs.Close()
-		ss.Close()
-	}
-	return server, ss, cleanup
+	ss := testutil.ConnectLegacyElicitationClient(ctx, t, server, func(ctx context.Context, params *mcp.ElicitParams) (*mcp.ElicitResult, error) {
+		return handler(ctx, &mcp.ElicitRequest{Params: params})
+	}, testutil.LegacyClientOptions{})
+	return server, ss, func() {}
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.
@@ -1066,11 +1052,12 @@ func TestIssueCreate_Confidential(t *testing.T) {
 	}
 }
 
-// ConfirmAction — generic error (not Declined/Cancelled) → nil.
+// ConfirmAction — generic error (not Declined/Cancelled) → fail closed.
 
-// TestConfirmAction_OtherError verifies that ConfirmAction returns nil when
-// ec.Confirm returns a generic error (not ErrDeclined/ErrCancelled),
-// maintaining backward compatibility by allowing the operation to proceed.
+// TestConfirmAction_OtherError verifies that ConfirmAction fails closed with
+// an error result when the confirmation exchange fails for a reason other
+// than an explicit user decision, so the destructive action never proceeds
+// on a failed confirmation.
 func TestConfirmAction_OtherError(t *testing.T) {
 	ctx := context.Background()
 	_, ss, cleanup := setupElicitationSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
@@ -1079,8 +1066,11 @@ func TestConfirmAction_OtherError(t *testing.T) {
 	defer cleanup()
 
 	r := ConfirmAction(ctx, &mcp.CallToolRequest{Session: ss}, "Proceed?")
-	if r != nil {
-		t.Error("ConfirmAction should return nil on generic error (backward compat)")
+	if r == nil {
+		t.Fatal("ConfirmAction should fail closed on generic confirmation errors")
+	}
+	if !r.IsError {
+		t.Error("ConfirmAction(generic error).IsError = false, want true")
 	}
 }
 

@@ -2274,6 +2274,9 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 
 		start := time.Now()
 		result, err := route.Handler(actionCtx, input.Params)
+		if inputResult, needsInput := InputRequiredResultFromError(err); needsInput {
+			return inputResult, nil, nil
+		}
 		LogToolCallAll(ctx, req, fmt.Sprintf("%s/%s", toolName, input.Action), start, err)
 
 		if err != nil {

@@ -255,6 +255,9 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 		actionCtx := toolutil.ContextWithRequest(ctx, req)
 		start := time.Now()
 		result, err := action.Route.Handler(actionCtx, input)
+		if inputResult, needsInput := toolutil.InputRequiredResultFromError(err); needsInput {
+			return inputResult, nil, nil
+		}
 		toolutil.LogToolCallAll(ctx, req, toolName, start, err)
 		if err != nil {
 			return nil, nil, err

@@ -55,6 +55,9 @@ func surfaceToolHandler(toolName string, route ActionRoute, formatResult FormatR
 			}
 		}
 		result, err := route.Handler(ContextWithRequest(ctx, req), input)
+		if inputResult, needsInput := InputRequiredResultFromError(err); needsInput {
+			return inputResult, nil, nil
+		}
 		LogToolCallAll(ctx, req, toolName, start, err)
 		if err != nil {
 			return nil, nil, err

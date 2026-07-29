@@ -213,12 +213,12 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ----------------------------------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              2,180 |        31,758 |       33,938 |
-| `dynamic` / `minimal`                                 | Free/CE  |             2 |               851 | n/a                 |              2,180 |         1,088 |        3,268 |
-| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              2,180 |        31,758 |       33,938 |
-| `dynamic` / `minimal`                                 | Premium  |             2 |             1,003 | n/a                 |              2,180 |         1,088 |        3,268 |
-| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              2,180 |        31,758 |       33,938 |
-| `dynamic` / `minimal`                                 | Ultimate |             2 |             1,069 | n/a                 |              2,180 |         1,088 |        3,268 |
+| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              2,192 |        31,758 |       33,950 |
+| `dynamic` / `minimal`                                 | Free/CE  |             2 |               851 | n/a                 |              2,192 |         1,088 |        3,280 |
+| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              2,192 |        31,758 |       33,950 |
+| `dynamic` / `minimal`                                 | Premium  |             2 |             1,003 | n/a                 |              2,192 |         1,088 |        3,280 |
+| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              2,192 |        31,758 |       33,950 |
+| `dynamic` / `minimal`                                 | Ultimate |             2 |             1,069 | n/a                 |              2,192 |         1,088 |        3,280 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 
@@ -363,7 +363,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | Component     | Technology                                       |
 | ------------- | ------------------------------------------------ |
 | Language      | Go 1.26+                                         |
-| MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.6.1  |
+| MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.7.0  |
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.51.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
@@ -392,20 +392,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       968 |     193,671 |
-| Unit tests (`_test.go`)  |       537 |     298,963 |
+| Source (`.go`, non-test) |       971 |     194,308 |
+| Unit tests (`_test.go`)  |       540 |     299,625 |
 | End-to-end tests         |       169 |      43,956 |
-| **Total**                | **1,674** | **536,590** |
+| **Total**                | **1,680** | **537,889** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,415 |
-| — exported (public)             |  2,600 |
-| — unexported (private)          |  4,815 |
-| Unit test functions (`TestXxx`) | 11,576 |
-| Subtests (`t.Run(...)`)         |  2,893 |
+| Source functions                |  7,455 |
+| — exported (public)             |  2,618 |
+| — unexported (private)          |  4,837 |
+| Unit test functions (`TestXxx`) | 11,599 |
+| Subtests (`t.Run(...)`)         |  2,895 |
 | End-to-end test functions       |    376 |
 
 ### Ratios worth noting
@@ -414,18 +414,18 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.54× more tests than code |
 | Average source file length         |                 ~200 lines |
-| Average test file length           |                 ~556 lines |
-| Comment lines in source            |  21,179 (~10.9% of source) |
+| Average test file length           |                 ~554 lines |
+| Comment lines in source            |  21,346 (~11.0% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,638 |
-| `defer` statements                 |   830 |
-| `struct` types defined             | 2,722 |
-| `//nolint` suppressions            |   206 |
+| `if err != nil` checks             | 6,670 |
+| `defer` statements                 |   832 |
+| `struct` types defined             | 2,727 |
+| `//nolint` suppressions            |   210 |
 | `TODO` / `FIXME` / `HACK` comments |     3 |
 
 ### Project
@@ -435,7 +435,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Go packages                    |   229 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   272 |
+| Git commits                    |   276 |
 | Unique contributors            |     4 |
 
 ### Hall of fame
@@ -449,8 +449,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,521 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,521 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,532 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,525 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

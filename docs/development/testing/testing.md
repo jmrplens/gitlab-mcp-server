@@ -18,26 +18,26 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 11,936 |
-| Unit test functions                                   | 11,564 |
+| Total test functions                                  | 11,959 |
+| Unit test functions                                   | 11,587 |
 | E2E test functions                                    |    372 |
 | cmd test functions                                    |    933 |
-| Test files (internal/)                                |    465 |
+| Test files (internal/)                                |    468 |
 | Test files (cmd/)                                     |     72 |
 | Test files (test/e2e/suite/)                          |    166 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     16 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  91.2% |
-| Overall coverage (`go test ./internal/...`)           |  95.0% |
-| Average package coverage                              |  95.4% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  91.1% |
+| Overall coverage (`go test ./internal/...`)           |  94.9% |
+| Average package coverage                              |  95.3% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,576 | 88.6% |
-| `TestFunc` (no underscore)             |    963 |  8.1% |
-| `TestFunc_Scenario_Expected` (3+ part) |    397 |  3.3% |
+| `TestFunc_Scenario` (2-part)           | 10,582 | 88.5% |
+| `TestFunc` (no underscore)             |    964 |  8.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |    413 |  3.5% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,022 |        102 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,045 |        105 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            283 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (175) |          8,326 |        349 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            372 |        166 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            933 |         72 | server entry point and developer command utilities                                              |
-| **Total**               |     **11,936** |    **703** |                                                                                                 |
+| **Total**               |     **11,959** |    **706** |                                                                                                 |
 
 ### Core Packages
 
@@ -62,17 +62,17 @@
 | completions  |        96 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                          |
 | config       |        74 |    99.7% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                  |
 | edition      |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                     |
-| elicitation  |        79 |    92.5% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                      |
+| elicitation  |       100 |    85.0% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                      |
 | gitlab       |        44 |   100.0% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                           |
 | oauth        |        35 |    98.6% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                           |
 | progress     |        17 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                     |
 | prompts      |       261 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                        |
 | resources    |       182 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
 | serverpool   |        47 |    99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
-| testutil     |        28 |    95.9% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
-| toolutil     |       698 |    98.9% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
+| testutil     |        29 |    85.3% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
+| toolutil     |       699 |    98.7% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard       |       327 |   100.0% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **2,022** |          |                                                                                                                                                                                                                   |
+| **Subtotal** | **2,045** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -151,7 +151,7 @@
 | dockerfiletemplates     |        15 |          1 |   100.0% |         2 |
 | dorametrics             |        11 |          2 |   100.0% |         2 |
 | dynamic                 |       159 |         10 |    99.9% |         2 |
-| elicitationtools        |        61 |          2 |   100.0% |         4 |
+| elicitationtools        |        61 |          2 |    99.5% |         4 |
 | enterpriseusers         |        35 |          3 |   100.0% |         4 |
 | environments            |        56 |          2 |   100.0% |         6 |
 | epicdiscussions         |        16 |          2 |   100.0% |         6 |
@@ -339,22 +339,22 @@
 | completions |   100.0% |
 | config      |    99.7% |
 | edition     |    87.0% |
-| elicitation |    92.5% |
+| elicitation |    85.0% |
 | gitlab      |   100.0% |
 | oauth       |    98.6% |
 | progress    |   100.0% |
 | prompts     |   100.0% |
 | resources   |   100.0% |
 | serverpool  |    99.6% |
-| testutil    |    95.9% |
-| toolutil    |    98.9% |
+| testutil    |    85.3% |
+| toolutil    |    98.7% |
 | wizard      |   100.0% |
 
 ### Tool Sub-Packages
 
 | Package                 | Coverage |
 | ----------------------- | -------: |
-| tools (orch.)           |    98.2% |
+| tools (orch.)           |    98.0% |
 | accessrequests          |   100.0% |
 | accesstokens            |    99.8% |
 | actioncatalog           |    99.1% |
@@ -395,7 +395,7 @@
 | dockerfiletemplates     |   100.0% |
 | dorametrics             |   100.0% |
 | dynamic                 |    99.9% |
-| elicitationtools        |   100.0% |
+| elicitationtools        |    99.5% |
 | enterpriseusers         |   100.0% |
 | environments            |   100.0% |
 | epicdiscussions         |   100.0% |
@@ -554,6 +554,8 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_catalog_first** (80.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_doc_coverage** (81.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/internal/mcpsurface** (81.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **elicitation** (85.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
+- **testutil** (85.3%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **cmd/audit_1to1/internal/merge** (85.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_docker_tools** (86.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/internal/apidocs** (86.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
