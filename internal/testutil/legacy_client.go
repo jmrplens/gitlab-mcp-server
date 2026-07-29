@@ -41,6 +41,11 @@ type ElicitHandlerFunc func(context.Context, *mcp.ElicitParams) (*mcp.ElicitResu
 // requests are answered by handler; ping requests are acknowledged; all
 // other server-initiated requests fail with MethodNotFound. The session and
 // the fake client are torn down via t.Cleanup.
+//
+// After the handshake, handler runs on the fake client's serving goroutine,
+// not the test goroutine: report failures inside handler with t.Errorf or by
+// returning an error, never t.Fatal/t.FailNow (which only terminate the
+// calling goroutine).
 func ConnectLegacyElicitationClient(ctx context.Context, t *testing.T, server *mcp.Server, handler ElicitHandlerFunc, opts LegacyClientOptions) *mcp.ServerSession {
 	t.Helper()
 

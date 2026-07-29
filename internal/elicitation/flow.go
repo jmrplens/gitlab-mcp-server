@@ -113,7 +113,10 @@ func FlowFromRequest(req *mcp.CallToolRequest) (*Flow, error) {
 	for id, resp := range req.Params.InputResponses {
 		er, ok := resp.(*mcp.ElicitResult)
 		if !ok {
-			continue
+			// This flow only ever queues elicitation requests, so any other
+			// response type is client misbehavior. Silently skipping it would
+			// re-queue the same input request forever; fail instead.
+			return nil, fmt.Errorf("elicitation: input response %q has unexpected type %T (want *mcp.ElicitResult)", id, resp)
 		}
 		f.answers[id] = answerRecord{Action: er.Action, Content: er.Content}
 	}
@@ -208,7 +211,7 @@ func (f *Flow) SelectMulti(ctx context.Context, id, message string, options []st
 	if err != nil {
 		return nil, err
 	}
-	return parseSelectMultiContent(content, options)
+	return parseSelectMultiContent(content, options, minItems, maxItems)
 }
 
 // SelectOneInt asks the user to pick one integer from a list of allowed
@@ -240,7 +243,7 @@ func (f *Flow) PromptNumber(ctx context.Context, id, message, fieldName string, 
 	if err != nil {
 		return 0, err
 	}
-	return parseNumberContent(content, fieldName)
+	return parseNumberContent(content, fieldName, minVal, maxVal)
 }
 
 // GatherData sends an arbitrary JSON Schema to the client and returns the

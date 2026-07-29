@@ -1052,11 +1052,12 @@ func TestIssueCreate_Confidential(t *testing.T) {
 	}
 }
 
-// ConfirmAction — generic error (not Declined/Cancelled) → nil.
+// ConfirmAction — generic error (not Declined/Cancelled) → fail closed.
 
-// TestConfirmAction_OtherError verifies that ConfirmAction returns nil when
-// ec.Confirm returns a generic error (not ErrDeclined/ErrCancelled),
-// maintaining backward compatibility by allowing the operation to proceed.
+// TestConfirmAction_OtherError verifies that ConfirmAction fails closed with
+// an error result when the confirmation exchange fails for a reason other
+// than an explicit user decision, so the destructive action never proceeds
+// on a failed confirmation.
 func TestConfirmAction_OtherError(t *testing.T) {
 	ctx := context.Background()
 	_, ss, cleanup := setupElicitationSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
@@ -1065,8 +1066,11 @@ func TestConfirmAction_OtherError(t *testing.T) {
 	defer cleanup()
 
 	r := ConfirmAction(ctx, &mcp.CallToolRequest{Session: ss}, "Proceed?")
-	if r != nil {
-		t.Error("ConfirmAction should return nil on generic error (backward compat)")
+	if r == nil {
+		t.Fatal("ConfirmAction should fail closed on generic confirmation errors")
+	}
+	if !r.IsError {
+		t.Error("ConfirmAction(generic error).IsError = false, want true")
 	}
 }
 

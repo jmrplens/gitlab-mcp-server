@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -115,29 +116,51 @@ func TestFlow_SelectOne_RejectsUnknownOption(t *testing.T) {
 // remaining typed prompt helpers (multi-select, integer select, number,
 // arbitrary schema).
 func TestFlow_TypedPrompts_ReplayAnswers(t *testing.T) {
-	ctx := context.Background()
-	f := newMRTRFlow(map[string]answerRecord{
-		"langs":  {Action: "accept", Content: map[string]any{"selections": []any{"go", "rust"}}},
-		"count":  {Action: "accept", Content: map[string]any{"selection": float64(3)}},
-		"rating": {Action: "accept", Content: map[string]any{"rating": 4.5}},
-		"form":   {Action: "accept", Content: map[string]any{"a": "b"}},
-	})
-
-	langs, err := f.SelectMulti(ctx, "langs", "Pick languages", []string{"go", "rust", "zig"}, 1, 0)
-	if err != nil || len(langs) != 2 {
-		t.Errorf("SelectMulti = (%v, %v), want 2 selections", langs, err)
+	newFlow := func() *Flow {
+		return newMRTRFlow(map[string]answerRecord{
+			"langs":  {Action: "accept", Content: map[string]any{"selections": []any{"go", "rust"}}},
+			"count":  {Action: "accept", Content: map[string]any{"selection": float64(3)}},
+			"rating": {Action: "accept", Content: map[string]any{"rating": 4.5}},
+			"form":   {Action: "accept", Content: map[string]any{"a": "b"}},
+		})
 	}
-	count, err := f.SelectOneInt(ctx, "count", "Pick count", []int{1, 2, 3})
-	if err != nil || count != 3 {
-		t.Errorf("SelectOneInt = (%d, %v), want 3", count, err)
+	tests := []struct {
+		name  string
+		check func(t *testing.T, f *Flow)
+	}{
+		{"SelectMulti replays selections", func(t *testing.T, f *Flow) {
+			t.Helper()
+			langs, err := f.SelectMulti(t.Context(), "langs", "Pick languages", []string{"go", "rust", "zig"}, 1, 0)
+			if err != nil || len(langs) != 2 {
+				t.Errorf("SelectMulti = (%v, %v), want 2 selections", langs, err)
+			}
+		}},
+		{"SelectOneInt replays selection", func(t *testing.T, f *Flow) {
+			t.Helper()
+			count, err := f.SelectOneInt(t.Context(), "count", "Pick count", []int{1, 2, 3})
+			if err != nil || count != 3 {
+				t.Errorf("SelectOneInt = (%d, %v), want 3", count, err)
+			}
+		}},
+		{"PromptNumber replays value", func(t *testing.T, f *Flow) {
+			t.Helper()
+			rating, err := f.PromptNumber(t.Context(), "rating", "Rate", "rating", 0, 5)
+			if err != nil || rating != 4.5 {
+				t.Errorf("PromptNumber = (%g, %v), want 4.5", rating, err)
+			}
+		}},
+		{"GatherData replays content", func(t *testing.T, f *Flow) {
+			t.Helper()
+			form, err := f.GatherData(t.Context(), "form", "Fill", map[string]any{"type": "object"})
+			if err != nil || form["a"] != "b" {
+				t.Errorf("GatherData = (%v, %v), want map with a=b", form, err)
+			}
+		}},
 	}
-	rating, err := f.PromptNumber(ctx, "rating", "Rate", "rating", 0, 5)
-	if err != nil || rating != 4.5 {
-		t.Errorf("PromptNumber = (%g, %v), want 4.5", rating, err)
-	}
-	form, err := f.GatherData(ctx, "form", "Fill", map[string]any{"type": "object"})
-	if err != nil || form["a"] != "b" {
-		t.Errorf("GatherData = (%v, %v), want map with a=b", form, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.check(t, newFlow())
+		})
 	}
 }
 
@@ -300,6 +323,9 @@ func TestFlow_MRTR_ConfirmDeclined(t *testing.T) {
 // opaque RequestState and each round only elicits the next unanswered
 // prompt, in order.
 func TestFlow_MRTR_MultiStepAccumulatesState(t *testing.T) {
+	// The elicitation handler runs on the client session's goroutine, so
+	// guard the recorded messages against concurrent access.
+	var mu sync.Mutex
 	var messages []string
 	answers := map[string]map[string]any{
 		"Enter first":  {"first": "hello"},
@@ -335,7 +361,9 @@ func TestFlow_MRTR_MultiStepAccumulatesState(t *testing.T) {
 	}
 
 	cs := flowTestTool(t, handler, func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		mu.Lock()
 		messages = append(messages, req.Params.Message)
+		mu.Unlock()
 		content, ok := answers[req.Params.Message]
 		if !ok {
 			return nil, errors.New("unexpected elicitation: " + req.Params.Message)
@@ -351,6 +379,8 @@ func TestFlow_MRTR_MultiStepAccumulatesState(t *testing.T) {
 		t.Errorf("result text = %q, want 'hello|world'", got)
 	}
 	want := []string{"Enter first", "Enter second", "Proceed?"}
+	mu.Lock()
+	defer mu.Unlock()
 	if len(messages) != len(want) {
 		t.Fatalf("elicitation messages = %v, want %v", messages, want)
 	}
@@ -383,6 +413,32 @@ func TestFlow_MRTR_InvalidRequestState(t *testing.T) {
 	}
 	if got := resultText(result); !strings.Contains(got, "state rejected") {
 		t.Errorf("result text = %q, want state rejection", got)
+	}
+}
+
+// TestFlow_MRTR_UnexpectedResponseType verifies that an input response of a
+// type this flow never requests (anything but *mcp.ElicitResult) is rejected
+// as an error instead of being silently dropped and re-queued forever.
+func TestFlow_MRTR_UnexpectedResponseType(t *testing.T) {
+	handler := func(_ context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
+		//nolint:staticcheck // deliberately uses a non-elicitation InputResponse type to exercise the mismatch rejection; all such types are deprecated upstream
+		req.Params.InputResponses = mcp.InputResponseMap{"confirm": &mcp.ListRootsResult{}}
+		if _, err := FlowFromRequest(req); err != nil {
+			//nolint:nilerr // the rejection is asserted in-band via the result text
+			return textResult("response rejected: " + err.Error()), nil
+		}
+		return textResult("response accepted"), nil
+	}
+	cs := flowTestTool(t, handler, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": true}}, nil
+	})
+
+	result, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "flow_tool", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if got := resultText(result); !strings.Contains(got, "response rejected") {
+		t.Errorf("result text = %q, want unexpected-type rejection", got)
 	}
 }
 

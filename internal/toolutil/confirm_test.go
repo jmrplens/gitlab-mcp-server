@@ -245,17 +245,24 @@ func TestConfirmAction_NilReqProceeds(t *testing.T) {
 	}
 }
 
-// TestConfirmAction_UnknownActionProceeds verifies that elicitation errors
-// other than ErrDeclined/ErrCancelled are treated as a fallback to proceed
-// (returning nil) so the destructive action can still run.
-func TestConfirmAction_UnknownActionProceeds(t *testing.T) {
+// TestConfirmAction_UnknownActionFailsClosed verifies that a malformed
+// elicitation answer (an unrecognized action value) fails closed with an
+// error result instead of letting the destructive action proceed.
+func TestConfirmAction_UnknownActionFailsClosed(t *testing.T) {
 	ss := newConfirmSession(t, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
 		return &mcp.ElicitResult{Action: "weird-action"}, nil
 	})
 
 	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
-	if got := ConfirmAction(context.Background(), req, "Delete?"); got != nil {
-		t.Errorf("ConfirmAction(unknown action) = %+v, want nil", got)
+	got := ConfirmAction(context.Background(), req, "Delete?")
+	if got == nil {
+		t.Fatal("ConfirmAction(unknown action) = nil, want fail-closed error result")
+	}
+	if !got.IsError {
+		t.Error("ConfirmAction(unknown action).IsError = false, want true")
+	}
+	if !strings.Contains(surfaceToolText(got), "Confirmation failed") {
+		t.Errorf("fail-closed text = %q, want it to mention 'Confirmation failed'", surfaceToolText(got))
 	}
 }
 

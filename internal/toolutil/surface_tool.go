@@ -2,13 +2,10 @@ package toolutil
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
 )
 
 // SurfaceToolRegisterOptions controls how an ActionSpec is exposed as a
@@ -58,8 +55,8 @@ func surfaceToolHandler(toolName string, route ActionRoute, formatResult FormatR
 			}
 		}
 		result, err := route.Handler(ContextWithRequest(ctx, req), input)
-		if inputErr, matched := errors.AsType[*elicitation.InputRequiredError](err); matched {
-			return inputErr.Result(), nil, nil
+		if inputResult, needsInput := InputRequiredResultFromError(err); needsInput {
+			return inputResult, nil, nil
 		}
 		LogToolCallAll(ctx, req, toolName, start, err)
 		if err != nil {

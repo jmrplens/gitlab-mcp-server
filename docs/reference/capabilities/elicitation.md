@@ -100,9 +100,9 @@ How prompts travel over the wire depends on the negotiated MCP protocol version.
 | Session protocol        | Mechanism                                  | Wire shape                                                                                                                 |
 | ----------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | `< 2026-07-28` (legacy) | Synchronous server-initiated requests      | The server sends `elicitation/create` requests mid-call and blocks for each answer                                         |
-| `>= 2026-07-28`         | Multi round-trip requests (MRTR, SEP-2322) | The tool result carries an `inputRequests` map; the client fulfills it and retries the call with `inputResponses` attached |
+| `>= 2026-07-28`         | Multi-round-trip requests (MRTR, SEP-2322) | The tool result carries an `inputRequests` map; the client fulfills it and retries the call with `inputResponses` attached |
 
-On the multi round-trip path the handler is **re-invoked from the start on every round**. Answers gathered in earlier rounds are carried in the opaque `requestState` string that the client echoes back, so multi-step wizards replay previously answered prompts from state instead of re-asking the user. From the user's perspective both mechanisms look identical: the same sequential forms in the same order.
+On the multi-round-trip path the handler is **re-invoked from the start on every round**. Answers gathered in earlier rounds are carried in the opaque `requestState` string that the client echoes back, so multi-step wizards replay previously answered prompts from state instead of re-asking the user. From the user's perspective both mechanisms look identical: the same sequential forms in the same order.
 
 ```go
 flow, err := elicitation.FlowFromRequest(req)
@@ -130,7 +130,7 @@ if !elicitClient.IsSupported() {
 
 ### Flow
 
-`Flow` (built with `FlowFromRequest(req)`) is the protocol-aware entry point used by all wizards and confirmation guards. It mirrors every `Client` prompt method with one extra leading argument: a **stable exchange id** (unique per prompt within one tool call) that identifies the exchange across handler re-invocations on the multi round-trip path. On legacy sessions each method delegates to the synchronous `Client` internally.
+`Flow` (built with `FlowFromRequest(req)`) is the protocol-aware entry point used by all wizards and confirmation guards. It mirrors every `Client` prompt method with one extra leading argument: a **stable exchange id** (unique per prompt within one tool call) that identifies the exchange across handler re-invocations on the multi-round-trip path. On legacy sessions each method delegates to the synchronous `Client` internally.
 
 ```go
 flow, err := elicitation.FlowFromRequest(req)

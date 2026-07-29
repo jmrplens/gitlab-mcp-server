@@ -141,7 +141,7 @@ func (c Client) SelectMulti(ctx context.Context, message string, options []strin
 	if err != nil {
 		return nil, err
 	}
-	return parseSelectMultiContent(result, options)
+	return parseSelectMultiContent(result, options, minItems, maxItems)
 }
 
 // SelectOneInt asks the user to pick one integer from a list of allowed values.
@@ -174,7 +174,7 @@ func (c Client) PromptNumber(ctx context.Context, message, fieldName string, min
 	if err != nil {
 		return 0, err
 	}
-	return parseNumberContent(result, fieldName)
+	return parseNumberContent(result, fieldName, minVal, maxVal)
 }
 
 // isInf reports whether f is +Inf or -Inf.
@@ -315,14 +315,13 @@ const ConfirmExchangeID = "confirm"
 // Returns nil if confirmed or elicitation is not supported (backward compatible).
 // Returns a non-nil *mcp.CallToolResult if the user declined or canceled, or
 // an input-required result when the session uses multi round-trip requests
-// and the client has not answered yet.
+// and the client has not answered yet. Any other confirmation failure fails
+// closed with an error result: a destructive action must never proceed on a
+// malformed or failed confirmation exchange.
 func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string) *mcp.CallToolResult {
 	flow, err := FlowFromRequest(req)
 	if err != nil {
-		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}},
-			IsError: true,
-		}
+		return ConfirmFailedResult(err)
 	}
 	if !flow.IsSupported() {
 		return nil
@@ -334,12 +333,24 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string
 	case errors.Is(err, ErrDeclined), errors.Is(err, ErrCancelled):
 		return CancelledResult("Operation canceled by user.")
 	case err != nil:
-		return nil
+		return ConfirmFailedResult(err)
 	}
 	if !confirmed {
 		return CancelledResult("Operation canceled by user.")
 	}
 	return nil
+}
+
+// ConfirmFailedResult returns the fail-closed error result used when a
+// destructive-action confirmation exchange fails for a reason other than an
+// explicit user decision (for example a malformed answer or a transport
+// failure). It instructs the caller to re-send with explicit approval.
+func ConfirmFailedResult(err error) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf(
+			"Confirmation failed: %v. The action was not executed. Re-send with \"confirm\": true only after the user explicitly approves this operation.", err)}},
+		IsError: true,
+	}
 }
 
 // CancelledResult returns a non-error tool result indicating the user canceled.

@@ -135,11 +135,18 @@ func selectMultiSchema(message string, options []string, minItems, maxItems int)
 	}
 }
 
-// parseSelectMultiContent extracts and validates the selected options.
-func parseSelectMultiContent(content map[string]any, options []string) ([]string, error) {
+// parseSelectMultiContent extracts and validates the selected options,
+// including the cardinality bounds advertised in the schema (0 = no bound).
+func parseSelectMultiContent(content map[string]any, options []string, minItems, maxItems int) ([]string, error) {
 	raw, ok := content["selections"].([]any)
 	if !ok {
 		return nil, errors.New("elicitation: response field 'selections' is not an array")
+	}
+	if minItems > 0 && len(raw) < minItems {
+		return nil, fmt.Errorf("elicitation: %d selections returned, want at least %d", len(raw), minItems)
+	}
+	if maxItems > 0 && len(raw) > maxItems {
+		return nil, fmt.Errorf("elicitation: %d selections returned, want at most %d", len(raw), maxItems)
 	}
 	selections := make([]string, 0, len(raw))
 	for _, v := range raw {
@@ -218,14 +225,21 @@ func numberSchema(message, fieldName string, minVal, maxVal float64) map[string]
 	}
 }
 
-// parseNumberContent extracts the numeric value of fieldName.
-func parseNumberContent(content map[string]any, fieldName string) (float64, error) {
+// parseNumberContent extracts the numeric value of fieldName and enforces
+// the bounds advertised in the schema (infinities mean unbounded).
+func parseNumberContent(content map[string]any, fieldName string, minVal, maxVal float64) (float64, error) {
 	f, ok := content[fieldName].(float64)
 	if !ok {
 		return 0, fmt.Errorf("elicitation: response field %q is not a number", fieldName)
 	}
 	if math.IsNaN(f) {
 		return 0, fmt.Errorf("elicitation: response field %q is NaN", fieldName)
+	}
+	if !isInf(minVal) && f < minVal {
+		return 0, fmt.Errorf("elicitation: response value %g is below the minimum %g", f, minVal)
+	}
+	if !isInf(maxVal) && f > maxVal {
+		return 0, fmt.Errorf("elicitation: response value %g is above the maximum %g", f, maxVal)
 	}
 	return f, nil
 }

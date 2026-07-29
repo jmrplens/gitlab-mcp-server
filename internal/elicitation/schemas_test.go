@@ -71,24 +71,58 @@ func TestTextSchema_ParseTextContent(t *testing.T) {
 	}
 }
 
-// TestSelectSchemas_ValidateOptions verifies enum construction and option
-// validation across the single, multi, and integer select parsers.
+// TestSelectSchemas_ValidateOptions verifies enum construction, option
+// validation, and cardinality enforcement across the single, multi, and
+// integer select parsers.
 func TestSelectSchemas_ValidateOptions(t *testing.T) {
-	if _, err := parseSelectOneContent(map[string]any{"selection": "c"}, []string{"a", "b"}); err == nil {
-		t.Error("parseSelectOneContent(out of enum) error = nil, want error")
+	tests := []struct {
+		name    string
+		run     func() error
+		wantErr bool
+	}{
+		{"select one rejects out-of-enum value", func() error {
+			_, err := parseSelectOneContent(map[string]any{"selection": "c"}, []string{"a", "b"})
+			return err
+		}, true},
+		{"select multi rejects non-string element", func() error {
+			_, err := parseSelectMultiContent(map[string]any{"selections": []any{"a", 3}}, []string{"a"}, 0, 0)
+			return err
+		}, true},
+		{"select multi rejects fewer than minItems", func() error {
+			_, err := parseSelectMultiContent(map[string]any{"selections": []any{}}, []string{"a", "b"}, 1, 0)
+			return err
+		}, true},
+		{"select multi rejects more than maxItems", func() error {
+			_, err := parseSelectMultiContent(map[string]any{"selections": []any{"a", "b"}}, []string{"a", "b"}, 0, 1)
+			return err
+		}, true},
+		{"select multi accepts within bounds", func() error {
+			_, err := parseSelectMultiContent(map[string]any{"selections": []any{"a"}}, []string{"a", "b"}, 1, 2)
+			return err
+		}, false},
+		{"select int rejects non-integer", func() error {
+			_, err := parseSelectOneIntContent(map[string]any{"selection": 2.5}, []int{1, 2})
+			return err
+		}, true},
+		{"select int rejects NaN", func() error {
+			_, err := parseSelectOneIntContent(map[string]any{"selection": math.NaN()}, []int{1})
+			return err
+		}, true},
+		{"select int accepts allowed value", func() error {
+			got, err := parseSelectOneIntContent(map[string]any{"selection": float64(2)}, []int{1, 2})
+			if err == nil && got != 2 {
+				return errors.New("wrong value")
+			}
+			return err
+		}, false},
 	}
-	if _, err := parseSelectMultiContent(map[string]any{"selections": []any{"a", 3}}, []string{"a"}); err == nil {
-		t.Error("parseSelectMultiContent(non-string element) error = nil, want error")
-	}
-	if _, err := parseSelectOneIntContent(map[string]any{"selection": 2.5}, []int{1, 2}); err == nil {
-		t.Error("parseSelectOneIntContent(non-integer) error = nil, want error")
-	}
-	if _, err := parseSelectOneIntContent(map[string]any{"selection": math.NaN()}, []int{1}); err == nil {
-		t.Error("parseSelectOneIntContent(NaN) error = nil, want error")
-	}
-	got, err := parseSelectOneIntContent(map[string]any{"selection": float64(2)}, []int{1, 2})
-	if err != nil || got != 2 {
-		t.Errorf("parseSelectOneIntContent = (%d, %v), want (2, nil)", got, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.run()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }
 
@@ -111,10 +145,19 @@ func TestNumberSchema_BoundsAndParse(t *testing.T) {
 		t.Error("numberSchema(+Inf) still has maximum")
 	}
 
-	if _, err := parseNumberContent(map[string]any{"v": math.NaN()}, "v"); err == nil {
+	if _, err := parseNumberContent(map[string]any{"v": math.NaN()}, "v", math.Inf(-1), math.Inf(1)); err == nil {
 		t.Error("parseNumberContent(NaN) error = nil, want error")
 	}
-	if _, err := parseNumberContent(map[string]any{"v": "x"}, "v"); err == nil {
+	if _, err := parseNumberContent(map[string]any{"v": "x"}, "v", math.Inf(-1), math.Inf(1)); err == nil {
 		t.Error("parseNumberContent(non-number) error = nil, want error")
+	}
+	if _, err := parseNumberContent(map[string]any{"v": -1.0}, "v", 0, 5); err == nil {
+		t.Error("parseNumberContent(below minimum) error = nil, want error")
+	}
+	if _, err := parseNumberContent(map[string]any{"v": 6.0}, "v", 0, 5); err == nil {
+		t.Error("parseNumberContent(above maximum) error = nil, want error")
+	}
+	if got, err := parseNumberContent(map[string]any{"v": 4.5}, "v", 0, 5); err != nil || got != 4.5 {
+		t.Errorf("parseNumberContent(in range) = (%g, %v), want (4.5, nil)", got, err)
 	}
 }

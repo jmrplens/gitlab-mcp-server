@@ -51,7 +51,7 @@ sequenceDiagram
     S-->>AI: MR !123 created successfully
 ```
 
-The wire mechanism adapts to the negotiated MCP protocol version: on sessions older than `2026-07-28` the server sends `elicitation/create` requests mid-call, while on `2026-07-28` and newer the prompts travel as multi round-trip input requests (SEP-2322) — the tool result asks for input and the client retries the call with the answers attached. The user experience is identical in both cases.
+The wire mechanism adapts to the negotiated MCP protocol version: on sessions older than `2026-07-28` the server sends `elicitation/create` requests mid-call, while on `2026-07-28` and newer the prompts travel as multi-round-trip input requests (SEP-2322) — the tool result asks for input and the client retries the call with the answers attached. The user experience is identical in both cases.
 
 ## Which interactive wizards are available?
 

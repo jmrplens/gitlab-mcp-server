@@ -1264,12 +1264,10 @@ func TestConfirmAction_NotConfirmed(t *testing.T) {
 	}
 }
 
-// TestConfirmAction_OtherError verifies that [ConfirmAction] returns nil
-// (does not cancel the operation) when [Client.Confirm] returns an error
-// that is neither [ErrDeclined] nor [ErrCancelled]. The handler signals
-// this by returning an unrecognized Action value, which causes the SDK
-// (or our wrapper) to surface a generic error rather than the two
-// well-known sentinels.
+// TestConfirmAction_OtherError verifies that [ConfirmAction] fails closed
+// when [Client.Confirm] returns an error that is neither [ErrDeclined] nor
+// [ErrCancelled]: the guard returns an error result so the destructive
+// action does not proceed on a failed confirmation exchange.
 func TestConfirmAction_OtherError(t *testing.T) {
 	ctx := context.Background()
 	server, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
@@ -1281,8 +1279,11 @@ func TestConfirmAction_OtherError(t *testing.T) {
 	req := &mcp.CallToolRequest{}
 	req.Session = ss
 	result := ConfirmAction(ctx, req, "Delete?")
-	if result != nil {
-		t.Errorf("expected nil result on non-decline/cancel error (so caller proceeds), got %+v", result)
+	if result == nil {
+		t.Fatal("expected fail-closed error result on confirmation failure, got nil (action would proceed)")
+	}
+	if !result.IsError {
+		t.Errorf("ConfirmAction(failure).IsError = false, want true")
 	}
 }
 
