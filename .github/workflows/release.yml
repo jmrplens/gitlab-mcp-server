@@ -311,16 +311,24 @@ jobs:
             ${{ steps.dockerhub-login.outputs.skip == 'false' && format('docker.io/{0}:{1}', env.DOCKERHUB_IMAGE, steps.version.outputs.version) || '' }}
             ${{ steps.dockerhub-login.outputs.skip == 'false' && format('docker.io/{0}:latest', env.DOCKERHUB_IMAGE) || '' }}
 
+      # Keyless signing reads an OIDC token from the ambient GitHub endpoint,
+      # which intermittently answers with a plain-text error body instead of
+      # JSON. cosign then fails with "fetching ambient OIDC credentials:
+      # invalid character 'u' looking for beginning of value" and takes the
+      # whole release down even though the image pushed fine (v2.5.3 failed
+      # this way and signed cleanly on a rerun with no code change). Retry
+      # before giving up so a blip on that endpoint stops leaving published
+      # images unsigned.
       - name: Sign Docker image (ghcr.io)
-        run: |
-          cosign sign --yes \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.docker-push.outputs.digest }}
+        env:
+          IMAGE_REF: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.docker-push.outputs.digest }}
+        run: bash .github/scripts/cosign-sign-retry.sh "$IMAGE_REF"
 
       - name: Sign Docker image (Docker Hub)
         if: steps.dockerhub-login.outputs.skip == 'false'
-        run: |
-          cosign sign --yes \
-            docker.io/${{ env.DOCKERHUB_IMAGE }}@${{ steps.docker-push.outputs.digest }}
+        env:
+          IMAGE_REF: docker.io/${{ env.DOCKERHUB_IMAGE }}@${{ steps.docker-push.outputs.digest }}
+        run: bash .github/scripts/cosign-sign-retry.sh "$IMAGE_REF"
 
   fly-deploy:
     name: Fly.io Deploy
