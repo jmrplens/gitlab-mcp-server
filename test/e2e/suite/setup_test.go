@@ -114,6 +114,7 @@ func TestMain(m *testing.M) {
 	sess.glClient = glClient
 	sess.enterprise = enterprise
 	captureE2ESnapshot(glClient)
+	materializeGlobalNotificationSetting(glClient)
 
 	code := m.Run()
 	code = verifyE2ESnapshotAfterRun(glClient, code)
@@ -221,6 +222,32 @@ func configureSafeModeE2EServer(glClient *gitlabclient.Client, enterprise bool) 
 
 func elicitationClientOptions() *mcp.ClientOptions {
 	return &mcp.ClientOptions{ElicitationHandler: mockElicitHandler}
+}
+
+// materializeGlobalNotificationSetting forces the authenticated user's global
+// notification setting row to exist before any parallel test runs.
+//
+// GitLab creates that row lazily on first access: User#global_notification_setting
+// does notification_settings.find_or_initialize_by(source: nil) and then saves
+// the record when it is not persisted, so even a plain GET /notification_settings
+// writes. Two concurrent callers therefore both build an unpersisted record and
+// both INSERT, and the loser fails the uniqueness validation on
+// (user_id, source_type, source_id) with a 400 "already exists in source".
+//
+// Reading it once here, serially, closes that window for the whole suite: from
+// this point on the row exists, so find_or_initialize_by always finds it and no
+// caller can insert a duplicate. Failures are logged rather than fatal because
+// this is a hardening step, not a prerequisite: a suite that cannot read
+// notification settings will fail in the tests that actually assert on them.
+func materializeGlobalNotificationSetting(glClient *gitlabclient.Client) {
+	if glClient == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if _, _, err := glClient.GL().NotificationSettings.GetGlobalSettings(gl.WithContext(ctx)); err != nil {
+		log.Printf("e2e: could not materialize the global notification setting: %v", err)
+	}
 }
 
 func captureE2ESnapshot(glClient *gitlabclient.Client) {
