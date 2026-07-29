@@ -615,6 +615,37 @@ func TestGroupList_EnrichedNewFilters(t *testing.T) {
 	}
 }
 
+// TestGroupList_CustomAttributesFilter verifies that the custom_attributes
+// input map is encoded as indexed query parameters
+// (custom_attributes[key]=value), which is the filtering form the GitLab API
+// expects and is distinct from the with_custom_attributes response flag.
+func TestGroupList_CustomAttributesFilter(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathGroups {
+			q := r.URL.Query()
+			if got := q.Get("custom_attributes[team]"); got != "platform" {
+				t.Errorf("query param custom_attributes[team] = %q, want %q", got, "platform")
+			}
+			if got := q.Get("custom_attributes[tier]"); got != "gold" {
+				t.Errorf("query param custom_attributes[tier] = %q, want %q", got, "gold")
+			}
+			if q.Has("custom_attributes") {
+				t.Error("query contains a bare custom_attributes parameter, want only indexed keys")
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		CustomAttributes: map[string]string{"team": "platform", "tier": "gold"},
+	})
+	if err != nil {
+		t.Fatalf(fmtGroupListErr, err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Create tests
 // ---------------------------------------------------------------------------.
