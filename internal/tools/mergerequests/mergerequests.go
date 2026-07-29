@@ -91,6 +91,7 @@ type ListInput struct {
 	ReviewerID             int64                `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
 	ApproverIDs            []int64              `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers"`
 	ApprovedByIDs          []int64              `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs"`
+	ApprovedByUsernames    []string             `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
 	WithLabelsDetails      *bool                `json:"with_labels_details,omitempty"        jsonschema:"Include full label details (color, description) in the response"`
 	WithMergeStatusRecheck *bool                `json:"with_merge_status_recheck,omitempty"  jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
 	Draft                  *bool                `json:"draft,omitempty"         jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
@@ -116,81 +117,83 @@ type ListOutput struct {
 }
 
 type mergeRequestListFilters struct {
-	State             string
-	Labels            []string
-	NotLabels         []string
-	Milestone         string
-	Scope             string
-	Search            string
-	SourceBranch      string
-	TargetBranch      string
-	AuthorUsername    string
-	NotAuthorUsername string
-	ReviewerUsername  string
-	Approved          string
-	In                string
-	MyReactionEmoji   string
-	View              string
-	WIP               string
-	Environment       string
-	AuthorID          int64
-	AssigneeID        int64
-	ReviewerID        int64
-	ApproverIDs       []int64
-	ApprovedByIDs     []int64
-	WithLabelsDetails *bool
-	WithMergeRecheck  *bool
-	Draft             *bool
-	NonArchived       *bool
-	CreatedAfter      string
-	CreatedBefore     string
-	UpdatedAfter      string
-	UpdatedBefore     string
-	DeployedAfter     string
-	DeployedBefore    string
-	OrderBy           string
-	Sort              string
-	Page              int
-	PerPage           int
-	Keyset            toolutil.KeysetPaginationInput
+	State               string
+	Labels              []string
+	NotLabels           []string
+	Milestone           string
+	Scope               string
+	Search              string
+	SourceBranch        string
+	TargetBranch        string
+	AuthorUsername      string
+	NotAuthorUsername   string
+	ReviewerUsername    string
+	Approved            string
+	In                  string
+	MyReactionEmoji     string
+	View                string
+	WIP                 string
+	Environment         string
+	AuthorID            int64
+	AssigneeID          int64
+	ReviewerID          int64
+	ApproverIDs         []int64
+	ApprovedByIDs       []int64
+	ApprovedByUsernames []string
+	WithLabelsDetails   *bool
+	WithMergeRecheck    *bool
+	Draft               *bool
+	NonArchived         *bool
+	CreatedAfter        string
+	CreatedBefore       string
+	UpdatedAfter        string
+	UpdatedBefore       string
+	DeployedAfter       string
+	DeployedBefore      string
+	OrderBy             string
+	Sort                string
+	Page                int
+	PerPage             int
+	Keyset              toolutil.KeysetPaginationInput
 }
 
 type mergeRequestListTarget struct {
-	state             func(*string)
-	labels            func(*gl.LabelOptions)
-	notLabels         func(*gl.LabelOptions)
-	milestone         func(*string)
-	scope             func(*string)
-	search            func(*string)
-	sourceBranch      func(*string)
-	targetBranch      func(*string)
-	authorUsername    func(*string)
-	notAuthorUsername func(*string)
-	reviewerUsername  func(*string)
-	approved          func(*string)
-	in                func(*string)
-	myReactionEmoji   func(*string)
-	view              func(*string)
-	wip               func(*string)
-	environment       func(*string)
-	authorID          func(int64)
-	assigneeID        func(int64)
-	reviewerID        func(int64)
-	approverIDs       func([]int64)
-	approvedByIDs     func([]int64)
-	withLabelsDetails func(*bool)
-	withMergeRecheck  func(*bool)
-	draft             func(*bool)
-	nonArchived       func(*bool)
-	createdAfter      func(*time.Time)
-	createdBefore     func(*time.Time)
-	updatedAfter      func(*time.Time)
-	updatedBefore     func(*time.Time)
-	deployedAfter     func(*time.Time)
-	deployedBefore    func(*time.Time)
-	orderBy           func(*string)
-	sort              func(*string)
-	listOptions       *gl.ListOptions
+	state               func(*string)
+	labels              func(*gl.LabelOptions)
+	notLabels           func(*gl.LabelOptions)
+	milestone           func(*string)
+	scope               func(*string)
+	search              func(*string)
+	sourceBranch        func(*string)
+	targetBranch        func(*string)
+	authorUsername      func(*string)
+	notAuthorUsername   func(*string)
+	reviewerUsername    func(*string)
+	approved            func(*string)
+	in                  func(*string)
+	myReactionEmoji     func(*string)
+	view                func(*string)
+	wip                 func(*string)
+	environment         func(*string)
+	authorID            func(int64)
+	assigneeID          func(int64)
+	reviewerID          func(int64)
+	approverIDs         func([]int64)
+	approvedByIDs       func([]int64)
+	approvedByUsernames func([]string)
+	withLabelsDetails   func(*bool)
+	withMergeRecheck    func(*bool)
+	draft               func(*bool)
+	nonArchived         func(*bool)
+	createdAfter        func(*time.Time)
+	createdBefore       func(*time.Time)
+	updatedAfter        func(*time.Time)
+	updatedBefore       func(*time.Time)
+	deployedAfter       func(*time.Time)
+	deployedBefore      func(*time.Time)
+	orderBy             func(*string)
+	sort                func(*string)
+	listOptions         *gl.ListOptions
 }
 
 func mergeRequestListOutput(mrs []*gl.BasicMergeRequest, resp *gl.Response) ListOutput {
@@ -234,6 +237,7 @@ func applyMergeRequestListFilters(input mergeRequestListFilters, target mergeReq
 	setInt64(input.ReviewerID, target.reviewerID)
 	setInt64Slice(input.ApproverIDs, target.approverIDs)
 	setInt64Slice(input.ApprovedByIDs, target.approvedByIDs)
+	setStringSlice(input.ApprovedByUsernames, target.approvedByUsernames)
 	if input.WithLabelsDetails != nil && target.withLabelsDetails != nil {
 		target.withLabelsDetails(input.WithLabelsDetails)
 	}
@@ -270,6 +274,12 @@ func setInt64(value int64, setter func(int64)) {
 }
 
 func setInt64Slice(value []int64, setter func([]int64)) {
+	if len(value) > 0 && setter != nil {
+		setter(value)
+	}
+}
+
+func setStringSlice(value []string, setter func([]string)) {
 	if len(value) > 0 && setter != nil {
 		setter(value)
 	}
@@ -591,7 +601,7 @@ func projectMRListFilters(input ListInput) mergeRequestListFilters {
 		AuthorUsername: input.AuthorUsername, NotAuthorUsername: input.NotAuthorUsername, ReviewerUsername: input.ReviewerUsername,
 		MyReactionEmoji: input.MyReactionEmoji, View: input.View, WIP: input.WIP, Environment: input.Environment,
 		AuthorID: input.AuthorID, AssigneeID: input.AssigneeID, ReviewerID: input.ReviewerID,
-		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs,
+		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs, ApprovedByUsernames: input.ApprovedByUsernames,
 		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
 		Draft: input.Draft, NonArchived: input.NonArchived, CreatedAfter: input.CreatedAfter,
 		CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter, UpdatedBefore: input.UpdatedBefore,
@@ -606,7 +616,7 @@ func projectMergeRequestListTarget(opts *gl.ListProjectMergeRequestsOptions) mer
 		search: &opts.Search, sourceBranch: &opts.SourceBranch, targetBranch: &opts.TargetBranch, authorUsername: &opts.AuthorUsername,
 		notAuthorUsername: &opts.NotAuthorUsername, reviewerUsername: &opts.ReviewerUsername, myReactionEmoji: &opts.MyReactionEmoji,
 		view: &opts.View, wip: &opts.WIP, environment: &opts.Environment, authorID: &opts.AuthorID,
-		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs,
+		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs, approvedByUsernames: &opts.ApprovedByUsernames,
 		withLabelsDetails: &opts.WithLabelsDetails, withMergeRecheck: &opts.WithMergeStatusRecheck,
 		draft: &opts.Draft, nonArchived: &opts.NonArchived, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
 		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, deployedAfter: &opts.DeployedAfter, deployedBefore: &opts.DeployedBefore,
@@ -1040,6 +1050,7 @@ type ListGlobalInput struct {
 	ReviewerID             int64    `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
 	ApproverIDs            []int64  `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers"`
 	ApprovedByIDs          []int64  `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs"`
+	ApprovedByUsernames    []string `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
 	WithLabelsDetails      *bool    `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`
 	WithMergeStatusRecheck *bool    `json:"with_merge_status_recheck,omitempty" jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
 	Draft                  *bool    `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
@@ -1083,7 +1094,7 @@ func globalMRListFilters(input ListGlobalInput) mergeRequestListFilters {
 		AuthorUsername: input.AuthorUsername, NotAuthorUsername: input.NotAuthorUsername, ReviewerUsername: input.ReviewerUsername,
 		Approved: input.Approved, In: input.In, MyReactionEmoji: input.MyReactionEmoji, View: input.View, WIP: input.WIP,
 		AuthorID: input.AuthorID, AssigneeID: input.AssigneeID, ReviewerID: input.ReviewerID,
-		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs,
+		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs, ApprovedByUsernames: input.ApprovedByUsernames,
 		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
 		Draft: input.Draft, NonArchived: input.NonArchived, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
 		UpdatedBefore: input.UpdatedBefore, OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
@@ -1099,7 +1110,7 @@ func globalMergeRequestListTarget(opts *gl.ListMergeRequestsOptions) mergeReques
 		approved:        &opts.Approved, //nolint:staticcheck // SA1019: mirrored for 1:1 SDK fidelity; prefer approved_by_ids.
 		in:              &opts.In,
 		myReactionEmoji: &opts.MyReactionEmoji, view: &opts.View, wip: &opts.WIP, authorID: &opts.AuthorID,
-		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs,
+		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs, approvedByUsernames: &opts.ApprovedByUsernames,
 		withLabelsDetails: &opts.WithLabelsDetails, withMergeRecheck: &opts.WithMergeStatusRecheck,
 		draft: &opts.Draft, nonArchived: &opts.NonArchived, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
 		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, orderBy: &opts.OrderBy, sort: &opts.Sort,
@@ -1108,41 +1119,42 @@ func globalMergeRequestListTarget(opts *gl.ListMergeRequestsOptions) mergeReques
 }
 
 type mergeRequestListTargetFields struct {
-	state             **string
-	labels            **gl.LabelOptions
-	notLabels         **gl.LabelOptions
-	milestone         **string
-	scope             **string
-	search            **string
-	sourceBranch      **string
-	targetBranch      **string
-	authorUsername    **string
-	notAuthorUsername **string
-	reviewerUsername  **string
-	approved          **string
-	in                **string
-	myReactionEmoji   **string
-	view              **string
-	wip               **string
-	environment       **string
-	authorID          **int64
-	assigneeID        **gl.AssigneeIDValue
-	reviewerID        **gl.ReviewerIDValue
-	approverIDs       **gl.ApproverIDsValue
-	approvedByIDs     **gl.ApproverIDsValue
-	withLabelsDetails **bool
-	withMergeRecheck  **bool
-	draft             **bool
-	nonArchived       **bool
-	createdAfter      **time.Time
-	createdBefore     **time.Time
-	updatedAfter      **time.Time
-	updatedBefore     **time.Time
-	deployedAfter     **time.Time
-	deployedBefore    **time.Time
-	orderBy           **string
-	sort              **string
-	listOptions       *gl.ListOptions
+	state               **string
+	labels              **gl.LabelOptions
+	notLabels           **gl.LabelOptions
+	milestone           **string
+	scope               **string
+	search              **string
+	sourceBranch        **string
+	targetBranch        **string
+	authorUsername      **string
+	notAuthorUsername   **string
+	reviewerUsername    **string
+	approved            **string
+	in                  **string
+	myReactionEmoji     **string
+	view                **string
+	wip                 **string
+	environment         **string
+	authorID            **int64
+	assigneeID          **gl.AssigneeIDValue
+	reviewerID          **gl.ReviewerIDValue
+	approverIDs         **gl.ApproverIDsValue
+	approvedByIDs       **gl.ApproverIDsValue
+	approvedByUsernames **[]string
+	withLabelsDetails   **bool
+	withMergeRecheck    **bool
+	draft               **bool
+	nonArchived         **bool
+	createdAfter        **time.Time
+	createdBefore       **time.Time
+	updatedAfter        **time.Time
+	updatedBefore       **time.Time
+	deployedAfter       **time.Time
+	deployedBefore      **time.Time
+	orderBy             **string
+	sort                **string
+	listOptions         *gl.ListOptions
 }
 
 func newMergeRequestListTarget(fields mergeRequestListTargetFields) mergeRequestListTarget {
@@ -1156,7 +1168,8 @@ func newMergeRequestListTarget(fields mergeRequestListTargetFields) mergeRequest
 		environment: setStringPtr(fields.environment), authorID: setInt64Ptr(fields.authorID),
 		assigneeID: setAssigneeIDPtr(fields.assigneeID), reviewerID: setReviewerIDPtr(fields.reviewerID),
 		approverIDs: setApproverIDsPtr(fields.approverIDs), approvedByIDs: setApproverIDsPtr(fields.approvedByIDs),
-		withLabelsDetails: setBoolPtr(fields.withLabelsDetails), withMergeRecheck: setBoolPtr(fields.withMergeRecheck),
+		approvedByUsernames: setStringSlicePtr(fields.approvedByUsernames),
+		withLabelsDetails:   setBoolPtr(fields.withLabelsDetails), withMergeRecheck: setBoolPtr(fields.withMergeRecheck),
 		draft: setBoolPtr(fields.draft), nonArchived: setBoolPtr(fields.nonArchived),
 		createdAfter: setTimePtr(fields.createdAfter), createdBefore: setTimePtr(fields.createdBefore),
 		updatedAfter: setTimePtr(fields.updatedAfter), updatedBefore: setTimePtr(fields.updatedBefore),
@@ -1191,6 +1204,10 @@ func setReviewerIDPtr(target **gl.ReviewerIDValue) func(int64) {
 // approved_by_ids).
 func setApproverIDsPtr(target **gl.ApproverIDsValue) func([]int64) {
 	return func(value []int64) { *target = gl.ApproverIDs(value) }
+}
+
+func setStringSlicePtr(target **[]string) func([]string) {
+	return func(value []string) { *target = &value }
 }
 
 func setStringPtr(target **string) func(*string) {
@@ -1232,6 +1249,7 @@ type ListGroupInput struct {
 	ReviewerID             int64                `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
 	ApproverIDs            []int64              `json:"approver_ids,omitempty"        jsonschema:"Filter by MRs with all listed users as eligible approvers"`
 	ApprovedByIDs          []int64              `json:"approved_by_ids,omitempty"     jsonschema:"Filter by MRs approved by all listed user IDs"`
+	ApprovedByUsernames    []string             `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
 	WithLabelsDetails      *bool                `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`
 	WithMergeStatusRecheck *bool                `json:"with_merge_status_recheck,omitempty" jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
 	Draft                  *bool                `json:"draft,omitempty"             jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
@@ -1281,7 +1299,7 @@ func groupMRListFilters(input ListGroupInput) mergeRequestListFilters {
 		AuthorUsername: input.AuthorUsername, NotAuthorUsername: input.NotAuthorUsername, ReviewerUsername: input.ReviewerUsername,
 		In: input.In, MyReactionEmoji: input.MyReactionEmoji, View: input.View, WIP: input.WIP,
 		AuthorID: input.AuthorID, AssigneeID: input.AssigneeID, ReviewerID: input.ReviewerID,
-		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs,
+		ApproverIDs: input.ApproverIDs, ApprovedByIDs: input.ApprovedByIDs, ApprovedByUsernames: input.ApprovedByUsernames,
 		WithLabelsDetails: input.WithLabelsDetails, WithMergeRecheck: input.WithMergeStatusRecheck,
 		Draft: input.Draft, NonArchived: input.NonArchived, CreatedAfter: input.CreatedAfter, CreatedBefore: input.CreatedBefore, UpdatedAfter: input.UpdatedAfter,
 		UpdatedBefore: input.UpdatedBefore, OrderBy: input.OrderBy, Sort: input.Sort, Page: input.Page, PerPage: input.PerPage,
@@ -1295,7 +1313,7 @@ func groupMergeRequestListTarget(opts *gl.ListGroupMergeRequestsOptions) mergeRe
 		search: &opts.Search, sourceBranch: &opts.SourceBranch, targetBranch: &opts.TargetBranch, authorUsername: &opts.AuthorUsername,
 		notAuthorUsername: &opts.NotAuthorUsername, reviewerUsername: &opts.ReviewerUsername, in: &opts.In,
 		myReactionEmoji: &opts.MyReactionEmoji, view: &opts.View, wip: &opts.WIP, authorID: &opts.AuthorID,
-		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs,
+		assigneeID: &opts.AssigneeID, reviewerID: &opts.ReviewerID, approverIDs: &opts.ApproverIDs, approvedByIDs: &opts.ApprovedByIDs, approvedByUsernames: &opts.ApprovedByUsernames,
 		withLabelsDetails: &opts.WithLabelsDetails, withMergeRecheck: &opts.WithMergeStatusRecheck,
 		draft: &opts.Draft, nonArchived: &opts.NonArchived, createdAfter: &opts.CreatedAfter, createdBefore: &opts.CreatedBefore,
 		updatedAfter: &opts.UpdatedAfter, updatedBefore: &opts.UpdatedBefore, orderBy: &opts.OrderBy, sort: &opts.Sort,

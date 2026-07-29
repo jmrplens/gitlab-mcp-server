@@ -263,6 +263,7 @@ type SubgroupsListInput struct {
 	Visibility           string               `json:"visibility,omitempty"    jsonschema:"Filter by visibility (public, internal, private)"`
 	TopLevelOnly         bool                 `json:"top_level_only,omitempty" jsonschema:"Limit to top-level subgroups (exclude nested descendants)"`
 	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
+	CustomAttributes     map[string]string    `json:"custom_attributes,omitempty" jsonschema:"Filter subgroups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response"`
 	SkipGroups           []int64              `json:"skip_groups,omitempty"   jsonschema:"Group IDs to exclude from results"`
 	RepositoryStorage    string               `json:"repository_storage,omitempty" jsonschema:"Filter by repository storage shard (administrators only)"`
 	Active               *bool                `json:"active,omitempty"        jsonschema:"Filter by active (true) or inactive/archived (false) subgroups"`
@@ -777,6 +778,9 @@ func subgroupsListOptions(input SubgroupsListInput) *gl.ListDescendantGroupsOpti
 	}
 	if input.WithCustomAttributes {
 		opts.WithCustomAttributes = new(true)
+	}
+	if len(input.CustomAttributes) > 0 {
+		opts.CustomAttributes = gl.CustomAttributesFilter(input.CustomAttributes)
 	}
 	if len(input.SkipGroups) > 0 {
 		opts.SkipGroups = &input.SkipGroups

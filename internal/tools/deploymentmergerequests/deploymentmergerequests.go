@@ -23,6 +23,7 @@ type ListInput struct {
 	Sort                   string   `json:"sort,omitempty"            jsonschema:"Sort order: asc or desc"`
 	Approved               string   `json:"approved,omitempty"        jsonschema:"Filter by approval status: yes or no"`
 	ApprovedByIDs          []int64  `json:"approved_by_ids,omitempty" jsonschema:"Filter by MRs approved by all listed user IDs"`
+	ApprovedByUsernames    []string `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
 	ApproverIDs            []int64  `json:"approver_ids,omitempty"    jsonschema:"Filter by MRs with all listed users as eligible approvers"`
 	AssigneeID             int64    `json:"assignee_id,omitempty"     jsonschema:"Filter by assignee user ID"`
 	AuthorID               int64    `json:"author_id,omitempty"       jsonschema:"Filter by author user ID"`
@@ -187,6 +188,9 @@ func applyIDFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
 	}
 	if len(input.ApprovedByIDs) > 0 {
 		opts.ApprovedByIDs = gl.ApproverIDs(input.ApprovedByIDs)
+	}
+	if len(input.ApprovedByUsernames) > 0 {
+		opts.ApprovedByUsernames = &input.ApprovedByUsernames
 	}
 }
 

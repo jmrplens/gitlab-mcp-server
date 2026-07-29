@@ -646,6 +646,31 @@ func TestGroupList_CustomAttributesFilter(t *testing.T) {
 	}
 }
 
+// TestSubgroupsList_CustomAttributesFilter verifies that descendant-group
+// listing forwards the custom_attributes filter as indexed query parameters.
+// ListDescendantGroupsOptions is a defined type over ListGroupsOptions, so it
+// inherited the filter and must expose it too.
+func TestSubgroupsList_CustomAttributesFilter(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == pathGroupSubgroups {
+			if got := r.URL.Query().Get("custom_attributes[team]"); got != "platform" {
+				t.Errorf("query param custom_attributes[team] = %q, want %q", got, "platform")
+			}
+			testutil.RespondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := SubgroupsList(context.Background(), client, SubgroupsListInput{
+		GroupID:          "99",
+		CustomAttributes: map[string]string{"team": "platform"},
+	})
+	if err != nil {
+		t.Fatalf("SubgroupsList() unexpected error: %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Create tests
 // ---------------------------------------------------------------------------.

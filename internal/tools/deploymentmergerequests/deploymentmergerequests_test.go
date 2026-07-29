@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -361,6 +362,11 @@ func TestList_MergeRequestFilters(t *testing.T) {
 		if got := q.Get("approved_by_ids[]"); got != "13" {
 			t.Errorf("approved_by_ids[] = %q, want 13", got)
 		}
+		// The SDK encodes *[]string as repeated plain keys, unlike
+		// ApproverIDsValue which appends the [] suffix itself.
+		if got := q["approved_by_usernames"]; !slices.Equal(got, []string{"alice", "bob"}) {
+			t.Errorf("approved_by_usernames = %v, want [alice bob]", got)
+		}
 		if got := q.Get("created_after"); !strings.HasPrefix(got, "2025-01-01") {
 			t.Errorf("created_after = %q, want 2025-01-01 prefix", got)
 		}
@@ -378,18 +384,19 @@ func TestList_MergeRequestFilters(t *testing.T) {
 
 	draft := true
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:      "1",
-		DeploymentID:   2,
-		Approved:       "yes",
-		ApprovedByIDs:  []int64{13},
-		ApproverIDs:    []int64{11},
-		AssigneeID:     9,
-		AuthorID:       7,
-		AuthorUsername: "alice",
-		CreatedAfter:   "2025-01-01T00:00:00Z",
-		CreatedBefore:  "2025-12-31T23:59:59Z",
-		Draft:          &draft,
-		In:             "title",
+		ProjectID:           "1",
+		DeploymentID:        2,
+		Approved:            "yes",
+		ApprovedByIDs:       []int64{13},
+		ApprovedByUsernames: []string{"alice", "bob"},
+		ApproverIDs:         []int64{11},
+		AssigneeID:          9,
+		AuthorID:            7,
+		AuthorUsername:      "alice",
+		CreatedAfter:        "2025-01-01T00:00:00Z",
+		CreatedBefore:       "2025-12-31T23:59:59Z",
+		Draft:               &draft,
+		In:                  "title",
 		KeysetPaginationInput: toolutil.KeysetPaginationInput{
 			Pagination: "keyset",
 			PageToken:  "cursor-1",

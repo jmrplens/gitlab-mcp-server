@@ -67,6 +67,7 @@ func TestList_NewFilterFields_ReachQuery(t *testing.T) {
 		ReviewerID:             9,
 		ApproverIDs:            []int64{11, 12},
 		ApprovedByIDs:          []int64{13},
+		ApprovedByUsernames:    []string{"alice", "bob"},
 		WithLabelsDetails:      &boolTrue,
 		WithMergeStatusRecheck: &boolTrue,
 		NonArchived:            &boolTrue,
@@ -93,6 +94,11 @@ func TestList_NewFilterFields_ReachQuery(t *testing.T) {
 	}
 	if got := q["approved_by_ids[]"]; !slices.Equal(got, []string{"13"}) {
 		t.Errorf("approved_by_ids[] = %v, want [13]", got)
+	}
+	// The SDK encodes *[]string as repeated plain keys, unlike ApproverIDsValue
+	// which appends the [] suffix itself.
+	if got := q["approved_by_usernames"]; !slices.Equal(got, []string{"alice", "bob"}) {
+		t.Errorf("approved_by_usernames = %v, want [alice bob]", got)
 	}
 	if q.Get("deployed_after") == "" {
 		t.Errorf("deployed_after missing (all=%v)", q)
