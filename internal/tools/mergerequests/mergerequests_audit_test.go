@@ -65,8 +65,8 @@ func TestList_NewFilterFields_ReachQuery(t *testing.T) {
 		AuthorID:               7,
 		AssigneeID:             8,
 		ReviewerID:             9,
-		ApproverIDs:            []int64{11, 12},
-		ApprovedByIDs:          []int64{13},
+		ApproverIDs:            toolutil.ApproverIDsFilter{"11", "12"},
+		ApprovedByIDs:          toolutil.ApproverIDsFilter{"13"},
 		ApprovedByUsernames:    []string{"alice", "bob"},
 		WithLabelsDetails:      &boolTrue,
 		WithMergeStatusRecheck: &boolTrue,
@@ -108,6 +108,47 @@ func TestList_NewFilterFields_ReachQuery(t *testing.T) {
 	}
 }
 
+// TestList_ApproverLiteral_ReachesQuery verifies that the "None" / "Any"
+// approver literals survive the whole path and reach GitLab as a bare value,
+// not as an indexed ID list. Without this the filter is unreachable through
+// the MCP, since the SDK only accepts them through ApproverIDsValue.
+func TestList_ApproverLiteral_ReachesQuery(t *testing.T) {
+	var q url.Values
+	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathMRs, &q))
+
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:     testProjectID,
+		ApprovedByIDs: toolutil.ApproverIDsFilter{"None"},
+	})
+	if err != nil {
+		t.Fatalf("List() unexpected error: %v", err)
+	}
+	assertQuery(t, q, "approved_by_ids", "None")
+	if _, indexed := q["approved_by_ids[]"]; indexed {
+		t.Errorf("approved_by_ids was sent as an indexed list, want a bare literal (all=%v)", q)
+	}
+}
+
+// TestList_ApproverFilterInvalid_ReturnsError verifies that combining a
+// literal with user IDs is rejected before any request is issued, rather than
+// silently returning a differently-filtered result set.
+func TestList_ApproverFilterInvalid_ReturnsError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("request issued despite an invalid approver filter")
+	}))
+
+	_, err := List(context.Background(), client, ListInput{
+		ProjectID:     testProjectID,
+		ApprovedByIDs: toolutil.ApproverIDsFilter{"None", "7"},
+	})
+	if err == nil {
+		t.Fatal("List() error = nil, want an invalid-filter error")
+	}
+	if !strings.Contains(err.Error(), "approved_by_ids") {
+		t.Errorf("List() error = %q, want it to name approved_by_ids", err)
+	}
+}
+
 // TestList_Keyset_ReachQuery verifies keyset pagination parameters are wired
 // onto the project list request.
 func TestList_Keyset_ReachQuery(t *testing.T) {
@@ -143,8 +184,8 @@ func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 		AuthorID:               1,
 		AssigneeID:             2,
 		ReviewerID:             3,
-		ApproverIDs:            []int64{4},
-		ApprovedByIDs:          []int64{5, 6},
+		ApproverIDs:            toolutil.ApproverIDsFilter{"4"},
+		ApprovedByIDs:          toolutil.ApproverIDsFilter{"5", "6"},
 		WithLabelsDetails:      &boolTrue,
 		WithMergeStatusRecheck: &boolTrue,
 		NonArchived:            &boolTrue,
@@ -193,8 +234,8 @@ func TestListGroup_NewFilterFields_ReachQuery(t *testing.T) {
 		AuthorID:               10,
 		AssigneeID:             20,
 		ReviewerID:             30,
-		ApproverIDs:            []int64{40},
-		ApprovedByIDs:          []int64{50},
+		ApproverIDs:            toolutil.ApproverIDsFilter{"40"},
+		ApprovedByIDs:          toolutil.ApproverIDsFilter{"50"},
 		WithLabelsDetails:      &boolTrue,
 		WithMergeStatusRecheck: &boolTrue,
 		NonArchived:            &boolTrue,

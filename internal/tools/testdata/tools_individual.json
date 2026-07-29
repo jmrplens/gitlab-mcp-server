@@ -95255,9 +95255,12 @@
           "type": "string"
         },
         "approved_by_ids": {
-          "description": "Filter by MRs approved by all listed user IDs",
+          "description": "Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)",
           "items": {
-            "type": "integer"
+            "type": [
+              "integer",
+              "string"
+            ]
           },
           "type": [
             "null",
@@ -95275,9 +95278,12 @@
           ]
         },
         "approver_ids": {
-          "description": "Filter by MRs with all listed users as eligible approvers",
+          "description": "Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)",
           "items": {
-            "type": "integer"
+            "type": [
+              "integer",
+              "string"
+            ]
           },
           "type": [
             "null",
@@ -123709,9 +123715,12 @@
       "additionalProperties": false,
       "properties": {
         "approved_by_ids": {
-          "description": "Filter by MRs approved by all listed user IDs",
+          "description": "Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)",
           "items": {
-            "type": "integer"
+            "type": [
+              "integer",
+              "string"
+            ]
           },
           "type": [
             "null",
@@ -123729,9 +123738,12 @@
           ]
         },
         "approver_ids": {
-          "description": "Filter by MRs with all listed users as eligible approvers",
+          "description": "Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)",
           "items": {
-            "type": "integer"
+            "type": [
+              "integer",
+              "string"
+            ]
           },
           "type": [
             "null",
@@ -124945,9 +124957,12 @@
           "type": "string"
         },
         "approved_by_ids": {
-          "description": "Filter by MRs approved by all listed user IDs",
+          "description": "Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)",
           "items": {
-            "type": "integer"
+            "type": [
+              "integer",
+              "string"
+            ]
           },
           "type": [
             "null",
@@ -124965,9 +124980,12 @@
           ]
         },
         "approver_ids": {
-          "description": "Filter by MRs with all listed users as eligible approvers",
+          "description": "Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)",
           "items": {
-            "type": "integer"
+            "type": [
+              "integer",
+              "string"
+            ]
           },
           "type": [
             "null",
@@ -126145,9 +126163,12 @@
       "additionalProperties": false,
       "properties": {
         "approved_by_ids": {
-          "description": "Filter by MRs approved by all listed user IDs",
+          "description": "Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)",
           "items": {
-            "type": "integer"
+            "type": [
+              "integer",
+              "string"
+            ]
           },
           "type": [
             "null",
@@ -126165,9 +126186,12 @@
           ]
         },
         "approver_ids": {
-          "description": "Filter by MRs with all listed users as eligible approvers",
+          "description": "Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)",
           "items": {
-            "type": "integer"
+            "type": [
+              "integer",
+              "string"
+            ]
           },
           "type": [
             "null",

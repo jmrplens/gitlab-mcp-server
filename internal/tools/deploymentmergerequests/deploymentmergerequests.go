@@ -2,6 +2,7 @@ package deploymentmergerequests
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -18,38 +19,38 @@ type ListInput struct {
 	ProjectID    toolutil.StringOrInt `json:"project_id"    jsonschema:"Project ID or URL-encoded path,required"`
 	DeploymentID int64                `json:"deployment_id" jsonschema:"Deployment ID,required"`
 
-	State                  string   `json:"state,omitempty"           jsonschema:"Filter by state: opened, closed, merged, all"`
-	OrderBy                string   `json:"order_by,omitempty"        jsonschema:"Order by: created_at or updated_at"`
-	Sort                   string   `json:"sort,omitempty"            jsonschema:"Sort order: asc or desc"`
-	Approved               string   `json:"approved,omitempty"        jsonschema:"Filter by approval status: yes or no"`
-	ApprovedByIDs          []int64  `json:"approved_by_ids,omitempty" jsonschema:"Filter by MRs approved by all listed user IDs"`
-	ApprovedByUsernames    []string `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
-	ApproverIDs            []int64  `json:"approver_ids,omitempty"    jsonschema:"Filter by MRs with all listed users as eligible approvers"`
-	AssigneeID             int64    `json:"assignee_id,omitempty"     jsonschema:"Filter by assignee user ID"`
-	AuthorID               int64    `json:"author_id,omitempty"       jsonschema:"Filter by author user ID"`
-	AuthorUsername         string   `json:"author_username,omitempty" jsonschema:"Filter by author username"`
-	NotAuthorUsername      string   `json:"not_author_username,omitempty" jsonschema:"Exclude MRs authored by this username"`
-	ReviewerID             int64    `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
-	ReviewerUsername       string   `json:"reviewer_username,omitempty"   jsonschema:"Filter by reviewer username"`
-	Labels                 []string `json:"labels,omitempty"          jsonschema:"Label names to filter by"`
-	NotLabels              []string `json:"not_labels,omitempty"      jsonschema:"Label names to exclude"`
-	Milestone              string   `json:"milestone,omitempty"       jsonschema:"Milestone title to filter by"`
-	Scope                  string   `json:"scope,omitempty"           jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
-	Search                 string   `json:"search,omitempty"          jsonschema:"Search in title and description"`
-	SourceBranch           string   `json:"source_branch,omitempty"   jsonschema:"Filter by source branch name"`
-	TargetBranch           string   `json:"target_branch,omitempty"   jsonschema:"Filter by target branch name"`
-	MyReactionEmoji        string   `json:"my_reaction_emoji,omitempty"   jsonschema:"Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)"`
-	View                   string   `json:"view,omitempty"                jsonschema:"Set to 'simple' to return only basic MR fields"`
-	WIP                    string   `json:"wip,omitempty"                 jsonschema:"Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft"`
-	WithLabelsDetails      *bool    `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`
-	WithMergeStatusRecheck *bool    `json:"with_merge_status_recheck,omitempty" jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
-	CreatedAfter           string   `json:"created_after,omitempty"   jsonschema:"Return MRs created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
-	CreatedBefore          string   `json:"created_before,omitempty"  jsonschema:"Return MRs created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
-	UpdatedAfter           string   `json:"updated_after,omitempty"   jsonschema:"Return MRs updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
-	UpdatedBefore          string   `json:"updated_before,omitempty"  jsonschema:"Return MRs updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
-	Draft                  *bool    `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
-	NonArchived            *bool    `json:"non_archived,omitempty"    jsonschema:"Return merge requests from non-archived projects only. Default is true"`
-	In                     string   `json:"in,omitempty"              jsonschema:"Modify the scope of the search attribute (title, description, or title,description)"`
+	State                  string                     `json:"state,omitempty"           jsonschema:"Filter by state: opened, closed, merged, all"`
+	OrderBy                string                     `json:"order_by,omitempty"        jsonschema:"Order by: created_at or updated_at"`
+	Sort                   string                     `json:"sort,omitempty"            jsonschema:"Sort order: asc or desc"`
+	Approved               string                     `json:"approved,omitempty"        jsonschema:"Filter by approval status: yes or no"`
+	ApprovedByIDs          toolutil.ApproverIDsFilter `json:"approved_by_ids,omitempty" jsonschema:"Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of \"Any\" (approved by someone) or \"None\" (unapproved)"`
+	ApprovedByUsernames    []string                   `json:"approved_by_usernames,omitempty" jsonschema:"Filter by MRs approved by all listed usernames"`
+	ApproverIDs            toolutil.ApproverIDsFilter `json:"approver_ids,omitempty"    jsonschema:"Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of \"Any\" (has approvers) or \"None\" (has none)"`
+	AssigneeID             int64                      `json:"assignee_id,omitempty"     jsonschema:"Filter by assignee user ID"`
+	AuthorID               int64                      `json:"author_id,omitempty"       jsonschema:"Filter by author user ID"`
+	AuthorUsername         string                     `json:"author_username,omitempty" jsonschema:"Filter by author username"`
+	NotAuthorUsername      string                     `json:"not_author_username,omitempty" jsonschema:"Exclude MRs authored by this username"`
+	ReviewerID             int64                      `json:"reviewer_id,omitempty"         jsonschema:"Filter by reviewer user ID"`
+	ReviewerUsername       string                     `json:"reviewer_username,omitempty"   jsonschema:"Filter by reviewer username"`
+	Labels                 []string                   `json:"labels,omitempty"          jsonschema:"Label names to filter by"`
+	NotLabels              []string                   `json:"not_labels,omitempty"      jsonschema:"Label names to exclude"`
+	Milestone              string                     `json:"milestone,omitempty"       jsonschema:"Milestone title to filter by"`
+	Scope                  string                     `json:"scope,omitempty"           jsonschema:"Filter by scope (created_by_me, assigned_to_me, all)"`
+	Search                 string                     `json:"search,omitempty"          jsonschema:"Search in title and description"`
+	SourceBranch           string                     `json:"source_branch,omitempty"   jsonschema:"Filter by source branch name"`
+	TargetBranch           string                     `json:"target_branch,omitempty"   jsonschema:"Filter by target branch name"`
+	MyReactionEmoji        string                     `json:"my_reaction_emoji,omitempty"   jsonschema:"Filter by MRs the caller reacted to with this emoji (e.g. thumbsup)"`
+	View                   string                     `json:"view,omitempty"                jsonschema:"Set to 'simple' to return only basic MR fields"`
+	WIP                    string                     `json:"wip,omitempty"                 jsonschema:"Filter by draft/WIP status: 'yes' for draft MRs, 'no' for non-draft"`
+	WithLabelsDetails      *bool                      `json:"with_labels_details,omitempty"       jsonschema:"Include full label details (color, description) in the response"`
+	WithMergeStatusRecheck *bool                      `json:"with_merge_status_recheck,omitempty" jsonschema:"Asynchronously recalculate each MR's merge_status before returning"`
+	CreatedAfter           string                     `json:"created_after,omitempty"   jsonschema:"Return MRs created after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	CreatedBefore          string                     `json:"created_before,omitempty"  jsonschema:"Return MRs created before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	UpdatedAfter           string                     `json:"updated_after,omitempty"   jsonschema:"Return MRs updated after date (ISO 8601, e.g. 2025-01-01T00:00:00Z)"`
+	UpdatedBefore          string                     `json:"updated_before,omitempty"  jsonschema:"Return MRs updated before date (ISO 8601, e.g. 2025-12-31T23:59:59Z)"`
+	Draft                  *bool                      `json:"draft,omitempty"           jsonschema:"Filter by draft status (true=only drafts, false=only non-drafts)"`
+	NonArchived            *bool                      `json:"non_archived,omitempty"    jsonschema:"Return merge requests from non-archived projects only. Default is true"`
+	In                     string                     `json:"in,omitempty"              jsonschema:"Modify the scope of the search attribute (title, description, or title,description)"`
 
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
@@ -80,7 +81,10 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredInt64("list_deployment_merge_requests", "deployment_id")
 	}
 
-	opts := buildListOptions(input)
+	opts, err := buildListOptions(input)
+	if err != nil {
+		return ListOutput{}, err
+	}
 
 	mrs, resp, err := client.GL().DeploymentMergeRequests.ListDeploymentMergeRequests(string(input.ProjectID), input.DeploymentID, opts, gl.WithContext(ctx))
 	if err != nil {
@@ -103,16 +107,18 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // wrapped via the SDK constructors (gl.AssigneeID, gl.ApproverIDs); date filters
 // are parsed with toolutil.ParseOptionalTime; offset and keyset pagination are
 // applied via toolutil.ApplyListOptions.
-func buildListOptions(input ListInput) *gl.ListMergeRequestsOptions {
+func buildListOptions(input ListInput) (*gl.ListMergeRequestsOptions, error) {
 	opts := &gl.ListMergeRequestsOptions{}
 
 	applyStringFilters(input, opts)
 	applyLabelAndBoolFilters(input, opts)
-	applyIDFilters(input, opts)
+	if err := applyIDFilters(input, opts); err != nil {
+		return nil, err
+	}
 	applyDateFilters(input, opts)
 
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
-	return opts
+	return opts, nil
 }
 
 // applyStringFilters sets the scalar string filters that are forwarded verbatim
@@ -173,7 +179,7 @@ func applyLabelAndBoolFilters(input ListInput, opts *gl.ListMergeRequestsOptions
 
 // applyIDFilters sets the user-ID filters, wrapping interface-typed values via
 // the SDK constructors (gl.AssigneeID, gl.ReviewerID, gl.ApproverIDs).
-func applyIDFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
+func applyIDFilters(input ListInput, opts *gl.ListMergeRequestsOptions) error {
 	if input.AuthorID != 0 {
 		opts.AuthorID = new(input.AuthorID)
 	}
@@ -184,14 +190,23 @@ func applyIDFilters(input ListInput, opts *gl.ListMergeRequestsOptions) {
 		opts.ReviewerID = gl.ReviewerID(input.ReviewerID)
 	}
 	if len(input.ApproverIDs) > 0 {
-		opts.ApproverIDs = gl.ApproverIDs(input.ApproverIDs)
+		converted, err := input.ApproverIDs.ApproverIDsValue()
+		if err != nil {
+			return fmt.Errorf("approver_ids: %w", err)
+		}
+		opts.ApproverIDs = converted
 	}
 	if len(input.ApprovedByIDs) > 0 {
-		opts.ApprovedByIDs = gl.ApproverIDs(input.ApprovedByIDs)
+		converted, err := input.ApprovedByIDs.ApproverIDsValue()
+		if err != nil {
+			return fmt.Errorf("approved_by_ids: %w", err)
+		}
+		opts.ApprovedByIDs = converted
 	}
 	if len(input.ApprovedByUsernames) > 0 {
 		opts.ApprovedByUsernames = &input.ApprovedByUsernames
 	}
+	return nil
 }
 
 // applyDateFilters parses the ISO 8601 created/updated bounds with

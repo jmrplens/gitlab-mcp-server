@@ -7670,9 +7670,9 @@ List the merge requests associated with a deployment, with merge-request filteri
 **Parameters:**
 
 - `approved` (string): Filter by approval status: yes or no
-- `approved_by_ids` (array of integers): Filter by MRs approved by all listed user IDs
+- `approved_by_ids` (array of values): Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)
 - `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
-- `approver_ids` (array of integers): Filter by MRs with all listed users as eligible approvers
+- `approver_ids` (array of values): Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)
 - `assignee_id` (integer): Filter by assignee user ID
 - `author_id` (integer): Filter by author user ID
 - `author_username` (string): Filter by author username
@@ -9493,9 +9493,9 @@ List merge requests in one project with filtering and pagination. Returns: match
 
 **Parameters:**
 
-- `approved_by_ids` (array of integers): Filter by MRs approved by all listed user IDs
+- `approved_by_ids` (array of values): Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)
 - `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
-- `approver_ids` (array of integers): Filter by MRs with all listed users as eligible approvers
+- `approver_ids` (array of values): Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)
 - `assignee_id` (integer): Filter by assignee user ID
 - `author_id` (integer): Filter by author user ID
 - `author_username` (string): Filter by author username
@@ -9542,9 +9542,9 @@ List merge requests across all accessible projects. Returns: visible MRs with pr
 **Parameters:**
 
 - `approved` (string): Filter by approval status: 'yes' or 'no' (Premium)
-- `approved_by_ids` (array of integers): Filter by MRs approved by all listed user IDs
+- `approved_by_ids` (array of values): Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)
 - `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
-- `approver_ids` (array of integers): Filter by MRs with all listed users as eligible approvers
+- `approver_ids` (array of values): Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)
 - `assignee_id` (integer): Filter by assignee user ID
 - `author_id` (integer): Filter by author user ID
 - `author_username` (string): Filter by author username
@@ -9586,9 +9586,9 @@ List merge requests across a group and its projects. Returns: visible MRs with p
 
 **Parameters:**
 
-- `approved_by_ids` (array of integers): Filter by MRs approved by all listed user IDs
+- `approved_by_ids` (array of values): Filter by MRs approved by all listed user IDs. Accepts user IDs, or exactly one of "Any" (approved by someone) or "None" (unapproved)
 - `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
-- `approver_ids` (array of integers): Filter by MRs with all listed users as eligible approvers
+- `approver_ids` (array of values): Filter by MRs with all listed users as eligible approvers. Accepts user IDs, or exactly one of "Any" (has approvers) or "None" (has none)
 - `assignee_id` (integer): Filter by assignee user ID
 - `author_id` (integer): Filter by author user ID
 - `author_username` (string): Filter by author username
