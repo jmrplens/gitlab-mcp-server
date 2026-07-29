@@ -7671,6 +7671,7 @@ List the merge requests associated with a deployment, with merge-request filteri
 
 - `approved` (string): Filter by approval status: yes or no
 - `approved_by_ids` (array of integers): Filter by MRs approved by all listed user IDs
+- `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
 - `approver_ids` (array of integers): Filter by MRs with all listed users as eligible approvers
 - `assignee_id` (integer): Filter by assignee user ID
 - `author_id` (integer): Filter by author user ID
@@ -9493,6 +9494,7 @@ List merge requests in one project with filtering and pagination. Returns: match
 **Parameters:**
 
 - `approved_by_ids` (array of integers): Filter by MRs approved by all listed user IDs
+- `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
 - `approver_ids` (array of integers): Filter by MRs with all listed users as eligible approvers
 - `assignee_id` (integer): Filter by assignee user ID
 - `author_id` (integer): Filter by author user ID
@@ -9541,6 +9543,7 @@ List merge requests across all accessible projects. Returns: visible MRs with pr
 
 - `approved` (string): Filter by approval status: 'yes' or 'no' (Premium)
 - `approved_by_ids` (array of integers): Filter by MRs approved by all listed user IDs
+- `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
 - `approver_ids` (array of integers): Filter by MRs with all listed users as eligible approvers
 - `assignee_id` (integer): Filter by assignee user ID
 - `author_id` (integer): Filter by author user ID
@@ -9584,6 +9587,7 @@ List merge requests across a group and its projects. Returns: visible MRs with p
 **Parameters:**
 
 - `approved_by_ids` (array of integers): Filter by MRs approved by all listed user IDs
+- `approved_by_usernames` (array of strings): Filter by MRs approved by all listed usernames
 - `approver_ids` (array of integers): Filter by MRs with all listed users as eligible approvers
 - `assignee_id` (integer): Filter by assignee user ID
 - `author_id` (integer): Filter by author user ID
@@ -14871,6 +14875,7 @@ List the subgroups (descendant groups) of a GitLab group. Returns: descendant gr
 - `active` (boolean): Filter by active (true) or inactive/archived (false) subgroups
 - `all_available` (boolean): Show all subgroups accessible by the authenticated user
 - `archived` (boolean): Limit to archived subgroups (true) or non-archived (false)
+- `custom_attributes` (object): Filter subgroups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `marked_for_deletion_on` (string): Filter to subgroups marked for deletion on this date (YYYY-MM-DD)
 - `min_access_level` (integer): Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)

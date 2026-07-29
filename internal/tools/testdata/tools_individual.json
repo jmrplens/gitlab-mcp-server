@@ -95264,6 +95264,16 @@
             "array"
           ]
         },
+        "approved_by_usernames": {
+          "description": "Filter by MRs approved by all listed usernames",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "approver_ids": {
           "description": "Filter by MRs with all listed users as eligible approvers",
           "items": {
@@ -123708,6 +123718,16 @@
             "array"
           ]
         },
+        "approved_by_usernames": {
+          "description": "Filter by MRs approved by all listed usernames",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "approver_ids": {
           "description": "Filter by MRs with all listed users as eligible approvers",
           "items": {
@@ -124934,6 +124954,16 @@
             "array"
           ]
         },
+        "approved_by_usernames": {
+          "description": "Filter by MRs approved by all listed usernames",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
         "approver_ids": {
           "description": "Filter by MRs with all listed users as eligible approvers",
           "items": {
@@ -126118,6 +126148,16 @@
           "description": "Filter by MRs approved by all listed user IDs",
           "items": {
             "type": "integer"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "approved_by_usernames": {
+          "description": "Filter by MRs approved by all listed usernames",
+          "items": {
+            "type": "string"
           },
           "type": [
             "null",
@@ -198224,6 +198264,14 @@
             "null",
             "boolean"
           ]
+        },
+        "custom_attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Filter subgroups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response",
+          "properties": {},
+          "type": "object"
         },
         "group_id": {
           "description": "Group ID or URL-encoded path",

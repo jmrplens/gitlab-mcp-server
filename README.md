@@ -392,20 +392,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       971 |     194,329 |
-| Unit tests (`_test.go`)  |       540 |     299,680 |
+| Source (`.go`, non-test) |       971 |     194,355 |
+| Unit tests (`_test.go`)  |       540 |     299,833 |
 | End-to-end tests         |       169 |      43,956 |
-| **Total**                | **1,680** | **537,965** |
+| **Total**                | **1,680** | **538,144** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,456 |
+| Source functions                |  7,458 |
 | — exported (public)             |  2,618 |
-| — unexported (private)          |  4,838 |
-| Unit test functions (`TestXxx`) | 11,601 |
-| Subtests (`t.Run(...)`)         |  2,895 |
+| — unexported (private)          |  4,840 |
+| Unit test functions (`TestXxx`) | 11,604 |
+| Subtests (`t.Run(...)`)         |  2,896 |
 | End-to-end test functions       |    376 |
 
 ### Ratios worth noting
@@ -414,7 +414,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.54× more tests than code |
 | Average source file length         |                 ~200 lines |
-| Average test file length           |                 ~554 lines |
+| Average test file length           |                 ~555 lines |
 | Comment lines in source            |  21,348 (~11.0% of source) |
 | Test functions per source function |                       1.6× |
 
@@ -422,7 +422,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,672 |
+| `if err != nil` checks             | 6,676 |
 | `defer` statements                 |   832 |
 | `struct` types defined             | 2,727 |
 | `//nolint` suppressions            |   210 |
@@ -435,7 +435,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Go packages                    |   229 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   274 |
+| Git commits                    |   278 |
 | Unique contributors            |     4 |
 
 ### Hall of fame
