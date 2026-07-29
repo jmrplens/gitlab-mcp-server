@@ -4581,23 +4581,38 @@ func TestGet_WithOptions(t *testing.T) {
 	}
 }
 
-// TestGet_CICDCatalogEnabled verifies that the cicd_catalog_enabled field of
-// the GitLab project payload is mirrored into the tool output, so clients can
-// tell whether a project is published as a CI/CD catalog resource.
-func TestGet_CICDCatalogEnabled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == pathProject42 {
-			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"test","cicd_catalog_enabled":true}`)
-			return
-		}
-		http.NotFound(w, r)
-	}))
-	out, err := Get(context.Background(), client, GetInput{ProjectID: "42"})
-	if err != nil {
-		t.Fatalf(fmtUnexpErr, err)
+// TestGet_CICDCatalogEnabled_MirrorsPayload verifies that the
+// cicd_catalog_enabled field of the GitLab project payload is mirrored into
+// the tool output, so clients can tell whether a project is published as a
+// CI/CD catalog resource. A payload omitting the field must read as false
+// rather than surfacing an unset value.
+func TestGet_CICDCatalogEnabled_MirrorsPayload(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		want    bool
+	}{
+		{"enabled in payload", `{"id":42,"name":"test","cicd_catalog_enabled":true}`, true},
+		{"disabled in payload", `{"id":42,"name":"test","cicd_catalog_enabled":false}`, false},
+		{"absent from payload", `{"id":42,"name":"test"}`, false},
 	}
-	if !out.CICDCatalogEnabled {
-		t.Error("CICDCatalogEnabled = false, want true")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == pathProject42 {
+					testutil.RespondJSON(w, http.StatusOK, tt.payload)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			out, err := Get(context.Background(), client, GetInput{ProjectID: "42"})
+			if err != nil {
+				t.Fatalf(fmtUnexpErr, err)
+			}
+			if out.CICDCatalogEnabled != tt.want {
+				t.Errorf("CICDCatalogEnabled = %v, want %v", out.CICDCatalogEnabled, tt.want)
+			}
+		})
 	}
 }
 

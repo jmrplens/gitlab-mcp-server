@@ -393,9 +393,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |       972 |     194,495 |
-| Unit tests (`_test.go`)  |       541 |     300,012 |
+| Unit tests (`_test.go`)  |       541 |     300,090 |
 | End-to-end tests         |       169 |      43,956 |
-| **Total**                | **1,682** | **538,463** |
+| **Total**                | **1,682** | **538,541** |
 
 ### Functions
 
@@ -404,8 +404,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  7,461 |
 | — exported (public)             |  2,620 |
 | — unexported (private)          |  4,841 |
-| Unit test functions (`TestXxx`) | 11,609 |
-| Subtests (`t.Run(...)`)         |  2,898 |
+| Unit test functions (`TestXxx`) | 11,608 |
+| Subtests (`t.Run(...)`)         |  2,901 |
 | End-to-end test functions       |    376 |
 
 ### Ratios worth noting
@@ -422,7 +422,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,686 |
+| `if err != nil` checks             | 6,684 |
 | `defer` statements                 |   832 |
 | `struct` types defined             | 2,727 |
 | `//nolint` suppressions            |   211 |
@@ -435,7 +435,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Go packages                    |   229 |
 | Direct dependencies (`go.mod`) |    13 |
 | Indirect dependencies          |    50 |
-| Git commits                    |   280 |
+| Git commits                    |   281 |
 | Unique contributors            |     4 |
 
 ### Hall of fame
@@ -443,7 +443,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Record              | File                                                     |
 | ------------------- | -------------------------------------------------------- |
 | Longest source file | `internal/tools/projects/projects.go` — 3,837 lines      |
-| Longest test file   | `internal/tools/projects/projects_test.go` — 8,119 lines |
+| Longest test file   | `internal/tools/projects/projects_test.go` — 8,134 lines |
 
 ### Because why not
 

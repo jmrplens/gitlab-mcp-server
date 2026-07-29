@@ -2822,26 +2822,72 @@ func TestClassifySnapshots(t *testing.T) {
 	}
 }
 
-// TestDiffSnapshots_OmittedZeroValueIsNotSemanticDrift documents the premise
-// behind [snapshotByteStale]: an annotation omitted from the golden file and
-// one written as an explicit false describe the same tool, so the semantic
-// comparison cannot be the only guard against golden files going stale.
-func TestDiffSnapshots_OmittedZeroValueIsNotSemanticDrift(t *testing.T) {
-	var omitted []toolSnapshot
-	if err := json.Unmarshal([]byte(`[{"name":"a","annotations":{}}]`), &omitted); err != nil {
-		t.Fatalf("unmarshal omitted: %v", err)
+// TestDiffSnapshots_Cases verifies which snapshot changes count as semantic
+// differences. The omitted-versus-explicit zero value case documents the
+// premise behind [snapshotByteStale]: those two golden files describe the same
+// tool, so the semantic comparison cannot be the only guard against golden
+// files going stale.
+func TestDiffSnapshots_Cases(t *testing.T) {
+	tests := []struct {
+		name      string
+		want      string
+		got       string
+		wantDiffs []string // compared by prefix, so the SDK's exact annotation serialization does not pin the test
+	}{
+		{
+			name:      "identical snapshots have no differences",
+			want:      `[{"name":"a","description":"d"}]`,
+			got:       `[{"name":"a","description":"d"}]`,
+			wantDiffs: nil,
+		},
+		{
+			name:      "omitted and explicit zero values are equivalent",
+			want:      `[{"name":"a","annotations":{}}]`,
+			got:       `[{"name":"a","annotations":{"readOnlyHint":false}}]`,
+			wantDiffs: nil,
+		},
+		{
+			name:      "added and removed tools are reported",
+			want:      `[{"name":"a"}]`,
+			got:       `[{"name":"b"}]`,
+			wantDiffs: []string{"ADDED tool: b", "REMOVED tool: a"},
+		},
+		{
+			name:      "changed description is reported",
+			want:      `[{"name":"a","description":"old"}]`,
+			got:       `[{"name":"a","description":"new"}]`,
+			wantDiffs: []string{"CHANGED a description:"},
+		},
+		{
+			name:      "changed annotation value is reported",
+			want:      `[{"name":"a","annotations":{"readOnlyHint":false}}]`,
+			got:       `[{"name":"a","annotations":{"readOnlyHint":true}}]`,
+			wantDiffs: []string{"CHANGED a annotations:"},
+		},
 	}
-	var explicit []toolSnapshot
-	if err := json.Unmarshal([]byte(`[{"name":"a","annotations":{"readOnlyHint":false}}]`), &explicit); err != nil {
-		t.Fatalf("unmarshal explicit: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var want, got []toolSnapshot
+			if err := json.Unmarshal([]byte(tt.want), &want); err != nil {
+				t.Fatalf("unmarshal want: %v", err)
+			}
+			if err := json.Unmarshal([]byte(tt.got), &got); err != nil {
+				t.Fatalf("unmarshal got: %v", err)
+			}
 
-	diffs, err := diffSnapshots(omitted, explicit)
-	if err != nil {
-		t.Fatalf("diffSnapshots: %v", err)
-	}
-	if len(diffs) != 0 {
-		t.Errorf("diffSnapshots() = %v, want no semantic differences", diffs)
+			diffs, err := diffSnapshots(want, got)
+			if err != nil {
+				t.Fatalf("diffSnapshots: %v", err)
+			}
+			if len(diffs) != len(tt.wantDiffs) {
+				t.Fatalf("diffSnapshots() = %q, want %d difference(s) starting with %q", diffs, len(tt.wantDiffs), tt.wantDiffs)
+			}
+			for i, wantPrefix := range tt.wantDiffs {
+				if !strings.HasPrefix(diffs[i], wantPrefix) {
+					t.Errorf("diffSnapshots()[%d] = %q, want it to start with %q", i, diffs[i], wantPrefix)
+				}
+			}
+		})
 	}
 }
 
