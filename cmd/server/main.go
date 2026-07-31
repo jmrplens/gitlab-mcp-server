@@ -52,6 +52,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cachehints"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/completions"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
@@ -762,6 +763,10 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		// schema resolution on every registration after the first.
 		SchemaCache: sharedSchemaCache,
 	})
+
+	// SEP-2549 cache hints: catalogs and resource reads are token- and
+	// tier-dependent, so every cacheable result is stamped "private".
+	server.AddReceivingMiddleware(cachehints.Middleware())
 
 	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
 	var metaSchemaRoutes map[string]toolutil.ActionMap

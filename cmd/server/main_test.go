@@ -4032,6 +4032,39 @@ func TestServeHTTP_Stateless_ToolCallSucceeds(t *testing.T) {
 	}
 }
 
+// TestServeHTTP_CacheHints_ToolsListPrivate verifies that the SEP-2549 cache
+// hints applied by the receiving middleware survive the full server-creation
+// and serialization path: a stateless tools/list response carries
+// cacheScope=private and the 5-minute list TTL.
+func TestServeHTTP_CacheHints_ToolsListPrivate(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, true))
+	defer shutdown()
+
+	resp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(body))
+	}
+	var rpc struct {
+		Result struct {
+			TTLMs      int    `json:"ttlMs"`
+			CacheScope string `json:"cacheScope"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rpc); err != nil {
+		t.Fatalf("decode JSON-RPC response: %v", err)
+	}
+	if rpc.Result.CacheScope != "private" {
+		t.Errorf("cacheScope = %q, want private", rpc.Result.CacheScope)
+	}
+	if rpc.Result.TTLMs != 300000 {
+		t.Errorf("ttlMs = %d, want 300000", rpc.Result.TTLMs)
+	}
+}
+
 // TestServeHTTP_StatefulOptOut_SessionHeaderPresent verifies that stateful
 // mode (--stateless=false) still issues Mcp-Session-Id, so the legacy
 // session-based transport remains fully functional as an opt-out.
