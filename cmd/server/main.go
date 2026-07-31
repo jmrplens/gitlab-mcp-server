@@ -89,36 +89,37 @@ const (
 // without requiring a GITLAB_TOKEN — each client must provide its own token
 // via PRIVATE-TOKEN header or Authorization: Bearer.
 type httpConfig struct {
-	addr               string
-	gitlabURL          string
-	skipTLSVerify      bool
-	metaTools          bool
-	metaToolsSet       bool
-	toolSurface        string
-	capabilitySurface  string
-	tier               string
-	tierSet            bool
-	readOnly           bool
-	safeMode           bool
-	embeddedResources  bool
-	excludeTools       string
-	ignoreScopes       bool
-	maxHTTPClients     int
-	sessionTimeout     time.Duration
-	autoUpdate         string
-	autoUpdateRepo     string
-	autoUpdateInterval time.Duration
-	autoUpdateTimeout  time.Duration
-	revalidateInterval time.Duration
-	authMode           string
-	oauthCacheTTL      time.Duration
-	trustedProxyHeader string
-	rateLimitRPS       float64
-	rateLimitBurst     int
-	metaParamSchema    string
-	httpIdleTimeout    time.Duration
-	stateless          bool
-	jsonResponse       bool
+	addr                string
+	gitlabURL           string
+	skipTLSVerify       bool
+	metaTools           bool
+	metaToolsSet        bool
+	toolSurface         string
+	capabilitySurface   string
+	tier                string
+	tierSet             bool
+	readOnly            bool
+	safeMode            bool
+	embeddedResources   bool
+	excludeTools        string
+	ignoreScopes        bool
+	maxHTTPClients      int
+	sessionTimeout      time.Duration
+	autoUpdate          string
+	autoUpdateRepo      string
+	autoUpdateInterval  time.Duration
+	autoUpdateTimeout   time.Duration
+	revalidateInterval  time.Duration
+	authMode            string
+	oauthCacheTTL       time.Duration
+	trustedProxyHeader  string
+	rateLimitRPS        float64
+	rateLimitBurst      int
+	metaParamSchema     string
+	httpIdleTimeout     time.Duration
+	stateless           bool
+	jsonResponse        bool
+	maxRequestBodyBytes int64
 }
 
 // HTTP server timeout defaults. These bound the standard library [http.Server]
@@ -201,6 +202,7 @@ func main() {
 	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so --session-timeout is the effective lifetime; set a positive duration to recycle idle connections sooner")
 	flag.BoolVar(&hcfg.stateless, "stateless", true, "Stateless streamable HTTP (default; required for MCP protocol 2026-07-28 over HTTP): no Mcp-Session-Id tracking, each POST is self-contained, GET/DELETE return 405. Use -stateless=false to restore legacy stateful sessions")
 	flag.BoolVar(&hcfg.jsonResponse, "json-response", false, "Return application/json responses instead of text/event-stream (SSE)")
+	flag.Int64Var(&hcfg.maxRequestBodyBytes, "max-request-body-bytes", 0, "Maximum streamable HTTP request body size in bytes; 0 uses the SDK default (4 MiB)")
 	flag.Parse()
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
@@ -322,6 +324,7 @@ FLAGS
   -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure so -session-timeout governs
   -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28). Use -stateless=false for legacy stateful sessions
   -json-response            Return application/json responses instead of SSE (default false)
+  -max-request-body-bytes n Maximum streamable HTTP request body bytes (0 = SDK default 4 MiB)
   -auto-update string       Auto-update mode: true|check|false (default "true")
   -auto-update-repo string  GitHub repository for update checks (default "%s")
   -auto-update-interval dur How often to check for updates (default %s, HTTP mode)
@@ -490,34 +493,35 @@ func resolveHTTPTier(hcfg *httpConfig) (edition.Tier, bool, error) {
 
 func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, tier edition.Tier, tierExplicit bool) *config.Config {
 	return &config.Config{
-		GitLabURL:          hcfg.gitlabURL,
-		SkipTLSVerify:      hcfg.skipTLSVerify,
-		MetaTools:          metaTools,
-		ToolSurface:        toolSurface,
-		CapabilitySurface:  hcfg.capabilitySurface,
-		Tier:               tier,
-		TierExplicit:       tierExplicit,
-		ReadOnly:           hcfg.readOnly,
-		SafeMode:           hcfg.safeMode,
-		EmbeddedResources:  hcfg.embeddedResources,
-		ExcludeTools:       config.ParseCSV(hcfg.excludeTools),
-		IgnoreScopes:       hcfg.ignoreScopes,
-		MaxHTTPClients:     hcfg.maxHTTPClients,
-		SessionTimeout:     hcfg.sessionTimeout,
-		RevalidateInterval: hcfg.revalidateInterval,
-		Stateless:          hcfg.stateless,
-		JSONResponse:       hcfg.jsonResponse,
-		UploadMaxFileSize:  config.DefaultMaxFileSize,
-		AutoUpdate:         hcfg.autoUpdate,
-		AutoUpdateRepo:     hcfg.autoUpdateRepo,
-		AutoUpdateInterval: hcfg.autoUpdateInterval,
-		AutoUpdateTimeout:  hcfg.autoUpdateTimeout,
-		AuthMode:           hcfg.authMode,
-		OAuthCacheTTL:      hcfg.oauthCacheTTL,
-		TrustedProxyHeader: hcfg.trustedProxyHeader,
-		RateLimitRPS:       hcfg.rateLimitRPS,
-		RateLimitBurst:     hcfg.rateLimitBurst,
-		MetaParamSchema:    hcfg.metaParamSchema,
+		GitLabURL:           hcfg.gitlabURL,
+		SkipTLSVerify:       hcfg.skipTLSVerify,
+		MetaTools:           metaTools,
+		ToolSurface:         toolSurface,
+		CapabilitySurface:   hcfg.capabilitySurface,
+		Tier:                tier,
+		TierExplicit:        tierExplicit,
+		ReadOnly:            hcfg.readOnly,
+		SafeMode:            hcfg.safeMode,
+		EmbeddedResources:   hcfg.embeddedResources,
+		ExcludeTools:        config.ParseCSV(hcfg.excludeTools),
+		IgnoreScopes:        hcfg.ignoreScopes,
+		MaxHTTPClients:      hcfg.maxHTTPClients,
+		SessionTimeout:      hcfg.sessionTimeout,
+		RevalidateInterval:  hcfg.revalidateInterval,
+		Stateless:           hcfg.stateless,
+		JSONResponse:        hcfg.jsonResponse,
+		MaxRequestBodyBytes: hcfg.maxRequestBodyBytes,
+		UploadMaxFileSize:   config.DefaultMaxFileSize,
+		AutoUpdate:          hcfg.autoUpdate,
+		AutoUpdateRepo:      hcfg.autoUpdateRepo,
+		AutoUpdateInterval:  hcfg.autoUpdateInterval,
+		AutoUpdateTimeout:   hcfg.autoUpdateTimeout,
+		AuthMode:            hcfg.authMode,
+		OAuthCacheTTL:       hcfg.oauthCacheTTL,
+		TrustedProxyHeader:  hcfg.trustedProxyHeader,
+		RateLimitRPS:        hcfg.rateLimitRPS,
+		RateLimitBurst:      hcfg.rateLimitBurst,
+		MetaParamSchema:     hcfg.metaParamSchema,
 	}
 }
 
@@ -533,6 +537,9 @@ func validateHTTPRuntimeConfig(cfg *config.Config) error {
 	}
 	if rateErr := toolutil.ValidateRateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst); rateErr != nil {
 		return fmt.Errorf("--rate-limit-rps/--rate-limit-burst: %w", rateErr)
+	}
+	if cfg.MaxRequestBodyBytes < 0 {
+		return fmt.Errorf("--max-request-body-bytes must be >= 0, got %d", cfg.MaxRequestBodyBytes)
 	}
 	return nil
 }
@@ -1072,9 +1079,10 @@ func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr s
 // because no session outlives its request.
 func streamableHTTPOptions(cfg *config.Config) *mcp.StreamableHTTPOptions {
 	return &mcp.StreamableHTTPOptions{
-		SessionTimeout: cfg.SessionTimeout,
-		Stateless:      cfg.Stateless,
-		JSONResponse:   cfg.JSONResponse,
+		SessionTimeout:      cfg.SessionTimeout,
+		Stateless:           cfg.Stateless,
+		JSONResponse:        cfg.JSONResponse,
+		MaxRequestBodyBytes: cfg.MaxRequestBodyBytes,
 		// Always propagate client aborts into handler contexts so in-flight
 		// GitLab API calls are cancelled when the POST is abandoned. The SDK
 		// applies this to new-protocol (2026-07-28) requests only, so legacy

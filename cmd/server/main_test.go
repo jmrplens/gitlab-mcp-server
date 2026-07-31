@@ -936,6 +936,7 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"stateless flag", "-stateless"},
 		{"stateless default", "-stateless=false"},
 		{"json-response flag", "-json-response"},
+		{"max-request-body-bytes flag", "-max-request-body-bytes"},
 		{"auto-update flag", "-auto-update"},
 		{"env section", "ENVIRONMENT VARIABLES"},
 		{"GITLAB_URL env", "GITLAB_URL"},
@@ -3802,13 +3803,16 @@ func TestDefaultHTTPIdleTimeout_DisabledByDefault(t *testing.T) {
 // flag layer defaults -stateless to true, while a zero httpConfig (as built
 // directly in tests) still maps to Stateless=false.
 func TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated(t *testing.T) {
-	hcfg := &httpConfig{stateless: true, jsonResponse: true}
+	hcfg := &httpConfig{stateless: true, jsonResponse: true, maxRequestBodyBytes: 2048}
 	cfg := configFromHTTPFlags(hcfg, "", false, edition.Free, false)
 	if !cfg.Stateless {
 		t.Error("configFromHTTPFlags() Stateless = false, want true")
 	}
 	if !cfg.JSONResponse {
 		t.Error("configFromHTTPFlags() JSONResponse = false, want true")
+	}
+	if cfg.MaxRequestBodyBytes != 2048 {
+		t.Errorf("configFromHTTPFlags() MaxRequestBodyBytes = %d, want 2048", cfg.MaxRequestBodyBytes)
 	}
 	defaults := configFromHTTPFlags(&httpConfig{}, "", false, edition.Free, false)
 	if defaults.Stateless || defaults.JSONResponse {
@@ -3831,6 +3835,7 @@ func TestStreamableHTTPOptions_MapsConfigFields(t *testing.T) {
 		{"stateless", &config.Config{Stateless: true}, true, false},
 		{"json_response", &config.Config{JSONResponse: true}, false, true},
 		{"both", &config.Config{Stateless: true, JSONResponse: true}, true, true},
+		{"body_limit", &config.Config{MaxRequestBodyBytes: 1024}, false, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3846,6 +3851,9 @@ func TestStreamableHTTPOptions_MapsConfigFields(t *testing.T) {
 			}
 			if !opts.PropagateRequestCancellation {
 				t.Error("PropagateRequestCancellation = false, want always true")
+			}
+			if opts.MaxRequestBodyBytes != tt.cfg.MaxRequestBodyBytes {
+				t.Errorf("MaxRequestBodyBytes = %d, want %d", opts.MaxRequestBodyBytes, tt.cfg.MaxRequestBodyBytes)
 			}
 		})
 	}
@@ -4029,6 +4037,38 @@ func TestServeHTTP_Stateless_ToolCallSucceeds(t *testing.T) {
 	body, _ := io.ReadAll(resp.Body)
 	if !strings.Contains(string(body), "gitlab_execute_action") && !strings.Contains(string(body), "project") {
 		t.Errorf("tools/call gitlab_find_action body has no catalog matches: %s", string(body))
+	}
+}
+
+// TestValidateHTTPRuntimeConfig_NegativeBodyLimit_Rejected verifies the CLI
+// refuses negative --max-request-body-bytes: the SDK would interpret it as
+// "no limit", which must be unreachable from configuration.
+func TestValidateHTTPRuntimeConfig_NegativeBodyLimit_Rejected(t *testing.T) {
+	cfg := &config.Config{MaxRequestBodyBytes: -1}
+	if err := validateHTTPRuntimeConfig(cfg); err == nil {
+		t.Fatal("expected error for negative --max-request-body-bytes")
+	}
+}
+
+// TestServeHTTP_Stateless_BodyLimitReturns413 verifies that
+// --max-request-body-bytes is enforced by the streamable HTTP transport: a
+// JSON-RPC POST larger than the configured limit is rejected with 413 instead
+// of being parsed.
+func TestServeHTTP_Stateless_BodyLimitReturns413(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := statelessTestConfig(mockGL.URL, true)
+	cfg.MaxRequestBodyBytes = 512
+	addr, shutdown := startStatelessServeHTTP(t, cfg)
+	defer shutdown()
+
+	oversized := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_find_action","arguments":{"query":"` +
+		strings.Repeat("x", 1024) + `"}}}`
+	resp := postStatelessJSONRPC(t, addr, oversized)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		body, _ := io.ReadAll(resp.Body)
+		t.Errorf("status = %d, want 413: %s", resp.StatusCode, string(body))
 	}
 }
 
