@@ -77,6 +77,8 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--rate-limit-rps`       | `0`                          | Límite de tasa por servidor para `tools/call` en req/s (`0` = desactivado)                                                                                                                                                     |
 | `--rate-limit-burst`     | `40`                         | Tamaño máximo del token bucket cuando `--rate-limit-rps > 0`                                                                                                                                                                   |
 | `--trusted-proxy-header` | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `Fly-Client-IP`, `X-Forwarded-For`)                                                                                                         |
+| `--stateless`            | `false`                      | HTTP streamable sin sesiones (SEP-2567 / protocolo 2026-07-28): sin seguimiento de `Mcp-Session-Id`, cada POST es autónomo, GET/DELETE devuelven `405`                                                                         |
+| `--json-response`        | `false`                      | Devuelve cuerpos `application/json` en lugar de `text/event-stream` (SSE)                                                                                                                                                      |
 
 :::note
 `--gitlab-url` es opcional. Cuando se omite, cada cliente debe proporcionar la cabecera `GITLAB-URL`. Cuando se establece, es autoritativa: cualquier cabecera `GITLAB-URL` enviada por el cliente se ignora, se usa la URL configurada y la petición registra `ignored_options` para ese cliente.
@@ -193,6 +195,23 @@ El modo OAuth requiere una Aplicación OAuth de GitLab. Consulta la guía [`docs
 :::note
 La cabecera `PRIVATE-TOKEN` sigue funcionando en modo OAuth — el middleware la normaliza a un token Bearer. Esto permite compatibilidad hacia atrás con clientes que no soportan OAuth.
 :::
+
+## Modo sin estado (stateless)
+
+`--stateless` cambia el transporte HTTP streamable al modelo sin sesiones introducido por [SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567) (protocolo MCP `2026-07-28`):
+
+- El servidor no lee ni establece la cabecera `Mcp-Session-Id`. Cada POST es un intercambio JSON-RPC autónomo — no se necesita la ronda `initialize`.
+- GET y DELETE sobre el endpoint MCP devuelven `405 Method Not Allowed` (`Allow: POST`). Los endpoints `/health` y `/.well-known/*` no se ven afectados.
+- Las peticiones iniciadas por el servidor quedan deshabilitadas — los flujos de elicitación MCP recurren a sus alternativas no interactivas (p. ej. el parámetro `confirm` para acciones destructivas).
+- `--session-timeout` no tiene efecto: ninguna sesión sobrevive a su petición.
+- El pool de servidores por token sigue aplicando, así que las peticiones repetidas reutilizan una instancia de servidor cacheada.
+
+El modo sin estado encaja en despliegues con balanceo de carga donde las peticiones de un cliente pueden aterrizar en réplicas distintas. Combínalo con `--json-response` para clientes o gateways que prefieren cuerpos JSON planos en lugar de SSE:
+
+```bash
+gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
+  --stateless --json-response
+```
 
 ## Gestión de sesiones
 
