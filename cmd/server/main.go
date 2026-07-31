@@ -116,6 +116,8 @@ type httpConfig struct {
 	rateLimitBurst     int
 	metaParamSchema    string
 	httpIdleTimeout    time.Duration
+	stateless          bool
+	jsonResponse       bool
 }
 
 // HTTP server timeout defaults. These bound the standard library [http.Server]
@@ -196,6 +198,8 @@ func main() {
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
 	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so --session-timeout is the effective lifetime; set a positive duration to recycle idle connections sooner")
+	flag.BoolVar(&hcfg.stateless, "stateless", false, "Stateless streamable HTTP: no Mcp-Session-Id tracking, each POST is self-contained; GET/DELETE return 405; disables server-initiated requests such as elicitation")
+	flag.BoolVar(&hcfg.jsonResponse, "json-response", false, "Return application/json responses instead of text/event-stream (SSE)")
 	flag.Parse()
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
@@ -315,6 +319,8 @@ FLAGS
   -max-http-clients int     Maximum concurrent client sessions (default %d)
   -session-timeout duration Idle session timeout (default %s)
   -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure so -session-timeout governs
+  -stateless                Stateless streamable HTTP: no session tracking, each POST is self-contained (default false)
+  -json-response            Return application/json responses instead of SSE (default false)
   -auto-update string       Auto-update mode: true|check|false (default "true")
   -auto-update-repo string  GitHub repository for update checks (default "%s")
   -auto-update-interval dur How often to check for updates (default %s, HTTP mode)
@@ -498,6 +504,8 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		MaxHTTPClients:     hcfg.maxHTTPClients,
 		SessionTimeout:     hcfg.sessionTimeout,
 		RevalidateInterval: hcfg.revalidateInterval,
+		Stateless:          hcfg.stateless,
+		JSONResponse:       hcfg.jsonResponse,
 		UploadMaxFileSize:  config.DefaultMaxFileSize,
 		AutoUpdate:         hcfg.autoUpdate,
 		AutoUpdateRepo:     hcfg.autoUpdateRepo,

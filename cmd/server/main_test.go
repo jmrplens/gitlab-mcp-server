@@ -932,6 +932,8 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"max-http-clients flag", "-max-http-clients"},
 		{"session-timeout flag", "-session-timeout"},
 		{"http-idle-timeout flag", "-http-idle-timeout"},
+		{"stateless flag", "-stateless"},
+		{"json-response flag", "-json-response"},
 		{"auto-update flag", "-auto-update"},
 		{"env section", "ENVIRONMENT VARIABLES"},
 		{"GITLAB_URL env", "GITLAB_URL"},
@@ -3787,5 +3789,24 @@ func TestDefaultHTTPIdleTimeout_DisabledByDefault(t *testing.T) {
 	}
 	if got := effectiveIdleTimeout(defaultHTTPIdleTimeout); got != idleTimeoutDisabled {
 		t.Errorf("effectiveIdleTimeout(default) = %s, want %s", got, idleTimeoutDisabled)
+	}
+}
+
+// TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated verifies that the
+// --stateless and --json-response CLI flags are carried into config.Config so
+// the streamable HTTP handler options can consume them.
+func TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated(t *testing.T) {
+	hcfg := &httpConfig{stateless: true, jsonResponse: true}
+	cfg := configFromHTTPFlags(hcfg, "", false, edition.Free, false)
+	if !cfg.Stateless {
+		t.Error("configFromHTTPFlags() Stateless = false, want true")
+	}
+	if !cfg.JSONResponse {
+		t.Error("configFromHTTPFlags() JSONResponse = false, want true")
+	}
+	defaults := configFromHTTPFlags(&httpConfig{}, "", false, edition.Free, false)
+	if defaults.Stateless || defaults.JSONResponse {
+		t.Errorf("configFromHTTPFlags() defaults: Stateless=%v JSONResponse=%v, want false/false",
+			defaults.Stateless, defaults.JSONResponse)
 	}
 }
