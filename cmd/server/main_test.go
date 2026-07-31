@@ -934,6 +934,7 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"session-timeout flag", "-session-timeout"},
 		{"http-idle-timeout flag", "-http-idle-timeout"},
 		{"stateless flag", "-stateless"},
+		{"stateless default", "-stateless=false"},
 		{"json-response flag", "-json-response"},
 		{"auto-update flag", "-auto-update"},
 		{"env section", "ENVIRONMENT VARIABLES"},
@@ -3796,6 +3797,10 @@ func TestDefaultHTTPIdleTimeout_DisabledByDefault(t *testing.T) {
 // TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated verifies that the
 // --stateless and --json-response CLI flags are carried into config.Config so
 // the streamable HTTP handler options can consume them.
+//
+// The zero-value httpConfig case asserts struct-to-struct mapping only: the
+// flag layer defaults -stateless to true, while a zero httpConfig (as built
+// directly in tests) still maps to Stateless=false.
 func TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated(t *testing.T) {
 	hcfg := &httpConfig{stateless: true, jsonResponse: true}
 	cfg := configFromHTTPFlags(hcfg, "", false, edition.Free, false)
@@ -4022,6 +4027,31 @@ func TestServeHTTP_Stateless_ToolCallSucceeds(t *testing.T) {
 	if !strings.Contains(string(body), "gitlab_execute_action") && !strings.Contains(string(body), "project") {
 		t.Errorf("tools/call gitlab_find_action body has no catalog matches: %s", string(body))
 	}
+}
+
+// TestServeHTTP_StatefulOptOut_SessionHeaderPresent verifies that stateful
+// mode (--stateless=false) still issues Mcp-Session-Id, so the legacy
+// session-based transport remains fully functional as an opt-out.
+func TestServeHTTP_StatefulOptOut_SessionHeaderPresent(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := statelessTestConfig(mockGL.URL, false)
+	cfg.Stateless = false
+	addr, shutdown := startStatelessServeHTTP(t, cfg)
+	defer shutdown()
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	resp := postStatelessJSONRPC(t, addr, body)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(resp.Body)
+		t.Fatalf("initialize status = %d: %s", resp.StatusCode, payload)
+	}
+	sessionID := resp.Header.Get(hdrMCPSessionID)
+	if sessionID == "" {
+		t.Fatal("stateful opt-out must set Mcp-Session-Id, got empty")
+	}
+	closeMCPSession(t, "http://"+addr, sessionID)
 }
 
 // headerRoundTripper injects a static header set into every outgoing request.
