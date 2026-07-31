@@ -77,8 +77,9 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--rate-limit-rps`       | `0`                          | Per-server `tools/call` rate limit in req/s (`0` = disabled)                                                                                                                           |
 | `--rate-limit-burst`     | `40`                         | Token-bucket burst size when `--rate-limit-rps > 0`                                                                                                                                    |
 | `--trusted-proxy-header` | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`)                                                                             |
-| `--stateless`            | `false`                      | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`                                      |
+| `--stateless`            | `true`                       | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`. Use `--stateless=false` for legacy stateful sessions |
 | `--json-response`        | `false`                      | Return `application/json` response bodies instead of `text/event-stream` (SSE)                                                                                                         |
+| `--max-request-body-bytes` | `0`                        | Maximum streamable HTTP request body size in bytes; `0` uses the SDK default (4 MiB). Oversized bodies are rejected with `413`                                                          |
 
 :::note
 `--gitlab-url` is optional. When omitted, each client must provide the `GITLAB-URL` header. When set, it is authoritative: any client-provided `GITLAB-URL` header is ignored, the configured URL is used, and the request logs `ignored_options` for that client.
@@ -198,11 +199,11 @@ The `PRIVATE-TOKEN` header still works in OAuth mode — the middleware normaliz
 
 ## Stateless mode
 
-`--stateless` switches the streamable HTTP transport to the sessionless model introduced by [SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567) (MCP protocol `2026-07-28`):
+Stateless is the **default** transport model, following the sessionless design introduced by [SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567) (MCP protocol `2026-07-28`):
 
 - The server neither reads nor sets the `Mcp-Session-Id` header. Every POST is a self-contained JSON-RPC exchange — no `initialize` round-trip is required.
 - GET and DELETE on the MCP endpoint return `405 Method Not Allowed` (`Allow: POST`). `/health` and `/.well-known/*` endpoints are unaffected.
-- Server-initiated requests are disabled — MCP elicitation flows fall back to their non-interactive alternatives (e.g. the `confirm` parameter for destructive actions).
+- Synchronous server-initiated requests are unavailable. Clients on protocol `2026-07-28` keep full elicitation through multi-round-trip requests (MRTR), which travel inside the tool result; only legacy-protocol clients fall back to non-interactive alternatives (e.g. the `confirm` parameter for destructive actions).
 - `--session-timeout` has no effect: no session outlives its request.
 - The per-token server pool still applies, so repeated requests reuse a cached server instance.
 
@@ -210,8 +211,30 @@ Stateless mode suits load-balanced deployments where requests from one client ma
 
 ```bash
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
-  --stateless --json-response
+  --json-response
 ```
+
+### Legacy stateful mode
+
+`--stateless=false` restores the session-based transport: `Mcp-Session-Id` is issued on `initialize`, GET opens the standalone SSE stream, DELETE terminates the session, and `--session-timeout` governs idle lifetime. It is a compatibility mode for clients that cannot negotiate protocol `2026-07-28` (they negotiate `2025-11-25` or older and use synchronous elicitation), the server logs a warning at startup when it is enabled, and it is intended to be removed once client ecosystems have migrated.
+
+### Cache hints
+
+Every cacheable result carries [SEP-2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549) hints with `cacheScope: private`, because catalogs and resource content are filtered by the caller's token scopes and licensing tier and must never be served from a shared cache:
+
+| Result                                                                                        | `ttlMs`              |
+| --------------------------------------------------------------------------------------------- | ---------------------- |
+| `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `server/discover` | `300000` (5 minutes) |
+| `resources/read` of static content (guides, schemas, `gitlab://tools` manifests)              | `3600000` (1 hour)   |
+| `resources/read` of live GitLab data                                                          | `0` (always fresh)   |
+
+### Request cancellation
+
+Client aborts are always propagated into handler contexts, so an abandoned POST cancels its in-flight GitLab API calls. The SDK applies this to protocol `2026-07-28` requests only.
+
+### Gateway routing annotation
+
+On the dynamic tool surface, the `action` property of `gitlab_execute_action` carries the [SEP-2243](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2243) `x-mcp-header` annotation with the value `Mcp-Param-Action`, so MCP-aware gateways can route, rate-limit, and observe calls by canonical action ID without parsing the JSON-RPC body.
 
 ## Session management
 

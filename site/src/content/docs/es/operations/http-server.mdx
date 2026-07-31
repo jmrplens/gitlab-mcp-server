@@ -77,8 +77,9 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--rate-limit-rps`       | `0`                          | Límite de tasa por servidor para `tools/call` en req/s (`0` = desactivado)                                                                                                                                                     |
 | `--rate-limit-burst`     | `40`                         | Tamaño máximo del token bucket cuando `--rate-limit-rps > 0`                                                                                                                                                                   |
 | `--trusted-proxy-header` | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `Fly-Client-IP`, `X-Forwarded-For`)                                                                                                         |
-| `--stateless`            | `false`                      | HTTP streamable sin sesiones (SEP-2567 / protocolo 2026-07-28): sin seguimiento de `Mcp-Session-Id`, cada POST es autónomo, GET/DELETE devuelven `405`                                                                         |
+| `--stateless`            | `true`                       | HTTP streamable sin sesiones (SEP-2567 / protocolo 2026-07-28): sin seguimiento de `Mcp-Session-Id`, cada POST es autónomo, GET/DELETE devuelven `405`. Usa `--stateless=false` para sesiones con estado heredadas             |
 | `--json-response`        | `false`                      | Devuelve cuerpos `application/json` en lugar de `text/event-stream` (SSE)                                                                                                                                                      |
+| `--max-request-body-bytes` | `0`                        | Tamaño máximo del cuerpo de las peticiones HTTP streamable en bytes; `0` usa el valor por defecto del SDK (4 MiB). Los cuerpos que lo superan se rechazan con `413`                                                            |
 
 :::note
 `--gitlab-url` es opcional. Cuando se omite, cada cliente debe proporcionar la cabecera `GITLAB-URL`. Cuando se establece, es autoritativa: cualquier cabecera `GITLAB-URL` enviada por el cliente se ignora, se usa la URL configurada y la petición registra `ignored_options` para ese cliente.
@@ -198,11 +199,11 @@ La cabecera `PRIVATE-TOKEN` sigue funcionando en modo OAuth — el middleware la
 
 ## Modo sin estado (stateless)
 
-`--stateless` cambia el transporte HTTP streamable al modelo sin sesiones introducido por [SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567) (protocolo MCP `2026-07-28`):
+El modo sin estado es el **predeterminado** y sigue el diseño sin sesiones introducido por [SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567) (protocolo MCP `2026-07-28`):
 
 - El servidor no lee ni establece la cabecera `Mcp-Session-Id`. Cada POST es un intercambio JSON-RPC autónomo — no se necesita la ronda `initialize`.
 - GET y DELETE sobre el endpoint MCP devuelven `405 Method Not Allowed` (`Allow: POST`). Los endpoints `/health` y `/.well-known/*` no se ven afectados.
-- Las peticiones iniciadas por el servidor quedan deshabilitadas — los flujos de elicitación MCP recurren a sus alternativas no interactivas (p. ej. el parámetro `confirm` para acciones destructivas).
+- Las peticiones síncronas iniciadas por el servidor no están disponibles. Los clientes con protocolo `2026-07-28` conservan la elicitación completa mediante peticiones multi-ronda (MRTR), que viajan dentro del resultado de la herramienta; solo los clientes con protocolo heredado recurren a las alternativas no interactivas (p. ej. el parámetro `confirm` para acciones destructivas).
 - `--session-timeout` no tiene efecto: ninguna sesión sobrevive a su petición.
 - El pool de servidores por token sigue aplicando, así que las peticiones repetidas reutilizan una instancia de servidor cacheada.
 
@@ -210,8 +211,30 @@ El modo sin estado encaja en despliegues con balanceo de carga donde las peticio
 
 ```bash
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
-  --stateless --json-response
+  --json-response
 ```
+
+### Modo con estado heredado
+
+`--stateless=false` restaura el transporte basado en sesiones: se emite `Mcp-Session-Id` en `initialize`, GET abre el flujo SSE independiente, DELETE termina la sesión y `--session-timeout` gobierna el tiempo de vida en reposo. Es un modo de compatibilidad para clientes que aún no negocian el protocolo `2026-07-28` (negocian `2025-11-25` o anterior y usan elicitación síncrona), el servidor registra un aviso al arrancar cuando está activo, y la intención es retirarlo cuando los ecosistemas de clientes hayan migrado.
+
+### Sugerencias de caché
+
+Todos los resultados cacheables llevan sugerencias [SEP-2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549) con `cacheScope: private`, porque los catálogos y el contenido de los recursos se filtran según los ámbitos del token y el nivel de licencia de quien llama, y nunca deben servirse desde una caché compartida:
+
+| Resultado                                                                                     | `ttlMs`              |
+| --------------------------------------------------------------------------------------------- | ---------------------- |
+| `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `server/discover` | `300000` (5 minutos) |
+| `resources/read` de contenido estático (guías, esquemas, manifiestos `gitlab://tools`)        | `3600000` (1 hora)   |
+| `resources/read` de datos en vivo de GitLab                                                   | `0` (siempre fresco) |
+
+### Cancelación de peticiones
+
+Las cancelaciones del cliente siempre se propagan a los contextos de los manejadores, de modo que un POST abandonado cancela sus llamadas en curso a la API de GitLab. El SDK lo aplica solo a las peticiones con protocolo `2026-07-28`.
+
+### Anotación de enrutado para gateways
+
+En la superficie dinámica de herramientas, la propiedad `action` de `gitlab_execute_action` lleva la anotación `x-mcp-header` de [SEP-2243](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2243) con el valor `Mcp-Param-Action`, de modo que los gateways compatibles con MCP pueden enrutar, limitar y observar las llamadas por ID canónico de acción sin analizar el cuerpo JSON-RPC.
 
 ## Gestión de sesiones
 

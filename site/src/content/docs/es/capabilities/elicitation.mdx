@@ -53,6 +53,8 @@ sequenceDiagram
 
 El mecanismo de transporte se adapta a la versión del protocolo MCP negociada: en sesiones anteriores a `2026-07-28` el servidor envía peticiones `elicitation/create` durante la llamada, mientras que en `2026-07-28` y posteriores los formularios viajan como peticiones de entrada multi-ronda (SEP-2322): el resultado de la herramienta solicita la entrada y el cliente reintenta la llamada con las respuestas adjuntas. La experiencia de usuario es idéntica en ambos casos.
 
+Como los formularios multi-ronda viajan dentro del resultado de la herramienta, la elicitación sigue funcionando sobre el [transporte HTTP sin estado](/es/operations/http-server/#modo-sin-estado-stateless) predeterminado para clientes con protocolo `2026-07-28`. Los clientes con protocolo heredado necesitan un canal iniciado por el servidor, así que sobre HTTP sin estado reciben las alternativas no interactivas (avisos de error de los asistentes y `confirm` para acciones destructivas).
+
 ## ¿Qué asistentes interactivos están disponibles?
 
 GitLab MCP Server proporciona cuatro herramientas de creación tipo asistente. Cada una guía al usuario por los campos que necesita un recurso y confirma antes de realizar la llamada final a la API.
