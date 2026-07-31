@@ -1,5 +1,6 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
 	run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
+	validate-http-stateless validate-http-stateless-docker \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
 	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
 	lint fmt clean version release release-check checksum \
@@ -132,6 +133,14 @@ test-e2e:
 	  --junitfile $(E2E_REPORT_DIR)/e2e-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-log.json \
 	  -- -tags e2e -timeout 120s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-output.txt'
+
+## validate-http-stateless: smoke-validate stateless streamable HTTP with the compiled binary (reads GITLAB_URL, GITLAB_TOKEN from .env)
+validate-http-stateless:
+	scripts/validate-http-stateless.sh binary
+
+## validate-http-stateless-docker: smoke-validate stateless streamable HTTP with the Docker image
+validate-http-stateless-docker:
+	scripts/validate-http-stateless.sh docker
 
 ## test-e2e-docker: start ephemeral GitLab CE, run E2E tests, tear down
 test-e2e-docker:
