@@ -142,6 +142,14 @@ type Config struct {
 	SessionTimeout     time.Duration // Idle MCP session timeout (HTTP mode only)
 	RevalidateInterval time.Duration // Token re-validation interval (HTTP mode only)
 
+	// Stateless enables sessionless streamable HTTP (SEP-2567, protocol
+	// 2026-07-28): the server neither reads nor sets Mcp-Session-Id, every
+	// POST is self-contained, and GET/DELETE return 405 (HTTP mode only).
+	Stateless bool
+	// JSONResponse returns application/json bodies instead of
+	// text/event-stream (SSE) for streamable responses (HTTP mode only).
+	JSONResponse bool
+
 	AutoUpdate         string        // Auto-update mode: "true" (auto), "check" (log-only), "false" (disabled)
 	AutoUpdateRepo     string        // GitLab project path for update checks
 	AutoUpdateInterval time.Duration // How often to check for updates (HTTP mode)

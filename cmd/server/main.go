@@ -116,6 +116,8 @@ type httpConfig struct {
 	rateLimitBurst     int
 	metaParamSchema    string
 	httpIdleTimeout    time.Duration
+	stateless          bool
+	jsonResponse       bool
 }
 
 // HTTP server timeout defaults. These bound the standard library [http.Server]
@@ -196,6 +198,8 @@ func main() {
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
 	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so --session-timeout is the effective lifetime; set a positive duration to recycle idle connections sooner")
+	flag.BoolVar(&hcfg.stateless, "stateless", false, "Stateless streamable HTTP: no Mcp-Session-Id tracking, each POST is self-contained; GET/DELETE return 405; disables server-initiated requests such as elicitation")
+	flag.BoolVar(&hcfg.jsonResponse, "json-response", false, "Return application/json responses instead of text/event-stream (SSE)")
 	flag.Parse()
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
@@ -315,6 +319,8 @@ FLAGS
   -max-http-clients int     Maximum concurrent client sessions (default %d)
   -session-timeout duration Idle session timeout (default %s)
   -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure so -session-timeout governs
+  -stateless                Stateless streamable HTTP: no session tracking, each POST is self-contained (default false)
+  -json-response            Return application/json responses instead of SSE (default false)
   -auto-update string       Auto-update mode: true|check|false (default "true")
   -auto-update-repo string  GitHub repository for update checks (default "%s")
   -auto-update-interval dur How often to check for updates (default %s, HTTP mode)
@@ -498,6 +504,8 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		MaxHTTPClients:     hcfg.maxHTTPClients,
 		SessionTimeout:     hcfg.sessionTimeout,
 		RevalidateInterval: hcfg.revalidateInterval,
+		Stateless:          hcfg.stateless,
+		JSONResponse:       hcfg.jsonResponse,
 		UploadMaxFileSize:  config.DefaultMaxFileSize,
 		AutoUpdate:         hcfg.autoUpdate,
 		AutoUpdateRepo:     hcfg.autoUpdateRepo,
@@ -975,6 +983,8 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdl
 		"auth_mode", cfg.AuthMode,
 		"max_clients", cfg.MaxHTTPClients,
 		"session_timeout", cfg.SessionTimeout,
+		"stateless", cfg.Stateless,
+		"json_response", cfg.JSONResponse,
 		"trusted_proxy_header", cfg.TrustedProxyHeader,
 		"version", version,
 		"commit", commit,
@@ -1048,6 +1058,17 @@ func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr s
 	registerLegacyMCPHandlers(ctx, cfg, pool, mux)
 }
 
+// streamableHTTPOptions builds the StreamableHTTPOptions shared by the legacy
+// and OAuth handler paths. In stateless mode the SDK ignores SessionTimeout
+// because no session outlives its request.
+func streamableHTTPOptions(cfg *config.Config) *mcp.StreamableHTTPOptions {
+	return &mcp.StreamableHTTPOptions{
+		SessionTimeout: cfg.SessionTimeout,
+		Stateless:      cfg.Stateless,
+		JSONResponse:   cfg.JSONResponse,
+	}
+}
+
 func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, mux *http.ServeMux) {
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
 		token := serverpool.ExtractToken(r)
@@ -1067,7 +1088,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr 
 			return nil
 		}
 		return server
-	}, &mcp.StreamableHTTPOptions{SessionTimeout: cfg.SessionTimeout})
+	}, streamableHTTPOptions(cfg))
 
 	tokenCache := oauth.NewTokenCache()
 	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cfg.OAuthCacheTTL, tokenCache)
@@ -1106,7 +1127,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 			return nil
 		}
 		return server
-	}, &mcp.StreamableHTTPOptions{SessionTimeout: cfg.SessionTimeout})
+	}, streamableHTTPOptions(cfg))
 	mux.Handle("/", mcpHandler)
 }
 

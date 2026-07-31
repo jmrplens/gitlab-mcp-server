@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -932,6 +933,8 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"max-http-clients flag", "-max-http-clients"},
 		{"session-timeout flag", "-session-timeout"},
 		{"http-idle-timeout flag", "-http-idle-timeout"},
+		{"stateless flag", "-stateless"},
+		{"json-response flag", "-json-response"},
 		{"auto-update flag", "-auto-update"},
 		{"env section", "ENVIRONMENT VARIABLES"},
 		{"GITLAB_URL env", "GITLAB_URL"},
@@ -3787,5 +3790,305 @@ func TestDefaultHTTPIdleTimeout_DisabledByDefault(t *testing.T) {
 	}
 	if got := effectiveIdleTimeout(defaultHTTPIdleTimeout); got != idleTimeoutDisabled {
 		t.Errorf("effectiveIdleTimeout(default) = %s, want %s", got, idleTimeoutDisabled)
+	}
+}
+
+// TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated verifies that the
+// --stateless and --json-response CLI flags are carried into config.Config so
+// the streamable HTTP handler options can consume them.
+func TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated(t *testing.T) {
+	hcfg := &httpConfig{stateless: true, jsonResponse: true}
+	cfg := configFromHTTPFlags(hcfg, "", false, edition.Free, false)
+	if !cfg.Stateless {
+		t.Error("configFromHTTPFlags() Stateless = false, want true")
+	}
+	if !cfg.JSONResponse {
+		t.Error("configFromHTTPFlags() JSONResponse = false, want true")
+	}
+	defaults := configFromHTTPFlags(&httpConfig{}, "", false, edition.Free, false)
+	if defaults.Stateless || defaults.JSONResponse {
+		t.Errorf("configFromHTTPFlags() defaults: Stateless=%v JSONResponse=%v, want false/false",
+			defaults.Stateless, defaults.JSONResponse)
+	}
+}
+
+// TestStreamableHTTPOptions_MapsConfigFields verifies that the shared handler
+// options builder copies session timeout, stateless mode, and JSON response
+// mode from config so the legacy and OAuth paths cannot drift apart.
+func TestStreamableHTTPOptions_MapsConfigFields(t *testing.T) {
+	tests := []struct {
+		name         string
+		cfg          *config.Config
+		stateless    bool
+		jsonResponse bool
+	}{
+		{"defaults", &config.Config{SessionTimeout: config.DefaultSessionTimeout}, false, false},
+		{"stateless", &config.Config{Stateless: true}, true, false},
+		{"json_response", &config.Config{JSONResponse: true}, false, true},
+		{"both", &config.Config{Stateless: true, JSONResponse: true}, true, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := streamableHTTPOptions(tt.cfg)
+			if opts.SessionTimeout != tt.cfg.SessionTimeout {
+				t.Errorf("SessionTimeout = %v, want %v", opts.SessionTimeout, tt.cfg.SessionTimeout)
+			}
+			if opts.Stateless != tt.stateless {
+				t.Errorf("Stateless = %v, want %v", opts.Stateless, tt.stateless)
+			}
+			if opts.JSONResponse != tt.jsonResponse {
+				t.Errorf("JSONResponse = %v, want %v", opts.JSONResponse, tt.jsonResponse)
+			}
+		})
+	}
+}
+
+// startStatelessServeHTTP boots serveHTTP with the given config on a free
+// port and returns the address plus a shutdown func that asserts clean exit.
+func startStatelessServeHTTP(t *testing.T, cfg *config.Config) (string, func()) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		cancel()
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+	listener.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
+	}()
+	waitForHTTPServerReady(t, addr, errCh)
+
+	return addr, func() {
+		cancel()
+		select {
+		case serveErr := <-errCh:
+			if serveErr != nil {
+				t.Fatalf("serveHTTP error: %v", serveErr)
+			}
+		case <-time.After(testHTTPLivenessTimeout):
+			t.Fatal("serveHTTP did not shut down in time")
+		}
+	}
+}
+
+// statelessTestConfig returns an HTTP-mode config in stateless mode with the
+// dynamic tool surface, backed by the given mock GitLab server URL.
+func statelessTestConfig(gitlabURL string, jsonResponse bool) *config.Config {
+	return &config.Config{
+		GitLabURL:      gitlabURL,
+		ToolSurface:    config.ToolSurfaceDynamic,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		Stateless:      true,
+		JSONResponse:   jsonResponse,
+	}
+}
+
+// postStatelessJSONRPC sends one self-contained JSON-RPC POST (no session
+// header) and returns the response. Callers own resp.Body.
+func postStatelessJSONRPC(t *testing.T, addr, body string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set(hdrContentType, mimeJSON)
+	req.Header.Set("Accept", mimeJSONSSE)
+	req.Header.Set("PRIVATE-TOKEN", testToken)
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	return resp
+}
+
+// TestServeHTTP_Stateless_ToolsListWithoutSession verifies that in stateless
+// mode a tools/list POST succeeds without any prior initialize call, the
+// response carries no Mcp-Session-Id header, and the default response body is
+// an SSE stream (text/event-stream).
+func TestServeHTTP_Stateless_ToolsListWithoutSession(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, false))
+	defer shutdown()
+
+	resp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(body))
+	}
+	if got := resp.Header.Get(hdrMCPSessionID); got != "" {
+		t.Errorf("stateless response must not set %s, got %q", hdrMCPSessionID, got)
+	}
+	if ct := resp.Header.Get(hdrContentType); !strings.HasPrefix(ct, "text/event-stream") {
+		t.Errorf("default stateless Content-Type = %q, want text/event-stream", ct)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "gitlab_find_action") {
+		t.Errorf("tools/list body does not mention gitlab_find_action: %s", string(body))
+	}
+}
+
+// TestServeHTTP_Stateless_GETMethodNotAllowed verifies that stateless mode
+// rejects GET on the MCP endpoint with 405 and an Allow: POST header, per the
+// sessionless streamable HTTP semantics of SEP-2567.
+func TestServeHTTP_Stateless_GETMethodNotAllowed(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, false))
+	defer shutdown()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/", nil)
+	if err != nil {
+		t.Fatalf("build request: %v", err)
+	}
+	req.Header.Set("PRIVATE-TOKEN", testToken)
+	resp, err := testHTTPClient.Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("GET status = %d, want 405", resp.StatusCode)
+	}
+	if allow := resp.Header.Get("Allow"); allow != http.MethodPost {
+		t.Errorf("Allow header = %q, want POST", allow)
+	}
+}
+
+// TestServeHTTP_Stateless_JSONResponseContentType verifies that combining
+// --stateless with --json-response yields plain application/json bodies with a
+// parseable JSON-RPC result instead of an SSE stream.
+func TestServeHTTP_Stateless_JSONResponseContentType(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, true))
+	defer shutdown()
+
+	resp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(body))
+	}
+	if ct := resp.Header.Get(hdrContentType); !strings.HasPrefix(ct, mimeJSON) {
+		t.Errorf("Content-Type = %q, want %s", ct, mimeJSON)
+	}
+	var rpc struct {
+		Result struct {
+			Tools []struct {
+				Name string `json:"name"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rpc); err != nil {
+		t.Fatalf("decode JSON-RPC response: %v", err)
+	}
+	names := make([]string, 0, len(rpc.Result.Tools))
+	for _, tool := range rpc.Result.Tools {
+		names = append(names, tool.Name)
+	}
+	if len(names) == 0 || !slices.Contains(names, "gitlab_find_action") {
+		t.Errorf("tools/list names = %v, want gitlab_find_action present", names)
+	}
+}
+
+// TestServeHTTP_Stateless_ToolCallSucceeds verifies an end-to-end tools/call
+// in stateless JSON mode: gitlab_find_action resolves catalog matches without
+// any session, proving the pooled server executes tools per request.
+func TestServeHTTP_Stateless_ToolCallSucceeds(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, true))
+	defer shutdown()
+
+	resp := postStatelessJSONRPC(t, addr,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"gitlab_find_action","arguments":{"query":"list projects"}}}`)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(body))
+	}
+	if got := resp.Header.Get(hdrMCPSessionID); got != "" {
+		t.Errorf("stateless response must not set %s, got %q", hdrMCPSessionID, got)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "gitlab_execute_action") && !strings.Contains(string(body), "project") {
+		t.Errorf("tools/call gitlab_find_action body has no catalog matches: %s", string(body))
+	}
+}
+
+// headerRoundTripper injects a static header set into every outgoing request.
+type headerRoundTripper struct {
+	base   http.RoundTripper
+	header http.Header
+}
+
+func (h headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	clone := req.Clone(req.Context())
+	for key, values := range h.header {
+		for _, value := range values {
+			clone.Header.Set(key, value)
+		}
+	}
+	return h.base.RoundTrip(clone)
+}
+
+// TestServeHTTP_Stateless_SDKClientInterop verifies that a real MCP go-sdk
+// client completes the full handshake and tool calls against a stateless
+// server: Connect (initialize), ListTools, and CallTool all succeed even
+// though the server never issues an Mcp-Session-Id. This guards real-client
+// interop beyond the raw JSON-RPC POSTs used by the other stateless tests.
+func TestServeHTTP_Stateless_SDKClientInterop(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, false))
+	defer shutdown()
+
+	transport := &mcp.StreamableClientTransport{
+		Endpoint: "http://" + addr,
+		HTTPClient: &http.Client{
+			Timeout:   10 * time.Second,
+			Transport: headerRoundTripper{base: http.DefaultTransport, header: http.Header{"Private-Token": {testToken}}},
+		},
+		// Stateless servers reject GET (405), so the optional standalone SSE
+		// stream for server-initiated messages must stay off.
+		DisableStandaloneSSE: true,
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "stateless-interop-test", Version: "0.0.1"}, nil)
+	session, err := client.Connect(t.Context(), transport, nil)
+	if err != nil {
+		t.Fatalf("SDK client Connect over stateless HTTP: %v", err)
+	}
+	// Close sends DELETE, which stateless servers answer with 405; the error
+	// is irrelevant to this test.
+	defer func() { _ = session.Close() }()
+
+	tools, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	names := make([]string, 0, len(tools.Tools))
+	for _, tool := range tools.Tools {
+		names = append(names, tool.Name)
+	}
+	if !slices.Contains(names, "gitlab_find_action") {
+		t.Fatalf("ListTools = %v, want gitlab_find_action", names)
+	}
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "gitlab_find_action",
+		Arguments: map[string]any{"query": "list projects"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool gitlab_find_action: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool returned IsError: %+v", result.Content)
 	}
 }

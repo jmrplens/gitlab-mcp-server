@@ -327,6 +327,8 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--max-http-clients`  | `100`   | Maximum concurrent client sessions                       |
 | `--session-timeout`   | `30m`   | Idle session timeout                                     |
 | `--http-idle-timeout` | `0` (disabled) | HTTP server idle connection timeout; `0` (default) disables idle closure so `--session-timeout` is the effective lifetime; set a positive duration to recycle idle connections sooner |
+| `--stateless`         | `false` | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`; disables server-initiated requests (elicitation) |
+| `--json-response`     | `false` | Return `application/json` response bodies instead of `text/event-stream` (SSE) |
 | `--http-addr`         | `:8080` | HTTP listen address                                      |
 | `--auth-mode`         | `legacy` | Authentication mode: `legacy` or `oauth` (RFC 9728 Bearer verification) |
 | `--oauth-cache-ttl`   | `15m`   | OAuth token identity cache TTL (range 1m–2h)             |

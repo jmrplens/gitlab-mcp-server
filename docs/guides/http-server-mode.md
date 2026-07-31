@@ -67,6 +67,8 @@ gitlab-mcp-server --http \
 | `--trusted-proxy-header` | _(empty)_      | HTTP header containing the real client IP (e.g. `Fly-Client-IP`, `X-Forwarded-For`). Required for rate limiting behind reverse proxies                                                                           |
 | `--rate-limit-rps`       | `0`            | Per-server `tools/call` rate limit in requests per second (`0` = disabled)                                                                                                                                       |
 | `--rate-limit-burst`     | `40`           | Token-bucket burst size when `--rate-limit-rps` > 0                                                                                                                                                              |
+| `--stateless`            | `false`        | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`. See [Stateless Mode](#stateless-mode)                         |
+| `--json-response`        | `false`        | Return `application/json` response bodies instead of `text/event-stream` (SSE)                                                                                                                                   |
 
 > **Note**: `--gitlab-url` is optional. When omitted, each client must provide the `GITLAB-URL` header. When set, it is authoritative: any client-provided `GITLAB-URL` header is ignored, the configured URL is used, and the request logs `ignored_options` for that client.
 
@@ -82,6 +84,38 @@ gitlab-mcp-server --http \
 
 `--meta-param-schema` affects visible domain meta-tool `inputSchema` only. Keep the default `opaque` unless a client needs `compact` or `full` schemas in `tools/list`; exact call shapes remain available through `gitlab://tools/{id}`. Current audit metrics show `compact` is 6.5x larger than `opaque`, and `full` is 11.9x larger.
 
+### Stateless Mode
+
+`--stateless` switches the streamable HTTP transport to the sessionless model
+introduced by [SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567)
+(MCP protocol `2026-07-28`):
+
+- The server neither reads nor sets the `Mcp-Session-Id` header. Every POST is
+  a self-contained JSON-RPC exchange — no `initialize` round-trip is required.
+- GET and DELETE on the MCP endpoint return `405 Method Not Allowed`
+  (`Allow: POST`). `/health` and `/.well-known/*` endpoints are unaffected.
+- Server-initiated requests are rejected by the SDK because no client channel
+  outlives the request. In practice this disables MCP elicitation: the
+  interactive creation tools fall back to their non-interactive error hints,
+  and destructive-action confirmation falls back to the `confirm` parameter.
+- `--session-timeout` has no effect: no session outlives its request.
+- The per-token server pool still applies: repeated requests with the same
+  token and GitLab URL reuse a cached `*mcp.Server`, so stateless mode does
+  not pay client-rebuild costs per request.
+
+Stateless mode suits load-balanced deployments where requests from one client
+may land on different replicas. Combine with `--json-response` for clients or
+gateways that prefer plain JSON bodies over SSE:
+
+```bash
+gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
+  --stateless --json-response
+```
+
+Validate a deployment with `make validate-http-stateless` (compiled binary) or
+`make validate-http-stateless-docker` (Docker image), both backed by
+`scripts/validate-http-stateless.sh`.
+
 ### Configuration Precedence
 
 HTTP mode has a narrow request-controlled surface. GitLab identity always comes from the request token, and the GitLab instance comes from `GITLAB-URL` only when the server was started without `--gitlab-url`. All other MCP server settings are process policy and cannot be changed per user, per session, or per JSON-RPC request.
@@ -91,7 +125,7 @@ HTTP mode has a narrow request-controlled surface. GitLab identity always comes 
 | GitLab token                        | `PRIVATE-TOKEN` or `Authorization: Bearer` request header                                                                                                                                        | Yes, this is the per-user identity boundary | Accepted and used to select/create the pooled server entry                                                                                                                                                                           |
 | GitLab URL                          | `--gitlab-url`, or `GITLAB-URL` only when `--gitlab-url` is omitted                                                                                                                              | Conditional                                 | If `--gitlab-url` is set, `GITLAB-URL` is ignored and logged in `ignored_options`                                                                                                                                                    |
 | Tool catalog and behavior           | `--tool-surface`, deprecated `--meta-tools`, `--capability-surface`, `--meta-param-schema`, `--tier`, `--read-only`, `--safe-mode`, `--embedded-resources`, `--exclude-tools`, `--ignore-scopes` | No                                          | Ignored and logged in `ignored_options` when sent as config-like headers such as `TOOL-SURFACE`, `META-TOOLS`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, or `GITLAB-SAFE-MODE`; `META-TOOLS` is also logged in `deprecated_options` |
-| Rate limits and HTTP pool policy    | `--rate-limit-rps`, `--rate-limit-burst`, `--max-http-clients`, `--session-timeout`, `--revalidate-interval`, `--http-idle-timeout`, `--trusted-proxy-header`                                    | No                                          | Ignored and logged in `ignored_options` when sent as config-like headers such as `RATE-LIMIT-RPS`                                                                                                                                    |
+| Rate limits and HTTP pool policy    | `--rate-limit-rps`, `--rate-limit-burst`, `--max-http-clients`, `--session-timeout`, `--revalidate-interval`, `--http-idle-timeout`, `--trusted-proxy-header`, `--stateless`, `--json-response`  | No                                          | Ignored and logged in `ignored_options` when sent as config-like headers such as `RATE-LIMIT-RPS`                                                                                                                                    |
 | Authentication mode and OAuth cache | `--auth-mode`, `--oauth-cache-ttl`                                                                                                                                                               | No                                          | Ignored and logged in `ignored_options`                                                                                                                                                                                              |
 | Update policy and logging           | `--auto-update`, `--auto-update-repo`, `--auto-update-interval`, `--auto-update-timeout`, process `LOG_LEVEL`                                                                                    | No                                          | Ignored and logged in `ignored_options`                                                                                                                                                                                              |
 
