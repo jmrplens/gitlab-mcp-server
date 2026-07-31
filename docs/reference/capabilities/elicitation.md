@@ -115,6 +115,17 @@ if errors.Is(err, elicitation.ErrInputPending) {
 
 Handlers that report outcomes through an error return use `flow.PendingError()` instead; the surface wrappers unwrap the `*elicitation.InputRequiredError` and return the embedded input-required result.
 
+### Elicitation over stateless HTTP
+
+HTTP mode is stateless by default (see [HTTP Server Mode](../../guides/http-server-mode.md#stateless-mode)), which decides which of the two mechanisms is available:
+
+| Transport                          | Session protocol        | Elicitation                                                                                             |
+| ---------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| stdio, or HTTP `--stateless=false` | `< 2026-07-28` (legacy) | Full: synchronous `elicitation/create` requests                                                         |
+| stdio, or HTTP `--stateless=false` | `>= 2026-07-28`         | Full: MRTR                                                                                              |
+| HTTP stateless (default)           | `>= 2026-07-28`         | Full: MRTR travels inside the tool result, so no session or server-initiated channel is required        |
+| HTTP stateless (default)           | `< 2026-07-28` (legacy) | Unavailable: wizards return their non-interactive error hints and destructive actions require `confirm` |
+
 ## API
 
 ### Client

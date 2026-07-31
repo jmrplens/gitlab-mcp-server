@@ -934,7 +934,9 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"session-timeout flag", "-session-timeout"},
 		{"http-idle-timeout flag", "-http-idle-timeout"},
 		{"stateless flag", "-stateless"},
+		{"stateless default", "-stateless=false"},
 		{"json-response flag", "-json-response"},
+		{"max-request-body-bytes flag", "-max-request-body-bytes"},
 		{"auto-update flag", "-auto-update"},
 		{"env section", "ENVIRONMENT VARIABLES"},
 		{"GITLAB_URL env", "GITLAB_URL"},
@@ -3796,14 +3798,21 @@ func TestDefaultHTTPIdleTimeout_DisabledByDefault(t *testing.T) {
 // TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated verifies that the
 // --stateless and --json-response CLI flags are carried into config.Config so
 // the streamable HTTP handler options can consume them.
+//
+// The zero-value httpConfig case asserts struct-to-struct mapping only: the
+// flag layer defaults -stateless to true, while a zero httpConfig (as built
+// directly in tests) still maps to Stateless=false.
 func TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated(t *testing.T) {
-	hcfg := &httpConfig{stateless: true, jsonResponse: true}
+	hcfg := &httpConfig{stateless: true, jsonResponse: true, maxRequestBodyBytes: 2048}
 	cfg := configFromHTTPFlags(hcfg, "", false, edition.Free, false)
 	if !cfg.Stateless {
 		t.Error("configFromHTTPFlags() Stateless = false, want true")
 	}
 	if !cfg.JSONResponse {
 		t.Error("configFromHTTPFlags() JSONResponse = false, want true")
+	}
+	if cfg.MaxRequestBodyBytes != 2048 {
+		t.Errorf("configFromHTTPFlags() MaxRequestBodyBytes = %d, want 2048", cfg.MaxRequestBodyBytes)
 	}
 	defaults := configFromHTTPFlags(&httpConfig{}, "", false, edition.Free, false)
 	if defaults.Stateless || defaults.JSONResponse {
@@ -3826,6 +3835,7 @@ func TestStreamableHTTPOptions_MapsConfigFields(t *testing.T) {
 		{"stateless", &config.Config{Stateless: true}, true, false},
 		{"json_response", &config.Config{JSONResponse: true}, false, true},
 		{"both", &config.Config{Stateless: true, JSONResponse: true}, true, true},
+		{"body_limit", &config.Config{MaxRequestBodyBytes: 1024}, false, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3838,6 +3848,12 @@ func TestStreamableHTTPOptions_MapsConfigFields(t *testing.T) {
 			}
 			if opts.JSONResponse != tt.jsonResponse {
 				t.Errorf("JSONResponse = %v, want %v", opts.JSONResponse, tt.jsonResponse)
+			}
+			if !opts.PropagateRequestCancellation {
+				t.Error("PropagateRequestCancellation = false, want always true")
+			}
+			if opts.MaxRequestBodyBytes != tt.cfg.MaxRequestBodyBytes {
+				t.Errorf("MaxRequestBodyBytes = %d, want %d", opts.MaxRequestBodyBytes, tt.cfg.MaxRequestBodyBytes)
 			}
 		})
 	}
@@ -4022,6 +4038,139 @@ func TestServeHTTP_Stateless_ToolCallSucceeds(t *testing.T) {
 	if !strings.Contains(string(body), "gitlab_execute_action") && !strings.Contains(string(body), "project") {
 		t.Errorf("tools/call gitlab_find_action body has no catalog matches: %s", string(body))
 	}
+}
+
+// TestServeHTTP_ToolsList_ExecuteActionCarriesXMCPHeader verifies that the
+// SEP-2243 x-mcp-header annotation on gitlab_execute_action survives the full
+// registration and serialization path: it must be visible in the raw tools/list
+// payload, because that is where MCP-aware gateways read routing annotations.
+func TestServeHTTP_ToolsList_ExecuteActionCarriesXMCPHeader(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, true))
+	defer shutdown()
+
+	resp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(body))
+	}
+	var rpc struct {
+		Result struct {
+			Tools []struct {
+				Name        string `json:"name"`
+				InputSchema struct {
+					Properties map[string]struct {
+						XMCPHeader string `json:"x-mcp-header"`
+					} `json:"properties"`
+				} `json:"inputSchema"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rpc); err != nil {
+		t.Fatalf("decode JSON-RPC response: %v", err)
+	}
+	for _, tool := range rpc.Result.Tools {
+		if tool.Name != "gitlab_execute_action" {
+			continue
+		}
+		if got := tool.InputSchema.Properties["action"].XMCPHeader; got != "Mcp-Param-Action" {
+			t.Fatalf("gitlab_execute_action action x-mcp-header = %q, want Mcp-Param-Action", got)
+		}
+		return
+	}
+	t.Fatal("gitlab_execute_action not present in tools/list")
+}
+
+// TestValidateHTTPRuntimeConfig_NegativeBodyLimit_Rejected verifies the CLI
+// refuses negative --max-request-body-bytes: the SDK would interpret it as
+// "no limit", which must be unreachable from configuration.
+func TestValidateHTTPRuntimeConfig_NegativeBodyLimit_Rejected(t *testing.T) {
+	cfg := &config.Config{MaxRequestBodyBytes: -1}
+	if err := validateHTTPRuntimeConfig(cfg); err == nil {
+		t.Fatal("expected error for negative --max-request-body-bytes")
+	}
+}
+
+// TestServeHTTP_Stateless_BodyLimitReturns413 verifies that
+// --max-request-body-bytes is enforced by the streamable HTTP transport: a
+// JSON-RPC POST larger than the configured limit is rejected with 413 instead
+// of being parsed.
+func TestServeHTTP_Stateless_BodyLimitReturns413(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := statelessTestConfig(mockGL.URL, true)
+	cfg.MaxRequestBodyBytes = 512
+	addr, shutdown := startStatelessServeHTTP(t, cfg)
+	defer shutdown()
+
+	oversized := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_find_action","arguments":{"query":"` +
+		strings.Repeat("x", 1024) + `"}}}`
+	resp := postStatelessJSONRPC(t, addr, oversized)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		body, _ := io.ReadAll(resp.Body)
+		t.Errorf("status = %d, want 413: %s", resp.StatusCode, string(body))
+	}
+}
+
+// TestServeHTTP_CacheHints_ToolsListPrivate verifies that the SEP-2549 cache
+// hints applied by the receiving middleware survive the full server-creation
+// and serialization path: a stateless tools/list response carries
+// cacheScope=private and the 5-minute list TTL.
+func TestServeHTTP_CacheHints_ToolsListPrivate(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, true))
+	defer shutdown()
+
+	resp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(body))
+	}
+	var rpc struct {
+		Result struct {
+			TTLMs      int    `json:"ttlMs"`
+			CacheScope string `json:"cacheScope"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rpc); err != nil {
+		t.Fatalf("decode JSON-RPC response: %v", err)
+	}
+	if rpc.Result.CacheScope != "private" {
+		t.Errorf("cacheScope = %q, want private", rpc.Result.CacheScope)
+	}
+	if rpc.Result.TTLMs != 300000 {
+		t.Errorf("ttlMs = %d, want 300000", rpc.Result.TTLMs)
+	}
+}
+
+// TestServeHTTP_StatefulOptOut_SessionHeaderPresent verifies that stateful
+// mode (--stateless=false) still issues Mcp-Session-Id, so the legacy
+// session-based transport remains fully functional as an opt-out.
+func TestServeHTTP_StatefulOptOut_SessionHeaderPresent(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := statelessTestConfig(mockGL.URL, false)
+	cfg.Stateless = false
+	addr, shutdown := startStatelessServeHTTP(t, cfg)
+	defer shutdown()
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}`
+	resp := postStatelessJSONRPC(t, addr, body)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		payload, _ := io.ReadAll(resp.Body)
+		t.Fatalf("initialize status = %d: %s", resp.StatusCode, payload)
+	}
+	sessionID := resp.Header.Get(hdrMCPSessionID)
+	if sessionID == "" {
+		t.Fatal("stateful opt-out must set Mcp-Session-Id, got empty")
+	}
+	closeMCPSession(t, "http://"+addr, sessionID)
 }
 
 // headerRoundTripper injects a static header set into every outgoing request.

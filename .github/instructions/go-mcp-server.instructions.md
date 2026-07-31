@@ -1,11 +1,11 @@
 ---
-description: 'Best practices and patterns for building Model Context Protocol (MCP) servers in Go using the official github.com/modelcontextprotocol/go-sdk package (v1.6.1+).'
+description: 'Best practices and patterns for building Model Context Protocol (MCP) servers in Go using the official github.com/modelcontextprotocol/go-sdk package (v1.7.0+).'
 applyTo: "**/*.go, **/go.mod, **/go.sum"
 ---
 
 # Go MCP Server Development Guidelines
 
-When building MCP servers in Go, follow these best practices and patterns using the official Go SDK (v1.6.1+).
+When building MCP servers in Go, follow these best practices and patterns using the official Go SDK (v1.7.0+).
 
 ## Server Setup
 
@@ -17,7 +17,7 @@ import "github.com/modelcontextprotocol/go-sdk/mcp"
 server := mcp.NewServer(
     &mcp.Implementation{
         Name:    "my-server",
-        Version: "v1.6.1",
+        Version: "v1.7.0",
     },
     nil, // or provide mcp.Options
 )
@@ -363,7 +363,7 @@ options := &mcp.Options{
 }
 
 server := mcp.NewServer(
-    &mcp.Implementation{Name: "my-server", Version: "v1.6.1"},
+    &mcp.Implementation{Name: "my-server", Version: "v1.7.0"},
     options,
 )
 ```
@@ -404,7 +404,7 @@ module github.com/yourusername/yourserver
 
 go 1.23
 
-require github.com/modelcontextprotocol/go-sdk v1.6.1
+require github.com/modelcontextprotocol/go-sdk v1.7.0
 ```
 
 ## Common Patterns
@@ -495,7 +495,7 @@ if skipTLSVerify {
 }
 ```
 
-## MCP SDK v1.6.1+ Features
+## MCP SDK v1.7.0+ Features
 
 ### Tool Icons
 

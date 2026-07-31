@@ -42,33 +42,34 @@ gitlab-mcp-server --http \
 
 ### CLI Flags
 
-| Flag                     | Default        | Description                                                                                                                                                                                                      |
-| ------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--http`                 | _(off)_        | Enable HTTP transport mode                                                                                                                                                                                       |
-| `--gitlab-url`           | _(optional)_   | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request                                                                                                                       |
-| `--http-addr`            | `:8080`        | HTTP listen address (host:port)                                                                                                                                                                                  |
-| `--skip-tls-verify`      | `false`        | Skip TLS certificate verification for self-signed certs                                                                                                                                                          |
-| `--tool-surface`         | `dynamic`      | Canonical tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                                 |
-| `--meta-tools`           | _(unset)_      | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                                                   |
-| `--capability-surface`   | `full`         | Resource and prompt selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                                    |
-| `--meta-param-schema`    | `opaque`       | Meta-tool input schema mode: `opaque`, `compact`, or `full`                                                                                                                                                      |
-| `--tier`                 | _(detected)_   | Force the licensing tier (`free`, `ce`, `premium`, `ultimate`) when explicitly set. When omitted, HTTP mode detects the tier per token+URL pool entry from the instance license (fallback `free`)                |
-| `--read-only`            | `false`        | Expose only read-only tools                                                                                                                                                                                      |
-| `--safe-mode`            | `false`        | Intercept mutating tools and return a JSON preview instead of executing them                                                                                                                                     |
-| `--embedded-resources`   | `true`         | Embed canonical MCP resource URIs in get_* tool results                                                                                                                                                          |
-| `--exclude-tools`        | _(empty)_      | Comma-separated tool names to exclude from registration                                                                                                                                                          |
-| `--ignore-scopes`        | `false`        | Skip PAT scope detection and register all tools allowed by the configured catalog                                                                                                                                |
-| `--max-http-clients`     | `100`          | Maximum unique token+URL entries in the server pool                                                                                                                                                              |
-| `--session-timeout`      | `30m`          | Idle MCP session timeout                                                                                                                                                                                         |
-| `--auth-mode`            | `legacy`       | Authentication mode: `legacy` (PRIVATE-TOKEN) or `oauth` (Bearer token verified via GitLab API)                                                                                                                  |
-| `--oauth-cache-ttl`      | `15m`          | How long verified OAuth tokens are cached before re-validation (1m–2h)                                                                                                                                           |
-| `--revalidate-interval`  | `15m`          | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                                  |
-| `--http-idle-timeout`    | `0` (disabled) | HTTP server idle connection timeout. Default `0` disables idle connection closure entirely, so `--session-timeout` is the effective session lifetime. Set a positive duration to recycle idle connections sooner |
-| `--trusted-proxy-header` | _(empty)_      | HTTP header containing the real client IP (e.g. `Fly-Client-IP`, `X-Forwarded-For`). Required for rate limiting behind reverse proxies                                                                           |
-| `--rate-limit-rps`       | `0`            | Per-server `tools/call` rate limit in requests per second (`0` = disabled)                                                                                                                                       |
-| `--rate-limit-burst`     | `40`           | Token-bucket burst size when `--rate-limit-rps` > 0                                                                                                                                                              |
-| `--stateless`            | `false`        | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`. See [Stateless Mode](#stateless-mode)                         |
-| `--json-response`        | `false`        | Return `application/json` response bodies instead of `text/event-stream` (SSE)                                                                                                                                   |
+| Flag                       | Default        | Description                                                                                                                                                                                                                                    |
+| -------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--http`                   | _(off)_        | Enable HTTP transport mode                                                                                                                                                                                                                     |
+| `--gitlab-url`             | _(optional)_   | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request                                                                                                                                                     |
+| `--http-addr`              | `:8080`        | HTTP listen address (host:port)                                                                                                                                                                                                                |
+| `--skip-tls-verify`        | `false`        | Skip TLS certificate verification for self-signed certs                                                                                                                                                                                        |
+| `--tool-surface`           | `dynamic`      | Canonical tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                                                               |
+| `--meta-tools`             | _(unset)_      | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                                                                                 |
+| `--capability-surface`     | `full`         | Resource and prompt selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                                                                  |
+| `--meta-param-schema`      | `opaque`       | Meta-tool input schema mode: `opaque`, `compact`, or `full`                                                                                                                                                                                    |
+| `--tier`                   | _(detected)_   | Force the licensing tier (`free`, `ce`, `premium`, `ultimate`) when explicitly set. When omitted, HTTP mode detects the tier per token+URL pool entry from the instance license (fallback `free`)                                              |
+| `--read-only`              | `false`        | Expose only read-only tools                                                                                                                                                                                                                    |
+| `--safe-mode`              | `false`        | Intercept mutating tools and return a JSON preview instead of executing them                                                                                                                                                                   |
+| `--embedded-resources`     | `true`         | Embed canonical MCP resource URIs in get_* tool results                                                                                                                                                                                        |
+| `--exclude-tools`          | _(empty)_      | Comma-separated tool names to exclude from registration                                                                                                                                                                                        |
+| `--ignore-scopes`          | `false`        | Skip PAT scope detection and register all tools allowed by the configured catalog                                                                                                                                                              |
+| `--max-http-clients`       | `100`          | Maximum unique token+URL entries in the server pool                                                                                                                                                                                            |
+| `--session-timeout`        | `30m`          | Idle MCP session timeout                                                                                                                                                                                                                       |
+| `--auth-mode`              | `legacy`       | Authentication mode: `legacy` (PRIVATE-TOKEN) or `oauth` (Bearer token verified via GitLab API)                                                                                                                                                |
+| `--oauth-cache-ttl`        | `15m`          | How long verified OAuth tokens are cached before re-validation (1m–2h)                                                                                                                                                                         |
+| `--revalidate-interval`    | `15m`          | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                                                                |
+| `--http-idle-timeout`      | `0` (disabled) | HTTP server idle connection timeout. Default `0` disables idle connection closure entirely, so `--session-timeout` is the effective session lifetime. Set a positive duration to recycle idle connections sooner                               |
+| `--trusted-proxy-header`   | _(empty)_      | HTTP header containing the real client IP (e.g. `Fly-Client-IP`, `X-Forwarded-For`). Required for rate limiting behind reverse proxies                                                                                                         |
+| `--rate-limit-rps`         | `0`            | Per-server `tools/call` rate limit in requests per second (`0` = disabled)                                                                                                                                                                     |
+| `--rate-limit-burst`       | `40`           | Token-bucket burst size when `--rate-limit-rps` > 0                                                                                                                                                                                            |
+| `--stateless`              | `true`         | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`. Use `--stateless=false` for legacy stateful sessions. See [Stateless Mode](#stateless-mode) |
+| `--json-response`          | `false`        | Return `application/json` response bodies instead of `text/event-stream` (SSE)                                                                                                                                                                 |
+| `--max-request-body-bytes` | `0`            | Maximum streamable HTTP request body size in bytes. `0` uses the SDK default (4 MiB); oversized bodies are rejected with `413`. Negative values are rejected at startup                                                                        |
 
 > **Note**: `--gitlab-url` is optional. When omitted, each client must provide the `GITLAB-URL` header. When set, it is authoritative: any client-provided `GITLAB-URL` header is ignored, the configured URL is used, and the request logs `ignored_options` for that client.
 
@@ -86,7 +87,7 @@ gitlab-mcp-server --http \
 
 ### Stateless Mode
 
-`--stateless` switches the streamable HTTP transport to the sessionless model
+Stateless is the **default** transport model. It follows the sessionless design
 introduced by [SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567)
 (MCP protocol `2026-07-28`):
 
@@ -94,10 +95,12 @@ introduced by [SEP-2567](https://github.com/modelcontextprotocol/modelcontextpro
   a self-contained JSON-RPC exchange — no `initialize` round-trip is required.
 - GET and DELETE on the MCP endpoint return `405 Method Not Allowed`
   (`Allow: POST`). `/health` and `/.well-known/*` endpoints are unaffected.
-- Server-initiated requests are rejected by the SDK because no client channel
-  outlives the request. In practice this disables MCP elicitation: the
-  interactive creation tools fall back to their non-interactive error hints,
-  and destructive-action confirmation falls back to the `confirm` parameter.
+- Synchronous server-initiated requests are rejected by the SDK because no
+  client channel outlives the request. Clients on protocol `2026-07-28` keep
+  full elicitation through multi-round-trip requests (MRTR), which travel in
+  the tool result itself; only legacy-protocol clients fall back to the
+  non-interactive error hints and the `confirm` parameter. See
+  [Elicitation](../reference/capabilities/elicitation.md).
 - `--session-timeout` has no effect: no session outlives its request.
 - The per-token server pool still applies: repeated requests with the same
   token and GitLab URL reuse a cached `*mcp.Server`, so stateless mode does
@@ -109,12 +112,50 @@ gateways that prefer plain JSON bodies over SSE:
 
 ```bash
 gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
-  --stateless --json-response
+  --json-response
 ```
 
 Validate a deployment with `make validate-http-stateless` (compiled binary) or
 `make validate-http-stateless-docker` (Docker image), both backed by
 `scripts/validate-http-stateless.sh`.
+
+#### Legacy stateful mode
+
+`--stateless=false` restores the session-based transport: the server issues
+`Mcp-Session-Id` on `initialize`, GET opens the standalone SSE stream, DELETE
+terminates the session, and `--session-timeout` governs idle session lifetime.
+This is a compatibility mode for clients that cannot yet negotiate protocol
+`2026-07-28`; such sessions negotiate `2025-11-25` or older and use synchronous
+elicitation. The server logs a warning at startup when it is enabled. The
+intent is to remove it once client ecosystems have migrated, so treat new
+deployments as stateless.
+
+#### Cache hints
+
+Every cacheable result carries [SEP-2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549)
+hints. All of them use `cacheScope: private`, because catalogs and resource
+content are filtered by the caller's token scopes and licensing tier and must
+never be served from a shared intermediary cache:
+
+| Result                                                                                        | `ttlMs`              |
+| --------------------------------------------------------------------------------------------- | -------------------- |
+| `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `server/discover` | `300000` (5 minutes) |
+| `resources/read` of static content (guides, schemas, `gitlab://tools` manifests)              | `3600000` (1 hour)   |
+| `resources/read` of live GitLab data                                                          | `0` (always fresh)   |
+
+#### Request cancellation
+
+Client aborts are always propagated into handler contexts, so an abandoned POST
+cancels its in-flight GitLab API calls. The SDK applies this to protocol
+`2026-07-28` requests only; legacy-protocol clients are unaffected.
+
+#### Gateway routing annotation
+
+On the dynamic tool surface, the `action` property of `gitlab_execute_action`
+carries the [SEP-2243](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2243)
+`x-mcp-header` annotation with the value `Mcp-Param-Action`. MCP-aware gateways
+can therefore route, rate-limit, and observe calls by canonical action ID from
+the request header, without parsing the JSON-RPC body.
 
 ### Configuration Precedence
 

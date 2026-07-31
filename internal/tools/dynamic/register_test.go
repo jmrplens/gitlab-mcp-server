@@ -12,6 +12,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -2517,6 +2518,82 @@ func TestRegisterCatalogFindExecuteTools_ExposesDynamicTools(t *testing.T) {
 		t.Fatalf("gitlab_execute_action output schema = %v, want open object schema", executeOutputSchema)
 	}
 	assertSchemaHasProperties(t, executeOutputSchema, "next_steps", "pagination")
+}
+
+// TestExecuteActionSchema_XMCPHeader_AnnotatesActionParam verifies that the
+// gitlab_execute_action input schema carries the SEP-2243 x-mcp-header
+// annotation on its action property, and that the annotation survives JSON
+// serialization of the schema — that is how MCP-aware gateways read it, so a
+// non-serialized annotation would be invisible to them.
+func TestExecuteActionSchema_XMCPHeader_AnnotatesActionParam(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "dynamic-test", Version: "0"}, nil)
+	RegisterCatalogFindExecuteTools(server, actioncatalog.FromActionMaps(testRoutes(t)))
+
+	st, ct := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { serverSession.Close() })
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "dynamic-client", Version: "0"}, nil)
+	session, err := client.Connect(t.Context(), ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { session.Close() })
+
+	tools, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools() error = %v", err)
+	}
+	executeSchema := listedToolInputSchema(t, tools.Tools, executeActionToolName)
+	properties, ok := executeSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("gitlab_execute_action schema has no properties object: %v", executeSchema)
+	}
+	action, ok := properties["action"].(map[string]any)
+	if !ok {
+		t.Fatalf("gitlab_execute_action schema has no action property: %v", properties)
+	}
+	if got := action["x-mcp-header"]; got != executeActionHeaderName {
+		t.Fatalf("action x-mcp-header = %v, want %q", got, executeActionHeaderName)
+	}
+	if params, paramsOK := properties["params"].(map[string]any); !paramsOK {
+		t.Fatalf("gitlab_execute_action schema has no params property: %v", properties)
+	} else if _, annotated := params["x-mcp-header"]; annotated {
+		t.Error("params must not carry an x-mcp-header annotation; only the action ID is routable")
+	}
+}
+
+// TestAnnotateActionHeader_DegenerateSchemas_ReturnedUnchanged verifies the
+// defensive paths of the x-mcp-header annotation helper: a nil schema, a
+// schema without an action property, and one whose action property is nil are
+// all returned untouched rather than panicking, so a future change to
+// [ExecuteInput] degrades to an unannotated tool.
+func TestAnnotateActionHeader_DegenerateSchemas_ReturnedUnchanged(t *testing.T) {
+	if got := annotateActionHeader(nil); got != nil {
+		t.Errorf("annotateActionHeader(nil) = %v, want nil", got)
+	}
+
+	noAction := &jsonschema.Schema{
+		Type:       "object",
+		Properties: map[string]*jsonschema.Schema{"params": {Type: "object"}},
+	}
+	if got := annotateActionHeader(noAction); got != noAction {
+		t.Errorf("annotateActionHeader(schema without action) = %v, want the same schema", got)
+	}
+	if _, annotated := noAction.Properties["params"].Extra[xMCPHeaderKeyword]; annotated {
+		t.Error("params must not be annotated when the action property is missing")
+	}
+
+	nilAction := &jsonschema.Schema{
+		Type:       "object",
+		Properties: map[string]*jsonschema.Schema{executeActionActionParam: nil},
+	}
+	if got := annotateActionHeader(nilAction); got != nilAction {
+		t.Errorf("annotateActionHeader(schema with nil action) = %v, want the same schema", got)
+	}
 }
 
 // TestRegisterCatalogFindExecuteTools_FindAcceptsNaturalLanguageAndReturnsSchema

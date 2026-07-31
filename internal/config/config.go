@@ -149,6 +149,10 @@ type Config struct {
 	// JSONResponse returns application/json bodies instead of
 	// text/event-stream (SSE) for streamable responses (HTTP mode only).
 	JSONResponse bool
+	// MaxRequestBodyBytes caps the size of incoming streamable HTTP request
+	// bodies. 0 uses the SDK default (4 MiB); negatives are rejected at
+	// validation (HTTP mode only).
+	MaxRequestBodyBytes int64
 
 	AutoUpdate         string        // Auto-update mode: "true" (auto), "check" (log-only), "false" (disabled)
 	AutoUpdateRepo     string        // GitLab project path for update checks
