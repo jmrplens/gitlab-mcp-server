@@ -1070,6 +1070,11 @@ func streamableHTTPOptions(cfg *config.Config) *mcp.StreamableHTTPOptions {
 		SessionTimeout: cfg.SessionTimeout,
 		Stateless:      cfg.Stateless,
 		JSONResponse:   cfg.JSONResponse,
+		// Always propagate client aborts into handler contexts so in-flight
+		// GitLab API calls are cancelled when the POST is abandoned. The SDK
+		// applies this to new-protocol (2026-07-28) requests only, so legacy
+		// clients are unaffected.
+		PropagateRequestCancellation: true,
 	}
 }
 

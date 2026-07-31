@@ -3844,6 +3844,9 @@ func TestStreamableHTTPOptions_MapsConfigFields(t *testing.T) {
 			if opts.JSONResponse != tt.jsonResponse {
 				t.Errorf("JSONResponse = %v, want %v", opts.JSONResponse, tt.jsonResponse)
 			}
+			if !opts.PropagateRequestCancellation {
+				t.Error("PropagateRequestCancellation = false, want always true")
+			}
 		})
 	}
 }
