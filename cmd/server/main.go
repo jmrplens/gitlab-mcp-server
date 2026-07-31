@@ -983,6 +983,8 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdl
 		"auth_mode", cfg.AuthMode,
 		"max_clients", cfg.MaxHTTPClients,
 		"session_timeout", cfg.SessionTimeout,
+		"stateless", cfg.Stateless,
+		"json_response", cfg.JSONResponse,
 		"trusted_proxy_header", cfg.TrustedProxyHeader,
 		"version", version,
 		"commit", commit,
@@ -1056,6 +1058,17 @@ func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr s
 	registerLegacyMCPHandlers(ctx, cfg, pool, mux)
 }
 
+// streamableHTTPOptions builds the StreamableHTTPOptions shared by the legacy
+// and OAuth handler paths. In stateless mode the SDK ignores SessionTimeout
+// because no session outlives its request.
+func streamableHTTPOptions(cfg *config.Config) *mcp.StreamableHTTPOptions {
+	return &mcp.StreamableHTTPOptions{
+		SessionTimeout: cfg.SessionTimeout,
+		Stateless:      cfg.Stateless,
+		JSONResponse:   cfg.JSONResponse,
+	}
+}
+
 func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, mux *http.ServeMux) {
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
 		token := serverpool.ExtractToken(r)
@@ -1075,7 +1088,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr 
 			return nil
 		}
 		return server
-	}, &mcp.StreamableHTTPOptions{SessionTimeout: cfg.SessionTimeout})
+	}, streamableHTTPOptions(cfg))
 
 	tokenCache := oauth.NewTokenCache()
 	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cfg.OAuthCacheTTL, tokenCache)
@@ -1114,7 +1127,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 			return nil
 		}
 		return server
-	}, &mcp.StreamableHTTPOptions{SessionTimeout: cfg.SessionTimeout})
+	}, streamableHTTPOptions(cfg))
 	mux.Handle("/", mcpHandler)
 }
 

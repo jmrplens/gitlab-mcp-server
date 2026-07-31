@@ -3810,3 +3810,34 @@ func TestConfigFromHTTPFlags_StatelessJSONResponse_Propagated(t *testing.T) {
 			defaults.Stateless, defaults.JSONResponse)
 	}
 }
+
+// TestStreamableHTTPOptions_MapsConfigFields verifies that the shared handler
+// options builder copies session timeout, stateless mode, and JSON response
+// mode from config so the legacy and OAuth paths cannot drift apart.
+func TestStreamableHTTPOptions_MapsConfigFields(t *testing.T) {
+	tests := []struct {
+		name         string
+		cfg          *config.Config
+		stateless    bool
+		jsonResponse bool
+	}{
+		{"defaults", &config.Config{SessionTimeout: config.DefaultSessionTimeout}, false, false},
+		{"stateless", &config.Config{Stateless: true}, true, false},
+		{"json_response", &config.Config{JSONResponse: true}, false, true},
+		{"both", &config.Config{Stateless: true, JSONResponse: true}, true, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			opts := streamableHTTPOptions(tt.cfg)
+			if opts.SessionTimeout != tt.cfg.SessionTimeout {
+				t.Errorf("SessionTimeout = %v, want %v", opts.SessionTimeout, tt.cfg.SessionTimeout)
+			}
+			if opts.Stateless != tt.stateless {
+				t.Errorf("Stateless = %v, want %v", opts.Stateless, tt.stateless)
+			}
+			if opts.JSONResponse != tt.jsonResponse {
+				t.Errorf("JSONResponse = %v, want %v", opts.JSONResponse, tt.jsonResponse)
+			}
+		})
+	}
+}
