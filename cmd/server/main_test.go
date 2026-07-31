@@ -4023,3 +4023,72 @@ func TestServeHTTP_Stateless_ToolCallSucceeds(t *testing.T) {
 		t.Errorf("tools/call gitlab_find_action body has no catalog matches: %s", string(body))
 	}
 }
+
+// headerRoundTripper injects a static header set into every outgoing request.
+type headerRoundTripper struct {
+	base   http.RoundTripper
+	header http.Header
+}
+
+func (h headerRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	clone := req.Clone(req.Context())
+	for key, values := range h.header {
+		for _, value := range values {
+			clone.Header.Set(key, value)
+		}
+	}
+	return h.base.RoundTrip(clone)
+}
+
+// TestServeHTTP_Stateless_SDKClientInterop verifies that a real MCP go-sdk
+// client completes the full handshake and tool calls against a stateless
+// server: Connect (initialize), ListTools, and CallTool all succeed even
+// though the server never issues an Mcp-Session-Id. This guards real-client
+// interop beyond the raw JSON-RPC POSTs used by the other stateless tests.
+func TestServeHTTP_Stateless_SDKClientInterop(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, false))
+	defer shutdown()
+
+	transport := &mcp.StreamableClientTransport{
+		Endpoint: "http://" + addr,
+		HTTPClient: &http.Client{
+			Timeout:   10 * time.Second,
+			Transport: headerRoundTripper{base: http.DefaultTransport, header: http.Header{"Private-Token": {testToken}}},
+		},
+		// Stateless servers reject GET (405), so the optional standalone SSE
+		// stream for server-initiated messages must stay off.
+		DisableStandaloneSSE: true,
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "stateless-interop-test", Version: "0.0.1"}, nil)
+	session, err := client.Connect(t.Context(), transport, nil)
+	if err != nil {
+		t.Fatalf("SDK client Connect over stateless HTTP: %v", err)
+	}
+	// Close sends DELETE, which stateless servers answer with 405; the error
+	// is irrelevant to this test.
+	defer func() { _ = session.Close() }()
+
+	tools, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	names := make([]string, 0, len(tools.Tools))
+	for _, tool := range tools.Tools {
+		names = append(names, tool.Name)
+	}
+	if !slices.Contains(names, "gitlab_find_action") {
+		t.Fatalf("ListTools = %v, want gitlab_find_action", names)
+	}
+
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{
+		Name:      "gitlab_find_action",
+		Arguments: map[string]any{"query": "list projects"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool gitlab_find_action: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("CallTool returned IsError: %+v", result.Content)
+	}
+}
