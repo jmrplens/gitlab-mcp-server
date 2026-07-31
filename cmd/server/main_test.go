@@ -4040,6 +4040,49 @@ func TestServeHTTP_Stateless_ToolCallSucceeds(t *testing.T) {
 	}
 }
 
+// TestServeHTTP_ToolsList_ExecuteActionCarriesXMCPHeader verifies that the
+// SEP-2243 x-mcp-header annotation on gitlab_execute_action survives the full
+// registration and serialization path: it must be visible in the raw tools/list
+// payload, because that is where MCP-aware gateways read routing annotations.
+func TestServeHTTP_ToolsList_ExecuteActionCarriesXMCPHeader(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	addr, shutdown := startStatelessServeHTTP(t, statelessTestConfig(mockGL.URL, true))
+	defer shutdown()
+
+	resp := postStatelessJSONRPC(t, addr, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("expected 200 OK, got %d: %s", resp.StatusCode, string(body))
+	}
+	var rpc struct {
+		Result struct {
+			Tools []struct {
+				Name        string `json:"name"`
+				InputSchema struct {
+					Properties map[string]struct {
+						XMCPHeader string `json:"x-mcp-header"`
+					} `json:"properties"`
+				} `json:"inputSchema"`
+			} `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&rpc); err != nil {
+		t.Fatalf("decode JSON-RPC response: %v", err)
+	}
+	for _, tool := range rpc.Result.Tools {
+		if tool.Name != "gitlab_execute_action" {
+			continue
+		}
+		if got := tool.InputSchema.Properties["action"].XMCPHeader; got != "Mcp-Param-Action" {
+			t.Fatalf("gitlab_execute_action action x-mcp-header = %q, want Mcp-Param-Action", got)
+		}
+		return
+	}
+	t.Fatal("gitlab_execute_action not present in tools/list")
+}
+
 // TestValidateHTTPRuntimeConfig_NegativeBodyLimit_Rejected verifies the CLI
 // refuses negative --max-request-body-bytes: the SDK would interpret it as
 // "no limit", which must be unreachable from configuration.

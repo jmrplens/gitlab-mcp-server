@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
@@ -29,6 +30,17 @@ const (
 
 	findToolName          = "gitlab_find_action"
 	executeActionToolName = "gitlab_execute_action"
+
+	// executeActionActionParam is the top-level input property carrying the
+	// canonical action ID for gitlab_execute_action.
+	executeActionActionParam = "action"
+	// executeActionHeaderName is the HTTP header that MCP-aware gateways
+	// receive the action ID in, declared through the SEP-2243 x-mcp-header
+	// annotation so they can route and observe calls without inspecting the
+	// JSON-RPC body.
+	executeActionHeaderName = "Mcp-Param-Action"
+	// xMCPHeaderKeyword is the JSON Schema keyword defined by SEP-2243.
+	xMCPHeaderKeyword = "x-mcp-header"
 
 	findToolDescription          = "Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples."
 	executeActionToolDescription = "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear."
@@ -238,6 +250,7 @@ func addExecuteActionTool(server *mcp.Server, registry *Registry) {
 		Name:         executeActionToolName,
 		Title:        "GitLab Execute Action",
 		Description:  executeActionToolDescription,
+		InputSchema:  executeActionInputSchema(),
 		OutputSchema: toolutil.ActionDispatchOutputSchema(),
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "GitLab Execute Action",
@@ -246,6 +259,44 @@ func addExecuteActionTool(server *mcp.Server, registry *Registry) {
 		},
 		Icons: toolutil.IconServer,
 	}, registry.Execute)
+}
+
+// executeActionInputSchema derives the gitlab_execute_action input schema from
+// [ExecuteInput] and annotates its action property with the SEP-2243
+// x-mcp-header keyword. The annotation is carried in [jsonschema.Schema.Extra],
+// which marshals inline, because gateways read it back from the serialized
+// schema in tools/list.
+//
+// It returns nil if schema inference fails, leaving the SDK to derive the
+// unannotated schema at registration time.
+func executeActionInputSchema() *jsonschema.Schema {
+	schema, err := jsonschema.For[ExecuteInput](nil)
+	if err != nil {
+		slog.Warn("dynamic: failed to derive execute action input schema, falling back to SDK inference",
+			"tool", executeActionToolName, "error", err)
+		return nil
+	}
+	return annotateActionHeader(schema)
+}
+
+// annotateActionHeader adds the x-mcp-header annotation to the schema's action
+// property. A nil schema, or one without that property, is returned unchanged
+// so a schema-shape change degrades to an unannotated tool instead of a panic.
+func annotateActionHeader(schema *jsonschema.Schema) *jsonschema.Schema {
+	if schema == nil {
+		return nil
+	}
+	action, ok := schema.Properties[executeActionActionParam]
+	if !ok || action == nil {
+		slog.Warn("dynamic: execute action input schema has no action property, skipping x-mcp-header annotation",
+			"tool", executeActionToolName)
+		return schema
+	}
+	if action.Extra == nil {
+		action.Extra = make(map[string]any, 1)
+	}
+	action.Extra[xMCPHeaderKeyword] = executeActionHeaderName
+	return schema
 }
 
 // NewRegistry builds a deterministic action registry from visible meta routes.
