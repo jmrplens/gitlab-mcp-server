@@ -61,7 +61,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--meta-tools`             | _(sin definir)_              | Flag de compatibilidad deprecado. Usa `--tool-surface=individual` en lugar de `--meta-tools=false`                                                                                                                             |
 | `--capability-surface`     | `full`                       | Selector de recursos y prompts; consulta [Opciones de superficie de herramientas y capacidades](#opciones-de-superficie-de-herramientas-y-capacidades)                                                                         |
 | `--meta-param-schema`      | `opaque`                     | Modo de esquema de entrada de meta-herramientas: `opaque`, `compact` o `full`; solo afecta schemas de meta-herramientas                                                                                                        |
-| `--enterprise`             | `false`                      | Forzar herramientas Enterprise/Premium; omítelo para autodetectar CE/EE por entrada token+URL                                                                                                                                  |
+| `--tier`                   | _(detectado)_                | Forzar el nivel de licencia (`free`, `ce`, `premium`, `ultimate`); omítelo para detectarlo por entrada token+URL desde la licencia de la instancia (por defecto `free`)                                                        |
 | `--read-only`              | `false`                      | Modo solo lectura: desactivar todas las herramientas de escritura                                                                                                                                                              |
 | `--safe-mode`              | `false`                      | Intercepta herramientas modificantes y devuelve una vista previa JSON en lugar de ejecutarlas                                                                                                                                  |
 | `--embedded-resources`     | `true`                       | Incrustar URIs canónicas de recursos MCP en resultados de herramientas get\_\*                                                                                                                                                 |
@@ -79,7 +79,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--trusted-proxy-header`   | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `Fly-Client-IP`, `X-Forwarded-For`)                                                                                                         |
 | `--stateless`              | `true`                       | HTTP streamable sin sesiones (SEP-2567 / protocolo 2026-07-28): sin seguimiento de `Mcp-Session-Id`, cada POST es autónomo, GET/DELETE devuelven `405`. Usa `--stateless=false` para sesiones con estado heredadas             |
 | `--json-response`          | `false`                      | Devuelve cuerpos `application/json` en lugar de `text/event-stream` (SSE)                                                                                                                                                      |
-| `--max-request-body-bytes` | `0`                          | Tamaño máximo del cuerpo de las peticiones HTTP streamable en bytes; `0` usa el valor por defecto del SDK (4 MiB). Los cuerpos que lo superan se rechazan con `413`                                                            |
+| `--max-request-body-bytes` | `0`                          | Tamaño máximo del cuerpo de las peticiones HTTP streamable en bytes; `0` usa el valor por defecto del SDK (4 MiB); los valores negativos se rechazan al arrancar. Los cuerpos que lo superan se rechazan con `413`             |
 
 :::note
 `--gitlab-url` es opcional. Cuando se omite, cada cliente debe proporcionar la cabecera `GITLAB-URL`. Cuando se establece, es autoritativa: cualquier cabecera `GITLAB-URL` enviada por el cliente se ignora, se usa la URL configurada y la petición registra `ignored_options` para ese cliente.
@@ -237,6 +237,10 @@ Las cancelaciones del cliente siempre se propagan a los contextos de los manejad
 En la superficie dinámica de herramientas, la propiedad `action` de `gitlab_execute_action` lleva la anotación `x-mcp-header` de [SEP-2243](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2243) con el valor `Mcp-Param-Action`, de modo que los gateways compatibles con MCP pueden enrutar, limitar y observar las llamadas por ID canónico de acción sin analizar el cuerpo JSON-RPC.
 
 ## Gestión de sesiones
+
+:::note
+El ciclo de vida de sesión MCP (el intercambio `Mcp-Session-Id`, la expiración por inactividad con `--session-timeout` y la terminación con DELETE) aplica solo al **modo stateful heredado** (`--stateless=false`). En el modo sin estado por defecto no hay sesiones MCP — el pool de servidores descrito abajo sigue aplicando, porque sus entradas se indexan por token, no por sesión.
+:::
 
 ### Arquitectura del pool de servidores
 

@@ -176,7 +176,7 @@ Always write idiomatic Go code that follows the official SDK patterns and Go com
 
 ## MCP Go SDK v1.7.0 Key Knowledge
 
-- **Protocol version**: 2025-11-25
+- **Protocol version**: 2026-07-28 (default; served over HTTP only in stateless mode, the server default). Legacy stateful HTTP (`--stateless=false`) negotiates 2025-11-25 or older
 - **Project Go requirement**: 1.26.5
 - **OAuth**: Stabilized — no build tag needed, `auth/` and `auth/extauth/` packages
 - **DNS rebinding protection**: Built-in for HTTP transport (localhost binding)

@@ -61,7 +61,7 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--meta-tools`             | _(unset)_                    | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                                          |
 | `--capability-surface`     | `full`                       | Resource and prompt selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                           |
 | `--meta-param-schema`      | `opaque`                     | Meta-tool input schema mode: `opaque`, `compact`, or `full`; applies to meta-tool schemas only                                                                                                          |
-| `--enterprise`             | `false`                      | Force Enterprise/Premium tools; omit to auto-detect CE/EE per token+URL entry                                                                                                                           |
+| `--tier`                   | _(detected)_                 | Force the licensing tier (`free`, `ce`, `premium`, `ultimate`); omit to detect it per token+URL entry from the instance license (fallback `free`)                                                       |
 | `--read-only`              | `false`                      | Read-only mode: disable all mutating tools                                                                                                                                                              |
 | `--safe-mode`              | `false`                      | Intercept mutating tools and return a JSON preview instead of executing them                                                                                                                            |
 | `--embedded-resources`     | `true`                       | Embed canonical MCP resource URIs in get\_\* tool results                                                                                                                                               |
@@ -79,7 +79,7 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--trusted-proxy-header`   | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`)                                                                                              |
 | `--stateless`              | `true`                       | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`. Use `--stateless=false` for legacy stateful sessions |
 | `--json-response`          | `false`                      | Return `application/json` response bodies instead of `text/event-stream` (SSE)                                                                                                                          |
-| `--max-request-body-bytes` | `0`                          | Maximum streamable HTTP request body size in bytes; `0` uses the SDK default (4 MiB). Oversized bodies are rejected with `413`                                                                          |
+| `--max-request-body-bytes` | `0`                          | Maximum streamable HTTP request body size in bytes; `0` uses the SDK default (4 MiB); negative values are rejected at startup. Oversized bodies are rejected with `413`                                 |
 
 :::note
 `--gitlab-url` is optional. When omitted, each client must provide the `GITLAB-URL` header. When set, it is authoritative: any client-provided `GITLAB-URL` header is ignored, the configured URL is used, and the request logs `ignored_options` for that client.
@@ -237,6 +237,10 @@ Client aborts are always propagated into handler contexts, so an abandoned POST 
 On the dynamic tool surface, the `action` property of `gitlab_execute_action` carries the [SEP-2243](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2243) `x-mcp-header` annotation with the value `Mcp-Param-Action`, so MCP-aware gateways can route, rate-limit, and observe calls by canonical action ID without parsing the JSON-RPC body.
 
 ## Session management
+
+:::note
+MCP session lifecycle (the `Mcp-Session-Id` handshake, idle expiry via `--session-timeout`, and DELETE termination) applies to **legacy stateful mode** (`--stateless=false`) only. In the default stateless mode there are no MCP sessions — the server pool below still applies, since pool entries are keyed by token, not by session.
+:::
 
 ### Server pool architecture
 
