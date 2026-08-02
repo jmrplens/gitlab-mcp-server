@@ -29,7 +29,7 @@
   },
   "type": "module",
   "dependencies": {
-    "@astrojs/starlight": "^0.41.5",
+    "@astrojs/starlight": "^0.41.6",
     "astro": "^7.1.6",
     "mermaid": "^11.16.0",
     "sharp": "^0.35.3"
@@ -41,10 +41,10 @@
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-astro": "^3.0.1",
-    "html-validate": "^11.6.0",
+    "html-validate": "^11.6.1",
     "htmlhint": "^1.9.2",
     "pa11y-ci": "^4.1.1",
-    "playwright": "^1.62.0",
+    "playwright": "^1.62.1",
     "prettier": "^3.9.6",
     "rehype-mermaid": "^3.0.0",
     "starlight-links-validator": "^0.25.2",
