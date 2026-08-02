@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"os"
@@ -139,4 +140,29 @@ func InputRequiredResultFromError(err error) (*mcp.CallToolResult, bool) {
 		return inputErr.Result(), true
 	}
 	return nil, false
+}
+
+// ExplicitConfirmFromRequest reports whether the caller set the reserved
+// confirm key on this tool call.
+//
+// The key never reaches a typed action input: [stripReservedKeys] removes it
+// before strict unmarshalling so it cannot trip the unknown-field rejection. A
+// handler that needs to know whether the caller confirmed — because its
+// destructiveness depends on runtime state and cannot be declared on the route
+// — must therefore read it from the raw arguments, which this does for both
+// call shapes: flat on individual tools, and nested under params on the
+// dispatcher surfaces.
+func ExplicitConfirmFromRequest(req *mcp.CallToolRequest) bool {
+	if req == nil || req.Params == nil || len(req.Params.Arguments) == 0 {
+		return false
+	}
+	var arguments map[string]any
+	if err := json.Unmarshal(req.Params.Arguments, &arguments); err != nil {
+		return false
+	}
+	if hasExplicitConfirm(arguments) {
+		return true
+	}
+	nested, ok := arguments["params"].(map[string]any)
+	return ok && hasExplicitConfirm(nested)
 }

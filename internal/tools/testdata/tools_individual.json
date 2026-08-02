@@ -15694,6 +15694,17 @@
           "format": "date",
           "type": "string"
         },
+        "status": {
+          "description": "Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE",
+          "enum": [
+            "TODO",
+            "IN_PROGRESS",
+            "DONE",
+            "WONT_DO",
+            "DUPLICATE"
+          ],
+          "type": "string"
+        },
         "title": {
           "description": "Title of the work item",
           "type": "string"
@@ -28955,12 +28966,19 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_destroy": {
+                "description": "Set true together with id (and no name) to delete this strategy from the flag during an update",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "id": {
                 "description": "Strategy ID (only for update operations referencing an existing strategy)",
                 "type": "integer"
               },
               "name": {
-                "description": "Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout)",
+                "description": "Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout). Required except when removing a strategy with _destroy",
                 "type": "string"
               },
               "parameters": {
@@ -29012,11 +29030,15 @@
                   "null",
                   "array"
                 ]
+              },
+              "user_list_id": {
+                "description": "ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_feature_flag_user_list_list to find it",
+                "type": [
+                  "null",
+                  "integer"
+                ]
               }
             },
-            "required": [
-              "name"
-            ],
             "type": "object"
           },
           "type": [
@@ -29135,6 +29157,43 @@
                 "type": [
                   "null",
                   "array"
+                ]
+              },
+              "user_list": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "project_id": {
+                    "type": "integer"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "user_xids": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "project_id",
+                  "name",
+                  "user_xids"
+                ],
+                "type": [
+                  "null",
+                  "object"
                 ]
               }
             },
@@ -29351,6 +29410,43 @@
                   "null",
                   "array"
                 ]
+              },
+              "user_list": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "project_id": {
+                    "type": "integer"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "user_xids": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "project_id",
+                  "name",
+                  "user_xids"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               }
             },
             "required": [
@@ -29546,6 +29642,43 @@
                         "null",
                         "array"
                       ]
+                    },
+                    "user_list": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "integer"
+                        },
+                        "iid": {
+                          "type": "integer"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "project_id": {
+                          "type": "integer"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        },
+                        "user_xids": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "iid",
+                        "project_id",
+                        "name",
+                        "user_xids"
+                      ],
+                      "type": [
+                        "null",
+                        "object"
+                      ]
                     }
                   },
                   "required": [
@@ -29672,12 +29805,19 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "_destroy": {
+                "description": "Set true together with id (and no name) to delete this strategy from the flag during an update",
+                "type": [
+                  "null",
+                  "boolean"
+                ]
+              },
               "id": {
                 "description": "Strategy ID (only for update operations referencing an existing strategy)",
                 "type": "integer"
               },
               "name": {
-                "description": "Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout)",
+                "description": "Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout). Required except when removing a strategy with _destroy",
                 "type": "string"
               },
               "parameters": {
@@ -29729,11 +29869,15 @@
                   "null",
                   "array"
                 ]
+              },
+              "user_list_id": {
+                "description": "ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_feature_flag_user_list_list to find it",
+                "type": [
+                  "null",
+                  "integer"
+                ]
               }
             },
-            "required": [
-              "name"
-            ],
             "type": "object"
           },
           "type": [
@@ -29848,6 +29992,43 @@
                 "type": [
                   "null",
                   "array"
+                ]
+              },
+              "user_list": {
+                "additionalProperties": false,
+                "properties": {
+                  "created_at": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "iid": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "project_id": {
+                    "type": "integer"
+                  },
+                  "updated_at": {
+                    "type": "string"
+                  },
+                  "user_xids": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "iid",
+                  "project_id",
+                  "name",
+                  "user_xids"
+                ],
+                "type": [
+                  "null",
+                  "object"
                 ]
               }
             },
@@ -107831,6 +108012,14 @@
           "format": "date-time",
           "type": "string"
         },
+        "custom_attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Filter users by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned",
+          "properties": {},
+          "type": "object"
+        },
         "exclude_active": {
           "description": "Exclude active users from the result",
           "type": [
@@ -156706,6 +156895,14 @@
             "boolean"
           ]
         },
+        "custom_attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned",
+          "properties": {},
+          "type": "object"
+        },
         "id_after": {
           "description": "Return projects with ID greater than this value (keyset pagination)",
           "type": "integer"
@@ -157897,6 +158094,14 @@
             "null",
             "boolean"
           ]
+        },
+        "custom_attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned",
+          "properties": {},
+          "type": "object"
         },
         "id_after": {
           "description": "Return forks with ID greater than this value (keyset pagination)",
@@ -159676,6 +159881,14 @@
             "boolean"
           ]
         },
+        "custom_attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned",
+          "properties": {},
+          "type": "object"
+        },
         "id_after": {
           "description": "Return projects with ID greater than this value (keyset pagination)",
           "type": "integer"
@@ -160875,6 +161088,14 @@
             "boolean"
           ]
         },
+        "custom_attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned",
+          "properties": {},
+          "type": "object"
+        },
         "id_after": {
           "description": "Return projects with ID greater than this value (keyset pagination)",
           "type": "integer"
@@ -162073,6 +162294,14 @@
             "null",
             "boolean"
           ]
+        },
+        "custom_attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned",
+          "properties": {},
+          "type": "object"
         },
         "id_after": {
           "description": "Return projects with ID greater than this value (keyset pagination)",
@@ -203782,7 +204011,7 @@
           ]
         },
         "assignee_ids": {
-          "description": "Global IDs of assignees (empty array to remove all)",
+          "description": "Global IDs of assignees. Replaces the current assignees; pass an empty array [] to remove every assignee. Omit the field to leave assignees untouched",
           "items": {
             "type": "integer"
           },
@@ -203795,8 +204024,12 @@
           "description": "Color hex code (e.g. #fefefe)",
           "type": "string"
         },
+        "confirm": {
+          "description": "Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted",
+          "type": "boolean"
+        },
         "crm_contact_ids": {
-          "description": "CRM contact IDs (empty array to remove all)",
+          "description": "CRM contact IDs. Replaces the current contacts; pass an empty array [] to remove every contact. Omit the field to leave contacts untouched",
           "items": {
             "type": "integer"
           },

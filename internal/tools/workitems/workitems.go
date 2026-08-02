@@ -445,6 +445,7 @@ type CreateInput struct {
 	Weight         *int64             `json:"weight,omitempty" tier:"premium" jsonschema:"Weight of the work item"`
 	HealthStatus   string             `json:"health_status,omitempty" tier:"ultimate" jsonschema:"Health status (onTrack/needsAttention/atRisk)"`
 	Color          string             `json:"color,omitempty" jsonschema:"Color hex code (e.g. #fefefe)"`
+	Status         string             `json:"status,omitempty" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
 	DueDate        string             `json:"due_date,omitempty" jsonschema:"Due date (YYYY-MM-DD)"`
 	StartDate      string             `json:"start_date,omitempty" jsonschema:"Start date (YYYY-MM-DD)"`
 	LinkedItems    *CreateLinkedItems `json:"linked_items,omitempty" jsonschema:"Linked work items to add on creation"`
@@ -466,6 +467,10 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	}
 	if input.Confidential != nil {
 		opts.Confidential = input.Confidential
+	}
+	if input.Status != "" {
+		status := mapStatusToID(input.Status)
+		opts.Status = &status
 	}
 	if len(input.AssigneeIDs) > 0 {
 		opts.AssigneeIDs = input.AssigneeIDs
@@ -523,9 +528,9 @@ type UpdateInput struct {
 	Title          string  `json:"title,omitempty" jsonschema:"New title"`
 	StateEvent     string  `json:"state_event,omitempty" jsonschema:"State event: CLOSE or REOPEN"`
 	Description    string  `json:"description,omitempty" jsonschema:"New description"`
-	AssigneeIDs    []int64 `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees (empty array to remove all)"`
+	AssigneeIDs    []int64 `json:"assignee_ids,omitempty" jsonschema:"Global IDs of assignees. Replaces the current assignees; pass an empty array [] to remove every assignee. Omit the field to leave assignees untouched"`
 	MilestoneID    *int64  `json:"milestone_id,omitempty" jsonschema:"Global ID of the milestone"`
-	CRMContactIDs  []int64 `json:"crm_contact_ids,omitempty" jsonschema:"CRM contact IDs (empty array to remove all)"`
+	CRMContactIDs  []int64 `json:"crm_contact_ids,omitempty" jsonschema:"CRM contact IDs. Replaces the current contacts; pass an empty array [] to remove every contact. Omit the field to leave contacts untouched"`
 	ParentID       *int64  `json:"parent_id,omitempty" jsonschema:"Global ID of the parent work item"`
 	AddLabelIDs    []int64 `json:"add_label_ids,omitempty" jsonschema:"Global IDs of labels to add"`
 	RemoveLabelIDs []int64 `json:"remove_label_ids,omitempty" jsonschema:"Global IDs of labels to remove"`
@@ -536,12 +541,20 @@ type UpdateInput struct {
 	IterationID    *int64  `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Global ID of the iteration"`
 	Color          string  `json:"color,omitempty" jsonschema:"Color hex code (e.g. #fefefe)"`
 	Status         string  `json:"status,omitempty" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the handler reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted"`
 }
 
 // Update modifies an existing work item.
 func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput) (GetOutput, error) {
 	if input.IID <= 0 {
 		return GetOutput{}, toolutil.ErrRequiredInt64("update_work_item", "work_item_iid")
+	}
+	if err := confirmListClearing(ctx, client, input); err != nil {
+		return GetOutput{}, err
 	}
 	opts := buildUpdateOptions(input)
 	wi, _, err := client.GL().WorkItems.UpdateWorkItem(input.FullPath, input.IID, opts, gl.WithContext(ctx))

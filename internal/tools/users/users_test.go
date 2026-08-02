@@ -4,6 +4,7 @@ package users
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -1554,5 +1555,30 @@ func TestResolveProjectWebURLs_Success(t *testing.T) {
 	urls := toolutil.ResolveProjectWebURLs(context.Background(), client.GL().Projects, []int64{10})
 	if got := urls[10]; got != "https://gitlab.example.com/group/project" {
 		t.Errorf("urls[10] = %q, want %q", got, "https://gitlab.example.com/group/project")
+	}
+}
+
+// TestList_CustomAttributesFilterReachesQuery verifies the user list encodes
+// the custom attribute filter as custom_attributes[key]=value, distinct from
+// with_custom_attributes which only controls whether attributes are returned.
+func TestList_CustomAttributesFilterReachesQuery(t *testing.T) {
+	var gotQuery string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	if _, err := List(t.Context(), client, ListInput{
+		CustomAttributes: map[string]string{"role": "maintainer"},
+	}); err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	decoded, err := url.QueryUnescape(gotQuery)
+	if err != nil {
+		t.Fatalf("unescape query: %v", err)
+	}
+	if !strings.Contains(decoded, "custom_attributes[role]=maintainer") {
+		t.Errorf("query = %q, want custom_attributes[role]=maintainer", decoded)
 	}
 }
