@@ -294,8 +294,8 @@ make analyze-report                        # generate LLM-consumable report
 | `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; default is `dynamic` when unset, unless legacy `META_TOOLS` is explicitly set |
 | `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal`; `minimal` keeps the surface-aware `gitlab://tools` manifest |
 | `META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface |
-| `GITLAB_READ_ONLY`       | No       | Read-only mode: disables all mutating tools (`false` default) |
-| `GITLAB_SAFE_MODE`       | No       | Safe mode: intercepts mutating tools and returns a JSON preview (`false` default) |
+| `GITLAB_READ_ONLY`       | No       | Read-only mode: removes mutating operations per action; reads keep working on every surface (`false` default) |
+| `GITLAB_SAFE_MODE`       | No       | Safe mode: intercepts mutating operations per action and returns a JSON preview naming the action; reads keep working (`false` default) |
 | `AUTO_UPDATE`            | No       | Enable auto-update: `true` (default), `check`, `false`  |
 | `AUTO_UPDATE_REPO`       | No       | GitHub repository slug for release assets (`jmrplens/gitlab-mcp-server`) |
 | `AUTO_UPDATE_INTERVAL`   | No       | Periodic check interval (`1h` default, HTTP mode)        |
@@ -309,6 +309,7 @@ make analyze-report                        # generate LLM-consumable report
 | `LOG_LEVEL`              | No       | Logging verbosity (`debug`, `info`, `warn`, `error`)     |
 | `EVAL_SURFACE_ENTERPRISE` | No      | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus. Used by `make eval-surfaces-docker-enterprise*` targets |
 | `EVAL_SURFACE_CASE_SET`   | No      | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (Community Edition only), `all` (CE+Enterprise). Used by `make eval-surfaces-docker-enterprise-all` |
+| `EVAL_SURFACE_SERVER_MODE` | No     | `cmd/eval_mcp_surfaces`: protective server mode under evaluation — `default`, `read-only`, or `safe-mode`. Alias `SERVER_MODE=` on the Makefile target |
 | `EVAL_SURFACE_FIXTURE_SMOKE` | No   | `cmd/eval_mcp_surfaces`: limit the run to fixture-smoke cases (fast smoke check) |
 | `--max-output-retries`  | No       | `cmd/eval_mcp_surfaces`: re-runs a task when it fails solely due to malformed model tool-call output (`2` default, `0` disables) |
 
