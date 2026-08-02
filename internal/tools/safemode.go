@@ -68,3 +68,28 @@ func safeModeHandler(toolName string) mcp.ToolHandler {
 		}, nil
 	}
 }
+
+// RemoveNonReadOnlyTools removes every registered tool that does not advertise
+// ReadOnlyHint, implementing read-only mode for surfaces whose tools map one to
+// one onto actions. Returns the number of tools removed.
+//
+// Dispatcher surfaces (meta-tools, the dynamic execute tool) must not rely on
+// this: one of their tools covers many actions, so read-only filtering happens
+// in the catalog instead — see [actioncatalog.Catalog.FilterReadOnlyActions].
+func RemoveNonReadOnlyTools(server *mcp.Server) int {
+	registered, err := toolutil.ListRegisteredTools(context.Background(), server, "readonly-filter")
+	if err != nil {
+		slog.Error("RemoveNonReadOnlyTools: list registered tools failed", "error", err)
+		return 0
+	}
+	var toRemove []string
+	for _, tool := range registered {
+		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
+			toRemove = append(toRemove, tool.Name)
+		}
+	}
+	if len(toRemove) > 0 {
+		server.RemoveTools(toRemove...)
+	}
+	return len(toRemove)
+}

@@ -858,7 +858,7 @@ func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig, too
 		}
 	}
 	if cfg.ReadOnly {
-		removed := removeNonReadOnlyTools(server)
+		removed := gitlabtools.RemoveNonReadOnlyTools(server)
 		slog.Info("read-only mode: removed write tools", "removed", removed)
 		return
 	}
@@ -1799,47 +1799,6 @@ func countCatalogActions(routes map[string]toolutil.ActionMap) int {
 		total += len(actions)
 	}
 	return total
-}
-
-// removeNonReadOnlyTools lists all registered tools via an ephemeral in-memory
-// session and removes those that do not have ReadOnlyHint set to true.
-// Returns the number of tools removed.
-func removeNonReadOnlyTools(server *mcp.Server) int {
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	serverSession, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		slog.Error("removeNonReadOnlyTools: server connect failed", "error", err)
-		return 0
-	}
-	defer serverSession.Close()
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "readonly-filter", Version: "0"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		slog.Error("removeNonReadOnlyTools: client connect failed", "error", err)
-		return 0
-	}
-	defer session.Close()
-
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		slog.Error("removeNonReadOnlyTools: list tools failed", "error", err)
-		return 0
-	}
-
-	var toRemove []string
-	for _, t := range result.Tools {
-		if t.Annotations == nil || !t.Annotations.ReadOnlyHint {
-			toRemove = append(toRemove, t.Name)
-		}
-	}
-
-	if len(toRemove) > 0 {
-		server.RemoveTools(toRemove...)
-	}
-	return len(toRemove)
 }
 
 // removeExcludedTools lists all registered tools and removes those whose name

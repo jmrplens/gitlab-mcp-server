@@ -55,6 +55,9 @@ type sessions struct {
 	dynamic     *mcp.ClientSession
 	elicitation *mcp.ClientSession
 	safeMode    *mcp.ClientSession
+	safeModeDyn *mcp.ClientSession
+	readOnly    *mcp.ClientSession
+	readOnlyDyn *mcp.ClientSession
 	glClient    *gitlabclient.Client
 	username    string
 	enterprise  bool
@@ -140,6 +143,9 @@ func startE2ERuntime(glClient *gitlabclient.Client, enterprise bool) e2eRuntime 
 	runtime.sessions.dynamic = mustStartE2ESession(&runtime, "dynamic", "gitlab-mcp-server-e2e-dynamic", "e2e-test-dynamic-client", nil, configureDynamicE2EServer(glClient, enterprise))
 	runtime.sessions.elicitation = mustStartE2ESession(&runtime, "elicitation", "gitlab-mcp-server-e2e-elicit", "e2e-test-elicit-client", elicitationClientOptions(), configureToolOnlyE2EServer(glClient, enterprise))
 	runtime.sessions.safeMode = mustStartE2ESession(&runtime, "safemode", "gitlab-mcp-server-e2e-safemode", "e2e-test-safemode-client", nil, configureSafeModeE2EServer(glClient, enterprise))
+	runtime.sessions.safeModeDyn = mustStartE2ESession(&runtime, "safemode-dynamic", "gitlab-mcp-server-e2e-safemode-dyn", "e2e-test-safemode-dyn-client", nil, configureDynamicModeE2EServer(glClient, enterprise, dynamicModeSafe))
+	runtime.sessions.readOnly = mustStartE2ESession(&runtime, "readonly", "gitlab-mcp-server-e2e-readonly", "e2e-test-readonly-client", nil, configureReadOnlyE2EServer(glClient, enterprise))
+	runtime.sessions.readOnlyDyn = mustStartE2ESession(&runtime, "readonly-dynamic", "gitlab-mcp-server-e2e-readonly-dyn", "e2e-test-readonly-dyn-client", nil, configureDynamicModeE2EServer(glClient, enterprise, dynamicModeReadOnly))
 	return runtime
 }
 
@@ -208,6 +214,47 @@ func configureDynamicE2EServer(glClient *gitlabclient.Client, enterprise bool) f
 func configureToolOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
 		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
+		return nil
+	}
+}
+
+// dynamicModeReadOnly and dynamicModeSafe select which mode a dynamic-surface
+// E2E session applies to its catalog before registering find/execute.
+const (
+	dynamicModeReadOnly = "readonly"
+	dynamicModeSafe     = "safemode"
+)
+
+// configureReadOnlyE2EServer registers the individual surface restricted to
+// read-only tools, mirroring GITLAB_READ_ONLY=true in stdio mode.
+func configureReadOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
+	return func(server *mcp.Server) error {
+		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
+		tools.RemoveNonReadOnlyTools(server)
+		return nil
+	}
+}
+
+// configureDynamicModeE2EServer registers the dynamic find/execute surface with
+// read-only filtering or safe-mode previews applied to the catalog, which is
+// where both policies act for dispatcher surfaces.
+func configureDynamicModeE2EServer(glClient *gitlabclient.Client, enterprise bool, mode string) func(*mcp.Server) error {
+	return func(server *mcp.Server) error {
+		catalog, err := tools.BuildActionCatalog(glClient, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
+		if err != nil {
+			return fmt.Errorf("build dynamic %s catalog: %w", mode, err)
+		}
+		catalog, err = dynamictools.AddStandaloneCatalog(catalog, glClient, dynamictools.StandaloneOptions{ReadOnly: mode == dynamicModeReadOnly})
+		if err != nil {
+			return fmt.Errorf("add standalone dynamic %s catalog: %w", mode, err)
+		}
+		switch mode {
+		case dynamicModeReadOnly:
+			catalog = catalog.FilterReadOnlyActions()
+		case dynamicModeSafe:
+			catalog = catalog.WithSafeModePreviews()
+		}
+		dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
 		return nil
 	}
 }

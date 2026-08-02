@@ -599,3 +599,77 @@ func TestCatalog_FilterReadOnlyActionsKeepsReadsInMixedGroups(t *testing.T) {
 		t.Error("nil catalog FilterReadOnlyActions() must return nil")
 	}
 }
+
+// TestCatalog_WithSafeModePreviewsRewritesOnlyMutatingActions verifies that
+// safe mode is applied at action granularity: mutating actions get a preview
+// handler naming the canonical action ID and lose their destructive flag
+// (nothing executes, so nothing needs confirming), read-only actions keep their
+// real handler, groups are never dropped, and the source catalog is untouched.
+func TestCatalog_WithSafeModePreviewsRewritesOnlyMutatingActions(t *testing.T) {
+	executed := false
+	realHandler := func(context.Context, map[string]any) (any, error) {
+		executed = true
+		return "real", nil
+	}
+
+	catalog := NewCatalog()
+	group := NewGroup(GroupOptions{ToolName: "gitlab_issue"})
+	group.SetAction(Action{Name: "list", Route: toolutil.ActionRoute{Handler: realHandler}, ReadOnly: true})
+	group.SetAction(Action{Name: "create", Route: toolutil.ActionRoute{Handler: realHandler, Destructive: true}})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+
+	previewed := catalog.WithSafeModePreviews()
+
+	safeGroup, ok := previewed.Group("gitlab_issue")
+	if !ok {
+		t.Fatal("gitlab_issue group missing: safe mode must not drop groups")
+	}
+	if got := len(safeGroup.Actions); got != 2 {
+		t.Fatalf("actions = %d, want 2 (safe mode previews, never removes)", got)
+	}
+
+	readAction := safeGroup.Actions["list"]
+	if _, err := readAction.Route.Handler(context.Background(), nil); err != nil {
+		t.Fatalf("read-only handler error = %v", err)
+	}
+	if !executed {
+		t.Error("read-only action must keep executing its real handler under safe mode")
+	}
+
+	executed = false
+	writeAction := safeGroup.Actions["create"]
+	result, err := writeAction.Route.Handler(context.Background(), map[string]any{"title": "x"})
+	if err != nil {
+		t.Fatalf("mutating handler error = %v", err)
+	}
+	if executed {
+		t.Error("mutating action executed its real handler under safe mode")
+	}
+	preview, isPreview := result.(toolutil.SafeModePreview)
+	if !isPreview {
+		t.Fatalf("mutating handler returned %T, want toolutil.SafeModePreview", result)
+	}
+	if preview.Status != "blocked" || preview.Mode != "safe" {
+		t.Errorf("preview status/mode = %q/%q, want blocked/safe", preview.Status, preview.Mode)
+	}
+	if preview.Tool != "issue.create" {
+		t.Errorf("preview tool = %q, want the canonical action ID issue.create", preview.Tool)
+	}
+	if string(preview.Params) != `{"title":"x"}` {
+		t.Errorf("preview params = %s, want the would-be call arguments", preview.Params)
+	}
+	if writeAction.Route.Destructive || writeAction.Destructive {
+		t.Error("previewed action must not stay destructive: nothing executes, so nothing needs confirmation")
+	}
+
+	if sourceAction := catalog.Groups()[0].Actions["create"]; !sourceAction.Route.Destructive {
+		t.Error("source catalog mutated: original action lost its destructive flag")
+	}
+
+	var nilCatalog *Catalog
+	if nilCatalog.WithSafeModePreviews() != nil {
+		t.Error("nil catalog WithSafeModePreviews() must return nil")
+	}
+}
