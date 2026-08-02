@@ -541,7 +541,11 @@ type UpdateInput struct {
 	IterationID    *int64  `json:"iteration_id,omitempty" tier:"premium" jsonschema:"Global ID of the iteration"`
 	Color          string  `json:"color,omitempty" jsonschema:"Color hex code (e.g. #fefefe)"`
 	Status         string  `json:"status,omitempty" jsonschema:"Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE"`
-	Confirm        bool    `json:"confirm,omitempty" jsonschema:"Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted"`
+	// Confirm is declared so the input schema advertises the reserved confirm
+	// key and strict validation accepts it. Its value is never populated:
+	// toolutil strips reserved keys before unmarshalling, so the handler reads
+	// the caller's confirmation from the raw request instead.
+	Confirm bool `json:"confirm,omitempty" jsonschema:"Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted"`
 }
 
 // Update modifies an existing work item.

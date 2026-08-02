@@ -131,6 +131,11 @@ func workItemCreateEnumOverrides() []toolutil.InputSchemaOverride {
 		toolutil.SchemaPropertyOverride("linked_items.link_type", map[string]any{
 			"enum": []any{"BLOCKED_BY", "BLOCKS", "RELATED"},
 		}),
+		// Unknown values would otherwise be forwarded verbatim as a status GID
+		// and rejected by GitLab with an opaque 400.
+		toolutil.SchemaPropertyOverride("status", map[string]any{
+			"enum": []any{"TODO", "IN_PROGRESS", "DONE", "WONT_DO", "DUPLICATE"},
+		}),
 	}
 }
 

@@ -42,11 +42,17 @@ const clearListConfirmID = "work_item_clear_lists"
 //
 // It returns nil when the update may proceed.
 func confirmListClearing(ctx context.Context, client *gitlabclient.Client, input UpdateInput) error {
-	losses := pendingClearLosses(ctx, client, input)
-	if len(losses) == 0 {
+	if !clearsAnyList(input) {
 		return nil
 	}
-	if toolutil.IsYOLOMode() || input.Confirm {
+	// Check the bypasses before reading the work item: a confirmed call does
+	// not need to know what it is about to remove.
+	req := toolutil.RequestFromContext(ctx)
+	if toolutil.IsYOLOMode() || toolutil.ExplicitConfirmFromRequest(req) {
+		return nil
+	}
+	losses := pendingClearLosses(ctx, client, input)
+	if len(losses) == 0 {
 		return nil
 	}
 
@@ -54,7 +60,7 @@ func confirmListClearing(ctx context.Context, client *gitlabclient.Client, input
 		"Remove %s from work item %s#%d? This replaces the list and cannot be undone from the response.",
 		strings.Join(losses, " and "), input.FullPath, input.IID)
 
-	flow, flowErr := elicitation.FlowFromRequest(toolutil.RequestFromContext(ctx))
+	flow, flowErr := elicitation.FlowFromRequest(req)
 	if flowErr != nil || !flow.IsSupported() {
 		return fmt.Errorf(
 			"update_work_item: %s Re-send the same call with confirm=true once the user has approved it",
@@ -71,6 +77,12 @@ func confirmListClearing(ctx context.Context, client *gitlabclient.Client, input
 		return errors.New("update_work_item: the user declined removing the current assignees or CRM contacts; omit assignee_ids/crm_contact_ids to leave them untouched")
 	}
 	return nil
+}
+
+// clearsAnyList reports whether the update submits an explicit empty list.
+func clearsAnyList(input UpdateInput) bool {
+	return (input.AssigneeIDs != nil && len(input.AssigneeIDs) == 0) ||
+		(input.CRMContactIDs != nil && len(input.CRMContactIDs) == 0)
 }
 
 // pendingClearLosses describes what an explicit empty list would delete,

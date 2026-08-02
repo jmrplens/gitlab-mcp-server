@@ -15696,6 +15696,13 @@
         },
         "status": {
           "description": "Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE",
+          "enum": [
+            "TODO",
+            "IN_PROGRESS",
+            "DONE",
+            "WONT_DO",
+            "DUPLICATE"
+          ],
           "type": "string"
         },
         "title": {

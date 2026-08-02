@@ -980,9 +980,15 @@ func featureFlagSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 // client-go v2.55.1: user_list_id targets a feature flag user list, _destroy
 // removes an existing strategy during an update, and the returned user_list is
 // surfaced in the output.
-func TestUpdate_StrategyUserListAndDestroy(t *testing.T) {
+func TestUpdateFeatureFlag_StrategyUserListAndDestroy_RoundTrip(t *testing.T) {
 	var gotBody string
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Errorf("method = %s, want PUT", r.Method)
+		}
+		if !strings.HasSuffix(r.URL.Path, "/projects/1/feature_flags/flag") {
+			t.Errorf("path = %s, want the feature flag update endpoint", r.URL.Path)
+		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Fatalf("read body: %v", err)

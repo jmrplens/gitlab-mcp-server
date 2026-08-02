@@ -1456,22 +1456,61 @@ func TestUpdate_EmptyAssigneesWithAssignedRequiresConfirmation(t *testing.T) {
 }
 
 // TestUpdate_EmptyAssigneesWithConfirmProceeds verifies that an explicit
-// confirm=true performs the removal, mirroring destructive-action precedence.
+// confirm=true performs the removal.
+//
+// The confirmation is read from the raw tool call, not from UpdateInput: the
+// reserved confirm key is stripped before the typed input is unmarshalled, so a
+// test that set the struct field directly would pass while the real MCP path
+// stayed blocked. The request is therefore built the way a caller sends it.
 func TestUpdate_EmptyAssigneesWithConfirmProceeds(t *testing.T) {
 	reads := 0
 	client := testutil.NewTestClient(t, clearGuardHandler(t, `{"username":"dev"}`, &reads))
 
-	out, err := Update(t.Context(), client, UpdateInput{
+	ctx := toolutil.ContextWithRequest(t.Context(), &mcp.CallToolRequest{
+		Params: &mcp.CallToolParamsRaw{
+			Name:      "gitlab_update_work_item",
+			Arguments: json.RawMessage(`{"full_path":"my-group/my-project","work_item_iid":1,"assignee_ids":[],"confirm":true}`),
+		},
+	})
+
+	out, err := Update(ctx, client, UpdateInput{
 		FullPath:    testFullPath,
 		IID:         1,
 		AssigneeIDs: []int64{},
-		Confirm:     true,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if out.WorkItem.Title != "Updated" {
 		t.Errorf("Title = %q", out.WorkItem.Title)
+	}
+	// Only the update's own global-ID lookup: a confirmed call must not pay for
+	// the guard's inspection read.
+	if reads != 1 {
+		t.Errorf("reads = %d, want exactly the update's own ID lookup", reads)
+	}
+}
+
+// TestUpdate_EmptyAssigneesWithNestedConfirmProceeds verifies the dispatcher
+// call shape, where the reserved key travels inside params rather than at the
+// top level.
+func TestUpdate_EmptyAssigneesWithNestedConfirmProceeds(t *testing.T) {
+	reads := 0
+	client := testutil.NewTestClient(t, clearGuardHandler(t, `{"username":"dev"}`, &reads))
+
+	ctx := toolutil.ContextWithRequest(t.Context(), &mcp.CallToolRequest{
+		Params: &mcp.CallToolParamsRaw{
+			Name:      "gitlab_execute_action",
+			Arguments: json.RawMessage(`{"action":"work_item.update","params":{"full_path":"my-group/my-project","work_item_iid":1,"assignee_ids":[],"confirm":true}}`),
+		},
+	})
+
+	if _, err := Update(ctx, client, UpdateInput{
+		FullPath:    testFullPath,
+		IID:         1,
+		AssigneeIDs: []int64{},
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
 	}
 }
 
@@ -1509,8 +1548,10 @@ func TestUpdate_OmittedListsSkipGuard(t *testing.T) {
 	}); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if reads > 1 {
-		t.Errorf("guard read the work item %d times for an update that clears nothing", reads)
+	// The update performs its own global-ID lookup; anything beyond that would
+	// be the guard reading a work item it has no reason to inspect.
+	if reads != 1 {
+		t.Errorf("reads = %d, want exactly the update's own ID lookup", reads)
 	}
 }
 
