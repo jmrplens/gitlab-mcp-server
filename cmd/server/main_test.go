@@ -1343,29 +1343,32 @@ func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession) 
 
 // TestCreateServer_DynamicReadOnlyRemovesExecute verifies that read-only mode
 // keeps discovery but removes execution from the dynamic surface.
-func TestCreateServer_DynamicReadOnlyRemovesExecute(t *testing.T) {
+func TestCreateServer_DynamicReadOnlyKeepsExecuteForReadActions(t *testing.T) {
 	client := newMockGitLabClient(t)
 	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic, ReadOnly: true})
 	toolsResult, err := listRegisteredTools(server, "dynamic-readonly")
 	if err != nil {
 		t.Fatalf("list dynamic read-only tools: %v", err)
 	}
-	wantTools := map[string]struct{}{
-		"gitlab_find_action": {},
-	}
-	gotTools := make(map[string]struct{}, len(toolsResult))
+	byName := make(map[string]*mcp.Tool, len(toolsResult))
 	for _, tool := range toolsResult {
-		gotTools[tool.Name] = struct{}{}
+		byName[tool.Name] = tool
 	}
-	for name := range gotTools {
-		if _, ok := wantTools[name]; !ok {
-			t.Fatalf("read-only dynamic surface tool %q is registered; want only discovery tools", name)
-		}
+	if _, found := byName["gitlab_find_action"]; !found {
+		t.Fatal("read-only dynamic surface missing gitlab_find_action")
 	}
-	for name := range wantTools {
-		if _, found := gotTools[name]; !found {
-			t.Fatalf("read-only dynamic surface missing discovery tool %q", name)
-		}
+	execute, found := byName["gitlab_execute_action"]
+	if !found {
+		t.Fatal("read-only dynamic surface dropped gitlab_execute_action: read actions would be unreachable")
+	}
+	if execute.Annotations == nil || !execute.Annotations.ReadOnlyHint {
+		t.Error("gitlab_execute_action must advertise ReadOnlyHint in read-only mode so read-only pruning keeps it")
+	}
+	if execute.Annotations != nil && execute.Annotations.DestructiveHint != nil && *execute.Annotations.DestructiveHint {
+		t.Error("gitlab_execute_action must not advertise DestructiveHint in read-only mode")
+	}
+	if len(byName) != 2 {
+		t.Errorf("read-only dynamic surface registered %d tools, want exactly find+execute", len(byName))
 	}
 }
 

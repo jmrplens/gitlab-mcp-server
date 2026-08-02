@@ -788,7 +788,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	metaSchemaRoutes = surfaceRegistration.metaSchemaRoutes
 	surfaceCatalog = surfaceRegistration.surfaceCatalog
 
-	applyToolVisibilityConfig(server, cfg)
+	applyToolVisibilityConfig(server, cfg, toolSurface)
 
 	toolCount, err := countRegisteredTools(server)
 	if err != nil {
@@ -846,7 +846,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	return server, nil
 }
 
-func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig) {
+func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig, toolSurface string) {
 	if len(cfg.ExcludeTools) > 0 {
 		removed := removeExcludedTools(server, cfg.ExcludeTools)
 		slog.Info("excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
@@ -863,6 +863,13 @@ func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig) {
 		return
 	}
 	if cfg.SafeMode {
+		// Dispatcher surfaces already carry per-action preview handlers from
+		// filterActionCatalog; wrapping their tools here would block the reads
+		// those same tools serve.
+		if toolSurface != config.ToolSurfaceIndividual {
+			slog.Info("safe mode: mutating catalog actions replaced with preview handlers", "surface", toolSurface)
+			return
+		}
 		wrapped := gitlabtools.WrapMutatingToolsForSafeMode(server)
 		slog.Info("safe mode: wrapped mutating tools with preview handler", "wrapped", wrapped)
 	}
@@ -1771,7 +1778,16 @@ func filterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfi
 		return nil, err
 	}
 	if cfg.ReadOnly {
-		filtered = filtered.FilterReadOnlyGroups()
+		// Filter at action granularity, not group granularity: a domain that
+		// mixes reads and writes must keep its read actions reachable instead
+		// of disappearing with them.
+		filtered = filtered.FilterReadOnlyActions()
+	}
+	if cfg.SafeMode {
+		// Same granularity argument: dispatcher tools cover reads and writes
+		// alike, so safe mode is applied per action in the catalog rather than
+		// by intercepting whole tools.
+		filtered = filtered.WithSafeModePreviews()
 	}
 	return filtered, nil
 }

@@ -519,6 +519,94 @@ func (c *Catalog) FilterReadOnlyGroups() *Catalog {
 	return filtered
 }
 
+// FilterReadOnlyActions returns a cloned catalog containing only read-only
+// actions, filtered at action granularity rather than group granularity.
+//
+// A group that mixes reads and writes keeps its read-only actions instead of
+// disappearing entirely, which is what read-only mode promises: mutating
+// operations are removed, reads keep working. Groups left without a single
+// read-only action are dropped, and every surviving group is marked ReadOnly so
+// derived tool annotations agree with the actions the group actually exposes
+// (otherwise [removeNonReadOnlyTools] would prune the very tools this filter
+// just built).
+func (c *Catalog) FilterReadOnlyActions() *Catalog {
+	if c == nil {
+		return nil
+	}
+	filtered := NewCatalog()
+	for _, group := range c.Groups() {
+		readOnlyGroup := NewGroup(GroupOptions{
+			ToolName:               group.ToolName,
+			Title:                  group.Title,
+			Description:            group.Description,
+			Icons:                  group.Icons,
+			ReadOnly:               true,
+			FormatResult:           group.FormatResult,
+			BaseDomain:             group.BaseDomain,
+			EnterpriseOnly:         group.EnterpriseOnly,
+			GitLabDotComOnly:       group.GitLabDotComOnly,
+			CapabilityRequirements: group.CapabilityRequirements,
+			OwnerPackage:           group.OwnerPackage,
+			SurfaceKind:            group.SurfaceKind,
+		})
+		for _, action := range group.ActionsInOrder() {
+			if !action.ReadOnly {
+				continue
+			}
+			readOnlyGroup.SetAction(action)
+		}
+		if len(readOnlyGroup.Actions) == 0 {
+			continue
+		}
+		mustAddCatalogGroup(filtered, readOnlyGroup, "filter read-only actions")
+	}
+	return filtered
+}
+
+// WithSafeModePreviews returns a cloned catalog in which every mutating action
+// is replaced by a handler returning a [toolutil.SafeModePreview] naming that
+// action, leaving read-only actions untouched.
+//
+// Safe Mode is a per-action policy, but dispatcher surfaces (meta-tools and the
+// dynamic execute tool) expose one tool covering many actions, so intercepting
+// at the tool level would block that tool's reads too. Rewriting the catalog
+// instead keeps the interception exactly as granular as the policy: reads
+// execute, writes preview, and the preview names the action rather than the
+// dispatcher. Destructive is cleared on rewritten actions because nothing is
+// executed, so there is nothing to confirm.
+func (c *Catalog) WithSafeModePreviews() *Catalog {
+	if c == nil {
+		return nil
+	}
+	previewed := NewCatalog()
+	for _, group := range c.Groups() {
+		safeGroup := NewGroup(GroupOptions{
+			ToolName:               group.ToolName,
+			Title:                  group.Title,
+			Description:            group.Description,
+			Icons:                  group.Icons,
+			ReadOnly:               group.ReadOnly,
+			FormatResult:           group.FormatResult,
+			BaseDomain:             group.BaseDomain,
+			EnterpriseOnly:         group.EnterpriseOnly,
+			GitLabDotComOnly:       group.GitLabDotComOnly,
+			CapabilityRequirements: group.CapabilityRequirements,
+			OwnerPackage:           group.OwnerPackage,
+			SurfaceKind:            group.SurfaceKind,
+		})
+		for _, action := range group.ActionsInOrder() {
+			if !action.ReadOnly {
+				action.Route.Handler = toolutil.SafeModeActionFunc(string(action.ID))
+				action.Route.Destructive = false
+				action.Destructive = false
+			}
+			safeGroup.SetAction(action)
+		}
+		mustAddCatalogGroup(previewed, safeGroup, "apply safe mode previews")
+	}
+	return previewed
+}
+
 // FilterAllowedToolNames returns a cloned catalog with only explicitly allowed tools.
 func (c *Catalog) FilterAllowedToolNames(toolNames []string) *Catalog {
 	if c == nil {

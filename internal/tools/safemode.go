@@ -11,17 +11,10 @@ import (
 )
 
 // SafeModePreview is the structured response returned when a mutating
-// tool is called with Safe Mode enabled. Status is always "blocked",
-// Mode is "safe", Tool is the registered tool name, Params mirrors the
-// would-be call arguments, and Hint tells the operator how to disable
-// safe mode.
-type SafeModePreview struct {
-	Status string          `json:"status"`
-	Mode   string          `json:"mode"`
-	Tool   string          `json:"tool"`
-	Params json.RawMessage `json:"params"`
-	Hint   string          `json:"hint"`
-}
+// operation is intercepted by Safe Mode. It aliases
+// [toolutil.SafeModePreview] so individual tool wrapping and the per-action
+// interception used by dispatcher surfaces return the identical payload.
+type SafeModePreview = toolutil.SafeModePreview
 
 // WrapMutatingToolsForSafeMode lists all registered tools via an
 // ephemeral in-memory session and replaces mutating tool handlers
@@ -59,7 +52,7 @@ func safeModeHandler(toolName string) mcp.ToolHandler {
 			Mode:   "safe",
 			Tool:   toolName,
 			Params: req.Params.Arguments,
-			Hint:   "Set GITLAB_SAFE_MODE=false to execute this operation",
+			Hint:   toolutil.SafeModeHint,
 		}
 
 		data, err := json.Marshal(preview)
