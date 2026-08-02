@@ -527,7 +527,7 @@ func (c *Catalog) FilterReadOnlyGroups() *Catalog {
 // operations are removed, reads keep working. Groups left without a single
 // read-only action are dropped, and every surviving group is marked ReadOnly so
 // derived tool annotations agree with the actions the group actually exposes
-// (otherwise [removeNonReadOnlyTools] would prune the very tools this filter
+// (otherwise read-only tool pruning would remove the very tools this filter
 // just built).
 func (c *Catalog) FilterReadOnlyActions() *Catalog {
 	if c == nil {

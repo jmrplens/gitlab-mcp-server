@@ -6275,3 +6275,90 @@ func TestBuildCatalogSession_ServerModeShapesEvaluatedCatalog(t *testing.T) {
 		t.Errorf("preview = %+v, want blocked issue.create", preview)
 	}
 }
+
+// TestResolveEvalServerMode_FlagBeatsEnvironment verifies the resolution order
+// for the server mode: an explicit --server-mode wins, otherwise
+// EVAL_SURFACE_SERVER_MODE and then SERVER_MODE apply, so the Makefile alias
+// and .env both work while the flag stays authoritative.
+func TestResolveEvalServerMode_FlagBeatsEnvironment(t *testing.T) {
+	t.Setenv("EVAL_SURFACE_SERVER_MODE", "")
+	t.Setenv("SERVER_MODE", "")
+	mode, err := resolveEvalServerMode("")
+	if err != nil || mode != ServerModeDefault {
+		t.Fatalf("resolveEvalServerMode(\"\") = %q, %v; want default", mode, err)
+	}
+
+	t.Setenv("SERVER_MODE", ServerModeReadOnly)
+	mode, err = resolveEvalServerMode("")
+	if err != nil || mode != ServerModeReadOnly {
+		t.Errorf("SERVER_MODE alone = %q, %v; want read-only", mode, err)
+	}
+
+	t.Setenv("EVAL_SURFACE_SERVER_MODE", ServerModeSafe)
+	mode, err = resolveEvalServerMode("")
+	if err != nil || mode != ServerModeSafe {
+		t.Errorf("EVAL_SURFACE_SERVER_MODE should win over SERVER_MODE, got %q, %v", mode, err)
+	}
+
+	mode, err = resolveEvalServerMode(ServerModeReadOnly)
+	if err != nil || mode != ServerModeReadOnly {
+		t.Errorf("explicit flag = %q, %v; want read-only over the environment", mode, err)
+	}
+
+	if _, invalidErr := resolveEvalServerMode("bogus"); invalidErr == nil {
+		t.Error("resolveEvalServerMode(bogus) error = nil, want validation error")
+	}
+}
+
+// TestBuildCatalogSession_ServerModeShapesDynamicSurface verifies the dynamic
+// surface honors the evaluated server mode too: read-only leaves
+// gitlab_execute_action routable but strips mutating actions from the routes it
+// can reach, and safe mode keeps them routable as previews.
+func TestBuildCatalogSession_ServerModeShapesDynamicSurface(t *testing.T) {
+	client := newEvalTestClient(t, false)
+
+	_, closeReadOnly, readOnlyTools, readOnlyRoutes, err := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeReadOnly)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(dynamic, read-only) error = %v", err)
+	}
+	closeReadOnly()
+
+	var executeTool *mcp.Tool
+	for _, tool := range readOnlyTools {
+		if tool.Name == "gitlab_execute_action" {
+			executeTool = tool
+		}
+	}
+	if executeTool == nil {
+		t.Fatal("read-only dynamic evaluation lost gitlab_execute_action: reads become unevaluable")
+	}
+	if executeTool.Annotations == nil || !executeTool.Annotations.ReadOnlyHint {
+		t.Error("read-only dynamic execute tool must advertise ReadOnlyHint")
+	}
+	if hasEvalRoute(readOnlyRoutes, "issue.create") {
+		t.Error("read-only dynamic evaluation still routes issue.create")
+	}
+	if !hasEvalRoute(readOnlyRoutes, "issue.list") {
+		t.Error("read-only dynamic evaluation dropped issue.list")
+	}
+
+	_, closeSafe, _, safeRoutes, err := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeSafe)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(dynamic, safe-mode) error = %v", err)
+	}
+	closeSafe()
+	if !hasEvalRoute(safeRoutes, "issue.create") {
+		t.Error("safe mode must keep mutating actions routable so the model can attempt them")
+	}
+}
+
+// hasEvalRoute reports whether any tool in routes exposes the action id, which
+// dynamic routes key by canonical ID and meta routes key by action name.
+func hasEvalRoute(routes map[string]toolutil.ActionMap, actionID string) bool {
+	for _, actions := range routes {
+		if _, ok := actions[actionID]; ok {
+			return true
+		}
+	}
+	return false
+}

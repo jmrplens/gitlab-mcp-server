@@ -3,6 +3,7 @@ package evaluator
 import (
 	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -304,6 +305,20 @@ const (
 	// ServerModeSafe replaces mutating action handlers with previews.
 	ServerModeSafe = "safe-mode"
 )
+
+// resolveEvalServerMode resolves the server mode from the flag, falling back to
+// EVAL_SURFACE_SERVER_MODE and then SERVER_MODE. The flag wins when set to
+// anything other than its default, so `--server-mode` overrides the
+// environment while `SERVER_MODE=` in .env still works on its own.
+func resolveEvalServerMode(flagValue string) (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(flagValue))
+	if mode == "" || mode == ServerModeDefault {
+		if envValue := firstNonEmpty(os.Getenv("EVAL_SURFACE_SERVER_MODE"), os.Getenv("SERVER_MODE")); envValue != "" {
+			mode = envValue
+		}
+	}
+	return normalizeEvalServerMode(mode)
+}
 
 // normalizeEvalServerMode validates the protective server mode under evaluation.
 func normalizeEvalServerMode(serverMode string) (string, error) {

@@ -4370,6 +4370,20 @@ func TestCreateServer_SafeMode_IndividualSurfaceStillWrapsTools(t *testing.T) {
 	}
 }
 
+// TestCreateServer_SafeMode_MetaSurfaceStillWrapsStandaloneTools verifies that
+// tools registered outside the action catalog — the gitlab_interactive_*
+// utilities on the meta surface — are still intercepted. Exempting the
+// catalog-backed dispatchers from tool-level wrapping must not exempt anything
+// else, or safe mode would let those utilities mutate GitLab for real.
+func TestCreateServer_SafeMode_MetaSurfaceStillWrapsStandaloneTools(t *testing.T) {
+	session := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta, SafeMode: true})
+
+	text := callModeTool(t, session, "gitlab_interactive_project_create", map[string]any{})
+	if !safeModeBlocked(t, text, "gitlab_interactive_project_create") {
+		t.Errorf("standalone interactive tool was not intercepted by safe mode: %s", text)
+	}
+}
+
 // TestCreateServer_SafeMode_PreviewCarriesCallArguments verifies the preview
 // echoes the would-be arguments, which is what makes it reviewable, and that
 // destructive actions are previewed without demanding confirmation first

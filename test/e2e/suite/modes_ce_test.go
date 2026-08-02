@@ -107,11 +107,17 @@ func TestReadOnlyMode(t *testing.T) {
 		listed, listErr := sess.readOnlyDyn.ListTools(ctx, nil)
 		requireNoError(t, listErr, "list read-only dynamic tools")
 		names := map[string]bool{}
+		var executeTool *mcp.Tool
 		for _, tool := range listed.Tools {
 			names[tool.Name] = true
+			if tool.Name == "gitlab_execute_action" {
+				executeTool = tool
+			}
 		}
 		requireTruef(t, names["gitlab_find_action"], "read-only dynamic surface lost gitlab_find_action")
-		requireTruef(t, names["gitlab_execute_action"], "read-only dynamic surface lost gitlab_execute_action: reads become unreachable")
+		requireTruef(t, executeTool != nil, "read-only dynamic surface lost gitlab_execute_action: reads become unreachable")
+		requireTruef(t, executeTool.Annotations != nil && executeTool.Annotations.ReadOnlyHint,
+			"gitlab_execute_action must advertise ReadOnlyHint in read-only mode, or read-only tool pruning would remove it")
 
 		text := modeCallText(ctx, t, sess.readOnlyDyn, "gitlab_execute_action", map[string]any{
 			"action": "issue.list",

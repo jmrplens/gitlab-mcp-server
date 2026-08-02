@@ -22,6 +22,18 @@ type SafeModePreview = toolutil.SafeModePreview
 // [SafeModePreview] instead of executing. Returns the number of tools
 // wrapped. If listing tools fails, logs the error and returns 0.
 func WrapMutatingToolsForSafeMode(server *mcp.Server) int {
+	return WrapMutatingToolsForSafeModeExcept(server, nil)
+}
+
+// WrapMutatingToolsForSafeModeExcept wraps mutating tools as
+// [WrapMutatingToolsForSafeMode] does, skipping the named tools.
+//
+// Dispatcher surfaces exempt their catalog-backed tools because those already
+// preview per action; wrapping them would block the reads they also serve. Any
+// tool registered outside the catalog — the interactive gitlab_interactive_*
+// utilities, for instance — must still be wrapped here, or safe mode would let
+// it execute for real.
+func WrapMutatingToolsForSafeModeExcept(server *mcp.Server, exempt map[string]struct{}) int {
 	ctx := context.Background()
 	tools, err := toolutil.ListRegisteredTools(ctx, server, "safemode-filter")
 	if err != nil {
@@ -32,6 +44,9 @@ func WrapMutatingToolsForSafeMode(server *mcp.Server) int {
 	var wrapped int
 	for _, t := range tools {
 		if t.Annotations != nil && t.Annotations.ReadOnlyHint {
+			continue
+		}
+		if _, skip := exempt[t.Name]; skip {
 			continue
 		}
 		toolCopy := *t

@@ -788,7 +788,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	metaSchemaRoutes = surfaceRegistration.metaSchemaRoutes
 	surfaceCatalog = surfaceRegistration.surfaceCatalog
 
-	applyToolVisibilityConfig(server, cfg, toolSurface)
+	applyToolVisibilityConfig(server, cfg, toolSurface, surfaceCatalog)
 
 	toolCount, err := countRegisteredTools(server)
 	if err != nil {
@@ -846,7 +846,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	return server, nil
 }
 
-func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig, toolSurface string) {
+func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
 	if len(cfg.ExcludeTools) > 0 {
 		removed := removeExcludedTools(server, cfg.ExcludeTools)
 		slog.Info("excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
@@ -863,16 +863,39 @@ func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig, too
 		return
 	}
 	if cfg.SafeMode {
-		// Dispatcher surfaces already carry per-action preview handlers from
-		// filterActionCatalog; wrapping their tools here would block the reads
-		// those same tools serve.
-		if toolSurface != config.ToolSurfaceIndividual {
-			slog.Info("safe mode: mutating catalog actions replaced with preview handlers", "surface", toolSurface)
-			return
-		}
-		wrapped := gitlabtools.WrapMutatingToolsForSafeMode(server)
-		slog.Info("safe mode: wrapped mutating tools with preview handler", "wrapped", wrapped)
+		// Catalog-backed dispatcher tools already carry per-action preview
+		// handlers from filterActionCatalog, and wrapping them here would block
+		// the reads they also serve. Everything else still needs wrapping,
+		// including tools registered outside the catalog such as the
+		// gitlab_interactive_* utilities.
+		exempt := catalogBackedToolNames(surfaceCatalog, toolSurface)
+		wrapped := gitlabtools.WrapMutatingToolsForSafeModeExcept(server, exempt)
+		slog.Info("safe mode: intercepted mutating operations",
+			"surface", toolSurface, "wrapped_tools", wrapped, "catalog_backed_tools", len(exempt))
 	}
+}
+
+// catalogBackedToolNames returns the tools whose handlers come from the action
+// catalog and therefore already enforce safe mode per action.
+func catalogBackedToolNames(surfaceCatalog *actioncatalog.Catalog, toolSurface string) map[string]struct{} {
+	if toolSurface == config.ToolSurfaceIndividual {
+		// One tool is one action here, so tool-level wrapping is already
+		// action-granular and nothing is exempt.
+		return nil
+	}
+	exempt := map[string]struct{}{}
+	if toolSurface == config.ToolSurfaceDynamic {
+		exempt[dynamictools.FindActionToolName] = struct{}{}
+		exempt[dynamictools.ExecuteActionToolName] = struct{}{}
+		return exempt
+	}
+	if surfaceCatalog == nil {
+		return exempt
+	}
+	for _, group := range surfaceCatalog.Groups() {
+		exempt[group.ToolName] = struct{}{}
+	}
+	return exempt
 }
 
 func logRegisteredToolSurface(toolSurface string, toolCount int, metaSchemaRoutes map[string]toolutil.ActionMap) {

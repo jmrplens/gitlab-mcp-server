@@ -28,8 +28,8 @@ const (
 	aliasEnvironmentProtection = "environment protection"
 	aliasMergeRequest          = "merge request"
 
-	findToolName          = "gitlab_find_action"
-	executeActionToolName = "gitlab_execute_action"
+	findToolName          = FindActionToolName
+	executeActionToolName = ExecuteActionToolName
 
 	// executeActionActionParam is the top-level input property carrying the
 	// canonical action ID for gitlab_execute_action.
@@ -3751,3 +3751,13 @@ func compactParameterGuidanceItem(name string, item toolutil.ParameterGuidance) 
 	}
 	return fmt.Sprintf("`%s` has action-specific guidance.", name)
 }
+
+// Tool names of the dynamic surface. They are exported so callers that reason
+// about which tools are catalog-backed — safe-mode exemption, for instance —
+// do not have to hardcode the strings.
+const (
+	// FindActionToolName is the read-only catalog discovery tool.
+	FindActionToolName = "gitlab_find_action"
+	// ExecuteActionToolName is the dispatcher that routes every catalog action.
+	ExecuteActionToolName = "gitlab_execute_action"
+)

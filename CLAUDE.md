@@ -323,8 +323,8 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--tool-surface`      | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
 | `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
 | `--tier`              | _(empty)_ | Force licensing tier: `free`, `ce`, `premium`, or `ultimate`. When set, used verbatim with no license check; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`) |
-| `--read-only`         | `false` | Read-only mode: disables all mutating tools              |
-| `--safe-mode`         | `false` | Safe mode: intercepts mutating tools, returns preview    |
+| `--read-only`         | `false` | Read-only mode: removes mutating operations per action; reads keep working |
+| `--safe-mode`         | `false` | Safe mode: intercepts mutating operations per action, returns preview |
 | `--max-http-clients`  | `100`   | Maximum concurrent client sessions                       |
 | `--session-timeout`   | `30m`   | Idle session timeout                                     |
 | `--http-idle-timeout` | `0` (disabled) | HTTP server idle connection timeout; `0` (default) disables idle closure so `--session-timeout` is the effective lifetime; set a positive duration to recycle idle connections sooner |

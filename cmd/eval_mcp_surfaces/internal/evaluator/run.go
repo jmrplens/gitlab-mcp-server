@@ -134,11 +134,6 @@ func prepareRunOptions() (options, func() error, error) {
 	if surfaceErr != nil {
 		return options{}, nil, surfaceErr
 	}
-	var serverModeErr error
-	opts.ServerMode, serverModeErr = normalizeEvalServerMode(opts.ServerMode)
-	if serverModeErr != nil {
-		return options{}, nil, serverModeErr
-	}
 	var editionErr error
 	opts.Edition, editionErr = normalizeEvalEdition(opts.Edition)
 	if editionErr != nil {
@@ -146,6 +141,13 @@ func prepareRunOptions() (options, func() error, error) {
 	}
 	if err := godotenv.Load(); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return options{}, nil, fmt.Errorf("load .env: %w", err)
+	}
+	// Resolved after .env is loaded so EVAL_SURFACE_SERVER_MODE/SERVER_MODE set
+	// there take effect; an explicit --server-mode still wins.
+	var serverModeErr error
+	opts.ServerMode, serverModeErr = resolveEvalServerMode(opts.ServerMode)
+	if serverModeErr != nil {
+		return options{}, nil, serverModeErr
 	}
 	return opts, closeTerminalOutput, nil
 }
