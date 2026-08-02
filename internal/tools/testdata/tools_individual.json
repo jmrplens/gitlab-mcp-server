@@ -28967,7 +28967,7 @@
             "additionalProperties": false,
             "properties": {
               "_destroy": {
-                "description": "Set true together with id to delete this strategy from the flag during an update",
+                "description": "Set true together with id (and no name) to delete this strategy from the flag during an update",
                 "type": [
                   "null",
                   "boolean"
@@ -28978,7 +28978,7 @@
                 "type": "integer"
               },
               "name": {
-                "description": "Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout)",
+                "description": "Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout). Required except when removing a strategy with _destroy",
                 "type": "string"
               },
               "parameters": {
@@ -29039,9 +29039,6 @@
                 ]
               }
             },
-            "required": [
-              "name"
-            ],
             "type": "object"
           },
           "type": [
@@ -29809,7 +29806,7 @@
             "additionalProperties": false,
             "properties": {
               "_destroy": {
-                "description": "Set true together with id to delete this strategy from the flag during an update",
+                "description": "Set true together with id (and no name) to delete this strategy from the flag during an update",
                 "type": [
                   "null",
                   "boolean"
@@ -29820,7 +29817,7 @@
                 "type": "integer"
               },
               "name": {
-                "description": "Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout)",
+                "description": "Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout). Required except when removing a strategy with _destroy",
                 "type": "string"
               },
               "parameters": {
@@ -29881,9 +29878,6 @@
                 ]
               }
             },
-            "required": [
-              "name"
-            ],
             "type": "object"
           },
           "type": [

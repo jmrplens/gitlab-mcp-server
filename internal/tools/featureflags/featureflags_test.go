@@ -1024,3 +1024,71 @@ func TestUpdateFeatureFlag_StrategyUserListAndDestroy_RoundTrip(t *testing.T) {
 		t.Errorf("user list name = %q, want 'beta testers'", out.Strategies[0].UserList.Name)
 	}
 }
+
+// TestUpdateFeatureFlag_DestroyOnlyStrategyOmitsName verifies that removing a
+// strategy sends only its id and _destroy. Sending "name":"" alongside them
+// fails the GitLab update schema, so the name must be omitted rather than
+// serialized empty.
+func TestUpdateFeatureFlag_DestroyOnlyStrategyOmitsName(t *testing.T) {
+	var gotBody string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		gotBody = string(body)
+		testutil.RespondJSON(w, http.StatusOK, `{"name":"flag","description":"","active":true,"version":"new_version_flag","strategies":[]}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	destroy := true
+	if _, err := UpdateFeatureFlag(t.Context(), client, UpdateInput{
+		ProjectID:  "1",
+		Name:       "flag",
+		Strategies: []StrategyInput{{ID: 42, Destroy: &destroy}},
+	}); err != nil {
+		t.Fatalf("UpdateFeatureFlag() error = %v", err)
+	}
+	if strings.Contains(gotBody, `"name"`) && strings.Contains(gotBody, `"name":""`) {
+		t.Errorf("destroy-only strategy serialized an empty name: %s", gotBody)
+	}
+	if !strings.Contains(gotBody, `"id":42`) || !strings.Contains(gotBody, `"_destroy":true`) {
+		t.Errorf("destroy-only strategy lost its id or _destroy: %s", gotBody)
+	}
+}
+
+// TestUpdateFeatureFlag_InvalidStrategyCombinationsRejected verifies the two
+// combinations GitLab cannot act on are caught before the request: a removal
+// without the strategy id, and a non-removal without a name.
+func TestUpdateFeatureFlag_InvalidStrategyCombinationsRejected(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("request sent despite an invalid strategy")
+		testutil.RespondJSON(w, http.StatusOK, `{}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+	destroy := true
+
+	tests := []struct {
+		name     string
+		strategy StrategyInput
+		want     string
+	}{
+		{"destroy without id", StrategyInput{Destroy: &destroy}, "_destroy requires the id"},
+		{"no name and no destroy", StrategyInput{}, "name is required"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := UpdateFeatureFlag(t.Context(), client, UpdateInput{
+				ProjectID:  "1",
+				Name:       "flag",
+				Strategies: []StrategyInput{tt.strategy},
+			})
+			if err == nil {
+				t.Fatal("invalid strategy was accepted")
+			}
+			if !strings.Contains(err.Error(), tt.want) {
+				t.Errorf("error = %v, want it to mention %q", err, tt.want)
+			}
+		})
+	}
+}

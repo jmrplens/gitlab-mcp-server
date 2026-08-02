@@ -4532,7 +4532,7 @@ Resource events (event_issue_*): project_id*, issue_iid* for all.
 - event_issue_weight_list
 
 Iterations (Premium+ — requires GITLAB_TIER=premium):
-- iteration_list_project: project_id*, state (1=opened, 2=upcoming, 3=current, 4=closed), search, include_ancestors
+- iteration_list_project: project_id*, state (opened, upcoming, current, closed, all), search, include_ancestors
 - iteration_list_group: group_id*, state, search, include_ancestors
 
 See also: gitlab_merge_request (MR lifecycle), gitlab_project (project settings, labels, milestones), gitlab_pipeline (CI/CD).
