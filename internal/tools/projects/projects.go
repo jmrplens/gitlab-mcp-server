@@ -416,12 +416,13 @@ type ListInput struct {
 	IDBefore                 int64  `json:"id_before,omitempty"                 jsonschema:"Return projects with ID less than this value (keyset pagination)"`
 
 	// Additional filters (additive 1:1 SDK parity with ListProjectsOptions)
-	Active                   *bool  `json:"active,omitempty"                    jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
-	Imported                 *bool  `json:"imported,omitempty"                  jsonschema:"Limit to projects imported from an external source by the current user"`
-	RepositoryChecksumFailed *bool  `json:"repository_checksum_failed,omitempty" jsonschema:"Limit to projects where the repository checksum calculation failed (admin only)"`
-	WikiChecksumFailed       *bool  `json:"wiki_checksum_failed,omitempty"       jsonschema:"Limit to projects where the wiki checksum calculation failed (admin only)"`
-	RepositoryStorage        string `json:"repository_storage,omitempty"         jsonschema:"Limit to projects on the given repository storage shard (admin only)"`
-	WithCustomAttributes     *bool  `json:"with_custom_attributes,omitempty"     jsonschema:"Include custom attributes in the response (admin only)"`
+	Active                   *bool             `json:"active,omitempty"                    jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
+	Imported                 *bool             `json:"imported,omitempty"                  jsonschema:"Limit to projects imported from an external source by the current user"`
+	RepositoryChecksumFailed *bool             `json:"repository_checksum_failed,omitempty" jsonschema:"Limit to projects where the repository checksum calculation failed (admin only)"`
+	WikiChecksumFailed       *bool             `json:"wiki_checksum_failed,omitempty"       jsonschema:"Limit to projects where the wiki checksum calculation failed (admin only)"`
+	RepositoryStorage        string            `json:"repository_storage,omitempty"         jsonschema:"Limit to projects on the given repository storage shard (admin only)"`
+	WithCustomAttributes     *bool             `json:"with_custom_attributes,omitempty"     jsonschema:"Include custom attributes in the response (admin only)"`
+	CustomAttributes         map[string]string `json:"custom_attributes,omitempty"     jsonschema:"Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned"`
 
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
@@ -1139,7 +1140,8 @@ func (input ListInput) toFilter() userProjectFilter {
 		IncludeHidden: input.IncludeHidden, Active: input.Active, Imported: input.Imported,
 		RepositoryChecksumFailed: input.RepositoryChecksumFailed, WikiChecksumFailed: input.WikiChecksumFailed,
 		RepositoryStorage: input.RepositoryStorage, WithCustomAttributes: input.WithCustomAttributes,
-		PaginationInput: input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
+		CustomAttributes: input.CustomAttributes,
+		PaginationInput:  input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
 	}
 }
 
@@ -1906,29 +1908,30 @@ type ListForksInput struct {
 	Sort       string               `json:"sort,omitempty" jsonschema:"Sort direction (asc, desc)"`
 
 	// Additional filters (additive 1:1 SDK parity with ListProjectsOptions)
-	Archived                 *bool  `json:"archived,omitempty"                    jsonschema:"Filter by archived status (true=only archived, false=only active)"`
-	Topic                    string `json:"topic,omitempty"                       jsonschema:"Filter by topic name"`
-	Simple                   bool   `json:"simple,omitempty"                      jsonschema:"Return only limited fields (faster for large result sets)"`
-	MinAccessLevel           int    `json:"min_access_level,omitempty"            jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
-	LastActivityAfter        string `json:"last_activity_after,omitempty"         jsonschema:"Return forks with last activity after date (ISO 8601 format)"`
-	LastActivityBefore       string `json:"last_activity_before,omitempty"        jsonschema:"Return forks with last activity before date (ISO 8601 format)"`
-	Starred                  *bool  `json:"starred,omitempty"                     jsonschema:"Limit to forks starred by the current user"`
-	Membership               *bool  `json:"membership,omitempty"                  jsonschema:"Limit to forks where the current user is a member"`
-	WithIssuesEnabled        *bool  `json:"with_issues_enabled,omitempty"         jsonschema:"Filter by forks with issues feature enabled"`
-	WithMergeRequestsEnabled *bool  `json:"with_merge_requests_enabled,omitempty" jsonschema:"Filter by forks with merge requests enabled"`
-	SearchNamespaces         *bool  `json:"search_namespaces,omitempty"           jsonschema:"Include namespace in search"`
-	Statistics               *bool  `json:"statistics,omitempty"                  jsonschema:"Include project statistics in response"`
-	WithProgrammingLanguage  string `json:"with_programming_language,omitempty"   jsonschema:"Filter by programming language name"`
-	IncludePendingDelete     *bool  `json:"include_pending_delete,omitempty"      jsonschema:"Include forks marked/scheduled for deletion. Default false."`
-	IncludeHidden            *bool  `json:"include_hidden,omitempty"              jsonschema:"Include hidden forks in results"`
-	IDAfter                  int64  `json:"id_after,omitempty"                    jsonschema:"Return forks with ID greater than this value (keyset pagination)"`
-	IDBefore                 int64  `json:"id_before,omitempty"                   jsonschema:"Return forks with ID less than this value (keyset pagination)"`
-	Active                   *bool  `json:"active,omitempty"                      jsonschema:"Limit to active (non-archived, non-pending-deletion) forks"`
-	Imported                 *bool  `json:"imported,omitempty"                    jsonschema:"Limit to forks imported from an external source by the current user"`
-	RepositoryChecksumFailed *bool  `json:"repository_checksum_failed,omitempty"  jsonschema:"Limit to forks where the repository checksum calculation failed (admin only)"`
-	WikiChecksumFailed       *bool  `json:"wiki_checksum_failed,omitempty"        jsonschema:"Limit to forks where the wiki checksum calculation failed (admin only)"`
-	RepositoryStorage        string `json:"repository_storage,omitempty"          jsonschema:"Limit to forks on the given repository storage shard (admin only)"`
-	WithCustomAttributes     *bool  `json:"with_custom_attributes,omitempty"      jsonschema:"Include custom attributes in the response (admin only)"`
+	Archived                 *bool             `json:"archived,omitempty"                    jsonschema:"Filter by archived status (true=only archived, false=only active)"`
+	Topic                    string            `json:"topic,omitempty"                       jsonschema:"Filter by topic name"`
+	Simple                   bool              `json:"simple,omitempty"                      jsonschema:"Return only limited fields (faster for large result sets)"`
+	MinAccessLevel           int               `json:"min_access_level,omitempty"            jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	LastActivityAfter        string            `json:"last_activity_after,omitempty"         jsonschema:"Return forks with last activity after date (ISO 8601 format)"`
+	LastActivityBefore       string            `json:"last_activity_before,omitempty"        jsonschema:"Return forks with last activity before date (ISO 8601 format)"`
+	Starred                  *bool             `json:"starred,omitempty"                     jsonschema:"Limit to forks starred by the current user"`
+	Membership               *bool             `json:"membership,omitempty"                  jsonschema:"Limit to forks where the current user is a member"`
+	WithIssuesEnabled        *bool             `json:"with_issues_enabled,omitempty"         jsonschema:"Filter by forks with issues feature enabled"`
+	WithMergeRequestsEnabled *bool             `json:"with_merge_requests_enabled,omitempty" jsonschema:"Filter by forks with merge requests enabled"`
+	SearchNamespaces         *bool             `json:"search_namespaces,omitempty"           jsonschema:"Include namespace in search"`
+	Statistics               *bool             `json:"statistics,omitempty"                  jsonschema:"Include project statistics in response"`
+	WithProgrammingLanguage  string            `json:"with_programming_language,omitempty"   jsonschema:"Filter by programming language name"`
+	IncludePendingDelete     *bool             `json:"include_pending_delete,omitempty"      jsonschema:"Include forks marked/scheduled for deletion. Default false."`
+	IncludeHidden            *bool             `json:"include_hidden,omitempty"              jsonschema:"Include hidden forks in results"`
+	IDAfter                  int64             `json:"id_after,omitempty"                    jsonschema:"Return forks with ID greater than this value (keyset pagination)"`
+	IDBefore                 int64             `json:"id_before,omitempty"                   jsonschema:"Return forks with ID less than this value (keyset pagination)"`
+	Active                   *bool             `json:"active,omitempty"                      jsonschema:"Limit to active (non-archived, non-pending-deletion) forks"`
+	Imported                 *bool             `json:"imported,omitempty"                    jsonschema:"Limit to forks imported from an external source by the current user"`
+	RepositoryChecksumFailed *bool             `json:"repository_checksum_failed,omitempty"  jsonschema:"Limit to forks where the repository checksum calculation failed (admin only)"`
+	WikiChecksumFailed       *bool             `json:"wiki_checksum_failed,omitempty"        jsonschema:"Limit to forks where the wiki checksum calculation failed (admin only)"`
+	RepositoryStorage        string            `json:"repository_storage,omitempty"          jsonschema:"Limit to forks on the given repository storage shard (admin only)"`
+	WithCustomAttributes     *bool             `json:"with_custom_attributes,omitempty"      jsonschema:"Include custom attributes in the response (admin only)"`
+	CustomAttributes         map[string]string `json:"custom_attributes,omitempty"      jsonschema:"Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned"`
 
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
@@ -1964,7 +1967,8 @@ func (input ListForksInput) toFilter() userProjectFilter {
 		IncludeHidden: input.IncludeHidden, Active: input.Active, Imported: input.Imported,
 		RepositoryChecksumFailed: input.RepositoryChecksumFailed, WikiChecksumFailed: input.WikiChecksumFailed,
 		RepositoryStorage: input.RepositoryStorage, WithCustomAttributes: input.WithCustomAttributes,
-		PaginationInput: input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
+		CustomAttributes: input.CustomAttributes,
+		PaginationInput:  input.PaginationInput, KeysetPaginationInput: input.KeysetPaginationInput,
 	}
 }
 
@@ -3010,34 +3014,35 @@ func ListUserStarredProjects(ctx context.Context, client *gitlabclient.Client, i
 // All three endpoints accept the full ListProjectsOptions filter set, so they
 // surface the complete filter surface for 1:1 SDK parity.
 type userProjectFilterInput struct {
-	Search                   string `json:"search,omitempty"             jsonschema:"Search query for project name"`
-	Visibility               string `json:"visibility,omitempty"         jsonschema:"Filter by visibility (private, internal, public)"`
-	Archived                 *bool  `json:"archived,omitempty"           jsonschema:"Filter by archived status (true=only archived, false=only active)"`
-	OrderBy                  string `json:"order_by,omitempty"           jsonschema:"Order by field (id, name, path, created_at, updated_at, last_activity_at)"`
-	Sort                     string `json:"sort,omitempty"               jsonschema:"Sort direction (asc, desc)"`
-	Simple                   bool   `json:"simple,omitempty"             jsonschema:"Return only limited fields (faster)"`
-	Owned                    bool   `json:"owned,omitempty"              jsonschema:"Limit to projects explicitly owned by the current user"`
-	Topic                    string `json:"topic,omitempty"              jsonschema:"Filter by topic name"`
-	MinAccessLevel           int    `json:"min_access_level,omitempty"   jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
-	Starred                  *bool  `json:"starred,omitempty"            jsonschema:"Limit to projects starred by the current user"`
-	Membership               *bool  `json:"membership,omitempty"         jsonschema:"Limit to projects where the current user is a member"`
-	WithIssuesEnabled        *bool  `json:"with_issues_enabled,omitempty"         jsonschema:"Filter by projects with issues feature enabled"`
-	WithMergeRequestsEnabled *bool  `json:"with_merge_requests_enabled,omitempty" jsonschema:"Filter by projects with merge requests enabled"`
-	SearchNamespaces         *bool  `json:"search_namespaces,omitempty"  jsonschema:"Include namespace in search"`
-	Statistics               *bool  `json:"statistics,omitempty"         jsonschema:"Include project statistics in response"`
-	WithProgrammingLanguage  string `json:"with_programming_language,omitempty"   jsonschema:"Filter by programming language name"`
-	LastActivityAfter        string `json:"last_activity_after,omitempty"         jsonschema:"Return projects with last activity after date (ISO 8601 format)"`
-	LastActivityBefore       string `json:"last_activity_before,omitempty"        jsonschema:"Return projects with last activity before date (ISO 8601 format)"`
-	IDAfter                  int64  `json:"id_after,omitempty"           jsonschema:"Return projects with ID greater than this value (keyset pagination)"`
-	IDBefore                 int64  `json:"id_before,omitempty"          jsonschema:"Return projects with ID less than this value (keyset pagination)"`
-	IncludePendingDelete     *bool  `json:"include_pending_delete,omitempty"      jsonschema:"Include projects marked/scheduled for deletion. Default false."`
-	IncludeHidden            *bool  `json:"include_hidden,omitempty"     jsonschema:"Include hidden projects in results"`
-	Active                   *bool  `json:"active,omitempty"             jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
-	Imported                 *bool  `json:"imported,omitempty"           jsonschema:"Limit to projects imported from an external source by the current user"`
-	RepositoryChecksumFailed *bool  `json:"repository_checksum_failed,omitempty"  jsonschema:"Limit to projects where the repository checksum calculation failed (admin only)"`
-	WikiChecksumFailed       *bool  `json:"wiki_checksum_failed,omitempty"        jsonschema:"Limit to projects where the wiki checksum calculation failed (admin only)"`
-	RepositoryStorage        string `json:"repository_storage,omitempty"          jsonschema:"Limit to projects on the given repository storage shard (admin only)"`
-	WithCustomAttributes     *bool  `json:"with_custom_attributes,omitempty"      jsonschema:"Include custom attributes in the response (admin only)"`
+	Search                   string            `json:"search,omitempty"             jsonschema:"Search query for project name"`
+	Visibility               string            `json:"visibility,omitempty"         jsonschema:"Filter by visibility (private, internal, public)"`
+	Archived                 *bool             `json:"archived,omitempty"           jsonschema:"Filter by archived status (true=only archived, false=only active)"`
+	OrderBy                  string            `json:"order_by,omitempty"           jsonschema:"Order by field (id, name, path, created_at, updated_at, last_activity_at)"`
+	Sort                     string            `json:"sort,omitempty"               jsonschema:"Sort direction (asc, desc)"`
+	Simple                   bool              `json:"simple,omitempty"             jsonschema:"Return only limited fields (faster)"`
+	Owned                    bool              `json:"owned,omitempty"              jsonschema:"Limit to projects explicitly owned by the current user"`
+	Topic                    string            `json:"topic,omitempty"              jsonschema:"Filter by topic name"`
+	MinAccessLevel           int               `json:"min_access_level,omitempty"   jsonschema:"Filter by minimum access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)"`
+	Starred                  *bool             `json:"starred,omitempty"            jsonschema:"Limit to projects starred by the current user"`
+	Membership               *bool             `json:"membership,omitempty"         jsonschema:"Limit to projects where the current user is a member"`
+	WithIssuesEnabled        *bool             `json:"with_issues_enabled,omitempty"         jsonschema:"Filter by projects with issues feature enabled"`
+	WithMergeRequestsEnabled *bool             `json:"with_merge_requests_enabled,omitempty" jsonschema:"Filter by projects with merge requests enabled"`
+	SearchNamespaces         *bool             `json:"search_namespaces,omitempty"  jsonschema:"Include namespace in search"`
+	Statistics               *bool             `json:"statistics,omitempty"         jsonschema:"Include project statistics in response"`
+	WithProgrammingLanguage  string            `json:"with_programming_language,omitempty"   jsonschema:"Filter by programming language name"`
+	LastActivityAfter        string            `json:"last_activity_after,omitempty"         jsonschema:"Return projects with last activity after date (ISO 8601 format)"`
+	LastActivityBefore       string            `json:"last_activity_before,omitempty"        jsonschema:"Return projects with last activity before date (ISO 8601 format)"`
+	IDAfter                  int64             `json:"id_after,omitempty"           jsonschema:"Return projects with ID greater than this value (keyset pagination)"`
+	IDBefore                 int64             `json:"id_before,omitempty"          jsonschema:"Return projects with ID less than this value (keyset pagination)"`
+	IncludePendingDelete     *bool             `json:"include_pending_delete,omitempty"      jsonschema:"Include projects marked/scheduled for deletion. Default false."`
+	IncludeHidden            *bool             `json:"include_hidden,omitempty"     jsonschema:"Include hidden projects in results"`
+	Active                   *bool             `json:"active,omitempty"             jsonschema:"Limit to active (non-archived, non-pending-deletion) projects"`
+	Imported                 *bool             `json:"imported,omitempty"           jsonschema:"Limit to projects imported from an external source by the current user"`
+	RepositoryChecksumFailed *bool             `json:"repository_checksum_failed,omitempty"  jsonschema:"Limit to projects where the repository checksum calculation failed (admin only)"`
+	WikiChecksumFailed       *bool             `json:"wiki_checksum_failed,omitempty"        jsonschema:"Limit to projects where the wiki checksum calculation failed (admin only)"`
+	RepositoryStorage        string            `json:"repository_storage,omitempty"          jsonschema:"Limit to projects on the given repository storage shard (admin only)"`
+	WithCustomAttributes     *bool             `json:"with_custom_attributes,omitempty"      jsonschema:"Include custom attributes in the response (admin only)"`
+	CustomAttributes         map[string]string `json:"custom_attributes,omitempty"     jsonschema:"Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned"`
 
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
@@ -3060,34 +3065,35 @@ func (f userProjectFilterInput) toFilter() userProjectFilter {
 // (and ListInput / ListForksInput) — so the tags are documentation/audit metadata
 // only and never affect serialization.
 type userProjectFilter struct {
-	Search                   string `json:"search,omitempty"`
-	Visibility               string `json:"visibility,omitempty"`
-	Archived                 *bool  `json:"archived,omitempty"`
-	OrderBy                  string `json:"order_by,omitempty"`
-	Sort                     string `json:"sort,omitempty"`
-	Simple                   bool   `json:"simple,omitempty"`
-	Owned                    bool   `json:"owned,omitempty"`
-	Topic                    string `json:"topic,omitempty"`
-	MinAccessLevel           int    `json:"min_access_level,omitempty"`
-	Starred                  *bool  `json:"starred,omitempty"`
-	Membership               *bool  `json:"membership,omitempty"`
-	WithIssuesEnabled        *bool  `json:"with_issues_enabled,omitempty"`
-	WithMergeRequestsEnabled *bool  `json:"with_merge_requests_enabled,omitempty"`
-	SearchNamespaces         *bool  `json:"search_namespaces,omitempty"`
-	Statistics               *bool  `json:"statistics,omitempty"`
-	WithProgrammingLanguage  string `json:"with_programming_language,omitempty"`
-	LastActivityAfter        string `json:"last_activity_after,omitempty"`
-	LastActivityBefore       string `json:"last_activity_before,omitempty"`
-	IDAfter                  int64  `json:"id_after,omitempty"`
-	IDBefore                 int64  `json:"id_before,omitempty"`
-	IncludePendingDelete     *bool  `json:"include_pending_delete,omitempty"`
-	IncludeHidden            *bool  `json:"include_hidden,omitempty"`
-	Active                   *bool  `json:"active,omitempty"`
-	Imported                 *bool  `json:"imported,omitempty"`
-	RepositoryChecksumFailed *bool  `json:"repository_checksum_failed,omitempty"`
-	WikiChecksumFailed       *bool  `json:"wiki_checksum_failed,omitempty"`
-	RepositoryStorage        string `json:"repository_storage,omitempty"`
-	WithCustomAttributes     *bool  `json:"with_custom_attributes,omitempty"`
+	Search                   string            `json:"search,omitempty"`
+	Visibility               string            `json:"visibility,omitempty"`
+	Archived                 *bool             `json:"archived,omitempty"`
+	OrderBy                  string            `json:"order_by,omitempty"`
+	Sort                     string            `json:"sort,omitempty"`
+	Simple                   bool              `json:"simple,omitempty"`
+	Owned                    bool              `json:"owned,omitempty"`
+	Topic                    string            `json:"topic,omitempty"`
+	MinAccessLevel           int               `json:"min_access_level,omitempty"`
+	Starred                  *bool             `json:"starred,omitempty"`
+	Membership               *bool             `json:"membership,omitempty"`
+	WithIssuesEnabled        *bool             `json:"with_issues_enabled,omitempty"`
+	WithMergeRequestsEnabled *bool             `json:"with_merge_requests_enabled,omitempty"`
+	SearchNamespaces         *bool             `json:"search_namespaces,omitempty"`
+	Statistics               *bool             `json:"statistics,omitempty"`
+	WithProgrammingLanguage  string            `json:"with_programming_language,omitempty"`
+	LastActivityAfter        string            `json:"last_activity_after,omitempty"`
+	LastActivityBefore       string            `json:"last_activity_before,omitempty"`
+	IDAfter                  int64             `json:"id_after,omitempty"`
+	IDBefore                 int64             `json:"id_before,omitempty"`
+	IncludePendingDelete     *bool             `json:"include_pending_delete,omitempty"`
+	IncludeHidden            *bool             `json:"include_hidden,omitempty"`
+	Active                   *bool             `json:"active,omitempty"`
+	Imported                 *bool             `json:"imported,omitempty"`
+	RepositoryChecksumFailed *bool             `json:"repository_checksum_failed,omitempty"`
+	WikiChecksumFailed       *bool             `json:"wiki_checksum_failed,omitempty"`
+	RepositoryStorage        string            `json:"repository_storage,omitempty"`
+	WithCustomAttributes     *bool             `json:"with_custom_attributes,omitempty"`
+	CustomAttributes         map[string]string `json:"custom_attributes,omitempty"`
 
 	// Pagination and Keyset are embedded (not named) so their page/per_page/
 	// page_token/pagination json tags are promoted, matching the embedded
@@ -3186,6 +3192,9 @@ func applyUserProjectFilterPtrs(opts *gl.ListProjectsOptions, f userProjectFilte
 	}
 	if f.WithCustomAttributes != nil {
 		opts.WithCustomAttributes = f.WithCustomAttributes
+	}
+	if len(f.CustomAttributes) > 0 {
+		opts.CustomAttributes = gl.CustomAttributesFilter(f.CustomAttributes)
 	}
 }
 

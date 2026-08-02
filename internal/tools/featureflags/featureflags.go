@@ -31,11 +31,24 @@ type StrategyParameterOutput struct {
 	Stickiness string `json:"stickiness,omitempty"`
 }
 
+// StrategyUserListOutput represents the user list a strategy targets, returned
+// for strategies of the gitlabUserList type.
+type StrategyUserListOutput struct {
+	ID        int64  `json:"id"`
+	IID       int64  `json:"iid"`
+	ProjectID int64  `json:"project_id"`
+	Name      string `json:"name"`
+	UserXIDs  string `json:"user_xids"`
+	CreatedAt string `json:"created_at,omitempty"`
+	UpdatedAt string `json:"updated_at,omitempty"`
+}
+
 // StrategyOutput represents a feature flag strategy.
 type StrategyOutput struct {
 	ID         int64                    `json:"id"`
 	Name       string                   `json:"name"`
 	Parameters *StrategyParameterOutput `json:"parameters,omitempty"`
+	UserList   *StrategyUserListOutput  `json:"user_list,omitempty"`
 	Scopes     []ScopeOutput            `json:"scopes,omitempty"`
 }
 
@@ -82,6 +95,8 @@ type StrategyInput struct {
 	ID         int64                   `json:"id,omitempty" jsonschema:"Strategy ID (only for update operations referencing an existing strategy)"`
 	Name       string                  `json:"name" jsonschema:"Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout)"`
 	Parameters *StrategyParameterInput `json:"parameters,omitempty" jsonschema:"Strategy-specific parameters (group_id, user_ids, percentage, rollout, stickiness)"`
+	UserListID *int64                  `json:"user_list_id,omitempty" jsonschema:"ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_feature_flag_user_list_list to find it"`
+	Destroy    *bool                   `json:"_destroy,omitempty" jsonschema:"Set true together with id to delete this strategy from the flag during an update"`
 	Scopes     []ScopeInput            `json:"scopes,omitempty" jsonschema:"Environment scopes to which this strategy applies"`
 }
 
@@ -335,6 +350,17 @@ func convertStrategy(s *gl.ProjectFeatureFlagStrategy) StrategyOutput {
 			Stickiness: s.Parameters.Stickiness,
 		}
 	}
+	if s.UserList != nil {
+		out.UserList = &StrategyUserListOutput{
+			ID:        s.UserList.ID,
+			IID:       s.UserList.IID,
+			ProjectID: s.UserList.ProjectID,
+			Name:      s.UserList.Name,
+			UserXIDs:  s.UserList.UserXIDs,
+			CreatedAt: toolutil.FormatTimePtr(s.UserList.CreatedAt),
+			UpdatedAt: toolutil.FormatTimePtr(s.UserList.UpdatedAt),
+		}
+	}
 	for _, sc := range s.Scopes {
 		out.Scopes = append(out.Scopes, ScopeOutput{
 			ID:               sc.ID,
@@ -358,6 +384,12 @@ func toStrategyOptions(strategies []StrategyInput) *[]*gl.FeatureFlagStrategyOpt
 		}
 		if s.ID != 0 {
 			o.ID = new(s.ID)
+		}
+		if s.UserListID != nil {
+			o.UserListID = s.UserListID
+		}
+		if s.Destroy != nil {
+			o.Destroy = s.Destroy
 		}
 		if s.Parameters != nil {
 			o.Parameters = &gl.ProjectFeatureFlagStrategyParameter{

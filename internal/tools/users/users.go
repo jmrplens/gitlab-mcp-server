@@ -112,28 +112,29 @@ func Current(ctx context.Context, client *gitlabclient.Client, _ CurrentInput) (
 
 // ListInput holds parameters for listing GitLab users.
 type ListInput struct {
-	Search               string `json:"search,omitempty" jsonschema:"Search users by name or username or email"`
-	Username             string `json:"username,omitempty" jsonschema:"Filter by exact username"`
-	Active               *bool  `json:"active,omitempty" jsonschema:"Filter for active users only"`
-	Blocked              *bool  `json:"blocked,omitempty" jsonschema:"Filter for blocked users only"`
-	External             *bool  `json:"external,omitempty" jsonschema:"Filter for external users only"`
-	Admins               *bool  `json:"admins,omitempty" jsonschema:"Filter for administrators only"`
-	Humans               *bool  `json:"humans,omitempty" jsonschema:"Filter for human (non-bot, non-internal) users only"`
-	ExcludeActive        *bool  `json:"exclude_active,omitempty" jsonschema:"Exclude active users from the result"`
-	ExcludeExternal      *bool  `json:"exclude_external,omitempty" jsonschema:"Exclude external users from the result"`
-	ExcludeHumans        *bool  `json:"exclude_humans,omitempty" jsonschema:"Exclude human users from the result"`
-	ExcludeInternal      *bool  `json:"exclude_internal,omitempty" jsonschema:"Exclude internal (bot/system) users from the result"`
-	WithoutProjects      *bool  `json:"without_projects,omitempty" jsonschema:"Filter for users without any projects"`
-	WithoutProjectBots   *bool  `json:"without_project_bots,omitempty" jsonschema:"Exclude project bot users from the result"`
-	WithCustomAttributes *bool  `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response (admin only)"`
-	TwoFactor            string `json:"two_factor,omitempty" jsonschema:"Filter by 2FA status: enabled or disabled"`
-	ExternUID            string `json:"extern_uid,omitempty" jsonschema:"Filter by external UID (use with provider)"`
-	Provider             string `json:"provider,omitempty" jsonschema:"Filter by external provider name (use with extern_uid)"`
-	PublicEmail          string `json:"public_email,omitempty" jsonschema:"Filter by exact public email address"`
-	CreatedAfter         string `json:"created_after,omitempty" jsonschema:"Filter users created after this date (RFC3339)"`
-	CreatedBefore        string `json:"created_before,omitempty" jsonschema:"Filter users created before this date (RFC3339)"`
-	OrderBy              string `json:"order_by,omitempty" jsonschema:"Order by: id | name | username | created_at | updated_at"`
-	Sort                 string `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
+	Search               string            `json:"search,omitempty" jsonschema:"Search users by name or username or email"`
+	Username             string            `json:"username,omitempty" jsonschema:"Filter by exact username"`
+	Active               *bool             `json:"active,omitempty" jsonschema:"Filter for active users only"`
+	Blocked              *bool             `json:"blocked,omitempty" jsonschema:"Filter for blocked users only"`
+	External             *bool             `json:"external,omitempty" jsonschema:"Filter for external users only"`
+	Admins               *bool             `json:"admins,omitempty" jsonschema:"Filter for administrators only"`
+	Humans               *bool             `json:"humans,omitempty" jsonschema:"Filter for human (non-bot, non-internal) users only"`
+	ExcludeActive        *bool             `json:"exclude_active,omitempty" jsonschema:"Exclude active users from the result"`
+	ExcludeExternal      *bool             `json:"exclude_external,omitempty" jsonschema:"Exclude external users from the result"`
+	ExcludeHumans        *bool             `json:"exclude_humans,omitempty" jsonschema:"Exclude human users from the result"`
+	ExcludeInternal      *bool             `json:"exclude_internal,omitempty" jsonschema:"Exclude internal (bot/system) users from the result"`
+	WithoutProjects      *bool             `json:"without_projects,omitempty" jsonschema:"Filter for users without any projects"`
+	WithoutProjectBots   *bool             `json:"without_project_bots,omitempty" jsonschema:"Exclude project bot users from the result"`
+	WithCustomAttributes *bool             `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response (admin only)"`
+	CustomAttributes     map[string]string `json:"custom_attributes,omitempty" jsonschema:"Filter users by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned"`
+	TwoFactor            string            `json:"two_factor,omitempty" jsonschema:"Filter by 2FA status: enabled or disabled"`
+	ExternUID            string            `json:"extern_uid,omitempty" jsonschema:"Filter by external UID (use with provider)"`
+	Provider             string            `json:"provider,omitempty" jsonschema:"Filter by external provider name (use with extern_uid)"`
+	PublicEmail          string            `json:"public_email,omitempty" jsonschema:"Filter by exact public email address"`
+	CreatedAfter         string            `json:"created_after,omitempty" jsonschema:"Filter users created after this date (RFC3339)"`
+	CreatedBefore        string            `json:"created_before,omitempty" jsonschema:"Filter users created before this date (RFC3339)"`
+	OrderBy              string            `json:"order_by,omitempty" jsonschema:"Order by: id | name | username | created_at | updated_at"`
+	Sort                 string            `json:"sort,omitempty" jsonschema:"Sort order: asc or desc"`
 	toolutil.PaginationInput
 	toolutil.KeysetPaginationInput
 }
@@ -182,6 +183,7 @@ func buildListUsersOptions(input ListInput) *gl.ListUsersOptions {
 		WithoutProjects:      input.WithoutProjects,
 		WithoutProjectBots:   input.WithoutProjectBots,
 		WithCustomAttributes: input.WithCustomAttributes,
+		CustomAttributes:     gl.CustomAttributesFilter(input.CustomAttributes),
 		Search:               strPtr(input.Search),
 		Username:             strPtr(input.Username),
 		TwoFactor:            strPtr(input.TwoFactor),

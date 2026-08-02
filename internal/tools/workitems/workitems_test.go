@@ -1388,18 +1388,32 @@ func TestUpdate_APIError404(t *testing.T) {
 
 // TestUpdate_EmptyAssigneesRemovesAll verifies that passing an empty AssigneeIDs
 // slice (non-nil) forwards it to the API, which interprets it as "remove all".
-func TestUpdate_EmptyAssigneesRemovesAll(t *testing.T) {
-	call := 0
-	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		call++
-		switch call {
-		case 1:
-			testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/1"}}}}`)
-		default:
-			testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemUpdate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"No assignees","author":{"username":"dev"},"widgets":[]}}}}`)
+// clearGuardHandler serves the two GraphQL shapes an empty-list update needs:
+// the work item read the guard performs, and the update mutation itself. It
+// dispatches on the request body so the extra read does not depend on call
+// ordering, and records how many reads happened.
+func clearGuardHandler(t *testing.T, assignees string, reads *int) http.HandlerFunc {
+	t.Helper()
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request body: %v", err)
 		}
-	})
-	client := testutil.NewTestClient(t, handler)
+		if strings.Contains(string(body), "workItemUpdate") {
+			testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemUpdate":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"Updated","author":{"username":"dev"},"widgets":[]}}}}`)
+			return
+		}
+		*reads++
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItem":{"id":"gid://gitlab/WorkItem/1","iid":"1","workItemType":{"name":"Issue"},"state":"OPEN","title":"Updated","author":{"username":"dev"},"features":{"assignees":{"assignees":{"nodes":[`+assignees+`]}}}}}}}`)
+	}
+}
+
+// TestUpdate_EmptyAssigneesWithNoneAssignedProceeds verifies that clearing an
+// already-empty assignee list is accepted without confirmation: nothing would
+// be deleted, so the guard must not make an ordinary edit interactive.
+func TestUpdate_EmptyAssigneesWithNoneAssignedProceeds(t *testing.T) {
+	reads := 0
+	client := testutil.NewTestClient(t, clearGuardHandler(t, "", &reads))
 
 	out, err := Update(t.Context(), client, UpdateInput{
 		FullPath:    testFullPath,
@@ -1409,8 +1423,94 @@ func TestUpdate_EmptyAssigneesRemovesAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
-	if out.WorkItem.Title != "No assignees" {
+	if out.WorkItem.Title != "Updated" {
 		t.Errorf("Title = %q", out.WorkItem.Title)
+	}
+	if reads == 0 {
+		t.Error("guard did not read the work item before clearing assignees")
+	}
+}
+
+// TestUpdate_EmptyAssigneesWithAssignedRequiresConfirmation verifies that the
+// same call is refused when assignees would actually be removed, and that the
+// error tells the caller how to proceed. Clients without elicitation must not
+// have the deletion happen silently.
+func TestUpdate_EmptyAssigneesWithAssignedRequiresConfirmation(t *testing.T) {
+	reads := 0
+	client := testutil.NewTestClient(t, clearGuardHandler(t, `{"username":"dev"},{"username":"ops"}`, &reads))
+
+	_, err := Update(t.Context(), client, UpdateInput{
+		FullPath:    testFullPath,
+		IID:         1,
+		AssigneeIDs: []int64{},
+	})
+	if err == nil {
+		t.Fatal("clearing 2 assignees was accepted without confirmation")
+	}
+	if !strings.Contains(err.Error(), "all 2 assignees") {
+		t.Errorf("error should name what would be removed, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "confirm=true") {
+		t.Errorf("error should tell the caller how to confirm, got: %v", err)
+	}
+}
+
+// TestUpdate_EmptyAssigneesWithConfirmProceeds verifies that an explicit
+// confirm=true performs the removal, mirroring destructive-action precedence.
+func TestUpdate_EmptyAssigneesWithConfirmProceeds(t *testing.T) {
+	reads := 0
+	client := testutil.NewTestClient(t, clearGuardHandler(t, `{"username":"dev"}`, &reads))
+
+	out, err := Update(t.Context(), client, UpdateInput{
+		FullPath:    testFullPath,
+		IID:         1,
+		AssigneeIDs: []int64{},
+		Confirm:     true,
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.WorkItem.Title != "Updated" {
+		t.Errorf("Title = %q", out.WorkItem.Title)
+	}
+}
+
+// TestUpdate_EmptyCRMContactsAlwaysConfirms verifies that clearing CRM contacts
+// always asks: the read model does not expose them, so the guard cannot tell a
+// no-op from a deletion and must not assume the harmless case.
+func TestUpdate_EmptyCRMContactsAlwaysConfirms(t *testing.T) {
+	reads := 0
+	client := testutil.NewTestClient(t, clearGuardHandler(t, "", &reads))
+
+	_, err := Update(t.Context(), client, UpdateInput{
+		FullPath:      testFullPath,
+		IID:           1,
+		CRMContactIDs: []int64{},
+	})
+	if err == nil {
+		t.Fatal("clearing CRM contacts was accepted without confirmation")
+	}
+	if !strings.Contains(err.Error(), "every CRM contact") {
+		t.Errorf("error should name CRM contacts, got: %v", err)
+	}
+}
+
+// TestUpdate_OmittedListsSkipGuard verifies that an update which does not touch
+// assignees or CRM contacts never reads the work item, so the guard costs
+// nothing for ordinary edits.
+func TestUpdate_OmittedListsSkipGuard(t *testing.T) {
+	reads := 0
+	client := testutil.NewTestClient(t, clearGuardHandler(t, `{"username":"dev"}`, &reads))
+
+	if _, err := Update(t.Context(), client, UpdateInput{
+		FullPath: testFullPath,
+		IID:      1,
+		Title:    "Renamed",
+	}); err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if reads > 1 {
+		t.Errorf("guard read the work item %d times for an update that clears nothing", reads)
 	}
 }
 

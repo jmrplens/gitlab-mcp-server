@@ -5,6 +5,7 @@ package featureflags
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -973,4 +974,47 @@ func featureFlagSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[strin
 		byTool[spec.IndividualTool.Name] = spec
 	}
 	return byTool
+}
+
+// TestUpdate_StrategyUserListAndDestroy verifies the strategy fields added in
+// client-go v2.55.1: user_list_id targets a feature flag user list, _destroy
+// removes an existing strategy during an update, and the returned user_list is
+// surfaced in the output.
+func TestUpdate_StrategyUserListAndDestroy(t *testing.T) {
+	var gotBody string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		gotBody = string(body)
+		testutil.RespondJSON(w, http.StatusOK, `{"name":"flag","description":"","active":true,"version":"new_version_flag","strategies":[{"id":7,"name":"gitlabUserList","user_list":{"id":3,"iid":1,"project_id":9,"name":"beta testers","user_xids":"u1,u2"},"scopes":[]}]}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	userListID := int64(3)
+	destroy := true
+	out, err := UpdateFeatureFlag(t.Context(), client, UpdateInput{
+		ProjectID: "1",
+		Name:      "flag",
+		Strategies: []StrategyInput{
+			{Name: "gitlabUserList", UserListID: &userListID},
+			{ID: 42, Destroy: &destroy},
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateFeatureFlag() error = %v", err)
+	}
+	if !strings.Contains(gotBody, `"user_list_id":3`) {
+		t.Errorf("request body missing user_list_id: %s", gotBody)
+	}
+	if !strings.Contains(gotBody, `"_destroy":true`) {
+		t.Errorf("request body missing _destroy: %s", gotBody)
+	}
+	if len(out.Strategies) != 1 || out.Strategies[0].UserList == nil {
+		t.Fatalf("output strategy user_list not surfaced: %+v", out.Strategies)
+	}
+	if out.Strategies[0].UserList.Name != "beta testers" {
+		t.Errorf("user list name = %q, want 'beta testers'", out.Strategies[0].UserList.Name)
+	}
 }

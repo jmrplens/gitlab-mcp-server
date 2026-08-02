@@ -18,10 +18,10 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,003 |
-| Unit test functions                                   | 11,628 |
+| Total test functions                                  | 12,013 |
+| Unit test functions                                   | 11,638 |
 | E2E test functions                                    |    375 |
-| cmd test functions                                    |    954 |
+| cmd test functions                                    |    957 |
 | Test files (internal/)                                |    470 |
 | Test files (cmd/)                                     |     72 |
 | Test files (test/e2e/suite/)                          |    168 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,591 | 88.2% |
-| `TestFunc` (no underscore)             |    967 |  8.1% |
-| `TestFunc_Scenario_Expected` (3+ part) |    445 |  3.7% |
+| `TestFunc_Scenario` (2-part)           | 10,600 | 88.2% |
+| `TestFunc` (no underscore)             |    967 |  8.0% |
+| `TestFunc_Scenario_Expected` (3+ part) |    446 |  3.7% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,055 |        107 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          8,334 |        349 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          8,341 |        349 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            375 |        168 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            954 |         72 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,003** |    **710** |                                                                                                 |
+| cmd packages            |            957 |         72 | server entry point and developer command utilities                                              |
+| **Total**               |     **12,013** |    **710** |                                                                                                 |
 
 ### Core Packages
 
@@ -79,11 +79,11 @@
 
 | Sub-package       | Tests | Coverage | Tools |
 | ----------------- | ----: | -------: | ----: |
-| projects          |   388 |   100.0% |    57 |
+| projects          |   389 |   100.0% |    57 |
 | groups            |   244 |    99.7% |    37 |
 | mergerequests     |   241 |    99.5% |    30 |
 | issues            |   223 |   100.0% |    21 |
-| users             |   209 |   100.0% |    38 |
+| users             |   210 |   100.0% |    38 |
 | dynamic           |   161 |    99.7% |     2 |
 | jobs              |   147 |    99.5% |    17 |
 | packages          |   123 |    99.2% |     9 |
@@ -99,8 +99,8 @@
 | pipelineschedules |    94 |    99.7% |    11 |
 | groupmilestones   |    90 |   100.0% |     8 |
 | snippets          |    89 |    99.5% |    15 |
+| workitems         |    88 |    97.4% |     6 |
 | mrapprovals       |    85 |   100.0% |     7 |
-| workitems         |    84 |   100.0% |     6 |
 | tags              |    83 |   100.0% |     9 |
 | groupmembers      |    82 |   100.0% |    10 |
 | integrations      |    82 |    98.8% |    12 |
@@ -163,7 +163,7 @@
 | errortracking           |        25 |          2 |   100.0% |         5 |
 | events                  |        52 |          2 |   100.0% |         2 |
 | externalstatuschecks    |        51 |          3 |   100.0% |         8 |
-| featureflags            |        40 |          2 |   100.0% |         5 |
+| featureflags            |        41 |          2 |   100.0% |         5 |
 | features                |        23 |          2 |    97.7% |         4 |
 | ffuserlists             |        33 |          2 |   100.0% |         5 |
 | files                   |        80 |          2 |   100.0% |         8 |
@@ -241,7 +241,7 @@
 | projectimportexport     |        40 |          1 |   100.0% |         5 |
 | projectiterations       |        18 |          1 |   100.0% |         1 |
 | projectmirrors          |        63 |          2 |   100.0% |         7 |
-| projects                |       388 |          6 |   100.0% |        57 |
+| projects                |       389 |          6 |   100.0% |        57 |
 | projectserviceaccounts  |        11 |          2 |   100.0% |         8 |
 | projectstatistics       |         8 |          2 |   100.0% |         1 |
 | projectstoragemoves     |        19 |          2 |   100.0% |         6 |
@@ -282,12 +282,12 @@
 | usagedata               |        28 |          1 |   100.0% |         6 |
 | useremails              |        24 |          2 |   100.0% |         6 |
 | usergpgkeys             |        44 |          2 |   100.0% |         8 |
-| users                   |       209 |          8 |   100.0% |        38 |
+| users                   |       210 |          8 |   100.0% |        38 |
 | vulnerabilities         |        61 |          3 |   100.0% |         8 |
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        60 |          2 |   100.0% |         6 |
-| workitems               |        84 |          2 |   100.0% |         6 |
-| **Total**               | **8,334** |    **349** |          | **1,169** |
+| workitems               |        88 |          2 |    97.4% |         6 |
+| **Total**               | **8,341** |    **349** |          | **1,169** |
 
 </details>
 
@@ -328,7 +328,7 @@
 | cmd/internal/apidocs                           |    86.7% |
 | cmd/internal/docgen                            |    99.5% |
 | cmd/internal/mcpsurface                        |    81.9% |
-| cmd/server                                     |    78.6% |
+| cmd/server                                     |    78.7% |
 
 ### Core Packages
 
@@ -356,7 +356,7 @@
 
 | Package                 | Coverage |
 | ----------------------- | -------: |
-| tools (orch.)           |    96.4% |
+| tools (orch.)           |    96.3% |
 | accessrequests          |   100.0% |
 | accesstokens            |    99.8% |
 | actioncatalog           |    99.2% |
@@ -531,7 +531,7 @@
 | vulnerabilities         |   100.0% |
 | waitpoll                |   100.0% |
 | wikis                   |   100.0% |
-| workitems               |   100.0% |
+| workitems               |    97.4% |
 
 Coverage target: **>90%** per package. Packages below the target in the latest generated coverage snapshot:
 
@@ -552,7 +552,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_surface_quality** (71.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_discovery_completeness** (77.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_lhm_manifest** (78.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/server** (78.6%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
+- **cmd/server** (78.7%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_catalog_first** (80.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_doc_coverage** (81.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/internal/mcpsurface** (81.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

@@ -1525,6 +1525,7 @@ Create a new work item under a namespace. Returns: the created work item with id
 - `linked_items` (object): Linked work items to add on creation
 - `milestone_id` (integer): Global ID of the milestone
 - `start_date` (string): Start date (YYYY-MM-DD)
+- `status` (string): Work item status: TODO, IN_PROGRESS, DONE, WONT_DO, or DUPLICATE
 - `title` (string) (required): Title of the work item
 - `weight` (integer): Weight of the work item
 - `work_item_type_id` (string) (required): Global ID of work item type (e.g. gid://gitlab/WorkItems::Type/1 for Issue)
@@ -8628,6 +8629,7 @@ List users with filtering and pagination support. Returns: user summaries includ
 - `blocked` (boolean): Filter for blocked users only
 - `created_after` (string): Filter users created after this date (RFC3339)
 - `created_before` (string): Filter users created before this date (RFC3339)
+- `custom_attributes` (object): Filter users by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned
 - `exclude_active` (boolean): Exclude active users from the result
 - `exclude_external` (boolean): Exclude external users from the result
 - `exclude_humans` (boolean): Exclude human users from the result
@@ -11857,6 +11859,7 @@ List projects accessible to the user with filtering and pagination. Returns: pro
 
 - `active` (boolean): Limit to active (non-archived, non-pending-deletion) projects
 - `archived` (boolean): Filter by archived status (true=only archived, false=only active)
+- `custom_attributes` (object): Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned
 - `id_after` (integer): Return projects with ID greater than this value (keyset pagination)
 - `id_before` (integer): Return projects with ID less than this value (keyset pagination)
 - `imported` (boolean): Limit to projects imported from an external source by the current user
@@ -11898,6 +11901,7 @@ List a project's forks. Returns: forked projects with namespace, visibility, and
 
 - `active` (boolean): Limit to active (non-archived, non-pending-deletion) forks
 - `archived` (boolean): Filter by archived status (true=only archived, false=only active)
+- `custom_attributes` (object): Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned
 - `id_after` (integer): Return forks with ID greater than this value (keyset pagination)
 - `id_before` (integer): Return forks with ID less than this value (keyset pagination)
 - `imported` (boolean): Limit to forks imported from an external source by the current user
@@ -12008,6 +12012,7 @@ List projects a user contributed to. Returns: projects with namespace, visibilit
 
 - `active` (boolean): Limit to active (non-archived, non-pending-deletion) projects
 - `archived` (boolean): Filter by archived status (true=only archived, false=only active)
+- `custom_attributes` (object): Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned
 - `id_after` (integer): Return projects with ID greater than this value (keyset pagination)
 - `id_before` (integer): Return projects with ID less than this value (keyset pagination)
 - `imported` (boolean): Limit to projects imported from an external source by the current user
@@ -12050,6 +12055,7 @@ List a user's owned projects. Returns: projects with namespace, visibility, and 
 
 - `active` (boolean): Limit to active (non-archived, non-pending-deletion) projects
 - `archived` (boolean): Filter by archived status (true=only archived, false=only active)
+- `custom_attributes` (object): Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned
 - `id_after` (integer): Return projects with ID greater than this value (keyset pagination)
 - `id_before` (integer): Return projects with ID less than this value (keyset pagination)
 - `imported` (boolean): Limit to projects imported from an external source by the current user
@@ -12092,6 +12098,7 @@ List projects a user starred. Returns: projects with namespace, visibility, and 
 
 - `active` (boolean): Limit to active (non-archived, non-pending-deletion) projects
 - `archived` (boolean): Filter by archived status (true=only archived, false=only active)
+- `custom_attributes` (object): Filter projects by custom attribute key/value pairs (admin only). Different from with_custom_attributes, which only controls whether attributes are returned
 - `id_after` (integer): Return projects with ID greater than this value (keyset pagination)
 - `id_before` (integer): Return projects with ID less than this value (keyset pagination)
 - `imported` (boolean): Limit to projects imported from an external source by the current user
@@ -15465,9 +15472,10 @@ Update an existing work item by namespace path and IID. Returns: the updated wor
 **Parameters:**
 
 - `add_label_ids` (array of integers): Global IDs of labels to add
-- `assignee_ids` (array of integers): Global IDs of assignees (empty array to remove all)
+- `assignee_ids` (array of integers): Global IDs of assignees. Replaces the current assignees; pass an empty array [] to remove every assignee. Omit the field to leave assignees untouched
 - `color` (string): Color hex code (e.g. #fefefe)
-- `crm_contact_ids` (array of integers): CRM contact IDs (empty array to remove all)
+- `confirm` (boolean): Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted
+- `crm_contact_ids` (array of integers): CRM contact IDs. Replaces the current contacts; pass an empty array [] to remove every contact. Omit the field to leave contacts untouched
 - `description` (string): New description
 - `due_date` (string): Due date (YYYY-MM-DD)
 - `full_path` (string) (required): Full path of the project or group (e.g. my-group/my-project)

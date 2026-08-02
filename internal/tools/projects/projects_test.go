@@ -8132,3 +8132,29 @@ func TestAddHook_CustomHeaders(t *testing.T) {
 		t.Errorf("custom_headers not in request body: %s", body)
 	}
 }
+
+// TestList_CustomAttributesFilterReachesQuery verifies that the custom
+// attribute filter is encoded as custom_attributes[key]=value query parameters,
+// which is what makes it a filter rather than the with_custom_attributes flag
+// that only controls whether attributes are returned.
+func TestList_CustomAttributesFilterReachesQuery(t *testing.T) {
+	var gotQuery string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	if _, err := List(t.Context(), client, ListInput{
+		CustomAttributes: map[string]string{"team": "platform"},
+	}); err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	decoded, err := url.QueryUnescape(gotQuery)
+	if err != nil {
+		t.Fatalf("unescape query: %v", err)
+	}
+	if !strings.Contains(decoded, "custom_attributes[team]=platform") {
+		t.Errorf("query = %q, want custom_attributes[team]=platform", decoded)
+	}
+}

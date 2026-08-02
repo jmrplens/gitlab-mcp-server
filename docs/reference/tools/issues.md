@@ -404,14 +404,14 @@ List work items for a project or group. Supports filtering by state, type, label
 
 ### `gitlab_create_work_item`
 
-Create a new work item. Requires full_path, work_item_type_id, and title. Supports linked_items to link other work items on creation. Experimental: the Work Items API may introduce breaking changes between minor versions.
+Create a new work item. Requires full_path, work_item_type_id, and title. Supports status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE) and linked_items to link other work items on creation. Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 | Annotation | **Create** |
 | ---------- | ---------- |
 
 ### `gitlab_update_work_item`
 
-Update an existing work item by IID. Supports changing title, state (CLOSE/REOPEN), description, assignees, milestone, labels (add/remove), dates, weight, health status, iteration, color, and status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE). Experimental: the Work Items API may introduce breaking changes between minor versions.
+Update an existing work item by IID. Supports changing title, state (CLOSE/REOPEN), description, assignees, milestone, labels (add/remove), dates, weight, health status, iteration, color, and status (TODO/IN_PROGRESS/DONE/WONT_DO/DUPLICATE). `assignee_ids` and `crm_contact_ids` replace the whole list: an empty array removes every entry, and omitting the field leaves it untouched; removing entries that exist requires `confirm=true` or an approved confirmation prompt. Experimental: the Work Items API may introduce breaking changes between minor versions.
 
 | Annotation | **Update** |
 | ---------- | ---------- |
