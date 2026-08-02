@@ -134,6 +134,11 @@ func prepareRunOptions() (options, func() error, error) {
 	if surfaceErr != nil {
 		return options{}, nil, surfaceErr
 	}
+	var serverModeErr error
+	opts.ServerMode, serverModeErr = normalizeEvalServerMode(opts.ServerMode)
+	if serverModeErr != nil {
+		return options{}, nil, serverModeErr
+	}
 	var editionErr error
 	opts.Edition, editionErr = normalizeEvalEdition(opts.Edition)
 	if editionErr != nil {

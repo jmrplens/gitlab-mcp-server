@@ -57,6 +57,10 @@ func parseFlags() options {
 	flag.StringVar(&opts.Partition, "partition", "", "Optional schema fixture partition: base-read, base-mutating, base-destructive, enterprise-read, enterprise-mutating, enterprise-destructive, error-recovery, or capability-fallback")
 	// --tool-surface chooses the dynamic or meta catalog.
 	flag.StringVar(&opts.ToolSurface, "tool-surface", config.DefaultToolSurface, "Tool catalog surface to evaluate: dynamic or meta")
+	// --server-mode evaluates the protective server modes, which change the
+	// catalog the model sees: read-only removes mutating actions, safe mode
+	// replaces them with previews.
+	flag.StringVar(&opts.ServerMode, "server-mode", ServerModeDefault, "Server mode to evaluate: default, read-only, or safe-mode")
 	// --edition filters cases by GitLab edition.
 	flag.StringVar(&opts.Edition, "edition", editionAll, "Task edition filter: all, ce, or enterprise")
 	// --coverage-report emits an uncovered-route report after the run.
@@ -287,6 +291,31 @@ func normalizeEvalToolSurface(toolSurface string) (string, error) {
 		return surface, nil
 	default:
 		return "", fmt.Errorf("--tool-surface must be %q or %q, got %q", config.ToolSurfaceMeta, config.ToolSurfaceDynamic, toolSurface)
+	}
+}
+
+// Server modes the evaluator can apply to the catalog before a run, mirroring
+// GITLAB_READ_ONLY and GITLAB_SAFE_MODE.
+const (
+	// ServerModeDefault leaves the catalog untouched.
+	ServerModeDefault = "default"
+	// ServerModeReadOnly keeps only read-only actions.
+	ServerModeReadOnly = "read-only"
+	// ServerModeSafe replaces mutating action handlers with previews.
+	ServerModeSafe = "safe-mode"
+)
+
+// normalizeEvalServerMode validates the protective server mode under evaluation.
+func normalizeEvalServerMode(serverMode string) (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(serverMode))
+	switch mode {
+	case "", ServerModeDefault:
+		return ServerModeDefault, nil
+	case ServerModeReadOnly, ServerModeSafe:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("--server-mode must be %q, %q or %q, got %q",
+			ServerModeDefault, ServerModeReadOnly, ServerModeSafe, serverMode)
 	}
 }
 

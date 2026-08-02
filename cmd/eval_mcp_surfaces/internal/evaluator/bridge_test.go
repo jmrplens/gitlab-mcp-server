@@ -156,7 +156,7 @@ func TestCapabilityBridgeResult_UsesLiveMCPCapabilities(t *testing.T) {
 		t.Fatalf("newMockGitLabClient() error = %v", clientErr)
 	}
 	defer cleanup()
-	session, closeSession, _, _, sessionErr := buildCatalogSession(client, config.ToolSurfaceDynamic)
+	session, closeSession, _, _, sessionErr := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeDefault)
 	if sessionErr != nil {
 		t.Fatalf("buildCatalogSession() error = %v", sessionErr)
 	}

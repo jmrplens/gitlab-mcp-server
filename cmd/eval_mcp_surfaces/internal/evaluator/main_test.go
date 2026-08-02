@@ -787,7 +787,7 @@ func taskIDs(tasks []evalTask) string {
 // TestBuildCatalogSession_UsesClientEnterpriseMode verifies BuildCatalogSession uses client enterprise mode.
 func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 	client := newEvalTestClient(t, false)
-	_, closeSession, _, routes, err := buildCatalogSession(client, config.ToolSurfaceMeta)
+	_, closeSession, _, routes, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeDefault)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(enterprise=false) error = %v", err)
 	}
@@ -797,7 +797,7 @@ func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 	}
 
 	client = newEvalTestClient(t, true)
-	_, closeSession, _, routes, err = buildCatalogSession(client, config.ToolSurfaceMeta)
+	_, closeSession, _, routes, err = buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeDefault)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(enterprise=true) error = %v", err)
 	}
@@ -813,7 +813,7 @@ func TestBuildCatalogSession_UsesClientEnterpriseMode(t *testing.T) {
 // evaluator sees the same no-input object schema shape as runtime tools/list.
 func TestBuildCatalogSession_MetaSurfaceAppliesSchemaLockdown(t *testing.T) {
 	client := newEvalTestClient(t, false)
-	_, closeSession, toolList, _, err := buildCatalogSession(client, config.ToolSurfaceMeta)
+	_, closeSession, toolList, _, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeDefault)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(meta) error = %v", err)
 	}
@@ -851,7 +851,7 @@ func TestBuildCatalogSession_MetaSurfaceAppliesSchemaLockdown(t *testing.T) {
 // routes for validation and execution.
 func TestBuildCatalogSession_DynamicSurfaceExposesExecuteRoutes(t *testing.T) {
 	client := newEvalTestClient(t, false)
-	_, closeSession, toolList, routes, err := buildCatalogSession(client, config.ToolSurfaceDynamic)
+	_, closeSession, toolList, routes, err := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeDefault)
 	if err != nil {
 		t.Fatalf("buildCatalogSession(dynamic) error = %v", err)
 	}
@@ -1633,7 +1633,7 @@ func TestAppendLookupFollowup_DynamicFindUsesLiveMCPTool(t *testing.T) {
 		t.Fatalf("newMockGitLabClient() error = %v", clientErr)
 	}
 	defer cleanup()
-	session, closeSession, _, routes, sessionErr := buildCatalogSession(client, config.ToolSurfaceDynamic)
+	session, closeSession, _, routes, sessionErr := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeDefault)
 	if sessionErr != nil {
 		t.Fatalf("buildCatalogSession() error = %v", sessionErr)
 	}
@@ -4841,7 +4841,7 @@ func TestBuildCatalogSession_ExposesFullCapabilitySurface(t *testing.T) {
 		t.Fatalf("newMockGitLabClient() error = %v", clientErr)
 	}
 	defer cleanup()
-	session, closeSession, _, _, sessionErr := buildCatalogSession(client, config.ToolSurfaceDynamic)
+	session, closeSession, _, _, sessionErr := buildCatalogSession(client, config.ToolSurfaceDynamic, ServerModeDefault)
 	if sessionErr != nil {
 		t.Fatalf("buildCatalogSession() error = %v", sessionErr)
 	}
@@ -6217,4 +6217,61 @@ func repositoryFileGetRoute() toolutil.ActionRoute {
 			"ref":        map[string]any{"type": "string"},
 		},
 	}}
+}
+
+// TestBuildCatalogSession_ServerModeShapesEvaluatedCatalog verifies that
+// --server-mode reaches the catalog the evaluated model sees. Read-only and
+// safe mode are per-action catalog policies, so evaluating them means the model
+// is offered a different set of actions (read-only) or actions whose handlers
+// preview instead of execute (safe mode). Without this the evaluator would keep
+// scoring the unrestricted catalog and never exercise either mode.
+func TestBuildCatalogSession_ServerModeShapesEvaluatedCatalog(t *testing.T) {
+	client := newEvalTestClient(t, false)
+
+	_, closeDefault, _, defaultRoutes, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeDefault)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(default) error = %v", err)
+	}
+	closeDefault()
+
+	_, closeReadOnly, _, readOnlyRoutes, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeReadOnly)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(read-only) error = %v", err)
+	}
+	closeReadOnly()
+
+	if _, mutatingPresent := readOnlyRoutes["gitlab_issue"]["create"]; mutatingPresent {
+		t.Error("read-only evaluation catalog still offers issue create")
+	}
+	if _, readPresent := readOnlyRoutes["gitlab_issue"]["list"]; !readPresent {
+		t.Error("read-only evaluation catalog dropped issue list: reads must stay evaluable")
+	}
+	if _, defaultMutating := defaultRoutes["gitlab_issue"]["create"]; !defaultMutating {
+		t.Fatal("default evaluation catalog lacks issue create; the comparison above is meaningless")
+	}
+
+	_, closeSafe, _, safeRoutes, err := buildCatalogSession(client, config.ToolSurfaceMeta, ServerModeSafe)
+	if err != nil {
+		t.Fatalf("buildCatalogSession(safe-mode) error = %v", err)
+	}
+	closeSafe()
+
+	safeCreate, safePresent := safeRoutes["gitlab_issue"]["create"]
+	if !safePresent {
+		t.Fatal("safe mode must keep mutating actions visible so the model can attempt them")
+	}
+	if safeCreate.Destructive {
+		t.Error("safe-mode action stayed destructive; nothing executes, so nothing needs confirmation")
+	}
+	result, handlerErr := safeCreate.Handler(context.Background(), map[string]any{"project_id": "1", "title": "x"})
+	if handlerErr != nil {
+		t.Fatalf("safe-mode handler error = %v", handlerErr)
+	}
+	preview, isPreview := result.(toolutil.SafeModePreview)
+	if !isPreview {
+		t.Fatalf("safe-mode handler returned %T, want a preview", result)
+	}
+	if preview.Status != "blocked" || preview.Tool != "issue.create" {
+		t.Errorf("preview = %+v, want blocked issue.create", preview)
+	}
 }
