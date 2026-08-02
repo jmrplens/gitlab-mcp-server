@@ -28,8 +28,8 @@ const (
 	aliasEnvironmentProtection = "environment protection"
 	aliasMergeRequest          = "merge request"
 
-	findToolName          = "gitlab_find_action"
-	executeActionToolName = "gitlab_execute_action"
+	findToolName          = FindActionToolName
+	executeActionToolName = ExecuteActionToolName
 
 	// executeActionActionParam is the top-level input property carrying the
 	// canonical action ID for gitlab_execute_action.
@@ -205,6 +205,7 @@ type actionEntry struct {
 	RelatedActions []string
 	SchemaURI      string
 	Destructive    bool
+	ReadOnly       bool
 	RequiredParams []string
 	Document       searchDocument
 	SearchText     string
@@ -244,7 +245,12 @@ func addFindTool(server *mcp.Server, registry *Registry) {
 }
 
 func addExecuteActionTool(server *mcp.Server, registry *Registry) {
-	destructiveHint := true
+	// Derive the annotations from what the registry can actually reach. When
+	// every routable action is read-only — read-only mode filtered the catalog
+	// down to reads — the execute tool is itself read-only, which keeps
+	// read-only tool pruning from removing the only way to run those reads.
+	readOnly := registry.AllActionsReadOnly()
+	destructiveHint := !readOnly
 	openWorldHint := true
 	mcp.AddTool(server, &mcp.Tool{
 		Name:         executeActionToolName,
@@ -254,6 +260,7 @@ func addExecuteActionTool(server *mcp.Server, registry *Registry) {
 		OutputSchema: toolutil.ActionDispatchOutputSchema(),
 		Annotations: &mcp.ToolAnnotations{
 			Title:           "GitLab Execute Action",
+			ReadOnlyHint:    readOnly,
 			DestructiveHint: &destructiveHint,
 			OpenWorldHint:   &openWorldHint,
 		},
@@ -297,6 +304,20 @@ func annotateActionHeader(schema *jsonschema.Schema) *jsonschema.Schema {
 	}
 	action.Extra[xMCPHeaderKeyword] = executeActionHeaderName
 	return schema
+}
+
+// AllActionsReadOnly reports whether every action this registry can dispatch is
+// read-only. An empty registry counts as read-only: it can mutate nothing.
+func (r *Registry) AllActionsReadOnly() bool {
+	if r == nil {
+		return true
+	}
+	for _, entry := range r.entries {
+		if !entry.ReadOnly {
+			return false
+		}
+	}
+	return true
 }
 
 // NewRegistry builds a deterministic action registry from visible meta routes.
@@ -356,6 +377,7 @@ func newRegistryFromCatalog(catalog *actioncatalog.Catalog, aliases []actionAlia
 				RelatedActions: append([]string(nil), action.RelatedActions...),
 				SchemaURI:      schemaURI,
 				Destructive:    route.Destructive,
+				ReadOnly:       action.ReadOnly,
 				RequiredParams: requiredParams(route.InputSchema),
 				Document:       document,
 				SearchText:     document.FlatText,
@@ -3729,3 +3751,13 @@ func compactParameterGuidanceItem(name string, item toolutil.ParameterGuidance) 
 	}
 	return fmt.Sprintf("`%s` has action-specific guidance.", name)
 }
+
+// Tool names of the dynamic surface. They are exported so callers that reason
+// about which tools are catalog-backed — safe-mode exemption, for instance —
+// do not have to hardcode the strings.
+const (
+	// FindActionToolName is the read-only catalog discovery tool.
+	FindActionToolName = "gitlab_find_action"
+	// ExecuteActionToolName is the dispatcher that routes every catalog action.
+	ExecuteActionToolName = "gitlab_execute_action"
+)

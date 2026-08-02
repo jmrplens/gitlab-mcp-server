@@ -1343,29 +1343,32 @@ func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession) 
 
 // TestCreateServer_DynamicReadOnlyRemovesExecute verifies that read-only mode
 // keeps discovery but removes execution from the dynamic surface.
-func TestCreateServer_DynamicReadOnlyRemovesExecute(t *testing.T) {
+func TestCreateServer_DynamicReadOnlyKeepsExecuteForReadActions(t *testing.T) {
 	client := newMockGitLabClient(t)
 	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic, ReadOnly: true})
 	toolsResult, err := listRegisteredTools(server, "dynamic-readonly")
 	if err != nil {
 		t.Fatalf("list dynamic read-only tools: %v", err)
 	}
-	wantTools := map[string]struct{}{
-		"gitlab_find_action": {},
-	}
-	gotTools := make(map[string]struct{}, len(toolsResult))
+	byName := make(map[string]*mcp.Tool, len(toolsResult))
 	for _, tool := range toolsResult {
-		gotTools[tool.Name] = struct{}{}
+		byName[tool.Name] = tool
 	}
-	for name := range gotTools {
-		if _, ok := wantTools[name]; !ok {
-			t.Fatalf("read-only dynamic surface tool %q is registered; want only discovery tools", name)
-		}
+	if _, found := byName["gitlab_find_action"]; !found {
+		t.Fatal("read-only dynamic surface missing gitlab_find_action")
 	}
-	for name := range wantTools {
-		if _, found := gotTools[name]; !found {
-			t.Fatalf("read-only dynamic surface missing discovery tool %q", name)
-		}
+	execute, found := byName["gitlab_execute_action"]
+	if !found {
+		t.Fatal("read-only dynamic surface dropped gitlab_execute_action: read actions would be unreachable")
+	}
+	if execute.Annotations == nil || !execute.Annotations.ReadOnlyHint {
+		t.Error("gitlab_execute_action must advertise ReadOnlyHint in read-only mode so read-only pruning keeps it")
+	}
+	if execute.Annotations != nil && execute.Annotations.DestructiveHint != nil && *execute.Annotations.DestructiveHint {
+		t.Error("gitlab_execute_action must not advertise DestructiveHint in read-only mode")
+	}
+	if len(byName) != 2 {
+		t.Errorf("read-only dynamic surface registered %d tools, want exactly find+execute", len(byName))
 	}
 }
 
@@ -3265,7 +3268,7 @@ func TestSetupAutoUpdateRedaction_WithURL(t *testing.T) {
 	_ = buf
 }
 
-// TestRemoveNonReadOnlyTools verifies that removeNonReadOnlyTools strips
+// TestRemoveNonReadOnlyTools verifies that tools.RemoveNonReadOnlyTools strips
 // tools that do not have ReadOnlyHint set to true.
 func TestRemoveNonReadOnlyTools(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{
@@ -3292,9 +3295,9 @@ func TestRemoveNonReadOnlyTools(t *testing.T) {
 		return &mcp.CallToolResult{}, nil, nil
 	})
 
-	removed := removeNonReadOnlyTools(server)
+	removed := tools.RemoveNonReadOnlyTools(server)
 	if removed != 1 {
-		t.Errorf("removeNonReadOnlyTools removed %d tools, want 1", removed)
+		t.Errorf("RemoveNonReadOnlyTools removed %d tools, want 1", removed)
 	}
 
 	count, err := countRegisteredTools(server)
@@ -4239,5 +4242,294 @@ func TestServeHTTP_Stateless_SDKClientInterop(t *testing.T) {
 	}
 	if result.IsError {
 		t.Fatalf("CallTool returned IsError: %+v", result.Content)
+	}
+}
+
+// modeTestSession opens an in-memory MCP session against a server built with
+// cfg, so mode tests exercise the real dispatch path instead of inspecting
+// registration metadata.
+func modeTestSession(t *testing.T, cfg *config.ServerConfig) *mcp.ClientSession {
+	t.Helper()
+	server := mustCreateServer(t, newMockGitLabClient(t), cfg)
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), serverTransport, nil)
+	if err != nil {
+		t.Fatalf("connect mode test server: %v", err)
+	}
+	t.Cleanup(func() { _ = serverSession.Close() })
+
+	client := mcp.NewClient(&mcp.Implementation{Name: "mode-test-client", Version: "0.0.1"}, nil)
+	session, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("connect mode test client: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
+
+// callModeTool calls one tool on session and returns its concatenated text
+// content, failing the test only on transport errors: a blocked or rejected
+// call is a result to assert on, not a failure.
+func callModeTool(t *testing.T, session *mcp.ClientSession, name string, args map[string]any) string {
+	t.Helper()
+	result, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: name, Arguments: args})
+	if err != nil {
+		t.Fatalf("CallTool(%s): %v", name, err)
+	}
+	var text strings.Builder
+	for _, content := range result.Content {
+		if textContent, ok := content.(*mcp.TextContent); ok {
+			text.WriteString(textContent.Text)
+		}
+	}
+	return text.String()
+}
+
+// safeModeBlocked reports whether text is a safe-mode preview naming action.
+func safeModeBlocked(t *testing.T, text, action string) bool {
+	t.Helper()
+	var preview tools.SafeModePreview
+	if err := json.Unmarshal([]byte(text), &preview); err != nil {
+		return false
+	}
+	return preview.Status == "blocked" && preview.Mode == "safe" && preview.Tool == action
+}
+
+// TestCreateServer_SafeMode_DynamicSurfacePreviewsWritesAndRunsReads verifies
+// that safe mode on the dynamic surface intercepts per action: a mutating
+// action returns a preview naming that action, while a read-only action
+// executes and reaches GitLab (the mock answers 404, which only a real call
+// can produce). Regression test for safe mode blocking every dynamic read
+// because gitlab_execute_action itself is not read-only.
+func TestCreateServer_SafeMode_DynamicSurfacePreviewsWritesAndRunsReads(t *testing.T) {
+	session := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic, SafeMode: true})
+
+	write := callModeTool(t, session, "gitlab_execute_action", map[string]any{
+		"action": "issue.create",
+		"params": map[string]any{"project_id": "1", "title": "safe mode issue"},
+	})
+	if !safeModeBlocked(t, write, "issue.create") {
+		t.Errorf("mutating dynamic action was not previewed as issue.create: %s", write)
+	}
+
+	read := callModeTool(t, session, "gitlab_execute_action", map[string]any{
+		"action": "project.list",
+		"params": map[string]any{},
+	})
+	if safeModeBlocked(t, read, "project.list") {
+		t.Errorf("read-only dynamic action was blocked by safe mode: %s", read)
+	}
+	if !strings.Contains(read, "projectList") {
+		t.Errorf("read-only dynamic action did not reach the GitLab client: %s", read)
+	}
+}
+
+// TestCreateServer_SafeMode_MetaSurfacePreviewsWritesAndRunsReads verifies the
+// same per-action interception through a meta-tool dispatcher, whose single
+// tool covers both reads and writes of one domain.
+func TestCreateServer_SafeMode_MetaSurfacePreviewsWritesAndRunsReads(t *testing.T) {
+	session := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta, SafeMode: true})
+
+	write := callModeTool(t, session, "gitlab_issue", map[string]any{
+		"action": "create",
+		"params": map[string]any{"project_id": "1", "title": "safe mode issue"},
+	})
+	if !safeModeBlocked(t, write, "issue.create") {
+		t.Errorf("mutating meta action was not previewed as issue.create: %s", write)
+	}
+
+	read := callModeTool(t, session, "gitlab_issue", map[string]any{
+		"action": "list",
+		"params": map[string]any{"project_id": "1"},
+	})
+	if safeModeBlocked(t, read, "issue.list") {
+		t.Errorf("read-only meta action was blocked by safe mode: %s", read)
+	}
+	if !strings.Contains(read, "issueList") {
+		t.Errorf("read-only meta action did not reach the GitLab client: %s", read)
+	}
+}
+
+// TestCreateServer_SafeMode_IndividualSurfaceStillWrapsTools verifies that the
+// individual surface keeps its tool-level interception: one tool is one action
+// there, so wrapping is already action-granular.
+func TestCreateServer_SafeMode_IndividualSurfaceStillWrapsTools(t *testing.T) {
+	session := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual, SafeMode: true})
+
+	write := callModeTool(t, session, "gitlab_issue_create", map[string]any{
+		"project_id": "1",
+		"title":      "safe mode issue",
+	})
+	if !safeModeBlocked(t, write, "gitlab_issue_create") {
+		t.Errorf("mutating individual tool was not previewed: %s", write)
+	}
+
+	read := callModeTool(t, session, "gitlab_issue_list", map[string]any{"project_id": "1"})
+	if !strings.Contains(read, "issueList") {
+		t.Errorf("read-only individual tool did not reach the GitLab client: %s", read)
+	}
+}
+
+// TestCreateServer_SafeMode_MetaSurfaceStillWrapsStandaloneTools verifies that
+// tools registered outside the action catalog — the gitlab_interactive_*
+// utilities on the meta surface — are still intercepted. Exempting the
+// catalog-backed dispatchers from tool-level wrapping must not exempt anything
+// else, or safe mode would let those utilities mutate GitLab for real.
+func TestCreateServer_SafeMode_MetaSurfaceStillWrapsStandaloneTools(t *testing.T) {
+	session := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta, SafeMode: true})
+
+	text := callModeTool(t, session, "gitlab_interactive_project_create", map[string]any{})
+	if !safeModeBlocked(t, text, "gitlab_interactive_project_create") {
+		t.Errorf("standalone interactive tool was not intercepted by safe mode: %s", text)
+	}
+}
+
+// TestCreateServer_SafeMode_PreviewCarriesCallArguments verifies the preview
+// echoes the would-be arguments, which is what makes it reviewable, and that
+// destructive actions are previewed without demanding confirmation first
+// (nothing executes, so there is nothing to confirm).
+func TestCreateServer_SafeMode_PreviewCarriesCallArguments(t *testing.T) {
+	session := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic, SafeMode: true})
+
+	text := callModeTool(t, session, "gitlab_execute_action", map[string]any{
+		"action": "project.delete",
+		"params": map[string]any{"project_id": "42"},
+	})
+	var preview tools.SafeModePreview
+	if err := json.Unmarshal([]byte(text), &preview); err != nil {
+		t.Fatalf("destructive action did not return a preview: %s", text)
+	}
+	if preview.Tool != "project.delete" {
+		t.Errorf("preview tool = %q, want project.delete", preview.Tool)
+	}
+	if !strings.Contains(string(preview.Params), `"project_id":"42"`) {
+		t.Errorf("preview params = %s, want the submitted arguments", preview.Params)
+	}
+	if preview.Hint == "" {
+		t.Error("preview hint is empty; operators need to know how to disable safe mode")
+	}
+}
+
+// TestCreateServer_ReadOnly_DynamicSurfaceRunsReadsAndRejectsWrites verifies
+// that read-only mode on the dynamic surface keeps read actions executable
+// through gitlab_execute_action while mutating action IDs are not routable at
+// all. Regression test for read-only leaving only gitlab_find_action.
+func TestCreateServer_ReadOnly_DynamicSurfaceRunsReadsAndRejectsWrites(t *testing.T) {
+	session := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic, ReadOnly: true})
+
+	read := callModeTool(t, session, "gitlab_execute_action", map[string]any{
+		"action": "project.list",
+		"params": map[string]any{},
+	})
+	if !strings.Contains(read, "projectList") {
+		t.Errorf("read-only dynamic surface could not run a read action: %s", read)
+	}
+
+	write := callModeTool(t, session, "gitlab_execute_action", map[string]any{
+		"action": "issue.create",
+		"params": map[string]any{"project_id": "1", "title": "should not exist"},
+	})
+	if !strings.Contains(write, "unknown action") {
+		t.Errorf("mutating action was routable in read-only mode: %s", write)
+	}
+}
+
+// TestCreateServer_ReadOnly_MetaSurfaceKeepsMixedDomainReads verifies that a
+// domain mixing reads and writes survives read-only mode with its read actions
+// intact, instead of being dropped whole because the domain is not read-only.
+func TestCreateServer_ReadOnly_MetaSurfaceKeepsMixedDomainReads(t *testing.T) {
+	session := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceMeta, ReadOnly: true})
+
+	listed, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	var issueTool *mcp.Tool
+	for _, tool := range listed.Tools {
+		if tool.Name == "gitlab_issue" {
+			issueTool = tool
+		}
+	}
+	if issueTool == nil {
+		t.Fatal("read-only meta surface dropped gitlab_issue: its read actions are unreachable")
+	}
+	if issueTool.Annotations == nil || !issueTool.Annotations.ReadOnlyHint {
+		t.Error("surviving read-only group must advertise ReadOnlyHint")
+	}
+
+	read := callModeTool(t, session, "gitlab_issue", map[string]any{
+		"action": "list",
+		"params": map[string]any{"project_id": "1"},
+	})
+	if !strings.Contains(read, "issueList") {
+		t.Errorf("read-only meta surface could not list issues: %s", read)
+	}
+
+	write := callModeTool(t, session, "gitlab_issue", map[string]any{
+		"action": "create",
+		"params": map[string]any{"project_id": "1", "title": "should not exist"},
+	})
+	if strings.Contains(write, "issueCreate") {
+		t.Errorf("mutating meta action executed in read-only mode: %s", write)
+	}
+	// The action is not advertised in the tool's action enum, so the call is
+	// rejected during schema validation before dispatch; older builds instead
+	// answered "unknown action" from the dispatcher.
+	rejected := strings.Contains(write, "does not equal any of") ||
+		strings.Contains(strings.ToLower(write), "unknown action") ||
+		strings.Contains(strings.ToLower(write), "unsupported")
+	if !rejected {
+		t.Errorf("mutating meta action was not rejected in read-only mode: %s", write)
+	}
+}
+
+// TestCreateServer_ReadOnly_IndividualSurfaceKeepsOnlyReadTools verifies the
+// individual surface exposes read tools and no mutating ones.
+func TestCreateServer_ReadOnly_IndividualSurfaceKeepsOnlyReadTools(t *testing.T) {
+	server := mustCreateServer(t, newMockGitLabClient(t), &config.ServerConfig{ToolSurface: config.ToolSurfaceIndividual, ReadOnly: true})
+	listed, err := listRegisteredTools(server, "individual-readonly")
+	if err != nil {
+		t.Fatalf("list tools: %v", err)
+	}
+	var mutating []string
+	readTools := 0
+	for _, tool := range listed {
+		if tool.Annotations != nil && tool.Annotations.ReadOnlyHint {
+			readTools++
+			continue
+		}
+		mutating = append(mutating, tool.Name)
+	}
+	if len(mutating) > 0 {
+		t.Errorf("read-only individual surface exposes mutating tools: %v", mutating)
+	}
+	if readTools == 0 {
+		t.Error("read-only individual surface exposes no read tools at all")
+	}
+}
+
+// TestCreateServer_ReadOnly_TakesPrecedenceOverSafeMode verifies the documented
+// precedence: with both modes enabled, read-only wins and mutating actions are
+// absent rather than previewable.
+func TestCreateServer_ReadOnly_TakesPrecedenceOverSafeMode(t *testing.T) {
+	session := modeTestSession(t, &config.ServerConfig{ToolSurface: config.ToolSurfaceDynamic, ReadOnly: true, SafeMode: true})
+
+	write := callModeTool(t, session, "gitlab_execute_action", map[string]any{
+		"action": "issue.create",
+		"params": map[string]any{"project_id": "1", "title": "should not exist"},
+	})
+	if safeModeBlocked(t, write, "issue.create") {
+		t.Errorf("read-only must remove mutating actions, not preview them: %s", write)
+	}
+	if !strings.Contains(write, "unknown action") {
+		t.Errorf("mutating action was routable with read-only + safe mode: %s", write)
+	}
+
+	read := callModeTool(t, session, "gitlab_execute_action", map[string]any{
+		"action": "project.list",
+		"params": map[string]any{},
+	})
+	if !strings.Contains(read, "projectList") {
+		t.Errorf("reads must keep working with read-only + safe mode: %s", read)
 	}
 }

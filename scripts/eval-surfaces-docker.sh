@@ -36,9 +36,11 @@ Environment overrides:
   EVAL_SURFACE_RUN_DIR      Exact artifact directory for this run.
   EVAL_SURFACE_TIMESTAMP    UTC-like timestamp used in names.
   EVAL_SURFACE_PRESET       Single Docker preset to run.
+  EVAL_SURFACE_SERVER_MODE  Server mode to evaluate: default, read-only, safe-mode.
   EVAL_SURFACE_KEEP_DOCKER  Set to 1 to leave Docker GitLab running.
   EVAL_DOCKER_GITLAB_IMAGE  GitLab image override (defaults to EE in Enterprise mode).
   PRESET                    Make-friendly alias for EVAL_SURFACE_PRESET.
+  SERVER_MODE               Make-friendly alias for EVAL_SURFACE_SERVER_MODE.
   ENTERPRISE                Make-friendly alias for EVAL_SURFACE_ENTERPRISE.
   GO_BIN                    Go binary to use (default: go).
   DOCKER_COMPOSE            Compose command (default: docker compose).
@@ -130,6 +132,10 @@ go_bin="${GO_BIN:-go}"
 default_models="${EVAL_SURFACE_DEFAULT_MODELS:-anthropic:claude-haiku-4-5-20251001,google:gemini-flash-latest,openai:gpt-5.4-nano,qwen:qwen3.6-flash}"
 models="${EVAL_SURFACE_MODELS:-${EVAL_MODELS:-$default_models}}"
 requested_preset="${2:-${EVAL_SURFACE_PRESET:-${PRESET:-}}}"
+# Protective server mode under evaluation: default, read-only or safe-mode.
+# read-only and safe-mode reshape the catalog the model is offered, so they
+# measure how well a model copes when writes are absent or only previewed.
+server_mode="${EVAL_SURFACE_SERVER_MODE:-${SERVER_MODE:-default}}"
 fixture_smoke=false
 if bool_enabled "${EVAL_SURFACE_FIXTURE_SMOKE:-${FIXTURE_SMOKE:-}}"; then
   fixture_smoke=true
@@ -314,6 +320,7 @@ run_fixture_smoke() {
   local report="$3"
   run_evaluator "$name" \
     --tool-surface "$surface" \
+    --server-mode "$server_mode" \
     --edition "$(preset_edition_arg "$preset")" \
     --preset "$preset" \
     --backend gitlab \
@@ -355,6 +362,7 @@ prepare_fixtures() {
   local preset="$2"
   run_evaluator "$name" \
     --tool-surface "$surface" \
+    --server-mode "$server_mode" \
     --edition "$(preset_edition_arg "$preset")" \
     --preset "$preset" \
     --backend gitlab \
@@ -462,6 +470,7 @@ for preset in "${presets[@]}"; do
   printf '=== %s ===\n' "$preset" | tee -a "$status_file"
   if run_evaluator "$preset" \
     --tool-surface "$surface" \
+    --server-mode "$server_mode" \
     --edition "$(preset_edition_arg "$preset")" \
     --preset "$preset" \
     --models "$models" \

@@ -72,6 +72,26 @@ Operations that modify or delete data use a confirmation flow (see [Error Handli
 3. **MCP elicitation** — Interactive user confirmation when supported by the client
 4. **Fail-safe** — If no confirmation mechanism is available, the operation is cancelled
 
+## Read-Only and Safe Mode
+
+Two opt-in modes narrow what the server can do to a GitLab instance, independently of the token's own permissions:
+
+| Mode      | Variable                                | Effect                                                                                                                                       |
+| --------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Read-only | `GITLAB_READ_ONLY=true` (`--read-only`) | Mutating operations are removed from the catalog. Attempting one fails as an unknown or unadvertised action                                  |
+| Safe mode | `GITLAB_SAFE_MODE=true` (`--safe-mode`) | Mutating operations stay visible but return a JSON preview (`{"status":"blocked","mode":"safe","tool":"<action>",...}`) instead of executing |
+
+Both policies are enforced **per action**, not per tool. This matters because two of the three tool surfaces expose dispatcher tools that cover many actions at once: a meta-tool such as `gitlab_issue` serves `list` and `create` alike, and the dynamic surface routes every action through `gitlab_execute_action`. Classifying those tools as mutating and removing or intercepting them whole would take their read operations down with them, leaving the server unable to read anything in either mode.
+
+Instead the policies are applied to the action catalog that meta-tools and the dynamic surface are both built from:
+
+- Read-only keeps the read-only actions inside each domain and drops the rest, so `gitlab_issue` survives with its read actions and `gitlab_execute_action` stays available (annotated read-only) for the reads it can still route.
+- Safe mode replaces each mutating action's handler with one returning a preview naming that canonical action, so `issue.create` previews while `issue.list` executes.
+
+The individual surface is unaffected by this distinction: one tool is one action there, so read-only removes mutating tools and safe mode wraps them directly.
+
+When both are enabled, read-only takes precedence: mutating operations are absent rather than previewable.
+
 ## Transport Security
 
 ### stdio (Default)

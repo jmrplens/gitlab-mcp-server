@@ -385,8 +385,10 @@ Enable `GITLAB_SAFE_MODE=true` to intercept mutating tools and return a structur
 - Training environments where you want to see tool behavior
 - Debugging tool parameters without side effects
 
+Both safe mode and read-only act **per action**, not per tool. On the dynamic and meta surfaces a single tool serves many actions — `gitlab_execute_action` routes everything, and `gitlab_issue` covers `list` and `create` alike — so the policy is applied to the underlying action catalog. Reads keep working on every surface, and safe-mode previews name the canonical action (for example `issue.create`) rather than the dispatcher tool.
+
 :::note
-If `GITLAB_READ_ONLY=true` is also set, it takes precedence — mutating tools are fully disabled rather than previewed.
+If `GITLAB_READ_ONLY=true` is also set, it takes precedence — mutating operations are removed entirely rather than previewed.
 :::
 
 <FAQ />

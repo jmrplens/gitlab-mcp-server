@@ -383,6 +383,8 @@ Habilita `GITLAB_SAFE_MODE=true` para interceptar las herramientas de escritura 
 - Entornos de formación donde se quiere ver el comportamiento de las herramientas
 - Depurar parámetros de herramientas sin efectos secundarios
 
+Tanto el modo seguro como el de solo lectura actúan **por acción**, no por herramienta. En las superficies dinámica y meta una sola herramienta sirve muchas acciones —`gitlab_execute_action` enruta todo y `gitlab_issue` cubre por igual `list` y `create`—, así que la política se aplica sobre el catálogo de acciones subyacente. Las lecturas siguen funcionando en todas las superficies, y las vistas previas del modo seguro nombran la acción canónica (por ejemplo `issue.create`) en lugar de la herramienta despachadora.
+
 :::note
 Si `GITLAB_READ_ONLY=true` también está configurado, tiene precedencia — las herramientas de escritura se desactivan completamente en lugar de mostrar una vista previa.
 :::

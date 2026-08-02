@@ -29,6 +29,7 @@ type options struct {
 	Preset                 string
 	Partition              string
 	ToolSurface            string
+	ServerMode             string
 	Edition                string
 	CoverageReport         string
 	Backend                string

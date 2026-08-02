@@ -11,17 +11,10 @@ import (
 )
 
 // SafeModePreview is the structured response returned when a mutating
-// tool is called with Safe Mode enabled. Status is always "blocked",
-// Mode is "safe", Tool is the registered tool name, Params mirrors the
-// would-be call arguments, and Hint tells the operator how to disable
-// safe mode.
-type SafeModePreview struct {
-	Status string          `json:"status"`
-	Mode   string          `json:"mode"`
-	Tool   string          `json:"tool"`
-	Params json.RawMessage `json:"params"`
-	Hint   string          `json:"hint"`
-}
+// operation is intercepted by Safe Mode. It aliases
+// [toolutil.SafeModePreview] so individual tool wrapping and the per-action
+// interception used by dispatcher surfaces return the identical payload.
+type SafeModePreview = toolutil.SafeModePreview
 
 // WrapMutatingToolsForSafeMode lists all registered tools via an
 // ephemeral in-memory session and replaces mutating tool handlers
@@ -29,6 +22,18 @@ type SafeModePreview struct {
 // [SafeModePreview] instead of executing. Returns the number of tools
 // wrapped. If listing tools fails, logs the error and returns 0.
 func WrapMutatingToolsForSafeMode(server *mcp.Server) int {
+	return WrapMutatingToolsForSafeModeExcept(server, nil)
+}
+
+// WrapMutatingToolsForSafeModeExcept wraps mutating tools as
+// [WrapMutatingToolsForSafeMode] does, skipping the named tools.
+//
+// Dispatcher surfaces exempt their catalog-backed tools because those already
+// preview per action; wrapping them would block the reads they also serve. Any
+// tool registered outside the catalog — the interactive gitlab_interactive_*
+// utilities, for instance — must still be wrapped here, or safe mode would let
+// it execute for real.
+func WrapMutatingToolsForSafeModeExcept(server *mcp.Server, exempt map[string]struct{}) int {
 	ctx := context.Background()
 	tools, err := toolutil.ListRegisteredTools(ctx, server, "safemode-filter")
 	if err != nil {
@@ -39,6 +44,9 @@ func WrapMutatingToolsForSafeMode(server *mcp.Server) int {
 	var wrapped int
 	for _, t := range tools {
 		if t.Annotations != nil && t.Annotations.ReadOnlyHint {
+			continue
+		}
+		if _, skip := exempt[t.Name]; skip {
 			continue
 		}
 		toolCopy := *t
@@ -59,7 +67,7 @@ func safeModeHandler(toolName string) mcp.ToolHandler {
 			Mode:   "safe",
 			Tool:   toolName,
 			Params: req.Params.Arguments,
-			Hint:   "Set GITLAB_SAFE_MODE=false to execute this operation",
+			Hint:   toolutil.SafeModeHint,
 		}
 
 		data, err := json.Marshal(preview)
@@ -74,4 +82,29 @@ func safeModeHandler(toolName string) mcp.ToolHandler {
 			Content: []mcp.Content{&mcp.TextContent{Text: string(data)}},
 		}, nil
 	}
+}
+
+// RemoveNonReadOnlyTools removes every registered tool that does not advertise
+// ReadOnlyHint, implementing read-only mode for surfaces whose tools map one to
+// one onto actions. Returns the number of tools removed.
+//
+// Dispatcher surfaces (meta-tools, the dynamic execute tool) must not rely on
+// this: one of their tools covers many actions, so read-only filtering happens
+// in the catalog instead — see [actioncatalog.Catalog.FilterReadOnlyActions].
+func RemoveNonReadOnlyTools(server *mcp.Server) int {
+	registered, err := toolutil.ListRegisteredTools(context.Background(), server, "readonly-filter")
+	if err != nil {
+		slog.Error("RemoveNonReadOnlyTools: list registered tools failed", "error", err)
+		return 0
+	}
+	var toRemove []string
+	for _, tool := range registered {
+		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
+			toRemove = append(toRemove, tool.Name)
+		}
+	}
+	if len(toRemove) > 0 {
+		server.RemoveTools(toRemove...)
+	}
+	return len(toRemove)
 }

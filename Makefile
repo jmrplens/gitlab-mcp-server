@@ -354,7 +354,7 @@ orbit-run-live-tests: orbit-ensure-token
 		go test -tags orbitlive -count=1 -v -timeout 300s ./test/e2e/orbit/; \
 	}
 
-## eval-surfaces-docker: run Docker CE model evaluation for one surface (usage: make eval-surfaces-docker SURFACE=dynamic [PRESET=docker-read])
+## eval-surfaces-docker: run Docker CE model evaluation for one surface (usage: make eval-surfaces-docker SURFACE=dynamic [PRESET=docker-read] [SERVER_MODE=read-only|safe-mode])
 eval-surfaces-docker:
 	@if [ -z "$(SURFACE)" ]; then echo "Usage: make eval-surfaces-docker SURFACE=dynamic|meta" >&2; exit 1; fi
 	@if [ -n "$(PRESET)" ]; then \

@@ -788,7 +788,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	metaSchemaRoutes = surfaceRegistration.metaSchemaRoutes
 	surfaceCatalog = surfaceRegistration.surfaceCatalog
 
-	applyToolVisibilityConfig(server, cfg)
+	applyToolVisibilityConfig(server, cfg, toolSurface, surfaceCatalog)
 
 	toolCount, err := countRegisteredTools(server)
 	if err != nil {
@@ -846,7 +846,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	return server, nil
 }
 
-func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig) {
+func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
 	if len(cfg.ExcludeTools) > 0 {
 		removed := removeExcludedTools(server, cfg.ExcludeTools)
 		slog.Info("excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
@@ -858,14 +858,44 @@ func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig) {
 		}
 	}
 	if cfg.ReadOnly {
-		removed := removeNonReadOnlyTools(server)
+		removed := gitlabtools.RemoveNonReadOnlyTools(server)
 		slog.Info("read-only mode: removed write tools", "removed", removed)
 		return
 	}
 	if cfg.SafeMode {
-		wrapped := gitlabtools.WrapMutatingToolsForSafeMode(server)
-		slog.Info("safe mode: wrapped mutating tools with preview handler", "wrapped", wrapped)
+		// Catalog-backed dispatcher tools already carry per-action preview
+		// handlers from filterActionCatalog, and wrapping them here would block
+		// the reads they also serve. Everything else still needs wrapping,
+		// including tools registered outside the catalog such as the
+		// gitlab_interactive_* utilities.
+		exempt := catalogBackedToolNames(surfaceCatalog, toolSurface)
+		wrapped := gitlabtools.WrapMutatingToolsForSafeModeExcept(server, exempt)
+		slog.Info("safe mode: intercepted mutating operations",
+			"surface", toolSurface, "wrapped_tools", wrapped, "catalog_backed_tools", len(exempt))
 	}
+}
+
+// catalogBackedToolNames returns the tools whose handlers come from the action
+// catalog and therefore already enforce safe mode per action.
+func catalogBackedToolNames(surfaceCatalog *actioncatalog.Catalog, toolSurface string) map[string]struct{} {
+	if toolSurface == config.ToolSurfaceIndividual {
+		// One tool is one action here, so tool-level wrapping is already
+		// action-granular and nothing is exempt.
+		return nil
+	}
+	exempt := map[string]struct{}{}
+	if toolSurface == config.ToolSurfaceDynamic {
+		exempt[dynamictools.FindActionToolName] = struct{}{}
+		exempt[dynamictools.ExecuteActionToolName] = struct{}{}
+		return exempt
+	}
+	if surfaceCatalog == nil {
+		return exempt
+	}
+	for _, group := range surfaceCatalog.Groups() {
+		exempt[group.ToolName] = struct{}{}
+	}
+	return exempt
 }
 
 func logRegisteredToolSurface(toolSurface string, toolCount int, metaSchemaRoutes map[string]toolutil.ActionMap) {
@@ -1771,7 +1801,16 @@ func filterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfi
 		return nil, err
 	}
 	if cfg.ReadOnly {
-		filtered = filtered.FilterReadOnlyGroups()
+		// Filter at action granularity, not group granularity: a domain that
+		// mixes reads and writes must keep its read actions reachable instead
+		// of disappearing with them.
+		filtered = filtered.FilterReadOnlyActions()
+	}
+	if cfg.SafeMode {
+		// Same granularity argument: dispatcher tools cover reads and writes
+		// alike, so safe mode is applied per action in the catalog rather than
+		// by intercepting whole tools.
+		filtered = filtered.WithSafeModePreviews()
 	}
 	return filtered, nil
 }
@@ -1783,47 +1822,6 @@ func countCatalogActions(routes map[string]toolutil.ActionMap) int {
 		total += len(actions)
 	}
 	return total
-}
-
-// removeNonReadOnlyTools lists all registered tools via an ephemeral in-memory
-// session and removes those that do not have ReadOnlyHint set to true.
-// Returns the number of tools removed.
-func removeNonReadOnlyTools(server *mcp.Server) int {
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	serverSession, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		slog.Error("removeNonReadOnlyTools: server connect failed", "error", err)
-		return 0
-	}
-	defer serverSession.Close()
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "readonly-filter", Version: "0"}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		slog.Error("removeNonReadOnlyTools: client connect failed", "error", err)
-		return 0
-	}
-	defer session.Close()
-
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
-		slog.Error("removeNonReadOnlyTools: list tools failed", "error", err)
-		return 0
-	}
-
-	var toRemove []string
-	for _, t := range result.Tools {
-		if t.Annotations == nil || !t.Annotations.ReadOnlyHint {
-			toRemove = append(toRemove, t.Name)
-		}
-	}
-
-	if len(toRemove) > 0 {
-		server.RemoveTools(toRemove...)
-	}
-	return len(toRemove)
 }
 
 // removeExcludedTools lists all registered tools and removes those whose name

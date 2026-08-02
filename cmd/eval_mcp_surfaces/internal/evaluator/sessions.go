@@ -57,7 +57,7 @@ func loadCatalog(opts options) (catalog []modelTool, routes map[string]toolutil.
 		return nil, nil, false, err
 	}
 	defer cleanup()
-	mcpTools, routes, err := buildCatalog(client, toolSurface)
+	mcpTools, routes, err := buildCatalog(client, toolSurface, opts.ServerMode)
 	if err != nil {
 		return nil, nil, false, err
 	}
@@ -109,7 +109,7 @@ func runMCPSmoke(opts options) error {
 		return err
 	}
 	defer cleanup()
-	session, closeSession, err := newCatalogSession(client, opts.ToolSurface)
+	session, closeSession, err := newCatalogSession(client, opts.ToolSurface, opts.ServerMode)
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func newExecutionSession(opts options) (*mcp.ClientSession, *gitlabclient.Client
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	session, closeSession, err := newCatalogSession(client, opts.ToolSurface)
+	session, closeSession, err := newCatalogSession(client, opts.ToolSurface, opts.ServerMode)
 	if err != nil {
 		cleanup()
 		return nil, nil, nil, err
@@ -169,7 +169,7 @@ func newResourceLookupSession(opts options) (*mcp.ClientSession, func(), error) 
 	if err != nil {
 		return nil, nil, err
 	}
-	session, closeSession, err := newCatalogSession(client, opts.ToolSurface)
+	session, closeSession, err := newCatalogSession(client, opts.ToolSurface, opts.ServerMode)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
@@ -378,8 +378,8 @@ func parseToolsSnapshot(data []byte) ([]snapshotTool, error) {
 }
 
 // buildCatalog constructs the request parameters from the input.
-func buildCatalog(client *gitlabclient.Client, toolSurface string) ([]*mcp.Tool, map[string]toolutil.ActionMap, error) {
-	session, closeSession, toolsResult, routes, err := buildCatalogSession(client, toolSurface)
+func buildCatalog(client *gitlabclient.Client, toolSurface, serverMode string) ([]*mcp.Tool, map[string]toolutil.ActionMap, error) {
+	session, closeSession, toolsResult, routes, err := buildCatalogSession(client, toolSurface, serverMode)
 	if closeSession != nil {
 		defer closeSession()
 	}
@@ -391,13 +391,28 @@ func buildCatalog(client *gitlabclient.Client, toolSurface string) ([]*mcp.Tool,
 }
 
 // newCatalogSession constructs catalog session.
-func newCatalogSession(client *gitlabclient.Client, toolSurface string) (*mcp.ClientSession, func(), error) {
-	session, closeSession, _, _, err := buildCatalogSession(client, toolSurface)
+func newCatalogSession(client *gitlabclient.Client, toolSurface, serverMode string) (*mcp.ClientSession, func(), error) {
+	session, closeSession, _, _, err := buildCatalogSession(client, toolSurface, serverMode)
 	return session, closeSession, err
 }
 
+// applyEvalServerMode applies the protective server mode to the catalog the
+// evaluated model will see, using the same catalog transforms the server
+// applies for GITLAB_READ_ONLY and GITLAB_SAFE_MODE. Both act per action, so
+// evaluating them means evaluating a different catalog, not a different client.
+func applyEvalServerMode(catalog *actioncatalog.Catalog, serverMode string) *actioncatalog.Catalog {
+	switch serverMode {
+	case ServerModeReadOnly:
+		return catalog.FilterReadOnlyActions()
+	case ServerModeSafe:
+		return catalog.WithSafeModePreviews()
+	default:
+		return catalog
+	}
+}
+
 // buildCatalogSession constructs the request parameters from the input.
-func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (session *mcp.ClientSession, closeSession func(), mcpTools []*mcp.Tool, routes map[string]toolutil.ActionMap, err error) {
+func buildCatalogSession(client *gitlabclient.Client, toolSurface, serverMode string) (session *mcp.ClientSession, closeSession func(), mcpTools []*mcp.Tool, routes map[string]toolutil.ActionMap, err error) {
 	completionHandler := completions.NewHandler(client)
 	server := mcp.NewServer(&mcp.Implementation{Name: "eval-mcp-surfaces", Version: "0.0.1"}, &mcp.ServerOptions{
 		PageSize: 2000,
@@ -421,6 +436,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 		if catalogErr != nil {
 			return nil, nil, nil, nil, fmt.Errorf("add standalone dynamic catalog: %w", catalogErr)
 		}
+		actionCatalog = applyEvalServerMode(actionCatalog, serverMode)
 		surfaceCatalog = actionCatalog
 		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
 		routes = dynamicValidationRoutes(actionCatalog.ActionMaps())
@@ -429,6 +445,7 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface string) (sessi
 		if catalogErr != nil {
 			return nil, nil, nil, nil, fmt.Errorf(errBuildActionCatalog, catalogErr)
 		}
+		actionCatalog = applyEvalServerMode(actionCatalog, serverMode)
 		surfaceCatalog = actionCatalog
 		tools.RegisterMetaCatalog(server, actionCatalog)
 		tools.RegisterMetaStandaloneTools(server, client)
