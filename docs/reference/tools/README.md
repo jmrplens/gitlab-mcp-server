@@ -37,7 +37,7 @@ This directory is a domain-oriented reference, not a one-heading-per-runtime-too
 | Runners & Resource Groups             |    34 | `gitlab_runner`                                                                        | [runners.md](runners.md)                                 |
 | Security & Feature Flags              |    28 | various                                                                                | [security.md](security.md)                               |
 | Notifications & Events                |    42 | various                                                                                | [notifications.md](notifications.md)                     |
-| Admin & Instance                      |    74 | `gitlab_admin`                                                                         | [admin.md](admin.md)                                     |
+| Admin & Instance                      |    75 | `gitlab_admin`                                                                         | [admin.md](admin.md)                                     |
 | Templates                             |    12 | `gitlab_template`                                                                      | [templates.md](templates.md)                             |
 | Integrations & Misc                   |    29 | various                                                                                | [integrations.md](integrations.md)                       |
 | MCP Capabilities                      |     5 | `gitlab_server` (plus individually-registered elicitation tools)                       | [capabilities.md](capabilities.md)                       |
