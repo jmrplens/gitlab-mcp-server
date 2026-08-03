@@ -34,7 +34,7 @@ jobs:
           # only reads local git history, so the remote token is not needed.
           persist-credentials: false
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v6.0.9
         with:
           package_json_file: site/package.json
 
