@@ -4,6 +4,8 @@
 
 # GitLab MCP Server
 
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2Fjmrplens%2Fgitlab-mcp-server.svg)](https://mcptoplist.com/server/glama%2Fjmrplens%2Fgitlab-mcp-server)
+
 <p align="center">
 
 [![GitHub Release](https://img.shields.io/github/v/release/jmrplens/gitlab-mcp-server?style=flat&logo=github&label=Release)](https://github.com/jmrplens/gitlab-mcp-server/releases/latest)
