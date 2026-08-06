@@ -250,6 +250,8 @@ When creating a new release and uploading binaries to GitHub Releases:
 
    The generator declares the **default** surface: it pins `dynamic` and talks to an in-process stub client instead of reading `TOOL_SURFACE`, `GITLAB_URL` or `GITLAB_TOKEN`. Anything a generator reads from the environment ships in the committed file, so a developer machine with `TOOL_SURFACE=individual` exported would otherwise publish a different manifest than CI checks. New environment-sensitive inputs belong in `cmd/internal/mcpsurface`, pinned there once for every generator, not read at the call site.
 
+6. **A `server.json` `remotes` URL must be globally unique across the whole MCP Registry, and the comparison is on the literal string.** The registry refuses a publish whose remote URL any other server already claims — templates included. This repository used to declare `https://{host}:{port}/` as a self-hosted form; the sibling `libgen-mcp` copied that pattern and its v1.5.2 publish was rejected with `remote URL https://{host}:{port}/ is already used by server io.github.jmrplens/gitlab-mcp-server`. Checking that nothing claims your _hostname_ is not the check — the string is. Generic templates are therefore not worth claiming: the self-hosted HTTP mode they advertise is documented in the guides anyway, and holding one blocks every other server you publish. `make check-server-json` validates the schema only; uniqueness is a registry-side property no local gate can see.
+
 ### Post-implementation verification
 
 After making changes, run targeted verification on the **changed files/packages only** (not the entire project):

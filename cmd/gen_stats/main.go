@@ -1,7 +1,14 @@
 // Command gen_stats auto-generates the repository statistics section in
-// README.md. It walks the source tree, classifies Go files, counts git
-// history and dependencies, and replaces the content between the
+// README.md. It classifies every tracked Go file, counts
+// dependencies, and replaces the content between the
 // <!-- START STATS --> / <!-- END STATS --> markers.
+//
+// Every figure is a pure function of the tracked file set. Nothing is derived
+// from git history: a commit count changes with the very commit that would
+// refresh it, so the section could never be both committed and current, and a
+// CI shallow clone would compute a different number anyway. Files come from the
+// git index rather than a directory walk for the same reason — see
+// [listTrackedGoFiles]. That is what makes `--check` usable as a gate.
 //
 // Usage:
 //
@@ -15,7 +22,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -86,7 +92,7 @@ func run(check bool) error {
 // File counts, line counts, and function counts are populated by walking
 // root with [collectStats]. Hall-of-fame fields track the longest names
 // and largest files. Project meta fields (Packages, DirectDeps,
-// IndirectDeps, CommitCount, ContributorCount) are filled after the walk
+// IndirectDeps) are filled after the walk
 // from go.mod and git, so callers should not assume they are valid until
 // [collectStats] returns.
 type repoStats struct {
@@ -125,15 +131,13 @@ type repoStats struct {
 	LargestTestLines int
 
 	// Project meta (filled after the walk)
-	Packages         int
-	DirectDeps       int
-	IndirectDeps     int
-	CommitCount      int
-	ContributorCount int
+	Packages     int
+	DirectDeps   int
+	IndirectDeps int
 }
 
-// collectStats walks root, classifies every .go file, and returns a populated
-// repoStats. root should be the repository root directory.
+// collectStats classifies every tracked .go file under root and returns a
+// populated repoStats. root should be the repository root directory.
 func collectStats(root string) (*repoStats, error) {
 	s := &repoStats{}
 	dirs := make(map[string]bool)
@@ -141,32 +145,20 @@ func collectStats(root string) (*repoStats, error) {
 	// WalkDir is used instead of Walk: it receives fs.DirEntry directly from
 	// the OS directory read, avoiding the extra os.Lstat call Walk performs
 	// for every entry.
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			// .claude holds agent worktrees (full repo copies) that would
-			// double-count every metric when present.
-			case ".git", "vendor", "node_modules", "dist", ".claude":
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, ".go") {
-			return nil
-		}
-
-		rel := filepath.ToSlash(path)
+	files, err := listTrackedGoFiles(root)
+	if err != nil {
+		return nil, err
+	}
+	for _, rel := range files {
+		path := filepath.Join(root, rel)
 		isE2E := strings.Contains(rel, "/e2e/")
-		isTest := strings.HasSuffix(path, "_test.go")
+		isTest := strings.HasSuffix(rel, "_test.go")
 
-		dirs[filepath.Dir(path)] = true
+		dirs[filepath.Dir(rel)] = true
 
 		lines, scanErr := scanGoFile(path, isE2E, isTest, s)
 		if scanErr != nil {
-			return fmt.Errorf("scanning %s: %w", path, scanErr)
+			return nil, fmt.Errorf("scanning %s: %w", path, scanErr)
 		}
 
 		switch {
@@ -178,33 +170,50 @@ func collectStats(root string) (*repoStats, error) {
 			s.UnitTestLines += lines
 			if lines > s.LargestTestLines {
 				s.LargestTestLines = lines
-				s.LargestTestFile = strings.TrimPrefix(rel, "./")
+				s.LargestTestFile = rel
 			}
 		default:
 			s.SourceFiles++
 			s.SourceLines += lines
 			if lines > s.LargestSrcLines {
 				s.LargestSrcLines = lines
-				s.LargestSrcFile = strings.TrimPrefix(rel, "./")
+				s.LargestSrcFile = rel
 			}
 		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
 
 	s.Packages = len(dirs)
 	s.DirectDeps, s.IndirectDeps = parseDeps(filepath.Join(root, "go.mod"))
 
-	var gitErr error
-	if s.CommitCount, gitErr = gitRevCount(); gitErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: git rev count: %v\n", gitErr)
-	}
-	if s.ContributorCount, gitErr = gitContributors(); gitErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: git contributors: %v\n", gitErr)
-	}
 	return s, nil
+}
+
+// listTrackedGoFiles returns every .go file git tracks under root, as
+// slash-separated paths relative to root.
+//
+// The file set comes from the index rather than from a directory walk so that
+// the generated section describes the repository and nothing else. A walk also
+// counts whatever happens to sit in a developer's working tree — build output,
+// scratch packages, a test file an over-broad .gitignore rule excluded — and
+// then `--check` disagrees between that machine and CI for reasons no diff
+// explains. The index is identical in a shallow clone, so this stays safe under
+// the `fetch-depth: 1` checkout CI uses.
+func listTrackedGoFiles(root string) ([]string, error) {
+	bin, err := exec.LookPath("git") //#nosec G204 -- resolves to an absolute path; no user input involved
+	if err != nil {
+		return nil, fmt.Errorf("locating git: %w", err)
+	}
+	out, err := exec.CommandContext(context.Background(), bin, "-C", root, "ls-files", "-z", "--", "*.go").Output() //#nosec G204 -- absolute path from LookPath, fixed args
+	if err != nil {
+		return nil, fmt.Errorf("git ls-files in %s: %w", root, err)
+	}
+	var files []string
+	for f := range strings.SplitSeq(string(out), "\x00") {
+		if f != "" {
+			files = append(files, f)
+		}
+	}
+	return files, nil
 }
 
 // scanGoFile reads every line of a .go file and accumulates pattern-based
@@ -384,49 +393,6 @@ func classifyDep(line string, direct, indirect *int) {
 	}
 }
 
-// gitBin resolves the absolute path of the git executable so downstream calls
-// use a fixed path instead of relying on PATH lookup at runtime.
-//
-// Returns the absolute path; the error from [exec.LookPath] is forwarded
-// unchanged so callers can recognize the missing-git scenario.
-func gitBin() (string, error) {
-	return exec.LookPath("git") //#nosec G204 -- resolves to an absolute path; no user input involved
-}
-
-func gitRevCount() (int, error) {
-	bin, err := gitBin()
-	if err != nil {
-		return 0, err
-	}
-	out, err := exec.CommandContext(context.Background(), bin, "rev-list", "--count", "HEAD").Output() //#nosec G204 -- absolute path from LookPath, fixed args
-	if err != nil {
-		return 0, fmt.Errorf("rev-list: %w", err)
-	}
-	n, err := strconv.Atoi(strings.TrimSpace(string(out)))
-	if err != nil {
-		return 0, fmt.Errorf("parsing rev-list output %q: %w", strings.TrimSpace(string(out)), err)
-	}
-	return n, nil
-}
-
-func gitContributors() (int, error) {
-	bin, err := gitBin()
-	if err != nil {
-		return 0, err
-	}
-	out, err := exec.CommandContext(context.Background(), bin, "log", "--format=%aE").Output() //#nosec G204 -- absolute path from LookPath, fixed args; %aE uses .mailmap
-	if err != nil {
-		return 0, fmt.Errorf("git log: %w", err)
-	}
-	emails := make(map[string]bool)
-	for line := range strings.SplitSeq(string(out), "\n") {
-		if e := strings.TrimSpace(line); e != "" {
-			emails[e] = true
-		}
-	}
-	return len(emails), nil
-}
-
 // renderStats builds the Markdown tables for the <!-- START STATS --> section.
 func renderStats(s *repoStats) string {
 	totalFiles := s.SourceFiles + s.UnitTestFiles + s.E2ETestFiles
@@ -520,8 +486,6 @@ func renderStats(s *repoStats) string {
 			{"Go packages", fmtInt(s.Packages)},
 			{"Direct dependencies (`go.mod`)", fmtInt(s.DirectDeps)},
 			{"Indirect dependencies", fmtInt(s.IndirectDeps)},
-			{"Git commits", fmtInt(s.CommitCount)},
-			{"Unique contributors", fmtInt(s.ContributorCount)},
 		},
 	))
 	b.WriteByte('\n')

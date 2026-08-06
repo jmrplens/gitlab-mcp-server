@@ -148,3 +148,39 @@ func TestAuditCatalogDiscoveryTerms_FlagsDenseActionsWithoutSignals(t *testing.T
 		}
 	}
 }
+
+// TestAuditRegistryDiscoveryTerms_SeverityOrderingTieBreaker verifies the
+// AuditRegistryDiscoveryTerms sort handles two findings with the same
+// severity and the same tool — it must fall back to a lexical ID
+// comparison (line 84-86 of alias_audit.go).
+func TestAuditRegistryDiscoveryTerms_SeverityOrderingTieBreaker(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_project"})
+	weakRoute := toolutil.Route(func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil })
+	// 8 weak actions guarantee the group is dense enough to flag findings.
+	// Use names deliberately out of lexical order so the tie-breaker runs.
+	names := []string{"z_last", "a_first", "m_middle", "extra_one", "extra_two", "extra_three", "extra_four", "extra_five"}
+	for _, name := range names {
+		group.SetAction(actioncatalog.Action{Name: name, Route: weakRoute})
+	}
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+
+	registry := NewRegistryFromCatalog(catalog)
+	findings := AuditRegistryDiscoveryTerms(registry)
+	if len(findings) < 2 {
+		t.Fatalf("AuditRegistryDiscoveryTerms() returned %d findings, want at least 2", len(findings))
+	}
+	// All findings share the same severity ("warning") and the same tool, so
+	// the comparator must use the lexical ID fallback to order them.
+	for i := 1; i < len(findings); i++ {
+		prev, cur := findings[i-1], findings[i]
+		if prev.Severity != cur.Severity || prev.Tool != cur.Tool {
+			continue
+		}
+		if prev.ID > cur.ID {
+			t.Fatalf("findings not sorted by ID within same severity/tool: %+v before %+v", prev, cur)
+		}
+	}
+}

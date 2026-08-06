@@ -92,7 +92,19 @@ make inspector-stop
 | Tool surface (registered tools, resources, prompts) | `go run ./cmd/gen_llms/` (and `--check` via `make check-llms`), plus `go run ./cmd/gen_lhm_manifest/` (and `--check` via `make check-lhm-manifest`) |
 | `server.json`                                       | `make check-server-json` (uses MCP publisher)                     |
 
-The combined gate is `make audit-docs`. CI runs it on every PR.
+`make audit-docs` runs the combined documentation gate locally. **CI does not
+run that target**, but every `check-*` freshness gate is now wired into CI
+individually: the `test` job runs the eight Go ones (`check-llms`,
+`check-lhm-manifest`, `check-server-json`, `check-openplugin`, `check-stats`,
+`check-footprint`, `check-site-stats`, `check-action-catalog-manifest`) and the
+`analyze-md` job runs the two that need Node (`check-doc-links`,
+`check-mcpb`). Adding a new `check-*` target means adding it to one of those
+two jobs — `check-stats` and `check-footprint` sat stale on `main` for several
+releases precisely because nothing gated them.
+
+The rest of `audit-docs` — markdownlint, `gen_testing_docs --check`, the godoc
+and surface-quality audits, and the site build — is still yours to run before
+pushing.
 
 ## Adding a new GitLab API tool
 

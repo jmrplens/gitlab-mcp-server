@@ -1075,36 +1075,6 @@
           "placeholder": "https://gitlab.com"
         }
       ]
-    },
-    {
-      "type": "streamable-http",
-      "url": "https://{host}:{port}/",
-      "headers": [
-        {
-          "name": "PRIVATE-TOKEN",
-          "description": "GitLab Personal Access Token (glpat-...). Alternatively, send Authorization: Bearer <token>.",
-          "isRequired": true,
-          "isSecret": true,
-          "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
-        },
-        {
-          "name": "GITLAB-URL",
-          "description": "Target GitLab instance URL. Omit if the server was started with --gitlab-url.",
-          "isRequired": false,
-          "placeholder": "https://gitlab.example.com"
-        }
-      ],
-      "variables": {
-        "host": {
-          "description": "Hostname of the self-hosted GitLab MCP Server HTTP instance",
-          "placeholder": "localhost"
-        },
-        "port": {
-          "description": "Port of the self-hosted GitLab MCP Server HTTP instance",
-          "default": "8080",
-          "placeholder": "8080"
-        }
-      }
     }
   ]
 }
