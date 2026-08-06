@@ -4,9 +4,13 @@
 package evaluator
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // TestFatalInitialProviderError_DetectsUnavailableProvider verifies that
@@ -102,5 +106,56 @@ func TestIsRetriableModelOutputFailure(t *testing.T) {
 				t.Fatalf("isRetriableModelOutputFailure() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestTaskAttemptPreparationErrorResult_RecordsReportableFailure verifies
+// fixture setup failures become task rows instead of aborting a full preset.
+func TestTaskAttemptPreparationErrorResult_RecordsReportableFailure(t *testing.T) {
+	task := evalTask{ID: "MT-017", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.merge"}
+	result := taskAttemptPreparationErrorResult(task, modelSpec{Provider: providerOpenAI, Model: "gpt-test"}, "dynamic", 2, errors.New("fixture timed out"))
+
+	if result.FinalSuccess || result.FirstPass || !result.DestructiveSafe {
+		t.Fatalf("result = %+v, want failed but destructive-safe fixture preparation result", result)
+	}
+	if result.Model != "openai:gpt-test" || result.Run != 2 || result.FirstAction != "merge_request.merge" || result.FinalAction != "merge_request.merge" {
+		t.Fatalf("result = %+v, want model/run/action metadata preserved", result)
+	}
+	if len(result.Notes) != 1 || !strings.Contains(result.Notes[0], "fixture timed out") {
+		t.Fatalf("notes = %#v, want fixture error note", result.Notes)
+	}
+	if result.Trace.Summary.FinalSuccess || result.Trace.Events[len(result.Trace.Events)-1].Kind != "fixture_error" {
+		t.Fatalf("trace = %+v, want fixture_error trace summary", result.Trace)
+	}
+}
+
+// TestPrepareTaskAttemptValue_PreservesNormalizedSteps verifies typed fixture
+// preparation keeps catalog-normalized expectations for the selected surface.
+func TestPrepareTaskAttemptValue_PreservesNormalizedSteps(t *testing.T) {
+	task := taskFromCase(EvalCase{
+		ID:     "MT-NORMALIZED",
+		Prompt: "Merge the fixture merge request.",
+		Steps: []ExpectedStep{{
+			ExpectedTool:   "gitlab_merge_request",
+			ExpectedAction: "merge",
+		}},
+		Fixtures: []CaseFixtureSpec{{
+			Name:    "noop",
+			Scope:   FixtureScopeAttempt,
+			Outputs: []string{"project_id"},
+			Ensure: func(context.Context, FixtureContext) (FixtureOutput, error) {
+				return FixtureOutput{"project_id": "my-org/project"}, nil
+			},
+		}},
+	})
+	task.Steps = []evalStep{{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.merge"}}
+
+	attempt, err := prepareTaskAttemptValue(t.Context(), options{Execute: true, UseFixtures: true, ToolSurface: config.ToolSurfaceDynamic}, modelSpec{Provider: "fixture", Model: "smoke"}, 1, task, evaluationRuntime{}, "run")
+	if err != nil {
+		t.Fatalf("prepareTaskAttemptValue() error = %v", err)
+	}
+	steps := attempt.PreparedCase().Steps
+	if len(steps) != 1 || steps[0].ExpectedTool != dynamicExecuteActionTool || steps[0].ExpectedAction != "merge_request.merge" {
+		t.Fatalf("prepared steps = %+v, want dynamic execute action expectation", steps)
 	}
 }

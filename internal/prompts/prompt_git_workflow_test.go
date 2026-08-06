@@ -139,3 +139,61 @@ func TestCommitHygieneHelpers(t *testing.T) {
 func testCommit(title, message string, parents []string) *gl.Commit {
 	return &gl.Commit{Title: title, Message: message, ParentIDs: parents}
 }
+
+// TestAuditCommitHygiene_CompareAPIError verifies that audit_commit_hygiene
+// returns an error when the repository compare API fails.
+func TestAuditCommitHygiene_CompareAPIError(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "audit_commit_hygiene",
+		map[string]string{"project_id": "42", "from": "v1.0.0"})
+}
+
+// TestAuditCommitHygiene_SameRef verifies the early-exit branch when both
+// refs point at the same commit and no commits are returned.
+func TestAuditCommitHygiene_SameRef(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathRepoCompare, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"compare_same_ref":true,"commits":[],"diffs":[]}`)
+	})
+
+	text := getPromptText(t, mux, "audit_commit_hygiene",
+		map[string]string{"project_id": "42", "from": "v1.0.0", "to": "v1.0.0"})
+	if !strings.Contains(text, "No commits found") {
+		t.Error("expected no-commits message for same ref")
+	}
+}
+
+// TestMRDescriptionQuality_InvalidIID verifies that a non-numeric MR IID is
+// rejected before any API call.
+func TestMRDescriptionQuality_InvalidIID(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "mr_description_quality",
+		map[string]string{"project_id": "42", "merge_request_iid": "abc"})
+}
+
+// TestMRDescriptionQuality_MRAPIError verifies the MR-fetch error branch of
+// mr_description_quality.
+func TestMRDescriptionQuality_MRAPIError(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "mr_description_quality",
+		map[string]string{"project_id": "42", "merge_request_iid": "5"})
+}
+
+// TestMRDescriptionQuality_DiffsAPIError verifies the diff-fetch error branch
+// of mr_description_quality (MR fetch succeeds).
+func TestMRDescriptionQuality_DiffsAPIError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET "+pathMR5, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"iid":5,"title":"T","source_branch":"a","target_branch":"main","description":""}`)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		respondNotFound(w)
+	})
+	getPromptExpectError(t, mux, "mr_description_quality",
+		map[string]string{"project_id": "42", "merge_request_iid": "5"})
+}
+
+// TestCommitBody_EmptyMessage verifies that a whitespace-only commit message
+// yields an empty body.
+func TestCommitBody_EmptyMessage(t *testing.T) {
+	if got := commitBody(&gl.Commit{Message: "   "}); got != "" {
+		t.Errorf("commitBody() = %q, want empty", got)
+	}
+}

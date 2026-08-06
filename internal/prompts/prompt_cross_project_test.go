@@ -343,3 +343,125 @@ func TestMyActivitySummary_CustomDays(t *testing.T) {
 		t.Error("expected 'last 14 days' in output")
 	}
 }
+
+const (
+	// notFoundJSON is the canonical GitLab 404 error body used by the
+	// error-branch tests. 404 is used instead of 500 because client-go
+	// retries 5xx responses, which would slow the tests down.
+	notFoundJSON = `{"message":"404 Not Found"}`
+	// basicUserJSON is the current-user payload for resolveUser success paths.
+	basicUserJSON = `{"id":1,"username":"me"}`
+	// aliceLookupJSON is the /users lookup payload resolving username "alice".
+	aliceLookupJSON = `[{"id":42,"username":"alice"}]`
+	// groupProjMRJSON is a minimal BasicMergeRequest list with a project reference.
+	groupProjMRJSON = `[{"iid":1,"project_id":10,"title":"MR1","source_branch":"a","target_branch":"main","references":{"full":"group/proj!1"},"created_at":"2026-01-01T00:00:00Z"}]`
+)
+
+// respondNotFound writes the canonical GitLab 404 JSON error response.
+func respondNotFound(w http.ResponseWriter) {
+	respondJSON(w, http.StatusNotFound, notFoundJSON)
+}
+
+// getPromptExpectError issues a GetPrompt call that is expected to fail and
+// fails the test when the prompt handler does not surface an error.
+func getPromptExpectError(t *testing.T, handler http.Handler, name string, args map[string]string) {
+	t.Helper()
+	session := newMCPSession(t, handler)
+	_, err := session.GetPrompt(t.Context(), &mcp.GetPromptParams{Name: name, Arguments: args})
+	if err == nil {
+		t.Errorf("expected error from prompt %q", name)
+	}
+}
+
+// TestMyOpenMRs_UserAPIError verifies that my_open_mrs returns an error when
+// the current-user lookup fails.
+func TestMyOpenMRs_UserAPIError(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "my_open_mrs", nil)
+}
+
+// TestMyOpenMRs_MRListAPIErrors verifies that my_open_mrs degrades to an
+// empty dashboard (warn-and-continue) when both MR list calls fail.
+func TestMyOpenMRs_MRListAPIErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, basicUserJSON)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		respondNotFound(w)
+	})
+
+	text := getPromptText(t, mux, "my_open_mrs", nil)
+	if !strings.Contains(text, "| Total open MRs | 0 |") {
+		t.Error("expected zero MRs when both list calls fail")
+	}
+}
+
+// TestMyPendingReviews_UserAPIError verifies that my_pending_reviews returns
+// an error when the current-user lookup fails.
+func TestMyPendingReviews_UserAPIError(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "my_pending_reviews", nil)
+}
+
+// TestMyPendingReviews_ListAPIError verifies that my_pending_reviews returns
+// an error when the reviewer MR list fails.
+func TestMyPendingReviews_ListAPIError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, basicUserJSON)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		respondNotFound(w)
+	})
+	getPromptExpectError(t, mux, "my_pending_reviews", nil)
+}
+
+// TestMyIssues_UserAPIError verifies that my_issues returns an error when the
+// current-user lookup fails.
+func TestMyIssues_UserAPIError(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "my_issues", nil)
+}
+
+// TestMyIssues_ListAPIError verifies that my_issues returns an error when the
+// issue list fails.
+func TestMyIssues_ListAPIError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, basicUserJSON)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		respondNotFound(w)
+	})
+	getPromptExpectError(t, mux, "my_issues", nil)
+}
+
+// TestMyActivitySummary_UserAPIError verifies that my_activity_summary
+// returns an error when the current-user lookup fails.
+func TestMyActivitySummary_UserAPIError(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "my_activity_summary", nil)
+}
+
+// TestMyActivitySummary_MRListAPIErrors verifies that my_activity_summary
+// renders N/A rows (warn-and-continue) when the merged and reviewed MR list
+// calls fail.
+func TestMyActivitySummary_MRListAPIErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, basicUserJSON)
+	})
+	mux.HandleFunc("GET /api/v4/events", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		respondNotFound(w)
+	})
+
+	text := getPromptText(t, mux, "my_activity_summary", nil)
+	if !strings.Contains(text, "| MRs merged | N/A |") {
+		t.Error("expected N/A for merged MRs when list fails")
+	}
+	if !strings.Contains(text, "| MRs reviewed | N/A |") {
+		t.Error("expected N/A for reviewed MRs when list fails")
+	}
+}
+
+// prompt_analytics.go error branches.

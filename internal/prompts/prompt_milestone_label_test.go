@@ -3,6 +3,7 @@ package prompts
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -488,3 +489,35 @@ func TestProjectContributors_APIError(t *testing.T) {
 		t.Errorf("expected wrapped 'project_contributors' error, got: %v", err)
 	}
 }
+
+// TestProjectContributors_PieChartCap verifies that the contributor pie chart
+// is capped at eight entries while the table still lists everyone.
+func TestProjectContributors_PieChartCap(t *testing.T) {
+	var sb strings.Builder
+	sb.WriteString("[")
+	for i := 1; i <= 9; i++ {
+		if i > 1 {
+			sb.WriteString(",")
+		}
+		fmt.Fprintf(&sb, `{"name":"c%d","commits":%d,"additions":0,"deletions":0}`, i, 10-i)
+	}
+	sb.WriteString("]")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/projects/42/repository/contributors", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, sb.String())
+	})
+
+	text := getPromptText(t, mux, "project_contributors", map[string]string{"project_id": "42"})
+	if !strings.Contains(text, "| c9 |") {
+		t.Error("expected ninth contributor in the table")
+	}
+	if !strings.Contains(text, `"c8" :`) {
+		t.Error("expected eighth contributor in the pie chart")
+	}
+	if strings.Contains(text, `"c9" :`) {
+		t.Error("pie chart should be capped at eight entries")
+	}
+}
+
+// prompt_git_workflow.go error branches.

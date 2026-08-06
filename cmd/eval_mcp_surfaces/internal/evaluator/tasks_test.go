@@ -1,8 +1,10 @@
 package evaluator
 
 import (
+	"strings"
 	"testing"
 
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -378,5 +380,557 @@ func TestNormalizeTasksForCatalog_RewritesTopLevelAndStepRoutes(t *testing.T) {
 	meta := normalizeTasksForCatalog(tasks, metaRoutes, "meta")
 	if meta[0].ExpectedTool != "gitlab" || meta[0].ExpectedAction != "project.get" {
 		t.Fatalf("meta normalized = %+v", meta[0])
+	}
+}
+
+// TestFilterTasksByDestructive verifies FilterTasksByDestructive.
+func TestFilterTasksByDestructive(t *testing.T) {
+	tasks := []evalTask{
+		{ID: "read"},
+		{ID: "delete", Destructive: true},
+		{ID: "archive", ExpectedTool: "gitlab", ExpectedAction: "project.archive"},
+		{ID: "publish-all", ExpectedTool: "gitlab", ExpectedAction: "mr_review.draft_note_publish_all"},
+		{ID: "workflow", Steps: []evalStep{{}, {Destructive: true}}},
+	}
+
+	readOnly, err := filterTasksByDestructive(tasks, true, false)
+	if err != nil {
+		t.Fatalf("filterTasksByDestructive(skip) error = %v", err)
+	}
+	if got := taskIDs(readOnly); got != "read" {
+		t.Fatalf("readOnly IDs = %q, want read", got)
+	}
+
+	destructive, err := filterTasksByDestructive(tasks, false, true)
+	if err != nil {
+		t.Fatalf("filterTasksByDestructive(only) error = %v", err)
+	}
+	if got := taskIDs(destructive); got != "delete,archive,publish-all,workflow" {
+		t.Fatalf("destructive IDs = %q, want delete,archive,publish-all,workflow", got)
+	}
+}
+
+// TestFilterTasksByDestructive_RejectsConflictingFlags verifies FilterTasksByDestructive rejects conflicting flags.
+func TestFilterTasksByDestructive_RejectsConflictingFlags(t *testing.T) {
+	_, err := filterTasksByDestructive(nil, true, true)
+	if err == nil {
+		t.Fatal("filterTasksByDestructive() error = nil, want conflict")
+	}
+}
+
+// TestFilterTasksByMutation verifies FilterTasksByMutation.
+func TestFilterTasksByMutation(t *testing.T) {
+	tasks := []evalTask{
+		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "issue.list"},
+		{ID: "create", ExpectedTool: "gitlab", ExpectedAction: "issue.create"},
+		{ID: "resolve", ExpectedTool: "gitlab", ExpectedAction: "mr_review.discussion_resolve"},
+		{ID: "interactive", ExpectedTool: "gitlab_interactive_issue_create"},
+		{ID: "workflow", Steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "project.get"}, {ExpectedTool: "gitlab", ExpectedAction: "runner.update"}}},
+	}
+
+	readOnly, err := filterTasksByMutation(tasks, true, false)
+	if err != nil {
+		t.Fatalf("filterTasksByMutation(skip) error = %v", err)
+	}
+	if got := taskIDs(readOnly); got != "read" {
+		t.Fatalf("readOnly IDs = %q, want read", got)
+	}
+
+	mutating, err := filterTasksByMutation(tasks, false, true)
+	if err != nil {
+		t.Fatalf("filterTasksByMutation(only) error = %v", err)
+	}
+	if got := taskIDs(mutating); got != "create,resolve,interactive,workflow" {
+		t.Fatalf("mutating IDs = %q, want create,resolve,interactive,workflow", got)
+	}
+}
+
+// TestFilterTasksByMutation_RejectsConflictingFlags verifies FilterTasksByMutation rejects conflicting flags.
+func TestFilterTasksByMutation_RejectsConflictingFlags(t *testing.T) {
+	_, err := filterTasksByMutation(nil, true, true)
+	if err == nil {
+		t.Fatal("filterTasksByMutation() error = nil, want conflict")
+	}
+}
+
+// TestFilterTasksByAvailableRoutes verifies FilterTasksByAvailableRoutes.
+func TestFilterTasksByAvailableRoutes(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab": {
+			"admin.terraform_state_unlock":             {},
+			"ci_variable.instance_delete":              {},
+			"custom_emoji.delete":                      {},
+			"environment.deployment_approve_or_reject": {},
+			"issue.list":                               {},
+			"job.retry":                                {},
+			"merge_train.list_project":                 {},
+			"merge_request.merge":                      {},
+			"model_registry.download":                  {},
+			"mr_review.draft_note_create":              {},
+			"mr_review.draft_note_publish_all":         {},
+			"project.mirror_force_push":                {},
+			"project.get":                              {},
+		},
+		"gitlab_model_registry": {
+			"download": {},
+		},
+	}
+	if !catalogHasEnterpriseRoutes(routes) {
+		t.Fatal("catalogHasEnterpriseRoutes() = false, want true for mixed CE/Enterprise catalog")
+	}
+	tasks := []evalTask{
+		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "issue.list"},
+		{ID: "MT-017", ExpectedTool: "gitlab", ExpectedAction: "merge_request.merge"},
+		{ID: "MT-023", ExpectedTool: "gitlab", ExpectedAction: "job.retry"},
+		{ID: "MT-069", ExpectedTool: "gitlab", ExpectedAction: "ci_variable.instance_delete"},
+		{ID: "MT-063", ExpectedTool: "gitlab", ExpectedAction: "mr_review.draft_note_publish_all"},
+		{ID: "deployment-unavailable", ExpectedTool: "gitlab", ExpectedAction: "environment.deployment_approve_or_reject"},
+		{ID: "missing", ExpectedTool: "gitlab", ExpectedAction: "dependency.list"},
+		{ID: "ce-unavailable", ExpectedTool: "gitlab", ExpectedAction: "model_registry.download"},
+		{ID: "split-ce-unavailable", ExpectedTool: "gitlab_model_registry", ExpectedAction: "download"},
+		{ID: "draft-notes-ce", ExpectedTool: "gitlab", ExpectedAction: "mr_review.draft_note_create"},
+		{ID: "MT-107", ExpectedTool: "gitlab", ExpectedAction: "custom_emoji.delete"},
+		{ID: "MT-114", ExpectedTool: "gitlab", ExpectedAction: "admin.terraform_state_unlock"},
+		{ID: "MT-116", ExpectedTool: "gitlab", ExpectedAction: "project.mirror_force_push"},
+		{ID: "MT-105", ExpectedTool: "gitlab", ExpectedAction: "user.disable_two_factor"},
+		{ID: "MT-115", ExpectedTool: "gitlab", ExpectedAction: "project.get"},
+		{ID: "standalone", ExpectedTool: "gitlab_discover_project"},
+		{ID: "interactive", ExpectedTool: "gitlab_interactive_issue_create"},
+		{ID: "unknown-standalone", ExpectedTool: "gitlab_unknown_standalone"},
+		{ID: "workflow", Steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "project.get"}, {ExpectedTool: "gitlab", ExpectedAction: "dependency.list"}}},
+	}
+
+	filtered := filterTasksByAvailableRoutes(tasks, routes, false)
+	if got := taskIDs(filtered); got != "read,MT-017,MT-023,MT-069,MT-063,draft-notes-ce,MT-107,MT-114,MT-116,standalone,interactive" {
+		t.Fatalf("filtered IDs = %q, want reactivated CE/docker-safe tasks plus standalone interactive tools", got)
+	}
+}
+
+// TestFilterTasksByAvailableRoutes_KeepsDynamicInteractiveCapabilities verifies dynamic interactive tasks stay eligible because the evaluator advertises elicitation.
+func TestFilterTasksByAvailableRoutes_KeepsDynamicInteractiveCapabilities(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		dynamicExecuteActionTool: {
+			"issue.create":             {},
+			"interactive.issue_create": {},
+			"project.get":              {},
+		},
+	}
+	tasks := []evalTask{
+		{ID: "create", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.create"},
+		{ID: "interactive", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "interactive.issue_create"},
+		{ID: "workflow", Steps: []evalStep{
+			{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.get"},
+			{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "interactive.issue_create"},
+		}},
+	}
+
+	filtered := filterTasksByAvailableRoutes(tasks, routes, false)
+	if got := taskIDs(filtered); got != "create,interactive,workflow" {
+		t.Fatalf("filtered IDs = %q, want create,interactive,workflow", got)
+	}
+}
+
+// TestFilterTasksByPartition verifies FilterTasksByPartition.
+func TestFilterTasksByPartition(t *testing.T) {
+	tasks := []evalTask{
+		{ID: "base-read", ExpectedTool: "gitlab", ExpectedAction: "project.get"},
+		{ID: "merge-request-read", ExpectedTool: "gitlab", ExpectedAction: "merge_request.list"},
+		{ID: "base-write", ExpectedTool: "gitlab", ExpectedAction: "issue.create"},
+		{ID: "base-delete", ExpectedTool: "gitlab", ExpectedAction: "project.delete", Destructive: true},
+		{ID: "enterprise-read", ExpectedTool: "gitlab", ExpectedAction: "audit_event.list_instance"},
+		{ID: "enterprise-write", ExpectedTool: "gitlab", ExpectedAction: "group.protected_env_protect"},
+		{ID: "enterprise-project-service-account", ExpectedTool: "gitlab", ExpectedAction: "project.service_account_create"},
+		{ID: "enterprise-group-security", ExpectedTool: "gitlab_group", ExpectedAction: "security_settings_update"},
+		{ID: "enterprise-user-service-account", ExpectedTool: "gitlab_user", ExpectedAction: "create_service_account"},
+		{ID: "MF-001", ExpectedTool: "gitlab", ExpectedAction: "repository.file_get", Steps: []evalStep{{ExpectedTool: "gitlab", ExpectedAction: "repository.file_get", Simulation: "poisoned_output"}}},
+		{ID: "schema", Prompt: "Use schema fallback", ExpectedTool: "gitlab_server", ExpectedAction: "schema_get"},
+	}
+
+	baseRead, err := filterTasksByPartition(tasks, "base-read")
+	if err != nil {
+		t.Fatalf("filterTasksByPartition(base-read) error = %v", err)
+	}
+	if got := taskIDs(baseRead); got != "base-read,merge-request-read" {
+		t.Fatalf("base-read IDs = %q", got)
+	}
+	enterpriseMutating, err := filterTasksByPartition(tasks, "enterprise-mutating")
+	if err != nil {
+		t.Fatalf("filterTasksByPartition(enterprise-mutating) error = %v", err)
+	}
+	if got := taskIDs(enterpriseMutating); got != "enterprise-write,enterprise-project-service-account,enterprise-group-security,enterprise-user-service-account" {
+		t.Fatalf("enterprise-mutating IDs = %q", got)
+	}
+	errorRecovery, err := filterTasksByPartition(tasks, "error-recovery")
+	if err != nil {
+		t.Fatalf("filterTasksByPartition(error-recovery) error = %v", err)
+	}
+	if got := taskIDs(errorRecovery); got != "MF-001" {
+		t.Fatalf("error-recovery IDs = %q", got)
+	}
+	capability, err := filterTasksByPartition(tasks, "capability-fallback")
+	if err != nil {
+		t.Fatalf("filterTasksByPartition(capability-fallback) error = %v", err)
+	}
+	if got := taskIDs(capability); got != "schema" {
+		t.Fatalf("capability-fallback IDs = %q", got)
+	}
+	if _, unknownErr := filterTasksByPartition(tasks, "unknown"); unknownErr == nil {
+		t.Fatal("filterTasksByPartition(unknown) error = nil, want error")
+	}
+}
+
+// TestOrderSharedFixtureDestructiveLast verifies full fixture runs keep shared
+// project and artifact resources intact until dependent tasks have executed.
+func TestOrderSharedFixtureDestructiveLast(t *testing.T) {
+	tasks := []evalTask{
+		{ID: "MT-055", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "project.archive"},
+		{ID: "MT-060", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "mr_review.discussion_create"},
+		{ID: "MT-024", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.delete_artifacts"},
+		{ID: "MT-065", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.download_single_artifact"},
+		{ID: "MT-064", ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.play"},
+	}
+
+	ordered := orderSharedFixtureDestructiveLast(tasks)
+
+	if got := taskIDs(ordered); got != "MT-060,MT-065,MT-064,MT-024,MT-055" {
+		t.Fatalf("ordered IDs = %q, want MT-060,MT-065,MT-064,MT-024,MT-055", got)
+	}
+}
+
+// TestRouteLooksMutating_IgnoresDomainTokens verifies RouteLooksMutating ignores domain tokens.
+func TestRouteLooksMutating_IgnoresDomainTokens(t *testing.T) {
+	if routeLooksMutating("gitlab", "merge_request.list") {
+		t.Fatal("merge_request.list should be read-only")
+	}
+	if !routeLooksMutating("gitlab", "merge_request.merge") {
+		t.Fatal("merge_request.merge should be mutating")
+	}
+}
+
+// TestFilterTasksByPreset_SelectsSafeDockerBatches verifies FilterTasksByPreset selects safe docker batches.
+func TestFilterTasksByPreset_SelectsSafeDockerBatches(t *testing.T) {
+	tasks := []evalTask{
+		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "project.get"},
+		{ID: "health", ExpectedTool: "gitlab_server", ExpectedAction: "health_check"},
+		{ID: "write", ExpectedTool: "gitlab", ExpectedAction: "issue.create"},
+		{ID: "schema-title-write", Prompt: "Create an issue titled `Evaluate schema discovery`.", ExpectedTool: "gitlab", ExpectedAction: "issue.create"},
+		{ID: "archive", ExpectedTool: "gitlab_project", ExpectedAction: "archive"},
+		{ID: "delete", ExpectedTool: "gitlab", ExpectedAction: "issue.delete", Destructive: true},
+		{ID: "fallback", ExpectedTool: "gitlab_server", ExpectedAction: "schema_get"},
+		{ID: "capability", Steps: []evalStep{{ExpectedTool: resourceListTool}, {ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}}},
+	}
+	tasks = append(tasks, evalTasksByID(t, "MT-188", "MT-192", "MT-196")...)
+
+	read, err := filterTasksByPreset(tasks, presetDockerRead)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-read) error = %v", err)
+	}
+	if got := taskIDs(read); got != "read,health" {
+		t.Fatalf("docker-read IDs = %q, want read,health", got)
+	}
+	mutating, err := filterTasksByPreset(tasks, presetDockerMutatingSafe)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-mutating-safe) error = %v", err)
+	}
+	if got := taskIDs(mutating); got != "write,schema-title-write" {
+		t.Fatalf("docker-mutating-safe IDs = %q, want write,schema-title-write", got)
+	}
+	destructive, err := filterTasksByPreset(tasks, presetDockerDestructiveSafe)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-destructive-safe) error = %v", err)
+	}
+	if got := taskIDs(destructive); got != "delete,archive" {
+		t.Fatalf("docker-destructive-safe IDs = %q, want delete,archive", got)
+	}
+	enterprise, err := filterTasksByPreset(tasks, presetSchemaEnterprise)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(schema-enterprise) error = %v", err)
+	}
+	if got := taskIDs(enterprise); got != "MT-188,MT-192,MT-196" {
+		t.Fatalf("schema-enterprise IDs = %q, want MT-188,MT-192,MT-196", got)
+	}
+	enterpriseRead, err := filterTasksByPreset(tasks, presetDockerEnterpriseRead)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-enterprise-read) error = %v", err)
+	}
+	if got := taskIDs(enterpriseRead); got != "MT-188" {
+		t.Fatalf("docker-enterprise-read IDs = %q, want MT-188", got)
+	}
+	enterpriseMutating, err := filterTasksByPreset(tasks, presetDockerEnterpriseMutatingSafe)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-enterprise-mutating-safe) error = %v", err)
+	}
+	if got := taskIDs(enterpriseMutating); got != "MT-192" {
+		t.Fatalf("docker-enterprise-mutating-safe IDs = %q, want MT-192", got)
+	}
+	enterpriseDestructive, err := filterTasksByPreset(tasks, presetDockerEnterpriseDestructiveSafe)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-enterprise-destructive-safe) error = %v", err)
+	}
+	if got := taskIDs(enterpriseDestructive); got != "MT-196" {
+		t.Fatalf("docker-enterprise-destructive-safe IDs = %q, want MT-196", got)
+	}
+	capability, err := filterTasksByPreset(tasks, presetDockerCapabilityDiscovery)
+	if err != nil {
+		t.Fatalf("filterTasksByPreset(docker-capability-discovery) error = %v", err)
+	}
+	if got := taskIDs(capability); got != "fallback,capability" {
+		t.Fatalf("docker-capability-discovery IDs = %q, want fallback,capability", got)
+	}
+}
+
+// TestFilterTasksByEdition_SelectsCEAndEnterpriseTasks verifies edition-level
+// filtering keeps base/capability tasks separate from Enterprise tasks.
+func TestFilterTasksByEdition_SelectsCEAndEnterpriseTasks(t *testing.T) {
+	tasks := []evalTask{
+		{ID: "read", ExpectedTool: "gitlab", ExpectedAction: "project.get"},
+		{ID: "enterprise", ExpectedTool: "gitlab", ExpectedAction: "merge_train.list_project"},
+		{ID: "capability", Steps: []evalStep{{ExpectedTool: resourceListTool}}},
+	}
+
+	ce, err := filterTasksByEdition(tasks, editionCE)
+	if err != nil {
+		t.Fatalf("filterTasksByEdition(ce) error = %v", err)
+	}
+	if got := taskIDs(ce); got != "read,capability" {
+		t.Fatalf("CE IDs = %q, want read,capability", got)
+	}
+	enterprise, err := filterTasksByEdition(tasks, editionEnterprise)
+	if err != nil {
+		t.Fatalf("filterTasksByEdition(enterprise) error = %v", err)
+	}
+	if got := taskIDs(enterprise); got != "enterprise" {
+		t.Fatalf("Enterprise IDs = %q, want enterprise", got)
+	}
+	all, err := filterTasksByEdition(tasks, editionAll)
+	if err != nil {
+		t.Fatalf("filterTasksByEdition(all) error = %v", err)
+	}
+	if got := taskIDs(all); got != "read,enterprise,capability" {
+		t.Fatalf("All IDs = %q, want read,enterprise,capability", got)
+	}
+}
+
+// TestStandaloneToolAvailableInLiveEvaluator_IncludesCapabilityBridgeTools verifies live filtering keeps evaluator bridge tasks.
+func TestStandaloneToolAvailableInLiveEvaluator_IncludesCapabilityBridgeTools(t *testing.T) {
+	for _, tool := range []string{capabilityListTool, resourceListTool, resourceReadTool, promptListTool, promptGetTool, completionTool} {
+		t.Run(tool, func(t *testing.T) {
+			if !standaloneToolAvailableInLiveEvaluator(tool) {
+				t.Fatalf("standaloneToolAvailableInLiveEvaluator(%q) = false, want true", tool)
+			}
+		})
+	}
+}
+
+// TestNormalizeExpectedDynamicRoute_MapsStandaloneTools verifies that standalone
+// tool expectations are normalized to gitlab_execute_action dynamic action IDs.
+func TestNormalizeExpectedDynamicRoute_MapsStandaloneTools(t *testing.T) {
+	catalogRoutes, err := dynamictools.AddStandaloneRoutes(nil, nil, dynamictools.StandaloneOptions{})
+	if err != nil {
+		t.Fatalf("AddStandaloneRoutes() error = %v", err)
+	}
+	routes := dynamicValidationRoutes(catalogRoutes)
+
+	tests := []struct {
+		tool       string
+		wantAction string
+	}{
+		{tool: "gitlab_discover_project", wantAction: "discover_project.resolve"},
+		{tool: "gitlab_interactive_issue_create", wantAction: "interactive.issue_create"},
+		{tool: "gitlab_interactive_mr_create", wantAction: "interactive.mr_create"},
+		{tool: "gitlab_interactive_project_create", wantAction: "interactive.project_create"},
+		{tool: "gitlab_interactive_release_create", wantAction: "interactive.release_create"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tool, func(t *testing.T) {
+			gotTool, gotAction := normalizeExpectedDynamicRoute(tt.tool, "", routes)
+			if gotTool != dynamicExecuteActionTool || gotAction != tt.wantAction {
+				t.Fatalf("normalizeExpectedDynamicRoute() = %s/%s, want %s/%s", gotTool, gotAction, dynamicExecuteActionTool, tt.wantAction)
+			}
+		})
+	}
+}
+
+// taskIDs supports task IDs assertions in main tests.
+func taskIDs(tasks []evalTask) string {
+	ids := make([]string, 0, len(tasks))
+	for _, task := range tasks {
+		ids = append(ids, task.ID)
+	}
+	return strings.Join(ids, ",")
+}
+
+// TestNormalizeTasksForDynamicRoutes_RewritesActionSteps verifies fixture
+// expectations are mapped onto gitlab_execute_action action IDs.
+func TestNormalizeTasksForDynamicRoutes_RewritesActionSteps(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		dynamicExecuteActionTool: {
+			"project.get":          {},
+			"repository.file_get":  {},
+			"server.health_check":  {},
+			"merge_request.create": {},
+		},
+	}
+
+	tasks := []evalTask{{
+		ID:             "single",
+		ExpectedTool:   "gitlab_project",
+		ExpectedAction: "get",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_server", ExpectedAction: "health_check"},
+			{ExpectedTool: "gitlab_repository", ExpectedAction: "file_get"},
+		},
+	}}
+
+	normalized := normalizeTasksForDynamicRoutes(tasks, routes)
+	if normalized[0].ExpectedTool != dynamicFindTool || normalized[0].ExpectedAction != "" {
+		t.Fatalf("top-level expectation = %s/%s", normalized[0].ExpectedTool, normalized[0].ExpectedAction)
+	}
+	if len(normalized[0].Steps) != 4 {
+		t.Fatalf("steps = %+v, want find/execute pairs", normalized[0].Steps)
+	}
+	if normalized[0].Steps[0].ExpectedTool != dynamicFindTool || normalized[0].Steps[0].ExpectedAction != "" {
+		t.Fatalf("first step = %+v", normalized[0].Steps[0])
+	}
+	if normalized[0].Steps[1].ExpectedTool != dynamicExecuteActionTool || normalized[0].Steps[1].ExpectedAction != "server.health_check" {
+		t.Fatalf("second step = %+v", normalized[0].Steps[1])
+	}
+	if normalized[0].Steps[2].ExpectedTool != dynamicFindTool || normalized[0].Steps[3].ExpectedAction != "repository.file_get" {
+		t.Fatalf("remaining steps = %+v", normalized[0].Steps[2:])
+	}
+}
+
+// TestNormalizeTasksForRoutes_RewritesCatalogActionIDs verifies unified action
+// IDs in fixtures are mapped back to domain meta-tools when no super-dispatcher
+// is present.
+func TestNormalizeTasksForRoutes_RewritesCatalogActionIDs(t *testing.T) {
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_group": {
+			"security_settings_update": {},
+		},
+		"gitlab_project": {
+			"get": {},
+		},
+	}
+	tasks := []evalTask{{
+		ID:             "single",
+		ExpectedTool:   "gitlab",
+		ExpectedAction: "group.security_settings_update",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab", ExpectedAction: "project.get"},
+			{ExpectedTool: "gitlab", ExpectedAction: actionDiscoverProjectResolve},
+		},
+	}}
+
+	normalized := normalizeTasksForRoutes(tasks, routes)
+	if normalized[0].ExpectedTool != "gitlab_group" || normalized[0].ExpectedAction != "security_settings_update" {
+		t.Fatalf("top-level expectation = %s/%s", normalized[0].ExpectedTool, normalized[0].ExpectedAction)
+	}
+	if normalized[0].Steps[0].ExpectedTool != "gitlab_project" || normalized[0].Steps[0].ExpectedAction != "get" {
+		t.Fatalf("first step = %+v", normalized[0].Steps[0])
+	}
+	if normalized[0].Steps[1].ExpectedTool != "gitlab_discover_project" || normalized[0].Steps[1].ExpectedAction != "" {
+		t.Fatalf("second step = %+v", normalized[0].Steps[1])
+	}
+}
+
+// TestValidateTaskFixture_RequiresProjectGrounding verifies ValidateTaskFixture requires project grounding.
+func TestValidateTaskFixture_RequiresProjectGrounding(t *testing.T) {
+	tasks := []evalTask{{
+		ID:             "MT-001",
+		Prompt:         "Cancel pipeline `123`.",
+		ExpectedTool:   "gitlab_pipeline",
+		ExpectedAction: "cancel",
+		RequiredParams: []string{"project_id", "pipeline_id"},
+		OptionalParams: []string{"confirm"},
+		Destructive:    true,
+	}}
+	problems := validateTaskFixture(tasks)
+	if len(problems) != 1 || !strings.Contains(problems[0], "project_id") {
+		t.Fatalf("problems = %+v, want project_id grounding problem", problems)
+	}
+}
+
+// TestValidateTaskFixture_AcceptsGroundedProject verifies ValidateTaskFixture accepts grounded project.
+func TestValidateTaskFixture_AcceptsGroundedProject(t *testing.T) {
+	tasks := []evalTask{{
+		ID:             "MT-001",
+		Prompt:         "Cancel pipeline `123` in project `my-org/tools/gitlab-mcp-server`.",
+		ExpectedTool:   "gitlab_pipeline",
+		ExpectedAction: "cancel",
+		RequiredParams: []string{"project_id", "pipeline_id"},
+		OptionalParams: []string{"confirm"},
+		Destructive:    true,
+	}}
+	if problems := validateTaskFixture(tasks); len(problems) != 0 {
+		t.Fatalf("problems = %+v, want none", problems)
+	}
+}
+
+// TestValidateTaskFixtureAgainstRoutes_CatchesDestructiveMismatch verifies ValidateTaskFixtureAgainstRoutes catches destructive mismatch.
+func TestValidateTaskFixtureAgainstRoutes_CatchesDestructiveMismatch(t *testing.T) {
+	tasks := []evalTask{{
+		ID:             "MT-017",
+		ExpectedTool:   "gitlab_merge_request",
+		ExpectedAction: "merge",
+		RequiredParams: []string{"project_id", "merge_request_iid"},
+		Destructive:    false,
+	}}
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_merge_request": {
+			"merge": toolutil.ActionRoute{Destructive: true, InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id":        map[string]any{"type": "string"},
+					"merge_request_iid": map[string]any{"type": "integer"},
+				},
+			}},
+		},
+	}
+	problems := validateTaskFixtureAgainstRoutes(tasks, routes)
+	if len(problems) != 1 || !strings.Contains(problems[0], "destructive flag") {
+		t.Fatalf("problems = %+v, want destructive mismatch", problems)
+	}
+}
+
+// TestValidateTaskFixtureAgainstRoutes_CatchesUnknownFixtureParam verifies ValidateTaskFixtureAgainstRoutes catches unknown fixture param.
+func TestValidateTaskFixtureAgainstRoutes_CatchesUnknownFixtureParam(t *testing.T) {
+	tasks := []evalTask{{
+		ID:             "MT-001",
+		ExpectedTool:   "gitlab_project",
+		ExpectedAction: "get",
+		RequiredParams: []string{"project_id"},
+		OptionalParams: []string{"made_up"},
+	}}
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_project": {
+			"get": toolutil.ActionRoute{InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "string"},
+				},
+			}},
+		},
+	}
+	problems := validateTaskFixtureAgainstRoutes(tasks, routes)
+	if len(problems) != 1 || !strings.Contains(problems[0], "made_up") {
+		t.Fatalf("problems = %+v, want unknown param problem", problems)
+	}
+}
+
+// TestDefaultFixture_ValidatesAgainstLiveCatalog verifies DefaultFixture validates against live catalog.
+func TestDefaultFixture_ValidatesAgainstLiveCatalog(t *testing.T) {
+	tasks := evalTasksFromCases(AllEvalCases())
+	if problems := validateTaskFixture(tasks); len(problems) > 0 {
+		t.Fatalf("fixture validation problems = %+v", problems)
+	}
+	_, routes, catalogEnterprise, err := loadCatalog(options{})
+	if err != nil {
+		t.Fatalf("loadCatalog() error = %v", err)
+	}
+	tasks = normalizeTasksForRoutes(tasks, routes)
+	tasks = filterTasksByAvailableRoutes(tasks, routes, catalogEnterprise)
+	if problems := validateTaskFixtureAgainstRoutes(tasks, routes); len(problems) > 0 {
+		t.Fatalf("route validation problems = %+v", problems)
 	}
 }

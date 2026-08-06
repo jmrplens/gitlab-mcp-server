@@ -183,7 +183,8 @@ func resetScopedRegTokenEntry(scope, scopeParam, related1, related2 string) runn
 		usage: fmt.Sprintf(
 			"Reset a %s's runner registration token by %s (deprecated registration flow). "+
 				"Use only for legacy %s-scoped runner registration; modern flows use runner.register with a created token.",
-			scope, scopeParam, scope),
+			scope, scopeParam, scope,
+		),
 		aliases: []string{
 			"reset " + scope + " registration token",
 			"rotate " + scope + " runner registration token",
@@ -194,7 +195,8 @@ func resetScopedRegTokenEntry(scope, scopeParam, related1, related2 string) runn
 		description: fmt.Sprintf(
 			"Reset a %s's runner registration token by %s (deprecated). "+
 				"Returns: the new registration token and its expiry. See also: %s, %s.",
-			scope, scopeParam, related1, related2),
+			scope, scopeParam, related1, related2,
+		),
 	}
 }
 

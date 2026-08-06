@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
@@ -849,5 +851,88 @@ func TestHookOutputWrappers_APIError_PropagatesError(t *testing.T) {
 				t.Fatalf("%s: expected propagated error from failing API, got nil", tt.name)
 			}
 		})
+	}
+}
+
+// TestHook_AuditCustomFields verifies AddHook forwards custom_webhook_template
+// and custom_headers, and that GetHook surfaces them as redacted []objects.
+func TestHook_AuditCustomFields(t *testing.T) {
+	var body string
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v4/groups/99/hooks":
+			bufBytes, _ := io.ReadAll(r.Body)
+			body = string(bufBytes)
+			testutil.RespondJSON(w, http.StatusCreated, `{"id":10,"url":"https://example.com/hook","group_id":99,
+				"custom_webhook_template":"{\"a\":1}","custom_headers":[{"key":"X-Token","value":"secret"}],
+				"url_variables":[{"key":"env","value":"prod"}]}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+
+	out, err := AddHook(context.Background(), client, AddHookInput{
+		GroupID: "99",
+		HookInput: HookInput{
+			URL:                   "https://example.com/hook",
+			CustomWebhookTemplate: `{"a":1}`,
+			CustomHeaders:         []HookCustomHeaderInput{{Key: "X-Token", Value: "secret"}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("AddHook() unexpected error: %v", err)
+	}
+	if !strings.Contains(body, `"custom_webhook_template":"{\"a\":1}"`) {
+		t.Errorf("custom_webhook_template missing from request: %s", body)
+	}
+	if !strings.Contains(body, `"custom_headers"`) || !strings.Contains(body, `"X-Token"`) || !strings.Contains(body, `"secret"`) {
+		t.Errorf("custom_headers missing from request: %s", body)
+	}
+	if out.CustomWebhookTemplate != `{"a":1}` {
+		t.Errorf("custom_webhook_template = %q, want object template", out.CustomWebhookTemplate)
+	}
+	if len(out.CustomHeaders) != 1 || out.CustomHeaders[0].Key != "X-Token" || out.CustomHeaders[0].Value != "" {
+		t.Errorf("custom_headers should expose key only (value redacted): %+v", out.CustomHeaders)
+	}
+	if len(out.URLVariables) != 1 || out.URLVariables[0].Key != "env" || out.URLVariables[0].Value != "" {
+		t.Errorf("url_variables should expose key only (value redacted): %+v", out.URLVariables)
+	}
+}
+
+// TestHookToOutput_NilCustomHeaderElement verifies hookToOutput skips nil
+// custom-header pointers without panicking.
+func TestHookToOutput_NilCustomHeaderElement(t *testing.T) {
+	out := hookToOutput(&gl.GroupHook{
+		ID:            1,
+		CustomHeaders: []*gl.HookCustomHeader{nil, {Key: "X-Real", Value: "secret"}},
+	})
+	if len(out.CustomHeaders) != 1 || out.CustomHeaders[0].Key != "X-Real" || out.CustomHeaders[0].Value != "" {
+		t.Errorf("nil custom header not skipped / value not redacted: %+v", out.CustomHeaders)
+	}
+}
+
+// TestListHooks_AuditParams verifies order_by/sort/keyset reach the hooks list
+// request.
+func TestListHooks_AuditParams(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/groups/99/hooks" {
+			http.NotFound(w, r)
+			return
+		}
+		q := r.URL.Query()
+		if q.Get("order_by") != "id" || q.Get("sort") != "asc" || q.Get("pagination") != "keyset" {
+			t.Errorf("order_by/sort/pagination missing: %s", r.URL.RawQuery)
+		}
+		testutil.RespondJSON(w, http.StatusOK, `[]`)
+	}))
+
+	_, err := ListHooks(context.Background(), client, ListHooksInput{
+		GroupID:               "99",
+		OrderBy:               "id",
+		Sort:                  "asc",
+		KeysetPaginationInput: keysetKeyset(),
+	})
+	if err != nil {
+		t.Fatalf("ListHooks() unexpected error: %v", err)
 	}
 }

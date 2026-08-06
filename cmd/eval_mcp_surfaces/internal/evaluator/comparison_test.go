@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // TestComparisonFormattingHelpers_NormalizeReportValues verifies report parsing
@@ -104,5 +106,139 @@ func TestSortedIntKeys_ReturnsDeterministicOrder(t *testing.T) {
 	keys := sortedIntKeys(map[string]int{"b": 2, "a": 1})
 	if len(keys) != 2 || keys[0] != "a" || keys[1] != "b" {
 		t.Fatalf("sortedIntKeys() = %v, want a,b", keys)
+	}
+}
+
+// TestParseComparisonInput_EvaluationAndTokenReports verifies ParseComparisonInput when evaluation and token reports.
+func TestParseComparisonInput_EvaluationAndTokenReports(t *testing.T) {
+	tmp := t.TempDir()
+	evalPath := filepath.Join(tmp, "current-abc123", "schema-base-read.md")
+	if err := os.MkdirAll(filepath.Dir(evalPath), 0o750); err != nil {
+		t.Fatalf("mkdir eval: %v", err)
+	}
+	evalReport := `# Meta-Tool Anthropic Evaluation
+
+Date: 2026-05-04T00:00:00Z
+Mode: static route/schema validation
+Model: ` + "`claude-sonnet-4-6`" + `
+Backend: ` + "`mock`" + `
+Tool execution: ` + "`none`" + `
+Tools file: ` + "`dist/evaluation/mcp-surfaces/snapshots/current-abc123/tools.json`" + `
+Partition: ` + "`base-read`" + `
+Catalog tools: 7
+Runs: 1
+Task attempts: 3
+
+## Metrics
+
+| Metric | Value |
+| --- | ---: |
+| Tool-selection accuracy | 100.0% |
+| Action-selection accuracy | 99.5% |
+| First-call validation pass rate | 98.0% |
+| Schema lookup use rate | 2.0% |
+| Repair success rate | 100.0% |
+| Destructive safety | 100.0% |
+| Final task success proxy | 97.0% |
+
+## Failure Diagnostics
+
+| Category | Count | Example task |
+| --- | ---: | --- |
+| model_parameter_shape_miss | 1 | MT-001 |
+
+## Fixture Tool Coverage
+
+| Metric | Value |
+| --- | ---: |
+| Catalog tools | 7 |
+| Tools covered by expected steps | 7 |
+| Missing tools | 0 |
+| Catalog action routes | 851 |
+| Action routes covered by expected steps | 200 |
+| Missing action routes | 651 |
+`
+	if err := os.WriteFile(evalPath, []byte(evalReport), 0o600); err != nil {
+		t.Fatalf("write eval report: %v", err)
+	}
+	evalInput, err := parseComparisonInput(evalPath)
+	if err != nil {
+		t.Fatalf("parseComparisonInput(eval) error = %v", err)
+	}
+	assertEvaluationComparisonInput(t, evalInput)
+
+	assertDynamicComparisonInput(t, tmp, evalReport)
+	assertDefaultTitleComparisonInput(t, tmp, evalReport)
+
+	tokenPath := filepath.Join(tmp, "current-abc123", "tokens.md")
+	tokenReport := `# Tools Snapshot Token Audit
+
+Tools file: ` + "`dist/evaluation/mcp-surfaces/snapshots/current-abc123/tools.json`" + `
+
+| Metric | Value |
+| --- | ---: |
+| Tools | 7 |
+| Estimated tokens | 18,021 |
+| Serialized bytes | 72,071 |
+`
+	if writeErr := os.WriteFile(tokenPath, []byte(tokenReport), 0o600); writeErr != nil {
+		t.Fatalf("write token report: %v", writeErr)
+	}
+	tokenInput, err := parseComparisonInput(tokenPath)
+	if err != nil {
+		t.Fatalf("parseComparisonInput(token) error = %v", err)
+	}
+	if tokenInput.Kind != "token" || tokenInput.TokenMetrics["Estimated tokens"] != 18021 {
+		t.Fatalf("token input = %+v", tokenInput)
+	}
+
+	comparison := buildComparisonReport([]comparisonInput{tokenInput, evalInput})
+	for _, want := range []string{"Catalog Token Metrics", "Evaluation Metrics", "current-abc123", "18021"} {
+		if !strings.Contains(comparison, want) {
+			t.Fatalf("comparison missing %q:\n%s", want, comparison)
+		}
+	}
+}
+
+func assertEvaluationComparisonInput(t *testing.T, evalInput comparisonInput) {
+	t.Helper()
+	if evalInput.Kind != "evaluation" || evalInput.Label != "current-abc123" || evalInput.TaskAttempts != 3 {
+		t.Fatalf("eval input = %+v", evalInput)
+	}
+	if evalInput.Metrics["Action-selection accuracy"] != 99.5 || evalInput.Diagnostics["model_parameter_shape_miss"] != 1 || evalInput.Coverage["Missing action routes"] != 651 {
+		t.Fatalf("eval metrics = %+v diagnostics=%+v coverage=%+v", evalInput.Metrics, evalInput.Diagnostics, evalInput.Coverage)
+	}
+}
+
+func assertDynamicComparisonInput(t *testing.T, tmp, evalReport string) {
+	t.Helper()
+	dynamicPath := filepath.Join(tmp, "current-abc123", "dynamic-base-read.md")
+	dynamicReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# Dynamic Surface Model Evaluation", 1)
+	dynamicReport = strings.Replace(dynamicReport, "Model: `claude-sonnet-4-6`", "Model: `test:model`\nTool surface: `dynamic`", 1)
+	if writeErr := os.WriteFile(dynamicPath, []byte(dynamicReport), 0o600); writeErr != nil {
+		t.Fatalf("write dynamic report: %v", writeErr)
+	}
+	dynamicInput, err := parseComparisonInput(dynamicPath)
+	if err != nil {
+		t.Fatalf("parseComparisonInput(dynamic) error = %v", err)
+	}
+	if dynamicInput.Kind != "evaluation" || dynamicInput.ToolSurface != config.ToolSurfaceDynamic || dynamicInput.TaskAttempts != 3 {
+		t.Fatalf("dynamic input = %+v", dynamicInput)
+	}
+}
+
+func assertDefaultTitleComparisonInput(t *testing.T, tmp, evalReport string) {
+	t.Helper()
+	defaultTitlePath := filepath.Join(tmp, "current-abc123", "default-title.md")
+	defaultTitleReport := strings.Replace(evalReport, "# Meta-Tool Anthropic Evaluation", "# MCP Surface Model Evaluation", 1)
+	if writeErr := os.WriteFile(defaultTitlePath, []byte(defaultTitleReport), 0o600); writeErr != nil {
+		t.Fatalf("write default title report: %v", writeErr)
+	}
+	defaultTitleInput, err := parseComparisonInput(defaultTitlePath)
+	if err != nil {
+		t.Fatalf("parseComparisonInput(default title) error = %v", err)
+	}
+	if defaultTitleInput.Kind != "evaluation" || defaultTitleInput.TaskAttempts != 3 {
+		t.Fatalf("default title input = %+v", defaultTitleInput)
 	}
 }

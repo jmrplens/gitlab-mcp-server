@@ -208,12 +208,57 @@ func listTrackedGoFiles(root string) ([]string, error) {
 		return nil, fmt.Errorf("git ls-files in %s: %w", root, err)
 	}
 	var files []string
+	var missing int
+	for f := range strings.SplitSeq(string(out), "\x00") {
+		if f == "" {
+			continue
+		}
+		// The index still lists a file that has been deleted on disk but not
+		// yet staged. Skipping it keeps the tool usable mid-refactor instead of
+		// failing on a dirty tree; a fresh checkout, which is what CI measures,
+		// has nothing to skip. Only a genuinely absent file is skipped — a
+		// permission or I/O error must surface rather than silently drop a
+		// tracked file from the published counts.
+		if _, statErr := os.Stat(filepath.Join(root, f)); statErr != nil {
+			if os.IsNotExist(statErr) {
+				missing++
+				continue
+			}
+			return nil, fmt.Errorf("stat tracked file %s: %w", f, statErr)
+		}
+		files = append(files, f)
+	}
+	warnIndexDrift(root, bin, missing)
+	return files, nil
+}
+
+// warnIndexDrift reports Go files whose tracked state does not match the
+// working tree, because the counts are taken from the index.
+//
+// Regenerating before staging is the one way to produce a section that CI then
+// rejects: a new .go file that is not yet added is invisible here but present
+// in the commit CI checks out. Silently emitting the wrong numbers turns that
+// into a confusing red build, so say it out loud instead.
+func warnIndexDrift(root, gitBin string, missing int) {
+	if missing > 0 {
+		fmt.Fprintf(os.Stderr, "warning: %d tracked .go file(s) are deleted on disk but not staged; they are not counted\n", missing)
+	}
+	out, err := exec.CommandContext(context.Background(), gitBin, "-C", root, "ls-files", "-z", "--others", "--exclude-standard", "--", "*.go").Output() //#nosec G204 -- absolute path from LookPath, fixed args
+	if err != nil {
+		return
+	}
+	var untracked []string
 	for f := range strings.SplitSeq(string(out), "\x00") {
 		if f != "" {
-			files = append(files, f)
+			untracked = append(untracked, f)
 		}
 	}
-	return files, nil
+	if len(untracked) > 0 {
+		fmt.Fprintf(os.Stderr, "warning: %d untracked .go file(s) are not counted; stage them and rerun, or CI will disagree:\n", len(untracked))
+		for _, f := range untracked {
+			fmt.Fprintf(os.Stderr, "  %s\n", f)
+		}
+	}
 }
 
 // scanGoFile reads every line of a .go file and accumulates pattern-based

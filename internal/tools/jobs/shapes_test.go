@@ -170,7 +170,8 @@ func TestPipelineInfoObject_TrimmedFields(t *testing.T) {
 // offset, and keyset parameters onto the embedded gl.ListOptions.
 func TestApplyListOpts_OrderAndSort(t *testing.T) {
 	opts := &gl.ListJobsOptions{}
-	applyListOpts(opts,
+	applyListOpts(
+		opts,
 		toolutil.PaginationInput{Page: 2, PerPage: 50},
 		toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
 		"id", "desc",

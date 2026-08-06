@@ -427,3 +427,65 @@ func TestStaleItemsReport_MissingProjectID(t *testing.T) {
 		t.Fatal("expected error for missing project_id")
 	}
 }
+
+// TestBranchMRSummary_APIError verifies that branch_mr_summary returns an
+// error when the MR list API fails.
+func TestBranchMRSummary_APIError(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "branch_mr_summary",
+		map[string]string{"project_id": "42", "target_branch": "main"})
+}
+
+// TestProjectActivityReport_EventsAPIErrorWithMergedMRs verifies that
+// project_activity_report tolerates a failing events API (warn-and-continue)
+// and still renders the recently-merged MRs section when merged MRs exist.
+func TestProjectActivityReport_EventsAPIErrorWithMergedMRs(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathMRs, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("state") == "merged" {
+			respondJSON(w, http.StatusOK, groupProjMRJSON)
+			return
+		}
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc(pathIssues, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	// Project events endpoint falls through to 404.
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		respondNotFound(w)
+	})
+
+	text := getPromptText(t, mux, "project_activity_report", map[string]string{"project_id": "42"})
+	if !strings.Contains(text, "| Events | 0 |") {
+		t.Error("expected zero events when events API fails")
+	}
+	if !strings.Contains(text, "Recently Merged MRs") {
+		t.Error("expected recently merged MRs section")
+	}
+}
+
+// TestMRDiscussionHealth_APIError verifies that mr_discussion_health returns
+// an error when the MR list API fails.
+func TestMRDiscussionHealth_APIError(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "mr_discussion_health", map[string]string{"project_id": "42"})
+}
+
+// TestMRDiscussionHealth_DiscussionsAPIError verifies that a failing
+// discussion API for a single MR yields a zero-thread row instead of failing
+// the whole prompt (warn-and-continue branch).
+func TestMRDiscussionHealth_DiscussionsAPIError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathMRs, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"iid":1,"project_id":42,"title":"MR1","source_branch":"a","target_branch":"main","author":{"username":"alice"}}]`)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		respondNotFound(w)
+	})
+
+	text := getPromptText(t, mux, "mr_discussion_health", map[string]string{"project_id": "42"})
+	if !strings.Contains(text, "| !1 | MR1 | @alice | 0 | 0 |") {
+		t.Error("expected zero-thread row when discussions API fails")
+	}
+}
+
+// prompt_milestone_label.go edge branch.
