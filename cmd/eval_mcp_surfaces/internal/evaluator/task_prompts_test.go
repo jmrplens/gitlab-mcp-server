@@ -1,7 +1,6 @@
 package evaluator
 
 import (
-	"net/http"
 	"strings"
 	"testing"
 
@@ -2271,12 +2270,4 @@ func TestTaskPrompt_GroupEpicIssueAssignUsesChildParams(t *testing.T) {
 			t.Fatalf("taskPrompt() = %q, want group epic issue assign guidance without %q", prompt, unwanted)
 		}
 	}
-}
-
-// roundTripFunc holds round trip func data for the evaluator package.
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-// RoundTrip executes an HTTP request through roundTripFunc.
-func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return f(req)
 }

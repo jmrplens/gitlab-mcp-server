@@ -3,6 +3,7 @@ package evaluator
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -49,4 +50,14 @@ func TestWaitForContext_CanceledContextReturnsError(t *testing.T) {
 	if err := waitForContext(ctx, time.Hour); !errors.Is(err, context.Canceled) {
 		t.Fatalf("waitForContext() error = %v, want context.Canceled", err)
 	}
+}
+
+// roundTripFunc adapts a function to http.RoundTripper so a test can serve
+// canned responses without a server. It lives here rather than beside any one
+// test because both the runner and the provider tests use it.
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+// RoundTrip executes an HTTP request through roundTripFunc.
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }

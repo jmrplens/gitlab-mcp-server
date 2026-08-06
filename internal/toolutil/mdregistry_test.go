@@ -12,6 +12,40 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// snapshotMarkdownRegistries saves both formatter registries and restores them
+// when the test ends.
+//
+// Several tests here reset the registries wholesale to get a clean slate. That
+// leaks: whatever the package init registered is gone for every test that runs
+// afterwards, so assertions about init-registered formatters used to pass or
+// fail purely on file-sort order. A test that calls this can reset freely and
+// still leave the package as it found it.
+func snapshotMarkdownRegistries(t *testing.T) {
+	t.Helper()
+
+	saved := map[reflect.Type]any{}
+	stringFormatters.Range(func(k, v any) bool {
+		saved[k.(reflect.Type)] = v
+		return true
+	})
+	savedResults := map[reflect.Type]any{}
+	resultFormatters.Range(func(k, v any) bool {
+		savedResults[k.(reflect.Type)] = v
+		return true
+	})
+
+	t.Cleanup(func() {
+		stringFormatters = sync.Map{}
+		resultFormatters = sync.Map{}
+		for k, v := range saved {
+			stringFormatters.Store(k, v)
+		}
+		for k, v := range savedResults {
+			resultFormatters.Store(k, v)
+		}
+	})
+}
+
 // mdTestOutput is a test-only type registered with RegisterMarkdown
 // to verify string formatter dispatch.
 type mdTestOutput struct{ Name string }
@@ -36,6 +70,7 @@ type mdUnregisteredOutput struct{}
 // text matches the expected "## hello" value.
 func TestRegisterMarkdown_StringFormatter(t *testing.T) {
 	// Clean state: register formatters locally by resetting the map.
+	snapshotMarkdownRegistries(t)
 	stringFormatters = sync.Map{}
 	resultFormatters = sync.Map{}
 
@@ -62,6 +97,7 @@ func TestRegisterMarkdown_StringFormatter(t *testing.T) {
 // formatter that prepends "custom: " to the URL, and asserts the content text
 // matches the expected value.
 func TestRegisterMarkdownResult_ResultFormatter(t *testing.T) {
+	snapshotMarkdownRegistries(t)
 	stringFormatters = sync.Map{}
 	resultFormatters = sync.Map{}
 
@@ -98,6 +134,7 @@ func TestMarkdownForResult_NilReturnsSuccess(t *testing.T) {
 // input value. The test resets the registry before the assertion to guarantee
 // a clean state.
 func TestMarkdownForResult_UnknownTypeReturnsNil(t *testing.T) {
+	snapshotMarkdownRegistries(t)
 	stringFormatters = sync.Map{}
 	resultFormatters = sync.Map{}
 
@@ -111,6 +148,7 @@ func TestMarkdownForResult_UnknownTypeReturnsNil(t *testing.T) {
 // returns nil when a registered string formatter returns an empty string,
 // signaling that the caller should fall back to a default representation.
 func TestMarkdownForResult_EmptyStringReturnsNil(t *testing.T) {
+	snapshotMarkdownRegistries(t)
 	stringFormatters = sync.Map{}
 	resultFormatters = sync.Map{}
 
@@ -128,6 +166,7 @@ func TestMarkdownForResult_EmptyStringReturnsNil(t *testing.T) {
 // The test asserts that the content text is "result" (from the result formatter)
 // rather than "string" (from the string formatter).
 func TestMarkdownForResult_ResultFormatterTakesPriority(t *testing.T) {
+	snapshotMarkdownRegistries(t)
 	stringFormatters = sync.Map{}
 	resultFormatters = sync.Map{}
 
@@ -154,6 +193,7 @@ func TestMarkdownForResult_ResultFormatterTakesPriority(t *testing.T) {
 // formatter and immediately invoke MarkdownForResult, relying on the Go
 // race detector to surface any unsafe concurrent access.
 func TestRegisterMarkdown_ConcurrentSafety(t *testing.T) {
+	snapshotMarkdownRegistries(t)
 	stringFormatters = sync.Map{}
 	resultFormatters = sync.Map{}
 
@@ -275,6 +315,7 @@ func TestFormatVoidOutput_ReturnsEmojiPlusMessage(t *testing.T) {
 // registers two distinct string formatters and MarkdownForResult dispatches
 // each to the correct renderer.
 func TestRegisterMarkdownPair_RegistersBothTypes(t *testing.T) {
+	snapshotMarkdownRegistries(t)
 	stringFormatters = sync.Map{}
 	resultFormatters = sync.Map{}
 
@@ -298,6 +339,7 @@ func TestRegisterMarkdownPair_RegistersBothTypes(t *testing.T) {
 // registers three distinct string formatters and MarkdownForResult dispatches
 // each correctly.
 func TestRegisterMarkdownTriple_RegistersAllTypes(t *testing.T) {
+	snapshotMarkdownRegistries(t)
 	stringFormatters = sync.Map{}
 	resultFormatters = sync.Map{}
 
@@ -326,6 +368,7 @@ func TestRegisterMarkdownTriple_RegistersAllTypes(t *testing.T) {
 // type-assertion branch in RegisterMarkdown when the stored closure receives
 // a non-matching concrete type.
 func TestRegisterMarkdown_TypeMismatchReturnsEmpty(t *testing.T) {
+	snapshotMarkdownRegistries(t)
 	stringFormatters = sync.Map{}
 	resultFormatters = sync.Map{}
 
@@ -350,6 +393,7 @@ func TestRegisterMarkdown_TypeMismatchReturnsEmpty(t *testing.T) {
 // type-assertion branch in RegisterMarkdownResult when the stored closure
 // receives a non-matching concrete type.
 func TestRegisterMarkdownResult_TypeMismatchReturnsNil(t *testing.T) {
+	snapshotMarkdownRegistries(t)
 	stringFormatters = sync.Map{}
 	resultFormatters = sync.Map{}
 
@@ -411,12 +455,10 @@ func TestHasRegisteredMarkdownFormatter_NilValue_ReturnsFalse(t *testing.T) {
 
 // TestHasRegisteredMarkdownFormatter_ReflectType_ReturnsTrue verifies the
 // canonical reflect.Type lookup path: a registered type's reflect.Type must
-// resolve to a formatter. The formatter is registered here rather than relied
-// on from the package init, because other tests in this file reset the
-// registry maps and the result would otherwise depend on execution order.
+// resolve to a formatter. The formatter comes from the package init, which
+// every registry-resetting test in this file now restores via
+// snapshotMarkdownRegistries.
 func TestHasRegisteredMarkdownFormatter_ReflectType_ReturnsTrue(t *testing.T) {
-	RegisterMarkdown(formatDeleteOutput)
-
 	if !HasRegisteredMarkdownFormatter(reflect.TypeFor[DeleteOutput]()) {
 		t.Error("HasRegisteredMarkdownFormatter(reflect.TypeFor[DeleteOutput]()) = false, want true")
 	}
@@ -426,8 +468,6 @@ func TestHasRegisteredMarkdownFormatter_ReflectType_ReturnsTrue(t *testing.T) {
 // plain-value lookup path (the default switch arm using reflect.TypeOf)
 // for a type with a registered string formatter.
 func TestHasRegisteredMarkdownFormatter_Value_ReturnsTrue(t *testing.T) {
-	RegisterMarkdown(formatDeleteOutput)
-
 	if !HasRegisteredMarkdownFormatter(DeleteOutput{Message: "gone"}) {
 		t.Error("HasRegisteredMarkdownFormatter(DeleteOutput{}) = false, want true")
 	}
@@ -437,8 +477,6 @@ func TestHasRegisteredMarkdownFormatter_Value_ReturnsTrue(t *testing.T) {
 // pointer types are dereferenced to their element type before the registry
 // lookup, so *DeleteOutput matches the DeleteOutput formatter.
 func TestHasRegisteredMarkdownFormatter_PointerValue_Dereferenced(t *testing.T) {
-	RegisterMarkdown(formatDeleteOutput)
-
 	if !HasRegisteredMarkdownFormatter(&DeleteOutput{Message: "gone"}) {
 		t.Error("HasRegisteredMarkdownFormatter(*DeleteOutput) = false, want true")
 	}
@@ -483,12 +521,6 @@ func TestHasRegisteredMarkdownFormatter_ResultFormatter_ReturnsTrue(t *testing.T
 // two formatters registered by this package's init (DeleteOutput and
 // VoidOutput).
 func TestMarkdownFormatterCount_IncludesInitRegistrations(t *testing.T) {
-	// The two formatters registered by the package init are re-registered here
-	// rather than relied on: sibling tests in this file reset the registry maps
-	// wholesale, so the surviving count otherwise depends on execution order.
-	RegisterMarkdown(formatDeleteOutput)
-	RegisterMarkdown(formatVoidOutput)
-
 	if n := MarkdownFormatterCount(); n < 2 {
 		t.Errorf("MarkdownFormatterCount() = %d, want >= 2", n)
 	}

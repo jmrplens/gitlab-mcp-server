@@ -216,10 +216,15 @@ func listTrackedGoFiles(root string) ([]string, error) {
 		// The index still lists a file that has been deleted on disk but not
 		// yet staged. Skipping it keeps the tool usable mid-refactor instead of
 		// failing on a dirty tree; a fresh checkout, which is what CI measures,
-		// has nothing to skip.
+		// has nothing to skip. Only a genuinely absent file is skipped — a
+		// permission or I/O error must surface rather than silently drop a
+		// tracked file from the published counts.
 		if _, statErr := os.Stat(filepath.Join(root, f)); statErr != nil {
-			missing++
-			continue
+			if os.IsNotExist(statErr) {
+				missing++
+				continue
+			}
+			return nil, fmt.Errorf("stat tracked file %s: %w", f, statErr)
 		}
 		files = append(files, f)
 	}
