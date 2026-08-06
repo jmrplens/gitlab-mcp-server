@@ -26,16 +26,23 @@ func TestUploadAvatar_ContentBase64_Multipart(t *testing.T) {
 	mux.HandleFunc("PUT /api/v4/groups/99", func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // Test handler parses a small in-memory fixture body.
 			t.Errorf("ParseMultipartForm: %v", err)
+			http.Error(w, "parse multipart form", http.StatusBadRequest)
+			return
 		}
 		for field, files := range r.MultipartForm.File {
+			if len(files) == 0 {
+				t.Errorf("multipart field %q has no files", field)
+				continue
+			}
 			gotField = field
 			f, err := files[0].Open()
 			if err != nil {
 				t.Errorf("open multipart file: %v", err)
+				continue
 			}
-			defer f.Close()
 			buf := make([]byte, 64)
 			n, _ := f.Read(buf)
+			_ = f.Close()
 			gotContent = string(buf[:n])
 			gotFilename = files[0].Filename
 		}

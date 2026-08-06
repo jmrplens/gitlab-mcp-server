@@ -480,9 +480,9 @@ func TestReviewerWorkload_MembersAPIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "reviewer_workload", map[string]string{"group_id": "g1"})
 }
 
-// TestRecordReviewerWorkloadMR_UnknownReviewer_IsIgnored verifies that a reviewer who
+// TestRecordReviewerWorkloadMR_UnknownReviewer_CreatesStatsEntry verifies that a reviewer who
 // is not a group member gets a stats entry created on the fly.
-func TestRecordReviewerWorkloadMR_UnknownReviewer_IsIgnored(t *testing.T) {
+func TestRecordReviewerWorkloadMR_UnknownReviewer_CreatesStatsEntry(t *testing.T) {
 	stats := map[string]*reviewerWorkloadStats{}
 	created := time.Now().Add(-24 * time.Hour)
 

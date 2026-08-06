@@ -5932,12 +5932,17 @@ func TestRegistrySearch_ProjectListSearchQuery_RanksSearchProjectsFirst(t *testi
 
 	const query = "project list search gitlab-mcp-server"
 	for _, limit := range []int{8, 20} {
-		if _, out, searchErr := reg.Search(context.Background(), nil, SearchInput{Query: query, Limit: limit}); searchErr != nil {
-			t.Errorf("Search(limit=%d) error = %v", limit, searchErr)
-		} else if len(out.Results) == 0 {
-			t.Errorf("Search(limit=%d) returned no results", limit)
-		} else if out.Results[0].ID != "search.projects" {
-			t.Errorf("Search(limit=%d) top result = %q, want search.projects", limit, out.Results[0].ID)
-		}
+		t.Run(fmt.Sprintf("limit=%d", limit), func(t *testing.T) {
+			_, out, searchErr := reg.Search(context.Background(), nil, SearchInput{Query: query, Limit: limit})
+			if searchErr != nil {
+				t.Fatalf("Search() error = %v", searchErr)
+			}
+			if len(out.Results) == 0 {
+				t.Fatal("Search() returned no results")
+			}
+			if out.Results[0].ID != "search.projects" {
+				t.Errorf("Search() top result = %q, want search.projects", out.Results[0].ID)
+			}
+		})
 	}
 }

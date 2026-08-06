@@ -2139,7 +2139,10 @@ func TestWriteMRSection_FetchError_WritesNothing(t *testing.T) {
 // TestTeamMemberWorkload_MissingProjectID_ReturnsError verifies that the
 // team_member_workload prompt rejects requests without a project_id.
 func TestTeamMemberWorkload_MissingProjectID_ReturnsError(t *testing.T) {
-	getPromptExpectErrorWithoutAPICall(t, "team_member_workload", nil)
+	// username is supplied so only project_id is missing: passing nil would
+	// omit both required arguments and the case would pass even if the
+	// project_id check were broken.
+	getPromptExpectErrorWithoutAPICall(t, "team_member_workload", map[string]string{"username": "alice"})
 }
 
 // prompt_team.go error branches.

@@ -92,22 +92,32 @@ func TestConfigureTerminalOutput_WritesLogWithoutEcho(t *testing.T) {
 // all enable terminal output. This keeps validation commands from creating
 // unnecessary artifacts.
 func TestShouldConfigureTerminalOutput_SkipsCheckDocsWithoutExplicitOutput(t *testing.T) {
-	for _, opts := range []options{
-		{CheckDocs: true},
-		{CheckEfficiency: stringList{"dist/evaluation/efficiency.md"}},
-		{CompareTraces: stringList{"dist/evaluation/report.traces"}},
+	for _, tt := range []struct {
+		name string
+		opts options
+	}{
+		{"check docs", options{CheckDocs: true}},
+		{"check efficiency", options{CheckEfficiency: stringList{"dist/evaluation/efficiency.md"}}},
+		{"compare traces", options{CompareTraces: stringList{"dist/evaluation/report.traces"}}},
 	} {
-		if shouldConfigureTerminalOutput(opts) {
-			t.Fatalf("shouldConfigureTerminalOutput(%+v) = true, want false", opts)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			if shouldConfigureTerminalOutput(tt.opts) {
+				t.Errorf("shouldConfigureTerminalOutput(%+v) = true, want false", tt.opts)
+			}
+		})
 	}
-	for _, opts := range []options{
-		{},
-		{CheckDocs: true, TerminalLog: "check.log"},
-		{CheckDocs: true, PrintOutput: true},
+	for _, tt := range []struct {
+		name string
+		opts options
+	}{
+		{"default options", options{}},
+		{"check docs with explicit log path", options{CheckDocs: true, TerminalLog: "check.log"}},
+		{"check docs with print output", options{CheckDocs: true, PrintOutput: true}},
 	} {
-		if !shouldConfigureTerminalOutput(opts) {
-			t.Fatalf("shouldConfigureTerminalOutput(%+v) = false, want true", opts)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			if !shouldConfigureTerminalOutput(tt.opts) {
+				t.Errorf("shouldConfigureTerminalOutput(%+v) = false, want true", tt.opts)
+			}
+		})
 	}
 }
