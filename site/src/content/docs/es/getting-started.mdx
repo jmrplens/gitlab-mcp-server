@@ -171,7 +171,7 @@ Hay una instancia pública en **`https://mcp.jmrp.io/gitlab`** — nada que inst
 }
 ```
 
-`PRIVATE-TOKEN` es obligatoria y viaja en cada petición — nunca se guarda en el servidor. `GITLAB-URL` es opcional y por defecto vale `https://gitlab.com`; ponla para llegar a otra instancia, que debe ser accesible desde Internet.
+La cabecera `PRIVATE-TOKEN` es obligatoria y viaja en cada petición — nunca se guarda en el servidor. `GITLAB-URL` es opcional y por defecto vale `https://gitlab.com`; ponla para llegar a otra instancia, que debe ser accesible desde Internet.
 
 Es la forma más rápida de probar el servidor, y la forma correcta de usarlo a diario sigue siendo **en local** (cualquier opción de arriba) o a través de [Smithery](https://smithery.ai/servers/jmrp/gitlab-mcp-server), por un motivo concreto: tu token y todas tus peticiones pasan por la máquina de otra persona. Ejecutarlo en local mantiene ambos en tu ordenador — la única opción sensata para una instancia autogestionada privada.
 

@@ -456,6 +456,12 @@ The endpoint is listed at [mcp.jmrp.io](https://mcp.jmrp.io/), a directory of th
 
 ## Session Lifecycle
 
+This section describes **stateful** mode (`--stateless=false`). Under the
+default `--stateless=true` — which the public hosted endpoint runs — no
+`Mcp-Session-Id` is issued and no MCP session state is carried between
+requests; every POST is self-contained. The server pool below is orthogonal to
+that: it is keyed on `(token, GitLab URL)` and is reused in both modes.
+
 ### 1. First Request
 
 When a client sends its first HTTP POST to `/mcp`:

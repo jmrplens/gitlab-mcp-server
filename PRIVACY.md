@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: 2026-07-07
+Last updated: 2026-08-06
 
 **gitlab-mcp-server** is a local Model Context Protocol (MCP) server. It runs
 entirely on your machine and acts as a bridge between your MCP client (Claude
