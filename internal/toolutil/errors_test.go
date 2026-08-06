@@ -837,9 +837,8 @@ func fieldSet(names ...string) map[string]struct{} {
 // helper does after the first clone (it reuses the same backing map).
 // Tests using this helper should treat the supplied params as
 // in-out: the same map will be mutated in place.
-func aliasClone(initial map[string]any) (clone func() map[string]any, _ *map[string]any) {
-	clone = func() map[string]any { return initial }
-	return clone, nil
+func aliasClone(initial map[string]any) func() map[string]any {
+	return func() map[string]any { return initial }
 }
 
 // TestExplainIIDParamAliasDirect verifies the explanation helper
@@ -924,7 +923,7 @@ func TestRemoveContextOnlyDiscussionIDDirect(t *testing.T) {
 
 	t.Run("removes when note_id is canonical and present", func(t *testing.T) {
 		params := map[string]any{"discussion_id": "abc", "note_id": 7}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		removeContextOnlyDiscussionID(params, acceptsNoteID, clone)
 		if _, ok := params["discussion_id"]; ok {
 			t.Errorf("discussion_id not removed: %+v", params)
@@ -936,7 +935,7 @@ func TestRemoveContextOnlyDiscussionIDDirect(t *testing.T) {
 
 	t.Run("keeps when schema accepts discussion_id", func(t *testing.T) {
 		params := map[string]any{"discussion_id": "abc", "note_id": 7}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		removeContextOnlyDiscussionID(params, acceptsAll, clone)
 		if _, ok := params["discussion_id"]; !ok {
 			t.Error("discussion_id removed even though schema accepts it")
@@ -945,7 +944,7 @@ func TestRemoveContextOnlyDiscussionIDDirect(t *testing.T) {
 
 	t.Run("keeps when note_id is absent", func(t *testing.T) {
 		params := map[string]any{"discussion_id": "abc"}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		removeContextOnlyDiscussionID(params, acceptsNoteID, clone)
 		if _, ok := params["discussion_id"]; !ok {
 			t.Error("discussion_id removed even though note_id is absent")
@@ -961,7 +960,7 @@ func TestNormalizeActiveAliasDirect(t *testing.T) {
 
 	t.Run("active false becomes paused true", func(t *testing.T) {
 		params := map[string]any{"active": false}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeActiveAlias(params, acceptsPaused, clone)
 		if v, ok := params["paused"]; !ok || v != true {
 			t.Errorf("paused = %v/%v, want true", v, ok)
@@ -973,7 +972,7 @@ func TestNormalizeActiveAliasDirect(t *testing.T) {
 
 	t.Run("active true becomes paused false", func(t *testing.T) {
 		params := map[string]any{"active": true}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeActiveAlias(params, acceptsPaused, clone)
 		if v, ok := params["paused"]; !ok || v != false {
 			t.Errorf("paused = %v/%v, want false", v, ok)
@@ -982,7 +981,7 @@ func TestNormalizeActiveAliasDirect(t *testing.T) {
 
 	t.Run("no-op when paused not accepted", func(t *testing.T) {
 		params := map[string]any{"active": false}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeActiveAlias(params, acceptsFalse, clone)
 		if _, ok := params["paused"]; ok {
 			t.Error("paused added when schema does not accept it")
@@ -991,7 +990,7 @@ func TestNormalizeActiveAliasDirect(t *testing.T) {
 
 	t.Run("preserves existing paused value", func(t *testing.T) {
 		params := map[string]any{"active": false, "paused": true}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeActiveAlias(params, acceptsPaused, clone)
 		if params["paused"] != true {
 			t.Errorf("paused = %v, want true (preserved)", params["paused"])
@@ -1000,7 +999,7 @@ func TestNormalizeActiveAliasDirect(t *testing.T) {
 
 	t.Run("non-bool active is ignored", func(t *testing.T) {
 		params := map[string]any{"active": "yes"}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeActiveAlias(params, acceptsPaused, clone)
 		if _, ok := params["paused"]; ok {
 			t.Error("paused added for non-bool active")
@@ -1015,7 +1014,7 @@ func TestNormalizeFilePathAliasDirect(t *testing.T) {
 
 	t.Run("splits file_path into path+filename", func(t *testing.T) {
 		params := map[string]any{"file_path": "packages/npm/pkg.tgz"}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeFilePathAlias(params, acceptsBoth, clone)
 		if params["path"] != "packages/npm" {
 			t.Errorf("path = %q, want packages/npm", params["path"])
@@ -1030,7 +1029,7 @@ func TestNormalizeFilePathAliasDirect(t *testing.T) {
 
 	t.Run("preserves existing path", func(t *testing.T) {
 		params := map[string]any{"file_path": "packages/npm/pkg.tgz", "path": "custom"}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeFilePathAlias(params, acceptsBoth, clone)
 		if params["path"] != "custom" {
 			t.Errorf("path = %q, want custom (preserved)", params["path"])
@@ -1039,7 +1038,7 @@ func TestNormalizeFilePathAliasDirect(t *testing.T) {
 
 	t.Run("non-string file_path is ignored", func(t *testing.T) {
 		params := map[string]any{"file_path": 42}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeFilePathAlias(params, acceptsBoth, clone)
 		if _, ok := params["path"]; ok {
 			t.Error("path added for non-string file_path")
@@ -1048,7 +1047,7 @@ func TestNormalizeFilePathAliasDirect(t *testing.T) {
 
 	t.Run("empty file_path is ignored", func(t *testing.T) {
 		params := map[string]any{"file_path": ""}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeFilePathAlias(params, acceptsBoth, clone)
 		if _, ok := params["path"]; ok {
 			t.Error("path added for empty file_path")
@@ -1064,7 +1063,7 @@ func TestNormalizeIIDAliasDirect(t *testing.T) {
 
 	t.Run("iid is renamed to merge_request_iid", func(t *testing.T) {
 		params := map[string]any{"iid": "5"}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeIIDAlias(params, fieldSet("merge_request_iid"), acceptsMRIID, clone)
 		if params["merge_request_iid"] != "5" {
 			t.Errorf("merge_request_iid = %v, want 5", params["merge_request_iid"])
@@ -1076,7 +1075,7 @@ func TestNormalizeIIDAliasDirect(t *testing.T) {
 
 	t.Run("no rename when iid is accepted", func(t *testing.T) {
 		params := map[string]any{"iid": "5"}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeIIDAlias(params, fieldSet("iid"), acceptsNoIID, clone)
 		if _, ok := params["merge_request_iid"]; ok {
 			t.Error("iid was renamed even though it is accepted")
@@ -1085,7 +1084,7 @@ func TestNormalizeIIDAliasDirect(t *testing.T) {
 
 	t.Run("ambiguous canonical field → no rename", func(t *testing.T) {
 		params := map[string]any{"iid": "5"}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeIIDAlias(params, fieldSet("merge_request_iid", "issue_iid"), acceptsNoIID, clone)
 		if _, ok := params["merge_request_iid"]; ok {
 			t.Error("iid was renamed when canonical was ambiguous")
@@ -1094,7 +1093,7 @@ func TestNormalizeIIDAliasDirect(t *testing.T) {
 
 	t.Run("missing canonical field → no rename", func(t *testing.T) {
 		params := map[string]any{"iid": "5"}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeIIDAlias(params, fieldSet("title"), acceptsNoIID, clone)
 		if _, ok := params["merge_request_iid"]; ok {
 			t.Error("iid was renamed when no canonical field exists")
@@ -1111,7 +1110,7 @@ func TestNormalizeEnvironmentNameAliasDirect(t *testing.T) {
 
 	t.Run("environment is renamed to name", func(t *testing.T) {
 		params := map[string]any{"environment": "production"}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeEnvironmentNameAlias(params, acceptsName, clone)
 		if params["name"] != "production" {
 			t.Errorf("name = %q, want production", params["name"])
@@ -1123,7 +1122,7 @@ func TestNormalizeEnvironmentNameAliasDirect(t *testing.T) {
 
 	t.Run("preserves existing name and drops environment", func(t *testing.T) {
 		params := map[string]any{"environment": "production", "name": "stage"}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeEnvironmentNameAlias(params, acceptsName, clone)
 		if params["name"] != "stage" {
 			t.Errorf("name = %q, want stage (preserved)", params["name"])
@@ -1135,7 +1134,7 @@ func TestNormalizeEnvironmentNameAliasDirect(t *testing.T) {
 
 	t.Run("no-op when environment_scope is accepted", func(t *testing.T) {
 		params := map[string]any{"environment": "production"}
-		clone, _ := aliasClone(params)
+		clone := aliasClone(params)
 		normalizeEnvironmentNameAlias(params, acceptsScope, clone)
 		if _, ok := params["name"]; ok {
 			t.Error("name was added despite environment_scope being accepted")
@@ -1330,8 +1329,10 @@ func TestGitLabRoleAccessLevelStringAliases(t *testing.T) {
 // TestHasUnknownParamNamesDirect verifies the unknown-parameter
 // detector handles empty params, missing properties, and unknown keys.
 func TestHasUnknownParamNamesDirect(t *testing.T) {
-	// empty params → false
-	if hasUnknownParamNames(map[string]any{"x": 1}, map[string]any{}) {
+	// empty params → false, with a schema that does declare properties so this
+	// case exercises the empty-params branch rather than the no-properties one.
+	emptyParamsSchema := map[string]any{"properties": map[string]any{"known": map[string]any{}}}
+	if hasUnknownParamNames(emptyParamsSchema, map[string]any{}) {
 		t.Error("hasUnknownParamNames(empty) = true, want false")
 	}
 	// schema has no properties → false

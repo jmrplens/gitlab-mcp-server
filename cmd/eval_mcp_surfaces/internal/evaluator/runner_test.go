@@ -983,7 +983,8 @@ func newResourceLookupSessionForTest(t *testing.T) *mcp.ClientSession {
 	return session
 }
 
-// toolUseResponse converts the GitLab API response to the tool output format.
+// toolUseResponse builds a scripted modelResponse carrying a single tool_use
+// content block, so a test can drive the runner without a real model call.
 func toolUseResponse(id, name string, input map[string]any) modelResponse {
 	return modelResponse{Content: []modelContentBlock{{Type: "tool_use", ID: id, Name: name, Input: input}}}
 }

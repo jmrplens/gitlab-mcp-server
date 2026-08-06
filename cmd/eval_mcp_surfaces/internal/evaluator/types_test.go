@@ -71,8 +71,13 @@ func TestModelProviderCallError_WrapsProviderTrace(t *testing.T) {
 	}
 }
 
-// TestDynamicCallBudgetForTask_ClassifiesExactAndAmbiguousTasks verifies DynamicCallBudgetForTask classifies exact and ambiguous tasks.
-func TestDynamicCallBudgetForTask_ClassifiesExactAndAmbiguousTasks(t *testing.T) {
+// TestDynamicCallBudgetForTask_ExactAndAmbiguousTasks_ShareOneDiscoveryBudget
+// pins the fact that callBudgetForTask does not classify tasks at all: it
+// hardcodes AllowedDiscoveryCalls to 0 and never sets SuppressDiscovery, so an
+// exact task and an ambiguous one get the same discovery budget. Only the
+// step-derived fields vary, and those are asserted here so a change to either
+// behavior is caught.
+func TestDynamicCallBudgetForTask_ExactAndAmbiguousTasks_ShareOneDiscoveryBudget(t *testing.T) {
 	exactTask := evalTask{ID: "MT-066", Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`.", Steps: []evalStep{
 		{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 	}}
@@ -87,6 +92,31 @@ func TestDynamicCallBudgetForTask_ClassifiesExactAndAmbiguousTasks(t *testing.T)
 	ambiguousBudget := callBudgetForTask(ambiguousTask, config.ToolSurfaceDynamic)
 	if ambiguousBudget.AllowedDiscoveryCalls != 0 || ambiguousBudget.SuppressDiscovery {
 		t.Fatalf("ambiguous budget = %+v, want default discovery budget", ambiguousBudget)
+	}
+	if ambiguousBudget.ExpectedSteps != exactBudget.ExpectedSteps {
+		t.Fatalf("ExpectedSteps: ambiguous = %d, exact = %d; both tasks have one step",
+			ambiguousBudget.ExpectedSteps, exactBudget.ExpectedSteps)
+	}
+	// MaxCalls is the only field a caller can act on, and it must leave room for
+	// the repair attempts the surface allows on top of the expected steps. Both
+	// budgets are checked: a task-dependent repair allowance would otherwise
+	// undersize the ambiguous one without failing the equality check below.
+	for _, tt := range []struct {
+		name   string
+		budget taskCallBudget
+	}{
+		{"exact", exactBudget},
+		{"ambiguous", ambiguousBudget},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.budget.MaxCalls < tt.budget.ExpectedSteps+tt.budget.AllowedRepairCalls {
+				t.Errorf("budget = %+v, want MaxCalls >= ExpectedSteps+AllowedRepairCalls", tt.budget)
+			}
+		})
+	}
+	if ambiguousBudget.MaxCalls != exactBudget.MaxCalls {
+		t.Fatalf("MaxCalls: ambiguous = %d, exact = %d; the budget is not task-dependent",
+			ambiguousBudget.MaxCalls, exactBudget.MaxCalls)
 	}
 }
 

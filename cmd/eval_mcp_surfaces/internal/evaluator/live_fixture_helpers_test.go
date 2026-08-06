@@ -257,16 +257,18 @@ func TestFixtureSetupToolEnvelope_KeepsMetaDispatcher(t *testing.T) {
 // TestCallFixtureSetupTool_FallsBackToSplitMetaTool verifies CallFixtureSetupTool falls back to split meta tool.
 func TestCallFixtureSetupTool_FallsBackToSplitMetaTool(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "fixture-test", Version: "0"}, nil)
-	called := false
+	// The handler runs on the server goroutine, so it records what it saw and
+	// the assertions run on the test goroutine after the call returns. Asserting
+	// inside would call FailNow off-test and abandon the request mid-flight.
+	var (
+		gotAction any
+		gotParams map[string]any
+		called    bool
+	)
 	mcp.AddTool(server, &mcp.Tool{Name: "gitlab_branch", Description: "branch meta-tool"}, func(_ context.Context, _ *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
 		called = true
-		if input["action"] != "create" {
-			t.Fatalf("action = %v, want create", input["action"])
-		}
-		params, _ := input["params"].(map[string]any)
-		if params["project_id"] != "my-org/tools/gitlab-mcp-server" {
-			t.Fatalf("params = %+v", params)
-		}
+		gotAction = input["action"]
+		gotParams, _ = input["params"].(map[string]any)
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil, nil
 	})
 
@@ -287,5 +289,11 @@ func TestCallFixtureSetupTool_FallsBackToSplitMetaTool(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("split meta-tool was not called")
+	}
+	if gotAction != "create" {
+		t.Errorf("action = %v, want create", gotAction)
+	}
+	if gotParams["project_id"] != "my-org/tools/gitlab-mcp-server" {
+		t.Errorf("params = %+v, want project_id my-org/tools/gitlab-mcp-server", gotParams)
 	}
 }

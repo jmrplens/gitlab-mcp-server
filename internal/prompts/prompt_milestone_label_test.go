@@ -490,9 +490,9 @@ func TestProjectContributors_APIError(t *testing.T) {
 	}
 }
 
-// TestProjectContributors_PieChartCap verifies that the contributor pie chart
+// TestProjectContributors_PieChartCap_CapsPieChartSlices verifies that the contributor pie chart
 // is capped at eight entries while the table still lists everyone.
-func TestProjectContributors_PieChartCap(t *testing.T) {
+func TestProjectContributors_PieChartCap_CapsPieChartSlices(t *testing.T) {
 	var sb strings.Builder
 	sb.WriteString("[")
 	for i := 1; i <= 9; i++ {

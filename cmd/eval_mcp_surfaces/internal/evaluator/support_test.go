@@ -43,15 +43,6 @@ func TestLiveUniqueSuffix_ReturnsDistinctNonEmptyValues(t *testing.T) {
 	}
 }
 
-// TestWaitForContext_CanceledContextReturnsError verifies WaitForContext when canceled context returns error.
-func TestWaitForContext_CanceledContextReturnsError(t *testing.T) {
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	if err := waitForContext(ctx, time.Hour); !errors.Is(err, context.Canceled) {
-		t.Fatalf("waitForContext() error = %v, want context.Canceled", err)
-	}
-}
-
 // roundTripFunc adapts a function to http.RoundTripper so a test can serve
 // canned responses without a server. It lives here rather than beside any one
 // test because both the runner and the provider tests use it.

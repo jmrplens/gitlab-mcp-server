@@ -140,16 +140,16 @@ func testCommit(title, message string, parents []string) *gl.Commit {
 	return &gl.Commit{Title: title, Message: message, ParentIDs: parents}
 }
 
-// TestAuditCommitHygiene_CompareAPIError verifies that audit_commit_hygiene
+// TestAuditCommitHygiene_CompareAPIError_ReturnsError verifies that audit_commit_hygiene
 // returns an error when the repository compare API fails.
-func TestAuditCommitHygiene_CompareAPIError(t *testing.T) {
+func TestAuditCommitHygiene_CompareAPIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "audit_commit_hygiene",
 		map[string]string{"project_id": "42", "from": "v1.0.0"})
 }
 
-// TestAuditCommitHygiene_SameRef verifies the early-exit branch when both
+// TestAuditCommitHygiene_SameRef_ReportsNoCommits verifies the early-exit branch when both
 // refs point at the same commit and no commits are returned.
-func TestAuditCommitHygiene_SameRef(t *testing.T) {
+func TestAuditCommitHygiene_SameRef_ReportsNoCommits(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathRepoCompare, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `{"compare_same_ref":true,"commits":[],"diffs":[]}`)
@@ -162,23 +162,23 @@ func TestAuditCommitHygiene_SameRef(t *testing.T) {
 	}
 }
 
-// TestMRDescriptionQuality_InvalidIID verifies that a non-numeric MR IID is
+// TestMRDescriptionQuality_InvalidIID_ReturnsError verifies that a non-numeric MR IID is
 // rejected before any API call.
-func TestMRDescriptionQuality_InvalidIID(t *testing.T) {
-	getPromptExpectError(t, notFoundHandler(), "mr_description_quality",
+func TestMRDescriptionQuality_InvalidIID_ReturnsError(t *testing.T) {
+	getPromptExpectErrorWithoutAPICall(t, "mr_description_quality",
 		map[string]string{"project_id": "42", "merge_request_iid": "abc"})
 }
 
-// TestMRDescriptionQuality_MRAPIError verifies the MR-fetch error branch of
+// TestMRDescriptionQuality_MRAPIError_ReturnsError verifies the MR-fetch error branch of
 // mr_description_quality.
-func TestMRDescriptionQuality_MRAPIError(t *testing.T) {
+func TestMRDescriptionQuality_MRAPIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "mr_description_quality",
 		map[string]string{"project_id": "42", "merge_request_iid": "5"})
 }
 
-// TestMRDescriptionQuality_DiffsAPIError verifies the diff-fetch error branch
+// TestMRDescriptionQuality_DiffsAPIError_ReturnsError verifies the diff-fetch error branch
 // of mr_description_quality (MR fetch succeeds).
-func TestMRDescriptionQuality_DiffsAPIError(t *testing.T) {
+func TestMRDescriptionQuality_DiffsAPIError_ReturnsError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+pathMR5, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `{"iid":5,"title":"T","source_branch":"a","target_branch":"main","description":""}`)
@@ -190,9 +190,9 @@ func TestMRDescriptionQuality_DiffsAPIError(t *testing.T) {
 		map[string]string{"project_id": "42", "merge_request_iid": "5"})
 }
 
-// TestCommitBody_EmptyMessage verifies that a whitespace-only commit message
+// TestCommitBody_EmptyMessage_ReturnsEmptyBody verifies that a whitespace-only commit message
 // yields an empty body.
-func TestCommitBody_EmptyMessage(t *testing.T) {
+func TestCommitBody_EmptyMessage_ReturnsEmptyBody(t *testing.T) {
 	if got := commitBody(&gl.Commit{Message: "   "}); got != "" {
 		t.Errorf("commitBody() = %q, want empty", got)
 	}

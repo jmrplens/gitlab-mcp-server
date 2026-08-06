@@ -394,10 +394,10 @@ func assertBefore(t *testing.T, s, before, after string) {
 	}
 }
 
-// TestRenderReadmeFootprint_DynamicOnlyWithTiers verifies the README footprint
+// TestRenderReadmeFootprint_DynamicOnlyRows_KeepsOneRowPerTier verifies the README footprint
 // table keeps only the dynamic surface (default configuration) across all
 // tiers and links to the detailed reference, without the meta/individual rows.
-func TestRenderReadmeFootprint_DynamicOnlyWithTiers(t *testing.T) {
+func TestRenderReadmeFootprint_DynamicOnlyRows_KeepsOneRowPerTier(t *testing.T) {
 	rows := []tokenFootprintRow{
 		{Tier: "Free/CE", Configuration: "`dynamic` / `full` (default)", VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
 		{Tier: "Free/CE", Configuration: "`dynamic` / `minimal`", VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 1088},
@@ -422,11 +422,11 @@ func TestRenderReadmeFootprint_DynamicOnlyWithTiers(t *testing.T) {
 	}
 }
 
-// TestFootprintStaleTargets verifies the drift detector backing
-// -footprint -check: it reports no stale targets when the README section and
-// detailed doc match the rendered content, and names exactly the target(s)
-// that diverge otherwise.
-func TestFootprintStaleTargets(t *testing.T) {
+// TestFootprintStaleTargets_DriftPerTarget_NamesOnlyTheDivergingFile verifies
+// the drift detector backing -footprint -check: it reports no stale targets
+// when the README section and detailed doc match the rendered content, and
+// names exactly the target that diverges otherwise.
+func TestFootprintStaleTargets_DriftPerTarget_NamesOnlyTheDivergingFile(t *testing.T) {
 	rows := completeFootprintRows()
 	// A README whose managed section already holds the rendered content.
 	readme := footprintStartMarker + "\n\n" + renderReadmeFootprint(rows) + "\n" + footprintEndMarker + "\n"
@@ -437,41 +437,43 @@ func TestFootprintStaleTargets(t *testing.T) {
 	}
 	site := string(siteJSON)
 
-	t.Run("current content reports no stale targets", func(t *testing.T) {
-		stale, err := footprintStaleTargets(readme, detailed, site, rows)
-		if err != nil {
-			t.Fatalf("footprintStaleTargets(current) error: %v", err)
-		}
-		if len(stale) != 0 {
-			t.Fatalf("expected no stale targets, got %v", stale)
-		}
-	})
+	tests := []struct {
+		name      string
+		readme    string
+		detailed  string
+		site      string
+		wantErr   bool
+		wantStale string // substring the single stale target must contain; "" means none
+	}{
+		{name: "current content reports no stale targets", readme: readme, detailed: detailed, site: site},
+		{name: "detailed-doc drift reports only the detailed doc", readme: readme, detailed: detailed + "\nextra drift\n", site: site, wantStale: detailedFootprintPath},
+		{name: "site JSON drift reports only the site data file", readme: readme, detailed: detailed, site: `{"tokenizer":"stale"}`, wantStale: siteFootprintPath},
+		{name: "missing README markers returns an error", readme: "no markers here", detailed: detailed, site: site, wantErr: true},
+	}
 
-	t.Run("detailed-doc drift reports only the detailed doc", func(t *testing.T) {
-		stale, err := footprintStaleTargets(readme, detailed+"\nextra drift\n", site, rows)
-		if err != nil {
-			t.Fatalf("footprintStaleTargets(stale detailed) error: %v", err)
-		}
-		if len(stale) != 1 || !strings.Contains(stale[0], detailedFootprintPath) {
-			t.Fatalf("expected only %q stale, got %v", detailedFootprintPath, stale)
-		}
-	})
-
-	t.Run("site JSON drift reports only the site data file", func(t *testing.T) {
-		stale, err := footprintStaleTargets(readme, detailed, `{"tokenizer":"stale"}`, rows)
-		if err != nil {
-			t.Fatalf("footprintStaleTargets(stale site) error: %v", err)
-		}
-		if len(stale) != 1 || !strings.Contains(stale[0], siteFootprintPath) {
-			t.Fatalf("expected only %q stale, got %v", siteFootprintPath, stale)
-		}
-	})
-
-	t.Run("missing README markers returns an error", func(t *testing.T) {
-		if _, err := footprintStaleTargets("no markers here", detailed, site, rows); err == nil {
-			t.Fatal("expected error when README lacks the footprint markers")
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stale, err := footprintStaleTargets(tt.readme, tt.detailed, tt.site, rows)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("footprintStaleTargets() error = nil, want error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("footprintStaleTargets() error: %v", err)
+			}
+			if tt.wantStale == "" {
+				if len(stale) != 0 {
+					t.Fatalf("stale = %v, want none", stale)
+				}
+				return
+			}
+			if len(stale) != 1 || !strings.Contains(stale[0], tt.wantStale) {
+				t.Fatalf("stale = %v, want only %q", stale, tt.wantStale)
+			}
+		})
+	}
 }
 
 // completeFootprintRows returns a fixture covering every row the site-facing
@@ -488,12 +490,12 @@ func completeFootprintRows() []tokenFootprintRow {
 	}
 }
 
-// TestRenderSiteFootprintJSON verifies the site-facing headline extract: the
+// TestRenderSiteFootprintJSON_CompleteMatrix_DerivesReductionFactor verifies the site-facing headline extract: the
 // dynamic surface is taken from the Ultimate tier, every tier gets an
 // individual-surface entry, and the reduction factor is derived rather than
 // restated. This is the number the docs site publishes as its headline claim,
 // so a wrong ratio would propagate straight into AI answers.
-func TestRenderSiteFootprintJSON(t *testing.T) {
+func TestRenderSiteFootprintJSON_CompleteMatrix_DerivesReductionFactor(t *testing.T) {
 	raw, renderErr := renderSiteFootprintJSON(completeFootprintRows())
 	if renderErr != nil {
 		t.Fatalf("renderSiteFootprintJSON() error: %v", renderErr)
@@ -522,9 +524,9 @@ func TestRenderSiteFootprintJSON(t *testing.T) {
 	}
 }
 
-// TestRenderSiteFootprintJSON_RejectsIncompleteMatrix verifies generation fails
+// TestRenderSiteFootprintJSON_IncompleteMatrix_ReturnsError verifies generation fails
 // loudly rather than publishing a partial headline claim.
-func TestRenderSiteFootprintJSON_RejectsIncompleteMatrix(t *testing.T) {
+func TestRenderSiteFootprintJSON_IncompleteMatrix_ReturnsError(t *testing.T) {
 	tests := []struct {
 		name string
 		rows []tokenFootprintRow
@@ -553,10 +555,10 @@ func TestRenderSiteFootprintJSON_RejectsIncompleteMatrix(t *testing.T) {
 	}
 }
 
-// TestMeasureTokenFootprintRows_AllTiersAllModes verifies the full measurement
+// TestMeasureTokenFootprintRows_AllTiersAllModes_CoversEveryCombination verifies the full measurement
 // matrix: 3 tiers \u00d7 9 configurations, tier ordering, meta schema-mode token
 // scaling, and tier-based individual tool scaling.
-func TestMeasureTokenFootprintRows_AllTiersAllModes(t *testing.T) {
+func TestMeasureTokenFootprintRows_AllTiersAllModes_CoversEveryCombination(t *testing.T) {
 	client := newAuditTokensClient(t)
 
 	rows, err := measureTokenFootprintRows(client)
@@ -595,12 +597,12 @@ func TestMeasureTokenFootprintRows_AllTiersAllModes(t *testing.T) {
 	}
 }
 
-// TestMeasureToolSchemaTokens_UsesRealTokenizer verifies the schema token
+// TestMeasureToolSchemaTokens_RealTokenizer_ReturnsNonZeroCounts verifies the schema token
 // estimator runs the cl100k_base tokenizer, not the bytes/4 fallback. It counts
 // the same serialized tools both ways and asserts they differ, so a tokenizer
 // init/encode regression (silently dropping to bytes/4) fails here. The
 // tokenizer itself is unit-tested in tokens_test.go.
-func TestMeasureToolSchemaTokens_UsesRealTokenizer(t *testing.T) {
+func TestMeasureToolSchemaTokens_RealTokenizer_ReturnsNonZeroCounts(t *testing.T) {
 	toolList := []*mcp.Tool{{Name: "a"}, {Name: "bb"}, {Name: "ccc"}}
 
 	got, err := measureToolSchemaTokens(toolList)
@@ -624,18 +626,18 @@ func TestMeasureToolSchemaTokens_UsesRealTokenizer(t *testing.T) {
 	}
 }
 
-// TestRunMetaSchemaSizing_Completes verifies the meta-schema sizing can build
+// TestRunMetaSchemaSizing_DefaultOptions_CompletesWithoutError verifies the meta-schema sizing can build
 // the full base-plus-enterprise meta-tool registry and measure schema sizes.
 // Migrated from the former cmd/audit_meta_schema/main_test.go.
-func TestRunMetaSchemaSizing_Completes(t *testing.T) {
+func TestRunMetaSchemaSizing_DefaultOptions_CompletesWithoutError(t *testing.T) {
 	if err := runMetaSchemaSizing(); err != nil {
 		t.Fatalf("runMetaSchemaSizing() error: %v", err)
 	}
 }
 
-// TestHumanBytes_AllMagnitudes verifies the humanBytes byte formatter emits
+// TestHumanBytes_AllMagnitudes_FormatsWithUnitSuffix verifies the humanBytes byte formatter emits
 // expected B/KB/MB suffixes for the three supported magnitude ranges.
-func TestHumanBytes_AllMagnitudes(t *testing.T) {
+func TestHumanBytes_AllMagnitudes_FormatsWithUnitSuffix(t *testing.T) {
 	tests := []struct {
 		name string
 		n    int

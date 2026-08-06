@@ -2089,10 +2089,10 @@ func TestReviewMRPrompt_MissingArgs(t *testing.T) {
 	}
 }
 
-// TestFetchContributionEvents_APIError verifies that fetchContributionEvents
+// TestFetchContributionEvents_APIError_ReturnsNoEvents verifies that fetchContributionEvents
 // logs and returns an empty slice (instead of failing the prompt) when the
 // events API fails, for both the current-user and other-user endpoints.
-func TestFetchContributionEvents_APIError(t *testing.T) {
+func TestFetchContributionEvents_APIError_ReturnsNoEvents(t *testing.T) {
 	client := newTestClient(t, notFoundHandler())
 	since := time.Now().Add(-7 * 24 * time.Hour)
 
@@ -2104,9 +2104,9 @@ func TestFetchContributionEvents_APIError(t *testing.T) {
 	}
 }
 
-// TestWriteOpenMRsSection_APIError verifies that the open-MRs section of the
+// TestWriteOpenMRsSection_APIError_WritesNothing verifies that the open-MRs section of the
 // project health check is silently skipped when the MR list API fails.
-func TestWriteOpenMRsSection_APIError(t *testing.T) {
+func TestWriteOpenMRsSection_APIError_WritesNothing(t *testing.T) {
 	client := newTestClient(t, notFoundHandler())
 	var b strings.Builder
 	writeOpenMRsSection(t.Context(), &b, client, "42")
@@ -2115,9 +2115,9 @@ func TestWriteOpenMRsSection_APIError(t *testing.T) {
 	}
 }
 
-// TestWriteBranchesSection_APIError verifies that the branches section of the
+// TestWriteBranchesSection_APIError_WritesNothing verifies that the branches section of the
 // project health check is silently skipped when the branch list API fails.
-func TestWriteBranchesSection_APIError(t *testing.T) {
+func TestWriteBranchesSection_APIError_WritesNothing(t *testing.T) {
 	client := newTestClient(t, notFoundHandler())
 	var b strings.Builder
 	writeBranchesSection(t.Context(), &b, client, "42")
@@ -2126,9 +2126,9 @@ func TestWriteBranchesSection_APIError(t *testing.T) {
 	}
 }
 
-// TestWriteMRSection_FetchError verifies that writeMRSection skips the whole
+// TestWriteMRSection_FetchError_WritesNothing verifies that writeMRSection skips the whole
 // section (warn-and-continue) when the MR fetch that produced the slice failed.
-func TestWriteMRSection_FetchError(t *testing.T) {
+func TestWriteMRSection_FetchError_WritesNothing(t *testing.T) {
 	var b strings.Builder
 	writeMRSection(&b, "Open MRs by", "alice", nil, errors.New("boom"))
 	if b.Len() != 0 {
@@ -2136,10 +2136,13 @@ func TestWriteMRSection_FetchError(t *testing.T) {
 	}
 }
 
-// TestTeamMemberWorkload_MissingProjectID verifies that the
+// TestTeamMemberWorkload_MissingProjectID_ReturnsError verifies that the
 // team_member_workload prompt rejects requests without a project_id.
-func TestTeamMemberWorkload_MissingProjectID(t *testing.T) {
-	getPromptExpectError(t, notFoundHandler(), "team_member_workload", nil)
+func TestTeamMemberWorkload_MissingProjectID_ReturnsError(t *testing.T) {
+	// username is supplied so only project_id is missing: passing nil would
+	// omit both required arguments and the case would pass even if the
+	// project_id check were broken.
+	getPromptExpectErrorWithoutAPICall(t, "team_member_workload", map[string]string{"username": "alice"})
 }
 
 // prompt_team.go error branches.
