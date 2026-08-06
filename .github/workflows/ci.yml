@@ -36,6 +36,10 @@ jobs:
         run: make check-server-json
       - name: Check Open Plugins manifest
         run: make check-openplugin
+      - name: Check README repository statistics
+        run: make check-stats
+      - name: Check token footprint
+        run: make check-footprint
       - name: Run tests with coverage
         run: |
           go test -count=1 -coverpkg=./cmd/...,./internal/... -coverprofile=coverage.out ./cmd/... ./internal/...

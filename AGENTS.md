@@ -92,7 +92,13 @@ make inspector-stop
 | Tool surface (registered tools, resources, prompts) | `go run ./cmd/gen_llms/` (and `--check` via `make check-llms`), plus `go run ./cmd/gen_lhm_manifest/` (and `--check` via `make check-lhm-manifest`) |
 | `server.json`                                       | `make check-server-json` (uses MCP publisher)                     |
 
-The combined gate is `make audit-docs`. CI runs it on every PR.
+`make audit-docs` runs the combined documentation gate locally. **CI does not
+run it** — the `test` job only gates `check-llms`, `check-lhm-manifest`,
+`check-server-json`, `check-openplugin`, `check-stats` and `check-footprint`.
+Everything else in `audit-docs` (and `check-mcpb`, `check-site-stats`,
+`check-action-catalog-manifest`, `check-doc-links`) is yours to run before
+pushing; `check-stats` and `check-footprint` were both stale on `main` before
+they were gated.
 
 ## Adding a new GitLab API tool
 
