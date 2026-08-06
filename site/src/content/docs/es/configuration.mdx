@@ -6,7 +6,7 @@ faq:
   - q: "¿Cuál es la configuración mínima?"
     a: "En modo stdio, un único `GITLAB_TOKEN` con el scope `api` basta para arrancar — cualquier otra variable es opcional y usa un valor predeterminado seguro. `GITLAB_URL` usa `https://gitlab.com` por defecto, así que solo la estableces al conectar a una instancia autogestionada. Para una configuración de solo lectura, usa un token `read_api` y añade `GITLAB_READ_ONLY=true`. En modo HTTP no se configura ningún token en el servidor; cada cliente envía el suyo en cada petición."
   - q: "stdio vs HTTP — ¿qué modo uso?"
-    a: "Usa el **modo stdio** (el predeterminado) para configuraciones locales de un solo usuario como integraciones con IDE (VS Code, Cursor, Claude Desktop); se configura mediante variables de entorno o un archivo `.env`. Usa el **modo HTTP** (`--http`) para despliegues compartidos o remotos como Docker, Fly.io o Kubernetes, donde la configuración usa flags de CLI y cada cliente se autentica con su propio token de GitLab en cada petición."
+    a: "Usa el **modo stdio** (el predeterminado) para configuraciones locales de un solo usuario como integraciones con IDE (VS Code, Cursor, Claude Desktop); se configura mediante variables de entorno o un archivo `.env`. Usa el **modo HTTP** (`--http`) para despliegues compartidos o remotos como Docker o Kubernetes, donde la configuración usa flags de CLI y cada cliente se autentica con su propio token de GitLab en cada petición."
   - q: "¿Cómo apunto a una instancia de GitLab autogestionada?"
     a: "Establece `GITLAB_URL` con la URL base de tu instancia, por ejemplo `GITLAB_URL=https://gitlab.example.com` (en modo HTTP, usa el flag `--gitlab-url`). Si la instancia usa un certificado autofirmado o de CA interna, establece también `GITLAB_SKIP_TLS_VERIFY=true` (o `--skip-tls-verify` en modo HTTP), pero solo en una red de confianza — desactiva la verificación de certificados para todas las conexiones a GitLab."
   - q: "¿Cómo elijo una superficie de herramientas (dynamic, meta o individual)?"
@@ -31,7 +31,7 @@ El modo stdio lee su configuración de variables de entorno o de un archivo `.en
 :::tip[Orientación rápida]
 **Modo stdio** (por defecto) — configura mediante variables de entorno o un archivo `.env`. Este es el modo utilizado por las integraciones con IDE (VS Code, Cursor, Claude Desktop, etc.).
 
-**Modo HTTP** (`--http`) — configura mediante flags de CLI. Usado para despliegues compartidos/remotos (Docker, Fly.io, Kubernetes). Ir a [Flags del modo HTTP](#flags-del-modo-http).
+**Modo HTTP** (`--http`) — configura mediante flags de CLI. Usado para despliegues compartidos/remotos (Docker, Kubernetes). Ir a [Flags del modo HTTP](#flags-del-modo-http).
 :::
 
 ## Variables requeridas
@@ -306,7 +306,7 @@ Al ejecutar en modo HTTP (`--http`), la configuración usa flags de CLI en lugar
 | `--revalidate-interval`  | `15m`                        | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                                                                                                                |
 | `--rate-limit-rps`       | `0`                          | Límite de tasa por servidor para `tools/call` en req/s (`0` = desactivado)                                                                                                                                           |
 | `--rate-limit-burst`     | `40`                         | Tamaño del token bucket cuando `--rate-limit-rps > 0`                                                                                                                                                                |
-| `--trusted-proxy-header` | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `Fly-Client-IP`, `X-Forwarded-For`)                                                                                               |
+| `--trusted-proxy-header` | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `CF-Connecting-IP`, `X-Forwarded-For`)                                                                                             |
 
 **Flags del evaluador de superficies** (solo para `cmd/eval_mcp_surfaces`):
 

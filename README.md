@@ -21,6 +21,7 @@
 [![MCP Badge](https://lobehub.com/badge/mcp/jmrplens-gitlab-mcp-server)](https://lobehub.com/mcp/jmrplens-gitlab-mcp-server)
 [![smithery badge](https://smithery.ai/badge/jmrp/gitlab-mcp-server)](https://smithery.ai/servers/jmrp/gitlab-mcp-server)
 [![Cursor Directory](https://img.shields.io/badge/Cursor-Directory-000000?logo=cursor&logoColor=white)](https://cursor.directory/plugins/gitlab-mcp-server)
+[![Hosted endpoint](https://img.shields.io/badge/Hosted-mcp.jmrp.io%2Fgitlab-6366f1?style=flat&logo=icloud&logoColor=white)](https://mcp.jmrp.io/)
 
 </p>
 
@@ -166,6 +167,28 @@ Cline uses the `mcpServers` shape shown above for the native binary.
 For a shared, long-running HTTP deployment instead of per-user stdio, see [HTTP Server Mode](docs/guides/http-server-mode.md).
 
 </details>
+
+### Try it without installing anything (hosted endpoint)
+
+A public instance runs at **`https://mcp.jmrp.io/gitlab`** — nothing to install, no account beyond your own GitLab token. Point any HTTP-capable MCP client at it:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.jmrp.io/gitlab",
+      "headers": { "PRIVATE-TOKEN": "glpat-xxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+`PRIVATE-TOKEN` is required and travels per request — it is never stored on the server. `GITLAB-URL` is optional and defaults to `https://gitlab.com`; set it to reach another instance (it must be reachable from the public internet).
+
+It is the fastest way to try the server, and the right way to keep using it is still **locally** (any option above) or through [Smithery](https://smithery.ai/servers/jmrp/gitlab-mcp-server) — for one concrete reason, not as a disclaimer: **your token and every request pass through someone else's machine.** Running it locally means your credentials and your GitLab traffic never leave your computer, which also makes it the only sensible option for a private self-managed instance.
+
+The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport, `GET` on it answers `405` by design, and `https://mcp.jmrp.io/gitlab/health` answers `ok`. It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers I maintain, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
 
 **Then just ask:** open your AI client and try _"List my GitLab projects."_ See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/getting-started/) for per-client details and [more example prompts](docs/guides/examples/usage-examples.md).
 

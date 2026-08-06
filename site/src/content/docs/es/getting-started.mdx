@@ -155,6 +155,28 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
 El <a href="#asistente-de-configuración">asistente de configuración</a> integrado recoge tu token y configura tu cliente por ti — sin editar JSON. Ejecuta `gitlab-mcp-server --setup` tras instalar el binario.
 :::
 
+### Pruébalo sin instalar nada (endpoint alojado)
+
+Hay una instancia pública en **`https://mcp.jmrp.io/gitlab`** — nada que instalar, sin más cuenta que tu propio token de GitLab. Apunta cualquier cliente MCP con soporte HTTP a ella:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.jmrp.io/gitlab",
+      "headers": { "PRIVATE-TOKEN": "glpat-xxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+La cabecera `PRIVATE-TOKEN` es obligatoria y viaja en cada petición — nunca se guarda en el servidor. `GITLAB-URL` es opcional y por defecto vale `https://gitlab.com`; ponla para llegar a otra instancia, que debe ser accesible desde Internet.
+
+Es la forma más rápida de probar el servidor, y la forma correcta de usarlo a diario sigue siendo **en local** (cualquier opción de arriba) o a través de [Smithery](https://smithery.ai/servers/jmrp/gitlab-mcp-server), por un motivo concreto: tu token y todas tus peticiones pasan por la máquina de otra persona. Ejecutarlo en local mantiene ambos en tu ordenador — la única opción sensata para una instancia autogestionada privada.
+
+El endpoint es **streamable HTTP sin estado** sobre la superficie `dynamic` por defecto: `POST` es el transporte, `GET` responde `405` por diseño y `https://mcp.jmrp.io/gitlab/health` responde `ok`. Es uno de los servidores listados en [mcp.jmrp.io](https://mcp.jmrp.io/), un directorio de los servidores MCP que mantiene el autor, cada uno accesible en su propio endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) es esa misma lista para clientes automáticos.
+
 ## Descarga
 
 ¿Prefieres colocar el binario tú mismo? Descarga el último binario para tu plataforma desde la página de [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):

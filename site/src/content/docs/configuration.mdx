@@ -6,7 +6,7 @@ faq:
   - q: "What is the minimum configuration?"
     a: "In stdio mode, a single `GITLAB_TOKEN` with the `api` scope is enough to start — every other variable is optional and defaults to a safe value. `GITLAB_URL` defaults to `https://gitlab.com`, so you set it only when connecting to a self-managed instance. For a read-only setup, use a `read_api` token and add `GITLAB_READ_ONLY=true`. In HTTP mode, no token is configured on the server at all; each client sends its own token with every request."
   - q: "stdio vs HTTP — which mode do I use?"
-    a: "Use **stdio mode** (the default) for local, single-user setups such as IDE integrations like VS Code, Cursor, and Claude Desktop; it is configured through environment variables or a `.env` file. Use **HTTP mode** (`--http`) for shared or remote deployments such as Docker, Fly.io, or Kubernetes, where configuration uses CLI flags and each client authenticates with its own GitLab token per request."
+    a: "Use **stdio mode** (the default) for local, single-user setups such as IDE integrations like VS Code, Cursor, and Claude Desktop; it is configured through environment variables or a `.env` file. Use **HTTP mode** (`--http`) for shared or remote deployments such as Docker or Kubernetes, where configuration uses CLI flags and each client authenticates with its own GitLab token per request."
   - q: "How do I point at a self-managed GitLab instance?"
     a: "Set `GITLAB_URL` to your instance base URL, for example `GITLAB_URL=https://gitlab.example.com` (in HTTP mode, use the `--gitlab-url` flag instead). If the instance uses a self-signed or internal CA certificate, also set `GITLAB_SKIP_TLS_VERIFY=true` (or `--skip-tls-verify` in HTTP mode), but only on a trusted network — it disables certificate verification for all connections to GitLab."
   - q: "How do I pick a tool surface (dynamic, meta, or individual)?"
@@ -33,7 +33,7 @@ Stdio mode reads its configuration from environment variables or a `.env` file; 
 :::tip[Quick orientation]
 **Stdio mode** (default) — configure via environment variables or a `.env` file. This is the mode used by IDE integrations (VS Code, Cursor, Claude Desktop, etc.).
 
-**HTTP mode** (`--http`) — configure via CLI flags. Used for shared/remote deployments (Docker, Fly.io, Kubernetes). Jump to [HTTP mode flags](#http-mode-flags).
+**HTTP mode** (`--http`) — configure via CLI flags. Used for shared/remote deployments (Docker, Kubernetes). Jump to [HTTP mode flags](#http-mode-flags).
 :::
 
 ## Required variables
@@ -308,7 +308,7 @@ When running in HTTP mode (`--http`), configuration uses CLI flags instead of en
 | `--revalidate-interval`  | `15m`                        | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                      |
 | `--rate-limit-rps`       | `0`                          | Per-server `tools/call` rate limit in req/s (`0` = disabled)                                                                                                                         |
 | `--rate-limit-burst`     | `40`                         | Token-bucket burst size when `--rate-limit-rps > 0`                                                                                                                                  |
-| `--trusted-proxy-header` | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`)                                                                           |
+| `--trusted-proxy-header` | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`)                                                                         |
 
 **Surface evaluator flags** (used by `cmd/eval_mcp_surfaces` only):
 
