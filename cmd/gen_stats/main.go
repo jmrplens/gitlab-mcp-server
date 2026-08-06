@@ -1,7 +1,13 @@
 // Command gen_stats auto-generates the repository statistics section in
-// README.md. It walks the source tree, classifies Go files, counts git
-// history and dependencies, and replaces the content between the
+// README.md. It walks the source tree, classifies Go files, counts
+// dependencies, and replaces the content between the
 // <!-- START STATS --> / <!-- END STATS --> markers.
+//
+// Every figure is a pure function of the checked-out tree. Nothing is derived
+// from git history: a commit count changes with the very commit that would
+// refresh it, so the section could never be both committed and current, and a
+// CI shallow clone would compute a different number anyway. That is what makes
+// `--check` usable as a gate.
 //
 // Usage:
 //
@@ -12,12 +18,10 @@ package main
 
 import (
 	"bufio"
-	"context"
 	"flag"
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -86,7 +90,7 @@ func run(check bool) error {
 // File counts, line counts, and function counts are populated by walking
 // root with [collectStats]. Hall-of-fame fields track the longest names
 // and largest files. Project meta fields (Packages, DirectDeps,
-// IndirectDeps, CommitCount, ContributorCount) are filled after the walk
+// IndirectDeps) are filled after the walk
 // from go.mod and git, so callers should not assume they are valid until
 // [collectStats] returns.
 type repoStats struct {
@@ -125,11 +129,9 @@ type repoStats struct {
 	LargestTestLines int
 
 	// Project meta (filled after the walk)
-	Packages         int
-	DirectDeps       int
-	IndirectDeps     int
-	CommitCount      int
-	ContributorCount int
+	Packages     int
+	DirectDeps   int
+	IndirectDeps int
 }
 
 // collectStats walks root, classifies every .go file, and returns a populated
@@ -197,13 +199,6 @@ func collectStats(root string) (*repoStats, error) {
 	s.Packages = len(dirs)
 	s.DirectDeps, s.IndirectDeps = parseDeps(filepath.Join(root, "go.mod"))
 
-	var gitErr error
-	if s.CommitCount, gitErr = gitRevCount(); gitErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: git rev count: %v\n", gitErr)
-	}
-	if s.ContributorCount, gitErr = gitContributors(); gitErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: git contributors: %v\n", gitErr)
-	}
 	return s, nil
 }
 
@@ -384,49 +379,6 @@ func classifyDep(line string, direct, indirect *int) {
 	}
 }
 
-// gitBin resolves the absolute path of the git executable so downstream calls
-// use a fixed path instead of relying on PATH lookup at runtime.
-//
-// Returns the absolute path; the error from [exec.LookPath] is forwarded
-// unchanged so callers can recognize the missing-git scenario.
-func gitBin() (string, error) {
-	return exec.LookPath("git") //#nosec G204 -- resolves to an absolute path; no user input involved
-}
-
-func gitRevCount() (int, error) {
-	bin, err := gitBin()
-	if err != nil {
-		return 0, err
-	}
-	out, err := exec.CommandContext(context.Background(), bin, "rev-list", "--count", "HEAD").Output() //#nosec G204 -- absolute path from LookPath, fixed args
-	if err != nil {
-		return 0, fmt.Errorf("rev-list: %w", err)
-	}
-	n, err := strconv.Atoi(strings.TrimSpace(string(out)))
-	if err != nil {
-		return 0, fmt.Errorf("parsing rev-list output %q: %w", strings.TrimSpace(string(out)), err)
-	}
-	return n, nil
-}
-
-func gitContributors() (int, error) {
-	bin, err := gitBin()
-	if err != nil {
-		return 0, err
-	}
-	out, err := exec.CommandContext(context.Background(), bin, "log", "--format=%aE").Output() //#nosec G204 -- absolute path from LookPath, fixed args; %aE uses .mailmap
-	if err != nil {
-		return 0, fmt.Errorf("git log: %w", err)
-	}
-	emails := make(map[string]bool)
-	for line := range strings.SplitSeq(string(out), "\n") {
-		if e := strings.TrimSpace(line); e != "" {
-			emails[e] = true
-		}
-	}
-	return len(emails), nil
-}
-
 // renderStats builds the Markdown tables for the <!-- START STATS --> section.
 func renderStats(s *repoStats) string {
 	totalFiles := s.SourceFiles + s.UnitTestFiles + s.E2ETestFiles
@@ -520,8 +472,6 @@ func renderStats(s *repoStats) string {
 			{"Go packages", fmtInt(s.Packages)},
 			{"Direct dependencies (`go.mod`)", fmtInt(s.DirectDeps)},
 			{"Indirect dependencies", fmtInt(s.IndirectDeps)},
-			{"Git commits", fmtInt(s.CommitCount)},
-			{"Unique contributors", fmtInt(s.ContributorCount)},
 		},
 	))
 	b.WriteByte('\n')
