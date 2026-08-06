@@ -247,7 +247,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 
 | Flag                       | Description                                                    | Default            |
 | -------------------------- | -------------------------------------------------------------- | ------------------ |
-| `--trusted-proxy-header`   | HTTP header with real client IP for rate limiting behind proxies (e.g. `Fly-Client-IP`, `X-Forwarded-For`) | _(empty)_          |
+| `--trusted-proxy-header`   | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`) | _(empty)_          |
 
 **General flags** (both stdio and HTTP modes):
 

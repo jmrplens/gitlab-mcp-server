@@ -64,7 +64,7 @@ gitlab-mcp-server --http \
 | `--oauth-cache-ttl`        | `15m`          | How long verified OAuth tokens are cached before re-validation (1m–2h)                                                                                                                                                                         |
 | `--revalidate-interval`    | `15m`          | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                                                                |
 | `--http-idle-timeout`      | `0` (disabled) | HTTP server idle connection timeout. Default `0` disables idle connection closure entirely, so `--session-timeout` is the effective session lifetime. Set a positive duration to recycle idle connections sooner                               |
-| `--trusted-proxy-header`   | _(empty)_      | HTTP header containing the real client IP (e.g. `Fly-Client-IP`, `X-Forwarded-For`). Required for rate limiting behind reverse proxies                                                                                                         |
+| `--trusted-proxy-header`   | _(empty)_      | HTTP header containing the real client IP (e.g. `CF-Connecting-IP`, `X-Forwarded-For`). Required for rate limiting behind reverse proxies                                                                                                      |
 | `--rate-limit-rps`         | `0`            | Per-server `tools/call` rate limit in requests per second (`0` = disabled)                                                                                                                                                                     |
 | `--rate-limit-burst`       | `40`           | Token-bucket burst size when `--rate-limit-rps` > 0                                                                                                                                                                                            |
 | `--stateless`              | `true`         | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`. Use `--stateless=false` for legacy stateful sessions. See [Stateless Mode](#stateless-mode) |
@@ -426,7 +426,41 @@ curl -X POST http://localhost:8080/mcp \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
+## Public Hosted Endpoint
+
+A ready-to-use instance of this server runs at `https://mcp.jmrp.io/gitlab`. It is deployed out of band from the [mcp.jmrp.io](https://github.com/jmrplens/mcp.jmrp.io) host — this repository publishes artifacts only, so nothing here deploys or configures it.
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.jmrp.io/gitlab",
+      "headers": { "PRIVATE-TOKEN": "glpat-xxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+| Property     | Value                                                             |
+| ------------ | ----------------------------------------------------------------- |
+| Transport    | Stateless streamable HTTP (`--stateless`); `GET`/`DELETE` → `405` |
+| Tool surface | `dynamic` (`gitlab_find_action`, `gitlab_execute_action`)         |
+| Auth mode    | `legacy` — `PRIVATE-TOKEN` per request, never stored server-side  |
+| `GITLAB-URL` | Optional; defaults to `https://gitlab.com`                        |
+| Health       | `GET https://mcp.jmrp.io/gitlab/health` → `ok`                    |
+
+Because it is multi-tenant, each distinct token+URL pair gets its own pooled MCP server (see [Server Pool](#server-pool)). Self-managed GitLab instances must be reachable from the public internet, and every request traverses a third-party host — for private instances, run one of the deployments described above instead.
+
+The endpoint is listed at [mcp.jmrp.io](https://mcp.jmrp.io/), a directory of the MCP servers maintained by this author; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list in machine-readable form.
+
 ## Session Lifecycle
+
+This section describes **stateful** mode (`--stateless=false`). Under the
+default `--stateless=true` — which the public hosted endpoint runs — no
+`Mcp-Session-Id` is issued and no MCP session state is carried between
+requests; every POST is self-contained. The server pool below is orthogonal to
+that: it is keyed on `(token, GitLab URL)` and is reused in both modes.
 
 ### 1. First Request
 
@@ -598,7 +632,7 @@ curl -s -o /dev/null -w "%{http_code}" \
 | Pool eviction too frequent                           | Too many unique tokens                                                                    | Increase `--max-http-clients`                                                                                                     |
 | Sessions expiring                                    | MCP idle timeout                                                                          | Increase `--session-timeout`                                                                                                      |
 | Sessions drop every ~2 min / `keepalive ping failed` | HTTP idle/write timeout closing SSE streams (only if a low `--http-idle-timeout` was set) | Default `--http-idle-timeout=0` disables this; if set low, raise it or set `0`. Behind a proxy, also raise the proxy read timeout |
-| Rate limiter blocks all clients                      | Behind reverse proxy, all requests share proxy IP                                         | Set `--trusted-proxy-header` to the header your proxy sets (e.g. `X-Forwarded-For`, `Fly-Client-IP`)                              |
+| Rate limiter blocks all clients                      | Behind reverse proxy, all requests share proxy IP                                         | Set `--trusted-proxy-header` to the header your proxy sets (e.g. `X-Forwarded-For`, `CF-Connecting-IP`)                           |
 
 ---
 

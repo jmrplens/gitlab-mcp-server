@@ -181,7 +181,9 @@ dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
    descriptive suffixes like `(GPG signature)` — `go-selfupdate` matches
    asset names exactly and will fail with decorated names.
 3. Push the tag; CI publishes the GitHub Release and the Docker image.
-4. `make fly-deploy-release` ships the matching tag to Fly.io (HTTP mode).
+4. The public hosted endpoint `https://mcp.jmrp.io/gitlab` is deployed out of
+   band from the [mcp.jmrp.io](https://github.com/jmrplens/mcp.jmrp.io) host —
+   this repository publishes artifacts only.
 
 ## Common traps
 
