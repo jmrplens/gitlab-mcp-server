@@ -392,18 +392,18 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       975 |     195,165 |
-| Unit tests (`_test.go`)  |       542 |     301,698 |
+| Source (`.go`, non-test) |       975 |     195,179 |
+| Unit tests (`_test.go`)  |       541 |     301,686 |
 | End-to-end tests         |       171 |      44,440 |
-| **Total**                | **1,688** | **541,303** |
+| **Total**                | **1,687** | **541,305** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,481 |
+| Source functions                |  7,482 |
 | — exported (public)             |  2,629 |
-| — unexported (private)          |  4,852 |
+| — unexported (private)          |  4,853 |
 | Unit test functions (`TestXxx`) | 11,654 |
 | Subtests (`t.Run(...)`)         |  2,918 |
 | End-to-end test functions       |    379 |
@@ -414,15 +414,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~200 lines |
-| Average test file length           |                 ~556 lines |
-| Comment lines in source            |  21,597 (~11.1% of source) |
+| Average test file length           |                 ~557 lines |
+| Comment lines in source            |  21,606 (~11.1% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,724 |
+| `if err != nil` checks             | 6,725 |
 | `defer` statements                 |   855 |
 | `struct` types defined             | 2,728 |
 | `//nolint` suppressions            |   212 |

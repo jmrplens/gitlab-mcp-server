@@ -1,13 +1,14 @@
 // Command gen_stats auto-generates the repository statistics section in
-// README.md. It walks the source tree, classifies Go files, counts
+// README.md. It classifies every tracked Go file, counts
 // dependencies, and replaces the content between the
 // <!-- START STATS --> / <!-- END STATS --> markers.
 //
-// Every figure is a pure function of the checked-out tree. Nothing is derived
+// Every figure is a pure function of the tracked file set. Nothing is derived
 // from git history: a commit count changes with the very commit that would
 // refresh it, so the section could never be both committed and current, and a
-// CI shallow clone would compute a different number anyway. That is what makes
-// `--check` usable as a gate.
+// CI shallow clone would compute a different number anyway. Files come from the
+// git index rather than a directory walk for the same reason — see
+// [listTrackedGoFiles]. That is what makes `--check` usable as a gate.
 //
 // Usage:
 //
@@ -18,10 +19,11 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
-	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -134,8 +136,8 @@ type repoStats struct {
 	IndirectDeps int
 }
 
-// collectStats walks root, classifies every .go file, and returns a populated
-// repoStats. root should be the repository root directory.
+// collectStats classifies every tracked .go file under root and returns a
+// populated repoStats. root should be the repository root directory.
 func collectStats(root string) (*repoStats, error) {
 	s := &repoStats{}
 	dirs := make(map[string]bool)
@@ -143,32 +145,20 @@ func collectStats(root string) (*repoStats, error) {
 	// WalkDir is used instead of Walk: it receives fs.DirEntry directly from
 	// the OS directory read, avoiding the extra os.Lstat call Walk performs
 	// for every entry.
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			// .claude holds agent worktrees (full repo copies) that would
-			// double-count every metric when present.
-			case ".git", "vendor", "node_modules", "dist", ".claude":
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !strings.HasSuffix(path, ".go") {
-			return nil
-		}
-
-		rel := filepath.ToSlash(path)
+	files, err := listTrackedGoFiles(root)
+	if err != nil {
+		return nil, err
+	}
+	for _, rel := range files {
+		path := filepath.Join(root, rel)
 		isE2E := strings.Contains(rel, "/e2e/")
-		isTest := strings.HasSuffix(path, "_test.go")
+		isTest := strings.HasSuffix(rel, "_test.go")
 
-		dirs[filepath.Dir(path)] = true
+		dirs[filepath.Dir(rel)] = true
 
 		lines, scanErr := scanGoFile(path, isE2E, isTest, s)
 		if scanErr != nil {
-			return fmt.Errorf("scanning %s: %w", path, scanErr)
+			return nil, fmt.Errorf("scanning %s: %w", path, scanErr)
 		}
 
 		switch {
@@ -180,26 +170,50 @@ func collectStats(root string) (*repoStats, error) {
 			s.UnitTestLines += lines
 			if lines > s.LargestTestLines {
 				s.LargestTestLines = lines
-				s.LargestTestFile = strings.TrimPrefix(rel, "./")
+				s.LargestTestFile = rel
 			}
 		default:
 			s.SourceFiles++
 			s.SourceLines += lines
 			if lines > s.LargestSrcLines {
 				s.LargestSrcLines = lines
-				s.LargestSrcFile = strings.TrimPrefix(rel, "./")
+				s.LargestSrcFile = rel
 			}
 		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
 
 	s.Packages = len(dirs)
 	s.DirectDeps, s.IndirectDeps = parseDeps(filepath.Join(root, "go.mod"))
 
 	return s, nil
+}
+
+// listTrackedGoFiles returns every .go file git tracks under root, as
+// slash-separated paths relative to root.
+//
+// The file set comes from the index rather than from a directory walk so that
+// the generated section describes the repository and nothing else. A walk also
+// counts whatever happens to sit in a developer's working tree — build output,
+// scratch packages, a test file an over-broad .gitignore rule excluded — and
+// then `--check` disagrees between that machine and CI for reasons no diff
+// explains. The index is identical in a shallow clone, so this stays safe under
+// the `fetch-depth: 1` checkout CI uses.
+func listTrackedGoFiles(root string) ([]string, error) {
+	bin, err := exec.LookPath("git") //#nosec G204 -- resolves to an absolute path; no user input involved
+	if err != nil {
+		return nil, fmt.Errorf("locating git: %w", err)
+	}
+	out, err := exec.CommandContext(context.Background(), bin, "-C", root, "ls-files", "-z", "--", "*.go").Output() //#nosec G204 -- absolute path from LookPath, fixed args
+	if err != nil {
+		return nil, fmt.Errorf("git ls-files in %s: %w", root, err)
+	}
+	var files []string
+	for f := range strings.SplitSeq(string(out), "\x00") {
+		if f != "" {
+			files = append(files, f)
+		}
+	}
+	return files, nil
 }
 
 // scanGoFile reads every line of a .go file and accumulates pattern-based

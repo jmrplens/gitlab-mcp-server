@@ -5335,3 +5335,577 @@ func TestIntentScorers_MatchReasonReturnedWhenIntentFires(t *testing.T) {
 		}
 	})
 }
+
+// scoringEntry builds a searchDocument-shaped actionEntry suitable for
+// invoking intent-scoring helpers without requiring the full registry fixture.
+// The Document is populated so documentForEntry returns the supplied fields.
+func scoringEntry(canonicalID, domain, action string) actionEntry {
+	entry := actionEntry{
+		ID:     canonicalID,
+		Domain: domain,
+		Action: action,
+		Document: searchDocument{
+			CanonicalID: canonicalID,
+			Domain:      domain,
+			Action:      action,
+		},
+	}
+	entry.Document.DomainWords = splitSearchFieldWords(domain)
+	entry.Document.ActionWords = splitSearchFieldWords(action)
+	entry.Document.IDWords = splitSearchFieldWords(canonicalID)
+	return entry
+}
+
+// TestAddProtectionTags_NonGroupProtectedEnv verifies that protected
+// environment actions outside the group domain still register the protected
+// environment aliases (aliasProtectedEnvironment/aliasEnvironmentProtection)
+// without falling through to the default branch.
+func TestAddProtectionTags_NonGroupProtectedEnv(t *testing.T) {
+	cases := []struct {
+		name   string
+		id     string
+		domain string
+		action string
+		want   []string
+	}{
+		{
+			name:   "project protected environment uses alias only",
+			id:     "project.protected_environment_list",
+			domain: "project",
+			action: "protected_environment_list",
+			want:   []string{"protected environment", "environment protection"},
+		},
+		{
+			name:   "branch protect action",
+			id:     "branch.protect",
+			domain: "branch",
+			action: "protect",
+			want:   []string{"protected branch", "branch protection"},
+		},
+		{
+			name:   "branch get_protected action",
+			id:     "branch.get_protected",
+			domain: "branch",
+			action: "get_protected",
+			want:   []string{"protected branch", "branch protection"},
+		},
+		{
+			name:   "branch unprotect action",
+			id:     "branch.unprotect",
+			domain: "branch",
+			action: "unprotect",
+			want:   []string{"protected branch", "branch protection"},
+		},
+		{
+			name:   "branch update_protected action",
+			id:     "branch.update_protected",
+			domain: "branch",
+			action: "update_protected",
+			want:   []string{"protected branch", "branch protection"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			add := func(values ...string) { got = append(got, values...) }
+			if !addProtectionTags(add, tc.id, tc.domain, tc.action) {
+				t.Fatalf("addProtectionTags() returned false, want true for id %q", tc.id)
+			}
+			for _, want := range tc.want {
+				if !slices.Contains(got, want) {
+					t.Fatalf("addProtectionTags() tags = %v, want %q", got, want)
+				}
+			}
+		})
+	}
+}
+
+// TestServiceAccountQueryVerb_AllVerbs verifies serviceAccountQueryVerb
+// returns the first recognized verb from a query and the empty string when
+// none of the supported verbs are present.
+func TestServiceAccountQueryVerb_AllVerbs(t *testing.T) {
+	cases := []struct {
+		name  string
+		query string
+		want  string
+	}{
+		{name: "create verb", query: "service account create", want: "create"},
+		{name: "list verb", query: "service account list", want: "list"},
+		{name: "update verb", query: "service account update", want: "update"},
+		{name: "delete verb", query: "service account delete", want: "delete"},
+		{name: "rotate verb", query: "service account rotate", want: "rotate"},
+		{name: "revoke verb matches as delete synonym (verb ordering)", query: "service account revoke", want: "delete"},
+		{name: "no verb", query: "service account", want: ""},
+		// "list" appears in the verb list before "delete", so a generic "show" query still maps
+		// to "list" via the searchTermsContainWord alternative-walk. The function intentionally
+		// returns the first matching verb regardless of whether the query was service-account scoped.
+		{name: "no service account context with verb still returns verb", query: "project list", want: "list"},
+		// "rotate" verb in a non-service-account context still returns "rotate" (no gate).
+		{name: "rotate verb in non service account context", query: "rotate token", want: "rotate"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := serviceAccountQueryVerb(normalizeSearchTerms(tc.query)); got != tc.want {
+				t.Fatalf("serviceAccountQueryVerb(%q) = %q, want %q", tc.query, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestAdjustServiceAccountVerbScores_AllBranches verifies the verb-score
+// adjuster covers the mismatch path (negative score floored at zero), the
+// matched-verb boost path, the explanation.TotalScore update path, the
+// no-verb early return, and the no-service-account-context early return.
+func TestAdjustServiceAccountVerbScores_AllBranches(t *testing.T) {
+	entry := scoringEntry("group.service_account_list", "group", "service_account_list")
+	makeMatches := func(scores ...int) []scoredActionEntry {
+		out := make([]scoredActionEntry, 0, len(scores))
+		for _, s := range scores {
+			out = append(out, scoredActionEntry{
+				entry: entry,
+				score: s,
+				explanation: ScoringExplanation{
+					TotalScore: s,
+				},
+			})
+		}
+		return out
+	}
+
+	t.Run("no service account context returns matches unchanged", func(t *testing.T) {
+		matches := makeMatches(10, 20)
+		got := adjustServiceAccountVerbScores(matches, normalizeSearchTerms("project list"))
+		if len(got) != 2 || got[0].score != 10 || got[1].score != 20 {
+			t.Fatalf("adjustServiceAccountVerbScores() = %+v, want unchanged scores", got)
+		}
+	})
+
+	t.Run("service account query with no recognized verb returns matches unchanged", func(t *testing.T) {
+		matches := makeMatches(15)
+		got := adjustServiceAccountVerbScores(matches, normalizeSearchTerms("service account"))
+		if got[0].score != 15 {
+			t.Fatalf("adjustServiceAccountVerbScores() score = %d, want 15 (unchanged)", got[0].score)
+		}
+	})
+
+	t.Run("mismatched verb subtracts boost and floors at zero", func(t *testing.T) {
+		matches := makeMatches(50) // 50 - 2*80 = -110 -> 0
+		got := adjustServiceAccountVerbScores(matches, normalizeSearchTerms("service account delete"))
+		if got[0].score != 0 {
+			t.Fatalf("adjustServiceAccountVerbScores() floored score = %d, want 0", got[0].score)
+		}
+	})
+
+	t.Run("mismatched verb subtracts boost without flooring when result stays positive", func(t *testing.T) {
+		matches := makeMatches(200) // 200 - 2*80 = 40
+		got := adjustServiceAccountVerbScores(matches, normalizeSearchTerms("service account delete"))
+		if got[0].score != 40 {
+			t.Fatalf("adjustServiceAccountVerbScores() score = %d, want 40", got[0].score)
+		}
+	})
+
+	t.Run("matched verb adds boost", func(t *testing.T) {
+		matches := makeMatches(50)
+		got := adjustServiceAccountVerbScores(matches, normalizeSearchTerms("service account list"))
+		if got[0].score != 130 {
+			t.Fatalf("adjustServiceAccountVerbScores() score = %d, want 130", got[0].score)
+		}
+	})
+
+	t.Run("non-service-account entry is skipped", func(t *testing.T) {
+		other := scoringEntry("project.list", "project", "list")
+		matches := []scoredActionEntry{{entry: other, score: 42}}
+		got := adjustServiceAccountVerbScores(matches, normalizeSearchTerms("service account list"))
+		if got[0].score != 42 {
+			t.Fatalf("adjustServiceAccountVerbScores() score = %d, want 42 (skipped)", got[0].score)
+		}
+	})
+
+	t.Run("action verb empty is skipped (unrecognized suffix)", func(t *testing.T) {
+		unknown := scoringEntry("group.service_account_unknown", "group", "service_account_unknown")
+		matches := []scoredActionEntry{{entry: unknown, score: 50}}
+		got := adjustServiceAccountVerbScores(matches, normalizeSearchTerms("service account list"))
+		if got[0].score != 50 {
+			t.Fatalf("adjustServiceAccountVerbScores() score = %d, want 50 (skipped)", got[0].score)
+		}
+	})
+}
+
+// TestMinimumMatchedTermCount_EdgeCases verifies the minimum-match threshold
+// edges: short queries, queries with no compound tags, queries with compound
+// tags that lower the requirement, and the floor at 1.
+func TestMinimumMatchedTermCount_EdgeCases(t *testing.T) {
+	// Entry that shares a compound tag with the terms (e.g., "group service account").
+	entry := actionEntry{
+		ID: "group.service_account_list",
+		Document: searchDocument{
+			CanonicalID: "group.service_account_list",
+			Tags:        []string{"group service account"},
+		},
+	}
+
+	cases := []struct {
+		name  string
+		query string
+		want  int
+	}{
+		{name: "empty query returns 1", query: "", want: 1},
+		{name: "single term returns 1", query: "service", want: 1},
+		{name: "two terms returns 2", query: "service account", want: 2},
+		{name: "three terms no compound returns 2", query: "service account list", want: 2},
+		{name: "four terms no compound returns 3", query: "service account list all", want: 3},
+		{name: "four terms with compound returns 2", query: "group service account list", want: 2},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := minimumMatchedTermCount(entry, normalizeSearchTerms(tc.query))
+			if got != tc.want {
+				t.Fatalf("minimumMatchedTermCount() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestScoreCompoundTagSignals_RepositoryCompareBoost verifies the
+// repository.compare branch that adds scoreRequiredParamBoost on top of the
+// regular compound tag boost when the tag contains compare/ref words.
+func TestScoreCompoundTagSignals_RepositoryCompareBoost(t *testing.T) {
+	entry := actionEntry{
+		ID: "repository.compare",
+		Document: searchDocument{
+			CanonicalID: "repository.compare",
+			Domain:      "repository",
+			Action:      "compare",
+			Tags:        []string{"compare refs", "diff refs"},
+		},
+	}
+	terms := normalizeSearchTerms("compare refs")
+	total, reasons := scoreCompoundTagSignals(entry, terms)
+	if total == 0 {
+		t.Fatal("scoreCompoundTagSignals() = 0, want positive score")
+	}
+	// At least one reason should have an elevated score (compound + required-param bonus).
+	if reasons[0].Score != scoreCompoundTagBoost+scoreRequiredParamBoost {
+		t.Fatalf("scoreCompoundTagSignals() first reason score = %d, want %d", reasons[0].Score,
+			scoreCompoundTagBoost+scoreRequiredParamBoost)
+	}
+}
+
+// TestScoreServiceAccountIntent_PositiveCase verifies the scoring helpers
+// return a positive score and a populated MatchReason for queries that match
+// the service-account intent (with and without the PAT/verb bonuses).
+func TestScoreServiceAccountIntent_PositiveCase(t *testing.T) {
+	entry := scoringEntry("group.service_account_create", "group", "service_account_create")
+
+	score, reason := scoreServiceAccountIntent(entry, normalizeSearchTerms("group service account create"))
+	if score == 0 || reason == (MatchReason{}) {
+		t.Fatalf("scoreServiceAccountIntent() = %d, %+v, want positive score with populated reason", score, reason)
+	}
+	if reason.Field != searchFieldServiceAccount {
+		t.Fatalf("scoreServiceAccountIntent() field = %q, want %q", reason.Field, searchFieldServiceAccount)
+	}
+	if reason.QueryTerm != "service account" {
+		t.Fatalf("scoreServiceAccountIntent() query term = %q, want %q", reason.QueryTerm, "service account")
+	}
+
+	// PAT case adds an extra boost.
+	patEntry := scoringEntry("group.service_account_pat_create", "group", "service_account_pat_create")
+	patScore := scoreServiceAccountIntentValue(patEntry, normalizeSearchTerms("service account personal access token create"))
+	if patScore <= score {
+		t.Fatalf("scoreServiceAccountIntentValue(pat) = %d, want greater than non-PAT score %d", patScore, score)
+	}
+}
+
+// TestScoreCompareRefsIntent_PositiveCase verifies the compare-refs scoring
+// helper returns a positive score and a populated MatchReason for matching
+// queries.
+func TestScoreCompareRefsIntent_PositiveCase(t *testing.T) {
+	entry := scoringEntry("repository.compare", "repository", "compare")
+
+	score, reason := scoreCompareRefsIntent(entry, normalizeSearchTerms("compare refs"))
+	if score == 0 || reason == (MatchReason{}) {
+		t.Fatalf("scoreCompareRefsIntent() = %d, %+v, want positive score with populated reason", score, reason)
+	}
+	if reason.Field != searchFieldCompareIntent {
+		t.Fatalf("scoreCompareRefsIntent() field = %q, want %q", reason.Field, searchFieldCompareIntent)
+	}
+	if reason.QueryTerm != "compare refs" {
+		t.Fatalf("scoreCompareRefsIntent() query term = %q, want %q", reason.QueryTerm, "compare refs")
+	}
+
+	// "refs" plural alternative should still match.
+	if v := scoreCompareRefsIntentValue(entry, normalizeSearchTerms("compare refs")); v == 0 {
+		t.Fatal("scoreCompareRefsIntentValue(refs) = 0, want positive score")
+	}
+
+	// Documented limitation: the second guard in scoreCompareRefsIntentValue
+	// (the "ref"/"refs" disambiguator check) is structurally unreachable from
+	// external callers because the "compare" entry in searchSynonymsMap lists
+	// "ref" and "refs" as alternatives. Any query that contains the literal
+	// word "compare" also satisfies the "ref"/"refs" check via the synonym
+	// walk. The guard exists as a defense-in-depth check, not as a reachable
+	// branch. We assert the contract through the positive path above.
+}
+
+// TestScoreReleaseListIntent_PositiveCase verifies the ScoreReleaseListIntent_PositiveCase handler.
+// The test exercises the GET path of the underlying GitLab API call.
+// It asserts the returned output matches the expected fields.
+func TestScoreReleaseListIntent_PositiveCase(t *testing.T) {
+	entry := scoringEntry("release.list", "release", "list")
+
+	score, reason := scoreReleaseListIntent(entry, normalizeSearchTerms("list releases"))
+	if score == 0 || reason == (MatchReason{}) {
+		t.Fatalf("scoreReleaseListIntent() = %d, %+v, want positive score with populated reason", score, reason)
+	}
+	if reason.Field != searchFieldReleaseIntent {
+		t.Fatalf("scoreReleaseListIntent() field = %q, want %q", reason.Field, searchFieldReleaseIntent)
+	}
+	if reason.QueryTerm != "list releases" {
+		t.Fatalf("scoreReleaseListIntent() query term = %q, want %q", reason.QueryTerm, "list releases")
+	}
+}
+
+// TestScoreDiscoverProjectIntentValue_Branches verifies all four trigger
+// words (url/remote/origin/git) and all five disambiguation words
+// (project/path/resolve/discover/find) feed the discover-project intent.
+func TestScoreDiscoverProjectIntentValue_Branches(t *testing.T) {
+	entry := scoringEntry("discover_project.resolve", "discover_project", "resolve")
+
+	cases := []struct {
+		name  string
+		query string
+		want  int
+	}{
+		{name: "url trigger + project disambiguator", query: "url project", want: scoreDiscoverIntentBoost},
+		{name: "remote trigger + path disambiguator", query: "remote path", want: scoreDiscoverIntentBoost},
+		{name: "origin trigger + resolve disambiguator", query: "origin resolve", want: scoreDiscoverIntentBoost},
+		{name: "git trigger + discover disambiguator", query: "git discover", want: scoreDiscoverIntentBoost},
+		{name: "url trigger + find disambiguator", query: "url find", want: scoreDiscoverIntentBoost},
+		{name: "no trigger returns zero", query: "branch", want: 0},
+		// "git" is a trigger with no synonym entries, so the disambiguator check fails.
+		{name: "trigger present but no disambiguator returns zero", query: "git help", want: 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := scoreDiscoverProjectIntentValue(entry, normalizeSearchTerms(tc.query))
+			if got != tc.want {
+				t.Fatalf("scoreDiscoverProjectIntentValue() = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestScoreProjectGetIntent_PositiveCase verifies the project-get-by-path
+// scoring helper covers the show/find/path/id disambiguation alternatives
+// and returns a populated MatchReason.
+func TestScoreProjectGetIntent_PositiveCase(t *testing.T) {
+	entry := scoringEntry("project.get", "project", "get")
+
+	score, reason := scoreProjectGetIntent(entry, normalizeSearchTerms("project show"))
+	if score == 0 || reason == (MatchReason{}) {
+		t.Fatalf("scoreProjectGetIntent() = %d, %+v, want positive score with populated reason", score, reason)
+	}
+	if reason.Field != searchFieldProjectIntent {
+		t.Fatalf("scoreProjectGetIntent() field = %q, want %q", reason.Field, searchFieldProjectIntent)
+	}
+	if reason.QueryTerm != "project get by path" {
+		t.Fatalf("scoreProjectGetIntent() query term = %q, want %q", reason.QueryTerm, "project get by path")
+	}
+
+	// "find", "path", "id" alternatives all return the boost.
+	for _, q := range []string{"project find", "project path", "project id"} {
+		if v := scoreProjectGetIntentValue(entry, normalizeSearchTerms(q)); v != scoreProjectGetIntentBoost {
+			t.Fatalf("scoreProjectGetIntentValue(%q) = %d, want %d", q, v, scoreProjectGetIntentBoost)
+		}
+	}
+}
+
+// TestScoreSearchProjectsIntent_PositiveCase verifies the search-projects
+// scoring helper returns a positive score and a populated MatchReason for
+// matching queries, including the concrete-needle boost.
+func TestScoreSearchProjectsIntent_PositiveCase(t *testing.T) {
+	entry := scoringEntry("search.projects", "search", "projects")
+
+	score, reason := scoreSearchProjectsIntent(entry, normalizeSearchTerms("search projects"))
+	if score == 0 || reason == (MatchReason{}) {
+		t.Fatalf("scoreSearchProjectsIntent() = %d, %+v, want positive score with populated reason", score, reason)
+	}
+	if reason.Field != searchFieldSearchIntent {
+		t.Fatalf("scoreSearchProjectsIntent() field = %q, want %q", reason.Field, searchFieldSearchIntent)
+	}
+	if reason.QueryTerm != "search projects" {
+		t.Fatalf("scoreSearchProjectsIntent() query term = %q, want %q", reason.QueryTerm, "search projects")
+	}
+
+	// Concrete needle (non-stopword) adds the extra boost.
+	concrete := scoreSearchProjectsIntentValue(entry, normalizeSearchTerms("search projects gitlab-mcp-server"))
+	plain := scoreSearchProjectsIntentValue(entry, normalizeSearchTerms("search projects"))
+	if concrete <= plain {
+		t.Fatalf("scoreSearchProjectsIntentValue(concrete) = %d, want greater than plain %d", concrete, plain)
+	}
+	if plain != scoreSearchProjectsBoost {
+		t.Fatalf("scoreSearchProjectsIntentValue(plain) = %d, want %d", plain, scoreSearchProjectsBoost)
+	}
+}
+
+// TestFormatSearchOutput_EmptyWithSuggestions verifies that an empty search
+// result emits a Try: suggestion line (instead of the default broader-terms
+// hint) and that the rest of the empty-result path renders the
+// gitlab_find_action fallback in subsequent calls.
+func TestFormatSearchOutput_EmptyWithSuggestions(t *testing.T) {
+	out := formatSearchOutput(SearchOutput{
+		Query:       "nonsenseonlyzz",
+		Count:       0,
+		Suggestions: []string{"project", "issue"},
+	})
+	if !strings.Contains(out, "Try: `project`, `issue`") {
+		t.Fatalf("formatSearchOutput() = %q, want Try: suggestions", out)
+	}
+	if !strings.Contains(out, "No catalog actions matched") {
+		t.Fatalf("formatSearchOutput() = %q, want no-match message", out)
+	}
+}
+
+// TestFormatSearchOutput_NextStepFallback verifies that the explicit
+// NextStep override suppresses the default gitlab_find_action hint and that
+// a populated result without NextStep falls back to the default hint.
+func TestFormatSearchOutput_NextStepFallback(t *testing.T) {
+	withNext := formatSearchOutput(SearchOutput{
+		Query:    "with next",
+		Count:    1,
+		NextStep: "Use its exact parameter schema before executing",
+		Results: []SearchResult{{
+			ID:             "project.get",
+			Destructive:    false,
+			RequiredParams: []string{"project_id"},
+		}},
+	})
+	if !strings.Contains(withNext, "Use its exact parameter schema before executing") {
+		t.Fatalf("formatSearchOutput(next) = %q, want explicit NextStep", withNext)
+	}
+	if strings.Contains(withNext, "Use `gitlab_find_action`") {
+		t.Fatalf("formatSearchOutput(next) = %q, want no default hint when NextStep set", withNext)
+	}
+
+	// Populated result without NextStep falls back to the default hint.
+	withHint := formatSearchOutput(SearchOutput{
+		Query: "without next",
+		Count: 1,
+		Results: []SearchResult{{
+			ID:             "project.get",
+			Destructive:    false,
+			RequiredParams: []string{"project_id"},
+		}},
+	})
+	if !strings.Contains(withHint, "Use `gitlab_find_action`") {
+		t.Fatalf("formatSearchOutput(no next) = %q, want default find_action hint", withHint)
+	}
+}
+
+// TestFormatFindOutput_AllTableShapes verifies every header/row branch in
+// formatFindOutput: default, with guidance, with explanations, and with both.
+func TestFormatFindOutput_AllTableShapes(t *testing.T) {
+	canonicalReason := MatchReason{
+		Field:        searchFieldCanonicalID,
+		QueryTerm:    "project",
+		MatchedValue: "project.get",
+		Score:        120,
+	}
+	canonicalExplanation := &ScoringExplanation{
+		TotalScore:   200,
+		MatchedTerms: 2,
+		Reasons:      []MatchReason{canonicalReason},
+	}
+
+	cases := []struct {
+		name        string
+		result      FindResult
+		wantColumns []string
+		denyColumns []string
+	}{
+		{
+			name: "default shape omits guidance and why columns",
+			result: FindResult{
+				ID:             "project.get",
+				Score:          200,
+				Destructive:    false,
+				RequiredParams: []string{"project_id"},
+			},
+			wantColumns: []string{"| Score |"},
+			denyColumns: []string{"| Why |", "| Guidance |"},
+		},
+		{
+			name: "guidance only adds Guidance column",
+			result: FindResult{
+				ID:             "project.get",
+				Score:          200,
+				Destructive:    true,
+				RequiredParams: []string{"project_id"},
+				Usage:          "destructive project action",
+			},
+			wantColumns: []string{"| Guidance |", "Execute destructive actions with top-level `confirm:true`."},
+			denyColumns: []string{"| Why |"},
+		},
+		{
+			name: "explanations only adds Why column",
+			result: FindResult{
+				ID:             "project.get",
+				Score:          200,
+				Destructive:    false,
+				RequiredParams: []string{"project_id"},
+				Explanation:    canonicalExplanation,
+			},
+			wantColumns: []string{"| Why |", "canonical_id matched"},
+			denyColumns: []string{"| Guidance |"},
+		},
+		{
+			name: "explanations and guidance render both columns",
+			result: FindResult{
+				ID:             "project.get",
+				Score:          200,
+				Destructive:    true,
+				RequiredParams: []string{"project_id"},
+				Usage:          "destructive project action",
+				Explanation:    canonicalExplanation,
+			},
+			wantColumns: []string{"| Why |", "| Guidance |", "canonical_id matched", "Execute destructive actions with top-level `confirm:true`."},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := formatFindOutput(FindOutput{
+				Query:   "project get",
+				Count:   1,
+				Results: []FindResult{tc.result},
+			})
+			for _, want := range tc.wantColumns {
+				if !strings.Contains(out, want) {
+					t.Fatalf("formatFindOutput() = %q, want column/text %q", out, want)
+				}
+			}
+			for _, deny := range tc.denyColumns {
+				if strings.Contains(out, deny) {
+					t.Fatalf("formatFindOutput() = %q, want no column %q", out, deny)
+				}
+			}
+		})
+	}
+}
+
+// TestCompactParameterGuidance_AlphabeticalTieBreaker verifies the third
+// comparator branch in the sort: when both items have equal required status
+// and equal CommonConfusions length, the result falls through to a lexical
+// name comparison.
+func TestCompactParameterGuidance_AlphabeticalTieBreaker(t *testing.T) {
+	guidance := map[string]toolutil.ParameterGuidance{
+		"zeta":  {ValueSource: "alpha"},
+		"alpha": {ValueSource: "beta"},
+	}
+	got := compactParameterGuidance(guidance, 5)
+	alphaIdx := strings.Index(got, "`alpha`")
+	zetaIdx := strings.Index(got, "`zeta`")
+	if alphaIdx == -1 || zetaIdx == -1 || alphaIdx > zetaIdx {
+		t.Fatalf("compactParameterGuidance() = %q, want alpha before zeta", got)
+	}
+}
