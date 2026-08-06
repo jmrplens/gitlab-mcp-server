@@ -1265,7 +1265,7 @@ func safeTokenSuffix(token string) string {
 }
 
 // clientIP extracts the real client IP from the request. When a trusted
-// proxy header is configured (e.g. Fly-Client-IP, X-Real-IP, X-Forwarded-For),
+// proxy header is configured (e.g. CF-Connecting-IP, X-Real-IP, X-Forwarded-For),
 // its value is used instead of RemoteAddr.
 //
 // For multi-value headers like X-Forwarded-For — where well-behaved proxies

@@ -10,13 +10,22 @@ Desktop, Claude Code, Cursor, VS Code, …) y la instancia de GitLab que
 configures. No tiene telemetría, ni analítica, ni informes de errores, ni
 backend propio.
 
+Hay un camino distinto que se describe aparte más abajo: el endpoint público
+alojado en `mcp.jmrp.io/gitlab`, donde el software se ejecuta en la máquina de
+otra persona y no en la tuya. Véase [Endpoint alojado](#endpoint-alojado).
+
 Última actualización: 2026-07-07
 
 ## Qué recopilamos
 
 **Nada.** El servidor no tiene telemetría, ni analítica, ni informes de
-errores, ni backend propio. El mantenedor nunca recibe, almacena ni tiene
-acceso a tus datos, credenciales o información de uso.
+errores, ni backend propio. Cuando lo ejecutas tú — que es como esta
+documentación recomienda usarlo — el mantenedor nunca recibe, almacena ni
+tiene acceso a tus datos, credenciales o información de uso.
+
+Eso es una afirmación sobre el software, y se cumple allí donde lo ejecutes.
+No es una afirmación sobre el [endpoint alojado](#endpoint-alojado), donde ese
+mismo software corre en una máquina que opera el mantenedor.
 
 ## Flujos de datos
 
@@ -40,6 +49,30 @@ acceso a tus datos, credenciales o información de uso.
   nuevas versiones de la extensión.
 
 No existen otros destinos de red.
+
+## Endpoint alojado
+
+Hay una instancia pública de este servidor alojada en
+`https://mcp.jmrp.io/gitlab`. Usarla es opcional y nunca es lo predeterminado:
+nada la instala, y ninguna configuración del proyecto apunta a ella.
+
+Conviene decir con claridad qué cambia al usarla. Tu Personal Access Token de
+GitLab y todas tus llamadas a herramientas viajan por la red hasta una máquina
+que opera el mantenedor de este proyecto en lugar de quedarse en la tuya, y las
+peticiones a tu instancia de GitLab las hace entonces esa máquina y no la tuya,
+de modo que GitLab ve su dirección y no la tuya. El token se usa para autenticar
+esa petición y no se guarda en el servidor, pero estás confiándoselo a un host
+que no controlas.
+
+Esa instancia se opera como parte de [mcp.jmrp.io](https://mcp.jmrp.io/) y su
+tratamiento de las peticiones se rige allí, no en esta política, que describe el
+software. Este documento solo puede contarte qué hace el software; no puede
+hacer promesas en nombre de un servidor que no ejecutas tú.
+
+Si tu instancia de GitLab es privada, o el token tiene más alcance del que estás
+dispuesto a entregar a un host de terceros, ejecuta el servidor en local. Ese es
+todo el consejo, y es el motivo por el que todas las rutas de instalación de la
+documentación llevan primero ahí.
 
 ## Credenciales
 

@@ -154,6 +154,28 @@ Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--e
 The built-in [setup wizard](#setup-wizard) collects your token and configures your client for you — no JSON to edit. Run `gitlab-mcp-server --setup` after installing the binary.
 :::
 
+### Try it without installing anything (hosted endpoint)
+
+A public instance runs at **`https://mcp.jmrp.io/gitlab`** — nothing to install, no account beyond your own GitLab token. Point any HTTP-capable MCP client at it:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.jmrp.io/gitlab",
+      "headers": { "PRIVATE-TOKEN": "glpat-xxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+`PRIVATE-TOKEN` is required and travels per request — it is never stored on the server. `GITLAB-URL` is optional and defaults to `https://gitlab.com`; set it to reach another instance, which must be reachable from the public internet.
+
+It is the fastest way to try the server, and the right way to keep using it is still **locally** (any option above) or through [Smithery](https://smithery.ai/servers/jmrp/gitlab-mcp-server), for one concrete reason: your token and every request pass through someone else's machine. Running it locally keeps both on your own computer — the only sensible option for a private self-managed instance.
+
+The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport, `GET` on it answers `405` by design, and `https://mcp.jmrp.io/gitlab/health` answers `ok`. It is one of the servers listed at [mcp.jmrp.io](https://mcp.jmrp.io/), a directory of the MCP servers maintained by this author, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
+
 ## Download
 
 Prefer to place the binary yourself? Download the latest binary for your platform from the [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest) page:
