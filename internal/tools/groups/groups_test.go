@@ -3669,7 +3669,7 @@ func TestTransferLocationsList_MissingGroupID(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Markdown
+// Create and update request bodies
 // ---------------------------------------------------------------------------.
 
 // TestCreate_NewOptions verifies that the v2.41.0 group create options are sent to the API.
@@ -3679,9 +3679,8 @@ func TestCreate_NewOptions(t *testing.T) {
 	var body string
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups", func(w http.ResponseWriter, r *http.Request) {
-		buf := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(buf)
-		body = string(buf)
+		raw, _ := io.ReadAll(r.Body)
+		body = string(raw)
 		testutil.RespondJSON(w, http.StatusCreated,
 			`{"id":1,"name":"G","path":"g","full_path":"g","visibility":"private","web_url":"https://x/groups/g"}`)
 	})
@@ -3725,9 +3724,8 @@ func TestUpdate_NewOptions(t *testing.T) {
 	var body string
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/5", func(w http.ResponseWriter, r *http.Request) {
-		buf := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(buf)
-		body = string(buf)
+		raw, _ := io.ReadAll(r.Body)
+		body = string(raw)
 		testutil.RespondJSON(w, http.StatusOK,
 			`{"id":5,"name":"G","path":"g","full_path":"g","visibility":"private","web_url":"https://x/groups/g"}`)
 	})

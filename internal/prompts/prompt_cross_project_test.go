@@ -373,15 +373,15 @@ func getPromptExpectError(t *testing.T, handler http.Handler, name string, args 
 	}
 }
 
-// TestMyOpenMRs_UserAPIError verifies that my_open_mrs returns an error when
+// TestMyOpenMRs_UserAPIError_ReturnsError verifies that my_open_mrs returns an error when
 // the current-user lookup fails.
-func TestMyOpenMRs_UserAPIError(t *testing.T) {
+func TestMyOpenMRs_UserAPIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "my_open_mrs", nil)
 }
 
-// TestMyOpenMRs_MRListAPIErrors verifies that my_open_mrs degrades to an
+// TestMyOpenMRs_MRListAPIErrors_StillRendersSummary verifies that my_open_mrs degrades to an
 // empty dashboard (warn-and-continue) when both MR list calls fail.
-func TestMyOpenMRs_MRListAPIErrors(t *testing.T) {
+func TestMyOpenMRs_MRListAPIErrors_StillRendersSummary(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, basicUserJSON)
@@ -396,15 +396,15 @@ func TestMyOpenMRs_MRListAPIErrors(t *testing.T) {
 	}
 }
 
-// TestMyPendingReviews_UserAPIError verifies that my_pending_reviews returns
+// TestMyPendingReviews_UserAPIError_ReturnsError verifies that my_pending_reviews returns
 // an error when the current-user lookup fails.
-func TestMyPendingReviews_UserAPIError(t *testing.T) {
+func TestMyPendingReviews_UserAPIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "my_pending_reviews", nil)
 }
 
-// TestMyPendingReviews_ListAPIError verifies that my_pending_reviews returns
+// TestMyPendingReviews_ListAPIError_ReturnsError verifies that my_pending_reviews returns
 // an error when the reviewer MR list fails.
-func TestMyPendingReviews_ListAPIError(t *testing.T) {
+func TestMyPendingReviews_ListAPIError_ReturnsError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, basicUserJSON)
@@ -415,15 +415,15 @@ func TestMyPendingReviews_ListAPIError(t *testing.T) {
 	getPromptExpectError(t, mux, "my_pending_reviews", nil)
 }
 
-// TestMyIssues_UserAPIError verifies that my_issues returns an error when the
+// TestMyIssues_UserAPIError_ReturnsError verifies that my_issues returns an error when the
 // current-user lookup fails.
-func TestMyIssues_UserAPIError(t *testing.T) {
+func TestMyIssues_UserAPIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "my_issues", nil)
 }
 
-// TestMyIssues_ListAPIError verifies that my_issues returns an error when the
+// TestMyIssues_ListAPIError_ReturnsError verifies that my_issues returns an error when the
 // issue list fails.
-func TestMyIssues_ListAPIError(t *testing.T) {
+func TestMyIssues_ListAPIError_ReturnsError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, basicUserJSON)
@@ -434,16 +434,16 @@ func TestMyIssues_ListAPIError(t *testing.T) {
 	getPromptExpectError(t, mux, "my_issues", nil)
 }
 
-// TestMyActivitySummary_UserAPIError verifies that my_activity_summary
+// TestMyActivitySummary_UserAPIError_ReturnsError verifies that my_activity_summary
 // returns an error when the current-user lookup fails.
-func TestMyActivitySummary_UserAPIError(t *testing.T) {
+func TestMyActivitySummary_UserAPIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "my_activity_summary", nil)
 }
 
-// TestMyActivitySummary_MRListAPIErrors verifies that my_activity_summary
+// TestMyActivitySummary_MRListAPIErrors_StillRendersSummary verifies that my_activity_summary
 // renders N/A rows (warn-and-continue) when the merged and reviewed MR list
 // calls fail.
-func TestMyActivitySummary_MRListAPIErrors(t *testing.T) {
+func TestMyActivitySummary_MRListAPIErrors_StillRendersSummary(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeGetUser, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, basicUserJSON)

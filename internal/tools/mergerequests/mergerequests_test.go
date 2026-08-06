@@ -4771,7 +4771,7 @@ func TestMarkdownHelpers_EdgeBranches(t *testing.T) {
 	}
 }
 
-// captureQuery is a tiny helper returning a handler that records the query
+// captureQueryHandler is a tiny helper returning a handler that records the query
 // values of the first matching request and replies with an empty paginated
 // list. The captured url.Values are written through the provided pointer.
 func captureQueryHandler(t *testing.T, method, path string, captured *url.Values) http.HandlerFunc {

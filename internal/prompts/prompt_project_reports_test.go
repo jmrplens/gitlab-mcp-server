@@ -428,17 +428,17 @@ func TestStaleItemsReport_MissingProjectID(t *testing.T) {
 	}
 }
 
-// TestBranchMRSummary_APIError verifies that branch_mr_summary returns an
+// TestBranchMRSummary_APIError_ReturnsError verifies that branch_mr_summary returns an
 // error when the MR list API fails.
-func TestBranchMRSummary_APIError(t *testing.T) {
+func TestBranchMRSummary_APIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "branch_mr_summary",
 		map[string]string{"project_id": "42", "target_branch": "main"})
 }
 
-// TestProjectActivityReport_EventsAPIErrorWithMergedMRs verifies that
+// TestProjectActivityReport_EventsAPIErrorWithMergedMRs_RendersMergedMRsWithZeroEvents verifies that
 // project_activity_report tolerates a failing events API (warn-and-continue)
 // and still renders the recently-merged MRs section when merged MRs exist.
-func TestProjectActivityReport_EventsAPIErrorWithMergedMRs(t *testing.T) {
+func TestProjectActivityReport_EventsAPIErrorWithMergedMRs_RendersMergedMRsWithZeroEvents(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathMRs, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("state") == "merged" {
@@ -464,16 +464,16 @@ func TestProjectActivityReport_EventsAPIErrorWithMergedMRs(t *testing.T) {
 	}
 }
 
-// TestMRDiscussionHealth_APIError verifies that mr_discussion_health returns
+// TestMRDiscussionHealth_APIError_ReturnsError verifies that mr_discussion_health returns
 // an error when the MR list API fails.
-func TestMRDiscussionHealth_APIError(t *testing.T) {
+func TestMRDiscussionHealth_APIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "mr_discussion_health", map[string]string{"project_id": "42"})
 }
 
-// TestMRDiscussionHealth_DiscussionsAPIError verifies that a failing
+// TestMRDiscussionHealth_DiscussionsAPIError_StillRendersReport verifies that a failing
 // discussion API for a single MR yields a zero-thread row instead of failing
 // the whole prompt (warn-and-continue branch).
-func TestMRDiscussionHealth_DiscussionsAPIError(t *testing.T) {
+func TestMRDiscussionHealth_DiscussionsAPIError_StillRendersReport(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathMRs, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `[{"iid":1,"project_id":42,"title":"MR1","source_branch":"a","target_branch":"main","author":{"username":"alice"}}]`)

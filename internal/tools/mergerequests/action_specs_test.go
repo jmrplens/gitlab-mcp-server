@@ -63,23 +63,25 @@ func TestActionSpecs_Metadata_NoGenericPlaceholders(t *testing.T) {
 	byTool := mergeRequestSpecsByTool(t, ActionSpecs(client))
 
 	for _, tool := range mrMetaActions {
-		spec, ok := byTool[tool]
-		if !ok {
-			t.Fatalf("missing action spec for %s", tool)
-		}
-		if u := strings.ToLower(strings.TrimSpace(spec.Usage)); u == "" || strings.HasPrefix(u, "use to execute") {
-			t.Errorf("%s: generic or empty Usage = %q", tool, spec.Usage)
-		}
-		if !hasNaturalLanguageAlias(spec, tool) {
-			t.Errorf("%s: aliases lack a natural-language entry: %v", tool, spec.Aliases)
-		}
-		if len(spec.RelatedActions) == 0 {
-			t.Errorf("%s: RelatedActions is empty", tool)
-		}
-		desc := spec.IndividualTool.Description
-		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-			t.Errorf("%s: individual description lacks Returns/See also: %q", tool, desc)
-		}
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := byTool[tool]
+			if !ok {
+				t.Fatal("missing action spec")
+			}
+			if u := strings.ToLower(strings.TrimSpace(spec.Usage)); u == "" || strings.HasPrefix(u, "use to execute") {
+				t.Errorf("generic or empty Usage = %q", spec.Usage)
+			}
+			if !hasNaturalLanguageAlias(spec, tool) {
+				t.Errorf("aliases lack a natural-language entry: %v", spec.Aliases)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Error("RelatedActions is empty")
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("individual description lacks Returns/See also: %q", desc)
+			}
+		})
 	}
 }
 

@@ -669,9 +669,9 @@ func TestMaskURL(t *testing.T) {
 	}
 }
 
-// TestAuditBranchProtection_ProjectAPIError verifies the project-fetch error
+// TestAuditBranchProtection_ProjectAPIError_ReturnsError verifies the project-fetch error
 // branch of the branch protection audit.
-func TestAuditBranchProtection_ProjectAPIError(t *testing.T) {
+func TestAuditBranchProtection_ProjectAPIError_ReturnsError(t *testing.T) {
 	client := newTestClient(t, notFoundHandler())
 	_, err := handleAuditBranchProtection(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
 	if err == nil {
@@ -679,9 +679,9 @@ func TestAuditBranchProtection_ProjectAPIError(t *testing.T) {
 	}
 }
 
-// TestAuditBranchProtection_BranchesAPIError verifies the protected-branches
+// TestAuditBranchProtection_BranchesAPIError_ReturnsError verifies the protected-branches
 // error branch of the branch protection audit (project fetch succeeds).
-func TestAuditBranchProtection_BranchesAPIError(t *testing.T) {
+func TestAuditBranchProtection_BranchesAPIError_ReturnsError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `{"path_with_namespace":"group/p","default_branch":"main"}`)
@@ -697,9 +697,9 @@ func TestAuditBranchProtection_BranchesAPIError(t *testing.T) {
 	}
 }
 
-// TestWriteSharedGroups_WithExpiry verifies the expiry-date branch of the
+// TestWriteSharedGroups_WithExpiry_RendersExpiryDate verifies the expiry-date branch of the
 // shared-groups table.
-func TestWriteSharedGroups_WithExpiry(t *testing.T) {
+func TestWriteSharedGroups_WithExpiry_RendersExpiryDate(t *testing.T) {
 	expires := gl.ISOTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
 	var b strings.Builder
 	writeSharedGroups(&b, []gl.ProjectSharedWithGroup{
@@ -710,9 +710,9 @@ func TestWriteSharedGroups_WithExpiry(t *testing.T) {
 	}
 }
 
-// TestAuditProjectAccess_MembersAPIError verifies the members-fetch error
+// TestAuditProjectAccess_MembersAPIError_ReturnsError verifies the members-fetch error
 // branch of the project access audit.
-func TestAuditProjectAccess_MembersAPIError(t *testing.T) {
+func TestAuditProjectAccess_MembersAPIError_ReturnsError(t *testing.T) {
 	client := newTestClient(t, notFoundHandler())
 	_, err := handleAuditProjectAccess(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
 	if err == nil {
@@ -720,9 +720,9 @@ func TestAuditProjectAccess_MembersAPIError(t *testing.T) {
 	}
 }
 
-// TestAuditProjectAccess_ProjectAPIError verifies the project-fetch error
+// TestAuditProjectAccess_ProjectAPIError_ReturnsError verifies the project-fetch error
 // branch of the project access audit (members fetch succeeds).
-func TestAuditProjectAccess_ProjectAPIError(t *testing.T) {
+func TestAuditProjectAccess_ProjectAPIError_ReturnsError(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeMembersAll, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `[]`)
@@ -738,9 +738,9 @@ func TestAuditProjectAccess_ProjectAPIError(t *testing.T) {
 	}
 }
 
-// TestAuditProjectAccess_InactiveAccounts verifies the inactive-accounts
+// TestAuditProjectAccess_InactiveAccounts_RendersInactiveSection verifies the inactive-accounts
 // section branch when a member is neither active nor blocked.
-func TestAuditProjectAccess_InactiveAccounts(t *testing.T) {
+func TestAuditProjectAccess_InactiveAccounts_RendersInactiveSection(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeMembersAll, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `[{"id":1,"username":"u1","name":"U One","access_level":30,"state":"awaiting"}]`)
@@ -760,9 +760,9 @@ func TestAuditProjectAccess_InactiveAccounts(t *testing.T) {
 	}
 }
 
-// TestAuditProjectWorkflow_ProjectAPIError verifies the project-fetch error
+// TestAuditProjectWorkflow_ProjectAPIError_ReturnsError verifies the project-fetch error
 // branch of the workflow audit.
-func TestAuditProjectWorkflow_ProjectAPIError(t *testing.T) {
+func TestAuditProjectWorkflow_ProjectAPIError_ReturnsError(t *testing.T) {
 	client := newTestClient(t, notFoundHandler())
 	_, err := handleAuditProjectWorkflow(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
 	if err == nil {
@@ -770,10 +770,10 @@ func TestAuditProjectWorkflow_ProjectAPIError(t *testing.T) {
 	}
 }
 
-// TestAuditProjectWorkflow_SubResourceAPIErrors verifies that the workflow
+// TestAuditProjectWorkflow_SubResourceAPIErrors_StillRendersReport verifies that the workflow
 // audit degrades gracefully (warn-and-continue) when the labels and template
 // APIs fail while the project fetch succeeds.
-func TestAuditProjectWorkflow_SubResourceAPIErrors(t *testing.T) {
+func TestAuditProjectWorkflow_SubResourceAPIErrors_StillRendersReport(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `{"path_with_namespace":"group/p"}`)

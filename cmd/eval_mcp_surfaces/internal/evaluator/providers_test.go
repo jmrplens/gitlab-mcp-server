@@ -1031,14 +1031,16 @@ func TestQwenEndpoint_UsesConfiguredBaseURL(t *testing.T) {
 func TestOpenAIProvider_CallOnceConvertsToolCall(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
-			t.Fatalf("Authorization = %q, want bearer", got)
+			t.Errorf("Authorization = %q, want bearer", got)
 		}
 		var request openAIRequest
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatalf("decode request: %v", err)
+			t.Errorf("decode request: %v", err)
+			http.Error(w, "decode request", http.StatusBadRequest)
+			return
 		}
 		if request.Model != "gpt-test" || len(request.Tools) != 1 || request.ToolChoice != "required" {
-			t.Fatalf("request = %+v", request)
+			t.Errorf("request = %+v", request)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]any{
@@ -1052,7 +1054,7 @@ func TestOpenAIProvider_CallOnceConvertsToolCall(t *testing.T) {
 			}}}}},
 			"usage": map[string]any{"prompt_tokens": 11, "completion_tokens": 7},
 		}); err != nil {
-			t.Fatalf("encode response: %v", err)
+			t.Errorf("encode response: %v", err)
 		}
 	}))
 	defer server.Close()
@@ -1081,13 +1083,15 @@ func TestOpenAIProvider_QwenDisablesThinking(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request openAIRequest
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatalf("decode request: %v", err)
+			t.Errorf("decode request: %v", err)
+			http.Error(w, "decode request", http.StatusBadRequest)
+			return
 		}
 		if request.EnableThinking == nil || *request.EnableThinking {
-			t.Fatalf("enable_thinking = %v, want false", request.EnableThinking)
+			t.Errorf("enable_thinking = %v, want false", request.EnableThinking)
 		}
 		if request.ToolChoice != "required" || request.MaxTokens == 0 {
-			t.Fatalf("request = %+v", request)
+			t.Errorf("request = %+v", request)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(map[string]any{
@@ -1100,7 +1104,7 @@ func TestOpenAIProvider_QwenDisablesThinking(t *testing.T) {
 				},
 			}}}}},
 		}); err != nil {
-			t.Fatalf("encode response: %v", err)
+			t.Errorf("encode response: %v", err)
 		}
 	}))
 	defer server.Close()
@@ -1132,7 +1136,7 @@ func TestOpenAIProvider_EmptyToolArgumentsAreRetryable(t *testing.T) {
 				},
 			}}}}},
 		}); err != nil {
-			t.Fatalf("encode response: %v", err)
+			t.Errorf("encode response: %v", err)
 		}
 	}))
 	defer server.Close()

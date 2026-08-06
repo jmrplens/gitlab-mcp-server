@@ -16,12 +16,14 @@ func TestUserActionSpecs_Descriptions(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	for _, spec := range UserActionSpecs(client) {
-		desc := spec.IndividualTool.Description
-		if desc == "" {
-			t.Fatalf("%s: empty description", spec.IndividualTool.Name)
-		}
-		if !contains(desc, "Returns:") || !contains(desc, "See also:") {
-			t.Errorf("%s: description missing Returns/See also: %q", spec.IndividualTool.Name, desc)
-		}
+		t.Run(spec.IndividualTool.Name, func(t *testing.T) {
+			desc := spec.IndividualTool.Description
+			if desc == "" {
+				t.Fatal("empty description")
+			}
+			if !contains(desc, "Returns:") || !contains(desc, "See also:") {
+				t.Errorf("description missing Returns/See also: %q", desc)
+			}
+		})
 	}
 }

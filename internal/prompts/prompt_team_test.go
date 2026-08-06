@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -311,6 +312,27 @@ func notFoundHandler() http.Handler {
 	})
 }
 
+// getPromptExpectErrorWithoutAPICall asserts that a prompt fails argument
+// validation before it reaches GitLab.
+//
+// getPromptExpectError with notFoundHandler cannot express this: a handler that
+// answers 404 makes the prompt fail either way, so the test passes whether the
+// argument was rejected up front or the first API call simply failed. Counting
+// requests and requiring zero is what pins the validation to the right side of
+// the client call.
+func getPromptExpectErrorWithoutAPICall(t *testing.T, name string, args map[string]string) {
+	t.Helper()
+	var requests atomic.Int64
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests.Add(1)
+		respondNotFound(w)
+	})
+	getPromptExpectError(t, handler, name, args)
+	if got := requests.Load(); got != 0 {
+		t.Errorf("%s made %d GitLab request(s); argument validation must reject before the client call", name, got)
+	}
+}
+
 // getPromptText issues a GetPrompt call that is expected to succeed and
 // returns the text of the first message.
 func getPromptText(t *testing.T, handler http.Handler, name string, args map[string]string) string {
@@ -325,17 +347,17 @@ func getPromptText(t *testing.T, handler http.Handler, name string, args map[str
 
 // prompts.go error branches.
 
-// TestUserActivityReport_UserLookupAPIError verifies that the
+// TestUserActivityReport_UserLookupAPIError_ReturnsError verifies that the
 // user_activity_report prompt returns an error when the /users lookup fails
 // (covers both the handler branch and resolveUser's lookup-error branch).
-func TestUserActivityReport_UserLookupAPIError(t *testing.T) {
+func TestUserActivityReport_UserLookupAPIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "user_activity_report", map[string]string{"username": "alice"})
 }
 
-// TestUserActivityReport_NoEventsWithMRs verifies the user_activity_report
+// TestUserActivityReport_NoEventsWithMRs_RendersMRSectionOnly verifies the user_activity_report
 // branches for an empty event list combined with non-empty merged and
 // under-review MR lists (the grouped per-project MR tables).
-func TestUserActivityReport_NoEventsWithMRs(t *testing.T) {
+func TestUserActivityReport_NoEventsWithMRs_RendersMRSectionOnly(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/users", func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, aliceLookupJSON)
@@ -359,9 +381,9 @@ func TestUserActivityReport_NoEventsWithMRs(t *testing.T) {
 	}
 }
 
-// TestUserActivityReport_MultiDayChart verifies the daily activity chart
+// TestUserActivityReport_MultiDayChart_RendersDailyChart verifies the daily activity chart
 // separator branches when contribution events span more than one day.
-func TestUserActivityReport_MultiDayChart(t *testing.T) {
+func TestUserActivityReport_MultiDayChart_RendersDailyChart(t *testing.T) {
 	d1 := time.Now().Add(-48 * time.Hour)
 	d2 := time.Now().Add(-24 * time.Hour)
 	mux := http.NewServeMux()
@@ -389,16 +411,16 @@ func TestUserActivityReport_MultiDayChart(t *testing.T) {
 	}
 }
 
-// TestTeamOverview_MembersAPIError verifies that team_overview returns an
+// TestTeamOverview_MembersAPIError_ReturnsError verifies that team_overview returns an
 // error when the group members API fails.
-func TestTeamOverview_MembersAPIError(t *testing.T) {
+func TestTeamOverview_MembersAPIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "team_overview", map[string]string{"group_id": "g1"})
 }
 
-// TestBuildTeamOverviewStats_MergedMRAuthors verifies the merged-MR
+// TestBuildTeamOverviewStats_MergedMRAuthors_CountsMergedMRAuthors verifies the merged-MR
 // attribution branches: authors that are active members are counted while
 // unknown or nil authors are ignored.
-func TestBuildTeamOverviewStats_MergedMRAuthors(t *testing.T) {
+func TestBuildTeamOverviewStats_MergedMRAuthors_CountsMergedMRAuthors(t *testing.T) {
 	members := []*gl.GroupMember{{Username: "alice", Name: "Alice", State: "active"}}
 	mergedMRs := []*gl.BasicMergeRequest{
 		{Author: &gl.BasicUser{Username: "alice"}},
@@ -416,9 +438,9 @@ func TestBuildTeamOverviewStats_MergedMRAuthors(t *testing.T) {
 	}
 }
 
-// TestWriteTeamOverviewChart_EmptyStats verifies the chart is omitted when
+// TestWriteTeamOverviewChart_EmptyStats_WritesNothing verifies the chart is omitted when
 // there are no member stats to plot.
-func TestWriteTeamOverviewChart_EmptyStats(t *testing.T) {
+func TestWriteTeamOverviewChart_EmptyStats_WritesNothing(t *testing.T) {
 	var b strings.Builder
 	writeTeamOverviewChart(&b, map[string]*teamOverviewMemberStats{})
 	if b.Len() != 0 {
@@ -426,21 +448,21 @@ func TestWriteTeamOverviewChart_EmptyStats(t *testing.T) {
 	}
 }
 
-// TestGroupMRDashboard_MissingGroupID verifies that group_mr_dashboard
+// TestGroupMRDashboard_MissingGroupID_ReturnsError verifies that group_mr_dashboard
 // rejects requests without a group_id.
-func TestGroupMRDashboard_MissingGroupID(t *testing.T) {
-	getPromptExpectError(t, notFoundHandler(), "group_mr_dashboard", nil)
+func TestGroupMRDashboard_MissingGroupID_ReturnsError(t *testing.T) {
+	getPromptExpectErrorWithoutAPICall(t, "group_mr_dashboard", nil)
 }
 
-// TestGroupMRDashboard_APIError verifies that group_mr_dashboard returns an
+// TestGroupMRDashboard_APIError_ReturnsError verifies that group_mr_dashboard returns an
 // error when the group MR list API fails.
-func TestGroupMRDashboard_APIError(t *testing.T) {
+func TestGroupMRDashboard_APIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "group_mr_dashboard", map[string]string{"group_id": "g1"})
 }
 
-// TestGroupMRDashboard_ConflictCount verifies the conflict-counting branch
+// TestGroupMRDashboard_ConflictCount_ReportsConflictCount verifies the conflict-counting branch
 // when an MR in the dashboard has merge conflicts.
-func TestGroupMRDashboard_ConflictCount(t *testing.T) {
+func TestGroupMRDashboard_ConflictCount_ReportsConflictCount(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/g1/merge_requests", func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `[{"iid":1,"project_id":10,"title":"MR1","source_branch":"a","target_branch":"main","has_conflicts":true,"references":{"full":"group/proj!1"},"created_at":"2026-01-01T00:00:00Z"}]`)
@@ -452,15 +474,15 @@ func TestGroupMRDashboard_ConflictCount(t *testing.T) {
 	}
 }
 
-// TestReviewerWorkload_MembersAPIError verifies that reviewer_workload
+// TestReviewerWorkload_MembersAPIError_ReturnsError verifies that reviewer_workload
 // returns an error when the group members API fails.
-func TestReviewerWorkload_MembersAPIError(t *testing.T) {
+func TestReviewerWorkload_MembersAPIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "reviewer_workload", map[string]string{"group_id": "g1"})
 }
 
-// TestRecordReviewerWorkloadMR_UnknownReviewer verifies that a reviewer who
+// TestRecordReviewerWorkloadMR_UnknownReviewer_IsIgnored verifies that a reviewer who
 // is not a group member gets a stats entry created on the fly.
-func TestRecordReviewerWorkloadMR_UnknownReviewer(t *testing.T) {
+func TestRecordReviewerWorkloadMR_UnknownReviewer_IsIgnored(t *testing.T) {
 	stats := map[string]*reviewerWorkloadStats{}
 	created := time.Now().Add(-24 * time.Hour)
 
@@ -478,9 +500,9 @@ func TestRecordReviewerWorkloadMR_UnknownReviewer(t *testing.T) {
 	}
 }
 
-// TestWriteReviewerWorkloadChart_NoActiveReviewers verifies the chart is
+// TestWriteReviewerWorkloadChart_NoActiveReviewers_WritesNothing verifies the chart is
 // omitted when nobody is reviewing anything.
-func TestWriteReviewerWorkloadChart_NoActiveReviewers(t *testing.T) {
+func TestWriteReviewerWorkloadChart_NoActiveReviewers_WritesNothing(t *testing.T) {
 	var b strings.Builder
 	writeReviewerWorkloadChart(&b, map[string]*reviewerWorkloadStats{"a": {name: "A"}}, 0)
 	if b.Len() != 0 {

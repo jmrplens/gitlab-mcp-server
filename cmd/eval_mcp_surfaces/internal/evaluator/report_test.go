@@ -245,24 +245,27 @@ func TestRouteDomainName_UsesDynamicActionDomain(t *testing.T) {
 // TestFailureDiagnosticCategory_SeparatesPhase4Buckets covers FailureDiagnosticCategory with table-driven subtests for separates phase 4 buckets.
 func TestFailureDiagnosticCategory_SeparatesPhase4Buckets(t *testing.T) {
 	tests := []struct {
+		name  string
 		notes []string
 		want  string
 	}{
-		{[]string{"json: cannot unmarshal string into Go struct field id of type int64"}, "mcp_implementation_bug"},
-		{[]string{"GitLab 503 service unavailable"}, "transient_gitlab_5xx"},
-		{[]string{"feature requires Premium license"}, "gitlab_ce_limitation"},
-		{[]string{"fixture state is missing project identity"}, "fixture_setup_failure"},
-		{[]string{"expected action issue.create, got project.create"}, "model_route_selection_miss"},
-		{[]string{"unknown params for gitlab/issue.create: iid"}, "model_parameter_shape_miss"},
-		{[]string{"missing required project_id"}, "model_parameter_shape_miss"},
-		{[]string{"destructive task requires params.confirm=true"}, "destructive_safety"},
-		{[]string{"context deadline exceeded"}, "timeout_resource_exhaustion"},
+		{"unmarshal type error", []string{"json: cannot unmarshal string into Go struct field id of type int64"}, "mcp_implementation_bug"},
+		{"gitlab 5xx", []string{"GitLab 503 service unavailable"}, "transient_gitlab_5xx"},
+		{"premium license", []string{"feature requires Premium license"}, "gitlab_ce_limitation"},
+		{"missing fixture identity", []string{"fixture state is missing project identity"}, "fixture_setup_failure"},
+		{"wrong action", []string{"expected action issue.create, got project.create"}, "model_route_selection_miss"},
+		{"unknown param", []string{"unknown params for gitlab/issue.create: iid"}, "model_parameter_shape_miss"},
+		{"missing required param", []string{"missing required project_id"}, "model_parameter_shape_miss"},
+		{"unconfirmed destructive", []string{"destructive task requires params.confirm=true"}, "destructive_safety"},
+		{"deadline exceeded", []string{"context deadline exceeded"}, "timeout_resource_exhaustion"},
 	}
 
 	for _, tt := range tests {
-		if got := failureDiagnosticCategory(tt.notes); got != tt.want {
-			t.Fatalf("failureDiagnosticCategory(%q) = %q, want %q", strings.Join(tt.notes, "; "), got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			if got := failureDiagnosticCategory(tt.notes); got != tt.want {
+				t.Errorf("failureDiagnosticCategory(%q) = %q, want %q", strings.Join(tt.notes, "; "), got, tt.want)
+			}
+		})
 	}
 }
 

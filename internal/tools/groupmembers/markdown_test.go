@@ -23,7 +23,7 @@ func TestFormatBillableMembersMarkdown(t *testing.T) {
 		}},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
-	for _, want := range []string{"Billable Group Members", "dev", "group_member", "https://gl/dev"} {
+	for _, want := range []string{"Billable Group Members", "[dev](https://gl/dev)", "group_member"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
 		}
@@ -45,7 +45,12 @@ func TestFormatBillableMembershipsMarkdown(t *testing.T) {
 		}},
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
-	for _, want := range []string{"Billable Member Memberships", "Org / Team", "Developer", "30"} {
+	for _, want := range []string{
+		"Billable Member Memberships",
+		"[Org / Team](https://gl/groups/team/-/group_members)",
+		"Developer",
+		"30",
+	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("markdown missing %q:\n%s", want, md)
 		}

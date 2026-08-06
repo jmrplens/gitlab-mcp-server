@@ -9,20 +9,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/eval_mcp_surfaces/internal/termio"
 )
 
-// TestShouldConfigureTerminalOutput_RespectsQuietCheckModes verifies terminal log
-// setup is skipped for pure check commands unless explicitly requested.
-func TestShouldConfigureTerminalOutput_RespectsQuietCheckModes(t *testing.T) {
-	if !shouldConfigureTerminalOutput(options{}) {
-		t.Fatal("shouldConfigureTerminalOutput(default) = false, want true")
-	}
-	if shouldConfigureTerminalOutput(options{CheckDocs: true}) {
-		t.Fatal("shouldConfigureTerminalOutput(check docs) = true, want false")
-	}
-	if !shouldConfigureTerminalOutput(options{CheckDocs: true, PrintOutput: true}) {
-		t.Fatal("shouldConfigureTerminalOutput(explicit print) = false, want true")
-	}
-}
-
 // TestTerminalPrintHelpers_WriteToConfiguredLog verifies package-level terminal
 // helpers write into the configured command output sink.
 func TestTerminalPrintHelpers_WriteToConfiguredLog(t *testing.T) {
@@ -75,6 +61,12 @@ func TestConfigureTerminalOutput_DefaultAndOverride(t *testing.T) {
 // TestConfigureTerminalOutput_WritesLogWithoutEcho verifies progress output is
 // captured in the terminal log by default.
 func TestConfigureTerminalOutput_WritesLogWithoutEcho(t *testing.T) {
+	// configureTerminalOutput swaps the process-wide termio sink. Without this
+	// restore the global keeps pointing at the log file closed below, and the
+	// next test in the package to call terminalPrintf writes to a closed file —
+	// a failure that only appears under some orderings.
+	t.Cleanup(termio.SetOutputForTest(termio.NewOutput(&strings.Builder{}, false)))
+
 	logPath := filepath.Join(t.TempDir(), "terminal.log")
 	_, closeLog, err := configureTerminalOutput(options{TerminalLog: logPath})
 	if err != nil {
@@ -96,8 +88,9 @@ func TestConfigureTerminalOutput_WritesLogWithoutEcho(t *testing.T) {
 // report-checking modes avoid terminal log setup unless output is requested.
 //
 // The test covers check-docs, efficiency checks, and trace comparisons as quiet
-// modes, then asserts that an explicit log path or print flag re-enables terminal
-// output. This keeps validation commands from creating unnecessary artifacts.
+// modes, then asserts that default options, an explicit log path, or a print flag
+// all enable terminal output. This keeps validation commands from creating
+// unnecessary artifacts.
 func TestShouldConfigureTerminalOutput_SkipsCheckDocsWithoutExplicitOutput(t *testing.T) {
 	for _, opts := range []options{
 		{CheckDocs: true},
@@ -108,7 +101,11 @@ func TestShouldConfigureTerminalOutput_SkipsCheckDocsWithoutExplicitOutput(t *te
 			t.Fatalf("shouldConfigureTerminalOutput(%+v) = true, want false", opts)
 		}
 	}
-	for _, opts := range []options{{CheckDocs: true, TerminalLog: "check.log"}, {CheckDocs: true, PrintOutput: true}} {
+	for _, opts := range []options{
+		{},
+		{CheckDocs: true, TerminalLog: "check.log"},
+		{CheckDocs: true, PrintOutput: true},
+	} {
 		if !shouldConfigureTerminalOutput(opts) {
 			t.Fatalf("shouldConfigureTerminalOutput(%+v) = false, want true", opts)
 		}

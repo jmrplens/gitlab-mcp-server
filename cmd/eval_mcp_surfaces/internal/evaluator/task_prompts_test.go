@@ -225,9 +225,8 @@ func TestDynamicTaskPrompt_MultiStepUsesFindFirst(t *testing.T) {
 // leaking expected action IDs.
 func TestDynamicTaskPrompt_ProviderConfusionCasesUseFindFirst(t *testing.T) {
 	tests := []struct {
-		name   string
-		task   evalTask
-		absent []string
+		name string
+		task evalTask
 	}{
 		{
 			name: "failed pipeline investigation workflow",
@@ -371,44 +370,44 @@ func TestDynamicTaskPrompt_MultiStepOmitsExactActionPlan(t *testing.T) {
 // examples are no longer injected into Dynamic prompts.
 func TestDynamicTaskPrompt_OmitsRoleSensitiveExactCallContent(t *testing.T) {
 	tests := []struct {
-		name string
-		task evalTask
-		want []string
+		name   string
+		task   evalTask
+		absent []string
 	}{
 		{
 			name: "allowlist source and target projects",
 			task: evalTask{ID: "MT-066", Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{`"action":"job.token_scope_remove_project"`, `"confirm":true`, `"params":{"project_id":1,"target_project_id":51}`},
+			absent: []string{`"action":"job.token_scope_remove_project"`, `"confirm":true`, `"params":{"project_id":1,"target_project_id":51}`},
 		},
 		{
 			name: "issue link source and target",
 			task: evalTask{ID: "MT-LINK", Prompt: "Link source issue IID `5` in project `my-org/source` to target issue IID `9` in target project ID `77`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.link_create", RequiredParams: []string{"project_id", "issue_iid", "target_project_id", "target_issue_iid"}},
 			}},
-			want: []string{`"action":"issue.link_create"`, `"issue_iid":5`, `"project_id":"my-org/source"`, `"target_issue_iid":9`, `"target_project_id":77`},
+			absent: []string{`"action":"issue.link_create"`, `"issue_iid":5`, `"project_id":"my-org/source"`, `"target_issue_iid":9`, `"target_project_id":77`},
 		},
 		{
 			name: "merge request branches",
 			task: evalTask{ID: "MT-MR", Prompt: "Create a merge request in project `my-org/tools/gitlab-mcp-server` from `feature/eval` into `main` titled `Evaluation MR`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "merge_request.create", RequiredParams: []string{"project_id", "source_branch", "target_branch", "title"}},
 			}},
-			want: []string{`"action":"merge_request.create"`, `"project_id":"my-org/tools/gitlab-mcp-server"`, `"source_branch":"feature/eval"`, `"target_branch":"main"`, `"title":"Evaluation MR"`},
+			absent: []string{`"action":"merge_request.create"`, `"project_id":"my-org/tools/gitlab-mcp-server"`, `"source_branch":"feature/eval"`, `"target_branch":"main"`, `"title":"Evaluation MR"`},
 		},
 		{
 			name: "group epic child issue",
 			task: evalTask{ID: "MT-140", Prompt: "Assign issue IID `99` from child project path `my-org/tools/gitlab-mcp-server` to epic IID `12` in group full path `my-org`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.epic_issue_assign", RequiredParams: []string{"full_path", "epic_iid", "child_project_path", "child_iid"}},
 			}},
-			want: []string{`"action":"group.epic_issue_assign"`, `"child_iid":99`, `"child_project_path":"my-org/tools/gitlab-mcp-server"`, `"epic_iid":12`, `"full_path":"my-org"`},
+			absent: []string{`"action":"group.epic_issue_assign"`, `"child_iid":99`, `"child_project_path":"my-org/tools/gitlab-mcp-server"`, `"epic_iid":12`, `"full_path":"my-org"`},
 		},
 		{
 			name: "project deploy token delete",
 			task: evalTask{ID: "MT-112", Prompt: "Delete project deploy token ID `66` from project `my-org/tools/gitlab-mcp-server`.", Steps: []evalStep{
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "access.deploy_token_delete_project", RequiredParams: []string{"project_id", "deploy_token_id"}, OptionalParams: []string{"confirm"}, Destructive: true},
 			}},
-			want: []string{`"action":"access.deploy_token_delete_project"`, `"confirm":true`, `"deploy_token_id":66`, `"project_id":"my-org/tools/gitlab-mcp-server"`},
+			absent: []string{`"action":"access.deploy_token_delete_project"`, `"confirm":true`, `"deploy_token_id":66`, `"project_id":"my-org/tools/gitlab-mcp-server"`},
 		},
 		{
 			name: "group ci variable environment scope",
@@ -416,7 +415,7 @@ func TestDynamicTaskPrompt_OmitsRoleSensitiveExactCallContent(t *testing.T) {
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "ci_variable.group_create", RequiredParams: []string{"group_id", "key", "value"}, OptionalParams: []string{"environment_scope", "masked"}},
 				{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "ci_variable.group_get", RequiredParams: []string{"group_id", "key"}, OptionalParams: []string{"environment_scope"}},
 			}},
-			want: []string{`"action":"ci_variable.group_create"`, `"environment_scope":"review/eval"`, `"group_id":"my-org"`, `"key":"GROUP_EVAL_CRUD_TOKEN"`, `"value":"group-crud-value-1"`},
+			absent: []string{`"action":"ci_variable.group_create"`, `"environment_scope":"review/eval"`, `"group_id":"my-org"`, `"key":"GROUP_EVAL_CRUD_TOKEN"`, `"value":"group-crud-value-1"`},
 		},
 	}
 
@@ -428,7 +427,7 @@ func TestDynamicTaskPrompt_OmitsRoleSensitiveExactCallContent(t *testing.T) {
 				"Use the returned result ID, input_schema, required_params, and example",
 				"Do not use action IDs from memory",
 			})
-			for _, unwanted := range tt.want {
+			for _, unwanted := range tt.absent {
 				if strings.Contains(prompt, unwanted) {
 					t.Fatalf("taskPromptForSurface() = %q, want no exact-call content %q", prompt, unwanted)
 				}
@@ -510,8 +509,7 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 		ExpectedAction: "project.list",
 	}
 	prompt := taskPrompt(task)
-	assertTaskPromptContains(
-		t, prompt,
+	requireContainsAll(t, "taskPrompt()", prompt, []string{
 		"exactly one tool call",
 		"A schema lookup before the task call is a failure",
 		"Do not look up schemas for ordinary parameter names already supplied by the task prompt",
@@ -542,16 +540,7 @@ func TestTaskPrompt_SingleOperationPrefersOneClearToolCall(t *testing.T) {
 		"latest pipelines plural means pipeline.list",
 		"do not send empty arrays or objects",
 		"call the selected action with params:{}",
-	)
-}
-
-func assertTaskPromptContains(t *testing.T, prompt string, snippets ...string) {
-	t.Helper()
-	for _, snippet := range snippets {
-		if !strings.Contains(prompt, snippet) {
-			t.Fatalf("taskPrompt() = %q, want %q", prompt, snippet)
-		}
-	}
+	})
 }
 
 // TestTaskPrompt_MultiStepAvoidsImplicitPagination verifies TaskPrompt when multi step avoids implicit pagination.

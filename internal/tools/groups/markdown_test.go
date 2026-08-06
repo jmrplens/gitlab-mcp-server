@@ -20,8 +20,8 @@ func TestFormatProvisionedUsersListMarkdown_Rows(t *testing.T) {
 	md := FormatProvisionedUsersListMarkdown(ProvisionedUsersListOutput{
 		Users: []ProvisionedUserOutput{{ID: 7, Username: "scim-user", Name: "SCIM User", State: "active", Email: "s@e.com", WebURL: "https://g/scim-user"}},
 	})
-	if !strings.Contains(md, "scim-user") || !strings.Contains(md, "https://g/scim-user") {
-		t.Fatalf("markdown = %q, want user row with link", md)
+	if !strings.Contains(md, "[scim-user](https://g/scim-user)") {
+		t.Fatalf("markdown = %q, want a clickable user link", md)
 	}
 }
 

@@ -4394,9 +4394,12 @@ func TestValidGitLabRoleAccessLevelFloat64Direct(t *testing.T) {
 
 // TestNumericRoleAccessLevel verifies the type-switch dispatch accepts
 // int, int64, and float64 numeric types and rejects everything else.
-// Note: this helper does not validate the canonical access-level
-// whitelist — it only narrows the type. Validation happens in the
-// subsequent validGitLabRoleAccessLevel{Int64,Float64} call sites.
+//
+// The three numeric arms are not equivalent: int64 and float64 delegate to
+// validGitLabRoleAccessLevel{Int64,Float64}, so the canonical access-level
+// whitelist is enforced here for those two, while a plain int is narrowed and
+// returned unchecked. The out-of-range assertions below cover only the
+// validating arms for that reason.
 func TestNumericRoleAccessLevel(t *testing.T) {
 	if got, ok := numericRoleAccessLevel(int(30)); !ok || got != 30 {
 		t.Errorf("numericRoleAccessLevel(int 30) = %d/%v, want 30/true", got, ok)
@@ -4550,16 +4553,6 @@ func TestIsStringSliceTypeAndIsStringTypeDirect(t *testing.T) {
 			t.Errorf("%s: isStringSliceType = %v, want %v", tc.name, got, tc.isSlice)
 		}
 	}
-}
-
-// TestCoerceStructuredValueDirect verifies the structured-value
-// coercion helper handles map-with-access_level shorthand, plain
-// role strings, scalar values that cannot be interpreted, and
-// non-slice targets.
-func TestCoerceStructuredValueDirect(t *testing.T) {
-	sliceType := reflect.TypeFor[[]accessLevelEntryInput]()
-	elemType := sliceType.Elem()
-	_ = elemType // documented for direct use elsewhere
 }
 
 // TestCoerceStructuredValue_MapWithAccessLevelKey verifies the helper

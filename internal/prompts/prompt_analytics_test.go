@@ -334,15 +334,15 @@ func TestWeeklyTeamRecap_MissingGroupID(t *testing.T) {
 	}
 }
 
-// TestMergeVelocity_APIError verifies that merge_velocity returns an error
+// TestMergeVelocity_APIError_ReturnsError verifies that merge_velocity returns an error
 // when the MR list API fails.
-func TestMergeVelocity_APIError(t *testing.T) {
+func TestMergeVelocity_APIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "merge_velocity", map[string]string{"project_id": "42"})
 }
 
-// TestWriteDailyMergeChart_NoMergedDates verifies that the daily merge chart
+// TestWriteDailyMergeChart_NoMergedDates_WritesNothing verifies that the daily merge chart
 // is omitted when no MR carries a merged_at timestamp.
-func TestWriteDailyMergeChart_NoMergedDates(t *testing.T) {
+func TestWriteDailyMergeChart_NoMergedDates_WritesNothing(t *testing.T) {
 	var b strings.Builder
 	writeDailyMergeChart(&b, []*gl.BasicMergeRequest{{IID: 1}})
 	if b.Len() != 0 {
@@ -350,15 +350,15 @@ func TestWriteDailyMergeChart_NoMergedDates(t *testing.T) {
 	}
 }
 
-// TestReleaseReadiness_APIError verifies that release_readiness returns an
+// TestReleaseReadiness_APIError_ReturnsError verifies that release_readiness returns an
 // error when the MR list API fails.
-func TestReleaseReadiness_APIError(t *testing.T) {
+func TestReleaseReadiness_APIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "release_readiness", map[string]string{"project_id": "42"})
 }
 
-// TestReleaseReadiness_DiscussionsAPIError verifies that unresolved-thread
+// TestReleaseReadiness_DiscussionsAPIError_StillRendersReport verifies that unresolved-thread
 // counting skips MRs whose discussion API fails (continue branch).
-func TestReleaseReadiness_DiscussionsAPIError(t *testing.T) {
+func TestReleaseReadiness_DiscussionsAPIError_StillRendersReport(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc(pathMRs, func(w http.ResponseWriter, _ *http.Request) {
 		respondJSON(w, http.StatusOK, `[{"iid":1,"project_id":42,"title":"MR1","source_branch":"a","target_branch":"main"}]`)
@@ -373,15 +373,15 @@ func TestReleaseReadiness_DiscussionsAPIError(t *testing.T) {
 	}
 }
 
-// TestReleaseCadence_APIError verifies that release_cadence returns an error
+// TestReleaseCadence_APIError_ReturnsError verifies that release_cadence returns an error
 // when the releases API fails.
-func TestReleaseCadence_APIError(t *testing.T) {
+func TestReleaseCadence_APIError_ReturnsError(t *testing.T) {
 	getPromptExpectError(t, notFoundHandler(), "release_cadence", map[string]string{"project_id": "42"})
 }
 
-// TestFilterRecentReleases_CreatedAtFallback verifies that a release without
+// TestFilterRecentReleases_CreatedAtFallback_FallsBackToCreatedAt verifies that a release without
 // released_at falls back to created_at for the recency filter.
-func TestFilterRecentReleases_CreatedAtFallback(t *testing.T) {
+func TestFilterRecentReleases_CreatedAtFallback_FallsBackToCreatedAt(t *testing.T) {
 	created := time.Now().Add(-24 * time.Hour)
 	since := time.Now().Add(-30 * 24 * time.Hour)
 
@@ -391,11 +391,11 @@ func TestFilterRecentReleases_CreatedAtFallback(t *testing.T) {
 	}
 }
 
-// TestWriteReleaseHistoryTable_TagNameFallback verifies that a release
+// TestWriteReleaseHistoryTable_TagNameFallback_FallsBackToTagName verifies that a release
 // without a name is rendered using its tag name. The slice is built
 // dynamically so gosec does not bounds-propagate a literal length into the
 // production loop (G602 false positive).
-func TestWriteReleaseHistoryTable_TagNameFallback(t *testing.T) {
+func TestWriteReleaseHistoryTable_TagNameFallback_FallsBackToTagName(t *testing.T) {
 	now := time.Now()
 	var releases []*gl.Release
 	releases = append(releases, &gl.Release{TagName: "v1.0.0", ReleasedAt: &now})
@@ -407,18 +407,18 @@ func TestWriteReleaseHistoryTable_TagNameFallback(t *testing.T) {
 	}
 }
 
-// TestWeeklyTeamRecap_MergedAPIError verifies that weekly_team_recap degrades
+// TestWeeklyTeamRecap_MergedAPIError_StillRendersRecap verifies that weekly_team_recap degrades
 // to a zero-count recap (warn-and-continue) when the group MR API fails.
-func TestWeeklyTeamRecap_MergedAPIError(t *testing.T) {
+func TestWeeklyTeamRecap_MergedAPIError_StillRendersRecap(t *testing.T) {
 	text := getPromptText(t, notFoundHandler(), "weekly_team_recap", map[string]string{"group_id": "g1"})
 	if !strings.Contains(text, "| MRs merged | 0 |") {
 		t.Error("expected zero merged MRs when API fails")
 	}
 }
 
-// TestWeeklyTeamRecap_OpenMRConflicts verifies the open-MR conflict counting
+// TestWeeklyTeamRecap_OpenMRConflicts_ReportsConflictCount verifies the open-MR conflict counting
 // branch of weekly_team_recap.
-func TestWeeklyTeamRecap_OpenMRConflicts(t *testing.T) {
+func TestWeeklyTeamRecap_OpenMRConflicts_ReportsConflictCount(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v4/groups/g1/merge_requests", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("state") == "merged" {

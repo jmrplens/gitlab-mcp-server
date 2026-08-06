@@ -325,16 +325,23 @@ func TestDeleteUser_CancelledContext(t *testing.T) {
 
 // decodeJSONBody reads an HTTP request's JSON body into a generic map so tests
 // can assert which option fields the SDK serialized.
+//
+// It is called from httptest handlers, which run on the server goroutine, so it
+// reports failures with t.Errorf and returns an empty map. testing requires
+// FailNow to run on the test goroutine; from a handler it would abort the
+// request mid-response and the client would report a misleading transport error
+// instead of the decoding failure.
 func decodeJSONBody(t *testing.T, r *http.Request) map[string]any {
 	t.Helper()
+	m := map[string]any{}
 	raw, readErr := io.ReadAll(r.Body)
 	if readErr != nil {
-		t.Fatalf("read body: %v", readErr)
+		t.Errorf("read body: %v", readErr)
+		return m
 	}
-	m := map[string]any{}
 	if len(raw) > 0 {
 		if jsonErr := json.Unmarshal(raw, &m); jsonErr != nil {
-			t.Fatalf("unmarshal body %q: %v", raw, jsonErr)
+			t.Errorf("unmarshal body %q: %v", raw, jsonErr)
 		}
 	}
 	return m
