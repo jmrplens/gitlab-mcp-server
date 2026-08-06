@@ -333,3 +333,111 @@ func TestWeeklyTeamRecap_MissingGroupID(t *testing.T) {
 		t.Fatal("expected error for missing group_id")
 	}
 }
+
+// TestMergeVelocity_APIError verifies that merge_velocity returns an error
+// when the MR list API fails.
+func TestMergeVelocity_APIError(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "merge_velocity", map[string]string{"project_id": "42"})
+}
+
+// TestWriteDailyMergeChart_NoMergedDates verifies that the daily merge chart
+// is omitted when no MR carries a merged_at timestamp.
+func TestWriteDailyMergeChart_NoMergedDates(t *testing.T) {
+	var b strings.Builder
+	writeDailyMergeChart(&b, []*gl.BasicMergeRequest{{IID: 1}})
+	if b.Len() != 0 {
+		t.Errorf("expected no chart without merge dates, got: %q", b.String())
+	}
+}
+
+// TestReleaseReadiness_APIError verifies that release_readiness returns an
+// error when the MR list API fails.
+func TestReleaseReadiness_APIError(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "release_readiness", map[string]string{"project_id": "42"})
+}
+
+// TestReleaseReadiness_DiscussionsAPIError verifies that unresolved-thread
+// counting skips MRs whose discussion API fails (continue branch).
+func TestReleaseReadiness_DiscussionsAPIError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(pathMRs, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"iid":1,"project_id":42,"title":"MR1","source_branch":"a","target_branch":"main"}]`)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		respondNotFound(w)
+	})
+
+	text := getPromptText(t, mux, "release_readiness", map[string]string{"project_id": "42"})
+	if !strings.Contains(text, "| Unresolved threads | 0 |") {
+		t.Error("expected zero unresolved threads when discussions API fails")
+	}
+}
+
+// TestReleaseCadence_APIError verifies that release_cadence returns an error
+// when the releases API fails.
+func TestReleaseCadence_APIError(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "release_cadence", map[string]string{"project_id": "42"})
+}
+
+// TestFilterRecentReleases_CreatedAtFallback verifies that a release without
+// released_at falls back to created_at for the recency filter.
+func TestFilterRecentReleases_CreatedAtFallback(t *testing.T) {
+	created := time.Now().Add(-24 * time.Hour)
+	since := time.Now().Add(-30 * 24 * time.Hour)
+
+	filtered := filterRecentReleases([]*gl.Release{{CreatedAt: &created}}, since)
+	if len(filtered) != 1 {
+		t.Errorf("expected 1 release via created_at fallback, got %d", len(filtered))
+	}
+}
+
+// TestWriteReleaseHistoryTable_TagNameFallback verifies that a release
+// without a name is rendered using its tag name. The slice is built
+// dynamically so gosec does not bounds-propagate a literal length into the
+// production loop (G602 false positive).
+func TestWriteReleaseHistoryTable_TagNameFallback(t *testing.T) {
+	now := time.Now()
+	var releases []*gl.Release
+	releases = append(releases, &gl.Release{TagName: "v1.0.0", ReleasedAt: &now})
+
+	var b strings.Builder
+	writeReleaseHistoryTable(&b, releases)
+	if !strings.Contains(b.String(), "| v1.0.0 | v1.0.0 |") {
+		t.Errorf("expected tag name fallback in table, got: %s", b.String())
+	}
+}
+
+// TestWeeklyTeamRecap_MergedAPIError verifies that weekly_team_recap degrades
+// to a zero-count recap (warn-and-continue) when the group MR API fails.
+func TestWeeklyTeamRecap_MergedAPIError(t *testing.T) {
+	text := getPromptText(t, notFoundHandler(), "weekly_team_recap", map[string]string{"group_id": "g1"})
+	if !strings.Contains(text, "| MRs merged | 0 |") {
+		t.Error("expected zero merged MRs when API fails")
+	}
+}
+
+// TestWeeklyTeamRecap_OpenMRConflicts verifies the open-MR conflict counting
+// branch of weekly_team_recap.
+func TestWeeklyTeamRecap_OpenMRConflicts(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/groups/g1/merge_requests", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("state") == "merged" {
+			respondJSON(w, http.StatusOK, `[]`)
+			return
+		}
+		respondJSON(w, http.StatusOK, `[{"iid":1,"project_id":10,"title":"MR1","source_branch":"a","target_branch":"main","has_conflicts":true,"references":{"full":"group/proj!1"},"created_at":"2026-01-01T00:00:00Z"}]`)
+	})
+	mux.HandleFunc("GET /api/v4/groups/g1/issues", func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+
+	text := getPromptText(t, mux, "weekly_team_recap", map[string]string{"group_id": "g1"})
+	if !strings.Contains(text, "## Open MR Health") {
+		t.Error("expected open MR health section")
+	}
+	if !strings.Contains(text, "| With conflicts | 1 |") {
+		t.Error("expected conflict count of 1")
+	}
+}
+
+// prompt_project_reports.go error branches.

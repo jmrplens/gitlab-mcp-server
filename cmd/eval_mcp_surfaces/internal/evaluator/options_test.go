@@ -162,3 +162,171 @@ func TestApplyDockerPresetDefaults_RespectsExplicitDockerAutoStart(t *testing.T)
 		t.Fatalf("DockerAutoStart = true, want explicit false preserved: %+v", opts)
 	}
 }
+
+// TestApplyPresetDefaults_UsesDockerReadDefaults verifies ApplyPresetDefaults uses docker read defaults.
+func TestApplyPresetDefaults_UsesDockerReadDefaults(t *testing.T) {
+	opts, err := applyPresetDefaults(options{Preset: presetDockerRead, explicitFlags: map[string]bool{}})
+	if err != nil {
+		t.Fatalf("applyPresetDefaults() error = %v", err)
+	}
+	if opts.Backend != backendGitLab {
+		t.Fatalf("Backend = %q, want %q", opts.Backend, backendGitLab)
+	}
+	if opts.GitLabEnv != "test/e2e/.env.docker" {
+		t.Fatalf("GitLabEnv = %q, want Docker env file", opts.GitLabEnv)
+	}
+	if opts.Partition != "base-read" {
+		t.Fatalf("Partition = %q, want base-read", opts.Partition)
+	}
+	if !opts.Execute || !opts.UseFixtures || !opts.SkipUnavailable || !opts.SkipMutating || !opts.SkipDestructive {
+		t.Fatalf("docker-read defaults not fully applied: %+v", opts)
+	}
+}
+
+// TestApplyPresetDefaults_UsesDockerCapabilityDiscoveryDefaults verifies ApplyPresetDefaults uses safe Docker defaults for MCP capability discovery.
+func TestApplyPresetDefaults_UsesDockerCapabilityDiscoveryDefaults(t *testing.T) {
+	opts, err := applyPresetDefaults(options{Preset: presetDockerCapabilityDiscovery, explicitFlags: map[string]bool{}})
+	if err != nil {
+		t.Fatalf("applyPresetDefaults() error = %v", err)
+	}
+	if opts.Backend != backendGitLab {
+		t.Fatalf("Backend = %q, want %q", opts.Backend, backendGitLab)
+	}
+	if opts.Partition != partitionCapabilityFallback {
+		t.Fatalf("Partition = %q, want %q", opts.Partition, partitionCapabilityFallback)
+	}
+	if !opts.Execute || !opts.UseFixtures || !opts.SkipUnavailable || !opts.SkipMutating || !opts.SkipDestructive {
+		t.Fatalf("docker-capability-discovery defaults not fully applied: %+v", opts)
+	}
+}
+
+// TestApplyPresetDefaults_PreservesExplicitFlags verifies ApplyPresetDefaults preserves explicit flags.
+func TestApplyPresetDefaults_PreservesExplicitFlags(t *testing.T) {
+	opts, err := applyPresetDefaults(options{
+		Preset:        presetDockerMutatingSafe,
+		Backend:       backendMock,
+		Partition:     "base-read",
+		explicitFlags: map[string]bool{"backend": true, "partition": true},
+	})
+	if err != nil {
+		t.Fatalf("applyPresetDefaults() error = %v", err)
+	}
+	if opts.Backend != backendMock {
+		t.Fatalf("Backend = %q, want explicit backend", opts.Backend)
+	}
+	if opts.Partition != "base-read" {
+		t.Fatalf("Partition = %q, want explicit partition", opts.Partition)
+	}
+	if !opts.Execute || !opts.UseFixtures || !opts.OnlyMutating || !opts.SkipDestructive {
+		t.Fatalf("non-explicit preset defaults not applied: %+v", opts)
+	}
+}
+
+// TestApplyPresetDefaults_RejectsUnknownPreset verifies ApplyPresetDefaults rejects unknown preset.
+func TestApplyPresetDefaults_RejectsUnknownPreset(t *testing.T) {
+	_, err := applyPresetDefaults(options{Preset: "surprise"})
+	if err == nil {
+		t.Fatal("applyPresetDefaults() error = nil, want unknown preset error")
+	}
+}
+
+// TestNormalizeEvalToolSurface_AcceptsDynamicCandidates verifies that supported
+// surface names accepted by configuration normalize to their canonical values.
+func TestNormalizeEvalToolSurface_AcceptsDynamicCandidates(t *testing.T) {
+	tests := map[string]string{
+		"":        config.ToolSurfaceDynamic,
+		"dynamic": config.ToolSurfaceDynamic,
+		"meta":    config.ToolSurfaceMeta,
+	}
+	for input, want := range tests {
+		t.Run(input, func(t *testing.T) {
+			got, err := normalizeEvalToolSurface(input)
+			if err != nil {
+				t.Fatalf("normalizeEvalToolSurface(%q) error = %v", input, err)
+			}
+			if got != want {
+				t.Fatalf("normalizeEvalToolSurface(%q) = %q, want %q", input, got, want)
+			}
+		})
+	}
+}
+
+// TestDefaultTraceDir_ReplacesReportExtension verifies DefaultTraceDir when replaces report extension.
+func TestDefaultTraceDir_ReplacesReportExtension(t *testing.T) {
+	got := defaultTraceDir("dist/evaluation/mcp-surfaces/report.md")
+	if got != "dist/evaluation/mcp-surfaces/report.traces" {
+		t.Fatalf("defaultTraceDir() = %q, want report.traces", got)
+	}
+}
+
+// TestDefaultTerminalLogPath_ReplacesReportExtension verifies terminal logs sit
+// beside explicit Markdown reports.
+func TestDefaultTerminalLogPath_ReplacesReportExtension(t *testing.T) {
+	got := defaultTerminalLogPath("dist/evaluation/mcp-surfaces/report.md")
+	if got != "dist/evaluation/mcp-surfaces/report.log" {
+		t.Fatalf("defaultTerminalLogPath() = %q, want report.log", got)
+	}
+}
+
+// TestDefaultTerminalLogPath_UsesIgnoredTerminalDirectory verifies the fallback
+// terminal log path stays under ignored evaluation artifacts.
+func TestDefaultTerminalLogPath_UsesIgnoredTerminalDirectory(t *testing.T) {
+	got := defaultTerminalLogPath("")
+	expectedPrefix := filepath.Join("dist", "evaluation", "mcp-surfaces", "terminal") + string(filepath.Separator)
+	if !strings.HasPrefix(got, expectedPrefix) || filepath.Ext(got) != ".log" {
+		t.Fatalf("defaultTerminalLogPath() = %q, want ignored terminal log path", got)
+	}
+}
+
+// TestDefaultOutputPath_UsesIgnoredDistDirectory verifies DefaultOutputPath uses ignored dist directory.
+func TestDefaultOutputPath_UsesIgnoredDistDirectory(t *testing.T) {
+	got := defaultOutputPath("claude/sonnet:4 6")
+	if !strings.HasPrefix(got, "dist/evaluation/mcp-surfaces/model-") {
+		t.Fatalf("defaultOutputPath() = %q, want dist evaluation path", got)
+	}
+	if !strings.HasSuffix(got, "-claude-sonnet-4-6.md") {
+		t.Fatalf("defaultOutputPath() = %q, want sanitized model suffix", got)
+	}
+}
+
+// TestDefaultOutputPath_UsesShortNameForMultiModel verifies DefaultOutputPath uses short name for multi model.
+func TestDefaultOutputPath_UsesShortNameForMultiModel(t *testing.T) {
+	got := defaultOutputPath("anthropic:claude-sonnet-4-6,openai:gpt-5.4-mini")
+	if !strings.HasSuffix(got, "-multi-model.md") {
+		t.Fatalf("defaultOutputPath() = %q, want multi-model suffix", got)
+	}
+}
+
+// TestResolveEvalServerMode_FlagBeatsEnvironment verifies the resolution order
+// for the server mode: an explicit --server-mode wins, otherwise
+// EVAL_SURFACE_SERVER_MODE and then SERVER_MODE apply, so the Makefile alias
+// and .env both work while the flag stays authoritative.
+func TestResolveEvalServerMode_FlagBeatsEnvironment(t *testing.T) {
+	t.Setenv("EVAL_SURFACE_SERVER_MODE", "")
+	t.Setenv("SERVER_MODE", "")
+	mode, err := resolveEvalServerMode("")
+	if err != nil || mode != ServerModeDefault {
+		t.Fatalf("resolveEvalServerMode(\"\") = %q, %v; want default", mode, err)
+	}
+
+	t.Setenv("SERVER_MODE", ServerModeReadOnly)
+	mode, err = resolveEvalServerMode("")
+	if err != nil || mode != ServerModeReadOnly {
+		t.Errorf("SERVER_MODE alone = %q, %v; want read-only", mode, err)
+	}
+
+	t.Setenv("EVAL_SURFACE_SERVER_MODE", ServerModeSafe)
+	mode, err = resolveEvalServerMode("")
+	if err != nil || mode != ServerModeSafe {
+		t.Errorf("EVAL_SURFACE_SERVER_MODE should win over SERVER_MODE, got %q, %v", mode, err)
+	}
+
+	mode, err = resolveEvalServerMode(ServerModeReadOnly)
+	if err != nil || mode != ServerModeReadOnly {
+		t.Errorf("explicit flag = %q, %v; want read-only over the environment", mode, err)
+	}
+
+	if _, invalidErr := resolveEvalServerMode("bogus"); invalidErr == nil {
+		t.Error("resolveEvalServerMode(bogus) error = nil, want validation error")
+	}
+}

@@ -5,6 +5,7 @@ package prompts
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -2087,3 +2088,58 @@ func TestReviewMRPrompt_MissingArgs(t *testing.T) {
 		t.Fatal(msgExpectedMissingProjectID)
 	}
 }
+
+// TestFetchContributionEvents_APIError verifies that fetchContributionEvents
+// logs and returns an empty slice (instead of failing the prompt) when the
+// events API fails, for both the current-user and other-user endpoints.
+func TestFetchContributionEvents_APIError(t *testing.T) {
+	client := newTestClient(t, notFoundHandler())
+	since := time.Now().Add(-7 * 24 * time.Hour)
+
+	if events := fetchContributionEvents(t.Context(), client, 42, false, since); len(events) != 0 {
+		t.Errorf("expected no events for other-user API error, got %d", len(events))
+	}
+	if events := fetchContributionEvents(t.Context(), client, 1, true, since); len(events) != 0 {
+		t.Errorf("expected no events for current-user API error, got %d", len(events))
+	}
+}
+
+// TestWriteOpenMRsSection_APIError verifies that the open-MRs section of the
+// project health check is silently skipped when the MR list API fails.
+func TestWriteOpenMRsSection_APIError(t *testing.T) {
+	client := newTestClient(t, notFoundHandler())
+	var b strings.Builder
+	writeOpenMRsSection(t.Context(), &b, client, "42")
+	if b.Len() != 0 {
+		t.Errorf("expected empty section on API error, got: %q", b.String())
+	}
+}
+
+// TestWriteBranchesSection_APIError verifies that the branches section of the
+// project health check is silently skipped when the branch list API fails.
+func TestWriteBranchesSection_APIError(t *testing.T) {
+	client := newTestClient(t, notFoundHandler())
+	var b strings.Builder
+	writeBranchesSection(t.Context(), &b, client, "42")
+	if b.Len() != 0 {
+		t.Errorf("expected empty section on API error, got: %q", b.String())
+	}
+}
+
+// TestWriteMRSection_FetchError verifies that writeMRSection skips the whole
+// section (warn-and-continue) when the MR fetch that produced the slice failed.
+func TestWriteMRSection_FetchError(t *testing.T) {
+	var b strings.Builder
+	writeMRSection(&b, "Open MRs by", "alice", nil, errors.New("boom"))
+	if b.Len() != 0 {
+		t.Errorf("expected no output for failed fetch, got: %q", b.String())
+	}
+}
+
+// TestTeamMemberWorkload_MissingProjectID verifies that the
+// team_member_workload prompt rejects requests without a project_id.
+func TestTeamMemberWorkload_MissingProjectID(t *testing.T) {
+	getPromptExpectError(t, notFoundHandler(), "team_member_workload", nil)
+}
+
+// prompt_team.go error branches.

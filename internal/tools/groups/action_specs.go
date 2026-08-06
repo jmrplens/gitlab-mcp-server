@@ -436,19 +436,22 @@ func applyGroupInputEnums(individualTool string, options *toolutil.ActionSpecOpt
 	// switch, so any overrides a future action sets there must be preserved.
 	switch individualTool {
 	case "gitlab_group_list", "gitlab_subgroups_list":
-		options.InputSchemaOverrides = append(options.InputSchemaOverrides,
+		options.InputSchemaOverrides = append(
+			options.InputSchemaOverrides,
 			toolutil.SchemaPropertyOverride("order_by", map[string]any{
 				"enum": []any{"name", "path", "id", "similarity"},
 			}),
 		)
 	case "gitlab_group_members_list":
-		options.InputSchemaOverrides = append(options.InputSchemaOverrides,
+		options.InputSchemaOverrides = append(
+			options.InputSchemaOverrides,
 			toolutil.SchemaPropertyOverride("order_by", map[string]any{
 				"enum": []any{"id", "name", "username", "access_level", "last_activity_on"},
 			}),
 		)
 	case "gitlab_group_projects":
-		options.InputSchemaOverrides = append(options.InputSchemaOverrides,
+		options.InputSchemaOverrides = append(
+			options.InputSchemaOverrides,
 			toolutil.SchemaPropertyOverride("order_by", map[string]any{
 				"enum": []any{"id", "name", "path", "created_at", "updated_at", "last_activity_at", "similarity"},
 			}),

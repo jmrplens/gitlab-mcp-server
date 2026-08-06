@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -945,5 +946,417 @@ func TestParseOpenAIToolArguments_RecoversXMLWrappedJSON(t *testing.T) {
 				t.Fatalf("params not recovered as object: %#v", got["params"])
 			}
 		})
+	}
+}
+
+// TestResolveModelSpecs_UsesEvalModels verifies ResolveModelSpecs uses eval models.
+func TestResolveModelSpecs_UsesEvalModels(t *testing.T) {
+	t.Setenv("EVAL_MODELS", "anthropic:claude-sonnet-4-6, google:gemini-3.0-flash, openai:gpt-5.4-mini, qwen:qwen3.6-flash")
+	specs, err := resolveModelSpecs(options{})
+	if err != nil {
+		t.Fatalf("resolveModelSpecs() error = %v", err)
+	}
+	got := modelReportLabel(specs)
+	want := "anthropic:claude-sonnet-4-6,google:gemini-3.0-flash,openai:gpt-5.4-mini,qwen:qwen3.6-flash"
+	if got != want {
+		t.Fatalf("modelReportLabel() = %q, want %q", got, want)
+	}
+}
+
+// TestResolveModelSpecs_IgnoresEmptyEntries verifies ResolveModelSpecs ignores empty entries.
+func TestResolveModelSpecs_IgnoresEmptyEntries(t *testing.T) {
+	t.Setenv("EVAL_MODELS", "anthropic:claude-sonnet-4-6,")
+	specs, err := resolveModelSpecs(options{})
+	if err != nil {
+		t.Fatalf("resolveModelSpecs() error = %v", err)
+	}
+	if len(specs) != 1 || specs[0].String() != "anthropic:claude-sonnet-4-6" {
+		t.Fatalf("specs = %+v, want single model", specs)
+	}
+}
+
+// TestResolveModelSpecs_ModelFlagOverridesEvalModels verifies ResolveModelSpecs when model flag overrides eval models.
+func TestResolveModelSpecs_ModelFlagOverridesEvalModels(t *testing.T) {
+	t.Setenv("EVAL_MODELS", "google:gemini-3.0-flash")
+	specs, err := resolveModelSpecs(options{Model: "claude-haiku-4-6"})
+	if err != nil {
+		t.Fatalf("resolveModelSpecs() error = %v", err)
+	}
+	if len(specs) != 1 || specs[0].Provider != providerAnthropic || specs[0].Model != "claude-haiku-4-6" {
+		t.Fatalf("specs = %+v, want single legacy Anthropic model", specs)
+	}
+}
+
+// TestParseModelSpec_RejectsUnsupportedProvider verifies ParseModelSpec rejects unsupported provider.
+func TestParseModelSpec_RejectsUnsupportedProvider(t *testing.T) {
+	_, err := parseModelSpec("local:llama")
+	if err == nil || !strings.Contains(err.Error(), "unsupported model provider") {
+		t.Fatalf("error = %v, want unsupported provider", err)
+	}
+}
+
+// TestParseModelSpec_StripsGoogleModelsPrefix verifies ParseModelSpec when strips google models prefix.
+func TestParseModelSpec_StripsGoogleModelsPrefix(t *testing.T) {
+	spec, err := parseModelSpec("google:models/gemini-3-flash-preview")
+	if err != nil {
+		t.Fatalf("parseModelSpec() error = %v", err)
+	}
+	if spec.Model != "gemini-3-flash-preview" {
+		t.Fatalf("model = %q, want trimmed Gemini model", spec.Model)
+	}
+}
+
+// TestAPIKeyForModelProvider_RequiresQwenAPIKey verifies APIKeyForModelProvider requires qwen API key.
+func TestAPIKeyForModelProvider_RequiresQwenAPIKey(t *testing.T) {
+	t.Setenv("QWEN_API_KEY", "")
+	_, err := apiKeyForModelProvider(providerQwen)
+	if err == nil {
+		t.Fatal("apiKeyForModelProvider() error = nil, want missing QWEN_API_KEY")
+	}
+	if !strings.Contains(err.Error(), "QWEN_API_KEY") {
+		t.Fatalf("error = %v, want QWEN_API_KEY", err)
+	}
+}
+
+// TestQwenEndpoint_UsesConfiguredBaseURL verifies QwenEndpoint uses configured base URL.
+func TestQwenEndpoint_UsesConfiguredBaseURL(t *testing.T) {
+	t.Setenv("QWEN_CHAT_COMPLETIONS_URL", "")
+	t.Setenv("QWEN_BASE_URL", "https://example.test/v1/")
+	if got := qwenEndpoint(); got != "https://example.test/v1/chat/completions" {
+		t.Fatalf("qwenEndpoint() = %q", got)
+	}
+}
+
+// TestOpenAIProvider_CallOnceConvertsToolCall verifies OpenAIProvider when call once converts tool call.
+func TestOpenAIProvider_CallOnceConvertsToolCall(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer test-key" {
+			t.Fatalf("Authorization = %q, want bearer", got)
+		}
+		var request openAIRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if request.Model != "gpt-test" || len(request.Tools) != 1 || request.ToolChoice != "required" {
+			t.Fatalf("request = %+v", request)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]any{"tool_calls": []any{map[string]any{
+				"id":   "call-1",
+				"type": "function",
+				"function": map[string]any{
+					"name":      "gitlab",
+					"arguments": `{"action":"user.current","params":{}}`,
+				},
+			}}}}},
+			"usage": map[string]any{"prompt_tokens": 11, "completion_tokens": 7},
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	provider := openAIProvider{endpoint: server.URL, name: providerOpenAI, maxTokenField: "max_completion_tokens"}
+	response, retry, err := provider.callOnce(t.Context(), server.Client(), "test-key", modelProviderRequest{
+		Model:     "gpt-test",
+		MaxTokens: 128,
+		System:    "Use tools.",
+		Tools:     []modelTool{{Name: "gitlab", Description: "GitLab", InputSchema: map[string]any{"type": "object"}}},
+		Messages:  []modelMessage{{Role: "user", Content: []modelContentBlock{{Type: "text", Text: "Who am I?"}}}},
+	})
+	if err != nil || retry {
+		t.Fatalf("callOnce() retry=%v error=%v", retry, err)
+	}
+	if response.Usage.InputTokens != 11 || response.Usage.OutputTokens != 7 {
+		t.Fatalf("usage = %+v", response.Usage)
+	}
+	if len(response.Content) != 1 || response.Content[0].Name != "gitlab" || response.Content[0].Input["action"] != "user.current" {
+		t.Fatalf("content = %+v", response.Content)
+	}
+}
+
+// TestOpenAIProvider_QwenDisablesThinking verifies OpenAIProvider when qwen disables thinking.
+func TestOpenAIProvider_QwenDisablesThinking(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request openAIRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if request.EnableThinking == nil || *request.EnableThinking {
+			t.Fatalf("enable_thinking = %v, want false", request.EnableThinking)
+		}
+		if request.ToolChoice != "required" || request.MaxTokens == 0 {
+			t.Fatalf("request = %+v", request)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]any{"tool_calls": []any{map[string]any{
+				"id":   "call-1",
+				"type": "function",
+				"function": map[string]any{
+					"name":      "gitlab",
+					"arguments": `{"action":"user.current","params":{}}`,
+				},
+			}}}}},
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	provider := openAIProvider{endpoint: server.URL, name: providerQwen, maxTokenField: "max_tokens", disableThinking: true}
+	_, retry, err := provider.callOnce(t.Context(), server.Client(), "test-key", modelProviderRequest{
+		Model:     "qwen3.6-flash",
+		MaxTokens: 128,
+		System:    "Use tools.",
+		Tools:     []modelTool{{Name: "gitlab", Description: "GitLab", InputSchema: map[string]any{"type": "object"}}},
+		Messages:  []modelMessage{{Role: "user", Content: []modelContentBlock{{Type: "text", Text: "Who am I?"}}}},
+	})
+	if err != nil || retry {
+		t.Fatalf("callOnce() retry=%v error=%v", retry, err)
+	}
+}
+
+// TestOpenAIProvider_EmptyToolArgumentsAreRetryable verifies OpenAIProvider when empty tool arguments are retryable.
+func TestOpenAIProvider_EmptyToolArgumentsAreRetryable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"choices": []any{map[string]any{"message": map[string]any{"tool_calls": []any{map[string]any{
+				"id":   "call-1",
+				"type": "function",
+				"function": map[string]any{
+					"name":      "gitlab",
+					"arguments": "",
+				},
+			}}}}},
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	provider := openAIProvider{endpoint: server.URL, name: providerQwen, maxTokenField: "max_tokens", disableThinking: true}
+	_, retry, err := provider.callOnce(t.Context(), server.Client(), "test-key", modelProviderRequest{
+		Model:     "qwen3.6-flash",
+		MaxTokens: 128,
+		System:    "Use tools.",
+		Tools:     []modelTool{{Name: "gitlab", Description: "GitLab", InputSchema: map[string]any{"type": "object"}}},
+		Messages:  []modelMessage{{Role: "user", Content: []modelContentBlock{{Type: "text", Text: "Who am I?"}}}},
+	})
+
+	if err == nil || !retry {
+		t.Fatalf("callOnce() retry=%v error=%v, want retryable empty arguments error", retry, err)
+	}
+}
+
+// TestOpenAIToolUseBlocks_RepairsLeadingCommaArguments verifies OpenAIToolUseBlocks when repairs leading comma arguments.
+func TestOpenAIToolUseBlocks_RepairsLeadingCommaArguments(t *testing.T) {
+	blocks, err := openAIToolUseBlocks(openAIMessage{ToolCalls: []openAIToolCall{{
+		ID:   "call-1",
+		Type: "function",
+		Function: openAIFunctionCall{
+			Name:      "gitlab",
+			Arguments: `, "action":"project.milestone_create","params":{"project_id":"my-org/tools/gitlab-mcp-server","title":"Evaluation Sprint"}`,
+		},
+	}}})
+	if err != nil {
+		t.Fatalf("openAIToolUseBlocks() error = %v", err)
+	}
+	if len(blocks) != 1 {
+		t.Fatalf("len(blocks) = %d, want 1", len(blocks))
+	}
+	if blocks[0].Input["action"] != "project.milestone_create" {
+		t.Fatalf("action = %v, want project.milestone_create", blocks[0].Input["action"])
+	}
+}
+
+// TestOpenAIToolUseBlocks_RepairsInterleavedLeadingCommaArguments verifies OpenAIToolUseBlocks when repairs interleaved leading comma arguments.
+func TestOpenAIToolUseBlocks_RepairsInterleavedLeadingCommaArguments(t *testing.T) {
+	blocks, err := openAIToolUseBlocks(openAIMessage{ToolCalls: []openAIToolCall{{
+		ID:   "call-1",
+		Type: "function",
+		Function: openAIFunctionCall{
+			Name:      "gitlab",
+			Arguments: " , \n, \"action\":\"merge_request.create\",\"params\":{\"project_id\":\"my-org/tools/gitlab-mcp-server\",\"source_branch\":\"feature/eval\",\"target_branch\":\"main\",\"title\":\"Evaluation MR\"}, ",
+		},
+	}}})
+	if err != nil {
+		t.Fatalf("openAIToolUseBlocks() error = %v", err)
+	}
+	if len(blocks) != 1 {
+		t.Fatalf("len(blocks) = %d, want 1", len(blocks))
+	}
+	if blocks[0].Input["action"] != "merge_request.create" {
+		t.Fatalf("action = %v, want merge_request.create", blocks[0].Input["action"])
+	}
+}
+
+// TestOpenAIToolUseBlocks_ExtractsWrappedJSONArguments verifies OpenAIToolUseBlocks when extracts wrapped JSON arguments.
+func TestOpenAIToolUseBlocks_ExtractsWrappedJSONArguments(t *testing.T) {
+	blocks, err := openAIToolUseBlocks(openAIMessage{ToolCalls: []openAIToolCall{{
+		ID:   "call-1",
+		Type: "function",
+		Function: openAIFunctionCall{
+			Name:      "gitlab_pipeline",
+			Arguments: `<tool_call>{"action":"get","params":{"project_id":"my-org/tools/gitlab-mcp-server","pipeline_id":12345}}</tool_call>`,
+		},
+	}}})
+	if err != nil {
+		t.Fatalf("openAIToolUseBlocks() error = %v", err)
+	}
+	if len(blocks) != 1 {
+		t.Fatalf("len(blocks) = %d, want 1", len(blocks))
+	}
+	if blocks[0].Input["action"] != "get" {
+		t.Fatalf("action = %v, want get", blocks[0].Input["action"])
+	}
+}
+
+// TestGoogleContentConversion_RoundTripsFunctionResponseNames verifies GoogleContentConversion when round trips function response names.
+func TestGoogleContentConversion_RoundTripsFunctionResponseNames(t *testing.T) {
+	messages := []modelMessage{
+		{Role: "assistant", Content: []modelContentBlock{{Type: "tool_use", ID: "call-1", Name: "gitlab", Input: map[string]any{"action": "user.current"}, ThoughtSignature: "thought-token"}}},
+		{Role: "user", Content: []modelContentBlock{{Type: "tool_result", ToolUseID: "call-1", Content: "ok"}}},
+	}
+	contents := googleContents(messages)
+	if len(contents) != 2 || len(contents[1].Parts) != 1 || contents[1].Parts[0].FunctionResponse == nil {
+		t.Fatalf("contents = %+v", contents)
+	}
+	if contents[1].Parts[0].FunctionResponse.Name != "gitlab" {
+		t.Fatalf("function response name = %q, want gitlab", contents[1].Parts[0].FunctionResponse.Name)
+	}
+	if contents[1].Parts[0].FunctionResponse.ID != "call-1" {
+		t.Fatalf("function response id = %q, want call-1", contents[1].Parts[0].FunctionResponse.ID)
+	}
+	if contents[0].Parts[0].ThoughtSignature != "thought-token" {
+		t.Fatalf("thought signature = %q, want preserved", contents[0].Parts[0].ThoughtSignature)
+	}
+
+	blocks := googleToolUseBlocks(googleContent{Parts: []googlePart{{ThoughtSignature: "thought-token", FunctionCall: &googleFunctionCall{Name: "gitlab", Args: map[string]any{"action": "user.current"}, ID: "call-1"}}}})
+	if len(blocks) != 1 || blocks[0].Name != "gitlab" || blocks[0].Input["action"] != "user.current" {
+		t.Fatalf("blocks = %+v", blocks)
+	}
+	if blocks[0].ID != "call-1" {
+		t.Fatalf("id = %q, want call-1", blocks[0].ID)
+	}
+	if blocks[0].ThoughtSignature != "thought-token" {
+		t.Fatalf("thought signature = %q, want preserved", blocks[0].ThoughtSignature)
+	}
+
+	contentBlocks := googleContentBlocks(googleContent{Parts: []googlePart{{Text: "plain response"}, {FunctionCall: &googleFunctionCall{Name: "gitlab", Args: map[string]any{"action": "user.current"}, ID: "call-2"}}}})
+	if len(contentBlocks) != 2 || contentBlocks[0].Type != "text" || contentBlocks[0].Text != "plain response" || contentBlocks[1].Type != "tool_use" {
+		t.Fatalf("content blocks = %+v, want text block followed by tool_use", contentBlocks)
+	}
+}
+
+// TestGoogleFunctionCallingMode_DefaultsToValidated verifies GoogleFunctionCallingMode when defaults to validated.
+func TestGoogleFunctionCallingMode_DefaultsToValidated(t *testing.T) {
+	t.Setenv("EVAL_GOOGLE_FUNCTION_MODE", "")
+	if got := googleFunctionCallingMode(); got != "VALIDATED" {
+		t.Fatalf("googleFunctionCallingMode() = %q, want VALIDATED", got)
+	}
+
+	t.Setenv("EVAL_GOOGLE_FUNCTION_MODE", "auto")
+	if got := googleFunctionCallingMode(); got != "AUTO" {
+		t.Fatalf("googleFunctionCallingMode() override = %q, want AUTO", got)
+	}
+}
+
+// TestSanitizeGoogleSchema_FlattensTypeUnion verifies SanitizeGoogleSchema when flattens type union.
+func TestSanitizeGoogleSchema_FlattensTypeUnion(t *testing.T) {
+	schema := map[string]any{
+		"type": []any{"string", "integer"},
+		"properties": map[string]any{
+			"project_id": map[string]any{"type": []any{"string", "integer"}},
+		},
+	}
+
+	got := sanitizeGoogleSchema(schema).(map[string]any)
+	if got["type"] != "string" {
+		t.Fatalf("type = %#v, want string", got["type"])
+	}
+	properties := got["properties"].(map[string]any)
+	projectID := properties["project_id"].(map[string]any)
+	if projectID["type"] != "string" {
+		t.Fatalf("project_id.type = %#v, want string", projectID["type"])
+	}
+}
+
+// TestSanitizeGoogleSchema_PreservesTitleProperty verifies SanitizeGoogleSchema preserves title property.
+func TestSanitizeGoogleSchema_PreservesTitleProperty(t *testing.T) {
+	schema := map[string]any{
+		"title": "Root schema title",
+		"type":  "object",
+		"properties": map[string]any{
+			"title": map[string]any{
+				"title":       "Property schema title",
+				"type":        "string",
+				"description": "Issue title.",
+			},
+		},
+	}
+
+	got := sanitizeGoogleSchema(schema).(map[string]any)
+	if _, ok := got["title"]; ok {
+		t.Fatalf("root schema title should be removed: %#v", got)
+	}
+	properties := got["properties"].(map[string]any)
+	title, ok := properties["title"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties.title missing after sanitize: %#v", properties)
+	}
+	if _, hasTitleKeyword := title["title"]; hasTitleKeyword {
+		t.Fatalf("property schema title keyword should be removed: %#v", title)
+	}
+	if title["type"] != "string" {
+		t.Fatalf("properties.title.type = %#v, want string", title["type"])
+	}
+}
+
+// TestGoogleEmptyResponseError_IncludesFinishAndBlockReasons verifies GoogleEmptyResponseError includes finish and block reasons.
+func TestGoogleEmptyResponseError_IncludesFinishAndBlockReasons(t *testing.T) {
+	decoded := googleResponse{}
+	decoded.Candidates = append(decoded.Candidates, struct {
+		Content       googleContent `json:"content"`
+		FinishReason  string        `json:"finishReason,omitempty"`
+		FinishMessage string        `json:"finishMessage,omitempty"`
+	}{FinishReason: "MALFORMED_FUNCTION_CALL", FinishMessage: "malformed tool call"})
+	decoded.PromptFeedback = &struct {
+		BlockReason        string `json:"blockReason,omitempty"`
+		BlockReasonMessage string `json:"blockReasonMessage,omitempty"`
+	}{BlockReason: "SAFETY", BlockReasonMessage: "blocked"}
+
+	err := googleEmptyResponseError(decoded, "no tool calls or output tokens")
+	message := err.Error()
+	for _, want := range []string{"no tool calls or output tokens", "finishReason=MALFORMED_FUNCTION_CALL", "finishMessage=malformed tool call", "blockReason=SAFETY", "blockReasonMessage=blocked"} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("error = %q, want %q", message, want)
+		}
+	}
+}
+
+// TestGoogleResponseDecode_PreservesNestedParams verifies GoogleResponseDecode preserves nested params.
+func TestGoogleResponseDecode_PreservesNestedParams(t *testing.T) {
+	raw := []byte(`{"candidates":[{"content":{"parts":[{"functionCall":{"name":"gitlab_project","args":{"action":"get","params":{"project_id":"my-org/tools/gitlab-mcp-server"}},"id":"call-1"}}]}}]}`)
+	var decoded googleResponse
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("decode google response: %v", err)
+	}
+
+	blocks := googleToolUseBlocks(decoded.Candidates[0].Content)
+	if len(blocks) != 1 {
+		t.Fatalf("blocks = %+v, want one tool call", blocks)
+	}
+	params, ok := blocks[0].Input["params"].(map[string]any)
+	if !ok {
+		t.Fatalf("params = %#v, want object", blocks[0].Input["params"])
+	}
+	if params["project_id"] != "my-org/tools/gitlab-mcp-server" {
+		t.Fatalf("project_id = %#v", params["project_id"])
+	}
+	if string(blocks[0].ProviderRawInput) != `{"action":"get","params":{"project_id":"my-org/tools/gitlab-mcp-server"}}` {
+		t.Fatalf("raw input = %s", blocks[0].ProviderRawInput)
 	}
 }

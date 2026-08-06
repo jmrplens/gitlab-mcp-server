@@ -1,8 +1,6 @@
-// case_fixtures_project_live_test.go covers the live GitLab fixture that
-// provisions an attempt-scoped source branch and seed file for merge-request
-// evaluation cases. The fixture is exercised against an [httptest] server
-// so the test does not require a real GitLab instance.
-
+// case_fixture_context_test.go contains unit tests for the live fixture
+// context helpers that prepare merge-request source branches and files
+// before a case runs.
 package evaluator
 
 import (

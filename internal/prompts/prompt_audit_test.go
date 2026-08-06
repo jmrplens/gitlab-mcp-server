@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
@@ -667,3 +668,136 @@ func TestMaskURL(t *testing.T) {
 		t.Errorf("maskURL long = %q, expected truncated with ...", got)
 	}
 }
+
+// TestAuditBranchProtection_ProjectAPIError verifies the project-fetch error
+// branch of the branch protection audit.
+func TestAuditBranchProtection_ProjectAPIError(t *testing.T) {
+	client := newTestClient(t, notFoundHandler())
+	_, err := handleAuditBranchProtection(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
+	if err == nil {
+		t.Error("expected error when project API fails")
+	}
+}
+
+// TestAuditBranchProtection_BranchesAPIError verifies the protected-branches
+// error branch of the branch protection audit (project fetch succeeds).
+func TestAuditBranchProtection_BranchesAPIError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"path_with_namespace":"group/p","default_branch":"main"}`)
+	})
+	mux.HandleFunc(routeProtectedBranches, func(w http.ResponseWriter, _ *http.Request) {
+		respondNotFound(w)
+	})
+
+	client := newTestClient(t, mux)
+	_, err := handleAuditBranchProtection(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
+	if err == nil {
+		t.Error("expected error when protected branches API fails")
+	}
+}
+
+// TestWriteSharedGroups_WithExpiry verifies the expiry-date branch of the
+// shared-groups table.
+func TestWriteSharedGroups_WithExpiry(t *testing.T) {
+	expires := gl.ISOTime(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	var b strings.Builder
+	writeSharedGroups(&b, []gl.ProjectSharedWithGroup{
+		{GroupID: 7, GroupName: "team-x", GroupAccessLevel: 30, ExpiresAt: &expires},
+	})
+	if !strings.Contains(b.String(), "2026-01-01") {
+		t.Errorf("expected expiry date in output, got: %s", b.String())
+	}
+}
+
+// TestAuditProjectAccess_MembersAPIError verifies the members-fetch error
+// branch of the project access audit.
+func TestAuditProjectAccess_MembersAPIError(t *testing.T) {
+	client := newTestClient(t, notFoundHandler())
+	_, err := handleAuditProjectAccess(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
+	if err == nil {
+		t.Error("expected error when members API fails")
+	}
+}
+
+// TestAuditProjectAccess_ProjectAPIError verifies the project-fetch error
+// branch of the project access audit (members fetch succeeds).
+func TestAuditProjectAccess_ProjectAPIError(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeMembersAll, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
+		respondNotFound(w)
+	})
+
+	client := newTestClient(t, mux)
+	_, err := handleAuditProjectAccess(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
+	if err == nil {
+		t.Error("expected error when project API fails")
+	}
+}
+
+// TestAuditProjectAccess_InactiveAccounts verifies the inactive-accounts
+// section branch when a member is neither active nor blocked.
+func TestAuditProjectAccess_InactiveAccounts(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeMembersAll, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[{"id":1,"username":"u1","name":"U One","access_level":30,"state":"awaiting"}]`)
+	})
+	mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"path_with_namespace":"group/p"}`)
+	})
+
+	client := newTestClient(t, mux)
+	result, err := handleAuditProjectAccess(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
+	if err != nil {
+		t.Fatalf(errMsgUnexpected, err)
+	}
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+	if !strings.Contains(text, "Inactive Accounts") {
+		t.Error("expected inactive accounts section")
+	}
+}
+
+// TestAuditProjectWorkflow_ProjectAPIError verifies the project-fetch error
+// branch of the workflow audit.
+func TestAuditProjectWorkflow_ProjectAPIError(t *testing.T) {
+	client := newTestClient(t, notFoundHandler())
+	_, err := handleAuditProjectWorkflow(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
+	if err == nil {
+		t.Error("expected error when project API fails")
+	}
+}
+
+// TestAuditProjectWorkflow_SubResourceAPIErrors verifies that the workflow
+// audit degrades gracefully (warn-and-continue) when the labels and template
+// APIs fail while the project fetch succeeds.
+func TestAuditProjectWorkflow_SubResourceAPIErrors(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(routeProject, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `{"path_with_namespace":"group/p"}`)
+	})
+	mux.HandleFunc(routeMilestones, func(w http.ResponseWriter, _ *http.Request) {
+		respondJSON(w, http.StatusOK, `[]`)
+	})
+	// Labels and both template endpoints fall through to 404.
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		respondNotFound(w)
+	})
+
+	client := newTestClient(t, mux)
+	result, err := handleAuditProjectWorkflow(t.Context(), client, testPromptRequest(map[string]string{"project_id": "42"}))
+	if err != nil {
+		t.Fatalf(errMsgUnexpected, err)
+	}
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+	if !strings.Contains(text, "No labels configured") {
+		t.Error("expected no-labels warning when labels API fails")
+	}
+	if !strings.Contains(text, "No templates found") {
+		t.Error("expected no-templates warning when template APIs fail")
+	}
+}
+
+// prompt_cross_project.go error branches.

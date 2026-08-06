@@ -4,6 +4,8 @@ package users
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"testing"
 
@@ -318,5 +320,94 @@ func TestDeleteUser_CancelledContext(t *testing.T) {
 	_, err := Delete(ctx, client, DeleteInput{UserID: 42})
 	if err == nil {
 		t.Fatal("expected error for cancelled context, got nil")
+	}
+}
+
+// decodeJSONBody reads an HTTP request's JSON body into a generic map so tests
+// can assert which option fields the SDK serialized.
+func decodeJSONBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
+	raw, readErr := io.ReadAll(r.Body)
+	if readErr != nil {
+		t.Fatalf("read body: %v", readErr)
+	}
+	m := map[string]any{}
+	if len(raw) > 0 {
+		if jsonErr := json.Unmarshal(raw, &m); jsonErr != nil {
+			t.Fatalf("unmarshal body %q: %v", raw, jsonErr)
+		}
+	}
+	return m
+}
+
+// TestCreate_AllOptionalFields exercises every new CreateUser optional field so
+// the option-wiring branches are covered.
+func TestCreate_AllOptionalFields(t *testing.T) {
+	var body map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/users" {
+			body = decodeJSONBody(t, r)
+			testutil.RespondJSON(w, http.StatusCreated, fullUserJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	bt := true
+	n := int64(5)
+	_, err := Create(context.Background(), client, CreateInput{
+		Email: "n@x.test", Name: "N", Username: "n",
+		Auditor: &bt, CanCreateGroup: &bt, PrivateProfile: &bt, ViewDiffsFileByFile: &bt,
+		Pronouns: "they", CommitEmail: "c@x.test", PublicEmail: "p@x.test", WebsiteURL: "https://x.test",
+		Linkedin: "li", Twitter: "tw", Skype: "sk", Discord: "dc", Github: "gh",
+		Provider: "ldap", ExternUID: "uid",
+		GroupIDForSAML: &n, ProjectsLimit: &n, ThemeID: &n, ColorSchemeID: &n,
+		SharedRunnersMinutesLimit: &n, ExtraSharedRunnersMinutesLimit: &n,
+	})
+	if err != nil {
+		t.Fatalf("Create() unexpected error: %v", err)
+	}
+	for _, key := range []string{
+		"auditor", "can_create_group", "private_profile", "view_diffs_file_by_file",
+		"pronouns", "commit_email", "public_email", "website_url", "linkedin", "twitter",
+		"skype", "discord", "github", "provider", "extern_uid", "group_id_for_saml",
+		"theme_id", "color_scheme_id", "shared_runners_minutes_limit", "extra_shared_runners_minutes_limit",
+	} {
+		if _, ok := body[key]; !ok {
+			t.Errorf("create body missing %q: %v", key, body)
+		}
+	}
+}
+
+// TestModify_AllOptionalFields exercises every new ModifyUser optional field so
+// the option-wiring branches are covered.
+func TestModify_AllOptionalFields(t *testing.T) {
+	var body map[string]any
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPut && r.URL.Path == "/api/v4/users/42" {
+			body = decodeJSONBody(t, r)
+			testutil.RespondJSON(w, http.StatusOK, fullUserJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	bt := true
+	n := int64(4)
+	_, err := Modify(context.Background(), client, ModifyInput{
+		UserID: 42, Auditor: &bt, ViewDiffsFileByFile: &bt, CommitEmail: "c@x.test", PublicEmail: "p@x.test",
+		WebsiteURL: "https://x.test", Linkedin: "li", Twitter: "tw", Skype: "sk",
+		Provider: "ldap", ExternUID: "uid", ThemeID: &n,
+	})
+	if err != nil {
+		t.Fatalf("Modify() unexpected error: %v", err)
+	}
+	for _, key := range []string{
+		"auditor", "view_diffs_file_by_file", "commit_email", "public_email", "website_url",
+		"linkedin", "twitter", "skype", "provider", "extern_uid", "theme_id",
+	} {
+		if _, ok := body[key]; !ok {
+			t.Errorf("modify body missing %q: %v", key, body)
+		}
 	}
 }

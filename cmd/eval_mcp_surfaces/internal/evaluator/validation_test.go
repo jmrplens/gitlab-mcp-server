@@ -465,3 +465,584 @@ func TestValidationExampleValueExtractors_CoverBacktickAndPrefixBranches(t *test
 		t.Fatalf("roleSensitiveRepairHint() = %q, want branch hint", got)
 	}
 }
+
+// TestValidateActionToolCall_DynamicConfirmTopLevel verifies destructive
+// dynamic execution accepts confirm at the gitlab_execute_action top level.
+func TestValidateActionToolCall_DynamicConfirmTopLevel(t *testing.T) {
+	step := evalStep{
+		ExpectedTool:   dynamicExecuteActionTool,
+		ExpectedAction: "project.delete",
+		RequiredParams: []string{"project_id"},
+		Destructive:    true,
+	}
+
+	valid := validateActionToolCall(step, dynamicExecuteActionTool, map[string]any{
+		"action":  "project.delete",
+		"params":  map[string]any{"project_id": "my-org/project"},
+		"confirm": true,
+	})
+	if !valid.Valid || !valid.DestructiveSafe {
+		t.Fatalf("validateActionToolCall(dynamic top-level confirm) = %+v, want valid safe", valid)
+	}
+
+	invalid := validateActionToolCall(step, dynamicExecuteActionTool, map[string]any{
+		"action": "project.delete",
+		"params": map[string]any{"project_id": "my-org/project"},
+	})
+	if invalid.Valid || invalid.DestructiveSafe {
+		t.Fatalf("validateActionToolCall(dynamic missing confirm) = %+v, want unsafe invalid", invalid)
+	}
+
+	paramsConfirm := validateActionToolCall(step, dynamicExecuteActionTool, map[string]any{
+		"action": "project.delete",
+		"params": map[string]any{"project_id": "my-org/project", "confirm": true},
+	})
+	if paramsConfirm.Valid || paramsConfirm.DestructiveSafe {
+		t.Fatalf("validateActionToolCall(dynamic params confirm) = %+v, want unsafe invalid", paramsConfirm)
+	}
+}
+
+// TestValidateToolCall_RequiresNestedParams verifies ValidateToolCall requires nested params.
+func TestValidateToolCall_RequiresNestedParams(t *testing.T) {
+	task := evalTask{ExpectedTool: "gitlab_issue", ExpectedAction: "delete", RequiredParams: []string{"project_id", "issue_iid"}, Destructive: true}
+	result := validateToolCall(task, "gitlab_issue", map[string]any{
+		"action":     "delete",
+		"project_id": "42",
+	})
+	if result.Valid {
+		t.Fatal("validateToolCall() Valid = true, want false")
+	}
+	if !strings.Contains(result.Message, "unexpected top-level parameter project_id") {
+		t.Fatalf("message = %q, want top-level parameter guidance", result.Message)
+	}
+}
+
+// TestValidateToolCall_AcceptsConfirmedDestructiveCall verifies ValidateToolCall accepts confirmed destructive call.
+func TestValidateToolCall_AcceptsConfirmedDestructiveCall(t *testing.T) {
+	task := evalTask{ExpectedTool: "gitlab_issue", ExpectedAction: "delete", RequiredParams: []string{"project_id", "issue_iid"}, Destructive: true}
+	result := validateToolCall(task, "gitlab_issue", map[string]any{
+		"action": "delete",
+		"params": map[string]any{
+			"project_id": "42",
+			"issue_iid":  7,
+			"confirm":    true,
+		},
+	})
+	if !result.Valid {
+		t.Fatalf("validateToolCall() Valid = false: %s", result.Message)
+	}
+	if !result.DestructiveSafe {
+		t.Fatal("DestructiveSafe = false, want true")
+	}
+}
+
+// TestValidateToolCall_DoesNotRequireConfirmForWrongReadOnlyAttempt verifies ValidateToolCall does not require confirm for wrong read only attempt.
+func TestValidateToolCall_DoesNotRequireConfirmForWrongReadOnlyAttempt(t *testing.T) {
+	task := evalTask{ExpectedTool: "gitlab_repository", ExpectedAction: "file_delete", RequiredParams: []string{"project_id", "file_path", "branch"}, Destructive: true}
+	result := validateToolCall(task, "gitlab_repository", map[string]any{
+		"action": "file_metadata",
+		"params": map[string]any{
+			"project_id": "42",
+			"file_path":  "README.md",
+			"ref":        "main",
+		},
+	})
+	if result.Valid {
+		t.Fatal("validateToolCall() Valid = true, want false")
+	}
+	if !result.DestructiveSafe {
+		t.Fatal("DestructiveSafe = false for a wrong read-only attempt, want true")
+	}
+}
+
+// TestValidateToolCall_AcceptsAddLabelsForLabelRequirement verifies ValidateToolCall accepts add labels for label requirement.
+func TestValidateToolCall_AcceptsAddLabelsForLabelRequirement(t *testing.T) {
+	task := evalTask{ExpectedTool: "gitlab", ExpectedAction: "issue.update", RequiredParams: []string{"project_id", "issue_iid", "labels"}}
+	result := validateToolCall(task, "gitlab", map[string]any{
+		"action": "issue.update",
+		"params": map[string]any{
+			"project_id": "my-org/tools/gitlab-mcp-server",
+			"issue_iid":  77,
+			"add_labels": "evaluation",
+		},
+	})
+	if !result.Valid {
+		t.Fatalf("validateToolCall() Valid = false: %s", result.Message)
+	}
+}
+
+// TestValidateStepCallWithRoutes_RejectsUnknownParamsFromSchema verifies ValidateStepCallWithRoutes rejects unknown params from schema.
+func TestValidateStepCallWithRoutes_RejectsUnknownParamsFromSchema(t *testing.T) {
+	step := evalStep{ExpectedTool: "gitlab_project", ExpectedAction: "get", RequiredParams: []string{"project_id"}}
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_project": {
+			"get": toolutil.ActionRoute{InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "string"},
+				},
+			}},
+		},
+	}
+	result := validateStepCallWithRoutes(step, "gitlab_project", map[string]any{
+		"action": "get",
+		"params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "iid": 7},
+	}, routes)
+	if result.Valid {
+		t.Fatal("validateStepCallWithRoutes() Valid = true, want false")
+	}
+	if !strings.Contains(result.Message, "unknown params") || !strings.Contains(result.Message, "iid") {
+		t.Fatalf("message = %q, want unknown params iid", result.Message)
+	}
+}
+
+// TestValidateStepCallWithRoutes_AcceptsActionAlias verifies ValidateStepCallWithRoutes accepts action alias.
+func TestValidateStepCallWithRoutes_AcceptsActionAlias(t *testing.T) {
+	step := evalStep{ExpectedTool: "gitlab", ExpectedAction: "project.milestone_create", RequiredParams: []string{"project_id", "title"}}
+	routes := map[string]toolutil.ActionMap{
+		"gitlab": {
+			"project.milestone_create": toolutil.ActionRoute{InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "string"},
+					"title":      map[string]any{"type": "string"},
+				},
+			}},
+		},
+	}
+
+	result := validateStepCallWithRoutes(step, "gitlab", map[string]any{
+		"action": "milestone.create",
+		"params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "title": "Evaluation Sprint"},
+	}, routes)
+
+	if !result.Valid {
+		t.Fatalf("validateStepCallWithRoutes() Valid = false: %s", result.Message)
+	}
+	if result.Action != "project.milestone_create" {
+		t.Fatalf("Action = %q, want project.milestone_create", result.Action)
+	}
+}
+
+// TestValidateStepCallWithRoutes_AcceptsDynamicActionScopedAliases verifies
+// that dynamic eval validation uses the same action-scoped param compatibility
+// as the runtime dynamic executor.
+func TestValidateStepCallWithRoutes_AcceptsDynamicActionScopedAliases(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "group.group_label_update", RequiredParams: []string{"group_id", "label_id"}}
+	routes := map[string]toolutil.ActionMap{
+		dynamicExecuteActionTool: {
+			"group.group_label_update": toolutil.ActionRoute{InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"group_id": map[string]any{"type": "string"},
+					"label_id": map[string]any{"type": "integer"},
+					"new_name": map[string]any{"type": "string"},
+				},
+			}},
+		},
+	}
+
+	result := validateStepCallWithRoutes(step, dynamicExecuteActionTool, map[string]any{
+		"action": "group.group_label_update",
+		"params": map[string]any{"group_id": "my-org", "label_id": 35, "name": "next-label"},
+	}, routes)
+
+	if !result.Valid {
+		t.Fatalf("validateStepCallWithRoutes() Valid = false: %s", result.Message)
+	}
+}
+
+// TestValidateStepCallWithRoutes_DynamicCompatibilityAndNormalization verifies
+// dynamic alias and parameter-normalization behavior across representative
+// compatibility scenarios.
+func TestValidateStepCallWithRoutes_DynamicCompatibilityAndNormalization(t *testing.T) {
+	tests := []struct {
+		name       string
+		step       evalStep
+		routes     map[string]toolutil.ActionMap
+		input      map[string]any
+		wantAction string
+		wantValid  bool
+	}{
+		{
+			name:       "accepts dynamic compatibility aliases",
+			step:       evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "repository.tree", RequiredParams: []string{"project_id"}},
+			wantAction: "repository.tree",
+			wantValid:  true,
+			routes: map[string]toolutil.ActionMap{
+				dynamicExecuteActionTool: {
+					"repository.tree": toolutil.ActionRoute{InputSchema: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"project_id": map[string]any{"type": "string"},
+							"ref":        map[string]any{"type": "string"},
+						},
+					}},
+				},
+			},
+			input: map[string]any{
+				"action": "repository_tree.list",
+				"params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "ref": "main"},
+			},
+		},
+		{
+			name:       "accepts dynamic-only aliases",
+			step:       evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "issue.update", RequiredParams: []string{"project_id", "issue_iid"}},
+			wantAction: "issue.update",
+			wantValid:  true,
+			routes: map[string]toolutil.ActionMap{
+				dynamicExecuteActionTool: {
+					"issue.update": toolutil.ActionRoute{InputSchema: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"project_id":  map[string]any{"type": "string"},
+							"issue_iid":   map[string]any{"type": "integer"},
+							"state_event": map[string]any{"type": "string"},
+						},
+					}},
+				},
+			},
+			input: map[string]any{
+				"action": "issue.close",
+				"params": map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "issue_iid": 1},
+			},
+		},
+		{
+			name:       "accepts nested dynamic param normalization",
+			step:       evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "snippet.project_create", RequiredParams: []string{"project_id", "title"}},
+			wantAction: "snippet.project_create",
+			wantValid:  true,
+			routes: map[string]toolutil.ActionMap{
+				dynamicExecuteActionTool: {
+					"snippet.project_create": toolutil.ActionRoute{InputSchema: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"project_id": map[string]any{"type": "string"},
+							"title":      map[string]any{"type": "string"},
+							"files": map[string]any{
+								"type": "array",
+								"items": map[string]any{
+									"type": "object",
+									"properties": map[string]any{
+										"file_path": map[string]any{"type": "string"},
+										"content":   map[string]any{"type": "string"},
+									},
+								},
+							},
+						},
+					}},
+				},
+			},
+			input: map[string]any{
+				"action": "snippet.project_create",
+				"params": map[string]any{
+					"project_id": "my-org/tools/gitlab-mcp-server",
+					"title":      "snippet",
+					"files": []any{map[string]any{
+						"action":    "create",
+						"file_path": "snippet.md",
+						"content":   "body",
+					}},
+				},
+			},
+		},
+		{
+			name:       "validates required params before dynamic normalization",
+			step:       evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "snippet.project_create", RequiredParams: []string{"project_id", "title", "file_name", "content"}},
+			wantAction: "snippet.project_create",
+			wantValid:  true,
+			routes: map[string]toolutil.ActionMap{
+				dynamicExecuteActionTool: {
+					"snippet.project_create": toolutil.ActionRoute{InputSchema: map[string]any{
+						"type":     "object",
+						"required": []any{"project_id", "title", "files"},
+						"properties": map[string]any{
+							"project_id": map[string]any{"type": "string"},
+							"title":      map[string]any{"type": "string"},
+							"files": map[string]any{
+								"type": "array",
+								"items": map[string]any{
+									"type":     "object",
+									"required": []any{"file_path", "content"},
+									"properties": map[string]any{
+										"file_path": map[string]any{"type": "string"},
+										"content":   map[string]any{"type": "string"},
+									},
+								},
+							},
+						},
+					}},
+				},
+			},
+			input: map[string]any{
+				"action": "snippet.project_create",
+				"params": map[string]any{
+					"project_id": "my-org/tools/gitlab-mcp-server",
+					"title":      "snippet",
+					"file_name":  "snippet.md",
+					"content":    "body",
+				},
+			},
+		},
+		{
+			name:       "accepts terraform state unlock compatibility envelope",
+			step:       evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.terraform_state_unlock", RequiredParams: []string{"project_id", "name"}, Destructive: true},
+			wantAction: "admin.terraform_state_unlock",
+			wantValid:  true,
+			routes: map[string]toolutil.ActionMap{
+				dynamicExecuteActionTool: {
+					"admin.terraform_state_unlock": toolutil.ActionRoute{InputSchema: map[string]any{
+						"type":     "object",
+						"required": []any{"project_id", "name"},
+						"properties": map[string]any{
+							"project_id": map[string]any{"type": "string"},
+							"name":       map[string]any{"type": "string"},
+						},
+					}},
+				},
+			},
+			input: map[string]any{
+				"action":  "terraform_state.unlock",
+				"confirm": true,
+				"params":  map[string]any{"project_id": "my-org/tools/gitlab-mcp-server", "id": "eval-unlock"},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := validateStepCallWithRoutes(tc.step, dynamicExecuteActionTool, tc.input, tc.routes)
+			if result.Valid != tc.wantValid {
+				t.Fatalf("validateStepCallWithRoutes() Valid = %v, want %v: %s", result.Valid, tc.wantValid, result.Message)
+			}
+			if tc.wantAction != "" && result.Action != tc.wantAction {
+				t.Fatalf("Action = %q, want %q", result.Action, tc.wantAction)
+			}
+		})
+	}
+}
+
+// TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint verifies ValidationRepairMessage includes action envelope and project hint.
+func TestValidationRepairMessage_IncludesActionEnvelopeAndProjectHint(t *testing.T) {
+	step := evalStep{ExpectedTool: "gitlab", ExpectedAction: "project.get", RequiredParams: []string{"project_id"}}
+	task := evalTask{Prompt: "Fetch project `my-org/tools/gitlab-mcp-server`."}
+	message := validationRepairMessage(task, step, validationResult{Message: "missing required params: project_id"}, nil)
+	if !strings.Contains(message, `"action":"project.get"`) || !strings.Contains(message, "project_id") {
+		t.Fatalf("message = %q, want action envelope example", message)
+	}
+	if !strings.Contains(message, `"project_id":"my-org/tools/gitlab-mcp-server"`) {
+		t.Fatalf("message = %q, want concrete project_id value", message)
+	}
+	if !strings.Contains(message, "previous tool result") || !strings.Contains(message, "params.project_id") {
+		t.Fatalf("message = %q, want previous-result project_id hint", message)
+	}
+}
+
+// TestValidationRepairMessage_DestructiveEnvelopeIncludesConfirm verifies ValidationRepairMessage when destructive envelope includes confirm.
+func TestValidationRepairMessage_DestructiveEnvelopeIncludesConfirm(t *testing.T) {
+	step := evalStep{ExpectedTool: "gitlab_branch", ExpectedAction: "delete", RequiredParams: []string{"project_id", "branch_name"}, OptionalParams: []string{"confirm"}, Destructive: true}
+	task := evalTask{Prompt: "Delete branch `obsolete/eval` from project `my-org/tools/gitlab-mcp-server`."}
+	message := validationRepairMessage(task, step, validationResult{Message: "destructive task requires params.confirm=true"}, nil)
+	if !strings.Contains(message, `"confirm":true`) {
+		t.Fatalf("message = %q, want confirm inside retry envelope", message)
+	}
+}
+
+// TestValidationRepairMessage_DynamicWrongActionIncludesOrderingHint verifies
+// dynamic repair feedback steers models back to the current scenario step.
+func TestValidationRepairMessage_DynamicWrongActionIncludesOrderingHint(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "admin.settings_get"}
+	message := validationRepairMessage(evalTask{}, step, validationResult{Message: "step 1: expected action admin.settings_get, got admin.broadcast_message_list", Action: "admin.broadcast_message_list"}, nil)
+	for _, want := range []string{
+		`"action":"admin.settings_get"`,
+		`"params":{}`,
+		"without gitlab_ prefixes",
+		"not the current scenario step",
+		"do not skip ahead",
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("message = %q, want substring %q", message, want)
+		}
+	}
+}
+
+// TestValidationRepairMessage_UnknownParamsDropsCarriedFields verifies repair
+// feedback tells models to remove fields copied from previous workflow steps.
+func TestValidationRepairMessage_UnknownParamsDropsCarriedFields(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "feature_flags.feature_flag_create", RequiredParams: []string{"project_id", "name", "version"}}
+	task := evalTask{Prompt: "Create feature flag `eval_flag` in project `my-org/tools/gitlab-mcp-server` version `new_version_flag`."}
+	message := validationRepairMessage(task, step, validationResult{Message: "unknown params for gitlab_execute_action/feature_flags.feature_flag_create: user_list_iid"}, nil)
+	for _, want := range []string{
+		`"action":"feature_flags.feature_flag_create"`,
+		"Remove every unknown param",
+		"do not carry IDs from a previous action",
+	} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("message = %q, want substring %q", message, want)
+		}
+	}
+}
+
+// TestValidationRepairMessage_PreservesAttemptedRequiredParams verifies repair
+// examples keep IDs the model already copied from a prior tool result.
+func TestValidationRepairMessage_PreservesAttemptedRequiredParams(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "pipeline.trigger_get", RequiredParams: []string{"project_id", "trigger_id"}}
+	task := evalTask{Prompt: "Fetch pipeline trigger using the returned trigger ID in project `my-org/tools/gitlab-mcp-server`."}
+	message := validationRepairMessage(task, step, validationResult{Message: "missing required params: project_id"}, map[string]any{
+		"action": "pipeline.trigger_get",
+		"params": map[string]any{"trigger_id": 67},
+	})
+
+	for _, want := range []string{`"action":"pipeline.trigger_get"`, `"project_id":"my-org/tools/gitlab-mcp-server"`, `"trigger_id":67`} {
+		if !strings.Contains(message, want) {
+			t.Fatalf("message = %q, want substring %q", message, want)
+		}
+	}
+}
+
+// TestValidationRepairMessage_ReturnsStructuredRepairPayload verifies ValidationRepairMessage returns structured repair payload.
+func TestValidationRepairMessage_ReturnsStructuredRepairPayload(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "job.token_scope_remove_project", RequiredParams: []string{"project_id", "target_project_id"}, OptionalParams: []string{"confirm"}, Destructive: true}
+	task := evalTask{Prompt: "Remove project ID `51` from the CI job token allowlist of project `1`."}
+	message := validationRepairMessage(task, step, validationResult{Message: "missing required params: target_project_id", Action: "job.token_scope_remove_project"}, map[string]any{
+		"action": "job.token_scope_remove_project",
+		"params": map[string]any{"project_id": 51},
+	})
+
+	var payload repairPayload
+	if err := json.Unmarshal([]byte(message), &payload); err != nil {
+		t.Fatalf("validationRepairMessage() JSON error = %v; message = %s", err, message)
+	}
+	if payload.ErrorKind != "missing_required_param" || payload.BadParam != "target_project_id" || payload.ExpectedType != "present concrete value" || !payload.RetryAllowed {
+		t.Fatalf("repair payload = %+v, want structured missing param retry", payload)
+	}
+	if !strings.Contains(payload.LikelyFix, "project_id is the owning project") || !strings.Contains(payload.Message, `"target_project_id":51`) {
+		t.Fatalf("repair payload = %+v, want role hint and concrete target_project_id", payload)
+	}
+}
+
+// TestValidationRepairMessage_ClassifiesWrongIntegerType verifies ValidationRepairMessage classifies wrong integer type.
+func TestValidationRepairMessage_ClassifiesWrongIntegerType(t *testing.T) {
+	step := evalStep{ExpectedTool: dynamicExecuteActionTool, ExpectedAction: "runner.remove", RequiredParams: []string{"runner_id"}}
+	message := validationRepairMessage(evalTask{}, step, validationResult{Message: "expected params.runner_id to be integer; got string", Action: "runner.remove"}, map[string]any{
+		"action": "runner.remove",
+		"params": map[string]any{"runner_id": "not-a-number"},
+	})
+
+	var payload repairPayload
+	if err := json.Unmarshal([]byte(message), &payload); err != nil {
+		t.Fatalf("validationRepairMessage() JSON error = %v; message = %s", err, message)
+	}
+	if payload.ErrorKind != "wrong_type" || payload.BadParam != "runner_id" || payload.ExpectedType != "integer" || payload.SentValue != "not-a-number" {
+		t.Fatalf("repair payload = %+v, want wrong integer type details", payload)
+	}
+}
+
+// TestValidateStepCallWithRoutes_RejectsMissingNestedSchemaRequiredParam verifies ValidateStepCallWithRoutes rejects missing nested schema required param.
+func TestValidateStepCallWithRoutes_RejectsMissingNestedSchemaRequiredParam(t *testing.T) {
+	step := evalStep{ExpectedTool: "gitlab", ExpectedAction: "snippet.project_update", RequiredParams: []string{"project_id", "snippet_id", "files"}}
+	routes := map[string]toolutil.ActionMap{
+		"gitlab": {
+			"snippet.project_update": toolutil.ActionRoute{InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"project_id": map[string]any{"type": "string"},
+					"snippet_id": map[string]any{"type": "integer"},
+					"files": map[string]any{
+						"type": "array",
+						"items": map[string]any{
+							"type":     "object",
+							"required": []any{"action", "file_path"},
+							"properties": map[string]any{
+								"action":        map[string]any{"type": "string"},
+								"content":       map[string]any{"type": "string"},
+								"file_path":     map[string]any{"type": "string"},
+								"previous_path": map[string]any{"type": "string"},
+							},
+						},
+					},
+				},
+			}},
+		},
+	}
+	input := map[string]any{"action": "snippet.project_update", "params": map[string]any{
+		"project_id": "my-org/tools/gitlab-mcp-server",
+		"snippet_id": float64(28),
+		"files": []any{map[string]any{
+			"action":        "update",
+			"content":       "updated",
+			"previous_path": "eval-crud-snippet",
+		}},
+	}}
+
+	result := validateStepCallWithRoutes(step, "gitlab", input, routes)
+	if result.Valid {
+		t.Fatal("validateStepCallWithRoutes() Valid = true, want false")
+	}
+	if !strings.Contains(result.Message, "files[0].file_path") {
+		t.Fatalf("message = %q, want nested missing file_path", result.Message)
+	}
+}
+
+// TestValidateStandaloneToolCall_AcceptsTopLevelInput verifies ValidateStandaloneToolCall accepts top level input.
+func TestValidateStandaloneToolCall_AcceptsTopLevelInput(t *testing.T) {
+	step := evalStep{ExpectedTool: "gitlab_discover_project", RequiredParams: []string{"remote_url"}}
+	result := validateStepCall(step, "gitlab_discover_project", map[string]any{
+		"remote_url": "https://gitlab.example.com/my-org/project.git",
+	})
+	if !result.Valid {
+		t.Fatalf("validateStepCall() Valid = false: %s", result.Message)
+	}
+}
+
+// TestValidateStandaloneToolCall_RejectsMetaEnvelope verifies ValidateStandaloneToolCall rejects meta envelope.
+func TestValidateStandaloneToolCall_RejectsMetaEnvelope(t *testing.T) {
+	step := evalStep{ExpectedTool: "gitlab_discover_project", RequiredParams: []string{"remote_url"}}
+	result := validateStepCall(step, "gitlab_discover_project", map[string]any{
+		"action": "resolve",
+		"params": map[string]any{"remote_url": "https://gitlab.example.com/my-org/project.git"},
+	})
+	if result.Valid {
+		t.Fatal("validateStepCall() Valid = true, want false")
+	}
+	if !strings.Contains(result.Message, "standalone tool") {
+		t.Fatalf("message = %q, want standalone guidance", result.Message)
+	}
+}
+
+// TestRunStaticValidation_ValidatesMultiStepRoutes verifies RunStaticValidation validates multi step routes.
+func TestRunStaticValidation_ValidatesMultiStepRoutes(t *testing.T) {
+	tasks := []evalTask{{
+		ID: "MS-001",
+		Steps: []evalStep{
+			{ExpectedTool: "gitlab_discover_project"},
+			{ExpectedTool: "gitlab_project", ExpectedAction: "get"},
+			{ExpectedTool: "gitlab_repository", ExpectedAction: "file_get"},
+		},
+	}}
+	routes := map[string]toolutil.ActionMap{
+		"gitlab_project":    {"get": {}},
+		"gitlab_repository": {"file_get": {}},
+	}
+	toolNames := map[string]bool{"gitlab_discover_project": true, "gitlab_project": true, "gitlab_repository": true}
+	results := runStaticValidation(tasks, routes, toolNames, 1)
+	if len(results) != 1 || !results[0].FinalSuccess || results[0].CompletedSteps != 3 {
+		t.Fatalf("results = %+v, want completed multi-step validation", results)
+	}
+}
+
+// TestValidationErrorKind_ClassifiesStandaloneMissingRequired verifies standalone tool diagnostics keep missing-required classification.
+func TestValidationErrorKind_ClassifiesStandaloneMissingRequired(t *testing.T) {
+	got := validationErrorKind("missing required project_id", validationResult{ToolMatches: true, ActionMatches: true})
+	if got != "missing_required_param" {
+		t.Fatalf("validationErrorKind() = %q, want missing_required_param", got)
+	}
+}
+
+// TestValidationBadParam_ExtractsSchemaFormattedMissingRequired verifies repair payloads name the missing field, not the diagnostic prefix.
+func TestValidationBadParam_ExtractsSchemaFormattedMissingRequired(t *testing.T) {
+	got := validationBadParam("missing required params for gitlab_issue/create: title, description")
+	if got != "title" {
+		t.Fatalf("validationBadParam() = %q, want title", got)
+	}
+}

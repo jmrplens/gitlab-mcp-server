@@ -58,13 +58,15 @@ func confirmListClearing(ctx context.Context, client *gitlabclient.Client, input
 
 	message := fmt.Sprintf(
 		"Remove %s from work item %s#%d? This replaces the list and cannot be undone from the response.",
-		strings.Join(losses, " and "), input.FullPath, input.IID)
+		strings.Join(losses, " and "), input.FullPath, input.IID,
+	)
 
 	flow, flowErr := elicitation.FlowFromRequest(req)
 	if flowErr != nil || !flow.IsSupported() {
 		return fmt.Errorf(
 			"update_work_item: %s Re-send the same call with confirm=true once the user has approved it",
-			message)
+			message,
+		)
 	}
 
 	confirmed, err := flow.Confirm(ctx, clearListConfirmID, message)

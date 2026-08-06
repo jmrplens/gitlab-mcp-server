@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -812,5 +813,558 @@ func TestIsNotFound(t *testing.T) {
 				t.Errorf("IsNotFound() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// acceptsTrue is a convenience acceptor predicate for tests that drive
+// alias helpers directly.
+func acceptsTrue(_ string) bool { return true }
+
+func acceptsFalse(_ string) bool { return false }
+
+func fieldSet(names ...string) map[string]struct{} {
+	out := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		out[name] = struct{}{}
+	}
+	return out
+}
+
+// aliasClone returns a "clone" callback matching the production
+// normalizeParamAliasesWithFields pattern. For test purposes we return
+// the same map on every call so that mutations made through the clone
+// callback are visible to the caller; this mirrors what the production
+// helper does after the first clone (it reuses the same backing map).
+// Tests using this helper should treat the supplied params as
+// in-out: the same map will be mutated in place.
+func aliasClone(initial map[string]any) (clone func() map[string]any, _ *map[string]any) {
+	clone = func() map[string]any { return initial }
+	return clone, nil
+}
+
+// TestExplainIIDParamAliasDirect verifies the explanation helper
+// detects the iid→merge_request_iid alias only when the canonical
+// field is present in the target schema, the alias is provided, and
+// there is exactly one candidate canonical field.
+func TestExplainIIDParamAliasDirect(t *testing.T) {
+	// accepts("iid") must be false for the helper to consider it an alias.
+	acceptsNoIID := func(name string) bool { return name != "iid" }
+	fields := fieldSet("merge_request_iid", "title")
+	params := map[string]any{"iid": "1"}
+
+	explanation, ok := explainIIDParamAlias(params, fields, acceptsNoIID)
+	if !ok {
+		t.Fatal("explainIIDParamAlias = false, want true")
+	}
+	if explanation.Canonical != "merge_request_iid" {
+		t.Errorf("Canonical = %q, want merge_request_iid", explanation.Canonical)
+	}
+	if explanation.Alias != "iid" {
+		t.Errorf("Alias = %q, want iid", explanation.Alias)
+	}
+	if explanation.Source != "schema_common" {
+		t.Errorf("Source = %q, want schema_common", explanation.Source)
+	}
+
+	// canonical field is absent from fields → no explanation
+	if _, hasMatch := explainIIDParamAlias(params, fieldSet("title"), acceptsNoIID); hasMatch {
+		t.Error("explainIIDParamAlias(canonical missing) = true, want false")
+	}
+
+	// iid param is absent → no explanation
+	if _, hasMatch := explainIIDParamAlias(map[string]any{}, fields, acceptsNoIID); hasMatch {
+		t.Error("explainIIDParamAlias(no iid) = true, want false")
+	}
+
+	// multiple _iid fields → no explanation (ambiguous)
+	if _, hasMatch := explainIIDParamAlias(params, fieldSet("merge_request_iid", "issue_iid"), acceptsNoIID); hasMatch {
+		t.Error("explainIIDParamAlias(ambiguous) = true, want false")
+	}
+
+	// accepts("iid") is true → no explanation
+	if _, hasMatch := explainIIDParamAlias(params, fields, acceptsTrue); hasMatch {
+		t.Error("explainIIDParamAlias(iid accepted) = true, want false")
+	}
+}
+
+// TestExplainEnvironmentIDParamAliasDirect verifies the helper produces
+// an explanation only when environment_id is supplied, environment is
+// accepted, and environment_id is not accepted.
+func TestExplainEnvironmentIDParamAliasDirect(t *testing.T) {
+	// accepts("environment_id") must be false; accepts("environment") must be true.
+	acceptsEnv := func(name string) bool { return name == "environment" }
+	params := map[string]any{"environment_id": "prod"}
+
+	explanation, ok := explainEnvironmentIDParamAlias(params, acceptsEnv)
+	if !ok {
+		t.Fatal("explainEnvironmentIDParamAlias = false, want true")
+	}
+	if explanation.Alias != "environment_id" || explanation.Canonical != "environment" {
+		t.Errorf("explanation = %+v, want environment_id→environment", explanation)
+	}
+
+	if _, hasMatch := explainEnvironmentIDParamAlias(map[string]any{}, acceptsEnv); hasMatch {
+		t.Error("explainEnvironmentIDParamAlias(no param) = true, want false")
+	}
+	if _, hasMatch := explainEnvironmentIDParamAlias(params, acceptsFalse); hasMatch {
+		t.Error("explainEnvironmentIDParamAlias(no env accepted) = true, want false")
+	}
+	// environment_id is accepted → no explanation
+	if _, hasMatch := explainEnvironmentIDParamAlias(params, acceptsTrue); hasMatch {
+		t.Error("explainEnvironmentIDParamAlias(environment_id accepted) = true, want false")
+	}
+}
+
+// TestRemoveContextOnlyDiscussionIDDirect verifies the helper drops a
+// stray discussion_id when the target schema accepts note_id and the
+// caller has already supplied note_id.
+func TestRemoveContextOnlyDiscussionIDDirect(t *testing.T) {
+	acceptsNoteID := func(name string) bool { return name == "note_id" }
+	acceptsAll := func(_ string) bool { return true }
+
+	t.Run("removes when note_id is canonical and present", func(t *testing.T) {
+		params := map[string]any{"discussion_id": "abc", "note_id": 7}
+		clone, _ := aliasClone(params)
+		removeContextOnlyDiscussionID(params, acceptsNoteID, clone)
+		if _, ok := params["discussion_id"]; ok {
+			t.Errorf("discussion_id not removed: %+v", params)
+		}
+		if params["note_id"] != 7 {
+			t.Errorf("note_id = %v, want 7", params["note_id"])
+		}
+	})
+
+	t.Run("keeps when schema accepts discussion_id", func(t *testing.T) {
+		params := map[string]any{"discussion_id": "abc", "note_id": 7}
+		clone, _ := aliasClone(params)
+		removeContextOnlyDiscussionID(params, acceptsAll, clone)
+		if _, ok := params["discussion_id"]; !ok {
+			t.Error("discussion_id removed even though schema accepts it")
+		}
+	})
+
+	t.Run("keeps when note_id is absent", func(t *testing.T) {
+		params := map[string]any{"discussion_id": "abc"}
+		clone, _ := aliasClone(params)
+		removeContextOnlyDiscussionID(params, acceptsNoteID, clone)
+		if _, ok := params["discussion_id"]; !ok {
+			t.Error("discussion_id removed even though note_id is absent")
+		}
+	})
+}
+
+// TestNormalizeActiveAliasDirect verifies the active→paused negation
+// helper behaves correctly for accepted/present/missing combinations
+// and non-bool inputs.
+func TestNormalizeActiveAliasDirect(t *testing.T) {
+	acceptsPaused := func(name string) bool { return name == "paused" }
+
+	t.Run("active false becomes paused true", func(t *testing.T) {
+		params := map[string]any{"active": false}
+		clone, _ := aliasClone(params)
+		normalizeActiveAlias(params, acceptsPaused, clone)
+		if v, ok := params["paused"]; !ok || v != true {
+			t.Errorf("paused = %v/%v, want true", v, ok)
+		}
+		if _, ok := params["active"]; ok {
+			t.Error("active not removed")
+		}
+	})
+
+	t.Run("active true becomes paused false", func(t *testing.T) {
+		params := map[string]any{"active": true}
+		clone, _ := aliasClone(params)
+		normalizeActiveAlias(params, acceptsPaused, clone)
+		if v, ok := params["paused"]; !ok || v != false {
+			t.Errorf("paused = %v/%v, want false", v, ok)
+		}
+	})
+
+	t.Run("no-op when paused not accepted", func(t *testing.T) {
+		params := map[string]any{"active": false}
+		clone, _ := aliasClone(params)
+		normalizeActiveAlias(params, acceptsFalse, clone)
+		if _, ok := params["paused"]; ok {
+			t.Error("paused added when schema does not accept it")
+		}
+	})
+
+	t.Run("preserves existing paused value", func(t *testing.T) {
+		params := map[string]any{"active": false, "paused": true}
+		clone, _ := aliasClone(params)
+		normalizeActiveAlias(params, acceptsPaused, clone)
+		if params["paused"] != true {
+			t.Errorf("paused = %v, want true (preserved)", params["paused"])
+		}
+	})
+
+	t.Run("non-bool active is ignored", func(t *testing.T) {
+		params := map[string]any{"active": "yes"}
+		clone, _ := aliasClone(params)
+		normalizeActiveAlias(params, acceptsPaused, clone)
+		if _, ok := params["paused"]; ok {
+			t.Error("paused added for non-bool active")
+		}
+	})
+}
+
+// TestNormalizeFilePathAliasDirect verifies the file_path → path+filename
+// split helper covers each branch.
+func TestNormalizeFilePathAliasDirect(t *testing.T) {
+	acceptsBoth := func(name string) bool { return name == "path" || name == "filename" }
+
+	t.Run("splits file_path into path+filename", func(t *testing.T) {
+		params := map[string]any{"file_path": "packages/npm/pkg.tgz"}
+		clone, _ := aliasClone(params)
+		normalizeFilePathAlias(params, acceptsBoth, clone)
+		if params["path"] != "packages/npm" {
+			t.Errorf("path = %q, want packages/npm", params["path"])
+		}
+		if params["filename"] != "pkg.tgz" {
+			t.Errorf("filename = %q, want pkg.tgz", params["filename"])
+		}
+		if _, ok := params["file_path"]; ok {
+			t.Error("file_path not removed")
+		}
+	})
+
+	t.Run("preserves existing path", func(t *testing.T) {
+		params := map[string]any{"file_path": "packages/npm/pkg.tgz", "path": "custom"}
+		clone, _ := aliasClone(params)
+		normalizeFilePathAlias(params, acceptsBoth, clone)
+		if params["path"] != "custom" {
+			t.Errorf("path = %q, want custom (preserved)", params["path"])
+		}
+	})
+
+	t.Run("non-string file_path is ignored", func(t *testing.T) {
+		params := map[string]any{"file_path": 42}
+		clone, _ := aliasClone(params)
+		normalizeFilePathAlias(params, acceptsBoth, clone)
+		if _, ok := params["path"]; ok {
+			t.Error("path added for non-string file_path")
+		}
+	})
+
+	t.Run("empty file_path is ignored", func(t *testing.T) {
+		params := map[string]any{"file_path": ""}
+		clone, _ := aliasClone(params)
+		normalizeFilePathAlias(params, acceptsBoth, clone)
+		if _, ok := params["path"]; ok {
+			t.Error("path added for empty file_path")
+		}
+	})
+}
+
+// TestNormalizeIIDAliasDirect verifies the iid→canonical-_iid mapping
+// for single, missing, ambiguous, and accepted-iid scenarios.
+func TestNormalizeIIDAliasDirect(t *testing.T) {
+	acceptsMRIID := func(name string) bool { return name == "merge_request_iid" }
+	acceptsNoIID := func(name string) bool { return name != "iid" }
+
+	t.Run("iid is renamed to merge_request_iid", func(t *testing.T) {
+		params := map[string]any{"iid": "5"}
+		clone, _ := aliasClone(params)
+		normalizeIIDAlias(params, fieldSet("merge_request_iid"), acceptsMRIID, clone)
+		if params["merge_request_iid"] != "5" {
+			t.Errorf("merge_request_iid = %v, want 5", params["merge_request_iid"])
+		}
+		if _, ok := params["iid"]; ok {
+			t.Error("iid not removed")
+		}
+	})
+
+	t.Run("no rename when iid is accepted", func(t *testing.T) {
+		params := map[string]any{"iid": "5"}
+		clone, _ := aliasClone(params)
+		normalizeIIDAlias(params, fieldSet("iid"), acceptsNoIID, clone)
+		if _, ok := params["merge_request_iid"]; ok {
+			t.Error("iid was renamed even though it is accepted")
+		}
+	})
+
+	t.Run("ambiguous canonical field → no rename", func(t *testing.T) {
+		params := map[string]any{"iid": "5"}
+		clone, _ := aliasClone(params)
+		normalizeIIDAlias(params, fieldSet("merge_request_iid", "issue_iid"), acceptsNoIID, clone)
+		if _, ok := params["merge_request_iid"]; ok {
+			t.Error("iid was renamed when canonical was ambiguous")
+		}
+	})
+
+	t.Run("missing canonical field → no rename", func(t *testing.T) {
+		params := map[string]any{"iid": "5"}
+		clone, _ := aliasClone(params)
+		normalizeIIDAlias(params, fieldSet("title"), acceptsNoIID, clone)
+		if _, ok := params["merge_request_iid"]; ok {
+			t.Error("iid was renamed when no canonical field exists")
+		}
+	})
+}
+
+// TestNormalizeEnvironmentNameAliasDirect verifies the environment→name
+// alias rewrite covers acceptance, name-already-present, and
+// environment_scope-accepted branches.
+func TestNormalizeEnvironmentNameAliasDirect(t *testing.T) {
+	acceptsName := func(name string) bool { return name == "name" }
+	acceptsScope := func(name string) bool { return name == "name" || name == "environment_scope" }
+
+	t.Run("environment is renamed to name", func(t *testing.T) {
+		params := map[string]any{"environment": "production"}
+		clone, _ := aliasClone(params)
+		normalizeEnvironmentNameAlias(params, acceptsName, clone)
+		if params["name"] != "production" {
+			t.Errorf("name = %q, want production", params["name"])
+		}
+		if _, ok := params["environment"]; ok {
+			t.Error("environment not removed")
+		}
+	})
+
+	t.Run("preserves existing name and drops environment", func(t *testing.T) {
+		params := map[string]any{"environment": "production", "name": "stage"}
+		clone, _ := aliasClone(params)
+		normalizeEnvironmentNameAlias(params, acceptsName, clone)
+		if params["name"] != "stage" {
+			t.Errorf("name = %q, want stage (preserved)", params["name"])
+		}
+		if _, ok := params["environment"]; ok {
+			t.Error("environment not removed when name was present")
+		}
+	})
+
+	t.Run("no-op when environment_scope is accepted", func(t *testing.T) {
+		params := map[string]any{"environment": "production"}
+		clone, _ := aliasClone(params)
+		normalizeEnvironmentNameAlias(params, acceptsScope, clone)
+		if _, ok := params["name"]; ok {
+			t.Error("name was added despite environment_scope being accepted")
+		}
+	})
+}
+
+// TestDecodeEncodedPathIdentifierDirect verifies the %2f decoder
+// returns the decoded path with the changed flag and rejects paths
+// that do not contain an encoded slash.
+func TestDecodeEncodedPathIdentifierDirect(t *testing.T) {
+	got, changed := decodeEncodedPathIdentifier("group%2Fsubgroup%2Fproject")
+	if !changed {
+		t.Fatal("decodeEncodedPathIdentifier(%2F) changed = false, want true")
+	}
+	if got != "group/subgroup/project" {
+		t.Errorf("decoded = %q, want group/subgroup/project", got)
+	}
+
+	// URL percent-encoding is case-insensitive: lowercase %2f must
+	// decode the same as uppercase %2F.
+	gotLower, changedLower := decodeEncodedPathIdentifier("group%2fsubgroup%2fproject")
+	if !changedLower {
+		t.Fatal("decodeEncodedPathIdentifier(%2f) changed = false, want true")
+	}
+	if gotLower != "group/subgroup/project" {
+		t.Errorf("decoded = %q, want group/subgroup/project", gotLower)
+	}
+
+	if _, isChanged := decodeEncodedPathIdentifier("plain/path"); isChanged {
+		t.Error("decodeEncodedPathIdentifier(no %2F) changed = true, want false")
+	}
+	if _, isChanged := decodeEncodedPathIdentifier(""); isChanged {
+		t.Error("decodeEncodedPathIdentifier(empty) changed = true, want false")
+	}
+	if _, isChanged := decodeEncodedPathIdentifier("no-slash-here"); isChanged {
+		t.Error("decodeEncodedPathIdentifier(no slash) changed = true, want false")
+	}
+}
+
+// TestCloneAccessLevelAliasesDirect verifies the alias-to-access_level
+// promotion covers the access_level-already-present, known-alias
+// matches, no-alias-found, and unhandled-alias scenarios.
+func TestCloneAccessLevelAliasesDirect(t *testing.T) {
+	// access_level present → no clone
+	original := map[string]any{"access_level": 30, "deploy_access_level": 40}
+	cloneFn := func() map[string]any {
+		t.Fatal("clone() should not be called when access_level is present")
+		return nil
+	}
+	if got := cloneAccessLevelAliases(original, cloneFn); !reflect.DeepEqual(got, original) {
+		t.Errorf("got = %+v, want original (access_level present)", got)
+	}
+
+	// deploy_access_level present → promoted
+	original = map[string]any{"deploy_access_level": 30}
+	called := false
+	cloned := cloneAccessLevelAliases(original, func() map[string]any {
+		called = true
+		return map[string]any{}
+	})
+	if !called {
+		t.Error("clone() not called for deploy_access_level")
+	}
+	if cloned["access_level"] != 30 {
+		t.Errorf("access_level = %v, want 30", cloned["access_level"])
+	}
+	if _, ok := cloned["deploy_access_level"]; ok {
+		t.Error("deploy_access_level not removed")
+	}
+
+	// no access-level field at all → unchanged
+	original = map[string]any{"name": "main"}
+	called = false
+	got := cloneAccessLevelAliases(original, func() map[string]any {
+		called = true
+		return map[string]any{}
+	})
+	if called {
+		t.Error("clone() called when no access-level alias is present")
+	}
+	if !reflect.DeepEqual(got, original) {
+		t.Errorf("got = %+v, want original (no alias)", got)
+	}
+}
+
+// TestHasStructuredApprovalCountDirect verifies the approval-count
+// detector accepts both the canonical field and the alias family.
+func TestHasStructuredApprovalCountDirect(t *testing.T) {
+	for _, key := range []string{"required_approvals", "required_approval_count", "approval_count", "approvals_required"} {
+		if !hasStructuredApprovalCount(map[string]any{key: 2}) {
+			t.Errorf("hasStructuredApprovalCount(%s) = false, want true", key)
+		}
+	}
+	if hasStructuredApprovalCount(map[string]any{"other": 1}) {
+		t.Error("hasStructuredApprovalCount(other) = true, want false")
+	}
+	if hasStructuredApprovalCount(map[string]any{}) {
+		t.Error("hasStructuredApprovalCount(empty) = true, want false")
+	}
+}
+
+// TestHasStructuredApprovalPrincipalDirect verifies the principal
+// detector accepts both canonical fields and the access-level alias
+// family used for protected-branch entries.
+func TestHasStructuredApprovalPrincipalDirect(t *testing.T) {
+	canonical := []string{"access_level", "user_id", "group_id"}
+	aliases := []string{"deploy_access_level", "group_access_level", "project_access_level", "machine_user_access_level"}
+
+	for _, key := range append(canonical, aliases...) {
+		if !hasStructuredApprovalPrincipal(map[string]any{key: 1}) {
+			t.Errorf("hasStructuredApprovalPrincipal(%s) = false, want true", key)
+		}
+	}
+	if hasStructuredApprovalPrincipal(map[string]any{"name": "alice"}) {
+		t.Error("hasStructuredApprovalPrincipal(name) = true, want false")
+	}
+	if hasStructuredApprovalPrincipal(map[string]any{}) {
+		t.Error("hasStructuredApprovalPrincipal(empty) = true, want false")
+	}
+}
+
+// TestSchemaPropertyHasTypeDirect verifies the schema-property type
+// detector covers string, []string, []any, and non-object inputs.
+func TestSchemaPropertyHasTypeDirect(t *testing.T) {
+	if !schemaPropertyHasType(map[string]any{"type": "string"}, "string") {
+		t.Error("schemaPropertyHasType(string) = false, want true")
+	}
+	if !schemaPropertyHasType(map[string]any{"type": []string{"integer", "string"}}, "string") {
+		t.Error("schemaPropertyHasType([]string) = false, want true")
+	}
+	if !schemaPropertyHasType(map[string]any{"type": []any{"integer", "string"}}, "integer") {
+		t.Error("schemaPropertyHasType([]any) = false, want true")
+	}
+	if schemaPropertyHasType(map[string]any{"type": "string"}, "integer") {
+		t.Error("schemaPropertyHasType(mismatch) = true, want false")
+	}
+	if schemaPropertyHasType("not-an-object", "string") {
+		t.Error("schemaPropertyHasType(non-object) = true, want false")
+	}
+	if schemaPropertyHasType(map[string]any{}, "string") {
+		t.Error("schemaPropertyHasType(empty) = true, want false")
+	}
+}
+
+// TestGitLabRoleAccessLevelStringAliases verifies that all canonical
+// GitLab role names — including plural forms and underscored/hyphenated
+// variants — map to the expected numeric access level.
+func TestGitLabRoleAccessLevelStringAliases(t *testing.T) {
+	cases := []struct {
+		role string
+		want int
+	}{
+		{"guest", 10},
+		{"guests", 10},
+		{"reporter", 20},
+		{"reporters", 20},
+		{"developer", 30},
+		{"developers", 30},
+		{"maintainer", 40},
+		{"maintainers", 40},
+		{"owner", 50},
+		{"owners", 50},
+		{"admin", 60},
+		{"admins", 60},
+		{"administrator", 60},
+		{"administrators", 60},
+		{"no access", 0},
+		{"no one", 0},
+		{"nobody", 0},
+		{"none", 0},
+		// case-insensitive
+		{"MAINTAINER", 40},
+	}
+	for _, tc := range cases {
+		got, ok := gitLabRoleAccessLevel(tc.role)
+		if !ok || got != tc.want {
+			t.Errorf("gitLabRoleAccessLevel(%q) = %d/%v, want %d/true", tc.role, got, ok, tc.want)
+		}
+	}
+
+	// unknown role → rejected
+	if _, ok := gitLabRoleAccessLevel("wizard"); ok {
+		t.Error("gitLabRoleAccessLevel(wizard) ok = true, want false")
+	}
+	// non-string, non-numeric value → rejected
+	if _, ok := gitLabRoleAccessLevel(true); ok {
+		t.Error("gitLabRoleAccessLevel(bool) ok = true, want false")
+	}
+}
+
+// TestHasUnknownParamNamesDirect verifies the unknown-parameter
+// detector handles empty params, missing properties, and unknown keys.
+func TestHasUnknownParamNamesDirect(t *testing.T) {
+	// empty params → false
+	if hasUnknownParamNames(map[string]any{"x": 1}, map[string]any{}) {
+		t.Error("hasUnknownParamNames(empty) = true, want false")
+	}
+	// schema has no properties → false
+	if hasUnknownParamNames(map[string]any{}, map[string]any{"unknown": 1}) {
+		t.Error("hasUnknownParamNames(no props) = true, want false")
+	}
+	// unknown key present → true
+	schema := map[string]any{"properties": map[string]any{"known": map[string]any{}}}
+	if !hasUnknownParamNames(schema, map[string]any{"unknown": 1}) {
+		t.Error("hasUnknownParamNames(unknown) = false, want true")
+	}
+	// only known keys → false
+	if hasUnknownParamNames(schema, map[string]any{"known": 1}) {
+		t.Error("hasUnknownParamNames(known only) = true, want false")
+	}
+}
+
+// TestCollectJSONFieldTypesDirect verifies the recursive JSON field
+// type collector handles embedded (anonymous) struct fields.
+func TestCollectJSONFieldTypesDirect(t *testing.T) {
+	type inner struct {
+		Name string `json:"name"`
+	}
+	type outer struct {
+		inner
+		ID int `json:"id"`
+	}
+	fields := map[string]reflect.Type{}
+	collectJSONFieldTypes(reflect.TypeFor[outer](), fields)
+	if _, ok := fields["name"]; !ok {
+		t.Error("collectJSONFieldTypes missing embedded 'name' field")
+	}
+	if _, ok := fields["id"]; !ok {
+		t.Error("collectJSONFieldTypes missing 'id' field")
 	}
 }

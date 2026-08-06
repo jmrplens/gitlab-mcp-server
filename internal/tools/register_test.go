@@ -4603,3 +4603,47 @@ func respondJSON(w http.ResponseWriter, status int, body string) {
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(body))
 }
+
+// benchClient builds a GitLab client against a stub version endpoint for the
+// registration benchmarks.
+func benchClient(b *testing.B) *gitlabclient.Client {
+	b.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+	}))
+	b.Cleanup(srv.Close)
+	client, err := gitlabclient.NewClient(&config.Config{GitLabURL: srv.URL, GitLabToken: "bench-token"})
+	if err != nil {
+		b.Fatal(err)
+	}
+	return client
+}
+
+// BenchmarkRegisterAll_Ultimate measures a cold individual-surface
+// registration: catalog build plus MCP SDK schema conversion/resolution for
+// every projected tool.
+func BenchmarkRegisterAll_Ultimate(b *testing.B) {
+	client := benchClient(b)
+	b.ResetTimer()
+	for range b.N {
+		server := mcp.NewServer(&mcp.Implementation{Name: "bench", Version: "0"}, &mcp.ServerOptions{PageSize: 2000})
+		RegisterAll(server, client, edition.Ultimate)
+	}
+}
+
+// BenchmarkRegisterAll_Ultimate_Cached measures the steady-state per-token
+// registration cost in HTTP mode: compiled schema pointers plus a warm
+// mcp.SchemaCache skip the SDK remarshal and resolution.
+func BenchmarkRegisterAll_Ultimate_Cached(b *testing.B) {
+	client := benchClient(b)
+	cache := mcp.NewSchemaCache()
+	// warm-up: first registration pays the one-time schema compilation
+	warm := mcp.NewServer(&mcp.Implementation{Name: "bench", Version: "0"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: cache})
+	RegisterAll(warm, client, edition.Ultimate)
+	b.ResetTimer()
+	for range b.N {
+		server := mcp.NewServer(&mcp.Implementation{Name: "bench", Version: "0"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: cache})
+		RegisterAll(server, client, edition.Ultimate)
+	}
+}

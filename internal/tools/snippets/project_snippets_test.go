@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -969,5 +970,27 @@ func TestActionSpecs_ProjectSnippetGetRoute(t *testing.T) {
 	}
 	if out.ID != 7 || out.Title != "hi" {
 		t.Fatalf("project snippet output = %#v, want ID 7 title hi", out)
+	}
+}
+
+// TestProjectList_Ordering verifies ProjectList forwards order_by and sort.
+func TestProjectList_Ordering(t *testing.T) {
+	var got url.Values
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/projects/p/snippets", func(w http.ResponseWriter, r *http.Request) {
+		got = r.URL.Query()
+		testutil.RespondJSONWithPagination(w, http.StatusOK, snippetListJSON,
+			testutil.PaginationHeaders{TotalPages: "1", Total: "1", Page: "1", PerPage: "20"})
+	})
+	client := testutil.NewTestClient(t, mux)
+
+	_, err := ProjectList(context.Background(), client, ProjectListInput{
+		ProjectID: "p", OrderBy: "created_at", Sort: "desc",
+	})
+	if err != nil {
+		t.Fatalf("ProjectList returned error: %v", err)
+	}
+	if got.Get("order_by") != "created_at" || got.Get("sort") != "desc" {
+		t.Errorf("order_by/sort = %q/%q, want created_at/desc", got.Get("order_by"), got.Get("sort"))
 	}
 }

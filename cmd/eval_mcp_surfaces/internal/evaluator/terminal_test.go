@@ -71,3 +71,46 @@ func TestConfigureTerminalOutput_DefaultAndOverride(t *testing.T) {
 		t.Fatal("configureTerminalOutput(invalid) error = nil, want error")
 	}
 }
+
+// TestConfigureTerminalOutput_WritesLogWithoutEcho verifies progress output is
+// captured in the terminal log by default.
+func TestConfigureTerminalOutput_WritesLogWithoutEcho(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "terminal.log")
+	_, closeLog, err := configureTerminalOutput(options{TerminalLog: logPath})
+	if err != nil {
+		t.Fatalf("configureTerminalOutput() error = %v", err)
+	}
+	terminalPrintf("progress line %d\n", 1)
+	if closeErr := closeLog(); closeErr != nil {
+		t.Fatalf("close terminal log: %v", closeErr)
+	}
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read terminal log: %v", err)
+	}
+	requireContainsAll(t, "terminal log", string(data), []string{"eval_mcp_surfaces terminal output", "progress line 1"})
+}
+
+// TestShouldConfigureTerminalOutput_SkipsCheckDocsWithoutExplicitOutput verifies
+// report-checking modes avoid terminal log setup unless output is requested.
+//
+// The test covers check-docs, efficiency checks, and trace comparisons as quiet
+// modes, then asserts that an explicit log path or print flag re-enables terminal
+// output. This keeps validation commands from creating unnecessary artifacts.
+func TestShouldConfigureTerminalOutput_SkipsCheckDocsWithoutExplicitOutput(t *testing.T) {
+	for _, opts := range []options{
+		{CheckDocs: true},
+		{CheckEfficiency: stringList{"dist/evaluation/efficiency.md"}},
+		{CompareTraces: stringList{"dist/evaluation/report.traces"}},
+	} {
+		if shouldConfigureTerminalOutput(opts) {
+			t.Fatalf("shouldConfigureTerminalOutput(%+v) = true, want false", opts)
+		}
+	}
+	for _, opts := range []options{{CheckDocs: true, TerminalLog: "check.log"}, {CheckDocs: true, PrintOutput: true}} {
+		if !shouldConfigureTerminalOutput(opts) {
+			t.Fatalf("shouldConfigureTerminalOutput(%+v) = false, want true", opts)
+		}
+	}
+}

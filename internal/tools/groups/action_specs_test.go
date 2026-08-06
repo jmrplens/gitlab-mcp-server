@@ -213,3 +213,59 @@ func TestActionSpecs_ErrorPaths(t *testing.T) {
 		})
 	}
 }
+
+// TestGroupRelationMetadata_Discoverability locks in the model-facing discovery
+// metadata for the relation tools added with client-go v2.41.0. It guards
+// against a regression back to the generic "Use to execute ... domain action"
+// placeholder and ensures each tool carries natural-language aliases, related
+// canonical actions, and a cross-referencing description so models know when
+// and how to choose them.
+func TestGroupRelationMetadata_Discoverability(t *testing.T) {
+	client := testutil.NewTestClient(t, http.NewServeMux())
+	byTool := groupSpecsByTool(t, ActionSpecs(client))
+
+	cases := []struct {
+		tool          string
+		aliasContains string
+		related       string
+		descContains  string
+	}{
+		{"gitlab_group_shared_with_list", "shared", "group.invited_groups", "shared with a GitLab group"},
+		{"gitlab_group_invited_list", "invited", "group.shared_with", "invited to a GitLab group"},
+		{"gitlab_group_transfer_locations", "transfer", "group.transfer_project", "candidate parent groups"},
+		{"gitlab_group_transfer_project", "transfer", "group.transfer_locations", "namespace"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tool, func(t *testing.T) {
+			spec, ok := byTool[tc.tool]
+			if !ok {
+				t.Fatalf("missing spec for %s", tc.tool)
+			}
+			if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute") {
+				t.Errorf("%s has generic/empty Usage: %q", tc.tool, spec.Usage)
+			}
+			if !hasAliasContaining(spec.Aliases, tc.aliasContains) {
+				t.Errorf("%s aliases %v missing phrase %q", tc.tool, spec.Aliases, tc.aliasContains)
+			}
+			if !slices.Contains(spec.RelatedActions, tc.related) {
+				t.Errorf("%s related %v missing %q", tc.tool, spec.RelatedActions, tc.related)
+			}
+			if !strings.Contains(spec.IndividualTool.Description, "See also") || !strings.Contains(spec.IndividualTool.Description, tc.descContains) {
+				t.Errorf("%s description weak: %q", tc.tool, spec.IndividualTool.Description)
+			}
+		})
+	}
+}
+
+func hasAliasContaining(aliases []string, sub string) bool {
+	for _, a := range aliases {
+		if strings.Contains(a, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// ---------------------------------------------------------------------------
+// SharedWithList
+// ---------------------------------------------------------------------------.
