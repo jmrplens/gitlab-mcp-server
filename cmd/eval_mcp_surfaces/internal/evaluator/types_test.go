@@ -101,10 +101,18 @@ func TestDynamicCallBudgetForTask_ExactAndAmbiguousTasks_ShareOneDiscoveryBudget
 	// the repair attempts the surface allows on top of the expected steps. Both
 	// budgets are checked: a task-dependent repair allowance would otherwise
 	// undersize the ambiguous one without failing the equality check below.
-	for name, budget := range map[string]taskCallBudget{"exact": exactBudget, "ambiguous": ambiguousBudget} {
-		if budget.MaxCalls < budget.ExpectedSteps+budget.AllowedRepairCalls {
-			t.Errorf("%s budget = %+v, want MaxCalls >= ExpectedSteps+AllowedRepairCalls", name, budget)
-		}
+	for _, tt := range []struct {
+		name   string
+		budget taskCallBudget
+	}{
+		{"exact", exactBudget},
+		{"ambiguous", ambiguousBudget},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.budget.MaxCalls < tt.budget.ExpectedSteps+tt.budget.AllowedRepairCalls {
+				t.Errorf("budget = %+v, want MaxCalls >= ExpectedSteps+AllowedRepairCalls", tt.budget)
+			}
+		})
 	}
 	if ambiguousBudget.MaxCalls != exactBudget.MaxCalls {
 		t.Fatalf("MaxCalls: ambiguous = %d, exact = %d; the budget is not task-dependent",
