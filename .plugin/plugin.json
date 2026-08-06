@@ -1,7 +1,7 @@
 {
   "$schema": "./plugin.schema.json",
   "name": "gitlab-mcp-server",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "description": "GitLab MCP server exposing 1027 self-managed GitLab REST/GraphQL MCP tools, or 1033 on GitLab.com Enterprise/Premium with Orbit. Includes a default 2-tool dynamic surface, 33 base / 49 self-managed enterprise / 50 GitLab.com Enterprise meta-tools, 46 resources, 37 prompts, 17 completion types, and 6 MCP capabilities (logging, progress, roots, sampling, elicitation, completions).",
   "author": {
     "name": "Jose M. Requena Plens",
