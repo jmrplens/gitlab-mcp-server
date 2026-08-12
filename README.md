@@ -387,7 +387,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | ------------- | ------------------------------------------------ |
 | Language      | Go 1.26+                                         |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.7.0  |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.53.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.57.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
 ## Privacy Policy
@@ -415,19 +415,19 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       975 |     195,231 |
-| Unit tests (`_test.go`)  |       527 |     301,584 |
+| Source (`.go`, non-test) |       975 |     195,304 |
+| Unit tests (`_test.go`)  |       527 |     301,738 |
 | End-to-end tests         |       171 |      44,440 |
-| **Total**                | **1,673** | **541,255** |
+| **Total**                | **1,673** | **541,482** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,483 |
+| Source functions                |  7,485 |
 | — exported (public)             |  2,629 |
-| — unexported (private)          |  4,854 |
-| Unit test functions (`TestXxx`) | 11,649 |
+| — unexported (private)          |  4,856 |
+| Unit test functions (`TestXxx`) | 11,651 |
 | Subtests (`t.Run(...)`)         |  2,922 |
 | End-to-end test functions       |    379 |
 
@@ -438,17 +438,17 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.54× more tests than code |
 | Average source file length         |                 ~200 lines |
 | Average test file length           |                 ~572 lines |
-| Comment lines in source            |  21,619 (~11.1% of source) |
+| Comment lines in source            |  21,636 (~11.1% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,723 |
+| `if err != nil` checks             | 6,724 |
 | `defer` statements                 |   854 |
-| `struct` types defined             | 2,728 |
-| `//nolint` suppressions            |   212 |
+| `struct` types defined             | 2,729 |
+| `//nolint` suppressions            |   224 |
 | `TODO` / `FIXME` / `HACK` comments |     3 |
 
 ### Project
@@ -470,8 +470,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,549 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,558 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,550 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,560 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

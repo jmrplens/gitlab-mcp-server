@@ -33986,7 +33986,7 @@
   },
   {
     "name": "gitlab_get_group_datadog_integration",
-    "description": "Read the Datadog integration configured on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The api_key is never returned.\n\nReturns: JSON with the group's Datadog integration details (api_url, datadog_env, datadog_service, datadog_site, datadog_tags, archive_trace_events).\n\nSee also: gitlab_set_group_datadog_integration, gitlab_delete_group_datadog_integration",
+    "description": "Read the Datadog integration configured on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The api_key is never returned.\n\nReturns: JSON with the group's Datadog integration details (api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events).\n\nSee also: gitlab_set_group_datadog_integration, gitlab_delete_group_datadog_integration",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -34035,6 +34035,12 @@
             },
             "created_at": {
               "type": "string"
+            },
+            "datadog_ci_visibility": {
+              "type": [
+                "null",
+                "boolean"
+              ]
             },
             "datadog_env": {
               "type": "string"
@@ -46015,6 +46021,65 @@
         "require_two_factor_authentication": {
           "type": "boolean"
         },
+        "root_storage_statistics": {
+          "additionalProperties": false,
+          "properties": {
+            "build_artifacts_size": {
+              "type": "integer"
+            },
+            "container_registry_size": {
+              "type": "integer"
+            },
+            "container_registry_size_is_estimated": {
+              "type": "boolean"
+            },
+            "dependency_proxy_size": {
+              "type": "integer"
+            },
+            "lfs_objects_size": {
+              "type": "integer"
+            },
+            "packages_size": {
+              "type": "integer"
+            },
+            "pipeline_artifacts_size": {
+              "type": "integer"
+            },
+            "repository_size": {
+              "type": "integer"
+            },
+            "snippets_size": {
+              "type": "integer"
+            },
+            "storage_size": {
+              "type": "integer"
+            },
+            "uploads_size": {
+              "type": "integer"
+            },
+            "wiki_size": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "build_artifacts_size",
+            "container_registry_size",
+            "container_registry_size_is_estimated",
+            "dependency_proxy_size",
+            "lfs_objects_size",
+            "packages_size",
+            "pipeline_artifacts_size",
+            "repository_size",
+            "snippets_size",
+            "storage_size",
+            "uploads_size",
+            "wiki_size"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "runners_token": {
           "type": "string"
         },
@@ -47372,6 +47437,65 @@
         },
         "require_two_factor_authentication": {
           "type": "boolean"
+        },
+        "root_storage_statistics": {
+          "additionalProperties": false,
+          "properties": {
+            "build_artifacts_size": {
+              "type": "integer"
+            },
+            "container_registry_size": {
+              "type": "integer"
+            },
+            "container_registry_size_is_estimated": {
+              "type": "boolean"
+            },
+            "dependency_proxy_size": {
+              "type": "integer"
+            },
+            "lfs_objects_size": {
+              "type": "integer"
+            },
+            "packages_size": {
+              "type": "integer"
+            },
+            "pipeline_artifacts_size": {
+              "type": "integer"
+            },
+            "repository_size": {
+              "type": "integer"
+            },
+            "snippets_size": {
+              "type": "integer"
+            },
+            "storage_size": {
+              "type": "integer"
+            },
+            "uploads_size": {
+              "type": "integer"
+            },
+            "wiki_size": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "build_artifacts_size",
+            "container_registry_size",
+            "container_registry_size_is_estimated",
+            "dependency_proxy_size",
+            "lfs_objects_size",
+            "packages_size",
+            "pipeline_artifacts_size",
+            "repository_size",
+            "snippets_size",
+            "storage_size",
+            "uploads_size",
+            "wiki_size"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "runners_token": {
           "type": "string"
@@ -50079,6 +50203,65 @@
               "require_two_factor_authentication": {
                 "type": "boolean"
               },
+              "root_storage_statistics": {
+                "additionalProperties": false,
+                "properties": {
+                  "build_artifacts_size": {
+                    "type": "integer"
+                  },
+                  "container_registry_size": {
+                    "type": "integer"
+                  },
+                  "container_registry_size_is_estimated": {
+                    "type": "boolean"
+                  },
+                  "dependency_proxy_size": {
+                    "type": "integer"
+                  },
+                  "lfs_objects_size": {
+                    "type": "integer"
+                  },
+                  "packages_size": {
+                    "type": "integer"
+                  },
+                  "pipeline_artifacts_size": {
+                    "type": "integer"
+                  },
+                  "repository_size": {
+                    "type": "integer"
+                  },
+                  "snippets_size": {
+                    "type": "integer"
+                  },
+                  "storage_size": {
+                    "type": "integer"
+                  },
+                  "uploads_size": {
+                    "type": "integer"
+                  },
+                  "wiki_size": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "build_artifacts_size",
+                  "container_registry_size",
+                  "container_registry_size_is_estimated",
+                  "dependency_proxy_size",
+                  "lfs_objects_size",
+                  "packages_size",
+                  "pipeline_artifacts_size",
+                  "repository_size",
+                  "snippets_size",
+                  "storage_size",
+                  "uploads_size",
+                  "wiki_size"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "runners_token": {
                 "type": "string"
               },
@@ -51862,6 +52045,65 @@
               },
               "require_two_factor_authentication": {
                 "type": "boolean"
+              },
+              "root_storage_statistics": {
+                "additionalProperties": false,
+                "properties": {
+                  "build_artifacts_size": {
+                    "type": "integer"
+                  },
+                  "container_registry_size": {
+                    "type": "integer"
+                  },
+                  "container_registry_size_is_estimated": {
+                    "type": "boolean"
+                  },
+                  "dependency_proxy_size": {
+                    "type": "integer"
+                  },
+                  "lfs_objects_size": {
+                    "type": "integer"
+                  },
+                  "packages_size": {
+                    "type": "integer"
+                  },
+                  "pipeline_artifacts_size": {
+                    "type": "integer"
+                  },
+                  "repository_size": {
+                    "type": "integer"
+                  },
+                  "snippets_size": {
+                    "type": "integer"
+                  },
+                  "storage_size": {
+                    "type": "integer"
+                  },
+                  "uploads_size": {
+                    "type": "integer"
+                  },
+                  "wiki_size": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "build_artifacts_size",
+                  "container_registry_size",
+                  "container_registry_size_is_estimated",
+                  "dependency_proxy_size",
+                  "lfs_objects_size",
+                  "packages_size",
+                  "pipeline_artifacts_size",
+                  "repository_size",
+                  "snippets_size",
+                  "storage_size",
+                  "uploads_size",
+                  "wiki_size"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "runners_token": {
                 "type": "string"
@@ -58087,6 +58329,65 @@
         "require_two_factor_authentication": {
           "type": "boolean"
         },
+        "root_storage_statistics": {
+          "additionalProperties": false,
+          "properties": {
+            "build_artifacts_size": {
+              "type": "integer"
+            },
+            "container_registry_size": {
+              "type": "integer"
+            },
+            "container_registry_size_is_estimated": {
+              "type": "boolean"
+            },
+            "dependency_proxy_size": {
+              "type": "integer"
+            },
+            "lfs_objects_size": {
+              "type": "integer"
+            },
+            "packages_size": {
+              "type": "integer"
+            },
+            "pipeline_artifacts_size": {
+              "type": "integer"
+            },
+            "repository_size": {
+              "type": "integer"
+            },
+            "snippets_size": {
+              "type": "integer"
+            },
+            "storage_size": {
+              "type": "integer"
+            },
+            "uploads_size": {
+              "type": "integer"
+            },
+            "wiki_size": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "build_artifacts_size",
+            "container_registry_size",
+            "container_registry_size_is_estimated",
+            "dependency_proxy_size",
+            "lfs_objects_size",
+            "packages_size",
+            "pipeline_artifacts_size",
+            "repository_size",
+            "snippets_size",
+            "storage_size",
+            "uploads_size",
+            "wiki_size"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "runners_token": {
           "type": "string"
         },
@@ -59310,6 +59611,65 @@
               },
               "require_two_factor_authentication": {
                 "type": "boolean"
+              },
+              "root_storage_statistics": {
+                "additionalProperties": false,
+                "properties": {
+                  "build_artifacts_size": {
+                    "type": "integer"
+                  },
+                  "container_registry_size": {
+                    "type": "integer"
+                  },
+                  "container_registry_size_is_estimated": {
+                    "type": "boolean"
+                  },
+                  "dependency_proxy_size": {
+                    "type": "integer"
+                  },
+                  "lfs_objects_size": {
+                    "type": "integer"
+                  },
+                  "packages_size": {
+                    "type": "integer"
+                  },
+                  "pipeline_artifacts_size": {
+                    "type": "integer"
+                  },
+                  "repository_size": {
+                    "type": "integer"
+                  },
+                  "snippets_size": {
+                    "type": "integer"
+                  },
+                  "storage_size": {
+                    "type": "integer"
+                  },
+                  "uploads_size": {
+                    "type": "integer"
+                  },
+                  "wiki_size": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "build_artifacts_size",
+                  "container_registry_size",
+                  "container_registry_size_is_estimated",
+                  "dependency_proxy_size",
+                  "lfs_objects_size",
+                  "packages_size",
+                  "pipeline_artifacts_size",
+                  "repository_size",
+                  "snippets_size",
+                  "storage_size",
+                  "uploads_size",
+                  "wiki_size"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "runners_token": {
                 "type": "string"
@@ -61200,6 +61560,65 @@
               "require_two_factor_authentication": {
                 "type": "boolean"
               },
+              "root_storage_statistics": {
+                "additionalProperties": false,
+                "properties": {
+                  "build_artifacts_size": {
+                    "type": "integer"
+                  },
+                  "container_registry_size": {
+                    "type": "integer"
+                  },
+                  "container_registry_size_is_estimated": {
+                    "type": "boolean"
+                  },
+                  "dependency_proxy_size": {
+                    "type": "integer"
+                  },
+                  "lfs_objects_size": {
+                    "type": "integer"
+                  },
+                  "packages_size": {
+                    "type": "integer"
+                  },
+                  "pipeline_artifacts_size": {
+                    "type": "integer"
+                  },
+                  "repository_size": {
+                    "type": "integer"
+                  },
+                  "snippets_size": {
+                    "type": "integer"
+                  },
+                  "storage_size": {
+                    "type": "integer"
+                  },
+                  "uploads_size": {
+                    "type": "integer"
+                  },
+                  "wiki_size": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "build_artifacts_size",
+                  "container_registry_size",
+                  "container_registry_size_is_estimated",
+                  "dependency_proxy_size",
+                  "lfs_objects_size",
+                  "packages_size",
+                  "pipeline_artifacts_size",
+                  "repository_size",
+                  "snippets_size",
+                  "storage_size",
+                  "uploads_size",
+                  "wiki_size"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
               "runners_token": {
                 "type": "string"
               },
@@ -61805,6 +62224,65 @@
         },
         "require_two_factor_authentication": {
           "type": "boolean"
+        },
+        "root_storage_statistics": {
+          "additionalProperties": false,
+          "properties": {
+            "build_artifacts_size": {
+              "type": "integer"
+            },
+            "container_registry_size": {
+              "type": "integer"
+            },
+            "container_registry_size_is_estimated": {
+              "type": "boolean"
+            },
+            "dependency_proxy_size": {
+              "type": "integer"
+            },
+            "lfs_objects_size": {
+              "type": "integer"
+            },
+            "packages_size": {
+              "type": "integer"
+            },
+            "pipeline_artifacts_size": {
+              "type": "integer"
+            },
+            "repository_size": {
+              "type": "integer"
+            },
+            "snippets_size": {
+              "type": "integer"
+            },
+            "storage_size": {
+              "type": "integer"
+            },
+            "uploads_size": {
+              "type": "integer"
+            },
+            "wiki_size": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "build_artifacts_size",
+            "container_registry_size",
+            "container_registry_size_is_estimated",
+            "dependency_proxy_size",
+            "lfs_objects_size",
+            "packages_size",
+            "pipeline_artifacts_size",
+            "repository_size",
+            "snippets_size",
+            "storage_size",
+            "uploads_size",
+            "wiki_size"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "runners_token": {
           "type": "string"
@@ -62499,6 +62977,65 @@
         },
         "require_two_factor_authentication": {
           "type": "boolean"
+        },
+        "root_storage_statistics": {
+          "additionalProperties": false,
+          "properties": {
+            "build_artifacts_size": {
+              "type": "integer"
+            },
+            "container_registry_size": {
+              "type": "integer"
+            },
+            "container_registry_size_is_estimated": {
+              "type": "boolean"
+            },
+            "dependency_proxy_size": {
+              "type": "integer"
+            },
+            "lfs_objects_size": {
+              "type": "integer"
+            },
+            "packages_size": {
+              "type": "integer"
+            },
+            "pipeline_artifacts_size": {
+              "type": "integer"
+            },
+            "repository_size": {
+              "type": "integer"
+            },
+            "snippets_size": {
+              "type": "integer"
+            },
+            "storage_size": {
+              "type": "integer"
+            },
+            "uploads_size": {
+              "type": "integer"
+            },
+            "wiki_size": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "build_artifacts_size",
+            "container_registry_size",
+            "container_registry_size_is_estimated",
+            "dependency_proxy_size",
+            "lfs_objects_size",
+            "packages_size",
+            "pipeline_artifacts_size",
+            "repository_size",
+            "snippets_size",
+            "storage_size",
+            "uploads_size",
+            "wiki_size"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "runners_token": {
           "type": "string"
@@ -63584,6 +64121,65 @@
         "require_two_factor_authentication": {
           "type": "boolean"
         },
+        "root_storage_statistics": {
+          "additionalProperties": false,
+          "properties": {
+            "build_artifacts_size": {
+              "type": "integer"
+            },
+            "container_registry_size": {
+              "type": "integer"
+            },
+            "container_registry_size_is_estimated": {
+              "type": "boolean"
+            },
+            "dependency_proxy_size": {
+              "type": "integer"
+            },
+            "lfs_objects_size": {
+              "type": "integer"
+            },
+            "packages_size": {
+              "type": "integer"
+            },
+            "pipeline_artifacts_size": {
+              "type": "integer"
+            },
+            "repository_size": {
+              "type": "integer"
+            },
+            "snippets_size": {
+              "type": "integer"
+            },
+            "storage_size": {
+              "type": "integer"
+            },
+            "uploads_size": {
+              "type": "integer"
+            },
+            "wiki_size": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "build_artifacts_size",
+            "container_registry_size",
+            "container_registry_size_is_estimated",
+            "dependency_proxy_size",
+            "lfs_objects_size",
+            "packages_size",
+            "pipeline_artifacts_size",
+            "repository_size",
+            "snippets_size",
+            "storage_size",
+            "uploads_size",
+            "wiki_size"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
         "runners_token": {
           "type": "string"
         },
@@ -64138,6 +64734,65 @@
         },
         "require_two_factor_authentication": {
           "type": "boolean"
+        },
+        "root_storage_statistics": {
+          "additionalProperties": false,
+          "properties": {
+            "build_artifacts_size": {
+              "type": "integer"
+            },
+            "container_registry_size": {
+              "type": "integer"
+            },
+            "container_registry_size_is_estimated": {
+              "type": "boolean"
+            },
+            "dependency_proxy_size": {
+              "type": "integer"
+            },
+            "lfs_objects_size": {
+              "type": "integer"
+            },
+            "packages_size": {
+              "type": "integer"
+            },
+            "pipeline_artifacts_size": {
+              "type": "integer"
+            },
+            "repository_size": {
+              "type": "integer"
+            },
+            "snippets_size": {
+              "type": "integer"
+            },
+            "storage_size": {
+              "type": "integer"
+            },
+            "uploads_size": {
+              "type": "integer"
+            },
+            "wiki_size": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "build_artifacts_size",
+            "container_registry_size",
+            "container_registry_size_is_estimated",
+            "dependency_proxy_size",
+            "lfs_objects_size",
+            "packages_size",
+            "pipeline_artifacts_size",
+            "repository_size",
+            "snippets_size",
+            "storage_size",
+            "uploads_size",
+            "wiki_size"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
         },
         "runners_token": {
           "type": "string"
@@ -193563,7 +194218,7 @@
   },
   {
     "name": "gitlab_set_group_datadog_integration",
-    "description": "Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, archive_trace_events, or use_inherited_settings=true must be supplied.\n\nReturns: JSON with the updated Datadog integration details.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration",
+    "description": "Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, or use_inherited_settings=true must be supplied.\n\nReturns: JSON with the updated Datadog integration details.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -193577,6 +194232,13 @@
         },
         "archive_trace_events": {
           "description": "Forward CI job trace events to Datadog",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "datadog_ci_visibility": {
+          "description": "Enable Datadog CI Visibility: forward pipeline/job data to Datadog CI Visibility",
           "type": [
             "null",
             "boolean"
@@ -193650,6 +194312,12 @@
             },
             "created_at": {
               "type": "string"
+            },
+            "datadog_ci_visibility": {
+              "type": [
+                "null",
+                "boolean"
+              ]
             },
             "datadog_env": {
               "type": "string"
@@ -198921,6 +199589,65 @@
               },
               "require_two_factor_authentication": {
                 "type": "boolean"
+              },
+              "root_storage_statistics": {
+                "additionalProperties": false,
+                "properties": {
+                  "build_artifacts_size": {
+                    "type": "integer"
+                  },
+                  "container_registry_size": {
+                    "type": "integer"
+                  },
+                  "container_registry_size_is_estimated": {
+                    "type": "boolean"
+                  },
+                  "dependency_proxy_size": {
+                    "type": "integer"
+                  },
+                  "lfs_objects_size": {
+                    "type": "integer"
+                  },
+                  "packages_size": {
+                    "type": "integer"
+                  },
+                  "pipeline_artifacts_size": {
+                    "type": "integer"
+                  },
+                  "repository_size": {
+                    "type": "integer"
+                  },
+                  "snippets_size": {
+                    "type": "integer"
+                  },
+                  "storage_size": {
+                    "type": "integer"
+                  },
+                  "uploads_size": {
+                    "type": "integer"
+                  },
+                  "wiki_size": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "build_artifacts_size",
+                  "container_registry_size",
+                  "container_registry_size_is_estimated",
+                  "dependency_proxy_size",
+                  "lfs_objects_size",
+                  "packages_size",
+                  "pipeline_artifacts_size",
+                  "repository_size",
+                  "snippets_size",
+                  "storage_size",
+                  "uploads_size",
+                  "wiki_size"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
               },
               "runners_token": {
                 "type": "string"

@@ -23,6 +23,17 @@ overrides:
   # ip-address Address4 decodes leading-zero octets as decimal (GHSA-8gjw-6f7c-jmc4);
   # dev/build deps only (pa11y-ci > puppeteer > socks-proxy-agent > socks).
   "ip-address@<10.3.1": 10.3.1
+  # js-yaml quadratic CPU consumption in !!omap resolution (GHSA-5p4m-2wfm-xmqj,
+  # CVE-2026-59870); build deps only (@astrojs/internal-helpers and friends).
+  "js-yaml@>=4.0.0 <4.3.1": 4.3.1
+
+auditConfig:
+  ignoreGhsas:
+    # extract-zip symlink path traversal: the advisory lists >=2.0.2 as patched,
+    # but no release after 2.0.1 exists on npm, so there is nothing to pin to.
+    # Dev-only path (pa11y-ci > puppeteer > @puppeteer/browsers). Remove this
+    # exception once extract-zip publishes a fixed release.
+    - GHSA-jmr9-qjv8-65gv
 
 peerDependencyRules:
   allowedVersions:

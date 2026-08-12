@@ -5,6 +5,7 @@
 package integrations
 
 import (
+	"io"
 	"net/http"
 	"slices"
 	"strings"
@@ -33,8 +34,10 @@ func matchGroupDatadogPath(path string) bool {
 // GetGroupDatadog.
 
 // TestGetGroupDatadog_Success verifies that GetGroupDatadog succeeds when the GitLab API returns a valid response.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// The mock mirrors the current GitLab payload, which nests the Datadog-specific
+// values under a "properties" object (client-go >= 2.57 maps it to Properties).
+// It asserts the Datadog values, including datadog_ci_visibility, are read from
+// the nested object.
 func TestGetGroupDatadog_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchGroupDatadogPath(r.URL.Path) && r.Method == http.MethodGet {
@@ -47,12 +50,15 @@ func TestGetGroupDatadog_Success(t *testing.T) {
 				"active": true,
 				"created_at": "2026-01-02T03:04:05.000Z",
 				"updated_at": "2026-06-08T11:12:13.000Z",
-				"api_url": "` + testAPIURL + `",
-				"datadog_env": "prod",
-				"datadog_service": "gitlab",
-				"datadog_site": "` + testDatadogSite + `",
-				"datadog_tags": "team:platform,env:prod",
-				"archive_trace_events": true
+				"properties": {
+					"api_url": "` + testAPIURL + `",
+					"datadog_env": "prod",
+					"datadog_service": "gitlab",
+					"datadog_site": "` + testDatadogSite + `",
+					"datadog_tags": "team:platform,env:prod",
+					"datadog_ci_visibility": true,
+					"archive_trace_events": true
+				}
 			}`))
 			return
 		}
@@ -75,11 +81,59 @@ func TestGetGroupDatadog_Success(t *testing.T) {
 	if out.Integration.DatadogSite != testDatadogSite {
 		t.Errorf("DatadogSite = %q, want %q", out.Integration.DatadogSite, testDatadogSite)
 	}
+	if out.Integration.DatadogCIVisibility == nil || !*out.Integration.DatadogCIVisibility {
+		t.Errorf("DatadogCIVisibility = %v, want pointer-to-true", out.Integration.DatadogCIVisibility)
+	}
 	if out.Integration.ArchiveTraceEvents == nil || !*out.Integration.ArchiveTraceEvents {
 		t.Errorf("ArchiveTraceEvents = %v, want pointer-to-true", out.Integration.ArchiveTraceEvents)
 	}
 	if out.Integration.CreatedAt == "" || out.Integration.UpdatedAt == "" {
 		t.Errorf("expected populated CreatedAt/UpdatedAt, got %+v", out.Integration)
+	}
+}
+
+// TestGetGroupDatadog_LegacyFlatResponse_MapsFlatFields verifies the fallback for older GitLab
+// servers whose payload has no "properties" object and carries the Datadog
+// values as deprecated top-level fields. The values must still round-trip, and
+// DatadogCIVisibility must stay nil (absent) instead of fabricating false.
+func TestGetGroupDatadog_LegacyFlatResponse_MapsFlatFields(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if matchGroupDatadogPath(r.URL.Path) && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{
+				"id": 42,
+				"title": "Datadog",
+				"slug": "datadog",
+				"active": true,
+				"api_url": "` + testAPIURL + `",
+				"datadog_env": "prod",
+				"datadog_service": "gitlab",
+				"datadog_site": "` + testDatadogSite + `",
+				"datadog_tags": "team:platform,env:prod",
+				"archive_trace_events": true
+			}`))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	out, err := GetGroupDatadog(t.Context(), client, GetGroupDatadogInput{GroupID: testGroupPath})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.Integration.APIURL != testAPIURL {
+		t.Errorf("APIURL = %q, want %q", out.Integration.APIURL, testAPIURL)
+	}
+	if out.Integration.DatadogEnv != "prod" || out.Integration.DatadogService != "gitlab" ||
+		out.Integration.DatadogSite != testDatadogSite || out.Integration.DatadogTags != "team:platform,env:prod" {
+		t.Errorf("legacy flat Datadog fields not copied: %+v", out.Integration)
+	}
+	if out.Integration.ArchiveTraceEvents == nil || !*out.Integration.ArchiveTraceEvents {
+		t.Errorf("ArchiveTraceEvents = %v, want pointer-to-true", out.Integration.ArchiveTraceEvents)
+	}
+	if out.Integration.DatadogCIVisibility != nil {
+		t.Errorf("DatadogCIVisibility = %v, want nil for a legacy flat response", *out.Integration.DatadogCIVisibility)
 	}
 }
 
@@ -145,10 +199,16 @@ func TestGetGroupDatadog_NilIntegration(t *testing.T) {
 
 // TestSetGroupDatadog_Success verifies SetGroupDatadog with a representative
 // payload: api_key, api_url, datadog_env, datadog_service, datadog_site,
-// datadog_tags, and archive_trace_events.
+// datadog_tags, datadog_ci_visibility, and archive_trace_events. The mock
+// asserts datadog_ci_visibility is forwarded in the PUT body and returns the
+// current nested "properties" response shape so the new field round-trips.
 func TestSetGroupDatadog_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchGroupDatadogPath(r.URL.Path) && r.Method == http.MethodPut {
+			body, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(body), `"datadog_ci_visibility":true`) {
+				t.Errorf("request body should carry datadog_ci_visibility=true, got: %s", body)
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{
@@ -156,12 +216,15 @@ func TestSetGroupDatadog_Success(t *testing.T) {
 				"title": "Datadog",
 				"slug": "datadog",
 				"active": true,
-				"api_url": "` + testAPIURL + `",
-				"datadog_env": "prod",
-				"datadog_service": "gitlab",
-				"datadog_site": "` + testDatadogSite + `",
-				"datadog_tags": "team:platform",
-				"archive_trace_events": false
+				"properties": {
+					"api_url": "` + testAPIURL + `",
+					"datadog_env": "prod",
+					"datadog_service": "gitlab",
+					"datadog_site": "` + testDatadogSite + `",
+					"datadog_tags": "team:platform",
+					"datadog_ci_visibility": true,
+					"archive_trace_events": false
+				}
 			}`))
 			return
 		}
@@ -169,21 +232,26 @@ func TestSetGroupDatadog_Success(t *testing.T) {
 	}))
 
 	archive := false
+	ciVisibility := true
 	out, err := SetGroupDatadog(t.Context(), client, SetGroupDatadogInput{
-		GroupID:            testGroupPath,
-		APIKey:             "secret-key",
-		APIURL:             testAPIURL,
-		DatadogEnv:         "prod",
-		DatadogService:     "gitlab",
-		DatadogSite:        testDatadogSite,
-		DatadogTags:        "team:platform",
-		ArchiveTraceEvents: &archive,
+		GroupID:             testGroupPath,
+		APIKey:              "secret-key",
+		APIURL:              testAPIURL,
+		DatadogEnv:          "prod",
+		DatadogService:      "gitlab",
+		DatadogSite:         testDatadogSite,
+		DatadogTags:         "team:platform",
+		DatadogCIVisibility: &ciVisibility,
+		ArchiveTraceEvents:  &archive,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	if out.Integration.ID != 7 {
 		t.Errorf("ID = %d, want 7", out.Integration.ID)
+	}
+	if out.Integration.DatadogCIVisibility == nil || !*out.Integration.DatadogCIVisibility {
+		t.Errorf("DatadogCIVisibility = %v, want pointer-to-true", out.Integration.DatadogCIVisibility)
 	}
 	if out.Integration.ArchiveTraceEvents == nil || *out.Integration.ArchiveTraceEvents {
 		t.Errorf("ArchiveTraceEvents = %v, want pointer-to-false", out.Integration.ArchiveTraceEvents)
@@ -321,11 +389,11 @@ func TestGroupDatadogToItem_Nil(t *testing.T) {
 	}
 }
 
-// TestGroupDatadogToItem_AllFields verifies the GroupDatadogToItem_AllFields handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestGroupDatadogToItem_AllFields verifies the converter with the current SDK
+// shape where the Datadog-specific values live in the nested Properties struct.
+// It asserts every embedded Integration field and every Properties field,
+// including DatadogCIVisibility, is copied into the item.
 func TestGroupDatadogToItem_AllFields(t *testing.T) {
-	archive := true
 	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	updated := time.Date(2026, 6, 8, 11, 12, 13, 0, time.UTC)
 	src := &gl.GroupDatadogIntegration{
@@ -337,12 +405,15 @@ func TestGroupDatadogToItem_AllFields(t *testing.T) {
 			CreatedAt: &created,
 			UpdatedAt: &updated,
 		},
-		APIURL:             testAPIURL,
-		DatadogEnv:         "prod",
-		DatadogService:     "gitlab",
-		DatadogSite:        testDatadogSite,
-		DatadogTags:        "team:platform",
-		ArchiveTraceEvents: &archive,
+		Properties: &gl.GroupDatadogIntegrationProperties{
+			APIURL:              testAPIURL,
+			DatadogEnv:          "prod",
+			DatadogService:      "gitlab",
+			DatadogSite:         testDatadogSite,
+			DatadogTags:         "team:platform",
+			DatadogCIVisibility: true,
+			ArchiveTraceEvents:  true,
+		},
 	}
 	got := groupDatadogToItem(src)
 	if got.ID != 99 || got.Title != "Datadog" || got.Slug != "datadog" || !got.Active {
@@ -352,6 +423,9 @@ func TestGroupDatadogToItem_AllFields(t *testing.T) {
 		got.DatadogSite != testDatadogSite || got.DatadogTags != "team:platform" {
 		t.Errorf("Datadog fields not copied: %+v", got)
 	}
+	if got.DatadogCIVisibility == nil || !*got.DatadogCIVisibility {
+		t.Errorf("DatadogCIVisibility not copied: %v", got.DatadogCIVisibility)
+	}
 	if got.ArchiveTraceEvents == nil || !*got.ArchiveTraceEvents {
 		t.Errorf("ArchiveTraceEvents not copied: %v", got.ArchiveTraceEvents)
 	}
@@ -360,6 +434,34 @@ func TestGroupDatadogToItem_AllFields(t *testing.T) {
 	}
 	if !strings.Contains(got.UpdatedAt, "2026-06-08") {
 		t.Errorf("UpdatedAt not serialized: %q", got.UpdatedAt)
+	}
+}
+
+// TestGroupDatadogToItem_DeprecatedFlatFallback_CopiesFlatFields verifies the converter falls
+// back to the deprecated flat SDK fields when Properties is nil (older GitLab
+// servers). The flat values must be copied and DatadogCIVisibility must stay
+// nil since legacy responses never carry it.
+func TestGroupDatadogToItem_DeprecatedFlatFallback_CopiesFlatFields(t *testing.T) {
+	archive := true
+	src := &gl.GroupDatadogIntegration{
+		Integration: gl.Integration{ID: 99, Title: "Datadog", Slug: "datadog", Active: true},
+	}
+	src.APIURL = testAPIURL           //nolint:staticcheck // SA1019: exercising the deprecated flat fallback.
+	src.DatadogEnv = "prod"           //nolint:staticcheck // SA1019: exercising the deprecated flat fallback.
+	src.DatadogService = "gitlab"     //nolint:staticcheck // SA1019: exercising the deprecated flat fallback.
+	src.DatadogSite = testDatadogSite //nolint:staticcheck // SA1019: exercising the deprecated flat fallback.
+	src.DatadogTags = "team:platform" //nolint:staticcheck // SA1019: exercising the deprecated flat fallback.
+	src.ArchiveTraceEvents = &archive //nolint:staticcheck // SA1019: exercising the deprecated flat fallback.
+	got := groupDatadogToItem(src)
+	if got.APIURL != testAPIURL || got.DatadogEnv != "prod" || got.DatadogService != "gitlab" ||
+		got.DatadogSite != testDatadogSite || got.DatadogTags != "team:platform" {
+		t.Errorf("deprecated flat Datadog fields not copied: %+v", got)
+	}
+	if got.ArchiveTraceEvents == nil || !*got.ArchiveTraceEvents {
+		t.Errorf("ArchiveTraceEvents not copied: %v", got.ArchiveTraceEvents)
+	}
+	if got.DatadogCIVisibility != nil {
+		t.Errorf("DatadogCIVisibility = %v, want nil when Properties is absent", *got.DatadogCIVisibility)
 	}
 }
 
@@ -401,20 +503,22 @@ func TestFormatGetGroupDatadogMarkdown_Minimal(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetGroupDatadogMarkdown_Full(t *testing.T) {
 	archive := true
+	ciVisibility := true
 	result := FormatGetGroupDatadogMarkdown(GetGroupDatadogOutput{
 		Integration: GroupDatadogItem{
-			ID:                 1,
-			Title:              "Datadog Production",
-			Slug:               "datadog",
-			Active:             true,
-			CreatedAt:          "2026-01-02T03:04:05.000Z",
-			UpdatedAt:          "2026-06-08T11:12:13.000Z",
-			APIURL:             testAPIURL,
-			DatadogEnv:         "prod",
-			DatadogService:     "gitlab",
-			DatadogSite:        testDatadogSite,
-			DatadogTags:        "team:platform",
-			ArchiveTraceEvents: &archive,
+			ID:                  1,
+			Title:               "Datadog Production",
+			Slug:                "datadog",
+			Active:              true,
+			CreatedAt:           "2026-01-02T03:04:05.000Z",
+			UpdatedAt:           "2026-06-08T11:12:13.000Z",
+			APIURL:              testAPIURL,
+			DatadogEnv:          "prod",
+			DatadogService:      "gitlab",
+			DatadogSite:         testDatadogSite,
+			DatadogTags:         "team:platform",
+			DatadogCIVisibility: &ciVisibility,
+			ArchiveTraceEvents:  &archive,
 		},
 	})
 	if result == nil {
@@ -423,16 +527,17 @@ func TestFormatGetGroupDatadogMarkdown_Full(t *testing.T) {
 	// Every populated field should make it into the rendered markdown.
 	text := firstMarkdownText(t, result)
 	wantSubs := []string{
-		"Datadog Production",   // fallback non-default for Title
-		"Slug",                 // fallback non-default for Slug
-		"API URL",              // i.APIURL != "" branch
-		"Datadog Env",          // i.DatadogEnv != "" branch
-		"Datadog Service",      // i.DatadogService != "" branch
-		"Datadog Site",         // i.DatadogSite != "" branch
-		"Datadog Tags",         // i.DatadogTags != "" branch
-		"Archive Trace Events", // i.ArchiveTraceEvents != nil branch
-		"Created",              // i.CreatedAt != "" branch
-		"Updated",              // i.UpdatedAt != "" branch
+		"Datadog Production",    // fallback non-default for Title
+		"Slug",                  // fallback non-default for Slug
+		"API URL",               // i.APIURL != "" branch
+		"Datadog Env",           // i.DatadogEnv != "" branch
+		"Datadog Service",       // i.DatadogService != "" branch
+		"Datadog Site",          // i.DatadogSite != "" branch
+		"Datadog Tags",          // i.DatadogTags != "" branch
+		"Datadog CI Visibility", // i.DatadogCIVisibility != nil branch
+		"Archive Trace Events",  // i.ArchiveTraceEvents != nil branch
+		"Created",               // i.CreatedAt != "" branch
+		"Updated",               // i.UpdatedAt != "" branch
 	}
 	for _, want := range wantSubs {
 		if !strings.Contains(text, want) {
@@ -467,18 +572,20 @@ func TestFormatSetGroupDatadogMarkdown(t *testing.T) {
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatSetGroupDatadogMarkdown_Full(t *testing.T) {
 	archive := true
+	ciVisibility := true
 	result := FormatSetGroupDatadogMarkdown(SetGroupDatadogOutput{
 		Integration: GroupDatadogItem{
-			ID:                 1,
-			Title:              "Datadog Production",
-			Slug:               "datadog",
-			Active:             true,
-			APIURL:             testAPIURL,
-			DatadogEnv:         "prod",
-			DatadogService:     "gitlab",
-			DatadogSite:        testDatadogSite,
-			DatadogTags:        "team:platform",
-			ArchiveTraceEvents: &archive,
+			ID:                  1,
+			Title:               "Datadog Production",
+			Slug:                "datadog",
+			Active:              true,
+			APIURL:              testAPIURL,
+			DatadogEnv:          "prod",
+			DatadogService:      "gitlab",
+			DatadogSite:         testDatadogSite,
+			DatadogTags:         "team:platform",
+			DatadogCIVisibility: &ciVisibility,
+			ArchiveTraceEvents:  &archive,
 		},
 	})
 	if result == nil {
@@ -486,13 +593,14 @@ func TestFormatSetGroupDatadogMarkdown_Full(t *testing.T) {
 	}
 	text := firstMarkdownText(t, result)
 	wantSubs := []string{
-		"Datadog Production",   // fallback non-default for Title
-		"API URL",              // i.APIURL != "" branch
-		"Datadog Env",          // i.DatadogEnv != "" branch
-		"Datadog Service",      // i.DatadogService != "" branch
-		"Datadog Site",         // i.DatadogSite != "" branch
-		"Datadog Tags",         // i.DatadogTags != "" branch
-		"Archive Trace Events", // i.ArchiveTraceEvents != nil branch
+		"Datadog Production",    // fallback non-default for Title
+		"API URL",               // i.APIURL != "" branch
+		"Datadog Env",           // i.DatadogEnv != "" branch
+		"Datadog Service",       // i.DatadogService != "" branch
+		"Datadog Site",          // i.DatadogSite != "" branch
+		"Datadog Tags",          // i.DatadogTags != "" branch
+		"Datadog CI Visibility", // i.DatadogCIVisibility != nil branch
+		"Archive Trace Events",  // i.ArchiveTraceEvents != nil branch
 	}
 	for _, want := range wantSubs {
 		if !strings.Contains(text, want) {

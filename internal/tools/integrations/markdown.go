@@ -83,6 +83,7 @@ func formatGroupDatadogItem(i GroupDatadogItem, headingSuffix string, includeTim
 	writeGroupDatadogStringField(&sb, "Datadog Service", i.DatadogService)
 	writeGroupDatadogStringField(&sb, "Datadog Site", i.DatadogSite)
 	writeGroupDatadogStringField(&sb, "Datadog Tags", i.DatadogTags)
+	writeGroupDatadogBoolField(&sb, "Datadog CI Visibility", i.DatadogCIVisibility)
 	writeGroupDatadogBoolField(&sb, "Archive Trace Events", i.ArchiveTraceEvents)
 	if includeTimestamps {
 		writeGroupDatadogTimestamp(&sb, "Created", i.CreatedAt)

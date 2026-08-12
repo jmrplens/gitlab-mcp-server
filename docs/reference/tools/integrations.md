@@ -80,7 +80,7 @@ Read the Datadog integration configured on a group.
 
 ### `gitlab_set_group_datadog_integration`
 
-Create or update the Datadog integration on a group. At least one of `api_key`, `api_url`, `datadog_env`, `datadog_service`, `datadog_site`, `datadog_tags`, `archive_trace_events`, or `use_inherited_settings=true` must be supplied.
+Create or update the Datadog integration on a group. At least one of `api_key`, `api_url`, `datadog_env`, `datadog_service`, `datadog_site`, `datadog_tags`, `datadog_ci_visibility`, `archive_trace_events`, or `use_inherited_settings=true` must be supplied.
 
 | Annotation | **Create** |
 | ---------- | ---------- |

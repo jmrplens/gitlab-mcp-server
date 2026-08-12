@@ -14427,13 +14427,14 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_set_group_datadog_integration
 
-Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, archive_trace_events, or use_inherited_settings=true must be supplied.
+Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, or use_inherited_settings=true must be supplied.
 
 **Parameters:**
 
 - `api_key` (string): Datadog API key (write-only; never returned by the get endpoint)
 - `api_url` (string): Datadog API URL (e.g. https://api.datadoghq.com)
 - `archive_trace_events` (boolean): Forward CI job trace events to Datadog
+- `datadog_ci_visibility` (boolean): Enable Datadog CI Visibility: forward pipeline/job data to Datadog CI Visibility
 - `datadog_env` (string): Datadog env tag forwarded with every log/metric
 - `datadog_service` (string): Datadog service tag forwarded with every log/metric
 - `datadog_site` (string): Datadog site (e.g. datadoghq.com, datadoghq.eu, us3.datadoghq.com, us5.datadoghq.com, ap1.datadoghq.com)

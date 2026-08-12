@@ -2766,6 +2766,11 @@ const fullGroupJSON = `{
 	"statistics":{"commit_count":12,"storage_size":34,"repository_size":5,"wiki_size":1,
 		"lfs_objects_size":2,"job_artifacts_size":3,"pipeline_artifacts_size":4,
 		"packages_size":6,"snippets_size":7,"uploads_size":8,"container_registry_size":9},
+	"root_storage_statistics":{"build_artifacts_size":11,"container_registry_size":22,
+		"container_registry_size_is_estimated":true,"dependency_proxy_size":33,
+		"lfs_objects_size":44,"packages_size":55,"pipeline_artifacts_size":66,
+		"repository_size":77,"snippets_size":88,"storage_size":99,"uploads_size":110,
+		"wiki_size":121},
 	"custom_attributes":[{"key":"team","value":"platform"}],
 	"default_branch_protection_defaults":{"allow_force_push":true,
 		"developer_can_initial_push":true,"code_owner_approval_required":true,
@@ -2858,6 +2863,42 @@ func assertGroupNestedObjects(t *testing.T, out Output) {
 	if len(d.AllowedToMerge) != 1 || d.AllowedToMerge[0].AccessLevel != 30 {
 		t.Errorf("AllowedToMerge not mapped: %+v", d.AllowedToMerge)
 	}
+	assertGroupRootStorageStatistics(t, out)
+}
+
+// assertGroupRootStorageStatistics checks every root_storage_statistics field
+// surfaced by ToOutput against the fullGroupJSON fixture (1:1 SDK mirror).
+func assertGroupRootStorageStatistics(t *testing.T, out Output) {
+	t.Helper()
+	r := out.RootStorageStatistics
+	if r == nil {
+		t.Fatalf("RootStorageStatistics not mapped: nil")
+	}
+	if !r.ContainerRegistrySizeIsEstimated {
+		t.Errorf("ContainerRegistrySizeIsEstimated = false, want true")
+	}
+	cases := []struct {
+		name string
+		got  int64
+		want int64
+	}{
+		{"BuildArtifactsSize", r.BuildArtifactsSize, 11},
+		{"ContainerRegistrySize", r.ContainerRegistrySize, 22},
+		{"DependencyProxySize", r.DependencyProxySize, 33},
+		{"LFSObjectsSize", r.LFSObjectsSize, 44},
+		{"PackagesSize", r.PackagesSize, 55},
+		{"PipelineArtifactsSize", r.PipelineArtifactsSize, 66},
+		{"RepositorySize", r.RepositorySize, 77},
+		{"SnippetsSize", r.SnippetsSize, 88},
+		{"StorageSize", r.StorageSize, 99},
+		{"UploadsSize", r.UploadsSize, 110},
+		{"WikiSize", r.WikiSize, 121},
+	}
+	for _, c := range cases {
+		if c.got != c.want {
+			t.Errorf("RootStorageStatistics.%s = %d, want %d", c.name, c.got, c.want)
+		}
+	}
 }
 
 // assertGroupNestedLists checks the link/attribute nested-slice sub-objects
@@ -2895,7 +2936,7 @@ func assertGroupEmbeddedProjects(t *testing.T, out Output) {
 // for absent sub-objects, so omitempty drops them from the output.
 func TestToOutput_NilNestedObjects(t *testing.T) {
 	out := ToOutput(&gl.Group{ID: 1, Name: "x"})
-	if out.Statistics != nil || out.DefaultBranchProtectionDefaults != nil {
+	if out.Statistics != nil || out.RootStorageStatistics != nil || out.DefaultBranchProtectionDefaults != nil {
 		t.Errorf("expected nil nested objects, got %+v", out)
 	}
 	if out.CustomAttributes != nil || out.SharedWithGroups != nil || out.LDAPGroupLinks != nil {

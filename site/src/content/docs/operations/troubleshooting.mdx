@@ -99,11 +99,11 @@ export NO_PROXY=localhost,127.0.0.1,.internal.corp
 
 When running the MCP server behind nginx, Caddy, or a cloud load balancer:
 
-| Symptom                                        | Cause                                            | Solution                                                                                             |
-| ---------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Symptom                                        | Cause                                            | Solution                                                                                                |
+| ---------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | Rate limiter counts all requests as one client | Reads load-balancer IP instead of real client IP | Set `--trusted-proxy-header` to the header your proxy sets (e.g. `X-Forwarded-For`, `CF-Connecting-IP`) |
-| WebSocket or SSE disconnected                  | Proxy read timeout too short                     | Increase proxy read timeout to at least 120s for long-running MCP streams                            |
-| `502 Bad Gateway`                              | Server not listening yet                         | Add a startup probe or retry; the server needs a few seconds to initialize on first request          |
+| WebSocket or SSE disconnected                  | Proxy read timeout too short                     | Increase proxy read timeout to at least 120s for long-running MCP streams                               |
+| `502 Bad Gateway`                              | Server not listening yet                         | Add a startup probe or retry; the server needs a few seconds to initialize on first request             |
 
 ## Tool discovery
 

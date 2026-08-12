@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,012 |
-| Unit test functions                                   | 11,637 |
+| Total test functions                                  | 12,014 |
+| Unit test functions                                   | 11,639 |
 | E2E test functions                                    |    375 |
 | cmd test functions                                    |    955 |
 | Test files (internal/)                                |    459 |
@@ -37,7 +37,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 10,538 | 87.7% |
 | `TestFunc` (no underscore)             |    963 |  8.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |    511 |  4.3% |
+| `TestFunc_Scenario_Expected` (3+ part) |    513 |  4.3% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,054 |        101 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         13 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          8,343 |        345 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          8,345 |        345 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            375 |        168 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            955 |         68 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,012** |    **695** |                                                                                                 |
+| **Total**               |     **12,014** |    **695** |                                                                                                 |
 
 ### Core Packages
 
@@ -101,9 +101,9 @@
 | snippets          |    89 |    99.5% |    15 |
 | workitems         |    89 |    97.2% |     6 |
 | mrapprovals       |    85 |   100.0% |     7 |
+| integrations      |    84 |    98.8% |    12 |
 | tags              |    83 |   100.0% |     9 |
 | groupmembers      |    82 |   100.0% |    10 |
-| integrations      |    82 |    98.8% |    12 |
 
 ### Complete Tool Sub-Package Test Counts
 
@@ -197,7 +197,7 @@
 | impersonationtokens     |        40 |          2 |   100.0% |         5 |
 | importservice           |        31 |          1 |   100.0% |         5 |
 | instancevariables       |        41 |          2 |   100.0% |         5 |
-| integrations            |        82 |          4 |    98.8% |        12 |
+| integrations            |        84 |          4 |    98.8% |        12 |
 | invites                 |        40 |          1 |   100.0% |         4 |
 | issuediscussions        |        44 |          2 |   100.0% |         6 |
 | issuelinks              |        68 |          3 |   100.0% |         4 |
@@ -287,7 +287,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        89 |          2 |    97.2% |         6 |
-| **Total**               | **8,343** |    **345** |          | **1,169** |
+| **Total**               | **8,345** |    **345** |          | **1,169** |
 
 </details>
 
@@ -301,7 +301,7 @@
 | cmd/audit_1to1/internal/actions                |    87.7% |
 | cmd/audit_1to1/internal/merge                  |    85.4% |
 | cmd/audit_1to1/internal/metadata               |    69.1% |
-| cmd/audit_1to1/internal/structs                |    95.0% |
+| cmd/audit_1to1/internal/structs                |    95.3% |
 | cmd/audit_catalog_first                        |    80.5% |
 | cmd/audit_discovery_completeness               |    77.9% |
 | cmd/audit_doc_coverage                         |    81.6% |

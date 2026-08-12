@@ -15,28 +15,28 @@ faq:
 
 import FAQ from "../../../components/FAQ.astro";
 import {
-	CardGrid,
-	LinkCard,
-	Tabs,
-	TabItem,
+  CardGrid,
+  LinkCard,
+  Tabs,
+  TabItem,
 } from "@astrojs/starlight/components";
 
 <CardGrid>
-	<LinkCard
-		title="CI/CD Workflows"
-		href="/gitlab-mcp-server/examples/ci-cd-workflows/"
-		description="Step-by-step pipeline monitoring and management"
-	/>
-	<LinkCard
-		title="Code Review Workflows"
-		href="/gitlab-mcp-server/examples/code-review-workflows/"
-		description="MR lifecycle, review, and approval"
-	/>
-	<LinkCard
-		title="Issue Management"
-		href="/gitlab-mcp-server/examples/issue-management/"
-		description="Triage, tracking, and project management"
-	/>
+  <LinkCard
+    title="CI/CD Workflows"
+    href="/gitlab-mcp-server/examples/ci-cd-workflows/"
+    description="Step-by-step pipeline monitoring and management"
+  />
+  <LinkCard
+    title="Code Review Workflows"
+    href="/gitlab-mcp-server/examples/code-review-workflows/"
+    description="MR lifecycle, review, and approval"
+  />
+  <LinkCard
+    title="Issue Management"
+    href="/gitlab-mcp-server/examples/issue-management/"
+    description="Triage, tracking, and project management"
+  />
 </CardGrid>
 
 This is a quick reference of natural language prompts you can use with any AI assistant connected to GitLab MCP Server, grouped by domain. Type the prompt in plain English and the server translates it into the right GitLab API operation automatically — the tabs below show which meta-tool and `action` each prompt maps to, across project management, code review, CI/CD, releases, and search.

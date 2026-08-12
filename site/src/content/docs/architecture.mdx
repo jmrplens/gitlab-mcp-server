@@ -159,13 +159,13 @@ The AI sends an `action` parameter to select the operation:
 
 ```json
 {
-	"tool": "gitlab_issue",
-	"arguments": {
-		"action": "create",
-		"project_id": "my-org/backend",
-		"title": "Fix N+1 query in /users",
-		"labels": "bug,performance"
-	}
+  "tool": "gitlab_issue",
+  "arguments": {
+    "action": "create",
+    "project_id": "my-org/backend",
+    "title": "Fix N+1 query in /users",
+    "labels": "bug,performance"
+  }
 }
 ```
 
@@ -231,17 +231,17 @@ Successful tool calls return a dual-format response:
 
 ```json
 {
-	"structuredContent": {
-		"type": "gitlab_issue",
-		"data": { "id": 42, "title": "Fix N+1 query", "state": "opened" },
-		"next_steps": ["View issue details", "Add labels", "Assign to user"]
-	},
-	"content": [
-		{
-			"type": "text",
-			"text": "## Issue #42: Fix N+1 query\n\n**State:** opened\n**Author:** @alice\n..."
-		}
-	]
+  "structuredContent": {
+    "type": "gitlab_issue",
+    "data": { "id": 42, "title": "Fix N+1 query", "state": "opened" },
+    "next_steps": ["View issue details", "Add labels", "Assign to user"]
+  },
+  "content": [
+    {
+      "type": "text",
+      "text": "## Issue #42: Fix N+1 query\n\n**State:** opened\n**Author:** @alice\n..."
+    }
+  ]
 }
 ```
 
@@ -280,7 +280,7 @@ The [full ADR index](https://github.com/jmrplens/gitlab-mcp-server/blob/main/doc
 - [JSON-RPC 2.0 specification](https://www.jsonrpc.org/specification) — the wire format used over stdio and HTTP
 - [GitLab REST API v4](https://docs.gitlab.com/api/rest/) and [GraphQL API](https://docs.gitlab.com/api/graphql/) — the GitLab API surfaces the server translates tool calls into
 - [`modelcontextprotocol/go-sdk`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp) (v1.7.0) — the official Go MCP SDK that implements tool, resource and prompt registration and both transports
-- [`gitlab-org/api/client-go`](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2) (v2.53.0) — GitLab's own Go API client, used for every REST call; domains it does not wrap are issued as raw GraphQL
+- [`gitlab-org/api/client-go`](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2) (v2.57.0) — GitLab's own Go API client, used for every REST call; domains it does not wrap are issued as raw GraphQL
 - [`tiktoken-go/tokenizer`](https://pkg.go.dev/github.com/tiktoken-go/tokenizer) — the pure-Go cl100k_base tokenizer behind the published token-footprint measurements
 
 ## Source reference
