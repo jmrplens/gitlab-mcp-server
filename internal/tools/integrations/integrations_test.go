@@ -171,9 +171,11 @@ func TestGroupDatadogToItem_MirrorsAllSDKFields(t *testing.T) {
 			PushEvents: true, TagPushEvents: true, VulnerabilityEvents: true,
 			WikiPageEvents: true, CommentOnEventEnabled: true, Inherited: true,
 		},
-		APIURL: "https://api.datadoghq.com", DatadogEnv: "prod",
-		DatadogService: "svc", DatadogSite: "datadoghq.com", DatadogTags: "team:core",
-		ArchiveTraceEvents: &archive,
+		Properties: &gl.GroupDatadogIntegrationProperties{
+			APIURL: "https://api.datadoghq.com", DatadogEnv: "prod",
+			DatadogService: "svc", DatadogSite: "datadoghq.com", DatadogTags: "team:core",
+			DatadogCIVisibility: true, ArchiveTraceEvents: archive,
+		},
 	}
 	got := groupDatadogToItem(src)
 	flags := map[string]bool{
@@ -196,10 +198,13 @@ func TestGroupDatadogToItem_MirrorsAllSDKFields(t *testing.T) {
 			t.Fatalf("groupDatadogToItem dropped event flag %s: %+v", name, got)
 		}
 	}
-	if got.APIURL != src.APIURL || got.DatadogEnv != src.DatadogEnv ||
-		got.DatadogService != src.DatadogService || got.DatadogSite != src.DatadogSite ||
-		got.DatadogTags != src.DatadogTags {
+	if got.APIURL != src.Properties.APIURL || got.DatadogEnv != src.Properties.DatadogEnv ||
+		got.DatadogService != src.Properties.DatadogService || got.DatadogSite != src.Properties.DatadogSite ||
+		got.DatadogTags != src.Properties.DatadogTags {
 		t.Fatalf("groupDatadogToItem dropped a Datadog field: %+v", got)
+	}
+	if got.DatadogCIVisibility == nil || !*got.DatadogCIVisibility {
+		t.Fatalf("groupDatadogToItem DatadogCIVisibility = %v, want true", got.DatadogCIVisibility)
 	}
 	if got.ArchiveTraceEvents == nil || !*got.ArchiveTraceEvents {
 		t.Fatalf("groupDatadogToItem ArchiveTraceEvents = %v, want true", got.ArchiveTraceEvents)

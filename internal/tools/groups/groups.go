@@ -74,39 +74,40 @@ type Output struct {
 	LockDuoFeaturesEnabled               bool   `json:"lock_duo_features_enabled" tier:"premium"`
 	ExperimentFeaturesEnabled            bool   `json:"experiment_features_enabled" tier:"premium"`
 	// Remaining gl.Group fields (1:1 audit).
-	MembershipLock                            bool                      `json:"membership_lock" tier:"premium"`
-	MaxArtifactsSize                          int64                     `json:"max_artifacts_size,omitempty"`
-	DefaultBranchProtectionDefaults           *BranchProtectionDefaults `json:"default_branch_protection_defaults,omitempty"`
-	RepositoryStorage                         string                    `json:"repository_storage,omitempty" tier:"premium"`
-	FileTemplateProjectID                     int64                     `json:"file_template_project_id,omitempty" tier:"premium"`
-	Statistics                                *StatisticsOutput         `json:"statistics,omitempty"`
-	CustomAttributes                          []CustomAttributeOutput   `json:"custom_attributes,omitempty"`
-	ShareWithGroupLock                        bool                      `json:"share_with_group_lock"`
-	RequireTwoFactorAuth                      bool                      `json:"require_two_factor_authentication"`
-	TwoFactorGracePeriod                      int64                     `json:"two_factor_grace_period,omitempty"`
-	AutoDevopsEnabled                         bool                      `json:"auto_devops_enabled"`
-	EmailsEnabled                             bool                      `json:"emails_enabled"`
-	EmailsDisabled                            bool                      `json:"emails_disabled"`
-	MentionsDisabled                          bool                      `json:"mentions_disabled"`
-	CRMEnabled                                bool                      `json:"crm_enabled" jsonschema:"Whether Customer Relations Management (CRM) is enabled for the group"`
-	RunnersToken                              string                    `json:"runners_token,omitempty"`
-	SharedWithGroups                          []SharedWithGroupOutput   `json:"shared_with_groups,omitempty"`
-	LDAPCN                                    string                    `json:"ldap_cn,omitempty" tier:"premium"`
-	LDAPAccess                                int                       `json:"ldap_access,omitempty" tier:"premium"`
-	LDAPGroupLinks                            []LDAPGroupLinkOutput     `json:"ldap_group_links,omitempty"`
-	SAMLGroupLinks                            []SAMLGroupLinkOutput     `json:"saml_group_links,omitempty"`
-	SharedRunnersMinutesLimit                 int64                     `json:"shared_runners_minutes_limit,omitempty" tier:"premium"`
-	ExtraSharedRunnersMinutesLimit            int64                     `json:"extra_shared_runners_minutes_limit,omitempty" tier:"premium"`
-	PreventForkingOutsideGroup                bool                      `json:"prevent_forking_outside_group" tier:"premium"`
-	IPRestrictionRanges                       string                    `json:"ip_restriction_ranges,omitempty" tier:"premium"`
-	AllowedEmailDomainsList                   string                    `json:"allowed_email_domains_list,omitempty" tier:"premium"`
-	WikiAccessLevel                           string                    `json:"wiki_access_level,omitempty" tier:"premium"`
-	OnlyAllowMergeIfPipelineSucceeds          bool                      `json:"only_allow_merge_if_pipeline_succeeds" tier:"premium"`
-	AllowMergeOnSkippedPipeline               bool                      `json:"allow_merge_on_skipped_pipeline" tier:"premium"`
-	OnlyAllowMergeIfAllDiscussionsAreResolved bool                      `json:"only_allow_merge_if_all_discussions_are_resolved" tier:"premium"`
-	DefaultBranchProtection                   int64                     `json:"default_branch_protection,omitempty"`
-	Projects                                  []ProjectItem             `json:"projects,omitempty"`
-	SharedProjects                            []ProjectItem             `json:"shared_projects,omitempty"`
+	MembershipLock                            bool                         `json:"membership_lock" tier:"premium"`
+	MaxArtifactsSize                          int64                        `json:"max_artifacts_size,omitempty"`
+	DefaultBranchProtectionDefaults           *BranchProtectionDefaults    `json:"default_branch_protection_defaults,omitempty"`
+	RepositoryStorage                         string                       `json:"repository_storage,omitempty" tier:"premium"`
+	FileTemplateProjectID                     int64                        `json:"file_template_project_id,omitempty" tier:"premium"`
+	Statistics                                *StatisticsOutput            `json:"statistics,omitempty"`
+	RootStorageStatistics                     *RootStorageStatisticsOutput `json:"root_storage_statistics,omitempty"`
+	CustomAttributes                          []CustomAttributeOutput      `json:"custom_attributes,omitempty"`
+	ShareWithGroupLock                        bool                         `json:"share_with_group_lock"`
+	RequireTwoFactorAuth                      bool                         `json:"require_two_factor_authentication"`
+	TwoFactorGracePeriod                      int64                        `json:"two_factor_grace_period,omitempty"`
+	AutoDevopsEnabled                         bool                         `json:"auto_devops_enabled"`
+	EmailsEnabled                             bool                         `json:"emails_enabled"`
+	EmailsDisabled                            bool                         `json:"emails_disabled"`
+	MentionsDisabled                          bool                         `json:"mentions_disabled"`
+	CRMEnabled                                bool                         `json:"crm_enabled" jsonschema:"Whether Customer Relations Management (CRM) is enabled for the group"`
+	RunnersToken                              string                       `json:"runners_token,omitempty"`
+	SharedWithGroups                          []SharedWithGroupOutput      `json:"shared_with_groups,omitempty"`
+	LDAPCN                                    string                       `json:"ldap_cn,omitempty" tier:"premium"`
+	LDAPAccess                                int                          `json:"ldap_access,omitempty" tier:"premium"`
+	LDAPGroupLinks                            []LDAPGroupLinkOutput        `json:"ldap_group_links,omitempty"`
+	SAMLGroupLinks                            []SAMLGroupLinkOutput        `json:"saml_group_links,omitempty"`
+	SharedRunnersMinutesLimit                 int64                        `json:"shared_runners_minutes_limit,omitempty" tier:"premium"`
+	ExtraSharedRunnersMinutesLimit            int64                        `json:"extra_shared_runners_minutes_limit,omitempty" tier:"premium"`
+	PreventForkingOutsideGroup                bool                         `json:"prevent_forking_outside_group" tier:"premium"`
+	IPRestrictionRanges                       string                       `json:"ip_restriction_ranges,omitempty" tier:"premium"`
+	AllowedEmailDomainsList                   string                       `json:"allowed_email_domains_list,omitempty" tier:"premium"`
+	WikiAccessLevel                           string                       `json:"wiki_access_level,omitempty" tier:"premium"`
+	OnlyAllowMergeIfPipelineSucceeds          bool                         `json:"only_allow_merge_if_pipeline_succeeds" tier:"premium"`
+	AllowMergeOnSkippedPipeline               bool                         `json:"allow_merge_on_skipped_pipeline" tier:"premium"`
+	OnlyAllowMergeIfAllDiscussionsAreResolved bool                         `json:"only_allow_merge_if_all_discussions_are_resolved" tier:"premium"`
+	DefaultBranchProtection                   int64                        `json:"default_branch_protection,omitempty"`
+	Projects                                  []ProjectItem                `json:"projects,omitempty"`
+	SharedProjects                            []ProjectItem                `json:"shared_projects,omitempty"`
 }
 
 // StatisticsOutput mirrors gl.Statistics (the statistics object, returned when
@@ -123,6 +124,26 @@ type StatisticsOutput struct {
 	SnippetsSize          int64 `json:"snippets_size"`
 	UploadsSize           int64 `json:"uploads_size"`
 	ContainerRegistrySize int64 `json:"container_registry_size"`
+}
+
+// RootStorageStatisticsOutput mirrors gl.RootStorageStatistics (the
+// root_storage_statistics object, aggregated over the whole hierarchy of a
+// top-level group). It is only returned for top-level groups when statistics
+// are requested; unlike Statistics it also reports the container registry and
+// dependency proxy sizes.
+type RootStorageStatisticsOutput struct {
+	BuildArtifactsSize               int64 `json:"build_artifacts_size"`
+	ContainerRegistrySize            int64 `json:"container_registry_size"`
+	ContainerRegistrySizeIsEstimated bool  `json:"container_registry_size_is_estimated"`
+	DependencyProxySize              int64 `json:"dependency_proxy_size"`
+	LFSObjectsSize                   int64 `json:"lfs_objects_size"`
+	PackagesSize                     int64 `json:"packages_size"`
+	PipelineArtifactsSize            int64 `json:"pipeline_artifacts_size"`
+	RepositorySize                   int64 `json:"repository_size"`
+	SnippetsSize                     int64 `json:"snippets_size"`
+	StorageSize                      int64 `json:"storage_size"`
+	UploadsSize                      int64 `json:"uploads_size"`
+	WikiSize                         int64 `json:"wiki_size"`
 }
 
 // CustomAttributeOutput mirrors gl.CustomAttribute (a custom_attributes entry).
@@ -336,6 +357,7 @@ func ToOutput(g *gl.Group) Output {
 	out.OnlyAllowMergeIfAllDiscussionsAreResolved = g.OnlyAllowMergeIfAllDiscussionsAreResolved
 	out.DefaultBranchProtection = g.DefaultBranchProtection //nolint:staticcheck // SA1019: mirror deprecated SDK field for 1:1 API coverage
 	out.Statistics = statisticsOutput(g.Statistics)
+	out.RootStorageStatistics = rootStorageStatisticsOutput(g.RootStorageStatistics)
 	out.DefaultBranchProtectionDefaults = branchProtectionDefaultsOutput(g.DefaultBranchProtectionDefaults)
 	out.CustomAttributes = customAttributesOutput(g.CustomAttributes)
 	out.SharedWithGroups = sharedWithGroupsOutput(g.SharedWithGroups)
@@ -363,6 +385,28 @@ func statisticsOutput(s *gl.Statistics) *StatisticsOutput {
 		SnippetsSize:          s.SnippetsSize,
 		UploadsSize:           s.UploadsSize,
 		ContainerRegistrySize: s.ContainerRegistrySize,
+	}
+}
+
+// rootStorageStatisticsOutput mirrors a gl.RootStorageStatistics into the
+// local output shape.
+func rootStorageStatisticsOutput(s *gl.RootStorageStatistics) *RootStorageStatisticsOutput {
+	if s == nil {
+		return nil
+	}
+	return &RootStorageStatisticsOutput{
+		BuildArtifactsSize:               s.BuildArtifactsSize,
+		ContainerRegistrySize:            s.ContainerRegistrySize,
+		ContainerRegistrySizeIsEstimated: s.ContainerRegistrySizeIsEstimated,
+		DependencyProxySize:              s.DependencyProxySize,
+		LFSObjectsSize:                   s.LFSObjectsSize,
+		PackagesSize:                     s.PackagesSize,
+		PipelineArtifactsSize:            s.PipelineArtifactsSize,
+		RepositorySize:                   s.RepositorySize,
+		SnippetsSize:                     s.SnippetsSize,
+		StorageSize:                      s.StorageSize,
+		UploadsSize:                      s.UploadsSize,
+		WikiSize:                         s.WikiSize,
 	}
 }
 
