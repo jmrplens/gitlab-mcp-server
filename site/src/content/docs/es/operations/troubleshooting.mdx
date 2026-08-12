@@ -99,11 +99,11 @@ export NO_PROXY=localhost,127.0.0.1,.internal.corp
 
 Cuando se ejecuta el servidor MCP detrás de nginx, Caddy, o un balanceador cloud:
 
-| Síntoma                                                          | Causa                                                     | Solución                                                                                                         |
-| ---------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Síntoma                                                          | Causa                                                     | Solución                                                                                                            |
+| ---------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | El rate limiter cuenta todas las peticiones como un solo cliente | Lee la IP del balanceador en lugar de la del cliente real | Establece `--trusted-proxy-header` a la cabecera que tu proxy establece (ej. `X-Forwarded-For`, `CF-Connecting-IP`) |
-| WebSocket o SSE desconectado                                     | Timeout de lectura del proxy demasiado corto              | Aumenta el timeout de lectura del proxy a al menos 120s para streams MCP de larga duración                       |
-| `502 Bad Gateway`                                                | El servidor aún no está escuchando                        | Añade un startup probe o reintento; el servidor necesita unos segundos para inicializarse en la primera petición |
+| WebSocket o SSE desconectado                                     | Timeout de lectura del proxy demasiado corto              | Aumenta el timeout de lectura del proxy a al menos 120s para streams MCP de larga duración                          |
+| `502 Bad Gateway`                                                | El servidor aún no está escuchando                        | Añade un startup probe o reintento; el servidor necesita unos segundos para inicializarse en la primera petición    |
 
 ## Descubrimiento de herramientas
 

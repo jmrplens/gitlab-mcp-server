@@ -92,11 +92,11 @@ func TestGetGroupDatadog_Success(t *testing.T) {
 	}
 }
 
-// TestGetGroupDatadog_LegacyFlatResponse verifies the fallback for older GitLab
+// TestGetGroupDatadog_LegacyFlatResponse_MapsFlatFields verifies the fallback for older GitLab
 // servers whose payload has no "properties" object and carries the Datadog
 // values as deprecated top-level fields. The values must still round-trip, and
 // DatadogCIVisibility must stay nil (absent) instead of fabricating false.
-func TestGetGroupDatadog_LegacyFlatResponse(t *testing.T) {
+func TestGetGroupDatadog_LegacyFlatResponse_MapsFlatFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if matchGroupDatadogPath(r.URL.Path) && r.Method == http.MethodGet {
 			w.Header().Set("Content-Type", "application/json")
@@ -437,11 +437,11 @@ func TestGroupDatadogToItem_AllFields(t *testing.T) {
 	}
 }
 
-// TestGroupDatadogToItem_DeprecatedFlatFallback verifies the converter falls
+// TestGroupDatadogToItem_DeprecatedFlatFallback_CopiesFlatFields verifies the converter falls
 // back to the deprecated flat SDK fields when Properties is nil (older GitLab
 // servers). The flat values must be copied and DatadogCIVisibility must stay
 // nil since legacy responses never carry it.
-func TestGroupDatadogToItem_DeprecatedFlatFallback(t *testing.T) {
+func TestGroupDatadogToItem_DeprecatedFlatFallback_CopiesFlatFields(t *testing.T) {
 	archive := true
 	src := &gl.GroupDatadogIntegration{
 		Integration: gl.Integration{ID: 99, Title: "Datadog", Slug: "datadog", Active: true},

@@ -106,10 +106,10 @@ sequenceDiagram
 
 ```json
 {
-	"tool": "gitlab_orbit",
-	"arguments": {
-		"action": "status"
-	}
+  "tool": "gitlab_orbit",
+  "arguments": {
+    "action": "status"
+  }
 }
 ```
 
@@ -117,14 +117,14 @@ sequenceDiagram
 
 ```json
 {
-	"tool": "gitlab_orbit",
-	"arguments": {
-		"action": "schema",
-		"params": {
-			"expand": ["Project", "User"],
-			"response_format": "llm"
-		}
-	}
+  "tool": "gitlab_orbit",
+  "arguments": {
+    "action": "schema",
+    "params": {
+      "expand": ["Project", "User"],
+      "response_format": "llm"
+    }
+  }
 }
 ```
 
@@ -132,10 +132,10 @@ sequenceDiagram
 
 ```json
 {
-	"tool": "gitlab_orbit",
-	"arguments": {
-		"action": "tools"
-	}
+  "tool": "gitlab_orbit",
+  "arguments": {
+    "action": "tools"
+  }
 }
 ```
 
@@ -143,13 +143,13 @@ sequenceDiagram
 
 ```json
 {
-	"tool": "gitlab_orbit",
-	"arguments": {
-		"action": "dsl",
-		"params": {
-			"response_format": "llm"
-		}
-	}
+  "tool": "gitlab_orbit",
+  "arguments": {
+    "action": "dsl",
+    "params": {
+      "response_format": "llm"
+    }
+  }
 }
 ```
 
@@ -157,24 +157,24 @@ sequenceDiagram
 
 ```json
 {
-	"tool": "gitlab_orbit",
-	"arguments": {
-		"action": "query",
-		"params": {
-			"query": {
-				"query_type": "traversal",
-				"node": {
-					"id": "p",
-					"entity": "Project",
-					"filters": {
-						"full_path": { "op": "starts_with", "value": "gitlab-org/" }
-					},
-					"columns": ["id", "full_path"]
-				}
-			},
-			"response_format": "llm"
-		}
-	}
+  "tool": "gitlab_orbit",
+  "arguments": {
+    "action": "query",
+    "params": {
+      "query": {
+        "query_type": "traversal",
+        "node": {
+          "id": "p",
+          "entity": "Project",
+          "filters": {
+            "full_path": { "op": "starts_with", "value": "gitlab-org/" }
+          },
+          "columns": ["id", "full_path"]
+        }
+      },
+      "response_format": "llm"
+    }
+  }
 }
 ```
 
@@ -182,14 +182,14 @@ sequenceDiagram
 
 ```json
 {
-	"tool": "gitlab_orbit",
-	"arguments": {
-		"action": "graph_status",
-		"params": {
-			"project_id": 278964,
-			"response_format": "llm"
-		}
-	}
+  "tool": "gitlab_orbit",
+  "arguments": {
+    "action": "graph_status",
+    "params": {
+      "project_id": 278964,
+      "response_format": "llm"
+    }
+  }
 }
 ```
 

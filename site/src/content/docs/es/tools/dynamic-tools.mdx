@@ -78,16 +78,16 @@ Añade `TOOL_SURFACE=dynamic` al entorno del servidor:
 
 ```json
 {
-	"servers": {
-		"gitlab": {
-			"type": "stdio",
-			"command": "/path/to/gitlab-mcp-server",
-			"env": {
-				"GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx",
-				"TOOL_SURFACE": "dynamic"
-			}
-		}
-	}
+  "servers": {
+    "gitlab": {
+      "type": "stdio",
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx",
+        "TOOL_SURFACE": "dynamic"
+      }
+    }
+  }
 }
 ```
 
@@ -182,11 +182,11 @@ Primero, encuentra la acción:
 
 ```json
 {
-	"tool": "gitlab_find_action",
-	"arguments": {
-		"query": "merge request list open authored by me project",
-		"limit": 5
-	}
+  "tool": "gitlab_find_action",
+  "arguments": {
+    "query": "merge request list open authored by me project",
+    "limit": 5
+  }
 }
 ```
 
@@ -194,16 +194,16 @@ Después, ejecútala:
 
 ```json
 {
-	"tool": "gitlab_execute_action",
-	"arguments": {
-		"action": "merge_request.list",
-		"params": {
-			"project_id": "my-group/my-project",
-			"state": "opened",
-			"scope": "created_by_me",
-			"per_page": 20
-		}
-	}
+  "tool": "gitlab_execute_action",
+  "arguments": {
+    "action": "merge_request.list",
+    "params": {
+      "project_id": "my-group/my-project",
+      "state": "opened",
+      "scope": "created_by_me",
+      "per_page": 20
+    }
+  }
 }
 ```
 
@@ -227,13 +227,13 @@ Sí. El modo dinámico reutiliza el mismo modelo de seguridad que las meta-herra
 
 ```json
 {
-	"tool": "gitlab_execute_action",
-	"arguments": {
-		"action": "project.delete",
-		"params": {
-			"project_id": "my-group/my-project"
-		}
-	}
+  "tool": "gitlab_execute_action",
+  "arguments": {
+    "action": "project.delete",
+    "params": {
+      "project_id": "my-group/my-project"
+    }
+  }
 }
 ```
 
@@ -241,14 +241,14 @@ Sin confirmación, el servidor devuelve un resultado de error en lugar de elimin
 
 ```json
 {
-	"tool": "gitlab_execute_action",
-	"arguments": {
-		"action": "project.delete",
-		"confirm": true,
-		"params": {
-			"project_id": "my-group/my-project"
-		}
-	}
+  "tool": "gitlab_execute_action",
+  "arguments": {
+    "action": "project.delete",
+    "confirm": true,
+    "params": {
+      "project_id": "my-group/my-project"
+    }
+  }
 }
 ```
 

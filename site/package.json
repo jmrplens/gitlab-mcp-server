@@ -2,7 +2,7 @@
   "name": "gitlab-mcp-server-docs",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "pnpm@11.17.0",
+  "packageManager": "pnpm@11.21.0",
   "engines": {
     "node": ">=24.18.0"
   },
@@ -29,25 +29,25 @@
   },
   "type": "module",
   "dependencies": {
-    "@astrojs/starlight": "^0.41.6",
-    "astro": "^7.1.6",
-    "mermaid": "^11.16.0",
+    "@astrojs/starlight": "^0.41.7",
+    "astro": "^7.2.1",
+    "mermaid": "^11.16.1",
     "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
-    "@typescript-eslint/eslint-plugin": "^8.65.0",
-    "@typescript-eslint/parser": "^8.65.0",
-    "eslint": "^10.8.0",
+    "@typescript-eslint/eslint-plugin": "^8.67.0",
+    "@typescript-eslint/parser": "^8.67.0",
+    "eslint": "^10.8.1",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-astro": "^3.0.1",
-    "html-validate": "^11.6.1",
+    "eslint-plugin-astro": "^3.1.0",
+    "html-validate": "^11.6.2",
     "htmlhint": "^1.9.2",
     "pa11y-ci": "^4.1.1",
     "playwright": "^1.62.1",
     "prettier": "^3.9.6",
     "rehype-mermaid": "^3.0.0",
-    "starlight-links-validator": "^0.25.2",
+    "starlight-links-validator": "^0.25.3",
     "typescript": "^6.0.3"
   }
 }

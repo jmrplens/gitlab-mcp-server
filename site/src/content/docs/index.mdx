@@ -32,11 +32,11 @@ faq:
 ---
 
 import {
-	Card,
-	CardGrid,
-	LinkCard,
-	Tabs,
-	TabItem,
+  Card,
+  CardGrid,
+  LinkCard,
+  Tabs,
+  TabItem,
 } from "@astrojs/starlight/components";
 import FAQ from "../../components/FAQ.astro";
 import stats from "../../data/stats.json";
@@ -121,61 +121,61 @@ The server translates these requests into GitLab API calls, executes them, and r
 Try these with your AI assistant once GitLab MCP Server is connected:
 
 <Tabs>
-	<TabItem label="Projects & Code">
-		- _"List my GitLab projects"_ - _"Show the README of project my-app"_ -
-		_"Search for TODO comments across the codebase"_
-	</TabItem>
-	<TabItem label="Merge Requests">
-		- _"Show open merge requests in my-app"_ - _"Summarize the changes in MR
-		!42"_ - _"Is MR !15 safe to merge? Check for security issues"_
-	</TabItem>
-	<TabItem label="Issues & Planning">
-		- _"List open issues assigned to me"_ - _"Create a bug report titled 'Fix
-		login page' with label 'bug'"_ - _"What's the progress on milestone v2.0?"_
-	</TabItem>
-	<TabItem label="CI/CD & Pipelines">
-		- _"What's the latest pipeline status for my-app?"_ - _"Why did the last
-		pipeline fail?"_ - _"Show the CI variables for project my-app"_
-	</TabItem>
-	<TabItem label="Reports & Analysis">
-		- _"Generate release notes from v1.0 to v2.0"_ - _"Give me a daily standup
-		summary"_ - _"Assess the risk of merge request !23"_
-	</TabItem>
+  <TabItem label="Projects & Code">
+    - _"List my GitLab projects"_ - _"Show the README of project my-app"_ -
+    _"Search for TODO comments across the codebase"_
+  </TabItem>
+  <TabItem label="Merge Requests">
+    - _"Show open merge requests in my-app"_ - _"Summarize the changes in MR
+    !42"_ - _"Is MR !15 safe to merge? Check for security issues"_
+  </TabItem>
+  <TabItem label="Issues & Planning">
+    - _"List open issues assigned to me"_ - _"Create a bug report titled 'Fix
+    login page' with label 'bug'"_ - _"What's the progress on milestone v2.0?"_
+  </TabItem>
+  <TabItem label="CI/CD & Pipelines">
+    - _"What's the latest pipeline status for my-app?"_ - _"Why did the last
+    pipeline fail?"_ - _"Show the CI variables for project my-app"_
+  </TabItem>
+  <TabItem label="Reports & Analysis">
+    - _"Generate release notes from v1.0 to v2.0"_ - _"Give me a daily standup
+    summary"_ - _"Assess the risk of merge request !23"_
+  </TabItem>
 </Tabs>
 
 ## Get started
 
 <CardGrid>
-	<LinkCard
-		title="Getting Started"
-		href="/gitlab-mcp-server/getting-started/"
-		description="Install the binary and connect to your first AI client in minutes"
-	/>
-	<LinkCard
-		title="Setup Wizard"
-		href="/gitlab-mcp-server/setup-wizard/"
-		description="Configure stdio clients with the Web, TUI, or CLI wizard"
-	/>
-	<LinkCard
-		title="Architecture"
-		href="/gitlab-mcp-server/architecture/"
-		description="Understand how the server connects AI assistants to GitLab"
-	/>
-	<LinkCard
-		title="Configuration"
-		href="/gitlab-mcp-server/configuration/"
-		description="Environment variables, client configs, and deployment options"
-	/>
-	<LinkCard
-		title="Tools Reference"
-		href="/gitlab-mcp-server/tools/overview/"
-		description="Browse all available MCP tools by domain"
-	/>
-	<LinkCard
-		title="Dynamic Toolset"
-		href="/gitlab-mcp-server/tools/dynamic-tools/"
-		description="Use the low-token find and execute mode"
-	/>
+  <LinkCard
+    title="Getting Started"
+    href="/gitlab-mcp-server/getting-started/"
+    description="Install the binary and connect to your first AI client in minutes"
+  />
+  <LinkCard
+    title="Setup Wizard"
+    href="/gitlab-mcp-server/setup-wizard/"
+    description="Configure stdio clients with the Web, TUI, or CLI wizard"
+  />
+  <LinkCard
+    title="Architecture"
+    href="/gitlab-mcp-server/architecture/"
+    description="Understand how the server connects AI assistants to GitLab"
+  />
+  <LinkCard
+    title="Configuration"
+    href="/gitlab-mcp-server/configuration/"
+    description="Environment variables, client configs, and deployment options"
+  />
+  <LinkCard
+    title="Tools Reference"
+    href="/gitlab-mcp-server/tools/overview/"
+    description="Browse all available MCP tools by domain"
+  />
+  <LinkCard
+    title="Dynamic Toolset"
+    href="/gitlab-mcp-server/tools/dynamic-tools/"
+    description="Use the low-token find and execute mode"
+  />
 </CardGrid>
 
 ## How it works

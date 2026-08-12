@@ -76,7 +76,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--revalidate-interval`    | `15m`                        | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                                                                                                                          |
 | `--rate-limit-rps`         | `0`                          | Límite de tasa por servidor para `tools/call` en req/s (`0` = desactivado)                                                                                                                                                     |
 | `--rate-limit-burst`       | `40`                         | Tamaño máximo del token bucket cuando `--rate-limit-rps > 0`                                                                                                                                                                   |
-| `--trusted-proxy-header`   | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `CF-Connecting-IP`, `X-Forwarded-For`)                                                                                                       |
+| `--trusted-proxy-header`   | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `CF-Connecting-IP`, `X-Forwarded-For`)                                                                                                      |
 | `--stateless`              | `true`                       | HTTP streamable sin sesiones (SEP-2567 / protocolo 2026-07-28): sin seguimiento de `Mcp-Session-Id`, cada POST es autónomo, GET/DELETE devuelven `405`. Usa `--stateless=false` para sesiones con estado heredadas             |
 | `--json-response`          | `false`                      | Devuelve cuerpos `application/json` en lugar de `text/event-stream` (SSE)                                                                                                                                                      |
 | `--max-request-body-bytes` | `0`                          | Tamaño máximo del cuerpo de las peticiones HTTP streamable en bytes; `0` usa el valor por defecto del SDK (4 MiB); los valores negativos se rechazan al arrancar. Los cuerpos que lo superan se rechazan con `413`             |
@@ -151,16 +151,16 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth
 
 ```json
 {
-	"servers": {
-		"gitlab": {
-			"type": "http",
-			"url": "http://tu-servidor:8080/mcp",
-			"oauth": {
-				"clientId": "TU_APPLICATION_ID_DE_GITLAB",
-				"scopes": ["api"]
-			}
-		}
-	}
+  "servers": {
+    "gitlab": {
+      "type": "http",
+      "url": "http://tu-servidor:8080/mcp",
+      "oauth": {
+        "clientId": "TU_APPLICATION_ID_DE_GITLAB",
+        "scopes": ["api"]
+      }
+    }
+  }
 }
 ```
 
@@ -331,15 +331,15 @@ Añadir a `.vscode/mcp.json`:
 
 ```json
 {
-	"servers": {
-		"gitlab": {
-			"type": "http",
-			"url": "http://tu-servidor:8080/mcp",
-			"headers": {
-				"PRIVATE-TOKEN": "glpat-tu-token"
-			}
-		}
-	}
+  "servers": {
+    "gitlab": {
+      "type": "http",
+      "url": "http://tu-servidor:8080/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "glpat-tu-token"
+      }
+    }
+  }
 }
 ```
 
@@ -348,14 +348,14 @@ Añadir a `.vscode/mcp.json`:
 
 ```json
 {
-	"mcpServers": {
-		"gitlab": {
-			"url": "http://tu-servidor:8080/mcp",
-			"headers": {
-				"PRIVATE-TOKEN": "glpat-tu-token"
-			}
-		}
-	}
+  "mcpServers": {
+    "gitlab": {
+      "url": "http://tu-servidor:8080/mcp",
+      "headers": {
+        "PRIVATE-TOKEN": "glpat-tu-token"
+      }
+    }
+  }
 }
 ```
 

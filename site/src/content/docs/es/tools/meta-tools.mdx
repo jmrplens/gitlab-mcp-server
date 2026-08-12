@@ -74,10 +74,10 @@ Las meta-herramientas usan un sobre común, y la forma exacta de `params` para c
 
 ```json
 {
-	"action": "create",
-	"params": {
-		"project_id": "42"
-	}
+  "action": "create",
+  "params": {
+    "project_id": "42"
+  }
 }
 ```
 
@@ -92,19 +92,19 @@ Ejemplos de lectura de recursos:
 
 ```json
 {
-	"method": "resources/read",
-	"params": {
-		"uri": "gitlab://tools"
-	}
+  "method": "resources/read",
+  "params": {
+    "uri": "gitlab://tools"
+  }
 }
 ```
 
 ```json
 {
-	"method": "resources/read",
-	"params": {
-		"uri": "gitlab://tools/gitlab_merge_request.create"
-	}
+  "method": "resources/read",
+  "params": {
+    "uri": "gitlab://tools/gitlab_merge_request.create"
+  }
 }
 ```
 
@@ -116,18 +116,18 @@ La respuesta del detalle por acción incluye el schema de `params` y la forma de
 
 ```json
 {
-	"tool": "gitlab_issue",
-	"arguments": {
-		"action": "create",
-		"params": {
-			"project_id": "my-group/my-project",
-			"title": "Update API documentation",
-			"description": "The REST API docs are missing the new v2 endpoints",
-			"labels": "documentation,api",
-			"assignee_ids": "42",
-			"milestone_id": 7
-		}
-	}
+  "tool": "gitlab_issue",
+  "arguments": {
+    "action": "create",
+    "params": {
+      "project_id": "my-group/my-project",
+      "title": "Update API documentation",
+      "description": "The REST API docs are missing the new v2 endpoints",
+      "labels": "documentation,api",
+      "assignee_ids": "42",
+      "milestone_id": 7
+    }
+  }
 }
 ```
 
@@ -135,16 +135,16 @@ La respuesta del detalle por acción incluye el schema de `params` y la forma de
 
 ```json
 {
-	"tool": "gitlab_merge_request",
-	"arguments": {
-		"action": "list",
-		"params": {
-			"project_id": "my-group/my-project",
-			"state": "opened",
-			"order_by": "updated_at",
-			"per_page": 20
-		}
-	}
+  "tool": "gitlab_merge_request",
+  "arguments": {
+    "action": "list",
+    "params": {
+      "project_id": "my-group/my-project",
+      "state": "opened",
+      "order_by": "updated_at",
+      "per_page": 20
+    }
+  }
 }
 ```
 
@@ -152,14 +152,14 @@ La respuesta del detalle por acción incluye el schema de `params` y la forma de
 
 ```json
 {
-	"tool": "gitlab_search",
-	"arguments": {
-		"action": "code",
-		"params": {
-			"search": "func handleWebhook",
-			"project_id": "my-group/my-project"
-		}
-	}
+  "tool": "gitlab_search",
+  "arguments": {
+    "action": "code",
+    "params": {
+      "search": "func handleWebhook",
+      "project_id": "my-group/my-project"
+    }
+  }
 }
 ```
 
@@ -167,13 +167,13 @@ La respuesta del detalle por acción incluye el schema de `params` y la forma de
 
 ```json
 {
-	"tool": "gitlab_orbit",
-	"arguments": {
-		"action": "status",
-		"params": {
-			"response_format": "llm"
-		}
-	}
+  "tool": "gitlab_orbit",
+  "arguments": {
+    "action": "status",
+    "params": {
+      "response_format": "llm"
+    }
+  }
 }
 ```
 
