@@ -26,7 +26,11 @@ func TestMeta_MRReviewChanges(t *testing.T) {
 		t.Skip("meta session not configured")
 	}
 
-	ctx, cancel := e2eTimeoutContext(180*time.Second, 480*time.Second)
+	// The budget must exceed the sum of the waits nested inside it: setup, then
+	// DiffVersionsList's waitForMRReady plus its own diff-version deadline, both
+	// e2eTimeout(120s, 300s). An exactly-sized budget expires mid-poll instead of
+	// letting the subtest observe the version list GitLab is still preparing.
+	ctx, cancel := e2eTimeoutContext(360*time.Second, 720*time.Second)
 	defer cancel()
 
 	proj := createProjectMeta(ctx, t, sess.meta)
