@@ -89,7 +89,11 @@ func TestIndividual_MRRawDiffs(t *testing.T) {
 		t.Skip("individual session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	// The budget must exceed the sum of the waits nested inside it: project and
+	// MR setup, then waitForMRReady (up to e2eTimeout(120s, 300s)), then the raw
+	// diff poll below. waitForMRReady only logs when it times out so the poll
+	// still gets its chance, which an exactly-sized budget would deny it.
+	ctx, cancel := e2eTimeoutContext(300*time.Second, 600*time.Second)
 	defer cancel()
 
 	proj, branch := setupMRProject(ctx, t, sess.individual)
