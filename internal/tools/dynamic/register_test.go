@@ -5634,7 +5634,7 @@ func TestScoreCompareRefsIntent_PositiveCase(t *testing.T) {
 	}
 
 	// "refs" plural alternative should still match.
-	if v := scoreCompareRefsIntentValue(entry, normalizeSearchTerms("compare refs")); v == 0 {
+	if scoreCompareRefsIntentValue(entry, normalizeSearchTerms("compare refs")) == 0 {
 		t.Fatal("scoreCompareRefsIntentValue(refs) = 0, want positive score")
 	}
 
