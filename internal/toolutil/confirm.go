@@ -36,8 +36,8 @@ func isTruthy(s string) bool {
 //  1. YOLO_MODE / AUTOPILOT env var → skip confirmation entirely
 //  2. Explicit "confirm": true in params → skip confirmation
 //  3. MCP elicitation supported → ask user interactively
-//  4. Elicitation unsupported and no confirm param → return error prompting
-//     the caller to re-send with confirm: true
+//  4. Elicitation unsupported and no confirm param → fail closed: return an
+//     error result prompting the caller to re-send with confirm: true
 //
 // Returns nil if the action should proceed. Returns a non-nil *mcp.CallToolResult
 // if the action was canceled or requires explicit confirmation.
@@ -55,6 +55,22 @@ func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, par
 	if hasExplicitConfirm(params) {
 		slog.Debug("destructive action confirmed via explicit param", "tool", tool)
 		return nil
+	}
+
+	// Fail closed when the client cannot prompt: without this, every client
+	// that does not support elicitation (most non-interactive agents) would
+	// execute destructive actions silently, while the dynamic surface's own
+	// guard requires confirm=true. Mirrors that guard's contract.
+	flow, err := elicitation.FlowFromRequest(req)
+	if err != nil {
+		slog.Warn("destructive confirmation state invalid", "tool", tool, "error", err)
+		return ErrorResult(err.Error())
+	}
+	if !flow.IsSupported() {
+		slog.Warn("blocked destructive action without explicit confirmation", "tool", tool)
+		return ErrorResult(message +
+			" The connected client cannot prompt for confirmation." +
+			" Re-send with confirm=true only after the user explicitly approves this operation.")
 	}
 
 	return ConfirmAction(ctx, req, message)
@@ -81,8 +97,9 @@ func hasExplicitConfirm(params map[string]any) bool {
 
 // ConfirmAction uses MCP elicitation to ask the user for confirmation before
 // a destructive action. Returns nil if the user confirmed or elicitation is
-// unsupported (fallback: action proceeds). Returns a non-error tool result
-// if the user declined or canceled. On sessions negotiated at protocol
+// unsupported (fallback: action proceeds — destructive callers must go
+// through [ConfirmDestructiveAction], which fails closed in that case).
+// Returns a non-error tool result if the user declined or canceled. On sessions negotiated at protocol
 // >= 2026-07-28 the confirmation travels as a multi round-trip input request
 // (SEP-2322): the first pass returns an input-required result and the client
 // retries the call with the user's answer attached.

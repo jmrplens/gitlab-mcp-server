@@ -126,23 +126,47 @@ func TestConfirmDestructiveAction_ExplicitConfirm(t *testing.T) {
 }
 
 // TestConfirmDestructiveAction_NoElicitation verifies that
-// [ConfirmDestructiveAction] returns nil (proceed) when the MCP request
-// is nil, indicating elicitation is not supported by the client.
+// [ConfirmDestructiveAction] fails closed when the MCP request is nil
+// (elicitation unsupported): the action must not proceed, and the error
+// result must tell the caller how to confirm explicitly.
 func TestConfirmDestructiveAction_NoElicitation(t *testing.T) {
-	// No elicitation support (req is nil) and no confirm param → proceeds (nil)
 	result := ConfirmDestructiveAction(context.Background(), nil, nil, testConfirmPrompt)
-	if result != nil {
-		t.Errorf("expected nil (proceed) when elicitation unsupported, got result")
+	if result == nil {
+		t.Fatal("expected error result when elicitation unsupported, got nil (proceed)")
 	}
+	if !result.IsError {
+		t.Errorf("result.IsError = false, want true")
+	}
+	assertConfirmGuardText(t, result)
 }
 
 // TestConfirmDestructiveAction_RequestWithoutElicitation verifies named tool
-// requests still proceed when the client does not support elicitation.
+// requests fail closed when the client does not support elicitation.
 func TestConfirmDestructiveAction_RequestWithoutElicitation(t *testing.T) {
 	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "delete_project"}}
 	result := ConfirmDestructiveAction(context.Background(), req, nil, testConfirmPrompt)
-	if result != nil {
-		t.Fatalf("ConfirmDestructiveAction() = %+v, want nil without elicitation support", result)
+	if result == nil {
+		t.Fatal("ConfirmDestructiveAction() = nil, want fail-closed error result without elicitation support")
+	}
+	if !result.IsError {
+		t.Errorf("result.IsError = false, want true")
+	}
+	assertConfirmGuardText(t, result)
+}
+
+// assertConfirmGuardText checks the fail-closed guard result carries the
+// original prompt plus the confirm=true instruction.
+func assertConfirmGuardText(t *testing.T, result *mcp.CallToolResult) {
+	t.Helper()
+	if len(result.Content) != 1 {
+		t.Fatalf("guard content length = %d, want 1", len(result.Content))
+	}
+	tc, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("guard content is %T, want *mcp.TextContent", result.Content[0])
+	}
+	if !strings.Contains(tc.Text, testConfirmPrompt) || !strings.Contains(tc.Text, "confirm=true") {
+		t.Errorf("guard text = %q, want prompt and confirm=true instruction", tc.Text)
 	}
 }
 

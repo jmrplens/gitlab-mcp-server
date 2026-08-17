@@ -2126,8 +2126,9 @@ func TestMakeMetaHandler_NonDestructiveSkipsConfirm(t *testing.T) {
 }
 
 // TestMakeMetaHandler_DestructiveNoElicitation verifies that when the client
-// does not support elicitation (nil request), destructive actions proceed
-// without blocking — backward compatibility.
+// does not support elicitation, destructive actions fail closed: the handler
+// must not run, and the error result must instruct the caller to re-send
+// with confirm=true. With confirm=true the same call proceeds.
 func TestMakeMetaHandler_DestructiveNoElicitation(t *testing.T) {
 	called := false
 	routes := ActionMap{
@@ -2137,14 +2138,28 @@ func TestMakeMetaHandler_DestructiveNoElicitation(t *testing.T) {
 		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
-	input := MetaToolInput{Action: "delete", Params: map[string]any{}}
 	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "test_tool"}}
-	_, _, err := handler(context.Background(), req, input)
+
+	result, _, err := handler(context.Background(), req, MetaToolInput{Action: "delete", Params: map[string]any{}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if called {
+		t.Fatal("handler was called — destructive action must fail closed when elicitation is unsupported")
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("result = %+v, want fail-closed error result", result)
+	}
+	if tc, ok := result.Content[0].(*mcp.TextContent); !ok || !strings.Contains(tc.Text, "confirm=true") {
+		t.Errorf("guard result content = %+v, want confirm=true instruction", result.Content[0])
+	}
+
+	_, _, err = handler(context.Background(), req, MetaToolInput{Action: "delete", Params: map[string]any{"confirm": true}})
+	if err != nil {
+		t.Fatalf("unexpected error with confirm=true: %v", err)
+	}
 	if !called {
-		t.Error("handler was not called — should proceed when elicitation unsupported")
+		t.Error("handler was not called — confirm=true must bypass the guard")
 	}
 }
 
@@ -2423,17 +2438,28 @@ func TestMakeMetaHandler_MetadataDestructive_TriggersConfirm(t *testing.T) {
 		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
-	input := MetaToolInput{Action: "delete", Params: map[string]any{"id": float64(1)}}
 	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "test_tool"}}
 
-	// Without confirm=true, handler should still be called (elicitation unsupported in tests)
-	// but the route is recognized as destructive.
-	result, _, err := handler(context.Background(), req, input)
+	// Without confirm=true and without elicitation support, the destructive
+	// route must fail closed before reaching the handler.
+	result, _, err := handler(context.Background(), req, MetaToolInput{Action: "delete", Params: map[string]any{"id": float64(1)}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if called {
+		t.Fatal("handler was called without confirmation")
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("result = %+v, want fail-closed error result", result)
+	}
+
+	// confirm=true bypasses the guard and reaches the handler.
+	result, _, err = handler(context.Background(), req, MetaToolInput{Action: "delete", Params: map[string]any{"id": float64(1), "confirm": true}})
+	if err != nil {
+		t.Fatalf("unexpected error with confirm=true: %v", err)
+	}
 	if !called {
-		t.Error("handler was not called")
+		t.Error("handler was not called with confirm=true")
 	}
 	if result == nil {
 		t.Fatal("result is nil")

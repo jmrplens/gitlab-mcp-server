@@ -54,6 +54,10 @@ type sessions struct {
 	meta        *mcp.ClientSession
 	dynamic     *mcp.ClientSession
 	elicitation *mcp.ClientSession
+	// noElicit is an individual-tools session whose client does not declare
+	// the elicitation capability, used to verify destructive actions fail
+	// closed for clients that cannot prompt interactively.
+	noElicit    *mcp.ClientSession
 	safeMode    *mcp.ClientSession
 	safeModeDyn *mcp.ClientSession
 	readOnly    *mcp.ClientSession
@@ -138,10 +142,15 @@ type e2eRuntime struct {
 
 func startE2ERuntime(glClient *gitlabclient.Client, enterprise bool) e2eRuntime {
 	runtime := e2eRuntime{}
-	runtime.sessions.individual = mustStartE2ESession(&runtime, "individual", "gitlab-mcp-server-e2e", "e2e-test-client", nil, configureIndividualE2EServer(glClient, enterprise))
-	runtime.sessions.meta = mustStartE2ESession(&runtime, "meta", "gitlab-mcp-server-e2e-meta", "e2e-test-meta-client", nil, configureMetaE2EServer(glClient, enterprise))
+	// The individual and meta workflow sessions declare the auto-accepting
+	// elicitation handler: destructive tools fail closed for clients that
+	// cannot prompt (see sessions.noElicit), so the workflow suites confirm
+	// each destructive call through the interactive elicitation path instead.
+	runtime.sessions.individual = mustStartE2ESession(&runtime, "individual", "gitlab-mcp-server-e2e", "e2e-test-client", elicitationClientOptions(), configureIndividualE2EServer(glClient, enterprise))
+	runtime.sessions.meta = mustStartE2ESession(&runtime, "meta", "gitlab-mcp-server-e2e-meta", "e2e-test-meta-client", elicitationClientOptions(), configureMetaE2EServer(glClient, enterprise))
 	runtime.sessions.dynamic = mustStartE2ESession(&runtime, "dynamic", "gitlab-mcp-server-e2e-dynamic", "e2e-test-dynamic-client", nil, configureDynamicE2EServer(glClient, enterprise))
 	runtime.sessions.elicitation = mustStartE2ESession(&runtime, "elicitation", "gitlab-mcp-server-e2e-elicit", "e2e-test-elicit-client", elicitationClientOptions(), configureToolOnlyE2EServer(glClient, enterprise))
+	runtime.sessions.noElicit = mustStartE2ESession(&runtime, "no-elicitation", "gitlab-mcp-server-e2e-noelicit", "e2e-test-noelicit-client", nil, configureToolOnlyE2EServer(glClient, enterprise))
 	runtime.sessions.safeMode = mustStartE2ESession(&runtime, "safemode", "gitlab-mcp-server-e2e-safemode", "e2e-test-safemode-client", nil, configureSafeModeE2EServer(glClient, enterprise))
 	runtime.sessions.safeModeDyn = mustStartE2ESession(&runtime, "safemode-dynamic", "gitlab-mcp-server-e2e-safemode-dyn", "e2e-test-safemode-dyn-client", nil, configureDynamicModeE2EServer(glClient, enterprise, dynamicModeSafe))
 	runtime.sessions.readOnly = mustStartE2ESession(&runtime, "readonly", "gitlab-mcp-server-e2e-readonly", "e2e-test-readonly-client", nil, configureReadOnlyE2EServer(glClient, enterprise))

@@ -275,7 +275,7 @@ See [Output Format](../reference/output-format.md) for the complete response for
 }
 ```
 
-If the MCP client supports elicitation, the server will ask for user confirmation before executing destructive actions. Set `YOLO_MODE=true` or `AUTOPILOT=true` to skip confirmation.
+If the MCP client supports elicitation, the server will ask for user confirmation before executing destructive actions. If the client cannot prompt (no elicitation capability), the call fails closed with an error asking to re-send with `"confirm": true`. Set `YOLO_MODE=true` or `AUTOPILOT=true` to skip confirmation.
 
 ---
 
