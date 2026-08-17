@@ -88,6 +88,8 @@ For deployments using the dynamic tool surface where resources and prompts domin
 
 | Variable                         | Default | Description                                                                                   |
 | -------------------------------- | ------- | --------------------------------------------------------------------------------------------- |
+| `CLIENT_COMPAT`                  | `auto`  | Per-client response compatibility: Codex sessions get fractional annotation priorities rounded to 0/1; `off` disables |
+| `UPLOAD_MAX_FILE_SIZE`           | `2GB`   | Size cap for upload and file tools, including raw file reads (streamed and stopped at the limit); supports `KB`/`MB`/`GB` suffixes |
 | `YOLO_MODE`                      | `false` | Skip destructive action confirmations (not recommended)                                       |
 | `AUTOPILOT`                      | `false` | Same as `YOLO_MODE` — skip destructive confirmations                                          |
 | `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | —       | Additional OS path-list-separated directories allowed for local project/group import archives |

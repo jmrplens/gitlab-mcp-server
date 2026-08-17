@@ -9,6 +9,8 @@ faq:
     a: "Define el tier de licencia explícitamente o deja que el servidor lo autodetecte. En modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`; en modo HTTP pasa `--tier=premium` o `--tier=ultimate`. Cuando se omite el tier, el servidor autodetecta la edición desde `GET /license` por entrada token+URL, con valor por defecto `free`. Forzar el catálogo Enterprise/Premium añade 16 meta-herramientas exclusivas de Enterprise. Los flags heredados `GITLAB_ENTERPRISE=true` (stdio) y `--enterprise` (HTTP) siguen respetándose por compatibilidad, pero están deprecados."
   - q: "¿Qué sistemas operativos y arquitecturas se admiten?"
     a: "Hay binarios precompilados disponibles para Linux, macOS y Windows en amd64 y arm64 — seis binarios en total. macOS ofrece compilaciones separadas para Intel (amd64) y Apple Silicon (arm64). Cada plataforma es un binario estático único sin dependencias en tiempo de ejecución."
+  - q: "¿Funciona GitLab MCP Server con OpenAI Codex?"
+    a: "Sí. El servidor detecta las sesiones de Codex automáticamente y aplica un perfil de compatibilidad: las prioridades de las anotaciones de contenido se redondean a valores enteros, que es lo que exigen las builds de Codex incluidas en ChatGPT.app, mientras que el resto de campos se entrega sin cambios. Configura el servidor en ~/.codex/config.toml con default_tools_approval_mode = \"approve\" para que las ejecuciones no interactivas puedan usar herramientas de escritura, y mantén la superficie de herramientas dynamic por defecto. Usa CLIENT_COMPAT=off para desactivar la reescritura por cliente."
   - q: "¿Qué clientes MCP son compatibles con GitLab MCP Server?"
     a: "Cualquier cliente que soporte el Model Context Protocol puede usar GitLab MCP Server. Los clientes stdio probados incluyen VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code (CLI), Windsurf, IDEs de JetBrains, Zed y Kiro. Cualquier cliente Streamable HTTP puede conectarse mediante el modo HTTP. El servidor también admite recursos MCP ({{resources}}), prompts ({{prompts}}), completions ({{completions}} tipos de argumento), elicitation y notificaciones de progreso."
 ---
@@ -65,7 +67,27 @@ Cualquier cliente que soporte el transporte stdio del Model Context Protocol pue
 | JetBrains IDEs                    | stdio      |   ✅   |
 | Zed                               | stdio      |   ✅   |
 | Kiro                              | stdio      |   ✅   |
+| OpenAI Codex                      | stdio      |   ✅   |
 | Cualquier cliente Streamable HTTP | HTTP       |   ✅   |
+
+### Perfiles de compatibilidad por cliente
+
+La mayoría de los clientes ignoran los campos MCP que no entienden, así que el servidor envía su superficie completa a todos. La única excepción se gestiona automáticamente: las builds de Codex incluidas en ChatGPT.app rechazan resultados cuyas anotaciones de contenido llevan un valor `priority` fraccionario, de modo que cuando una sesión se identifica como Codex el servidor redondea esas prioridades al entero válido más cercano según la especificación. Todo lo demás — anotaciones de audiencia, contenido estructurado, esquemas de salida, iconos — se entrega sin cambios, y ningún otro cliente se ve afectado. Configura `CLIENT_COMPAT=off` para desactivar la reescritura.
+
+Para Codex, añade el servidor a `~/.codex/config.toml` con pre-aprobación de herramientas — sin ella, Codex pide confirmación en cada herramienta que no sea de solo lectura, y las ejecuciones no interactivas de `codex exec` cancelan esas llamadas:
+
+```toml title="~/.codex/config.toml"
+[mcp_servers.gitlab]
+command = "/ruta/a/gitlab-mcp-server"
+args = ["stdio"]
+default_tools_approval_mode = "approve"
+
+[mcp_servers.gitlab.env]
+GITLAB_URL = "https://gitlab.example.com"
+GITLAB_TOKEN = "glpat-xxxxxxxxxxxxxxxxxxxx"
+```
+
+Mantén la superficie de herramientas `dynamic` por defecto para clientes con límites de número de herramientas (Cursor limita cada servidor a 40 herramientas, Windsurf a 100, los clientes basados en OpenAI a 128 por petición) y deja `META_PARAM_SCHEMA` en su valor por defecto `opaque` para Codex, que recorta silenciosamente los esquemas de herramienta mayores de ~5 KB.
 
 ## Funcionalidades del protocolo MCP
 

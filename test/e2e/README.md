@@ -95,6 +95,40 @@ env GITLAB_IMAGE=gitlab/gitlab-ee:latest docker compose -f test/e2e/docker-compo
 
 Docker mode enables pipeline and job tests that require a CI runner, and starts an internal fixture service used by webhook and custom emoji tests. The setup script also writes `E2E_FIXTURE_URL` and `E2E_GITLAB_INTERNAL_URL` into `.env.docker` so CI runs all non-EE tests without public Internet dependencies.
 
+### What setup-gitlab.sh provisions
+
+Beyond the test user and PAT, the setup script prepares the instance so
+coverage that used to skip can run:
+
+- **Instance settings**: enables the `github`, `bitbucket`, and
+  `bitbucket_server` importer sources (GitLab ships with them disabled) and
+  sets `default_branch_protection=0` so unprotect-then-push flows cannot race
+  GitLab's asynchronous default-branch protection job.
+- **Container registry seed**: creates the `e2e-registry-seed` project and
+  pushes `busybox:stable` with two tags (`seed-a`, `seed-b`) through the
+  plain-HTTP registry at `localhost:5050`, recording `E2E_REGISTRY_PROJECT`
+  in `.env.docker`. The push writes its auth into a scratch `DOCKER_CONFIG`
+  instead of calling `docker login`, which needs an unlocked keychain on
+  macOS. Without a docker CLI the registry tag tests skip.
+- **GitLab Pages** is enabled in the omnibus config; the Pages write test
+  publishes a real deployment through a `pages` CI job before asserting.
+
+### Optional operator credentials
+
+Tests that talk to external services read the repository root `.env` (loaded
+as a fallback in Docker mode; `.env.docker` values keep precedence) and skip
+when unset:
+
+| Variable | Used by |
+| --- | --- |
+| `GH_TOKEN` | `import_github` / `import_cancel_github` / `import_gists` (a repository owned by the token's user is resolved via the GitHub API) |
+| `BITBUCKET_USERNAME`, `BITBUCKET_API_TOKEN`, `BITBUCKET_EMAIL`, `BITBUCKET_REPO_PATH` | Bitbucket Cloud imports (Atlassian API token created **with Bitbucket scopes**, paired with the account email) |
+| `BITBUCKET_SERVER_URL`, `BITBUCKET_SERVER_USERNAME`, `BITBUCKET_SERVER_TOKEN`, `BITBUCKET_SERVER_PROJECT_KEY`, `BITBUCKET_SERVER_REPO_SLUG` | `import_bitbucket_server` against a self-hosted Bitbucket Server |
+| `E2E_DB_MIGRATION_VERSION` | The mutating `db_migration_mark` path (only meaningful when debugging a genuinely stuck migration; the error path always runs) |
+
+Imported projects are registered for permanent deletion in the per-test
+resource ledger.
+
 ## Architecture
 
 ### Test Files

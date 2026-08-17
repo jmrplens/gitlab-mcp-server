@@ -9,6 +9,8 @@ faq:
     a: "Set the licensing tier explicitly or let the server auto-detect it. In stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`; in HTTP mode pass `--tier=premium` or `--tier=ultimate`. When the tier is omitted, the server auto-detects the edition from `GET /license` per token+URL entry, falling back to `free`. Forcing the Enterprise/Premium catalog adds 16 enterprise-only meta-tools. The legacy `GITLAB_ENTERPRISE=true` (stdio) and `--enterprise` (HTTP) flags are still honored for back-compat but are deprecated."
   - q: "Which operating systems and architectures are supported?"
     a: "Pre-built binaries are available for Linux, macOS, and Windows on both amd64 and arm64 — six binaries in total. macOS ships separate Intel (amd64) and Apple Silicon (arm64) builds. Each platform is a single static binary with no runtime dependencies."
+  - q: "Does GitLab MCP Server work with OpenAI Codex?"
+    a: "Yes. The server detects Codex sessions automatically and applies a compatibility profile: content annotation priorities are rounded to integer values, which the Codex builds bundled with ChatGPT.app require, while every other field is delivered unchanged. Configure the server in ~/.codex/config.toml with default_tools_approval_mode = \"approve\" so non-interactive runs can execute write tools, and keep the default dynamic tool surface. Set CLIENT_COMPAT=off to disable the per-client rewriting."
   - q: "Which MCP clients are compatible with GitLab MCP Server?"
     a: "Any client that supports the Model Context Protocol can use GitLab MCP Server. Tested stdio clients include VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code (CLI), Windsurf, JetBrains IDEs, Zed, and Kiro. Any Streamable HTTP client can connect through HTTP mode. The server also supports MCP resources ({{resources}}), prompts ({{prompts}}), completions ({{completions}} argument types), elicitation, and progress notifications."
 ---
@@ -65,7 +67,27 @@ Any client supporting the Model Context Protocol stdio transport can use this se
 | JetBrains IDEs             | stdio     |   ✅   |
 | Zed                        | stdio     |   ✅   |
 | Kiro                       | stdio     |   ✅   |
+| OpenAI Codex               | stdio     |   ✅   |
 | Any Streamable HTTP client | HTTP      |   ✅   |
+
+### Per-client compatibility profiles
+
+Most clients ignore MCP fields they do not understand, so the server ships its full surface to everyone. The one exception is handled automatically: the Codex builds bundled with ChatGPT.app reject results whose content annotations carry a fractional `priority` value, so when a session identifies itself as Codex the server rounds those priorities to the nearest spec-legal integer. Everything else — audience annotations, structured content, output schemas, icons — is delivered unchanged, and no other client is affected. Set `CLIENT_COMPAT=off` to disable the rewriting.
+
+For Codex, add the server to `~/.codex/config.toml` with tool pre-approval — without it, Codex asks for confirmation on every non-read-only tool, and non-interactive `codex exec` runs cancel those calls:
+
+```toml title="~/.codex/config.toml"
+[mcp_servers.gitlab]
+command = "/path/to/gitlab-mcp-server"
+args = ["stdio"]
+default_tools_approval_mode = "approve"
+
+[mcp_servers.gitlab.env]
+GITLAB_URL = "https://gitlab.example.com"
+GITLAB_TOKEN = "glpat-xxxxxxxxxxxxxxxxxxxx"
+```
+
+Keep the default `dynamic` tool surface for clients with tool-count limits (Cursor caps servers at 40 tools, Windsurf at 100, OpenAI-backed clients at 128 per request) and keep `META_PARAM_SCHEMA` at its `opaque` default for Codex, which silently trims tool schemas larger than ~5 KB.
 
 ## MCP protocol features
 
