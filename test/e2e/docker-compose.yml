@@ -97,6 +97,51 @@ services:
       retries: 30
       start_period: 30s
 
+  # e2e-bitbucket provides a real self-hosted Bitbucket Data Center for the
+  # import_bitbucket_server e2e coverage (profile "bitbucket", enabled by the
+  # CE docker target). Unattended setup is driven by bitbucket.properties
+  # written before the stock entrypoint runs; the license is Atlassian's
+  # public 3-hour timebomb Data Center test license
+  # (https://developer.atlassian.com/platform/marketplace/timebomb-licenses-for-testing-server-apps/),
+  # which comfortably outlives an ephemeral e2e run. Search is disabled (the
+  # importer only needs git + REST) and the embedded eval database is used,
+  # so the container stays at one JVM. setup-bitbucket.sh provisions the
+  # project/repo/token after boot and appends BITBUCKET_SERVER_* to
+  # .env.docker; GitLab reaches it as http://e2e-bitbucket:7990 over the
+  # compose network.
+  e2e-bitbucket:
+    image: atlassian/bitbucket:9.6
+    hostname: bitbucket-e2e
+    container_name: e2e-bitbucket
+    profiles: ["bitbucket"]
+    ports:
+      - "7990:7990"
+    environment:
+      SEARCH_ENABLED: "false"
+      JVM_MAXIMUM_MEMORY: "1024m"
+      BITBUCKET_ADMIN_PASSWORD: ${E2E_BITBUCKET_ADMIN_PASSWORD:-E2e_BB_admin1}
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        mkdir -p /var/atlassian/application-data/bitbucket/shared
+        cat > /var/atlassian/application-data/bitbucket/shared/bitbucket.properties <<PROPS
+        setup.displayName=E2E Bitbucket
+        setup.baseUrl=http://e2e-bitbucket:7990
+        setup.license=AAABrQ0ODAoPeNp9kVFvmzAQx9/9KSztLZIJZIu0RkJqA6yNViAK0G3d+uDApXgjNrKPbPn2dYG0a6fuwS8+393v//O7vAMa8yN1PerOFrPZYn5GL+OczlzvI0m6/RZ0uisMaON7LgmURF5iwvfgVy3XWpj6nGPDjRFcOqXaE4Pc1M61KEEayI8t9I+DNI6jTbC6uP73wd/FdafLmhsIOYL/yMDcOXM98p95Yyn60wp97PvW769OpFHMRfMWagb6AHoV+svLs5x9LW4+sM+3t1ds6XpfRkw7jwcgEbSPugOSdVtTatGiUHK4mUwmSZqzT+mGrTdpWAT5Kk1YkUW24AcaLFBFt0eKNdARlUayVBVo2mr1E0qk32vE9sdiOr1XzgvEaTN0MBg67hwaKioV0koY1GLbIdjJwlBUtOwMqr39KYfY1JZZclm+9jLEsmbEAZ4CBJvoIo9Ctvz2CP2GrRHe6irkL6l+S5JFiW8Pm7suSfU9l8LwXkwIB2hUaxPmYPAUm/Q2bP315w5MGXL95DmEZ839jFEE3SlNedvS6rTCkOjAm25YvOON3fMAVTj4nTAtAhRH4o+fI5MQ7xSh2mtA1bPJrq0WAgIVAIGperR8m2N0fl/GfUUJfQnd+T1aX02kk
+        setup.sysadmin.username=admin
+        setup.sysadmin.password=$${BITBUCKET_ADMIN_PASSWORD}
+        setup.sysadmin.displayName=E2E Admin
+        setup.sysadmin.emailAddress=admin@example.com
+        PROPS
+        chown -R 2003:2003 /var/atlassian/application-data/bitbucket
+        exec /usr/bin/tini -- /entrypoint.py --log=INFO
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:7990/status | grep -q RUNNING"]
+      interval: 15s
+      timeout: 5s
+      retries: 40
+      start_period: 90s
+
   e2e-fixture:
     image: nginx:alpine
     command:

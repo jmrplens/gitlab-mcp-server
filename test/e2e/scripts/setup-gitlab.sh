@@ -551,7 +551,7 @@ for _ in 1 2 3; do
 done
 
 # 4. Write .env.docker
-echo "  [4/6] Writing ${ENV_FILE_DISPLAY}..."
+echo "  [4/7] Writing ${ENV_FILE_DISPLAY}..."
 cat > "${ENV_FILE}" <<EOF
 GITLAB_URL=${GITLAB_URL}
 GITLAB_TOKEN=${PAT}
@@ -569,7 +569,7 @@ EOF
 # disable default-branch protection for new projects (GitLab applies that
 # protection asynchronously after project creation, so tests that unprotect
 # and immediately push were racing the protection job).
-echo "  [5/6] Applying instance settings (importer sources, no default branch protection)..."
+echo "  [5/7] Applying instance settings (importer sources, no default branch protection)..."
 curl -sSf -o /dev/null -X PUT "${GITLAB_URL}/api/v4/application/settings" \
     -H "PRIVATE-TOKEN: ${PAT}" \
     --data "import_sources[]=github&import_sources[]=bitbucket&import_sources[]=bitbucket_server&default_branch_protection=0" \
@@ -583,7 +583,7 @@ curl -sSf -o /dev/null -X PUT "${GITLAB_URL}/api/v4/application/settings" \
 REGISTRY_HOST="${REGISTRY_HOST:-localhost:5050}"
 REGISTRY_PROJECT_NAME="e2e-registry-seed"
 if command -v docker >/dev/null 2>&1; then
-    echo "  [6/6] Seeding container registry image (${REGISTRY_HOST})..."
+    echo "  [6/7] Seeding container registry image (${REGISTRY_HOST})..."
     seed_project_json=$(curl -sS -X POST "${GITLAB_URL}/api/v4/projects" \
         -H "PRIVATE-TOKEN: ${PAT}" \
         --data "name=${REGISTRY_PROJECT_NAME}&visibility=private" \
@@ -616,7 +616,35 @@ if command -v docker >/dev/null 2>&1; then
         echo "      WARNING: registry image seeding failed; registry tag e2e coverage will skip"
     fi
 else
-    echo "  [6/6] docker CLI not found; skipping registry image seeding"
+    echo "  [6/7] docker CLI not found; skipping registry image seeding"
+fi
+
+# 7. Seed a pending schema migration so the db_migration_mark happy path can
+# run: a healthy instance has no stuck migration to mark, so the newest
+# executed row is deleted from schema_migrations (making Rails consider that
+# migration pending) and its version is exported. The e2e test marks it via
+# POST /admin/migrations/:version/mark, which re-inserts the row — the
+# instance ends the run in the same state it started. The newest version is
+# used because GitLab squashes old migrations: only recent versions are
+# guaranteed to still have a migration file the mark service can resolve.
+if command -v docker >/dev/null 2>&1; then
+    echo "  [7/7] Seeding a pending schema migration for db_migration_mark coverage..."
+    compose_file="${REPO_ROOT}/test/e2e/docker-compose.yml"
+    # The version must be one the Rails migration context can resolve to a
+    # file — the newest schema_migrations row is not guaranteed to (structure
+    # loads insert historical versions whose files were squashed away), so
+    # Rails itself is asked for the newest migration it knows.
+    mig_version=$(docker compose -f "${compose_file}" exec -T gitlab gitlab-rails runner \
+        "puts ActiveRecord::Base.connection_pool.migration_context.migrations.last.version" 2>/dev/null | tr -d '[:space:]' || true)
+    if [ -n "${mig_version}" ] && docker compose -f "${compose_file}" exec -T gitlab gitlab-psql -c \
+        "DELETE FROM schema_migrations WHERE version='${mig_version}'" >/dev/null 2>&1; then
+        echo "E2E_DB_MIGRATION_VERSION=${mig_version}" >> "${ENV_FILE}"
+        echo "      Removed schema_migrations row ${mig_version}; the mark test restores it"
+    else
+        echo "      WARNING: could not seed a pending migration; db_migration_mark happy path will skip"
+    fi
+else
+    echo "  [7/7] docker CLI not found; skipping db_migration_mark seeding"
 fi
 
 echo ""

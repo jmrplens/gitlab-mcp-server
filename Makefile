@@ -141,12 +141,12 @@ validate-http-stateless:
 validate-http-stateless-docker:
 	scripts/validate-http-stateless.sh docker
 
-## test-e2e-docker: start ephemeral GitLab CE, run E2E tests, tear down
+## test-e2e-docker: start ephemeral GitLab CE (+ Bitbucket fixture), run E2E tests, tear down
 test-e2e-docker:
 	@echo "=== Cleaning up previous containers (if any) ==="
-	docker compose -f test/e2e/docker-compose.yml down -v 2>/dev/null || true
-	@echo "=== Starting ephemeral GitLab CE ==="
-	docker compose -f test/e2e/docker-compose.yml up -d
+	docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v 2>/dev/null || true
+	@echo "=== Starting ephemeral GitLab CE and Bitbucket fixture ==="
+	docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
 	@echo "=== Waiting for GitLab readiness ==="
 	./test/e2e/scripts/wait-for-gitlab.sh http://localhost:8929 600
 	@echo "=== Setting up test user and token ==="
@@ -164,6 +164,8 @@ test-e2e-docker:
 	done
 	@echo "=== Registering GitLab Runner ==="
 	./test/e2e/scripts/register-runner.sh http://localhost:8929
+	@echo "=== Provisioning Bitbucket import fixture ==="
+	./test/e2e/scripts/setup-bitbucket.sh http://localhost:7990
 	@echo "=== Running E2E tests ==="
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	@set +e; \
@@ -176,7 +178,7 @@ test-e2e-docker:
 	@echo "=== Tearing down ==="
 	@status=$$(cat $(E2E_REPORT_DIR)/e2e-docker-status); \
 	  teardown_status=0; \
-	  docker compose -f test/e2e/docker-compose.yml down -v || teardown_status=$$?; \
+	  docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v || teardown_status=$$?; \
 	  echo "=== E2E reports saved to $(E2E_REPORT_DIR)/ ==="; \
 	  rm -f $(E2E_REPORT_DIR)/e2e-docker-status; \
 	  if [ "$$status" -ne 0 ]; then exit "$$status"; fi; \

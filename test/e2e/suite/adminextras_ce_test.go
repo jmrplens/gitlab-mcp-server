@@ -1026,9 +1026,11 @@ func adminExtrasImportGists(ctx context.Context, t *testing.T, ghToken string) {
 // for Bitbucket Cloud. Missing credentials skip the corresponding subtest,
 // so the isolated CI run stays deterministic while a developer with a filled
 // .env exercises the full family. Imported projects are registered for
-// permanent deletion in the per-test ledger. import_bitbucket_server keeps a
-// documented skip: it needs a reachable self-hosted Bitbucket Server
-// (BITBUCKET_SERVER_URL/USERNAME/TOKEN/PROJECT_KEY/REPO_SLUG to override).
+// permanent deletion in the per-test ledger. import_bitbucket_server reads
+// BITBUCKET_SERVER_URL/USERNAME/TOKEN/PROJECT_KEY/REPO_SLUG — in Docker mode
+// setup-bitbucket.sh provisions the ephemeral e2e-bitbucket fixture and
+// writes them to .env.docker, so the subtest runs for real; elsewhere it
+// skips unless the operator points it at a reachable Bitbucket Server.
 //
 // Build tag: e2e && !enterprise. Mode: any (credential-gated). Surface: meta.
 func TestMeta_AdminExternalImporters(t *testing.T) {
@@ -1121,7 +1123,7 @@ func TestMeta_AdminExternalImporters(t *testing.T) {
 				"personal_access_token":     token,
 				"bitbucket_server_project":  projectKey,
 				"bitbucket_server_repo":     repoSlug,
-				"target_namespace":          sess.username,
+				"new_namespace":             sess.username,
 				"new_name":                  uniqueName("e2e-bbs-import"),
 			},
 		})
@@ -1138,8 +1140,10 @@ func TestMeta_AdminExternalImporters(t *testing.T) {
 // the route, the destructive-action confirmation, and the error mapping end
 // to end. The mutating happy path requires a migration that is actually
 // stuck — something a healthy, freshly migrated instance cannot have — so
-// it only runs when the operator provides E2E_DB_MIGRATION_VERSION (and, as
-// a safety interlock for real instances, only in Docker mode).
+// it only runs when E2E_DB_MIGRATION_VERSION is set (and, as a safety
+// interlock for real instances, only in Docker mode). setup-gitlab.sh seeds
+// it automatically in Docker mode by deleting the newest Rails-resolvable
+// schema_migrations row; the mark call here re-inserts it.
 //
 // Build tag: e2e && !enterprise. Mode: any (error path) / Docker with
 // E2E_DB_MIGRATION_VERSION (mutating path). Surface: meta.
