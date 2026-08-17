@@ -982,6 +982,26 @@ func TestGetRaw_ExceedsSizeLimit_Rejected(t *testing.T) {
 	}
 }
 
+// TestGetRaw_TruncatedBody_ReturnsReadError verifies the streaming read
+// error path: the mock declares a Content-Length larger than the bytes it
+// actually writes, so io.ReadAll on the response body fails with an
+// unexpected EOF that must surface as a wrapped fileGetRaw error.
+func TestGetRaw_TruncatedBody_ReturnsReadError(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "64")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("short"))
+	}))
+
+	_, err := GetRaw(context.Background(), client, RawInput{ProjectID: "42", FilePath: testFileMainGo})
+	if err == nil {
+		t.Fatal("expected read error from truncated body, got nil")
+	}
+	if !strings.Contains(err.Error(), "fileGetRaw") {
+		t.Fatalf("error should be wrapped as fileGetRaw, got: %v", err)
+	}
+}
+
 // TestGetRaw_AtSizeLimit_Succeeds verifies a body exactly at the configured
 // cap is delivered untruncated through the streaming reader.
 func TestGetRaw_AtSizeLimit_Succeeds(t *testing.T) {

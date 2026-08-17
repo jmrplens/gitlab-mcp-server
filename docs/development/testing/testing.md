@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,041 |
-| Unit test functions                                   | 11,664 |
+| Total test functions                                  | 12,042 |
+| Unit test functions                                   | 11,665 |
 | E2E test functions                                    |    377 |
 | cmd test functions                                    |    957 |
 | Test files (internal/)                                |    462 |
@@ -37,7 +37,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 10,553 | 87.6% |
 | `TestFunc` (no underscore)             |    963 |  8.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |    525 |  4.4% |
+| `TestFunc_Scenario_Expected` (3+ part) |    526 |  4.4% |
 
 ## Test Distribution
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,075 |        103 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          8,347 |        345 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          8,348 |        345 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            377 |        170 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            957 |         69 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,041** |    **701** |                                                                                                 |
+| **Total**               |     **12,042** |    **701** |                                                                                                 |
 
 ### Core Packages
 
@@ -103,8 +103,8 @@
 | workitems         |    89 |    97.2% |     6 |
 | mrapprovals       |    85 |   100.0% |     7 |
 | integrations      |    84 |    98.8% |    12 |
+| files             |    83 |   100.0% |     8 |
 | tags              |    83 |   100.0% |     9 |
-| files             |    82 |    99.7% |     8 |
 
 ### Complete Tool Sub-Package Test Counts
 
@@ -167,7 +167,7 @@
 | featureflags            |        43 |          2 |    99.5% |         5 |
 | features                |        23 |          2 |    97.7% |         4 |
 | ffuserlists             |        33 |          2 |   100.0% |         5 |
-| files                   |        82 |          2 |    99.7% |         8 |
+| files                   |        83 |          2 |   100.0% |         8 |
 | freezeperiods           |        36 |          2 |   100.0% |         5 |
 | geo                     |        54 |          2 |   100.0% |         8 |
 | gitignoretemplates      |        15 |          1 |   100.0% |         2 |
@@ -288,7 +288,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        89 |          2 |    97.2% |         6 |
-| **Total**               | **8,347** |    **345** |          | **1,169** |
+| **Total**               | **8,348** |    **345** |          | **1,169** |
 
 </details>
 
@@ -413,7 +413,7 @@
 | featureflags            |    99.5% |
 | features                |    97.7% |
 | ffuserlists             |   100.0% |
-| files                   |    99.7% |
+| files                   |   100.0% |
 | freezeperiods           |   100.0% |
 | geo                     |   100.0% |
 | gitignoretemplates      |   100.0% |
