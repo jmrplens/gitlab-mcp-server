@@ -29,6 +29,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/clientcompat"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -98,12 +99,94 @@ func newMockGitLabClient(t *testing.T) *gitlabclient.Client {
 	return client
 }
 
+// createdServerKey identifies one cacheable createServer configuration by its
+// scalar fields. The clientCompat bit captures the CLIENT_COMPAT env read at
+// build time so the kill-switch test cannot collide with default-env builds
+// of the same config.
+type createdServerKey struct {
+	metaTools         bool
+	toolSurface       string
+	capabilitySurface string
+	tier              edition.Tier
+	tierExplicit      bool
+	readOnly          bool
+	safeMode          bool
+	metaParamSchema   string
+	clientCompat      bool
+}
+
+var (
+	createdServersMu     sync.Mutex
+	createdServers       = map[createdServerKey]*mcp.Server{}
+	sharedServerClient   *gitlabclient.Client
+	sharedServerClientMu sync.Mutex
+)
+
+// sharedCreateServerClient returns a mock GitLab client whose httptest
+// backend lives for the whole test binary, so cached servers never point at
+// a backend torn down by the test that first built them.
+func sharedCreateServerClient(t *testing.T) *gitlabclient.Client {
+	t.Helper()
+	sharedServerClientMu.Lock()
+	defer sharedServerClientMu.Unlock()
+	if sharedServerClient != nil {
+		return sharedServerClient
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/version" {
+			w.Header().Set(hdrContentType, mimeJSON)
+			_ = json.NewEncoder(w).Encode(map[string]string{"version": "16.0.0", "revision": "test"})
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	// Process teardown reclaims the server; it must outlive every test.
+	client, err := gitlabclient.NewClient(&config.Config{GitLabURL: srv.URL, GitLabToken: testToken})
+	if err != nil {
+		t.Fatalf("shared createServer client: %v", err)
+	}
+	sharedServerClient = client
+	return client
+}
+
+// mustCreateServer builds a fully registered MCP server for cfg. Registration
+// resolves the whole action catalog (~2s), and for configs without slices or
+// per-test state the result depends only on the config (plus the
+// CLIENT_COMPAT env), so those builds are shared per key against a
+// binary-lifetime mock client; sessions attach per test. Callers that mutate
+// the server or need their own backend must pass a cfg with
+// ExcludeTools/TokenScopes set (never cached) or call createServer directly.
 func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.ServerConfig) *mcp.Server {
 	t.Helper()
-	server, err := createServer(client, cfg, nil)
+	cacheable := cfg.ExcludeTools == nil && cfg.TokenScopes == nil && cfg.GitLabURL == ""
+	if !cacheable {
+		server, err := createServer(client, cfg, nil)
+		if err != nil {
+			t.Fatalf("createServer() error: %v", err)
+		}
+		return server
+	}
+	key := createdServerKey{
+		metaTools:         cfg.MetaTools,
+		toolSurface:       cfg.ToolSurface,
+		capabilitySurface: cfg.CapabilitySurface,
+		tier:              cfg.Tier,
+		tierExplicit:      cfg.TierExplicit,
+		readOnly:          cfg.ReadOnly,
+		safeMode:          cfg.SafeMode,
+		metaParamSchema:   cfg.MetaParamSchema,
+		clientCompat:      clientcompat.Enabled(),
+	}
+	createdServersMu.Lock()
+	defer createdServersMu.Unlock()
+	if server, ok := createdServers[key]; ok {
+		return server
+	}
+	server, err := createServer(sharedCreateServerClient(t), cfg, nil)
 	if err != nil {
 		t.Fatalf("createServer() error: %v", err)
 	}
+	createdServers[key] = server
 	return server
 }
 
@@ -621,17 +704,29 @@ func TestServeHTTP_PortConflict(t *testing.T) {
 	}
 }
 
-// TestRun_GitLabConnectionFailure verifies that [run] returns an error when the
-// GitLab connectivity ping returns a failure status.
-func TestRun_GitLabConnectionFailure(t *testing.T) {
+// TestRun_GitLabPingFailure_StartsDegraded verifies that a failing GitLab
+// connectivity ping does not abort startup: [run] continues in degraded mode
+// (the server must stay usable so the setup wizard and self-diagnostics can
+// run). run then serves stdio until the test binary's stdin reports EOF, so
+// the assertion accepts a clean exit or a transport-closed error but rejects
+// a connectivity error and a hang. The old expectation (run returns an error
+// on ping failure) predates degraded-mode startup and only passed through a
+// test-order accident.
+func TestRun_GitLabPingFailure_StartsDegraded(t *testing.T) {
 	srv := newFailingGitLabServer(t, http.StatusForbidden)
 	t.Setenv("GITLAB_URL", srv.URL)
 	t.Setenv("GITLAB_TOKEN", testToken)
 	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "true")
 
-	err := run(nil)
-	if err == nil {
-		t.Fatal("run() expected error when gitlab is unreachable, got nil")
+	done := make(chan error, 1)
+	go func() { done <- run(nil) }()
+	select {
+	case err := <-done:
+		if err != nil && strings.Contains(err.Error(), "ping") {
+			t.Fatalf("run() aborted on ping failure instead of starting degraded: %v", err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("run() did not return; expected stdio serve to end on closed stdin")
 	}
 }
 
@@ -1506,7 +1601,12 @@ func TestCreateServer_ToolManifestInspectionError(t *testing.T) {
 	}
 	t.Cleanup(func() { listRegisteredToolsForInspection = original })
 
-	server := mustCreateServer(t, client, &config.ServerConfig{MetaTools: true})
+	// Build directly: the stubbed inspection hook must not be captured into
+	// (or satisfied from) the shared mustCreateServer cache.
+	server, err := createServer(client, &config.ServerConfig{MetaTools: true}, nil)
+	if err != nil {
+		t.Fatalf("createServer() error: %v", err)
+	}
 	session := newInMemorySession(t, server)
 	if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"}); err == nil {
 		t.Fatal("tool manifest should be omitted when inspection fails")

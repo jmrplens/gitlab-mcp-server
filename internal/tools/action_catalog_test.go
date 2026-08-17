@@ -22,10 +22,7 @@ import (
 // TestBuildActionCatalog_IncludesBaseEnterpriseAndMCPActions verifies BuildActionCatalog includes base enterprise and MCP actions.
 func TestBuildActionCatalog_IncludesBaseEnterpriseAndMCPActions(t *testing.T) {
 	t.Run("base", func(t *testing.T) {
-		base, err := BuildActionCatalog(nil, ActionCatalogOptions{})
-		if err != nil {
-			t.Fatalf("BuildActionCatalog(base) error = %v", err)
-		}
+		base := mustBuildActionCatalog(t, nil, ActionCatalogOptions{})
 		if base.CountGroups() == 0 || base.CountActions() == 0 {
 			t.Fatalf("base catalog counts = groups %d actions %d, want non-zero", base.CountGroups(), base.CountActions())
 		}
@@ -38,24 +35,15 @@ func TestBuildActionCatalog_IncludesBaseEnterpriseAndMCPActions(t *testing.T) {
 	})
 
 	t.Run("mcp", func(t *testing.T) {
-		withMCP, err := BuildActionCatalog(nil, ActionCatalogOptions{IncludeMCP: true})
-		if err != nil {
-			t.Fatalf("BuildActionCatalog(with MCP) error = %v", err)
-		}
+		withMCP := mustBuildActionCatalog(t, nil, ActionCatalogOptions{IncludeMCP: true})
 		if _, ok := withMCP.Action("server.status"); !ok {
 			t.Fatal("MCP catalog missing server.status")
 		}
 	})
 
 	t.Run("enterprise", func(t *testing.T) {
-		base, err := BuildActionCatalog(nil, ActionCatalogOptions{})
-		if err != nil {
-			t.Fatalf("BuildActionCatalog(base) error = %v", err)
-		}
-		enterprise, err := BuildActionCatalog(nil, ActionCatalogOptions{Enterprise: true})
-		if err != nil {
-			t.Fatalf("BuildActionCatalog(enterprise) error = %v", err)
-		}
+		base := mustBuildActionCatalog(t, nil, ActionCatalogOptions{})
+		enterprise := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true})
 		if enterprise.CountActions() <= base.CountActions() {
 			t.Fatalf("enterprise action count = %d, want greater than base %d", enterprise.CountActions(), base.CountActions())
 		}
@@ -77,10 +65,7 @@ func TestBuildActionCatalog_DoesNotUseMetaRegistrationCapture(t *testing.T) {
 
 // TestBuildActionCatalog_CapturesInlineAndDelegatedGroups verifies BuildActionCatalog captures inline and delegated groups.
 func TestBuildActionCatalog_CapturesInlineAndDelegatedGroups(t *testing.T) {
-	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Enterprise: true})
-	if err != nil {
-		t.Fatalf("BuildActionCatalog() error = %v", err)
-	}
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true})
 
 	for _, actionID := range []string{"project.list", "search.code", "runner.list"} {
 		t.Run(actionID, func(t *testing.T) {
@@ -263,10 +248,7 @@ func TestBuildActionCatalog_UsesCanonicalActionSpecs(t *testing.T) {
 
 // TestBuildActionCatalog_UsesCollectedActionSpecGuidance verifies BuildActionCatalog uses collected action spec guidance.
 func TestBuildActionCatalog_UsesCollectedActionSpecGuidance(t *testing.T) {
-	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{})
-	if err != nil {
-		t.Fatalf("BuildActionCatalog() error = %v", err)
-	}
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{})
 	action, ok := catalog.Action("job.token_scope_remove_project")
 	if !ok {
 		t.Fatal("catalog missing job.token_scope_remove_project")
@@ -496,6 +478,13 @@ func testCatalogActionRoute(params ...string) toolutil.ActionRoute {
 // mustBuildActionCatalog builds action catalog test fixtures and fails the test on error.
 func mustBuildActionCatalog(t *testing.T, client *gitlabclient.Client, opts ActionCatalogOptions) *actioncatalog.Catalog {
 	t.Helper()
+	if client == nil && cacheableCatalogOptions(opts) {
+		catalog, err := sharedActionCatalog(opts)
+		if err != nil {
+			t.Fatalf("BuildActionCatalog(%+v) error = %v", opts, err)
+		}
+		return catalog
+	}
 	catalog, err := BuildActionCatalog(client, opts)
 	if err != nil {
 		t.Fatalf("BuildActionCatalog(%+v) error = %v", opts, err)
