@@ -551,7 +551,7 @@ for _ in 1 2 3; do
 done
 
 # 4. Write .env.docker
-echo "  [4/5] Writing ${ENV_FILE_DISPLAY}..."
+echo "  [4/6] Writing ${ENV_FILE_DISPLAY}..."
 cat > "${ENV_FILE}" <<EOF
 GITLAB_URL=${GITLAB_URL}
 GITLAB_TOKEN=${PAT}
@@ -570,10 +570,10 @@ EOF
 # protection asynchronously after project creation, so tests that unprotect
 # and immediately push were racing the protection job).
 echo "  [5/6] Applying instance settings (importer sources, no default branch protection)..."
-curl -sS -o /dev/null -X PUT "${GITLAB_URL}/api/v4/application/settings" \
+curl -sSf -o /dev/null -X PUT "${GITLAB_URL}/api/v4/application/settings" \
     -H "PRIVATE-TOKEN: ${PAT}" \
     --data "import_sources[]=github&import_sources[]=bitbucket&import_sources[]=bitbucket_server&default_branch_protection=0" \
-    --connect-timeout 5 --max-time 30 || echo "      WARNING: could not enable importer sources"
+    --connect-timeout 5 --max-time 30 || echo "      WARNING: instance settings update rejected; importer and branch-protection coverage may misbehave"
 
 # 6. Seed a container image so the registry repository/tag e2e coverage can
 # exercise real repositories instead of skipping. The registry listens on
@@ -588,14 +588,7 @@ if command -v docker >/dev/null 2>&1; then
         -H "PRIVATE-TOKEN: ${PAT}" \
         --data "name=${REGISTRY_PROJECT_NAME}&visibility=private" \
         --connect-timeout 5 --max-time 30 2>/dev/null || true)
-    seed_path=$(JSON_INPUT="${seed_project_json}" FIELD="path_with_namespace" python3 -c "
-import json, os
-data = os.environ.get('JSON_INPUT', '')
-try:
-    print(json.loads(data).get(os.environ.get('FIELD', ''), ''))
-except Exception:
-    print('')
-")
+    seed_path=$(json_field "${seed_project_json}" "path_with_namespace")
     if [ -z "${seed_path}" ]; then
         # Project may already exist from a previous provisioning run.
         seed_path="${TEST_USER}/${REGISTRY_PROJECT_NAME}"
@@ -607,8 +600,9 @@ except Exception:
     # the contexts/cli-plugins symlinks keep the Docker Desktop context
     # and buildx working from the scratch config.
     seed_docker_config=$(mktemp -d)
+    trap 'rm -rf "${seed_docker_config}"' EXIT
     seed_auth=$(printf '%s:%s' "${TEST_USER}" "${PAT}" | base64 | tr -d '\n')
-    printf '{"auths":{"%s":{"auth":"%s"}}}' "${REGISTRY_HOST}" "${seed_auth}" > "${seed_docker_config}/config.json"
+    (umask 177 && printf '{"auths":{"%s":{"auth":"%s"}}}' "${REGISTRY_HOST}" "${seed_auth}" > "${seed_docker_config}/config.json")
     [ -d "${HOME}/.docker/contexts" ] && ln -s "${HOME}/.docker/contexts" "${seed_docker_config}/contexts"
     [ -d "${HOME}/.docker/cli-plugins" ] && ln -s "${HOME}/.docker/cli-plugins" "${seed_docker_config}/cli-plugins"
     if DOCKER_CONFIG="${seed_docker_config}" docker pull busybox:stable >/dev/null \

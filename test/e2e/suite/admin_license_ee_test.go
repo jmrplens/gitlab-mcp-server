@@ -15,6 +15,7 @@ package suite
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -30,7 +31,12 @@ func adminLicenseCachedKey(t *testing.T) string {
 	t.Helper()
 	candidates := []string{"../.enterprise-license"}
 	if override := os.Getenv("E2E_ENTERPRISE_LICENSE_FILE"); override != "" {
-		candidates = []string{override, "../../../" + override}
+		candidates = []string{override}
+		if !filepath.IsAbs(override) {
+			// The suite's working directory is test/e2e/suite; overrides are
+			// usually given relative to the repository root.
+			candidates = append(candidates, "../../../"+override)
+		}
 	}
 	for _, path := range candidates {
 		data, err := os.ReadFile(path)
@@ -76,6 +82,17 @@ func TestMeta_AdminLicenseLifecycle(t *testing.T) {
 	requireTruef(t, added.License.ID > 0 && added.License.ID != before.License.ID,
 		"expected a new license record, got %+v (before %d)", added.License, before.License.ID)
 	t.Logf("Added duplicate license %d (plan %s)", added.License.ID, added.License.Plan)
+	// Unconditional teardown: if the in-test delete or a later assertion
+	// fails, the duplicate must still be removed so the instance is left as
+	// found. Deleting an already-deleted license is a tolerated 404.
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanupCancel()
+		_ = callToolVoidOn(cleanupCtx, sess.meta, "gitlab_admin", map[string]any{
+			"action": "license_delete",
+			"params": map[string]any{"id": added.License.ID},
+		})
+	})
 
 	err = callToolVoidOn(ctx, sess.meta, "gitlab_admin", map[string]any{
 		"action": "license_delete",

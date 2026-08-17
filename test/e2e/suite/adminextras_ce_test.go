@@ -1037,8 +1037,7 @@ func TestMeta_AdminExternalImporters(t *testing.T) {
 		})
 		// A tiny repository can finish importing before the cancel lands;
 		// GitLab then rejects the cancel with a 400 naming the state.
-		if err != nil && !strings.Contains(err.Error(), "cannot be canceled") &&
-			!strings.Contains(err.Error(), "already") && !isHTTPStatus(err, 400) {
+		if err != nil && !strings.Contains(err.Error(), "cannot be canceled") && !isHTTPStatus(err, 400) {
 			t.Fatalf("import_cancel_github: %v", err)
 		}
 		t.Log("GitHub import cancel path exercised")
@@ -1146,19 +1145,21 @@ func TestMeta_AdminDBMigrationMark(t *testing.T) {
 	})
 
 	t.Run("MarkConfiguredVersion", func(t *testing.T) {
-		version := os.Getenv("E2E_DB_MIGRATION_VERSION")
-		if version == "" {
+		rawVersion := os.Getenv("E2E_DB_MIGRATION_VERSION")
+		if rawVersion == "" {
 			t.Skip("E2E_DB_MIGRATION_VERSION not set: marking a real migration needs a stuck migration, which a healthy instance cannot provide")
 		}
 		if !isDockerMode() {
 			t.Skip("mutating migration bookkeeping is only exercised against the ephemeral Docker instance")
 		}
+		version, parseErr := strconv.ParseInt(rawVersion, 10, 64)
+		requireNoError(t, parseErr, "parse E2E_DB_MIGRATION_VERSION")
 		err := callToolVoidOn(ctx, sess.meta, "gitlab_admin", map[string]any{
 			"action": "db_migration_mark",
 			"params": map[string]any{"version": version},
 		})
-		requireNoError(t, err, "db_migration_mark "+version)
-		t.Logf("Marked migration %s as executed", version)
+		requireNoError(t, err, "db_migration_mark "+rawVersion)
+		t.Logf("Marked migration %s as executed", rawVersion)
 	})
 }
 

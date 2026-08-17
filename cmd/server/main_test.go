@@ -112,6 +112,8 @@ type createdServerKey struct {
 	readOnly          bool
 	safeMode          bool
 	metaParamSchema   string
+	rateLimitRPS      float64
+	rateLimitBurst    int
 	clientCompat      bool
 }
 
@@ -175,6 +177,8 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 		readOnly:          cfg.ReadOnly,
 		safeMode:          cfg.SafeMode,
 		metaParamSchema:   cfg.MetaParamSchema,
+		rateLimitRPS:      cfg.RateLimitRPS,
+		rateLimitBurst:    cfg.RateLimitBurst,
 		clientCompat:      clientcompat.Enabled(),
 	}
 	createdServersMu.Lock()
