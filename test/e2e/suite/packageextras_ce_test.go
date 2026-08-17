@@ -286,45 +286,45 @@ func TestIndividual_PackageRegistryRules(t *testing.T) {
 			t.Skip("E2E_REGISTRY_PROJECT not set: registry image seeding did not run")
 		}
 
-		repos, err := callToolOn[containerregistry.RepositoryListOutput](ctx, sess.individual, "gitlab_registry_list_project", containerregistry.ListProjectInput{
+		repos, listErr := callToolOn[containerregistry.RepositoryListOutput](ctx, sess.individual, "gitlab_registry_list_project", containerregistry.ListProjectInput{
 			ProjectID: toolutil.StringOrInt(seedProject),
 			TagsCount: true,
 		})
-		requireNoError(t, err, "list registry repositories")
+		requireNoError(t, listErr, "list registry repositories")
 		requireTruef(t, len(repos.Repositories) > 0, "expected at least one seeded registry repository")
 		repo := repos.Repositories[0]
 		t.Logf("Seed registry repository %d (%s), %d tags", repo.ID, repo.Path, repo.TagsCount)
 
-		got, err := callToolOn[containerregistry.RepositoryOutput](ctx, sess.individual, "gitlab_registry_get_repository", containerregistry.GetRepositoryInput{
+		got, getErr := callToolOn[containerregistry.RepositoryOutput](ctx, sess.individual, "gitlab_registry_get_repository", containerregistry.GetRepositoryInput{
 			RepositoryID: repo.ID,
 			TagsCount:    true,
 		})
-		requireNoError(t, err, "get registry repository")
+		requireNoError(t, getErr, "get registry repository")
 		requireTruef(t, got.ID == repo.ID, "expected repository %d, got %d", repo.ID, got.ID)
 
-		tags, err := callToolOn[containerregistry.TagListOutput](ctx, sess.individual, "gitlab_registry_list_tags", containerregistry.ListTagsInput{
+		tags, tagsErr := callToolOn[containerregistry.TagListOutput](ctx, sess.individual, "gitlab_registry_list_tags", containerregistry.ListTagsInput{
 			ProjectID:    toolutil.StringOrInt(seedProject),
 			RepositoryID: repo.ID,
 		})
-		requireNoError(t, err, "list registry tags")
+		requireNoError(t, tagsErr, "list registry tags")
 		requireTruef(t, len(tags.Tags) >= 2, "expected the two seeded tags, got %d", len(tags.Tags))
 
-		tag, err := callToolOn[containerregistry.TagOutput](ctx, sess.individual, "gitlab_registry_get_tag", containerregistry.GetTagInput{
+		tag, tagErr := callToolOn[containerregistry.TagOutput](ctx, sess.individual, "gitlab_registry_get_tag", containerregistry.GetTagInput{
 			ProjectID:    toolutil.StringOrInt(seedProject),
 			RepositoryID: repo.ID,
 			TagName:      "seed-a",
 		})
-		requireNoError(t, err, "get registry tag seed-a")
+		requireNoError(t, tagErr, "get registry tag seed-a")
 		requireTruef(t, tag.Name == "seed-a", "expected tag seed-a, got %q", tag.Name)
 
 		// Delete one seeded tag; seed-a stays so reruns keep a listable tag
 		// (the seeding script restores both on the next provisioning pass).
-		_, err = callToolOn[containerregistry.TagOutput](ctx, sess.individual, "gitlab_registry_delete_tag", containerregistry.DeleteTagInput{
+		_, deleteErr := callToolOn[containerregistry.TagOutput](ctx, sess.individual, "gitlab_registry_delete_tag", containerregistry.DeleteTagInput{
 			ProjectID:    toolutil.StringOrInt(seedProject),
 			RepositoryID: repo.ID,
 			TagName:      "seed-b",
 		})
-		requireNoError(t, err, "delete registry tag seed-b")
+		requireNoError(t, deleteErr, "delete registry tag seed-b")
 		t.Log("Deleted seeded registry tag seed-b")
 	})
 }
