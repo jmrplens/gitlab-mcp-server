@@ -2,14 +2,14 @@
 
 > **Diátaxis type**: How-to
 > **Audience**: 🔧 Developers, contributors
-> **Prerequisites**: Go 1.26+, Node.js 22+, GitLab instance with PAT, Git, Make
+> **Prerequisites**: Go 1.26+, Node.js 24.18+, GitLab instance with PAT, Git, Make
 
 ---
 
 ## Prerequisites
 
 - **Go 1.26+** ([download](https://go.dev/dl/))
-- **Node.js 22+ with Corepack** for the documentation site and MCP Inspector. The site uses `pnpm@11.8.0`; keep pnpm configuration in `site/pnpm-workspace.yaml` rather than the `pnpm` field in `package.json`.
+- **Node.js 24.18+ with Corepack** for the documentation site and MCP Inspector. The site uses `pnpm@11.22.0`; keep pnpm configuration in `site/pnpm-workspace.yaml` rather than the `pnpm` field in `package.json`.
 - **GitLab instance** with Personal Access Token (`api` scope)
 - **Git** for version control
 - **Make** for build automation (optional but recommended)
