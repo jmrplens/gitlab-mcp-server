@@ -167,9 +167,7 @@ func assertContains(t *testing.T, err error, substr string) {
 
 // TestSnippetIDRequired_Validation ensures all handlers reject zero/negative snippet_id.
 func TestSnippetIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when snippet_id is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 
@@ -207,9 +205,7 @@ func TestSnippetIDRequired_Validation(t *testing.T) {
 
 // TestDiscussionIDRequired_Validation ensures discussion-scoped handlers reject an empty discussion_id.
 func TestDiscussionIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when discussion_id is empty")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 
@@ -242,9 +238,7 @@ func TestDiscussionIDRequired_Validation(t *testing.T) {
 
 // TestContextCancelled_Validation ensures every handler returns early when the context is already cancelled.
 func TestContextCancelled_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when context is cancelled")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	const pid = "my/project"
@@ -373,9 +367,7 @@ func TestUpdateNote_CreatedAt(t *testing.T) {
 
 // TestNoteIDRequired_Validation ensures UpdateNote and DeleteNote reject zero/negative note_id.
 func TestNoteIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when note_id is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 
@@ -400,9 +392,7 @@ func TestNoteIDRequired_Validation(t *testing.T) {
 
 // TestProjectIDRequired_Validation ensures all handlers reject empty project_id.
 func TestProjectIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when project_id is empty")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 
 	tests := []struct {

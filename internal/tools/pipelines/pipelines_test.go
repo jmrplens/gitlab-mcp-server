@@ -658,9 +658,7 @@ func assertContains(t *testing.T, err error, substr string) {
 // TestPipelineIDRequired_Validation ensures all handlers that require pipeline_id
 // reject zero and negative values.
 func TestPipelineIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when pipeline_id is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 
@@ -978,9 +976,7 @@ func TestDetailToOutput_MinimalFields(t *testing.T) {
 
 // TestGet_CancelledContext verifies Get when cancelled context.
 func TestGet_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
@@ -990,9 +986,7 @@ func TestGet_CancelledContext(t *testing.T) {
 
 // TestCancel_CancelledContext verifies Cancel when cancelled context.
 func TestCancel_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Cancel(ctx, client, ActionInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
@@ -1002,9 +996,7 @@ func TestCancel_CancelledContext(t *testing.T) {
 
 // TestRetry_CancelledContext verifies Retry when cancelled context.
 func TestRetry_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Retry(ctx, client, ActionInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
@@ -1014,9 +1006,7 @@ func TestRetry_CancelledContext(t *testing.T) {
 
 // TestDelete_CancelledContext verifies Delete when cancelled context.
 func TestDelete_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
@@ -1026,9 +1016,7 @@ func TestDelete_CancelledContext(t *testing.T) {
 
 // TestGetVariables_CancelledContext verifies GetVariables when cancelled context.
 func TestGetVariables_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := GetVariables(ctx, client, GetInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
@@ -1038,9 +1026,7 @@ func TestGetVariables_CancelledContext(t *testing.T) {
 
 // TestGetTestReport_CancelledContext verifies GetTestReport when cancelled context.
 func TestGetTestReport_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := GetTestReport(ctx, client, GetInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
@@ -1050,9 +1036,7 @@ func TestGetTestReport_CancelledContext(t *testing.T) {
 
 // TestGetTestReportSummary_CancelledContext verifies GetTestReportSummary when cancelled context.
 func TestGetTestReportSummary_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := GetTestReportSummary(ctx, client, GetInput{ProjectID: "42", PipelineID: 10})
 	if err == nil {
@@ -1062,9 +1046,7 @@ func TestGetTestReportSummary_CancelledContext(t *testing.T) {
 
 // TestGetLatest_CancelledContext verifies GetLatest when cancelled context.
 func TestGetLatest_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := GetLatest(ctx, client, GetLatestInput{ProjectID: "42"})
 	if err == nil {
@@ -1074,9 +1056,7 @@ func TestGetLatest_CancelledContext(t *testing.T) {
 
 // TestCreate_CancelledContext verifies Create when cancelled context.
 func TestCreate_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{ProjectID: "42", Ref: "main"})
 	if err == nil {
@@ -1086,9 +1066,7 @@ func TestCreate_CancelledContext(t *testing.T) {
 
 // TestUpdateMetadata_CancelledContext verifies UpdateMetadata when cancelled context.
 func TestUpdateMetadata_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := UpdateMetadata(ctx, client, UpdateMetadataInput{ProjectID: "42", PipelineID: 10, Name: "x"})
 	if err == nil {
@@ -1879,7 +1857,9 @@ func TestGetLatest_FallbackListError(t *testing.T) {
 		// Force a connection-level error by hijacking and closing
 		hj, ok := w.(http.Hijacker)
 		if !ok {
-			t.Fatal("response writer does not support hijacking")
+			t.Error("response writer does not support hijacking")
+			http.Error(w, "response writer does not support hijacking", http.StatusInternalServerError)
+			return
 		}
 		conn, _, _ := hj.Hijack()
 		conn.Close()

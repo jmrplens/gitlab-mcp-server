@@ -326,7 +326,9 @@ func TestUpdateProjectExternalStatusCheck_WithAllFields(t *testing.T) {
 	mux.HandleFunc("PUT /api/v4/projects/1/external_status_checks/42", func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read request body: %v", err)
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
 		}
 		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusOK, projectStatusCheckJSON)

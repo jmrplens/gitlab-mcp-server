@@ -192,10 +192,14 @@ func TestCreate_Success(t *testing.T) {
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read request body: %v", err)
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
 		}
 		if !strings.Contains(string(body), "package main") {
-			t.Fatalf("request body = %q, want snippet content", string(body))
+			t.Errorf("request body = %q, want snippet content", string(body))
+			http.Error(w, "request body, want snippet content", http.StatusInternalServerError)
+			return
 		}
 		testutil.RespondJSON(w, http.StatusCreated, snippetJSON)
 	})

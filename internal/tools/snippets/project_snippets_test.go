@@ -471,7 +471,9 @@ func TestCreate_WithAllOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read request body: %v", err)
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
 		}
 		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusCreated, covSnippetJSON)
@@ -503,7 +505,9 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read request body: %v", err)
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
 		}
 		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusOK, covSnippetJSON)

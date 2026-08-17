@@ -797,9 +797,7 @@ func TestTagList_APIError(t *testing.T) {
 
 // TestTagList_EmptyProjectID verifies List validates project_id before calling GitLab.
 func TestTagList_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(context.Background(), client, ListInput{})
 	if err == nil {
 		t.Fatal(errExpEmptyProjectID)
@@ -875,7 +873,9 @@ func TestTagProtect_WithAllowedToCreate(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedTags {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"name":"v*","create_access_levels":[{"id":1,"access_level":30,"access_level_description":"Developers + Maintainers","user_id":5}]}`)
@@ -1524,10 +1524,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 // the early-return guard at the top of List that checks ctx.Err() prior
 // to performing any GitLab API request.
 func TestList_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("HTTP handler must not be invoked when context is cancelled")
-		_ = w
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := List(ctx, client, ListInput{ProjectID: "42"}); err == nil {

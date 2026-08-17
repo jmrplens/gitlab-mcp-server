@@ -92,9 +92,7 @@ func TestListIssueAwardEmoji_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestListIssueAwardEmoji_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{
 		ProjectID: "",
@@ -166,9 +164,7 @@ func TestCreateIssueAwardEmoji_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateIssueAwardEmoji_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{
 		ProjectID: "",
@@ -305,9 +301,7 @@ func TestListMRAwardEmoji_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreateMRAwardEmoji_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{
 		ProjectID: "",
@@ -501,9 +495,7 @@ func assertErrContains(t *testing.T, err error, substr string) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestListIssueAwardEmoji_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueAwardEmoji(t.Context(), client, IssueListInput{ProjectID: "p", IID: 0})
 	assertErrContains(t, err, testFieldIssueIID)
 	_, err = ListIssueAwardEmoji(t.Context(), client, IssueListInput{ProjectID: "p", IID: -1})
@@ -514,9 +506,7 @@ func TestListIssueAwardEmoji_InvalidIID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGetIssueAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetIssueAwardEmoji(t.Context(), client, IssueGetInput{ProjectID: "p", IID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldIssueIID)
 	_, err = GetIssueAwardEmoji(t.Context(), client, IssueGetInput{ProjectID: "p", IID: 1, AwardID: 0})
@@ -527,9 +517,7 @@ func TestGetIssueAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestCreateIssueAwardEmoji_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := CreateIssueAwardEmoji(t.Context(), client, IssueCreateInput{ProjectID: "p", IID: 0, Name: testEmojiStar})
 	assertErrContains(t, err, testFieldIssueIID)
 }
@@ -538,9 +526,7 @@ func TestCreateIssueAwardEmoji_InvalidIID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestDeleteIssueAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{ProjectID: "p", IID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldIssueIID)
 	err = DeleteIssueAwardEmoji(t.Context(), client, IssueDeleteInput{ProjectID: "p", IID: 1, AwardID: 0})
@@ -551,9 +537,7 @@ func TestDeleteIssueAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestListIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1})
 	assertErrContains(t, err, testFieldIssueIID)
 	_, err = ListIssueNoteAwardEmoji(t.Context(), client, IssueListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0})
@@ -564,9 +548,7 @@ func TestListIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGetIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetIssueNoteAwardEmoji(t.Context(), client, IssueGetOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
 	assertErrContains(t, err, testFieldIssueIID)
 	_, err = GetIssueNoteAwardEmoji(t.Context(), client, IssueGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
@@ -579,9 +561,7 @@ func TestGetIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestCreateIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := CreateIssueNoteAwardEmoji(t.Context(), client, IssueCreateOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, Name: testEmojiStar})
 	assertErrContains(t, err, testFieldIssueIID)
 	_, err = CreateIssueNoteAwardEmoji(t.Context(), client, IssueCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, Name: testEmojiStar})
@@ -592,9 +572,7 @@ func TestCreateIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestDeleteIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteIssueNoteAwardEmoji(t.Context(), client, IssueDeleteOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
 	assertErrContains(t, err, testFieldIssueIID)
 	err = DeleteIssueNoteAwardEmoji(t.Context(), client, IssueDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
@@ -607,9 +585,7 @@ func TestDeleteIssueNoteAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestListMRAwardEmoji_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListMRAwardEmoji(t.Context(), client, MRListInput{ProjectID: "p", IID: 0})
 	assertErrContains(t, err, testFieldMRIID)
 }
@@ -618,9 +594,7 @@ func TestListMRAwardEmoji_InvalidIID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGetMRAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetMRAwardEmoji(t.Context(), client, MRGetInput{ProjectID: "p", IID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldMRIID)
 	_, err = GetMRAwardEmoji(t.Context(), client, MRGetInput{ProjectID: "p", IID: 1, AwardID: 0})
@@ -631,9 +605,7 @@ func TestGetMRAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestCreateMRAwardEmoji_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := CreateMRAwardEmoji(t.Context(), client, MRCreateInput{ProjectID: "p", IID: -5, Name: testEmojiStar})
 	assertErrContains(t, err, testFieldMRIID)
 }
@@ -642,9 +614,7 @@ func TestCreateMRAwardEmoji_InvalidIID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestDeleteMRAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{ProjectID: "p", IID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldMRIID)
 	err = DeleteMRAwardEmoji(t.Context(), client, MRDeleteInput{ProjectID: "p", IID: 1, AwardID: -1})
@@ -655,9 +625,7 @@ func TestDeleteMRAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestListMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListMRNoteAwardEmoji(t.Context(), client, MRListOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1})
 	assertErrContains(t, err, testFieldMRIID)
 	_, err = ListMRNoteAwardEmoji(t.Context(), client, MRListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0})
@@ -668,9 +636,7 @@ func TestListMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGetMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetMRNoteAwardEmoji(t.Context(), client, MRGetOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
 	assertErrContains(t, err, testFieldMRIID)
 	_, err = GetMRNoteAwardEmoji(t.Context(), client, MRGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
@@ -683,9 +649,7 @@ func TestGetMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestCreateMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := CreateMRNoteAwardEmoji(t.Context(), client, MRCreateOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, Name: testEmojiStar})
 	assertErrContains(t, err, testFieldMRIID)
 	_, err = CreateMRNoteAwardEmoji(t.Context(), client, MRCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, Name: testEmojiStar})
@@ -696,9 +660,7 @@ func TestCreateMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestDeleteMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteMRNoteAwardEmoji(t.Context(), client, MRDeleteOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
 	assertErrContains(t, err, testFieldMRIID)
 	err = DeleteMRNoteAwardEmoji(t.Context(), client, MRDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
@@ -711,9 +673,7 @@ func TestDeleteMRNoteAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestListSnippetAwardEmoji_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListSnippetAwardEmoji(t.Context(), client, SnippetListInput{ProjectID: "p", IID: 0})
 	assertErrContains(t, err, testFieldSnippetID)
 }
@@ -722,9 +682,7 @@ func TestListSnippetAwardEmoji_InvalidIID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGetSnippetAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetSnippetAwardEmoji(t.Context(), client, SnippetGetInput{ProjectID: "p", IID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldSnippetID)
 	_, err = GetSnippetAwardEmoji(t.Context(), client, SnippetGetInput{ProjectID: "p", IID: 1, AwardID: 0})
@@ -735,9 +693,7 @@ func TestGetSnippetAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestCreateSnippetAwardEmoji_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := CreateSnippetAwardEmoji(t.Context(), client, SnippetCreateInput{ProjectID: "p", IID: 0, Name: testEmojiStar})
 	assertErrContains(t, err, testFieldSnippetID)
 }
@@ -746,9 +702,7 @@ func TestCreateSnippetAwardEmoji_InvalidIID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestDeleteSnippetAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteSnippetAwardEmoji(t.Context(), client, SnippetDeleteInput{ProjectID: "p", IID: 0, AwardID: 1})
 	assertErrContains(t, err, testFieldSnippetID)
 	err = DeleteSnippetAwardEmoji(t.Context(), client, SnippetDeleteInput{ProjectID: "p", IID: 1, AwardID: 0})
@@ -759,9 +713,7 @@ func TestDeleteSnippetAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestListSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListSnippetNoteAwardEmoji(t.Context(), client, SnippetListOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1})
 	assertErrContains(t, err, testFieldSnippetID)
 	_, err = ListSnippetNoteAwardEmoji(t.Context(), client, SnippetListOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0})
@@ -772,9 +724,7 @@ func TestListSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGetSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetSnippetNoteAwardEmoji(t.Context(), client, SnippetGetOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
 	assertErrContains(t, err, testFieldSnippetID)
 	_, err = GetSnippetNoteAwardEmoji(t.Context(), client, SnippetGetOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})
@@ -787,9 +737,7 @@ func TestGetSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestCreateSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := CreateSnippetNoteAwardEmoji(t.Context(), client, SnippetCreateOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, Name: testEmojiStar})
 	assertErrContains(t, err, testFieldSnippetID)
 	_, err = CreateSnippetNoteAwardEmoji(t.Context(), client, SnippetCreateOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, Name: testEmojiStar})
@@ -800,9 +748,7 @@ func TestCreateSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestDeleteSnippetNoteAwardEmoji_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteSnippetNoteAwardEmoji(t.Context(), client, SnippetDeleteOnNoteInput{ProjectID: "p", IID: 0, NoteID: 1, AwardID: 1})
 	assertErrContains(t, err, testFieldSnippetID)
 	err = DeleteSnippetNoteAwardEmoji(t.Context(), client, SnippetDeleteOnNoteInput{ProjectID: "p", IID: 1, NoteID: 0, AwardID: 1})

@@ -217,9 +217,7 @@ func TestList_RESTFilterOptions(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_MissingFullPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(context.Background(), client, ListInput{})
 	if err == nil {
 		t.Fatal("List() expected error for missing full_path, got nil")
@@ -230,9 +228,7 @@ func TestList_MissingFullPath(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestList_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := List(ctx, client, ListInput{FullPath: testFullPath})
 	if err == nil {
@@ -287,9 +283,7 @@ func TestGet_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(context.Background(), client, GetInput{FullPath: testFullPath})
 	if err == nil {
 		t.Fatal("Get() expected error for missing iid, got nil")
@@ -303,9 +297,7 @@ func TestGet_MissingIID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestGet_MissingFullPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(context.Background(), client, GetInput{IID: 1})
 	if err == nil {
 		t.Fatal("Get() expected error for missing full_path, got nil")
@@ -357,9 +349,7 @@ func TestGetLinks_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetLinks_MissingIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetLinks(context.Background(), client, GetLinksInput{FullPath: testFullPath})
 	if err == nil {
 		t.Fatal("GetLinks() expected error for missing iid, got nil")
@@ -370,9 +360,7 @@ func TestGetLinks_MissingIID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetLinks_MissingFullPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetLinks(context.Background(), client, GetLinksInput{IID: 1})
 	if err == nil {
 		t.Fatal("GetLinks() expected error for missing full_path, got nil")
@@ -410,9 +398,7 @@ func TestCreate_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingTitle(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{FullPath: testFullPath})
 	if err == nil {
 		t.Fatal("Create() expected error for missing title, got nil")
@@ -423,9 +409,7 @@ func TestCreate_MissingTitle(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestCreate_MissingFullPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(context.Background(), client, CreateInput{Title: "Some Title"})
 	if err == nil {
 		t.Fatal("Create() expected error for missing full_path, got nil")
@@ -484,9 +468,7 @@ func TestUpdate_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Update(context.Background(), client, UpdateInput{FullPath: testFullPath})
 	if err == nil {
 		t.Fatal("Update() expected error for missing iid, got nil")
@@ -497,9 +479,7 @@ func TestUpdate_MissingIID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestUpdate_MissingFullPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Update(context.Background(), client, UpdateInput{IID: 1})
 	if err == nil {
 		t.Fatal("Update() expected error for missing full_path, got nil")
@@ -550,9 +530,7 @@ func TestDelete_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(context.Background(), client, DeleteInput{FullPath: testFullPath})
 	if err == nil {
 		t.Fatal("Delete() expected error for missing iid, got nil")
@@ -563,9 +541,7 @@ func TestDelete_MissingIID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_MissingFullPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(context.Background(), client, DeleteInput{IID: 1})
 	if err == nil {
 		t.Fatal("Delete() expected error for missing full_path, got nil")
@@ -909,7 +885,9 @@ func TestList_WithAllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		vars, err := testutil.ParseGraphQLVariables(r)
 		if err != nil {
-			t.Fatalf("ParseGraphQLVariables: %v", err)
+			t.Errorf("ParseGraphQLVariables: %v", err)
+			http.Error(w, "ParseGraphQLVariables", http.StatusInternalServerError)
+			return
 		}
 		for _, key := range []string{"fullPath", "state", "search", "authorUsername", "labelName", "confidential", "sort", "first", "after", "includeAncestors", "includeDescendants"} {
 			if _, ok := vars[key]; !ok {
@@ -949,7 +927,9 @@ func TestList_WorkItems_RequestsEEFields(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read body: %v", err)
+			t.Errorf("read body: %v", err)
+			http.Error(w, "read body", http.StatusInternalServerError)
+			return
 		}
 		query := string(body)
 		for _, field := range []string{"weight", "healthStatus", "color", "status"} {
@@ -992,11 +972,15 @@ func TestCreate_WithAllOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		vars, err := testutil.ParseGraphQLVariables(r)
 		if err != nil {
-			t.Fatalf("ParseGraphQLVariables: %v", err)
+			t.Errorf("ParseGraphQLVariables: %v", err)
+			http.Error(w, "ParseGraphQLVariables", http.StatusInternalServerError)
+			return
 		}
 		input, ok := vars["input"].(map[string]any)
 		if !ok {
-			t.Fatal("GraphQL variables missing 'input' object")
+			t.Error("GraphQL variables missing 'input' object")
+			http.Error(w, "GraphQL variables missing 'input' object", http.StatusInternalServerError)
+			return
 		}
 		for _, key := range []string{"title", "confidential", "descriptionWidget", "colorWidget", "startAndDueDateWidget", "assigneesWidget", "labelsWidget", "weightWidget", "healthStatusWidget"} {
 			if _, exists := input[key]; !exists {
@@ -1032,9 +1016,7 @@ func TestCreate_WithAllOptions(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreate_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Create(ctx, client, CreateInput{FullPath: testFullPath, Title: "X"})
 	if err == nil {
@@ -1057,11 +1039,15 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 		default:
 			vars, err := testutil.ParseGraphQLVariables(r)
 			if err != nil {
-				t.Fatalf("ParseGraphQLVariables: %v", err)
+				t.Errorf("ParseGraphQLVariables: %v", err)
+				http.Error(w, "ParseGraphQLVariables", http.StatusInternalServerError)
+				return
 			}
 			input, ok := vars["input"].(map[string]any)
 			if !ok {
-				t.Fatal("GraphQL variables missing 'input' object")
+				t.Error("GraphQL variables missing 'input' object")
+				http.Error(w, "GraphQL variables missing 'input' object", http.StatusInternalServerError)
+				return
 			}
 			for _, key := range []string{"title", "stateEvent", "descriptionWidget", "colorWidget", "startAndDueDateWidget", "labelsWidget", "assigneesWidget", "weightWidget", "healthStatusWidget", "statusWidget"} {
 				if _, exists := input[key]; !exists {
@@ -1102,9 +1088,7 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestUpdate_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Update(ctx, client, UpdateInput{FullPath: testFullPath, IID: 1, Title: "X"})
 	if err == nil {
@@ -1118,9 +1102,7 @@ func TestUpdate_CancelledContext(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetLinks_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := GetLinks(ctx, client, GetLinksInput{FullPath: testFullPath, IID: 1})
 	if err == nil {
@@ -1145,9 +1127,7 @@ func TestGetLinks_APIError(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGet_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Get(ctx, client, GetInput{FullPath: testFullPath, IID: 1})
 	if err == nil {
@@ -1159,9 +1139,7 @@ func TestGet_CancelledContext(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDelete_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	err := Delete(ctx, client, DeleteInput{FullPath: testFullPath, IID: 1})
 	if err == nil {

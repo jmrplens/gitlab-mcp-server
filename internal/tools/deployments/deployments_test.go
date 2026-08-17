@@ -301,9 +301,7 @@ func TestDeploymentGet_DeployableWithoutProject(t *testing.T) {
 // that real handlers reach only on malformed routes. It asserts both helpers
 // return a non-nil error and never invoke the transport.
 func TestDeploymentRawFetch_NewRequestError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		t.Fatal("transport must not be called when NewRequest fails")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	if _, err := rawGetDeployment(context.Background(), client, "projects/%zz/deployments/1"); err == nil {
 		t.Error("rawGetDeployment: expected NewRequest error, got nil")
 	}
@@ -689,7 +687,9 @@ func TestDeploymentApprove_Success(t *testing.T) {
 				RepresentedAs string `json:"represented_as"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "decode body", http.StatusInternalServerError)
+				return
 			}
 			if body.RepresentedAs != "security" {
 				t.Errorf("represented_as = %q, want %q", body.RepresentedAs, "security")

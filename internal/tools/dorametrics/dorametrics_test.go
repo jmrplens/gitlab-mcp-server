@@ -232,9 +232,7 @@ func assertProjectMetricsCaseResult(t *testing.T, out Output, err error, tt proj
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetProjectMetrics_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called for cancelled context")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := GetProjectMetrics(ctx, client, ProjectInput{ProjectID: "42", Metric: "deployment_frequency"})
 	if err == nil {
@@ -414,9 +412,7 @@ func metricsCaseHandler(t *testing.T, handler http.HandlerFunc) http.HandlerFunc
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetGroupMetrics_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called for cancelled context")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := GetGroupMetrics(ctx, client, GroupInput{GroupID: "5", Metric: "deployment_frequency"})
 	if err == nil {

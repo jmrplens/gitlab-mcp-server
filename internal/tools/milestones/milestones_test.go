@@ -385,9 +385,7 @@ func TestMilestoneUpdate_WithDates(t *testing.T) {
 		http.NotFound(w, r)
 	})
 	mux.HandleFunc(pathProjectMilestones+"/1", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			t.Fatalf("method = %s, want PUT", r.Method)
-		}
+		testutil.AssertRequestMethod(t, r, http.MethodPut)
 		testutil.RespondJSON(w, http.StatusOK, `{"id":1,"iid":1,"project_id":42,"title":"v1.0"}`)
 	})
 	client := testutil.NewTestClient(t, mux)

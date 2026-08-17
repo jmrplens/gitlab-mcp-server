@@ -98,7 +98,9 @@ func TestListProjectMergeTrains(t *testing.T) {
 				if tt.handler != nil {
 					tt.handler(t, w, r)
 				} else {
-					t.Fatal("handler should not be called")
+					t.Error("handler should not be called")
+					http.Error(w, "handler should not be called", http.StatusInternalServerError)
+					return
 				}
 			}))
 			out, err := ListProjectMergeTrains(context.Background(), client, tt.input)
@@ -208,7 +210,9 @@ func TestListMergeRequestInMergeTrain(t *testing.T) {
 				if tt.handler != nil {
 					tt.handler(t, w, r)
 				} else {
-					t.Fatal("handler should not be called")
+					t.Error("handler should not be called")
+					http.Error(w, "handler should not be called", http.StatusInternalServerError)
+					return
 				}
 			}))
 			out, err := ListMergeRequestInMergeTrain(context.Background(), client, tt.input)
@@ -287,7 +291,9 @@ func TestGetMergeRequestOnMergeTrain(t *testing.T) {
 				if tt.handler != nil {
 					tt.handler(t, w, r)
 				} else {
-					t.Fatal("handler should not be called")
+					t.Error("handler should not be called")
+					http.Error(w, "handler should not be called", http.StatusInternalServerError)
+					return
 				}
 			}))
 			out, err := GetMergeRequestOnMergeTrain(context.Background(), client, tt.input)
@@ -371,7 +377,9 @@ func TestAddMergeRequestToMergeTrain(t *testing.T) {
 				if tt.handler != nil {
 					tt.handler(t, w, r)
 				} else {
-					t.Fatal("handler should not be called")
+					t.Error("handler should not be called")
+					http.Error(w, "handler should not be called", http.StatusInternalServerError)
+					return
 				}
 			}))
 			out, err := AddMergeRequestToMergeTrain(context.Background(), client, tt.input)
@@ -476,11 +484,15 @@ func TestAddMergeRequestToMergeTrain_WhenPipelineSucceeds(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read body: %v", err)
+			t.Errorf("read body: %v", err)
+			http.Error(w, "read body", http.StatusInternalServerError)
+			return
 		}
 		var opts map[string]any
 		if jErr := json.Unmarshal(body, &opts); jErr != nil {
-			t.Fatalf("parse body: %v", jErr)
+			t.Errorf("parse body: %v", jErr)
+			http.Error(w, "parse body", http.StatusInternalServerError)
+			return
 		}
 		if opts["when_pipeline_succeeds"] != true {
 			t.Errorf("when_pipeline_succeeds = %v, want true", opts["when_pipeline_succeeds"])

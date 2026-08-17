@@ -28,9 +28,6 @@ const testHookURL = "https://example.com/hook"
 // errExpectedErrZeroID identifies the err expected err zero ID constant used by this package.
 const errExpectedErrZeroID = "expected error for zero ID, got nil"
 
-// errAPINotCalledZeroID identifies the err API not called zero ID constant used by this package.
-const errAPINotCalledZeroID = "API should not be called when ID is 0"
-
 // hookJSON identifies the hook JSON constant used by this package.
 const hookJSON = `{"id":1,"url":"https://example.com/hook","name":"My Hook","description":"Test hook","created_at":"2026-01-01T00:00:00Z","push_events":true,"tag_push_events":false,"merge_requests_events":true,"repository_update_events":false,"enable_ssl_verification":true,"url_variables":[{"key":"env","value":"prod"}],"token_present":true,"signing_token_present":true}`
 
@@ -122,7 +119,9 @@ func TestAdd_Success(t *testing.T) {
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read request body: %v", err)
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
 		}
 		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusCreated, hookJSON)
@@ -143,9 +142,7 @@ func TestAdd_Success(t *testing.T) {
 
 // TestAdd_Validation verifies Add validates required fields before calling the API.
 func TestAdd_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPINotCalledZeroID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	if _, err := Add(t.Context(), client, AddInput{}); err == nil {
 		t.Fatal("expected error for empty URL, got nil")
@@ -166,7 +163,9 @@ func TestEdit_Success(t *testing.T) {
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read request body: %v", err)
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
 		}
 		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusOK, hookJSON)
@@ -197,7 +196,9 @@ func TestEdit_AllOptionalFields(t *testing.T) {
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read request body: %v", err)
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
 		}
 		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusOK, `{"id":2,"url":"https://example.com/hook2","name":"Named Hook","description":"Hook desc","created_at":"2026-01-01T00:00:00Z","push_events":false,"tag_push_events":true,"merge_requests_events":true,"repository_update_events":true,"enable_ssl_verification":false}`)
@@ -285,9 +286,7 @@ func TestDelete_Error(t *testing.T) {
 
 // TestGet_ZeroID verifies Get when zero ID.
 func TestGet_ZeroID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPINotCalledZeroID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(t.Context(), client, GetInput{ID: 0})
 	if err == nil {
 		t.Fatal(errExpectedErrZeroID)
@@ -296,9 +295,7 @@ func TestGet_ZeroID(t *testing.T) {
 
 // TestTest_ZeroID verifies Test when zero ID.
 func TestTest_ZeroID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPINotCalledZeroID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Test(t.Context(), client, TestInput{ID: 0})
 	if err == nil {
 		t.Fatal(errExpectedErrZeroID)
@@ -307,9 +304,7 @@ func TestTest_ZeroID(t *testing.T) {
 
 // TestDelete_ZeroID verifies Delete when zero ID.
 func TestDelete_ZeroID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPINotCalledZeroID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(t.Context(), client, DeleteInput{ID: 0})
 	if err == nil {
 		t.Fatal(errExpectedErrZeroID)
@@ -318,9 +313,7 @@ func TestDelete_ZeroID(t *testing.T) {
 
 // TestEdit_ZeroID verifies Edit when zero ID.
 func TestEdit_ZeroID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPINotCalledZeroID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Edit(t.Context(), client, EditInput{ID: 0})
 	if err == nil {
 		t.Fatal(errExpectedErrZeroID)
@@ -339,7 +332,9 @@ func TestSetURLVariable_Success(t *testing.T) {
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read request body: %v", err)
+			t.Errorf("read request body: %v", err)
+			http.Error(w, "read request body", http.StatusInternalServerError)
+			return
 		}
 		capturedBody = string(body)
 		testutil.RespondJSON(w, http.StatusOK, `{"key":"env","value":"prod"}`)
@@ -389,9 +384,7 @@ func TestDeleteURLVariable_Success(t *testing.T) {
 
 // TestSetURLVariable_Validation verifies SetURLVariable validation branches.
 func TestSetURLVariable_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPINotCalledZeroID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	if err := SetURLVariable(t.Context(), client, SetURLVariableInput{}); err == nil {
 		t.Fatal(errExpectedErrZeroID)
 	}
@@ -409,9 +402,7 @@ func TestSetURLVariable_Validation(t *testing.T) {
 
 // TestDeleteURLVariable_Validation verifies DeleteURLVariable validation branches.
 func TestDeleteURLVariable_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPINotCalledZeroID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	if err := DeleteURLVariable(t.Context(), client, DeleteURLVariableInput{}); err == nil {
 		t.Fatal(errExpectedErrZeroID)
 	}

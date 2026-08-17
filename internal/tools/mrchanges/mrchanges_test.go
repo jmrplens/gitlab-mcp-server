@@ -272,9 +272,7 @@ func assertContains(t *testing.T, err error, substr string) {
 
 // TestMRIIDRequired_Validation covers MRIIDRequired with table-driven subtests for validation.
 func TestMRIIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called when merge_request_iid is missing")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	tests := []struct {
 		name string
@@ -306,9 +304,7 @@ func TestMRIIDRequired_Validation(t *testing.T) {
 
 // TestVersionIDRequired_Validation verifies VersionIDRequired when validation.
 func TestVersionIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called when version_id is missing")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	t.Run("GetDiffVersion", func(t *testing.T) {
 		_, err := GetDiffVersion(context.Background(), client, DiffVersionGetInput{ProjectID: "42", MRIID: 1})

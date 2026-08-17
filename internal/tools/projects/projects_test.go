@@ -489,7 +489,9 @@ func TestProjectDelete_PermanentlyRemoveTwoStep(t *testing.T) {
 		case 2, 3:
 			w.WriteHeader(http.StatusAccepted)
 		default:
-			t.Fatalf("unexpected delete call %d", calls)
+			t.Errorf("unexpected delete call %d", calls)
+			http.Error(w, "unexpected delete call", http.StatusInternalServerError)
+			return
 		}
 	}))
 
@@ -521,9 +523,7 @@ func TestProjectDelete_NotFound(t *testing.T) {
 // TestProjectDelete_EmptyID verifies that Delete returns an error
 // when project_id is empty.
 func TestProjectDelete_EmptyID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not make API call with empty project_id")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Delete(context.Background(), client, DeleteInput{ProjectID: ""})
 	if err == nil {
@@ -593,9 +593,7 @@ func TestProjectRestore_NotFound(t *testing.T) {
 // TestProjectRestore_EmptyID verifies that Restore returns an error
 // when project_id is empty.
 func TestProjectRestore_EmptyID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not make API call with empty project_id")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Restore(context.Background(), client, RestoreInput{ProjectID: ""})
 	if err == nil {
@@ -639,7 +637,9 @@ func TestProjectCreate_ReviewerAssignmentStrategy_SentAndMapped(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"my-repo","path_with_namespace":"jmrplens/my-repo","visibility":"private","reviewer_assignment_strategy":"code_owners"}`)
@@ -673,7 +673,9 @@ func TestProjectCreate_ReviewerAssignmentStrategy_OmittedWhenEmpty(t *testing.T)
 		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":42,"name":"my-repo"}`)
@@ -703,7 +705,9 @@ func TestProjectUpdate_ReviewerAssignmentStrategy_SentAndMapped(t *testing.T) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProject42 {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, `{"id":42,"name":"my-repo","reviewer_assignment_strategy":"dap_powered"}`)
@@ -751,9 +755,7 @@ func TestProjectCreate_ContextCancelled(t *testing.T) {
 // housekeeping, and user-project paths. A failing mock handler ensures each
 // operation observes the cancelled context before touching GitLab.
 func TestProjectHandlers_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("API should not be called with canceled context: %s %s", r.Method, r.URL.Path)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	content := base64.StdEncoding.EncodeToString([]byte("avatar-data"))
 
@@ -1025,9 +1027,7 @@ func TestProjectHandlers_StatusSpecificErrors(t *testing.T) {
 // handler fails on any request, proving validation protects GitLab from malformed
 // calls.
 func TestProjectHandlers_ValidationErrors(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("API should not be called for validation errors: %s %s", r.Method, r.URL.Path)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	tests := []struct {
 		name string
@@ -1172,7 +1172,9 @@ func TestProjectCreate_EnrichedFeatureOpts(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("failed to decode request body: %v", err)
+				t.Errorf("failed to decode request body: %v", err)
+				http.Error(w, "failed to decode request body", http.StatusInternalServerError)
+				return
 			}
 			assertCreateFeatureBody(t, body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":99,"name":"feature-proj","path_with_namespace":"ns/feature-proj","visibility":"private","default_branch":"main","web_url":"https://gitlab.example.com/ns/feature-proj","description":""}`)
@@ -1462,11 +1464,15 @@ func TestProjectStar_EOFFallsBackToGet(t *testing.T) {
 			callOrder = append(callOrder, "star")
 			hijacker, ok := w.(http.Hijacker)
 			if !ok {
-				t.Fatal("response writer does not support hijacking")
+				t.Error("response writer does not support hijacking")
+				http.Error(w, "response writer does not support hijacking", http.StatusInternalServerError)
+				return
 			}
 			conn, _, err := hijacker.Hijack()
 			if err != nil {
-				t.Fatalf("hijack response: %v", err)
+				t.Errorf("hijack response: %v", err)
+				http.Error(w, "hijack response", http.StatusInternalServerError)
+				return
 			}
 			_ = conn.Close()
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v4/projects/42":
@@ -1813,9 +1819,7 @@ func TestProjectHookCustomHeadersToOutput_SkipsNilEntries(t *testing.T) {
 // TestDoProjectHookRequest_NewRequestError verifies request construction errors
 // are returned before the GitLab client attempts an HTTP call.
 func TestDoProjectHookRequest_NewRequestError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called when request construction fails")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, resp, err := doProjectHookRequest[projectHookAPI](context.Background(), client, "bad method", pathProject42Hooks, nil)
 	if err == nil {
@@ -2604,9 +2608,7 @@ func TestEditPushRule_EmptyProjectID(t *testing.T) {
 // TestAddPushRule_RequiresRuleSetting verifies AddPushRule rejects calls that
 // GitLab would reject because they contain no actual push rule setting.
 func TestAddPushRule_RequiresRuleSetting(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		t.Fatalf("API should not be called for missing push rule settings: %s %s", r.Method, r.URL.Path)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := AddPushRule(context.Background(), client, AddPushRuleInput{ProjectID: "42"})
 	if err == nil {
@@ -3124,7 +3126,9 @@ func TestFork_WithAllOptions(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42Fork {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":100,"name":"my-fork","path_with_namespace":"user/my-fork","visibility":"private","web_url":"https://gitlab.example.com/user/my-fork"}`)
@@ -3190,7 +3194,9 @@ func TestAddHook_WithAllEvents(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42Hooks {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"url":"https://example.com/hook","project_id":42,"push_events":true,"issues_events":true,"merge_requests_events":true,"tag_push_events":true,"note_events":true,"confidential_note_events":true,"job_events":true,"pipeline_events":true,"wiki_page_events":true,"deployment_events":true,"releases_events":true,"milestone_events":true,"feature_flag_events":true,"emoji_events":true,"resource_access_token_events":true,"resource_deploy_token_events":true,"vulnerability_events":true,"token_present":true,"signing_token_present":true}`)
@@ -3261,7 +3267,9 @@ func TestEditHook_WithAllEvents(t *testing.T) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProject42Hook1 {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"url":"https://example.com/hook-updated","project_id":42,"push_events":true}`)
@@ -4070,7 +4078,9 @@ func TestProjectFork_AllOptionalFields(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProject42Fork {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("failed to decode request body: %v", err)
+				t.Errorf("failed to decode request body: %v", err)
+				http.Error(w, "failed to decode request body", http.StatusInternalServerError)
+				return
 			}
 			assertForkBody(t, body)
 			testutil.RespondJSON(w, http.StatusCreated, projectJSON)
@@ -5568,7 +5578,9 @@ func TestProjectCreate_MergeMethod_FastForward(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("failed to decode body: %v", err)
+				t.Errorf("failed to decode body: %v", err)
+				http.Error(w, "failed to decode body", http.StatusInternalServerError)
+				return
 			}
 			if v, ok := body["merge_method"].(string); !ok || v != "ff" {
 				t.Errorf("merge_method = %v, want %q", body["merge_method"], "ff")
@@ -5601,7 +5613,9 @@ func TestProjectCreate_MergePoliciesCombined(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("failed to decode body: %v", err)
+				t.Errorf("failed to decode body: %v", err)
+				http.Error(w, "failed to decode body", http.StatusInternalServerError)
+				return
 			}
 			if v := body["merge_method"]; v != "rebase_merge" {
 				t.Errorf("merge_method = %v, want rebase_merge", v)
@@ -5636,7 +5650,9 @@ func TestProjectCreate_RemoveSourceBranch(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjects {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("failed to decode body: %v", err)
+				t.Errorf("failed to decode body: %v", err)
+				http.Error(w, "failed to decode body", http.StatusInternalServerError)
+				return
 			}
 			if v, ok := body["remove_source_branch_after_merge"].(bool); !ok || !v {
 				t.Errorf("remove_source_branch_after_merge = %v, want true", body["remove_source_branch_after_merge"])
@@ -6624,7 +6640,9 @@ func TestCreateForUser_AllOptionalFields(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjectForUser5 {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			s := string(body)
 			for _, want := range []string{

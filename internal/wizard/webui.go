@@ -42,9 +42,25 @@ var listenFn = func(ctx context.Context, network, address string) (net.Listener,
 	return lc.Listen(ctx, network, address)
 }
 
+// syncWriter serializes writes to an underlying [io.Writer]. RunWebUI shares
+// its progress writer between the calling goroutine and HTTP handler
+// goroutines, so unsynchronized writes to a plain buffer are a data race.
+type syncWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+// Write implements [io.Writer] under the mutex.
+func (s *syncWriter) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.w.Write(p)
+}
+
 // RunWebUI starts a local HTTP server and opens the setup wizard in the browser.
 // It blocks until the user completes configuration or the context is cancelled.
 func RunWebUI(version string, w io.Writer) error {
+	w = &syncWriter{w: w}
 	listener, err := listenFn(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		return fmt.Errorf("starting web server: %w", err)

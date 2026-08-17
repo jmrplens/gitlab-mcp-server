@@ -28,9 +28,7 @@ func newStats(all, opened, closed int64) StatisticsOutput {
 // TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/issues_statistics" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/issues_statistics")
 		testutil.RespondJSON(w, http.StatusOK, `{"statistics":{"counts":{"all":10,"closed":3,"opened":7}}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -57,9 +55,7 @@ func TestGet_Error(t *testing.T) {
 // TestGetGroup verifies GetGroup.
 func TestGetGroup(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/groups/5/issues_statistics" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/groups/5/issues_statistics")
 		testutil.RespondJSON(w, http.StatusOK, `{"statistics":{"counts":{"all":5,"closed":2,"opened":3}}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -86,9 +82,7 @@ func TestGetGroup_Error(t *testing.T) {
 // TestGetProject verifies GetProject.
 func TestGetProject(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/projects/1/issues_statistics" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/projects/1/issues_statistics")
 		testutil.RespondJSON(w, http.StatusOK, `{"statistics":{"counts":{"all":20,"closed":10,"opened":10}}}`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -121,9 +115,6 @@ func TestFormatMarkdown(t *testing.T) {
 }
 
 // ---------- Tests consolidated from coverage_test.go ----------.
-
-// fmtUnexpPath identifies the fmt unexp path constant used by this package.
-const fmtUnexpPath = "unexpected path: %s"
 
 // errExpCancelledNil identifies the err exp cancelled nil constant used by this package.
 const errExpCancelledNil = "expected error for canceled context, got nil"
@@ -254,9 +245,7 @@ func TestFromGL_ZeroCounts(t *testing.T) {
 func TestGet_WithAllFilters(t *testing.T) {
 	const resp = `{"statistics":{"counts":{"all":10,"closed":3,"opened":7}}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/issues_statistics" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/issues_statistics")
 		q := r.URL.Query()
 		if q.Get("labels") == "" {
 			t.Error(errExpLabelsParam)
@@ -390,9 +379,7 @@ func TestGet_APIError403(t *testing.T) {
 func TestGetGroup_WithAllFilters(t *testing.T) {
 	const resp = `{"statistics":{"counts":{"all":30,"closed":10,"opened":20}}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/groups/99/issues_statistics" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/groups/99/issues_statistics")
 		q := r.URL.Query()
 		if q.Get("labels") == "" {
 			t.Error(errExpLabelsParam)
@@ -514,9 +501,7 @@ func TestGetGroup_APIError404(t *testing.T) {
 func TestGetProject_WithAllFilters(t *testing.T) {
 	const resp = `{"statistics":{"counts":{"all":50,"closed":20,"opened":30}}}`
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/projects/42/issues_statistics" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/projects/42/issues_statistics")
 		q := r.URL.Query()
 		if q.Get("labels") == "" {
 			t.Error(errExpLabelsParam)

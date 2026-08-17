@@ -246,9 +246,7 @@ func TestDeleteNote_APIError(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestUpdateNote_NoteIDValidation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := UpdateNote(t.Context(), client, UpdateNoteInput{
 		ProjectID:    testProjectID,
 		CommitSHA:    testCommitSHA,
@@ -268,9 +266,7 @@ func TestUpdateNote_NoteIDValidation(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestDeleteNote_NoteIDValidation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteNote(t.Context(), client, DeleteNoteInput{
 		ProjectID:    testProjectID,
 		CommitSHA:    testCommitSHA,

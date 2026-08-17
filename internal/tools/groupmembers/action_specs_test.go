@@ -153,9 +153,7 @@ func TestActionSpecs_DeleteOutputs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API when confirm is declined")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	byTool := groupMemberSpecsByTool(t, ActionSpecs(client))
 
 	for _, tt := range []struct {

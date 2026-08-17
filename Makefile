@@ -508,11 +508,12 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/5] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/5] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/5] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/5] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[5/5] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[1/6] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/6] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/6] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/6] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/6] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[6/6] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \

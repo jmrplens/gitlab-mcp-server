@@ -159,10 +159,7 @@ func TestCreate_Success(t *testing.T) {
 // when the due_date field has an invalid format. The mock should never be
 // called because validation occurs before the API request.
 func TestCreate_InvalidDueDate(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called for invalid due_date")
-		http.NotFound(w, nil)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Create(context.Background(), client, CreateInput{
 		ProjectID: testProjectID,
@@ -1378,9 +1375,7 @@ func assertContains(t *testing.T, err error, substr string) {
 // TestIssueIIDRequired_Validation ensures all handlers that accept issue_iid
 // reject zero/negative values with ErrRequiredInt64 before making any API call.
 func TestIssueIIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when issue_iid is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 
@@ -1434,9 +1429,7 @@ func TestIssueIIDRequired_Validation(t *testing.T) {
 
 // TestIssueIDRequired_Validation ensures GetByID rejects zero/negative issue_id.
 func TestIssueIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when issue_id is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	tests := []struct {
 		name string
 		id   int64
@@ -1493,9 +1486,7 @@ func schemaRequiredFields(schema map[string]any) []string {
 
 // TestToProjectIDRequired_Validation ensures Move rejects zero/negative to_project_id.
 func TestToProjectIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when to_project_id is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	tests := []struct {
 		name string
 		id   int64
@@ -3283,7 +3274,9 @@ func TestCreate_ConfidentialTrue(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssues {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("failed to decode body: %v", err)
+				t.Errorf("failed to decode body: %v", err)
+				http.Error(w, "failed to decode body", http.StatusInternalServerError)
+				return
 			}
 			if v, ok := body["confidential"].(bool); !ok || !v {
 				t.Errorf("confidential = %v, want true", body["confidential"])
@@ -3315,7 +3308,9 @@ func TestCreate_ConfidentialFalse(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssues {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("failed to decode body: %v", err)
+				t.Errorf("failed to decode body: %v", err)
+				http.Error(w, "failed to decode body", http.StatusInternalServerError)
+				return
 			}
 			if v, ok := body["confidential"].(bool); !ok || v {
 				t.Errorf("confidential = %v, want false", body["confidential"])
@@ -3347,7 +3342,9 @@ func TestUpdate_ConfidentialToggle(t *testing.T) {
 		if r.Method == http.MethodPut && r.URL.Path == pathIssue10 {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("failed to decode body: %v", err)
+				t.Errorf("failed to decode body: %v", err)
+				http.Error(w, "failed to decode body", http.StatusInternalServerError)
+				return
 			}
 			if v, ok := body["confidential"].(bool); !ok || v {
 				t.Errorf("confidential = %v, want false", body["confidential"])
@@ -3407,7 +3404,9 @@ func TestCreate_AssigneeIDSingular(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssues {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("failed to decode request body: %v", err)
+				t.Errorf("failed to decode request body: %v", err)
+				http.Error(w, "failed to decode request body", http.StatusInternalServerError)
+				return
 			}
 			if _, ok := body["assignee_id"]; !ok {
 				t.Errorf("request body missing assignee_id field: %v", body)
@@ -3441,7 +3440,9 @@ func TestUpdate_AssigneeIDSingular(t *testing.T) {
 		if r.Method == http.MethodPut && r.URL.Path == pathIssue10 {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("failed to decode request body: %v", err)
+				t.Errorf("failed to decode request body: %v", err)
+				http.Error(w, "failed to decode request body", http.StatusInternalServerError)
+				return
 			}
 			if _, ok := body["assignee_id"]; !ok {
 				t.Errorf("request body missing assignee_id field: %v", body)
@@ -4075,7 +4076,9 @@ func TestCreate_WithIID(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssues {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "decode body", http.StatusInternalServerError)
+				return
 			}
 			if body["iid"] != float64(900) {
 				t.Errorf("body iid = %v, want 900", body["iid"])
@@ -4099,7 +4102,9 @@ func TestUpdate_WithUpdatedAt(t *testing.T) {
 		if r.Method == http.MethodPut && r.URL.Path == pathIssue10 {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "decode body", http.StatusInternalServerError)
+				return
 			}
 			if _, ok := body["updated_at"]; !ok {
 				t.Error("expected updated_at in update body")

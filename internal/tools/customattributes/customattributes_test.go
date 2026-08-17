@@ -15,9 +15,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// fmtUnexpPath identifies the fmt unexp path constant used by this package.
-const fmtUnexpPath = "unexpected path: %s"
-
 // errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
@@ -44,9 +41,7 @@ const testTypeProject = "project"
 // It asserts the returned output matches the expected fields.
 func TestList_User(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/users/1/custom_attributes" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/users/1/custom_attributes")
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"dept","value":"engineering"}]`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -67,9 +62,7 @@ func TestList_User(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestList_Group(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/groups/2/custom_attributes" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/groups/2/custom_attributes")
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"tier","value":"gold"}]`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -87,9 +80,7 @@ func TestList_Group(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestList_Project(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/projects/3/custom_attributes" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/projects/3/custom_attributes")
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -120,9 +111,7 @@ func TestList_InvalidType(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestGet_User(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/users/1/custom_attributes/dept" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/users/1/custom_attributes/dept")
 		testutil.RespondJSON(w, http.StatusOK, `{"key":"dept","value":"engineering"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -154,12 +143,8 @@ func TestGet_Error(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestSet_Group(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/groups/2/custom_attributes/tier" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
-		if r.Method != http.MethodPut {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/groups/2/custom_attributes/tier")
+		testutil.AssertRequestMethod(t, r, http.MethodPut)
 		testutil.RespondJSON(w, http.StatusOK, `{"key":"tier","value":"platinum"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -191,12 +176,8 @@ func TestSet_Error(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestDelete_Project(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/projects/3/custom_attributes/old_key" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
-		if r.Method != http.MethodDelete {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/projects/3/custom_attributes/old_key")
+		testutil.AssertRequestMethod(t, r, http.MethodDelete)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	client := testutil.NewTestClient(t, handler)

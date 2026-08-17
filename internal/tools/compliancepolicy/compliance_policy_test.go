@@ -22,7 +22,7 @@ import (
 func TestGet(t *testing.T) {
 	tests := []struct {
 		name       string
-		handler    http.HandlerFunc
+		handler    http.Handler
 		ctx        func() context.Context
 		wantErr    bool
 		wantNilCSP bool
@@ -115,7 +115,7 @@ func TestUpdate(t *testing.T) {
 	tests := []struct {
 		name       string
 		input      UpdateInput
-		handler    http.HandlerFunc
+		handler    http.Handler
 		ctx        func() context.Context
 		wantErr    bool
 		wantNilCSP bool
@@ -132,11 +132,9 @@ func TestUpdate(t *testing.T) {
 			wantCSP: 456,
 		},
 		{
-			name:  "rejects nil csp_namespace_id",
-			input: UpdateInput{CSPNamespaceID: nil},
-			handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				t.Fatal("handler should not be called for nil csp_namespace_id")
-			}),
+			name:    "rejects nil csp_namespace_id",
+			input:   UpdateInput{CSPNamespaceID: nil},
+			handler: testutil.ForbiddenHandler(t),
 			wantErr: true,
 		},
 		{

@@ -18,9 +18,7 @@ import (
 // It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/templates/gitignores" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/templates/gitignores")
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"Go","name":"Go"},{"key":"Node","name":"Node"}]`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -51,9 +49,7 @@ func TestList_Error(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/templates/gitignores/Go" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/templates/gitignores/Go")
 		testutil.RespondJSON(w, http.StatusOK, `{"name":"Go","content":"*.exe\n*.test"}`)
 	})
 	client := testutil.NewTestClient(t, handler)

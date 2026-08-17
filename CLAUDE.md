@@ -53,6 +53,7 @@ gitlab-mcp-server/
 │   ├── godoc_tool/              # Consolidated Go doc auditor + fixer (was audit_godocs + add_docs)
 │   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
 │   ├── audit_surface_quality/   # Consolidated surface audit: metadata violations + output quality (was audit_tools + audit_output)
+│   ├── audit_test_goroutines/   # Audits testing.T aborts made off the test goroutine (A/B categories, --check gate)
 │   ├── audit_test_names/        # Audits test function naming convention compliance
 │   ├── audit_tokens/            # Audits token usage for model-facing surfaces (+ --compare-schemas sizing spike)
 │   ├── eval_mcp_surfaces/       # Evaluates model-facing MCP surface behavior

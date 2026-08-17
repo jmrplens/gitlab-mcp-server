@@ -15,9 +15,6 @@ import (
 // fmtUnexpPath identifies the fmt unexp path constant used by this package.
 const fmtUnexpPath = "unexpected path: %s"
 
-// errNoReachAPI identifies the err no reach API constant used by this package.
-const errNoReachAPI = "should not reach API"
-
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
@@ -68,9 +65,7 @@ func TestGetSettingsForProject_Success(t *testing.T) {
 
 // TestGetSettingsForProject_ValidationError verifies GetSettingsForProject when validation error.
 func TestGetSettingsForProject_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := GetSettingsForProject(t.Context(), client, GetProjectInput{ProjectID: ""})
 	if err == nil {
@@ -98,9 +93,7 @@ func TestGetSettingsForGroup_Success(t *testing.T) {
 
 // TestGetSettingsForGroup_ValidationError verifies GetSettingsForGroup when validation error.
 func TestGetSettingsForGroup_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := GetSettingsForGroup(t.Context(), client, GetGroupInput{GroupID: ""})
 	if err == nil {
@@ -131,9 +124,7 @@ func TestUpdateGlobalSettings_Success(t *testing.T) {
 
 // TestUpdateSettingsForProject_ValidationError verifies UpdateSettingsForProject when validation error.
 func TestUpdateSettingsForProject_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := UpdateSettingsForProject(t.Context(), client, UpdateProjectInput{ProjectID: ""})
 	if err == nil {
@@ -290,9 +281,7 @@ func TestUpdateSettingsForGroup_Success(t *testing.T) {
 
 // TestUpdateSettingsForGroup_ValidationError verifies UpdateSettingsForGroup when validation error.
 func TestUpdateSettingsForGroup_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := UpdateSettingsForGroup(t.Context(), client, UpdateGroupInput{GroupID: ""})
 	if err == nil {
 		t.Fatal("expected validation error")

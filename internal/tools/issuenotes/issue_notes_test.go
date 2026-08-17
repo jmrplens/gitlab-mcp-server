@@ -390,9 +390,7 @@ func assertContains(t *testing.T, err error, substr string) {
 // TestIssueIIDRequired_Validation ensures all handlers that accept issue_iid
 // reject zero/negative values before making any API call.
 func TestIssueIIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when issue_iid is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 
@@ -423,9 +421,7 @@ func TestIssueIIDRequired_Validation(t *testing.T) {
 // TestNoteIDRequired_Validation ensures GetNote, Update, Delete reject
 // zero/negative note_id before making any API call.
 func TestNoteIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when note_id is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 
@@ -823,7 +819,9 @@ func TestCreate_CreatedAtBackdated(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssueNotes {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read body: %v", err)
+				t.Errorf("read body: %v", err)
+				http.Error(w, "read body", http.StatusInternalServerError)
+				return
 			}
 			if !strings.Contains(string(body), `"created_at":"2026-01-15T10:00:00Z"`) {
 				t.Errorf("body = %s, want created_at 2026-01-15T10:00:00Z", body)
@@ -852,7 +850,9 @@ func TestCreate_CreatedAtUnparseableIgnored(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathIssueNotes {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read body: %v", err)
+				t.Errorf("read body: %v", err)
+				http.Error(w, "read body", http.StatusInternalServerError)
+				return
 			}
 			if strings.Contains(string(body), "created_at") {
 				t.Errorf("body = %s, want no created_at", body)

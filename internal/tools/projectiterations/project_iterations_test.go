@@ -61,9 +61,7 @@ func TestList_Success(t *testing.T) {
 
 // TestList_ValidationError_MissingProjectID verifies List returns error when ProjectID is empty.
 func TestList_ValidationError_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(context.Background(), client, ListInput{})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")

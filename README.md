@@ -415,17 +415,17 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       977 |     195,992 |
-| Unit tests (`_test.go`)  |       532 |     302,990 |
+| Source (`.go`, non-test) |       977 |     196,008 |
+| Unit tests (`_test.go`)  |       532 |     302,377 |
 | End-to-end tests         |       173 |      44,989 |
-| **Total**                | **1,682** | **543,971** |
+| **Total**                | **1,682** | **543,374** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,509 |
-| — exported (public)             |  2,632 |
+| Source functions                |  7,510 |
+| — exported (public)             |  2,633 |
 | — unexported (private)          |  4,877 |
 | Unit test functions (`TestXxx`) | 11,683 |
 | Subtests (`t.Run(...)`)         |  2,931 |
@@ -435,19 +435,19 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.55× more tests than code |
+| Test lines vs source lines         | 1.54× more tests than code |
 | Average source file length         |                 ~200 lines |
-| Average test file length           |                 ~569 lines |
-| Comment lines in source            |  21,778 (~11.1% of source) |
+| Average test file length           |                 ~568 lines |
+| Comment lines in source            |  21,782 (~11.1% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,761 |
-| `defer` statements                 |   865 |
-| `struct` types defined             | 2,732 |
+| `if err != nil` checks             | 6,758 |
+| `defer` statements                 |   866 |
+| `struct` types defined             | 2,733 |
 | `//nolint` suppressions            |   226 |
 | `TODO` / `FIXME` / `HACK` comments |     3 |
 
@@ -464,7 +464,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Record              | File                                                     |
 | ------------------- | -------------------------------------------------------- |
 | Longest source file | `internal/tools/projects/projects.go` — 3,846 lines      |
-| Longest test file   | `internal/tools/projects/projects_test.go` — 8,186 lines |
+| Longest test file   | `internal/tools/projects/projects_test.go` — 8,204 lines |
 
 ### Because why not
 

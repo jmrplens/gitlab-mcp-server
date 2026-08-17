@@ -181,9 +181,7 @@ func TestRemoveGroupAllowlist_Success(t *testing.T) {
 
 // TestAddProjectAllowlist_ZeroTargetProjectID verifies AddProjectAllowlist when zero target project ID.
 func TestAddProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called when TargetProjectID is 0")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := AddProjectAllowlist(t.Context(), client, AddProjectAllowlistInput{ProjectID: "42", TargetProjectID: 0})
 	if err == nil {
 		t.Fatal("expected error for zero TargetProjectID, got nil")
@@ -192,9 +190,7 @@ func TestAddProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
 
 // TestRemoveProjectAllowlist_ZeroTargetProjectID verifies RemoveProjectAllowlist when zero target project ID.
 func TestRemoveProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called when TargetProjectID is 0")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := RemoveProjectAllowlist(t.Context(), client, RemoveProjectAllowlistInput{ProjectID: "42", TargetProjectID: 0})
 	if err == nil {
 		t.Fatal("expected error for zero TargetProjectID, got nil")
@@ -203,9 +199,7 @@ func TestRemoveProjectAllowlist_ZeroTargetProjectID(t *testing.T) {
 
 // TestAddGroupAllowlist_ZeroTargetGroupID verifies AddGroupAllowlist when zero target group ID.
 func TestAddGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called when TargetGroupID is 0")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := AddGroupAllowlist(t.Context(), client, AddGroupAllowlistInput{ProjectID: "42", TargetGroupID: 0})
 	if err == nil {
 		t.Fatal("expected error for zero TargetGroupID, got nil")
@@ -214,9 +208,7 @@ func TestAddGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
 
 // TestRemoveGroupAllowlist_ZeroTargetGroupID verifies RemoveGroupAllowlist when zero target group ID.
 func TestRemoveGroupAllowlist_ZeroTargetGroupID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called when TargetGroupID is 0")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := RemoveGroupAllowlist(t.Context(), client, RemoveGroupAllowlistInput{ProjectID: "42", TargetGroupID: 0})
 	if err == nil {
 		t.Fatal("expected error for zero TargetGroupID, got nil")

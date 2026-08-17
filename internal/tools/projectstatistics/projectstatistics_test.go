@@ -14,9 +14,7 @@ import (
 // TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/projects/1/statistics" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/projects/1/statistics")
 		testutil.RespondJSON(w, http.StatusOK, `{"fetches":{"total":42,"days":[{"count":5,"date":"2026-01-01"}]}}`)
 	})
 	client := testutil.NewTestClient(t, handler)

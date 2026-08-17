@@ -921,9 +921,7 @@ func assertContains(t *testing.T, err error, substr string) {
 // TestJobIDRequired_Validation ensures all handlers that require job_id
 // reject zero and negative values.
 func TestJobIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when job_id is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 
@@ -968,9 +966,7 @@ func TestJobIDRequired_Validation(t *testing.T) {
 // TestPipelineIDRequired_ValidationJobs ensures handlers that require pipeline_id
 // reject zero and negative values.
 func TestPipelineIDRequired_ValidationJobs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when pipeline_id is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 

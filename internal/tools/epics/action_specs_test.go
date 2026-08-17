@@ -31,7 +31,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		if r.Method == http.MethodPost {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			query := string(body)
 			switch {
@@ -48,7 +50,9 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 			case strings.Contains(query, "workItemDelete"):
 				testutil.RespondJSON(w, http.StatusOK, deleteDeleteResponseJSON)
 			default:
-				t.Fatalf("unexpected GraphQL query: %s", query)
+				t.Errorf("unexpected GraphQL query: %s", query)
+				http.Error(w, "unexpected GraphQL query", http.StatusInternalServerError)
+				return
 			}
 			return
 		}
@@ -137,9 +141,7 @@ func TestActionSpecs_DeleteError(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API when confirm is declined")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	byTool := epicSpecsByTool(t, ActionSpecs(client))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)

@@ -239,9 +239,7 @@ func TestReleaseLinkUpdate_Success(t *testing.T) {
 // TestReleaseLink_GetRequiresLinkID verifies that Get returns an error
 // when link_id is zero.
 func TestReleaseLink_GetRequiresLinkID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Get(context.Background(), client, GetInput{
 		ProjectID: "42",
@@ -259,9 +257,7 @@ func TestReleaseLink_GetRequiresLinkID(t *testing.T) {
 // TestReleaseLink_UpdateRequiresLinkID verifies that Update returns an error
 // when link_id is zero.
 func TestReleaseLink_UpdateRequiresLinkID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Update(context.Background(), client, UpdateInput{
 		ProjectID: "42",
@@ -279,9 +275,7 @@ func TestReleaseLink_UpdateRequiresLinkID(t *testing.T) {
 // TestReleaseLink_DeleteRequiresLinkID verifies that Delete returns an error
 // when link_id is zero.
 func TestReleaseLink_DeleteRequiresLinkID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Delete(context.Background(), client, DeleteInput{
 		ProjectID: "42",
@@ -1006,9 +1000,7 @@ func TestToOutput_ZeroValue(t *testing.T) {
 
 // TestCreateBatch_EmptyTagName verifies CreateBatch returns error when tag_name is empty.
 func TestCreateBatch_EmptyTagName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := CreateBatch(context.Background(), client, CreateBatchInput{
 		ProjectID: "42",
 		TagName:   "",

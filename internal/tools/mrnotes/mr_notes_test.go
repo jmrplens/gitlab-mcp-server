@@ -724,7 +724,9 @@ func TestCreate_CreatedAtBackdated(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1Notes {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read body: %v", err)
+				t.Errorf("read body: %v", err)
+				http.Error(w, "read body", http.StatusInternalServerError)
+				return
 			}
 			if !strings.Contains(string(body), `"created_at":"2026-01-15T10:00:00Z"`) {
 				t.Errorf("body = %s, want created_at 2026-01-15T10:00:00Z", body)
@@ -753,7 +755,9 @@ func TestCreate_CreatedAtUnparseableIgnored(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1Notes {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read body: %v", err)
+				t.Errorf("read body: %v", err)
+				http.Error(w, "read body", http.StatusInternalServerError)
+				return
 			}
 			if strings.Contains(string(body), "created_at") {
 				t.Errorf("body = %s, want no created_at", body)
@@ -782,7 +786,9 @@ func TestCreate_InternalAndDiffHeadSHA(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMR1Notes {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read body: %v", err)
+				t.Errorf("read body: %v", err)
+				http.Error(w, "read body", http.StatusInternalServerError)
+				return
 			}
 			s := string(body)
 			if !strings.Contains(s, `"internal":true`) {

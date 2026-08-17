@@ -245,7 +245,9 @@ func TestOrbit_ActionSpecs_CallAllRoutes(t *testing.T) {
 			testutil.AssertRequestMethod(t, r, http.MethodGet)
 			testutil.RespondJSON(w, http.StatusOK, `{"projects":{"indexed":1,"total_known":1},"indexing":{"state":"indexed"}}`)
 		default:
-			t.Fatalf("unexpected path: %s", r.URL.Path)
+			t.Errorf("unexpected path: %s", r.URL.Path)
+			http.Error(w, "unexpected path", http.StatusInternalServerError)
+			return
 		}
 	}))
 

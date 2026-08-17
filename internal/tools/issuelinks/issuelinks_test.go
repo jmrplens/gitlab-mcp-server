@@ -441,9 +441,7 @@ func assertContains(t *testing.T, err error, substr string) {
 
 // TestIssueIIDNegative_Validation ensures negative issue_iid is rejected by all handlers.
 func TestIssueIIDNegative_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when issue_iid is negative")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 
@@ -473,9 +471,7 @@ func TestIssueIIDNegative_Validation(t *testing.T) {
 
 // TestIssueLinkIDNegative_Validation ensures negative issue_link_id is rejected.
 func TestIssueLinkIDNegative_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when issue_link_id is negative")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 

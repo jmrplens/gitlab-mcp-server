@@ -19,7 +19,7 @@ func TestListDeps(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    ListInput
-		handler  http.HandlerFunc
+		handler  http.Handler
 		wantErr  bool
 		validate func(t *testing.T, out ListOutput)
 	}{
@@ -146,9 +146,7 @@ func TestListDeps(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := tt.handler
 			if handler == nil {
-				handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					t.Fatal("handler should not be called")
-				})
+				handler = testutil.ForbiddenHandler(t)
 			}
 			client := testutil.NewTestClient(t, handler)
 			out, err := ListDeps(context.Background(), client, tt.input)
@@ -210,9 +208,7 @@ func assertRailsDependencyLicense(t *testing.T, d Output) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListDeps_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called for cancelled context")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := ListDeps(ctx, client, ListInput{ProjectID: "42"})
 	if err == nil {
@@ -227,7 +223,7 @@ func TestCreateExport(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    CreateExportInput
-		handler  http.HandlerFunc
+		handler  http.Handler
 		wantErr  bool
 		validate func(t *testing.T, out ExportOutput)
 	}{
@@ -290,9 +286,7 @@ func TestCreateExport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := tt.handler
 			if handler == nil {
-				handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					t.Fatal("handler should not be called")
-				})
+				handler = testutil.ForbiddenHandler(t)
 			}
 			client := testutil.NewTestClient(t, handler)
 			out, err := CreateExport(context.Background(), client, tt.input)
@@ -310,9 +304,7 @@ func TestCreateExport(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestCreateExport_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called for cancelled context")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := CreateExport(ctx, client, CreateExportInput{PipelineID: 100})
 	if err == nil {
@@ -346,7 +338,7 @@ func TestGetExport(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    GetExportInput
-		handler  http.HandlerFunc
+		handler  http.Handler
 		wantErr  bool
 		validate func(t *testing.T, out ExportOutput)
 	}{
@@ -408,9 +400,7 @@ func TestGetExport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := tt.handler
 			if handler == nil {
-				handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					t.Fatal("handler should not be called")
-				})
+				handler = testutil.ForbiddenHandler(t)
 			}
 			client := testutil.NewTestClient(t, handler)
 			out, err := GetExport(context.Background(), client, tt.input)
@@ -428,9 +418,7 @@ func TestGetExport(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetExport_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called for cancelled context")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := GetExport(ctx, client, GetExportInput{ExportID: 1})
 	if err == nil {
@@ -445,7 +433,7 @@ func TestDownloadExport(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    DownloadExportInput
-		handler  http.HandlerFunc
+		handler  http.Handler
 		wantErr  bool
 		validate func(t *testing.T, out DownloadOutput)
 	}{
@@ -503,9 +491,7 @@ func TestDownloadExport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := tt.handler
 			if handler == nil {
-				handler = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					t.Fatal("handler should not be called")
-				})
+				handler = testutil.ForbiddenHandler(t)
 			}
 			client := testutil.NewTestClient(t, handler)
 			out, err := DownloadExport(context.Background(), client, tt.input)
@@ -523,9 +509,7 @@ func TestDownloadExport(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestDownloadExport_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called for cancelled context")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := DownloadExport(ctx, client, DownloadExportInput{ExportID: 1})
 	if err == nil {

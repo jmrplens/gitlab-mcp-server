@@ -89,9 +89,7 @@ func TestList_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestList_ValidationError_MissingGroupID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(context.Background(), client, ListInput{})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")

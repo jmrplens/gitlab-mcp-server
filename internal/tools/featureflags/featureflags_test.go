@@ -991,7 +991,9 @@ func TestUpdateFeatureFlag_StrategyUserListAndDestroy_RoundTrip(t *testing.T) {
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read body: %v", err)
+			t.Errorf("read body: %v", err)
+			http.Error(w, "read body", http.StatusInternalServerError)
+			return
 		}
 		gotBody = string(body)
 		testutil.RespondJSON(w, http.StatusOK, `{"name":"flag","description":"","active":true,"version":"new_version_flag","strategies":[{"id":7,"name":"gitlabUserList","user_list":{"id":3,"iid":1,"project_id":9,"name":"beta testers","user_xids":"u1,u2"},"scopes":[]}]}`)
@@ -1034,7 +1036,9 @@ func TestUpdateFeatureFlag_DestroyOnlyStrategyOmitsName(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			t.Fatalf("read body: %v", err)
+			t.Errorf("read body: %v", err)
+			http.Error(w, "read body", http.StatusInternalServerError)
+			return
 		}
 		gotBody = string(body)
 		testutil.RespondJSON(w, http.StatusOK, `{"name":"flag","description":"","active":true,"version":"new_version_flag","strategies":[]}`)

@@ -18,15 +18,13 @@ import (
 // It asserts the returned output matches the expected fields.
 func TestStartMigration(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/bulk_imports" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/bulk_imports")
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		var body map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode body: %v", err)
+			t.Errorf("decode body: %v", err)
+			http.Error(w, "decode body", http.StatusInternalServerError)
+			return
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"id": 42,

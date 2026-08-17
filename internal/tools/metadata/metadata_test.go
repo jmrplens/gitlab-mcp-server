@@ -15,9 +15,7 @@ import (
 // TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/metadata" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/metadata")
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"version": "16.8.0",
 			"revision": "abc123",

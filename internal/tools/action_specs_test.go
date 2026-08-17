@@ -209,7 +209,8 @@ func surfacePolicyTestSpec(t *testing.T) (toolutil.ActionSpec, *bool) {
 		Handler: func(_ context.Context, params map[string]any) (any, error) {
 			handlerCalled = true
 			if params["project_id"] != "123" {
-				t.Fatalf("handler project_id = %v, want 123", params["project_id"])
+				t.Errorf("handler project_id = %v, want 123", params["project_id"])
+				return nil, fmt.Errorf("unexpected project_id %v", params["project_id"])
 			}
 			return map[string]any{"ok": true}, nil
 		},

@@ -410,9 +410,7 @@ func TestPreviewGroup_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGetProject_BadgeIDRequired(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := GetProject(t.Context(), client, GetProjectInput{ProjectID: "1", BadgeID: 0})
 	if err == nil || !strings.Contains(err.Error(), testBadgeIDField) {
@@ -424,9 +422,7 @@ func TestGetProject_BadgeIDRequired(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestEditProject_BadgeIDRequired(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := EditProject(t.Context(), client, EditProjectInput{ProjectID: "1", BadgeID: 0})
 	if err == nil || !strings.Contains(err.Error(), testBadgeIDField) {
@@ -438,9 +434,7 @@ func TestEditProject_BadgeIDRequired(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestDeleteProject_BadgeIDRequired(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	err := DeleteProject(t.Context(), client, DeleteProjectInput{ProjectID: "1", BadgeID: 0})
 	if err == nil || !strings.Contains(err.Error(), testBadgeIDField) {
@@ -452,9 +446,7 @@ func TestDeleteProject_BadgeIDRequired(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGetGroup_BadgeIDRequired(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := GetGroup(t.Context(), client, GetGroupInput{GroupID: "1", BadgeID: 0})
 	if err == nil || !strings.Contains(err.Error(), testBadgeIDField) {
@@ -466,9 +458,7 @@ func TestGetGroup_BadgeIDRequired(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestEditGroup_BadgeIDRequired(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := EditGroup(t.Context(), client, EditGroupInput{GroupID: "1", BadgeID: 0})
 	if err == nil || !strings.Contains(err.Error(), testBadgeIDField) {
@@ -480,9 +470,7 @@ func TestEditGroup_BadgeIDRequired(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestDeleteGroup_BadgeIDRequired(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	err := DeleteGroup(t.Context(), client, DeleteGroupInput{GroupID: "1", BadgeID: 0})
 	if err == nil || !strings.Contains(err.Error(), testBadgeIDField) {

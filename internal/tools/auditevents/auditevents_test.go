@@ -75,9 +75,7 @@ func TestGetInstance_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetInstance_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetInstance(context.Background(), client, GetInstanceInput{EventID: 0})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
@@ -114,9 +112,7 @@ func TestListGroup_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestListGroup_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListGroup(context.Background(), client, ListGroupInput{})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
@@ -148,9 +144,7 @@ func TestGetGroup_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetGroup_ValidationError_MissingGroup(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetGroup(context.Background(), client, GetGroupInput{EventID: 1})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
@@ -187,9 +181,7 @@ func TestListProject_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestListProject_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListProject(context.Background(), client, ListProjectInput{})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
@@ -221,9 +213,7 @@ func TestGetProject_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetProject_ValidationError_MissingProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetProject(context.Background(), client, GetProjectInput{EventID: 1})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
@@ -260,9 +250,7 @@ func TestListInstance_WithDateFilter(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListInstance_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called on cancelled context")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListInstance(ctx, client, ListInstanceInput{})
@@ -275,9 +263,7 @@ func TestListInstance_ContextCancelled(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetInstance_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetInstance(ctx, client, GetInstanceInput{EventID: 1})
@@ -290,9 +276,7 @@ func TestGetInstance_ContextCancelled(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListGroup_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListGroup(ctx, client, ListGroupInput{GroupID: "5"})
@@ -305,9 +289,7 @@ func TestListGroup_ContextCancelled(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetGroup_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetGroup(ctx, client, GetGroupInput{GroupID: "5", EventID: 1})
@@ -320,9 +302,7 @@ func TestGetGroup_ContextCancelled(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestListProject_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 
 	_, err := ListProject(ctx, client, ListProjectInput{ProjectID: "42"})
@@ -335,9 +315,7 @@ func TestListProject_ContextCancelled(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that a canceled context aborts the call without contacting GitLab.
 func TestGetProject_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 
 	_, err := GetProject(ctx, client, GetProjectInput{ProjectID: "42", EventID: 1})
@@ -456,9 +434,7 @@ func TestGetProject_APIError(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetGroup_ValidationError_MissingEvent(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := GetGroup(context.Background(), client, GetGroupInput{GroupID: "5", EventID: 0})
 	if err == nil {
@@ -470,9 +446,7 @@ func TestGetGroup_ValidationError_MissingEvent(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestGetProject_ValidationError_MissingEvent(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := GetProject(context.Background(), client, GetProjectInput{ProjectID: "42", EventID: 0})
 	if err == nil {
@@ -484,9 +458,7 @@ func TestGetProject_ValidationError_MissingEvent(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGetInstance_NegativeEventID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := GetInstance(context.Background(), client, GetInstanceInput{EventID: -1})
 	if err == nil {

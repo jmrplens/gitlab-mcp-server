@@ -420,6 +420,37 @@ go run ./cmd/godoc_tool/ fix ./internal/tools/branches/
 
 Replaces the former `audit_godocs` and `add_docs` binaries. The full rules taxonomy (package comments, exported-symbol conventions, test-function comments, and the common package-comment pitfall) is documented in [godoc.md](godoc.md).
 
+### audit_test_goroutines
+
+Scans `_test.go` files for `testing.T` aborts (`t.Fatal`, `t.Fatalf`, `t.FailNow`) made inside function literals that cross a goroutine boundary (`http.HandlerFunc`, `HandleFunc`, `go` statements, `errgroup.Go`, MCP `AddTool` handlers, middleware, handler struct fields). Classifies each site as category A (tail position) or B (handler still had work to do), and also reports advisory `t.Errorf` sites not followed by `return`. Enforces the contract in `.github/instructions/test-goroutines.instructions.md`.
+
+#### Usage
+
+```bash
+# Human-readable report over the default roots (cmd, internal, test)
+go run ./cmd/audit_test_goroutines/
+
+# JSON work list + CI gate
+go run ./cmd/audit_test_goroutines/ -json plan/test-goroutines-backlog.json
+go run ./cmd/audit_test_goroutines/ --check
+```
+
+#### Flags
+
+| Flag      | Type   | Default | Description                                                                    |
+| --------- | ------ | ------- | ------------------------------------------------------------------------------ |
+| `-json`   | string | _(off)_ | Write the JSON work list to this path                                          |
+| `--check` | bool   | `false` | Exit non-zero when any abort site exists; errorf-without-return stays advisory |
+
+#### Output
+
+Human report to stdout (per-site `file:line [category] boundary`), summary line, and optionally the JSON work list (`fatal`, `errorf_no_return`, `summary`).
+
+#### Make targets
+
+- `make audit-test-goroutines` — writes `plan/test-goroutines-backlog.json`.
+- `make check-test-goroutines` — CI gate; also step [6/6] of `make analyze`.
+
 ### audit_test_names
 
 Scans Go `_test.go` files and classifies `Test*` functions by naming pattern (3-part / 2-part / no-underscore / TestCov / skip), then emits rename suggestions.

@@ -355,7 +355,9 @@ func TestImportFromGitHub_WithAllOptionalFields(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/import/github" {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"imported","full_path":"ns/imported","full_name":"ns / imported","import_source":"github.com/user/repo","import_status":"scheduled"}`)
@@ -511,7 +513,9 @@ func TestImportFromGitHub_WithOptionalStages(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == "/api/v4/import/github" {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"my-repo","full_path":"ns/my-repo","full_name":"ns / my-repo","refs_url":"https://gitlab.example.com/ns/my-repo/refs","import_source":"github.com/user/repo","import_status":"scheduled","import_warning":"some collaborators could not be mapped"}`)

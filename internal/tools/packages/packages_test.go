@@ -167,7 +167,9 @@ func TestPackagePublish_WithProgressToken(t *testing.T) {
 			return
 		}
 		if _, err := io.Copy(io.Discard, r.Body); err != nil {
-			t.Fatalf("read upload body: %v", err)
+			t.Errorf("read upload body: %v", err)
+			http.Error(w, "read upload body", http.StatusInternalServerError)
+			return
 		}
 		testutil.RespondJSON(w, http.StatusCreated, publishResponseJSON)
 	}))
@@ -227,9 +229,7 @@ func TestPackagePublish_WithProgressToken(t *testing.T) {
 
 // TestPackagePublishBothParams_Error verifies PackagePublishBothParams when error.
 func TestPackagePublishBothParams_Error(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Publish(context.Background(), nil, client, PublishInput{
 		ProjectID:      "42",
@@ -246,9 +246,7 @@ func TestPackagePublishBothParams_Error(t *testing.T) {
 
 // TestPackagePublishNeitherParams_Error verifies PackagePublishNeitherParams when error.
 func TestPackagePublishNeitherParams_Error(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Publish(context.Background(), nil, client, PublishInput{
 		ProjectID:      "42",
@@ -263,9 +261,7 @@ func TestPackagePublishNeitherParams_Error(t *testing.T) {
 
 // TestPackagePublish_InvalidPackageName verifies PackagePublish when invalid package name.
 func TestPackagePublish_InvalidPackageName(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Publish(context.Background(), nil, client, PublishInput{
 		ProjectID:      "42",
@@ -281,9 +277,7 @@ func TestPackagePublish_InvalidPackageName(t *testing.T) {
 
 // TestPackagePublish_MissingProjectID verifies PackagePublish when missing project ID.
 func TestPackagePublish_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Publish(context.Background(), nil, client, PublishInput{
 		PackageName:    testPackageName,
@@ -300,9 +294,7 @@ func TestPackagePublish_MissingProjectID(t *testing.T) {
 func TestPackagePublish_ContextCancelled(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Publish(ctx, nil, client, PublishInput{
 		ProjectID:      "42",
@@ -364,9 +356,7 @@ func TestPackageDownload_Success(t *testing.T) {
 
 // TestPackageDownload_MissingOutputPath verifies PackageDownload when missing output path.
 func TestPackageDownload_MissingOutputPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Download(context.Background(), nil, client, DownloadInput{
 		ProjectID:      "42",
@@ -383,9 +373,7 @@ func TestPackageDownload_MissingOutputPath(t *testing.T) {
 func TestPackageDownload_ContextCancelled(t *testing.T) {
 	ctx := testutil.CancelledCtx(t)
 
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Download(ctx, nil, client, DownloadInput{
 		ProjectID:      "42",
@@ -660,9 +648,7 @@ func TestPackageList_WithFilters(t *testing.T) {
 
 // TestPackageList_MissingProjectID verifies PackageList when missing project ID.
 func TestPackageList_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := List(context.Background(), client, ListInput{})
 	if err == nil {
@@ -730,9 +716,7 @@ func TestPackageGroupList_Success(t *testing.T) {
 
 // TestPackageGroupList_MissingGroupID verifies GroupList rejects an empty group_id.
 func TestPackageGroupList_MissingGroupID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := GroupList(context.Background(), client, GroupListInput{})
 	if err == nil {
@@ -746,9 +730,7 @@ func TestPackageGroupList_MissingGroupID(t *testing.T) {
 // TestPackageGroupList_ContextCancelled verifies GroupList returns early when
 // the context is already cancelled.
 func TestPackageGroupList_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
@@ -820,9 +802,7 @@ func TestPackageFileList_Success(t *testing.T) {
 
 // TestPackageFileList_MissingPackageID verifies PackageFileList when missing package ID.
 func TestPackageFileList_MissingPackageID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := FileList(context.Background(), client, FileListInput{
 		ProjectID: "42",
@@ -853,9 +833,7 @@ func TestPackageDelete_Success(t *testing.T) {
 
 // TestPackageDelete_MissingProjectID verifies PackageDelete when missing project ID.
 func TestPackageDelete_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	err := Delete(context.Background(), nil, client, DeleteInput{
 		PackageID: "10",
@@ -867,9 +845,7 @@ func TestPackageDelete_MissingProjectID(t *testing.T) {
 
 // TestPackageDelete_MissingPackageID verifies PackageDelete when missing package ID.
 func TestPackageDelete_MissingPackageID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	err := Delete(context.Background(), nil, client, DeleteInput{
 		ProjectID: "42",
@@ -901,9 +877,7 @@ func TestPackageFileDelete_Success(t *testing.T) {
 
 // TestPackageFileDelete_MissingFileID verifies PackageFileDelete when missing file ID.
 func TestPackageFileDelete_MissingFileID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	err := FileDelete(context.Background(), nil, client, FileDeleteInput{
 		ProjectID: "42",

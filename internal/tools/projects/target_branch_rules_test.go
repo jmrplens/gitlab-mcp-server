@@ -83,9 +83,7 @@ func TestListTargetBranchRules_Empty(t *testing.T) {
 
 // TestListTargetBranchRules_MissingProjectID verifies project_id validation.
 func TestListTargetBranchRules_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("handler should not be called when project_id is missing")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListTargetBranchRules(context.Background(), client, ListTargetBranchRulesInput{})
 	if err == nil || !strings.Contains(err.Error(), "project_id is required") {
 		t.Fatalf("err = %v, want project_id is required", err)
@@ -147,9 +145,7 @@ func TestCreateTargetBranchRule_Success(t *testing.T) {
 // TestCreateTargetBranchRule_Validation covers required-field and numeric-ID
 // validation without reaching the API.
 func TestCreateTargetBranchRule_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("handler should not be called on validation failure")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	tests := []struct {
 		name  string
 		input CreateTargetBranchRuleInput
@@ -216,9 +212,7 @@ func TestDeleteTargetBranchRuleOutput_Success(t *testing.T) {
 
 // TestDeleteTargetBranchRule_MissingRuleID verifies rule_id validation.
 func TestDeleteTargetBranchRule_MissingRuleID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("handler should not be called when rule_id is missing")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteTargetBranchRule(context.Background(), client, DeleteTargetBranchRuleInput{})
 	if err == nil || !strings.Contains(err.Error(), "rule_id is required") {
 		t.Fatalf("err = %v, want rule_id is required", err)

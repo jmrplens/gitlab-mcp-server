@@ -284,9 +284,7 @@ func TestSetGroupDatadog_UseInheritedSettings(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestSetGroupDatadog_EmptyInputRejected(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("transport should not be called when input is empty")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := SetGroupDatadog(t.Context(), client, SetGroupDatadogInput{GroupID: testGroupPath})
 	if err == nil {

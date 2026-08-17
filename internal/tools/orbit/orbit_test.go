@@ -87,7 +87,9 @@ func TestSchema_ResponseFormatAlias_ForwardsFormat(t *testing.T) {
 		testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema")
 		testutil.AssertQueryParam(t, r, "format", "llm")
 		if got := r.URL.Query().Get("response_format"); got != "" {
-			t.Fatalf("response_format query parameter = %q, want empty", got)
+			t.Errorf("response_format query parameter = %q, want empty", got)
+			http.Error(w, "response_format query parameter, want empty", http.StatusInternalServerError)
+			return
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{"schema_version":"1.0"}`)
 	}))
@@ -158,13 +160,19 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 		testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
 		var got map[string]json.RawMessage
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Fatalf("decode request: %v", err)
+			t.Errorf("decode request: %v", err)
+			http.Error(w, "decode request", http.StatusInternalServerError)
+			return
 		}
 		if string(got["query"]) != `{"node":{"entity":"Project","id":"p","node_ids":[1]},"query_type":"traversal"}` {
-			t.Fatalf("query body = %s, want traversal query with node_ids", got["query"])
+			t.Errorf("query body = %s, want traversal query with node_ids", got["query"])
+			http.Error(w, "query body, want traversal query with node_ids", http.StatusInternalServerError)
+			return
 		}
 		if string(got["response_format"]) != `"raw"` {
-			t.Fatalf("response_format = %s, want raw", got["response_format"])
+			t.Errorf("response_format = %s, want raw", got["response_format"])
+			http.Error(w, "response_format, want raw", http.StatusInternalServerError)
+			return
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"result": [{"_id": "1", "_type": "Project"}],
@@ -203,10 +211,14 @@ func TestQuery_LLMResponseFormat_UsesRawResponse(t *testing.T) {
 		testutil.AssertRequestPath(t, r, "/api/v4/orbit/query")
 		var got map[string]json.RawMessage
 		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
-			t.Fatalf("decode request: %v", err)
+			t.Errorf("decode request: %v", err)
+			http.Error(w, "decode request", http.StatusInternalServerError)
+			return
 		}
 		if string(got["response_format"]) != `"llm"` {
-			t.Fatalf("response_format = %s, want llm", got["response_format"])
+			t.Errorf("response_format = %s, want llm", got["response_format"])
+			http.Error(w, "response_format, want llm", http.StatusInternalServerError)
+			return
 		}
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write([]byte("@header\nProject(name: gitlab)\n"))
@@ -939,7 +951,9 @@ func TestSchema_ResponseFormatAliasEmptyString(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testutil.AssertRequestPath(t, r, "/api/v4/orbit/schema")
 		if got := r.URL.Query().Get("format"); got != "" {
-			t.Fatalf("format query parameter = %q, want empty (server default)", got)
+			t.Errorf("format query parameter = %q, want empty (server default)", got)
+			http.Error(w, "format query parameter, want empty (server default)", http.StatusInternalServerError)
+			return
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{"schema_version":"1.0"}`)
 	}))

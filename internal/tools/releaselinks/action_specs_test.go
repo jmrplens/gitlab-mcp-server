@@ -124,9 +124,7 @@ func TestActionSpecs_MutationErrors(t *testing.T) {
 
 // TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API when confirm is declined")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	byTool := releaseLinkSpecsByTool(t, ActionSpecs(client))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)

@@ -16,9 +16,7 @@ import (
 // TestList verifies List.
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/projects/1/templates/licenses" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/projects/1/templates/licenses")
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"mit","name":"MIT License","popular":true}]`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -48,9 +46,7 @@ func TestList_Error(t *testing.T) {
 // TestGet verifies Get.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/projects/1/templates/licenses/mit" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/projects/1/templates/licenses/mit")
 		testutil.RespondJSON(w, http.StatusOK, `{"key":"mit","name":"MIT License","content":"MIT text","permissions":["commercial-use"]}`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -65,9 +61,7 @@ func TestGet(t *testing.T) {
 
 // TestGet_EmptyKey verifies that Get returns a validation error when the key is empty.
 func TestGet_EmptyKey(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called with empty key")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(t.Context(), client, GetInput{ProjectID: "1", TemplateType: "licenses", Key: ""})
 	if err == nil {
 		t.Fatal("expected error for empty key")

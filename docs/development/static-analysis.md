@@ -93,28 +93,30 @@ gotestsum --version
 
 ### Combined Targets
 
-| Target                | Description                                                                                                           |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `make analyze`        | Run `golangci-lint config verify`, `golangci-lint fmt --diff`, `golangci-lint run`, `govulncheck`, and `markdownlint` |
-| `make analyze-fix`    | Apply auto-fixes with `golangci-lint fmt`, `golangci-lint run --fix`, and `markdownlint --fix`                        |
-| `make analyze-report` | Generate a combined Markdown report at `dist/analysis/report.txt`                                                     |
-| `make lint`           | Backward-compatible alias for `make golangci-lint`                                                                    |
+| Target                | Description                                                                                                                                          |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `make analyze`        | Run `golangci-lint config verify`, `golangci-lint fmt --diff`, `golangci-lint run`, `govulncheck`, `markdownlint`, and the test-goroutine abort gate |
+| `make analyze-fix`    | Apply auto-fixes with `golangci-lint fmt`, `golangci-lint run --fix`, and `markdownlint --fix`                                                       |
+| `make analyze-report` | Generate a combined Markdown report at `dist/analysis/report.txt`                                                                                    |
+| `make lint`           | Backward-compatible alias for `make golangci-lint`                                                                                                   |
 
 ### Project Audit Targets
 
 > Full CLI reference (flags, usage, output formats): [cmd-utilities.md](cmd-utilities.md)
 
-| Target                       | Description                                                                                      |
-| ---------------------------- | ------------------------------------------------------------------------------------------------ |
-| `make audit-surface-quality` | Consolidated MCP surface audit (metadata + output quality)                                       |
-| `make audit-tokens`          | Measure exposed tool token overhead (`--compare-schemas` for meta-tool sizing spike)             |
-| `make audit-metrics`         | Report MCP tool/resource/prompt counts                                                           |
-| `make audit-1to1`            | Consolidated 1:1 SDK↔API parity audit (struct/action/metadata + merged backlog)                  |
-| `make audit-catalog-first`   | Generate ActionSpec surface coverage inventory in `dist/action-spec-coverage.json`               |
-| `make audit-dynamic-aliases` | Audit Dynamic search aliases and canonical action reachability                                   |
-| `make audit-test-names`      | Audit test function naming convention compliance                                                 |
-| `make audit-godocs`          | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings |
-| `make audit-godocs-check`    | Run the same Godoc audit and fail if findings remain                                             |
+| Target                       | Description                                                                                        |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| `make audit-surface-quality` | Consolidated MCP surface audit (metadata + output quality)                                         |
+| `make audit-tokens`          | Measure exposed tool token overhead (`--compare-schemas` for meta-tool sizing spike)               |
+| `make audit-metrics`         | Report MCP tool/resource/prompt counts                                                             |
+| `make audit-1to1`            | Consolidated 1:1 SDK↔API parity audit (struct/action/metadata + merged backlog)                    |
+| `make audit-catalog-first`   | Generate ActionSpec surface coverage inventory in `dist/action-spec-coverage.json`                 |
+| `make audit-dynamic-aliases` | Audit Dynamic search aliases and canonical action reachability                                     |
+| `make audit-test-names`      | Audit test function naming convention compliance                                                   |
+| `make audit-test-goroutines` | Report `testing.T` aborts (`t.Fatal`/`FailNow`) made off the test goroutine, with a JSON work list |
+| `make check-test-goroutines` | Fail when any off-goroutine abort site remains (errorf-without-return stays advisory)              |
+| `make audit-godocs`          | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings   |
+| `make audit-godocs-check`    | Run the same Godoc audit and fail if findings remain                                               |
 
 ## Tool Details
 
