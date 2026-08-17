@@ -13,6 +13,8 @@ package suite
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
@@ -21,6 +23,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/grouplabels"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupmembers"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groups"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/resourceevents"
 )
 
@@ -412,4 +415,251 @@ func TestMeta_GroupEpicLabelEvents(t *testing.T) {
 		requireTruef(t, out.ID == eventID, "label event ID = %d, want %d", out.ID, eventID)
 		t.Logf("Got epic label event %d (%s)", out.ID, out.Action)
 	})
+}
+
+// TestMeta_GroupHookExtras exercises the group webhook sub-operations
+// hook_set_custom_header, hook_delete_custom_header, hook_set_url_variable,
+// hook_delete_url_variable, hook_test, and hook_resend_event through the
+// gitlab_group meta-tool.
+//
+// The test creates a group with a README-initialized project (so push-event
+// test deliveries have a commit payload), registers a webhook pointing at
+// the Docker fixture service, and walks each sub-operation. URL-variable
+// handling is version-tolerant: GitLab rejects variables for hooks whose URL
+// lacks a {placeholder} on some versions and accepts them on others, so the
+// delete assertion follows whichever outcome the set produced. Event resend
+// prefers a real recorded delivery and falls back to the documented 404
+// error path when none is visible within the poll budget.
+//
+// Build tag: e2e && enterprise. Mode: EE (fixture service required).
+// Surface: meta.
+func TestMeta_GroupHookExtras(t *testing.T) {
+	t.Parallel()
+	if sess.meta == nil {
+		t.Skip("meta session not configured")
+	}
+	if !hasE2EFixtureService() {
+		t.Skip("E2E fixture service unavailable; set E2E_FIXTURE_URL or run with E2E_MODE=docker")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
+	defer cancel()
+
+	e2e := NewE2EContext(t)
+	grp := CreateGroupMeta(ctx, e2e, sess.meta, "grp-hook-xtra")
+	groupExtrasCreateGroupProject(ctx, t, grp)
+	hookID := groupExtrasAddHook(ctx, t, grp)
+
+	runGroupExtrasHookHeaderOps(t, ctx, grp, hookID)
+	runGroupExtrasHookURLVariableOps(t, ctx, grp, hookID)
+	runGroupExtrasHookDeliveryOps(t, ctx, grp, hookID)
+}
+
+// groupExtrasAddHook registers a webhook on the group pointing at the E2E
+// fixture service and returns its ID. Hook creation itself (hook_add) is
+// fixture plumbing for the sub-operation tests.
+func groupExtrasAddHook(ctx context.Context, t *testing.T, grp GroupFixture) int64 {
+	t.Helper()
+	out, err := callToolOn[groups.HookOutput](ctx, sess.meta, "gitlab_group", map[string]any{
+		"action": "hook_add",
+		"params": map[string]any{
+			"group_id":    grp.gidStr(),
+			"url":         e2eFixtureServiceURL("/group-hook"),
+			"push_events": true,
+		},
+	})
+	requireNoError(t, err, "group hook_add")
+	requireTruef(t, out.ID > 0, "expected positive hook ID")
+	t.Logf("Added group hook %d", out.ID)
+	return out.ID
+}
+
+// runGroupExtrasHookHeaderOps drives hook_set_custom_header and
+// hook_delete_custom_header; both are expected to succeed on a fresh hook.
+func runGroupExtrasHookHeaderOps(t *testing.T, ctx context.Context, grp GroupFixture, hookID int64) {
+	t.Helper()
+
+	t.Run("HookSetCustomHeader", func(t *testing.T) {
+		requireTruef(t, hookID > 0, "hookID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "hook_set_custom_header",
+			"params": map[string]any{
+				"group_id": grp.gidStr(),
+				"hook_id":  hookID,
+				"key":      "X-E2E-Group",
+				"value":    "e2e-group-value",
+			},
+		})
+		requireNoError(t, err, "group hook_set_custom_header")
+		t.Log("Set custom header on group hook")
+	})
+
+	t.Run("HookDeleteCustomHeader", func(t *testing.T) {
+		requireTruef(t, hookID > 0, "hookID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "hook_delete_custom_header",
+			"params": map[string]any{
+				"group_id": grp.gidStr(),
+				"hook_id":  hookID,
+				"key":      "X-E2E-Group",
+			},
+		})
+		requireNoError(t, err, "group hook_delete_custom_header")
+		t.Log("Deleted custom header from group hook")
+	})
+}
+
+// runGroupExtrasHookURLVariableOps drives hook_set_url_variable and
+// hook_delete_url_variable. The hook URL carries no {placeholder}, so the
+// set call may be rejected (422) or accepted depending on the GitLab
+// version; the delete assertion mirrors whichever outcome occurred.
+func runGroupExtrasHookURLVariableOps(t *testing.T, ctx context.Context, grp GroupFixture, hookID int64) {
+	t.Helper()
+	variableSet := false
+
+	t.Run("HookSetURLVariable", func(t *testing.T) {
+		requireTruef(t, hookID > 0, "hookID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "hook_set_url_variable",
+			"params": map[string]any{
+				"group_id": grp.gidStr(),
+				"hook_id":  hookID,
+				"key":      "e2e_var",
+				"value":    "e2e-value",
+			},
+		})
+		variableSet = err == nil
+		t.Logf("hook_set_url_variable accepted=%v (err=%v)", variableSet, err)
+	})
+
+	t.Run("HookDeleteURLVariable", func(t *testing.T) {
+		requireTruef(t, hookID > 0, "hookID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "hook_delete_url_variable",
+			"params": map[string]any{
+				"group_id": grp.gidStr(),
+				"hook_id":  hookID,
+				"key":      "e2e_var",
+			},
+		})
+		if variableSet {
+			requireNoError(t, err, "delete URL variable that was set")
+			t.Log("Deleted URL variable from group hook")
+			return
+		}
+		requireTruef(t, err != nil, "expected error deleting a URL variable that was never set")
+		t.Logf("Expected error deleting unset URL variable: %v", err)
+	})
+}
+
+// runGroupExtrasHookDeliveryOps drives hook_test and hook_resend_event. The
+// resend prefers a real recorded delivery from the test trigger and falls
+// back to asserting the 404 error path with a non-existent event ID when no
+// delivery becomes visible within the poll budget.
+func runGroupExtrasHookDeliveryOps(t *testing.T, ctx context.Context, grp GroupFixture, hookID int64) {
+	t.Helper()
+	tested := false
+
+	t.Run("HookTest", func(t *testing.T) {
+		requireTruef(t, hookID > 0, "hookID not set")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "hook_test",
+			"params": map[string]any{
+				"group_id": grp.gidStr(),
+				"hook_id":  hookID,
+				"trigger":  "push_events",
+			},
+		})
+		requireNoError(t, err, "group hook_test")
+		tested = true
+		t.Logf("Triggered test push event on group hook %d", hookID)
+	})
+
+	t.Run("HookResendEvent", func(t *testing.T) {
+		requireTruef(t, hookID > 0, "hookID not set")
+		var eventID int64
+		if tested {
+			eventID = groupExtrasFirstHookEventID(ctx, t, grp.ID, hookID)
+		}
+		if eventID == 0 {
+			err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+				"action": "hook_resend_event",
+				"params": map[string]any{
+					"group_id":      grp.gidStr(),
+					"hook_id":       hookID,
+					"hook_event_id": int64(999999999),
+				},
+			})
+			requireTruef(t, err != nil, "expected error resending a non-existent hook event")
+			t.Logf("Expected error resending non-existent hook event: %v", err)
+			return
+		}
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
+			"action": "hook_resend_event",
+			"params": map[string]any{
+				"group_id":      grp.gidStr(),
+				"hook_id":       hookID,
+				"hook_event_id": eventID,
+			},
+		})
+		requireNoError(t, err, "group hook_resend_event")
+		t.Logf("Resent group hook event %d", eventID)
+	})
+}
+
+// groupExtrasCreateGroupProject creates a README-initialized project inside
+// the group so group hook test triggers have a commit payload to deliver.
+// The project is removed by the group deletion cascade.
+func groupExtrasCreateGroupProject(ctx context.Context, t *testing.T, grp GroupFixture) {
+	t.Helper()
+	name := uniqueName(e2eProjectPrefix + "grp-hook")
+	out, err := callToolOn[projects.Output](ctx, sess.meta, "gitlab_project", map[string]any{
+		"action": "create",
+		"params": map[string]any{
+			"name":                   name,
+			"namespace_id":           grp.ID,
+			"visibility":             "private",
+			"initialize_with_readme": true,
+			"default_branch":         defaultBranch,
+		},
+	})
+	requireNoError(t, err, "create project inside group")
+	waitForBranchOn(ctx, t, sess.glClient, out.ID, defaultBranch)
+}
+
+// groupExtrasFirstHookEventID polls the raw group hook events endpoint until
+// a delivery is recorded, returning its ID or 0 when none appears within the
+// budget. The events endpoint has no client-go wrapper, so the request is
+// built through the SDK's generic NewRequest/Do plumbing.
+func groupExtrasFirstHookEventID(ctx context.Context, t *testing.T, groupID, hookID int64) int64 {
+	t.Helper()
+	var events []struct {
+		ID int64 `json:"id"`
+	}
+	const budget = 30 * time.Second
+	pollCtx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	_ = Poll(pollCtx, 2*time.Second, budget, func() (bool, string, error) {
+		req, err := sess.glClient.GL().NewRequest(
+			http.MethodGet,
+			fmt.Sprintf("groups/%d/hooks/%d/events", groupID, hookID),
+			nil,
+			[]gl.RequestOptionFunc{gl.WithContext(pollCtx)},
+		)
+		if err != nil {
+			return false, "", fmt.Errorf("build hook events request: %w", err)
+		}
+		events = events[:0]
+		if _, doErr := sess.glClient.GL().Do(req, &events); doErr != nil {
+			return false, fmt.Sprintf("hook events endpoint not readable yet: %v", doErr), nil
+		}
+		if len(events) == 0 {
+			return false, "no hook events recorded yet", nil
+		}
+		return true, "hook event recorded", nil
+	})
+	if len(events) == 0 {
+		return 0
+	}
+	return events[0].ID
 }

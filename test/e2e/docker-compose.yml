@@ -38,6 +38,14 @@ services:
         gitlab_rails['registry_enabled'] = true
         registry_nginx['listen_port'] = 5050
         registry_nginx['listen_https'] = false
+        # GitLab Pages enabled so the pages_* project actions (settings
+        # update, domain lifecycle, unpublish) can be exercised end-to-end.
+        # Only the API and the CI artifact deployment path are needed — the
+        # pages sites themselves are never fetched, so no extra port is
+        # published and access control stays off.
+        pages_external_url 'http://pages.gitlab.localhost'
+        gitlab_pages['enable'] = true
+        gitlab_rails['pages_access_control'] = false
     volumes:
       - gitlab-config:/etc/gitlab
       - gitlab-logs:/var/log/gitlab
@@ -100,6 +108,9 @@ services:
           listen 8080;
           location = /hook { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"hook"}\n'; }
           location = /hook-updated { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"hook-updated"}\n'; }
+          location = /group-hook { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"group-hook"}\n'; }
+          location = /system-hook { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"system-hook"}\n'; }
+          location = /jira { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"jira"}\n'; }
           location = /emoji.png { root /usr/share/nginx/html; add_header Content-Type image/png; }
         }
         NGINX

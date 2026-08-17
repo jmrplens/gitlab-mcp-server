@@ -16,6 +16,7 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergerequests"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mergetrains"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/mrapprovalsettings"
 )
@@ -162,4 +163,38 @@ func TestMeta_MergeTrainGet(t *testing.T) {
 			"merge train entry MR IID = %d, want %d", out.MergeRequest.IID, mr.IID)
 		t.Logf("Merge train entry %d for MR !%d: status=%s target=%s", out.ID, mr.IID, out.Status, out.TargetBranch)
 	})
+}
+
+// TestIndividual_MRDependenciesList exercises gitlab_mr_dependencies_list on
+// a fresh merge request. MR dependencies are a Premium feature, so the tool
+// is only registered on enterprise catalogs; on EE the call must succeed and
+// a fresh MR must report no blocking dependencies. Moved here from the CE
+// suite, where it could only ever skip.
+//
+// Build tag: e2e && enterprise. Mode: EE. Surface: individual.
+func TestIndividual_MRDependenciesList(t *testing.T) {
+	t.Parallel()
+	if sess.individual == nil {
+		t.Skip("individual session not configured")
+	}
+	if !sess.enterprise {
+		t.Skip("enterprise session not configured")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
+	defer cancel()
+
+	proj := createProjectMeta(ctx, t, sess.meta)
+	branch := uniqueName("mrx-deps-branch")
+	createBranchMeta(ctx, t, sess.meta, proj, branch)
+	commitFileMeta(ctx, t, sess.meta, proj, branch, "mr-deps.txt", "mr dependencies fixture", "mr dependencies fixture")
+	mr := createMRMeta(ctx, t, sess.meta, proj, branch, defaultBranch, "mr dependencies fixture")
+
+	out, err := callToolOn[mergerequests.DependenciesOutput](ctx, sess.individual, "gitlab_mr_dependencies_list", mergerequests.GetDependenciesInput{
+		ProjectID: proj.pidOf(),
+		MRIID:     mr.IID,
+	})
+	requireNoError(t, err, "list MR dependencies")
+	requireTruef(t, len(out.Dependencies) == 0, "expected no dependencies on a fresh MR, got %d", len(out.Dependencies))
+	t.Log("Fresh MR has no blocking dependencies")
 }

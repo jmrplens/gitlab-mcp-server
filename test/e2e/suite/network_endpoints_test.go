@@ -1,7 +1,9 @@
-//go:build e2e && !enterprise
+//go:build e2e
 
-// network_endpoints_ce_test.go centralizes deterministic URLs used by Docker E2E
-// tests for webhook, custom emoji, and remote mirror operations.
+// network_endpoints_test.go centralizes deterministic URLs used by Docker E2E
+// tests for webhook, custom emoji, and remote mirror operations. Shared by
+// the CE and EE builds: the EE group-webhook coverage drives deliveries
+// through the same fixture service.
 package suite
 
 import (

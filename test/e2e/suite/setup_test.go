@@ -371,6 +371,11 @@ func configureE2EStartupEnvironment() {
 	if isDockerMode() {
 		_ = godotenv.Load("../../../test/e2e/.env.docker")
 		_ = godotenv.Load("../.env.docker")
+		// Fallback for keys .env.docker does not provision (external
+		// importer credentials such as GH_TOKEN and BITBUCKET_*): godotenv
+		// never overrides variables that are already set, so the Docker
+		// endpoints and tokens loaded above keep precedence.
+		_ = godotenv.Load("../../../.env")
 		return
 	}
 	_ = godotenv.Load("../../../.env")

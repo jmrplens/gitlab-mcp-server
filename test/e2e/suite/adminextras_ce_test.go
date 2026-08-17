@@ -26,6 +26,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,6 +36,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/alertmanagement"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/applications"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/errortracking"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/importservice"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/license"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/planlimits"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/securefiles"
@@ -934,40 +937,254 @@ func TestMeta_AdminDependencyProxyPurge(t *testing.T) {
 	})
 }
 
-// TestMeta_AdminExternalImportersPermanentSkip documents why the external
-// importer actions (import from Git Hub, import from Bit Bucket Server,
-// import gists, cancel a Git Hub import) are permanently skipped: each one
-// requires live credentials and reachable third-party services, which an
-// isolated, deterministic e2e suite cannot provide. Faking the calls would
-// only assert transport errors against unreachable hosts.
-//
-// Build tag: e2e && !enterprise. Mode: n/a (documented permanent skip). Surface: meta.
-func TestMeta_AdminExternalImportersPermanentSkip(t *testing.T) {
-	t.Parallel()
-	t.Skip("permanent skip: the external importer family (import _ github, import _ bitbucket _ server, import _ gists, import _ cancel _ github) needs real third-party services and credentials that the isolated e2e environment cannot provide")
+// adminExtrasGitHubRepo resolves one repository (ID and full name) owned by
+// the GH_TOKEN user through the GitHub API, so the import test needs no
+// extra configuration beyond the token itself.
+func adminExtrasGitHubRepo(ctx context.Context, t *testing.T, token string) (int64, string) {
+	t.Helper()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet,
+		"https://api.github.com/user/repos?per_page=1&sort=full_name&affiliation=owner", http.NoBody)
+	requireNoError(t, err, "build GitHub repos request")
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Skipf("GitHub API unreachable from this environment: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Skipf("GitHub API rejected GH_TOKEN (status %d); cannot resolve a repository to import", resp.StatusCode)
+	}
+	var repos []struct {
+		ID       int64  `json:"id"`
+		FullName string `json:"full_name"`
+	}
+	requireNoError(t, json.NewDecoder(resp.Body).Decode(&repos), "decode GitHub repos response")
+	if len(repos) == 0 {
+		t.Skip("GH_TOKEN user owns no repositories to import")
+	}
+	return repos[0].ID, repos[0].FullName
 }
 
-// TestMeta_AdminDBMigrationMarkPermanentSkip documents why the database
-// migration marking action is permanently skipped: it mutates the
-// instance's migration bookkeeping (marking a background migration as
-// executed), which can corrupt any GitLab instance it runs against and is
-// not restorable through the API.
-//
-// Build tag: e2e && !enterprise. Mode: n/a (documented permanent skip). Surface: meta.
-func TestMeta_AdminDBMigrationMarkPermanentSkip(t *testing.T) {
-	t.Parallel()
-	t.Skip("permanent skip: db _ migration _ mark mutates database migration state irreversibly; exercising it would risk corrupting the instance")
+// adminExtrasRegisterImportedProjectCleanup registers permanent deletion for
+// a project created by an importer, keyed by its numeric ID.
+func adminExtrasRegisterImportedProjectCleanup(e2e *E2EContext, id int64, path string) {
+	_ = e2e.Ledger.Register(ResourceRecord{
+		Kind:      ResourceKindProject,
+		ID:        strconv.FormatInt(id, 10),
+		Path:      path,
+		OwnerTest: e2e.Name,
+		RunID:     e2e.RunID,
+		CreatedAt: time.Now(),
+		Cleanup: func(cleanupCtx context.Context) error {
+			return callToolVoidOn(cleanupCtx, sess.meta, "gitlab_project", map[string]any{
+				"action": "delete",
+				"params": map[string]any{
+					"project_id":         strconv.FormatInt(id, 10),
+					"permanently_remove": true,
+					"full_path":          path,
+				},
+			})
+		},
+	})
 }
 
-// TestMeta_AdminLicenseMutationPermanentSkip documents why the license
-// mutation actions (adding and deleting instance licenses) are permanently
-// skipped: the enterprise e2e workflow depends on the cached EE license
-// staying installed, and adding or deleting licenses from the suite could
-// invalidate that workflow. Only the read path is exercised (see
-// TestMeta_AdminLicenseGetCE).
-//
-// Build tag: e2e && !enterprise. Mode: n/a (documented permanent skip). Surface: meta.
-func TestMeta_AdminLicenseMutationPermanentSkip(t *testing.T) {
-	t.Parallel()
-	t.Skip("permanent skip: license _ add and license _ delete would mutate the instance license and could break the cached EE license workflow used by the enterprise e2e runs")
+// adminExtrasImportGists drives the import_gists action. GitLab's gists
+// importer talks to api.github.com synchronously and 500s when GitHub is
+// degraded (observed during a GitHub outage; the same run scheduled the
+// asynchronous repository import fine). Retry briefly and convert a
+// persistent 500 into a documented skip — the route and error mapping are
+// exercised either way, and the fault is upstream.
+func adminExtrasImportGists(ctx context.Context, t *testing.T, ghToken string) {
+	t.Helper()
+	if ghToken == "" {
+		t.Skip("GH_TOKEN not set; skipping gists import coverage")
+	}
+	var err error
+	for attempt := 1; attempt <= 3; attempt++ {
+		err = callToolVoidOn(ctx, sess.meta, "gitlab_admin", map[string]any{
+			"action": "import_gists",
+			"params": map[string]any{"personal_access_token": ghToken},
+		})
+		if err == nil || !isHTTPStatus(err, 500) {
+			break
+		}
+		time.Sleep(5 * time.Second)
+	}
+	if err != nil && isHTTPStatus(err, 500) {
+		t.Skipf("GitLab returned 500 on the gists import three times (GitHub degraded or GitLab-side flake): %v", err)
+	}
+	requireNoError(t, err, "import_gists")
+	t.Log("Enqueued GitHub gists import")
 }
+
+// TestMeta_AdminExternalImporters exercises the external importer actions
+// (import_github, import_cancel_github, import_gists, import_bitbucket)
+// against the real third-party services, gated on the operator's own
+// credentials: GH_TOKEN for the GitHub family and
+// BITBUCKET_USERNAME/BITBUCKET_API_TOKEN/BITBUCKET_EMAIL/BITBUCKET_REPO_PATH
+// for Bitbucket Cloud. Missing credentials skip the corresponding subtest,
+// so the isolated CI run stays deterministic while a developer with a filled
+// .env exercises the full family. Imported projects are registered for
+// permanent deletion in the per-test ledger. import_bitbucket_server keeps a
+// documented skip: it needs a reachable self-hosted Bitbucket Server
+// (BITBUCKET_SERVER_URL/USERNAME/TOKEN/PROJECT_KEY/REPO_SLUG to override).
+//
+// Build tag: e2e && !enterprise. Mode: any (credential-gated). Surface: meta.
+func TestMeta_AdminExternalImporters(t *testing.T) {
+	t.Parallel()
+	if sess.meta == nil {
+		t.Skip("meta session not configured")
+	}
+	e2e := NewE2EContext(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 240*time.Second)
+	defer cancel()
+	ghToken := os.Getenv("GH_TOKEN")
+
+	t.Run("GitHubImportAndCancel", func(t *testing.T) {
+		if ghToken == "" {
+			t.Skip("GH_TOKEN not set; skipping GitHub import coverage")
+		}
+		repoID, repoName := adminExtrasGitHubRepo(ctx, t, ghToken)
+		out, err := callToolOn[importservice.GitHubImportOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
+			"action": "import_github",
+			"params": map[string]any{
+				"personal_access_token": ghToken,
+				"repo_id":               repoID,
+				"target_namespace":      sess.username,
+				"new_name":              uniqueName("e2e-gh-import"),
+			},
+		})
+		requireNoError(t, err, "import_github "+repoName)
+		requireTruef(t, out.ID > 0, "expected imported project ID, got %+v", out)
+		adminExtrasRegisterImportedProjectCleanup(e2e, out.ID, out.FullPath)
+		t.Logf("Started GitHub import of %s as project %d (%s)", repoName, out.ID, out.FullPath)
+
+		_, err = callToolOn[importservice.CancelledImportOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
+			"action": "import_cancel_github",
+			"params": map[string]any{"project_id": out.ID},
+		})
+		// A tiny repository can finish importing before the cancel lands;
+		// GitLab then rejects the cancel with a 400 naming the state.
+		if err != nil && !strings.Contains(err.Error(), "cannot be canceled") && !isHTTPStatus(err, 400) {
+			t.Fatalf("import_cancel_github: %v", err)
+		}
+		t.Log("GitHub import cancel path exercised")
+	})
+
+	t.Run("GistsImport", func(t *testing.T) {
+		adminExtrasImportGists(ctx, t, ghToken)
+	})
+
+	t.Run("BitbucketCloudImport", func(t *testing.T) {
+		username := os.Getenv("BITBUCKET_USERNAME")
+		apiToken := os.Getenv("BITBUCKET_API_TOKEN")
+		email := os.Getenv("BITBUCKET_EMAIL")
+		repoPath := os.Getenv("BITBUCKET_REPO_PATH")
+		if username == "" || apiToken == "" || email == "" || repoPath == "" {
+			t.Skip("BITBUCKET_USERNAME/BITBUCKET_API_TOKEN/BITBUCKET_EMAIL/BITBUCKET_REPO_PATH not set; skipping Bitbucket Cloud import coverage")
+		}
+		out, err := callToolOn[importservice.BitbucketCloudImportOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
+			"action": "import_bitbucket",
+			"params": map[string]any{
+				"bitbucket_username":  username,
+				"bitbucket_api_token": apiToken,
+				"bitbucket_email":     email,
+				"repo_path":           repoPath,
+				"target_namespace":    sess.username,
+				"new_name":            uniqueName("e2e-bb-import"),
+			},
+		})
+		if err != nil && strings.Contains(err.Error(), "could not be found") {
+			t.Skipf("Bitbucket repository %s not accessible with the configured credentials — refresh BITBUCKET_API_TOKEN in .env for real coverage: %v", repoPath, err)
+		}
+		requireNoError(t, err, "import_bitbucket "+repoPath)
+		requireTruef(t, out.ID > 0, "expected imported project ID, got %+v", out)
+		adminExtrasRegisterImportedProjectCleanup(e2e, out.ID, out.FullPath)
+		t.Logf("Started Bitbucket Cloud import of %s as project %d", repoPath, out.ID)
+	})
+
+	t.Run("BitbucketServerImport", func(t *testing.T) {
+		serverURL := os.Getenv("BITBUCKET_SERVER_URL")
+		username := os.Getenv("BITBUCKET_SERVER_USERNAME")
+		token := os.Getenv("BITBUCKET_SERVER_TOKEN")
+		projectKey := os.Getenv("BITBUCKET_SERVER_PROJECT_KEY")
+		repoSlug := os.Getenv("BITBUCKET_SERVER_REPO_SLUG")
+		if serverURL == "" || username == "" || token == "" || projectKey == "" || repoSlug == "" {
+			t.Skip("BITBUCKET_SERVER_URL/USERNAME/TOKEN/PROJECT_KEY/REPO_SLUG not set; import_bitbucket_server needs a reachable self-hosted Bitbucket Server")
+		}
+		out, err := callToolOn[importservice.BitbucketServerImportOutput](ctx, sess.meta, "gitlab_admin", map[string]any{
+			"action": "import_bitbucket_server",
+			"params": map[string]any{
+				"bitbucket_server_url":      serverURL,
+				"bitbucket_server_username": username,
+				"personal_access_token":     token,
+				"bitbucket_server_project":  projectKey,
+				"bitbucket_server_repo":     repoSlug,
+				"target_namespace":          sess.username,
+				"new_name":                  uniqueName("e2e-bbs-import"),
+			},
+		})
+		requireNoError(t, err, "import_bitbucket_server")
+		requireTruef(t, out.ID > 0, "expected imported project ID, got %+v", out)
+		adminExtrasRegisterImportedProjectCleanup(e2e, out.ID, out.FullPath)
+		t.Logf("Started Bitbucket Server import as project %d", out.ID)
+	})
+}
+
+// TestMeta_AdminDBMigrationMark exercises the db_migration_mark action.
+// The error path runs everywhere: marking a nonexistent migration version
+// must be rejected by GitLab without mutating any bookkeeping, which covers
+// the route, the destructive-action confirmation, and the error mapping end
+// to end. The mutating happy path requires a migration that is actually
+// stuck — something a healthy, freshly migrated instance cannot have — so
+// it only runs when the operator provides E2E_DB_MIGRATION_VERSION (and, as
+// a safety interlock for real instances, only in Docker mode).
+//
+// Build tag: e2e && !enterprise. Mode: any (error path) / Docker with
+// E2E_DB_MIGRATION_VERSION (mutating path). Surface: meta.
+func TestMeta_AdminDBMigrationMark(t *testing.T) {
+	t.Parallel()
+	if sess.meta == nil {
+		t.Skip("meta session not configured")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	t.Run("NonexistentVersionRejected", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_admin", map[string]any{
+			"action": "db_migration_mark",
+			"params": map[string]any{"version": int64(19000101000000)},
+		})
+		if err != nil && isHTTPStatus(err, 403) {
+			t.Skipf("db_migration_mark requires an administrator token: %v", err)
+		}
+		requireTruef(t, err != nil, "marking a nonexistent migration version must fail")
+		requireTruef(t, !strings.Contains(err.Error(), "confirm=true"),
+			"call was blocked by the confirmation guard instead of reaching GitLab: %v", err)
+		t.Logf("Nonexistent migration version rejected as expected: %v", err)
+	})
+
+	t.Run("MarkConfiguredVersion", func(t *testing.T) {
+		rawVersion := os.Getenv("E2E_DB_MIGRATION_VERSION")
+		if rawVersion == "" {
+			t.Skip("E2E_DB_MIGRATION_VERSION not set: marking a real migration needs a stuck migration, which a healthy instance cannot provide")
+		}
+		if !isDockerMode() {
+			t.Skip("mutating migration bookkeeping is only exercised against the ephemeral Docker instance")
+		}
+		version, parseErr := strconv.ParseInt(rawVersion, 10, 64)
+		requireNoError(t, parseErr, "parse E2E_DB_MIGRATION_VERSION")
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_admin", map[string]any{
+			"action": "db_migration_mark",
+			"params": map[string]any{"version": version},
+		})
+		requireNoError(t, err, "db_migration_mark "+rawVersion)
+		t.Logf("Marked migration %s as executed", rawVersion)
+	})
+}
+
+// License add/delete coverage lives in admin_license_ee_test.go: the
+// mutation endpoints only exist on EE runtimes, and the lifecycle there adds
+// a duplicate of the cached license and deletes that duplicate, so the
+// active plan never changes.

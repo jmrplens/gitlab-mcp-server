@@ -23,6 +23,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/packages"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/releases"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // pkgExtrasCreateGroupProject creates a group and a project inside it via
@@ -275,14 +276,69 @@ func TestIndividual_PackageRegistryRules(t *testing.T) {
 		t.Logf("Updated registry protection rule %d", out.ID)
 	})
 
-	t.Run("ImageBackedActionsPending", func(t *testing.T) {
-		// The registry repository get/delete and tag get/list/delete/bulk
-		// delete actions require a container repository with pushed image
-		// tags. The Docker fixture enables the registry on :5050, but no
-		// setup step pushes images yet, so those actions cannot succeed here.
-		// Skipping before any tool call keeps the e2e gap audit honest: the
-		// actions stay reported as uncovered until the Wave-4 image push
-		// enabler (docker login/push in the fixture setup scripts) lands.
-		t.Skip("container registry repository and tag actions require a pushed image; pending Wave-4 enabler")
+	t.Run("ImageBackedActions", func(t *testing.T) {
+		// setup-gitlab.sh pushes busybox to the seed project with two tags
+		// (seed-a, seed-b) and records its path in E2E_REGISTRY_PROJECT.
+		// Without that seed (docker CLI unavailable, or self-hosted mode)
+		// the image-backed actions cannot succeed, so the subtest skips.
+		seedProject := os.Getenv("E2E_REGISTRY_PROJECT")
+		if seedProject == "" {
+			t.Skip("E2E_REGISTRY_PROJECT not set: registry image seeding did not run")
+		}
+
+		repos, listErr := callToolOn[containerregistry.RepositoryListOutput](ctx, sess.individual, "gitlab_registry_list_project", containerregistry.ListProjectInput{
+			ProjectID: toolutil.StringOrInt(seedProject),
+			TagsCount: true,
+		})
+		requireNoError(t, listErr, "list registry repositories")
+		requireTruef(t, len(repos.Repositories) > 0, "expected at least one seeded registry repository")
+		repo := repos.Repositories[0]
+		t.Logf("Seed registry repository %d (%s), %d tags", repo.ID, repo.Path, repo.TagsCount)
+
+		got, getErr := callToolOn[containerregistry.RepositoryOutput](ctx, sess.individual, "gitlab_registry_get_repository", containerregistry.GetRepositoryInput{
+			RepositoryID: repo.ID,
+			TagsCount:    true,
+		})
+		requireNoError(t, getErr, "get registry repository")
+		requireTruef(t, got.ID == repo.ID, "expected repository %d, got %d", repo.ID, got.ID)
+
+		tags, tagsErr := callToolOn[containerregistry.TagListOutput](ctx, sess.individual, "gitlab_registry_list_tags", containerregistry.ListTagsInput{
+			ProjectID:    toolutil.StringOrInt(seedProject),
+			RepositoryID: repo.ID,
+		})
+		requireNoError(t, tagsErr, "list registry tags")
+		requireTruef(t, len(tags.Tags) >= 1, "expected at least one seeded tag, got %d", len(tags.Tags))
+		seedBPresent := false
+		for _, listed := range tags.Tags {
+			if listed.Name == "seed-b" {
+				seedBPresent = true
+				break
+			}
+		}
+
+		tag, tagErr := callToolOn[containerregistry.TagOutput](ctx, sess.individual, "gitlab_registry_get_tag", containerregistry.GetTagInput{
+			ProjectID:    toolutil.StringOrInt(seedProject),
+			RepositoryID: repo.ID,
+			TagName:      "seed-a",
+		})
+		requireNoError(t, tagErr, "get registry tag seed-a")
+		requireTruef(t, tag.Name == "seed-a", "expected tag seed-a, got %q", tag.Name)
+
+		// Delete one seeded tag; seed-a stays so reruns keep a listable tag.
+		// The seeding script restores seed-b on the next provisioning pass,
+		// but a plain `go test` rerun against the same instance arrives
+		// after this delete already consumed it — skip the delete then so
+		// the subtest stays run-count-independent.
+		if !seedBPresent {
+			t.Log("seed-b already consumed by a previous run; delete coverage exercised then")
+			return
+		}
+		_, deleteErr := callToolOn[containerregistry.TagOutput](ctx, sess.individual, "gitlab_registry_delete_tag", containerregistry.DeleteTagInput{
+			ProjectID:    toolutil.StringOrInt(seedProject),
+			RepositoryID: repo.ID,
+			TagName:      "seed-b",
+		})
+		requireNoError(t, deleteErr, "delete registry tag seed-b")
+		t.Log("Deleted seeded registry tag seed-b")
 	})
 }

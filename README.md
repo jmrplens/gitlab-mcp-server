@@ -416,9 +416,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |       976 |     195,546 |
-| Unit tests (`_test.go`)  |       530 |     302,593 |
-| End-to-end tests         |       172 |      44,540 |
-| **Total**                | **1,678** | **542,679** |
+| Unit tests (`_test.go`)  |       531 |     302,733 |
+| End-to-end tests         |       173 |      44,989 |
+| **Total**                | **1,680** | **543,268** |
 
 ### Functions
 
@@ -428,8 +428,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | — exported (public)             |  2,631 |
 | — unexported (private)          |  4,865 |
 | Unit test functions (`TestXxx`) | 11,674 |
-| Subtests (`t.Run(...)`)         |  2,926 |
-| End-to-end test functions       |    380 |
+| Subtests (`t.Run(...)`)         |  2,931 |
+| End-to-end test functions       |    381 |
 
 ### Ratios worth noting
 
@@ -445,8 +445,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,749 |
-| `defer` statements                 |   855 |
+| `if err != nil` checks             | 6,753 |
+| `defer` statements                 |   864 |
 | `struct` types defined             | 2,729 |
 | `//nolint` suppressions            |   226 |
 | `TODO` / `FIXME` / `HACK` comments |     3 |

@@ -90,10 +90,7 @@ func TestRemoveScopeFilteredTools_EmptyScopes(t *testing.T) {
 // TestFilterScopeFilteredCatalog_MissingAdminMode verifies that catalog-level
 // scope filtering removes the same admin-mode groups without mutating the source.
 func TestFilterScopeFilteredCatalog_MissingAdminMode(t *testing.T) {
-	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{Enterprise: true})
-	if err != nil {
-		t.Fatalf("BuildActionCatalog() error = %v", err)
-	}
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true})
 
 	t.Run("source contains admin", func(t *testing.T) {
 		if _, ok := catalog.Group("gitlab_admin"); !ok {

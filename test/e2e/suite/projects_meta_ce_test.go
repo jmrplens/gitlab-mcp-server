@@ -1042,33 +1042,45 @@ func TestMeta_ProjectPages(t *testing.T) {
 
 	proj := createProjectMeta(ctx, t, sess.meta)
 
+	// The Docker omnibus config enables Pages, so the read endpoints answer
+	// there; instances without Pages reject them instead. Both worlds are
+	// asserted so the test stays meaningful on self-hosted runs.
 	t.Run("PagesGet", func(t *testing.T) {
-		// Pages daemon not configured in Docker test environment
 		_, err := callToolOn[pages.Output](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "pages_get",
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
-		requireTruef(t, err != nil, "expected error: Pages not configured in test environment")
+		if isDockerMode() {
+			requireNoError(t, err, "pages_get with Pages enabled")
+			return
+		}
+		requireTruef(t, err != nil, "expected error: Pages not configured on this instance")
 		t.Logf("Expected error for pages_get: %v", err)
 	})
 
 	t.Run("PagesDomainListAll", func(t *testing.T) {
-		// Pages not configured — admin endpoint may fail
 		_, err := callToolOn[pages.ListAllDomainsOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "pages_domain_list_all",
 			"params": map[string]any{},
 		})
-		requireTruef(t, err != nil, "expected error: Pages not configured")
+		if isDockerMode() {
+			requireNoError(t, err, "pages_domain_list_all with Pages enabled")
+			return
+		}
+		requireTruef(t, err != nil, "expected error: Pages not configured on this instance")
 		t.Logf("Expected error for pages_domain_list_all: %v", err)
 	})
 
 	t.Run("PagesDomainList", func(t *testing.T) {
-		// Pages not configured
 		_, err := callToolOn[pages.ListDomainsOutput](ctx, sess.meta, "gitlab_project", map[string]any{
 			"action": "pages_domain_list",
 			"params": map[string]any{"project_id": proj.pidStr()},
 		})
-		requireTruef(t, err != nil, "expected error: Pages not configured")
+		if isDockerMode() {
+			requireNoError(t, err, "pages_domain_list with Pages enabled")
+			return
+		}
+		requireTruef(t, err != nil, "expected error: Pages not configured on this instance")
 		t.Logf("Expected error for pages_domain_list: %v", err)
 	})
 }

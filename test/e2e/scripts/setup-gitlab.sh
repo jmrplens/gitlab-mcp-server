@@ -551,7 +551,7 @@ for _ in 1 2 3; do
 done
 
 # 4. Write .env.docker
-echo "  [4/4] Writing ${ENV_FILE_DISPLAY}..."
+echo "  [4/6] Writing ${ENV_FILE_DISPLAY}..."
 cat > "${ENV_FILE}" <<EOF
 GITLAB_URL=${GITLAB_URL}
 GITLAB_TOKEN=${PAT}
@@ -562,6 +562,62 @@ E2E_FIXTURE_URL=http://e2e-fixture:8080
 E2E_GITLAB_INTERNAL_URL=http://gitlab-e2e
 E2E_ROOT_TOKEN=${ROOT_TOKEN}
 EOF
+
+# 5. Instance settings for e2e determinism: enable the external importer
+# sources (GitLab ships with them disabled, and the importer coverage needs
+# the instance to accept those sources before credentials even matter) and
+# disable default-branch protection for new projects (GitLab applies that
+# protection asynchronously after project creation, so tests that unprotect
+# and immediately push were racing the protection job).
+echo "  [5/6] Applying instance settings (importer sources, no default branch protection)..."
+curl -sSf -o /dev/null -X PUT "${GITLAB_URL}/api/v4/application/settings" \
+    -H "PRIVATE-TOKEN: ${PAT}" \
+    --data "import_sources[]=github&import_sources[]=bitbucket&import_sources[]=bitbucket_server&default_branch_protection=0" \
+    --connect-timeout 5 --max-time 30 || echo "      WARNING: instance settings update rejected; importer and branch-protection coverage may misbehave"
+
+# 6. Seed a container image so the registry repository/tag e2e coverage can
+# exercise real repositories instead of skipping. The registry listens on
+# plain HTTP at localhost:5050 (Docker treats localhost registries as
+# insecure by default), and GitLab issues the push token for the test user's
+# PAT. Best-effort: without a docker CLI the suite skips those subtests.
+REGISTRY_HOST="${REGISTRY_HOST:-localhost:5050}"
+REGISTRY_PROJECT_NAME="e2e-registry-seed"
+if command -v docker >/dev/null 2>&1; then
+    echo "  [6/6] Seeding container registry image (${REGISTRY_HOST})..."
+    seed_project_json=$(curl -sS -X POST "${GITLAB_URL}/api/v4/projects" \
+        -H "PRIVATE-TOKEN: ${PAT}" \
+        --data "name=${REGISTRY_PROJECT_NAME}&visibility=private" \
+        --connect-timeout 5 --max-time 30 2>/dev/null || true)
+    seed_path=$(json_field "${seed_project_json}" "path_with_namespace")
+    if [ -z "${seed_path}" ]; then
+        # Project may already exist from a previous provisioning run.
+        seed_path="${TEST_USER}/${REGISTRY_PROJECT_NAME}"
+    fi
+    # docker login is avoided on purpose: on macOS the credential helper
+    # requires an unlocked keychain, which non-interactive sessions (CI,
+    # agents) do not have. A scratch DOCKER_CONFIG with the base64 auth
+    # written directly into config.json sidesteps the helper entirely;
+    # the contexts/cli-plugins symlinks keep the Docker Desktop context
+    # and buildx working from the scratch config.
+    seed_docker_config=$(mktemp -d)
+    trap 'rm -rf "${seed_docker_config}"' EXIT
+    seed_auth=$(printf '%s:%s' "${TEST_USER}" "${PAT}" | base64 | tr -d '\n')
+    (umask 177 && printf '{"auths":{"%s":{"auth":"%s"}}}' "${REGISTRY_HOST}" "${seed_auth}" > "${seed_docker_config}/config.json")
+    [ -d "${HOME}/.docker/contexts" ] && ln -s "${HOME}/.docker/contexts" "${seed_docker_config}/contexts"
+    [ -d "${HOME}/.docker/cli-plugins" ] && ln -s "${HOME}/.docker/cli-plugins" "${seed_docker_config}/cli-plugins"
+    if DOCKER_CONFIG="${seed_docker_config}" docker pull busybox:stable >/dev/null \
+        && DOCKER_CONFIG="${seed_docker_config}" docker tag busybox:stable "${REGISTRY_HOST}/${seed_path}:seed-a" \
+        && DOCKER_CONFIG="${seed_docker_config}" docker tag busybox:stable "${REGISTRY_HOST}/${seed_path}:seed-b" \
+        && DOCKER_CONFIG="${seed_docker_config}" docker push "${REGISTRY_HOST}/${seed_path}:seed-a" >/dev/null \
+        && DOCKER_CONFIG="${seed_docker_config}" docker push "${REGISTRY_HOST}/${seed_path}:seed-b" >/dev/null; then
+        echo "E2E_REGISTRY_PROJECT=${seed_path}" >> "${ENV_FILE}"
+        echo "      Seeded ${REGISTRY_HOST}/${seed_path} with tags seed-a, seed-b"
+    else
+        echo "      WARNING: registry image seeding failed; registry tag e2e coverage will skip"
+    fi
+else
+    echo "  [6/6] docker CLI not found; skipping registry image seeding"
+fi
 
 echo ""
 echo "=== Setup complete ==="
