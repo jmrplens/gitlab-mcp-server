@@ -405,3 +405,12 @@ After all phases complete:
 - Ensure tests don't share mutable state
 - Use `t.Parallel()` carefully — only when tests are truly independent
 - Check that test helpers don't store state across calls
+
+## Assertions off the test goroutine (MANDATORY)
+
+Never call `t.Fatal`/`t.Fatalf`/`t.FailNow` inside an `httptest` handler, a
+`go` statement, an errgroup task, or an MCP tool handler — it kills only that
+goroutine and truncates the response. Follow the six-rule contract in
+`.github/instructions/test-goroutines.instructions.md` (t.Errorf + response +
+return, or record with atomics and assert on the test goroutine). Verify with
+`make check-test-goroutines`.

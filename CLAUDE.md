@@ -194,6 +194,7 @@ All tests use `httptest` to mock GitLab API responses. Shared helpers in `intern
 - `testutil.NewTestClient()` — creates a mock GitLab client pointing to httptest server
 - `testutil.RespondJSON()` — responds with JSON body
 - `testutil.RespondJSONWithPagination()` — responds with pagination headers
+- **Never `t.Fatal`/`FailNow` off the test goroutine** (httptest handlers, `go` statements, MCP handlers): follow the six-rule contract in `.github/instructions/test-goroutines.instructions.md` — `t.Errorf` + deterministic response + `return`, or record with atomics and assert afterwards. `make check-test-goroutines` detects violations; `make audit-test-goroutines` writes the work list
 - Test naming: `TestToolName_Scenario_ExpectedResult`
 
 ### Build & test commands

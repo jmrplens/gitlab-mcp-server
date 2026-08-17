@@ -797,3 +797,12 @@ func TestUserEqual(t *testing.T) {
 ```
 
 **Remember**: Tests are documentation. They show how your code is meant to be used. Write them clearly and keep them up to date.
+
+## Assertions off the test goroutine (MANDATORY)
+
+Never call `t.Fatal`/`t.Fatalf`/`t.FailNow` inside an `httptest` handler, a
+`go` statement, an errgroup task, or an MCP tool handler — it kills only that
+goroutine and truncates the response. Follow the six-rule contract in
+`.github/instructions/test-goroutines.instructions.md` (t.Errorf + response +
+return, or record with atomics and assert on the test goroutine). Verify with
+`make check-test-goroutines`.

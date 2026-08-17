@@ -277,3 +277,7 @@ Key agents: `go-mcp-expert` (primary coding), `test-expert` (testing, coverage, 
 | Git branch names                             | English  |
 
 Conversations with the developer may be in any language, but **every file committed to this repository must be in English**.
+
+- **Tests with HTTP mocks or goroutines**: never `t.Fatal` inside handler
+  literals or `go` statements — follow
+  `.github/instructions/test-goroutines.instructions.md`.
