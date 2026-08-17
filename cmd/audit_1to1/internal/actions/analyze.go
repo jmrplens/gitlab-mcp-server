@@ -174,6 +174,10 @@ func usageFor(usage map[string]*serviceUsage, named *types.Named) *serviceUsage 
 // Key = "<Service>.<Method>" (service name without the ServiceInterface suffix).
 // Methods NOT listed here and still uncovered are the genuine new-tool backlog.
 var acceptedMissingMethods = map[string]string{
+	// COVERED_VARIANT — an alternative SDK binding for an endpoint another
+	// covered method already drives; one action per endpoint is the rule.
+	"RepositoryFiles.GetRawFile": "COVERED_VARIANT — same raw-file endpoint; gitlab_file_raw calls the streaming GetRawFileReader (client-go v2.58.0) so UPLOAD_MAX_FILE_SIZE is enforced without buffering the blob",
+
 	// COVERED_GENERIC — method-value passed to a generic helper (not a call.Fun).
 	"AwardEmoji.ListIssuesAwardEmojiOnNote":         "COVERED_GENERIC — method-value -> listNoteAwardEmoji (gitlab_issue_note_emoji_list)",
 	"AwardEmoji.CreateIssuesAwardEmojiOnNote":       "COVERED_GENERIC — method-value -> createNoteAwardEmoji",
