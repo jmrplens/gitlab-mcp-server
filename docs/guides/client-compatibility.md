@@ -23,9 +23,9 @@ Every other client — including Claude Code, Claude Desktop, and every client i
 
 ### Kill switch
 
-| Variable        | Default | Description                                                                                          |
-| --------------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| `CLIENT_COMPAT` | `auto`  | Set to `off` to disable per-client response rewriting (all clients then receive identical responses) |
+| Variable        | Default | Description                                                                                                                                                                                          |
+| --------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CLIENT_COMPAT` | `auto`  | Set to `off` to disable per-client response rewriting (all clients then receive identical responses). Read from the process environment in both stdio and HTTP modes — it has no CLI flag equivalent |
 
 ## Client limits worth knowing
 

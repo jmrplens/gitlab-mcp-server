@@ -2605,10 +2605,13 @@ func TestDeriveAnnotations_WithCompositeWrappers(t *testing.T) {
 // correctly triggers (or skips) confirmation for routes built with composite
 // wrappers, covering representative domain action patterns.
 func TestMakeMetaHandler_CompositeWrapperConfirmation(t *testing.T) {
+	var typedCalls, voidCalls int
 	typedFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		typedCalls++
 		return testOutput{Result: "ok"}, nil
 	}
 	voidFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) error {
+		voidCalls++
 		return nil
 	}
 
@@ -2638,15 +2641,19 @@ func TestMakeMetaHandler_CompositeWrapperConfirmation(t *testing.T) {
 		{name: "get", action: "get", params: map[string]any{}, wantCalled: true},
 		{name: "create", action: "create", params: map[string]any{}, wantCalled: true},
 		{name: "update", action: "update", params: map[string]any{}, wantCalled: true},
-		// Destructive actions without elicitation support proceed via fallback
-		{name: "delete_fallback", action: "delete", params: map[string]any{}, wantCalled: true},
-		{name: "remove_fallback", action: "remove", params: map[string]any{}, wantCalled: true},
-		// Destructive action with explicit confirm=true bypasses confirmation
+		// Destructive composite wrappers without elicitation support fail
+		// closed: the wrapped handler must not run and the result must
+		// instruct re-sending with confirm=true.
+		{name: "delete_blocked", action: "delete", params: map[string]any{}, wantCalled: false},
+		{name: "remove_blocked", action: "remove", params: map[string]any{}, wantCalled: false},
+		// Explicit confirm=true bypasses the guard for both wrapper kinds.
 		{name: "delete_confirm", action: "delete", params: map[string]any{"confirm": true}, wantCalled: true},
+		{name: "remove_confirm", action: "remove", params: map[string]any{"confirm": true}, wantCalled: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			callsBefore := typedCalls + voidCalls
 			input := MetaToolInput{
 				Action: tt.action,
 				Params: tt.params,
@@ -2658,8 +2665,21 @@ func TestMakeMetaHandler_CompositeWrapperConfirmation(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if tt.wantCalled && result == nil {
-				t.Error("expected result but got nil")
+			if result == nil {
+				t.Fatal("expected result but got nil")
+			}
+			called := typedCalls+voidCalls > callsBefore
+			if called != tt.wantCalled {
+				t.Fatalf("handler called = %v, want %v", called, tt.wantCalled)
+			}
+			if !tt.wantCalled {
+				if !result.IsError {
+					t.Errorf("blocked result.IsError = false, want true")
+				}
+				tc, ok := result.Content[0].(*mcp.TextContent)
+				if !ok || !strings.Contains(tc.Text, "confirm=true") {
+					t.Errorf("blocked result content = %+v, want confirm=true instruction", result.Content[0])
+				}
 			}
 		})
 	}

@@ -83,6 +83,34 @@ func newTestServer() *mcp.Server {
 	return server
 }
 
+// addMixedContentTool registers a tool whose result carries every content
+// block type with a float-priority annotation, plus text blocks with the
+// rounding edge cases (0.4 rounds down to an omitted 0; an integer priority
+// is passed through without cloning).
+func addMixedContentTool(server *mcp.Server) {
+	low := &mcp.Annotations{Audience: []mcp.Role{"assistant"}, Priority: 0.4}
+	integer := &mcp.Annotations{Audience: []mcp.Role{"assistant"}, Priority: 1}
+	server.AddTool(&mcp.Tool{
+		Name:        "mixed",
+		Description: "mixed content tool",
+		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: "low", Annotations: low},
+				&mcp.TextContent{Text: "int", Annotations: integer},
+				&mcp.ImageContent{Data: []byte{1}, MIMEType: "image/png", Annotations: contentAnnotations},
+				&mcp.AudioContent{Data: []byte{1}, MIMEType: "audio/mp3", Annotations: contentAnnotations},
+				&mcp.ResourceLink{URI: "test://doc", Name: "doc", Annotations: contentAnnotations},
+				&mcp.EmbeddedResource{
+					Resource:    &mcp.ResourceContents{URI: "test://doc", Text: "body"},
+					Annotations: contentAnnotations,
+				},
+			},
+		}, nil
+	})
+}
+
 // connect wires a client with the given implementation identity to a fresh
 // test server over in-memory transports and returns the client session.
 func connect(t *testing.T, impl *mcp.Implementation) *mcp.ClientSession {
@@ -307,6 +335,101 @@ func TestDetection_TitleOnly(t *testing.T) {
 	}
 }
 
+// TestCallTool_CodexClient_RoundsEveryContentBlockType verifies the rewrite
+// covers every annotated content block type and both rounding directions:
+// 0.4 rounds down to 0 (omitted on the wire), 0.6 rounds up to 1, and an
+// already-integer priority is preserved.
+func TestCallTool_CodexClient_RoundsEveryContentBlockType(t *testing.T) {
+	server := newTestServer()
+	addMixedContentTool(server)
+	session := connectTo(t, server, codexImpl)
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "mixed", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if len(res.Content) != 6 {
+		t.Fatalf("content length = %d, want 6", len(res.Content))
+	}
+	annotationsOf := func(block mcp.Content) *mcp.Annotations {
+		switch c := block.(type) {
+		case *mcp.TextContent:
+			return c.Annotations
+		case *mcp.ImageContent:
+			return c.Annotations
+		case *mcp.AudioContent:
+			return c.Annotations
+		case *mcp.ResourceLink:
+			return c.Annotations
+		case *mcp.EmbeddedResource:
+			return c.Annotations
+		default:
+			t.Fatalf("unexpected content type %T", block)
+			return nil
+		}
+	}
+	wantPriorities := []float64{0, 1, 1, 1, 1, 1}
+	for i, want := range wantPriorities {
+		a := annotationsOf(res.Content[i])
+		if a == nil {
+			t.Fatalf("content[%d] annotations dropped; want audience preserved", i)
+		}
+		if a.Priority != want {
+			t.Errorf("content[%d] priority = %v, want %v", i, a.Priority, want)
+		}
+		if len(a.Audience) == 0 {
+			t.Errorf("content[%d] audience dropped", i)
+		}
+	}
+}
+
+// TestCallTool_GenericClient_MixedContentKeepsFloats verifies the same mixed
+// result reaches non-Codex clients with the original float priorities.
+func TestCallTool_GenericClient_MixedContentKeepsFloats(t *testing.T) {
+	server := newTestServer()
+	addMixedContentTool(server)
+	session := connectTo(t, server, genericImpl)
+	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "mixed", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	tc, ok := res.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content[0] is %T, want *mcp.TextContent", res.Content[0])
+	}
+	if tc.Annotations == nil || tc.Annotations.Priority != 0.4 {
+		t.Errorf("content[0] priority = %+v, want 0.4", tc.Annotations)
+	}
+	img, ok := res.Content[2].(*mcp.ImageContent)
+	if !ok {
+		t.Fatalf("content[2] is %T, want *mcp.ImageContent", res.Content[2])
+	}
+	if img.Annotations == nil || img.Annotations.Priority != 0.6 {
+		t.Errorf("image priority = %+v, want 0.6", img.Annotations)
+	}
+}
+
+// TestMiddleware_ErrorAndNilResultPassThrough verifies the middleware
+// forwards handler errors and nil results untouched instead of sanitizing.
+func TestMiddleware_ErrorAndNilResultPassThrough(t *testing.T) {
+	wantErr := context.DeadlineExceeded
+	handler := clientcompat.Middleware()(func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+		return nil, wantErr
+	})
+	res, err := handler(context.Background(), "tools/call", &mcp.CallToolRequest{})
+	if err == nil || res != nil {
+		t.Fatalf("handler = (%v, %v), want (nil, error) passthrough", res, err)
+	}
+
+	nilHandler := clientcompat.Middleware()(func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+		//nolint:nilnil // Intentional: the middleware must forward a nil result untouched.
+		return nil, nil
+	})
+	res, err = nilHandler(context.Background(), "tools/call", &mcp.CallToolRequest{})
+	if err != nil || res != nil {
+		t.Fatalf("handler = (%v, %v), want (nil, nil) passthrough", res, err)
+	}
+}
+
 // TestMiddleware_NoSession_PassesThrough verifies requests without a server
 // session (defensive path) are left untouched.
 func TestMiddleware_NoSession_PassesThrough(t *testing.T) {
@@ -330,6 +453,103 @@ func TestMiddleware_NoSession_PassesThrough(t *testing.T) {
 	}
 	if tc.Annotations.Priority != 0.6 {
 		t.Error("sessionless request was sanitized; want passthrough")
+	}
+}
+
+// TestProfileFromClientInfo_Branches verifies detection over every input
+// shape, including the defensive nil clientInfo the public API cannot
+// produce through a real session.
+func TestProfileFromClientInfo_Branches(t *testing.T) {
+	tests := []struct {
+		name string
+		impl *mcp.Implementation
+		want clientcompat.Profile
+	}{
+		{name: "nil", impl: nil, want: clientcompat.ProfileDefault},
+		{name: "codex_name", impl: &mcp.Implementation{Name: "codex-mcp-client"}, want: clientcompat.ProfileCodex},
+		{name: "codex_title", impl: &mcp.Implementation{Name: "wrapper", Title: "Codex"}, want: clientcompat.ProfileCodex},
+		{name: "case_insensitive", impl: &mcp.Implementation{Name: "CODEX-cli"}, want: clientcompat.ProfileCodex},
+		{name: "generic", impl: &mcp.Implementation{Name: "claude-code", Title: "Claude Code"}, want: clientcompat.ProfileDefault},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := clientcompat.ProfileFromClientInfoForTest(tt.impl); got != tt.want {
+				t.Errorf("profileFromClientInfo(%+v) = %v, want %v", tt.impl, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestProfileForRequest_DefensiveBranches verifies the session-resolution
+// fallbacks: nil request, request without a session, and a server session
+// whose initialize handshake has not happened yet (nil InitializeParams).
+func TestProfileForRequest_DefensiveBranches(t *testing.T) {
+	if got := clientcompat.ProfileForRequestForTest(nil); got != clientcompat.ProfileDefault {
+		t.Errorf("profileForRequest(nil) = %v, want default", got)
+	}
+	if got := clientcompat.ProfileForRequestForTest(&mcp.CallToolRequest{}); got != clientcompat.ProfileDefault {
+		t.Errorf("profileForRequest(no session) = %v, want default", got)
+	}
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.1"}, nil)
+	serverTransport, _ := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(context.Background(), serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { _ = ss.Close() })
+	req := &mcp.CallToolRequest{Session: ss}
+	if got := clientcompat.ProfileForRequestForTest(req); got != clientcompat.ProfileDefault {
+		t.Errorf("profileForRequest(uninitialized session) = %v, want default", got)
+	}
+}
+
+// TestRoundPriority_Branches verifies the pure rounding helper: nil and
+// integer-valued annotations pass through unchanged (no clone), fractional
+// values are rounded on a copy.
+func TestRoundPriority_Branches(t *testing.T) {
+	if got := clientcompat.RoundPriorityForTest(nil); got != nil {
+		t.Errorf("roundPriority(nil) = %+v, want nil", got)
+	}
+	integer := &mcp.Annotations{Priority: 1}
+	if got := clientcompat.RoundPriorityForTest(integer); got != integer {
+		t.Errorf("roundPriority(integer) returned a clone; want same pointer")
+	}
+	zero := &mcp.Annotations{Audience: []mcp.Role{"user"}}
+	if got := clientcompat.RoundPriorityForTest(zero); got != zero {
+		t.Errorf("roundPriority(zero) returned a clone; want same pointer")
+	}
+	frac := &mcp.Annotations{Priority: 0.6}
+	got := clientcompat.RoundPriorityForTest(frac)
+	if got == frac || got.Priority != 1 {
+		t.Errorf("roundPriority(0.6) = %+v (same=%v), want cloned priority 1", got, got == frac)
+	}
+	if frac.Priority != 0.6 {
+		t.Errorf("roundPriority mutated its input: %v", frac.Priority)
+	}
+}
+
+// TestRoundContentPriorities_EdgeBranches verifies the empty-slice fast path
+// and the pass-through of content types outside the annotated set
+// (ToolUseContent is a sampling-only block with no annotations field).
+func TestRoundContentPriorities_EdgeBranches(t *testing.T) {
+	if got := clientcompat.RoundContentPrioritiesForTest(nil); got != nil {
+		t.Errorf("roundContentPriorities(nil) = %v, want nil", got)
+	}
+	//nolint:staticcheck // Deprecated sampling type used on purpose: it is the only SDK Content outside the annotated set.
+	unknown := &mcp.ToolUseContent{ID: "x", Name: "y"}
+	out := clientcompat.RoundContentPrioritiesForTest([]mcp.Content{unknown})
+	if len(out) != 1 || out[0] != mcp.Content(unknown) {
+		t.Errorf("unknown content type not passed through: %+v", out)
+	}
+}
+
+// TestSanitizeForCodex_UnhandledResultPassesThrough verifies result types
+// outside the sanitizer's switch are returned unchanged.
+func TestSanitizeForCodex_UnhandledResultPassesThrough(t *testing.T) {
+	res := &mcp.ListToolsResult{}
+	if got := clientcompat.SanitizeForCodexForTest(res); got != mcp.Result(res) {
+		t.Errorf("sanitizeForCodex(ListToolsResult) = %v, want same pointer", got)
 	}
 }
 

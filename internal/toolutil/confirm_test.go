@@ -154,6 +154,106 @@ func TestConfirmDestructiveAction_RequestWithoutElicitation(t *testing.T) {
 	assertConfirmGuardText(t, result)
 }
 
+// confirmGuardServer builds an in-memory server with two destructive-guarded
+// tools: "guarded" runs the normal ConfirmDestructiveAction flow, and
+// "corrupt" corrupts the multi round-trip request state first so the guard's
+// invalid-state branch is exercised through a real tools/call.
+func confirmGuardServer(t *testing.T) *mcp.ClientSession {
+	t.Helper()
+	server := mcp.NewServer(confirmTestImpl, nil)
+	schema := map[string]any{"type": "object", "properties": map[string]any{}}
+	executed := func() *mcp.CallToolResult {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "executed"}}}
+	}
+	server.AddTool(&mcp.Tool{Name: "guarded", Description: "guarded", InputSchema: schema},
+		func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			if result := ConfirmDestructiveAction(ctx, req, nil, testConfirmPrompt); result != nil {
+				return result, nil
+			}
+			return executed(), nil
+		})
+	server.AddTool(&mcp.Tool{Name: "corrupt", Description: "corrupt", InputSchema: schema},
+		func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			req.Params.RequestState = "{not json"
+			if result := ConfirmDestructiveAction(ctx, req, nil, testConfirmPrompt); result != nil {
+				return result, nil
+			}
+			return executed(), nil
+		})
+	server.AddTool(&mcp.Tool{Name: "corrupt_confirm", Description: "corrupt confirm", InputSchema: schema},
+		func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			req.Params.RequestState = "{not json"
+			if result := ConfirmAction(ctx, req, testConfirmPrompt); result != nil {
+				return result, nil
+			}
+			return executed(), nil
+		})
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(t.Context(), serverTransport, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "confirm-mrtr-client", Version: "1.0.0"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": true}}, nil
+		},
+	})
+	session, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
+}
+
+// TestConfirmDestructiveAction_MRTRRoundTrip verifies the multi round-trip
+// confirmation on a modern session: the first pass returns input-required,
+// the SDK client answers through its elicitation handler, and the retried
+// call executes the destructive handler.
+func TestConfirmDestructiveAction_MRTRRoundTrip(t *testing.T) {
+	session := confirmGuardServer(t)
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "guarded", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	tc, ok := result.Content[0].(*mcp.TextContent)
+	if !ok || tc.Text != "executed" {
+		t.Fatalf("result = %+v, want confirmed execution", result.Content[0])
+	}
+}
+
+// TestConfirmDestructiveAction_InvalidRequestStateFailsClosed verifies a
+// corrupted client-echoed request state is rejected with an error result
+// instead of proceeding with the destructive action.
+func TestConfirmDestructiveAction_InvalidRequestStateFailsClosed(t *testing.T) {
+	session := confirmGuardServer(t)
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "corrupt", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("result = %+v, want error result for invalid request state", result)
+	}
+	tc, ok := result.Content[0].(*mcp.TextContent)
+	if !ok || !strings.Contains(tc.Text, "requestState") {
+		t.Errorf("result content = %+v, want invalid requestState detail", result.Content[0])
+	}
+}
+
+// TestConfirmAction_InvalidRequestStateFailsClosed verifies ConfirmAction's
+// own defensive flow-state check (reached when a caller invokes it without
+// the ConfirmDestructiveAction pre-check) rejects a corrupted request state.
+func TestConfirmAction_InvalidRequestStateFailsClosed(t *testing.T) {
+	session := confirmGuardServer(t)
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "corrupt_confirm", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("result = %+v, want error result for invalid request state", result)
+	}
+}
+
 // assertConfirmGuardText checks the fail-closed guard result carries the
 // original prompt plus the confirm=true instruction.
 func assertConfirmGuardText(t *testing.T, result *mcp.CallToolResult) {
