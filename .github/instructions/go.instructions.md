@@ -408,7 +408,7 @@ func TestCovListMetricImagesWithPagination(t *testing.T) { ... }
 
 ## Go 1.26 Project Modern Features
 
-This project declares `1.26.5`; prefer these modern patterns when they simplify code without reducing clarity:
+This project declares `1.26.6`; prefer these modern patterns when they simplify code without reducing clarity:
 
 ### Range-over-func Iterators (Go 1.23+)
 
