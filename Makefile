@@ -826,6 +826,18 @@ audit-dynamic-aliases:
 audit-e2e-gaps:
 	go run ./cmd/audit_e2e_gaps/
 
+## audit-test-goroutines: report testing.T aborts made off the test goroutine
+## (t.Fatal inside HTTP mock handlers, go statements, MCP tool handlers) and
+## t.Errorf calls without the contract-required return. Writes the JSON work
+## list consumed by the conversion batches.
+audit-test-goroutines:
+	go run ./cmd/audit_test_goroutines/ -json plan/test-goroutines-backlog.json
+
+## check-test-goroutines: fail when any testing.T abort remains off the test
+## goroutine. Wired into CI once the sweep lands (phase 4 of the plan).
+check-test-goroutines:
+	go run ./cmd/audit_test_goroutines/ -check
+
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:
 	go run ./cmd/audit_test_names/ cmd internal test
