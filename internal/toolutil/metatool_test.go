@@ -2126,8 +2126,9 @@ func TestMakeMetaHandler_NonDestructiveSkipsConfirm(t *testing.T) {
 }
 
 // TestMakeMetaHandler_DestructiveNoElicitation verifies that when the client
-// does not support elicitation (nil request), destructive actions proceed
-// without blocking — backward compatibility.
+// does not support elicitation, destructive actions fail closed: the handler
+// must not run, and the error result must instruct the caller to re-send
+// with confirm=true. With confirm=true the same call proceeds.
 func TestMakeMetaHandler_DestructiveNoElicitation(t *testing.T) {
 	called := false
 	routes := ActionMap{
@@ -2137,14 +2138,28 @@ func TestMakeMetaHandler_DestructiveNoElicitation(t *testing.T) {
 		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
-	input := MetaToolInput{Action: "delete", Params: map[string]any{}}
 	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "test_tool"}}
-	_, _, err := handler(context.Background(), req, input)
+
+	result, _, err := handler(context.Background(), req, MetaToolInput{Action: "delete", Params: map[string]any{}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if called {
+		t.Fatal("handler was called — destructive action must fail closed when elicitation is unsupported")
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("result = %+v, want fail-closed error result", result)
+	}
+	if tc, ok := result.Content[0].(*mcp.TextContent); !ok || !strings.Contains(tc.Text, "confirm=true") {
+		t.Errorf("guard result content = %+v, want confirm=true instruction", result.Content[0])
+	}
+
+	_, _, err = handler(context.Background(), req, MetaToolInput{Action: "delete", Params: map[string]any{"confirm": true}})
+	if err != nil {
+		t.Fatalf("unexpected error with confirm=true: %v", err)
+	}
 	if !called {
-		t.Error("handler was not called — should proceed when elicitation unsupported")
+		t.Error("handler was not called — confirm=true must bypass the guard")
 	}
 }
 
@@ -2423,17 +2438,28 @@ func TestMakeMetaHandler_MetadataDestructive_TriggersConfirm(t *testing.T) {
 		}),
 	}
 	handler := MakeMetaHandler("test_tool", routes, nil)
-	input := MetaToolInput{Action: "delete", Params: map[string]any{"id": float64(1)}}
 	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "test_tool"}}
 
-	// Without confirm=true, handler should still be called (elicitation unsupported in tests)
-	// but the route is recognized as destructive.
-	result, _, err := handler(context.Background(), req, input)
+	// Without confirm=true and without elicitation support, the destructive
+	// route must fail closed before reaching the handler.
+	result, _, err := handler(context.Background(), req, MetaToolInput{Action: "delete", Params: map[string]any{"id": float64(1)}})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if called {
+		t.Fatal("handler was called without confirmation")
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("result = %+v, want fail-closed error result", result)
+	}
+
+	// confirm=true bypasses the guard and reaches the handler.
+	result, _, err = handler(context.Background(), req, MetaToolInput{Action: "delete", Params: map[string]any{"id": float64(1), "confirm": true}})
+	if err != nil {
+		t.Fatalf("unexpected error with confirm=true: %v", err)
+	}
 	if !called {
-		t.Error("handler was not called")
+		t.Error("handler was not called with confirm=true")
 	}
 	if result == nil {
 		t.Fatal("result is nil")
@@ -2579,10 +2605,13 @@ func TestDeriveAnnotations_WithCompositeWrappers(t *testing.T) {
 // correctly triggers (or skips) confirmation for routes built with composite
 // wrappers, covering representative domain action patterns.
 func TestMakeMetaHandler_CompositeWrapperConfirmation(t *testing.T) {
+	var typedCalls, voidCalls int
 	typedFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) (testOutput, error) {
+		typedCalls++
 		return testOutput{Result: "ok"}, nil
 	}
 	voidFn := func(_ context.Context, _ *gitlabclient.Client, _ testInput) error {
+		voidCalls++
 		return nil
 	}
 
@@ -2612,15 +2641,19 @@ func TestMakeMetaHandler_CompositeWrapperConfirmation(t *testing.T) {
 		{name: "get", action: "get", params: map[string]any{}, wantCalled: true},
 		{name: "create", action: "create", params: map[string]any{}, wantCalled: true},
 		{name: "update", action: "update", params: map[string]any{}, wantCalled: true},
-		// Destructive actions without elicitation support proceed via fallback
-		{name: "delete_fallback", action: "delete", params: map[string]any{}, wantCalled: true},
-		{name: "remove_fallback", action: "remove", params: map[string]any{}, wantCalled: true},
-		// Destructive action with explicit confirm=true bypasses confirmation
+		// Destructive composite wrappers without elicitation support fail
+		// closed: the wrapped handler must not run and the result must
+		// instruct re-sending with confirm=true.
+		{name: "delete_blocked", action: "delete", params: map[string]any{}, wantCalled: false},
+		{name: "remove_blocked", action: "remove", params: map[string]any{}, wantCalled: false},
+		// Explicit confirm=true bypasses the guard for both wrapper kinds.
 		{name: "delete_confirm", action: "delete", params: map[string]any{"confirm": true}, wantCalled: true},
+		{name: "remove_confirm", action: "remove", params: map[string]any{"confirm": true}, wantCalled: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			callsBefore := typedCalls + voidCalls
 			input := MetaToolInput{
 				Action: tt.action,
 				Params: tt.params,
@@ -2632,8 +2665,21 @@ func TestMakeMetaHandler_CompositeWrapperConfirmation(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if tt.wantCalled && result == nil {
-				t.Error("expected result but got nil")
+			if result == nil {
+				t.Fatal("expected result but got nil")
+			}
+			called := typedCalls+voidCalls > callsBefore
+			if called != tt.wantCalled {
+				t.Fatalf("handler called = %v, want %v", called, tt.wantCalled)
+			}
+			if !tt.wantCalled {
+				if !result.IsError {
+					t.Errorf("blocked result.IsError = false, want true")
+				}
+				tc, ok := result.Content[0].(*mcp.TextContent)
+				if !ok || !strings.Contains(tc.Text, "confirm=true") {
+					t.Errorf("blocked result content = %+v, want confirm=true instruction", result.Content[0])
+				}
 			}
 		})
 	}

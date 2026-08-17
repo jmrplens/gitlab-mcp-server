@@ -9,7 +9,7 @@
 
 | Attribute     | Value                                               |
 | ------------- | --------------------------------------------------- |
-| Language      | Go 1.26.5                                           |
+| Language      | Go 1.26.6                                           |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0 |
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.57.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
@@ -308,6 +308,7 @@ make analyze-report                        # generate LLM-consumable report
 | `OAUTH_CACHE_TTL`        | No       | OAuth token identity cache TTL (`15m` default, range 1m–2h) |
 | `RATE_LIMIT_RPS`         | No       | Per-server tools/call rate limit in req/s (`0` = disabled) |
 | `RATE_LIMIT_BURST`       | No       | Token-bucket burst size when RPS > 0 (`40` default)       |
+| `CLIENT_COMPAT`          | No       | Per-client response compatibility (`auto` default): Codex sessions get float `priority` in annotations rounded to 0/1; `off` disables. Read from the process environment in both stdio and HTTP modes (no flag equivalent). See `internal/clientcompat` and `docs/guides/client-compatibility.md` |
 | `LOG_LEVEL`              | No       | Logging verbosity (`debug`, `info`, `warn`, `error`)     |
 | `EVAL_SURFACE_ENTERPRISE` | No      | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus. Used by `make eval-surfaces-docker-enterprise*` targets |
 | `EVAL_SURFACE_CASE_SET`   | No      | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (Community Edition only), `all` (CE+Enterprise). Used by `make eval-surfaces-docker-enterprise-all` |
