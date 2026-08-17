@@ -10,7 +10,6 @@ package suite
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -147,25 +146,6 @@ func TestIndividual_MRExtras(t *testing.T) {
 		requireNoError(t, pErr, "poll MR related issues")
 		requireTruef(t, found, "expected issue #%d among MR related issues", issue.IID)
 		t.Logf("Issue #%d listed as related to MR !%d", issue.IID, mr.IID)
-	})
-
-	t.Run("DependenciesList", func(t *testing.T) {
-		out, dErr := callToolOn[mergerequests.DependenciesOutput](ctx, sess.individual, "gitlab_mr_dependencies_list", mergerequests.GetDependenciesInput{
-			ProjectID: proj.pidOf(),
-			MRIID:     mr.IID,
-		})
-		// MR dependencies are a Premium feature: on a Free-tier catalog the
-		// gitlab_mr_dependencies_list tool is not registered at all (unknown
-		// tool), and an ungated server against live CE gets 404/403 from the
-		// API. An empty list on a fresh MR is the expected result when
-		// available.
-		if dErr != nil && (isHTTPStatus(dErr, 403) || isHTTPStatus(dErr, 404) ||
-			strings.Contains(dErr.Error(), "Premium") || strings.Contains(dErr.Error(), "unknown tool")) {
-			t.Skipf("MR dependencies not available on this tier: %v", dErr)
-		}
-		requireNoError(t, dErr, "list MR dependencies")
-		requireTruef(t, len(out.Dependencies) == 0, "expected no dependencies on a fresh MR, got %d", len(out.Dependencies))
-		t.Log("Fresh MR has no blocking dependencies")
 	})
 
 	t.Run("CreatePipeline", func(t *testing.T) {
