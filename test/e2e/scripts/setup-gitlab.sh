@@ -563,13 +563,16 @@ E2E_GITLAB_INTERNAL_URL=http://gitlab-e2e
 E2E_ROOT_TOKEN=${ROOT_TOKEN}
 EOF
 
-# 5. Enable the external importer sources: GitLab ships with them disabled,
-# and the importer e2e coverage (import_github, import_bitbucket, ...) needs
-# the instance to accept those sources before credentials even matter.
-echo "  [5/6] Enabling importer sources (github, bitbucket, bitbucket_server)..."
+# 5. Instance settings for e2e determinism: enable the external importer
+# sources (GitLab ships with them disabled, and the importer coverage needs
+# the instance to accept those sources before credentials even matter) and
+# disable default-branch protection for new projects (GitLab applies that
+# protection asynchronously after project creation, so tests that unprotect
+# and immediately push were racing the protection job).
+echo "  [5/6] Applying instance settings (importer sources, no default branch protection)..."
 curl -sS -o /dev/null -X PUT "${GITLAB_URL}/api/v4/application/settings" \
     -H "PRIVATE-TOKEN: ${PAT}" \
-    --data "import_sources[]=github&import_sources[]=bitbucket&import_sources[]=bitbucket_server" \
+    --data "import_sources[]=github&import_sources[]=bitbucket&import_sources[]=bitbucket_server&default_branch_protection=0" \
     --connect-timeout 5 --max-time 30 || echo "      WARNING: could not enable importer sources"
 
 # 6. Seed a container image so the registry repository/tag e2e coverage can

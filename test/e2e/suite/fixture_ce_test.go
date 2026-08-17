@@ -363,34 +363,9 @@ func unprotectMain(ctx context.Context, t *testing.T, proj ProjectFixture) {
 	t.Helper()
 	pid := int(proj.ID)
 
-	// GitLab protects the default branch asynchronously after project
-	// creation, so a single unprotect can run before the protection even
-	// exists and the next push still gets 403. Unprotect and verify until
-	// the protected-branch list no longer carries the default branch.
-	deadline := time.Now().Add(30 * time.Second)
-	for {
-		// Idempotent: safe to call when the branch is already unprotected.
-		if _, err := sess.glClient.GL().ProtectedBranches.UnprotectRepositoryBranches(pid, defaultBranch); err != nil {
-			t.Logf("unprotect main (idempotent, may already be unprotected): %v", err)
-		}
-		protected, _, listErr := sess.glClient.GL().ProtectedBranches.ListProtectedBranches(pid, nil, gl.WithContext(ctx))
-		stillProtected := false
-		if listErr == nil {
-			for _, branch := range protected {
-				if branch.Name == defaultBranch {
-					stillProtected = true
-					break
-				}
-			}
-		}
-		if listErr == nil && !stillProtected {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Logf("default branch still protected after unprotect retries (listErr=%v)", listErr)
-			break
-		}
-		time.Sleep(1 * time.Second)
+	// Idempotent: safe to call when the branch is already unprotected.
+	if _, err := sess.glClient.GL().ProtectedBranches.UnprotectRepositoryBranches(pid, defaultBranch); err != nil {
+		t.Logf("unprotect main (idempotent, may already be unprotected): %v", err)
 	}
 
 	// Wait for sidekiq to process the unprotect job before polling; under
