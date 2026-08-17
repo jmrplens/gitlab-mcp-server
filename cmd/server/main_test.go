@@ -1608,7 +1608,7 @@ func TestCreateServer_ToolManifestInspectionError(t *testing.T) {
 		t.Fatalf("createServer() error: %v", err)
 	}
 	session := newInMemorySession(t, server)
-	if _, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"}); err == nil {
+	if _, readErr := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"}); readErr == nil {
 		t.Fatal("tool manifest should be omitted when inspection fails")
 	}
 }
