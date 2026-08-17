@@ -128,11 +128,11 @@ func AssertQueryParam(t *testing.T, r *http.Request, key, expected string) {
 //
 // The returned client is safe for concurrent use; the httptest.Server that
 // backs it is goroutine-safe by construction.
-func NewTestClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
-	t.Helper()
+func NewTestClient(tb testing.TB, handler http.Handler) *gitlabclient.Client {
+	tb.Helper()
 
 	srv := httptest.NewServer(handler)
-	t.Cleanup(srv.Close)
+	tb.Cleanup(srv.Close)
 
 	cfg := &config.Config{
 		GitLabURL:      srv.URL,
@@ -141,13 +141,19 @@ func NewTestClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
 		DisableRetries: true,
 	}
 
-	client, err := gitlabclient.NewClient(cfg)
+	client, err := newGitLabClient(cfg)
 	if err != nil {
-		t.Fatalf("failed to create test gitlab client: %v", err)
+		tb.Fatalf("failed to create test gitlab client: %v", err)
 	}
 
 	return client
 }
+
+// newGitLabClient is the client constructor used by [NewTestClient]. It is a
+// package variable so the construction-failure branch is testable: srv.URL is
+// always a valid base URL, so [gitlabclient.NewClient] cannot be made to fail
+// from outside.
+var newGitLabClient = gitlabclient.NewClient
 
 // RespondJSON writes a JSON response with the given HTTP status and raw body.
 // It sets Content-Type to "application/json". body is written verbatim —
@@ -210,12 +216,23 @@ func RespondJSONWithPagination(w http.ResponseWriter, status int, body string, p
 func ForbiddenHandler(t *testing.T) http.Handler {
 	t.Helper()
 	var hits atomic.Int64
-	t.Cleanup(func() {
-		if n := hits.Load(); n != 0 {
-			t.Errorf("mock API was called %d time(s); the test forbids any request", n)
-		}
-	})
+	t.Cleanup(func() { reportForbiddenHits(t, hits.Load()) })
 	return forbiddenHandlerCore(&hits)
+}
+
+// errorReporter is the subset of [testing.TB] that reportForbiddenHits needs,
+// kept as an interface so the non-zero branch is testable with a recorder
+// instead of failing the calling test.
+type errorReporter interface {
+	Errorf(format string, args ...any)
+}
+
+// reportForbiddenHits fails the test when a [ForbiddenHandler] mock received
+// any request. Zero hits is the expected quiet path.
+func reportForbiddenHits(r errorReporter, n int64) {
+	if n != 0 {
+		r.Errorf("mock API was called %d time(s); the test forbids any request", n)
+	}
 }
 
 // forbiddenHandlerCore is the response half of [ForbiddenHandler], split out

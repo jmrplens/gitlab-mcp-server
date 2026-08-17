@@ -7,6 +7,8 @@ package testutil
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -14,6 +16,9 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
 // TestCancelledCtx verifies that [CancelledCtx] returns a context whose
@@ -284,5 +289,78 @@ func TestForbiddenHandlerCore_CountsAndRespondsWithError(t *testing.T) {
 	}
 	if n := hits.Load(); n != 1 {
 		t.Errorf("hits = %d, want 1", n)
+	}
+}
+
+// errorfRecorder records Errorf calls for asserting on failure-path helpers
+// without failing the running test.
+type errorfRecorder struct {
+	messages []string
+}
+
+// Errorf implements the errorReporter seam by recording the formatted message.
+func (r *errorfRecorder) Errorf(format string, args ...any) {
+	r.messages = append(r.messages, fmt.Sprintf(format, args...))
+}
+
+// TestReportForbiddenHits_NonZeroFails verifies the failure branch: a non-zero
+// hit count must produce exactly one Errorf naming the count.
+func TestReportForbiddenHits_NonZeroFails(t *testing.T) {
+	rec := &errorfRecorder{}
+	reportForbiddenHits(rec, 3)
+	if len(rec.messages) != 1 {
+		t.Fatalf("Errorf calls = %d, want 1", len(rec.messages))
+	}
+	if !strings.Contains(rec.messages[0], "3 time(s)") {
+		t.Errorf("message = %q, want the hit count named", rec.messages[0])
+	}
+}
+
+// TestReportForbiddenHits_ZeroIsQuiet verifies the expected path: zero hits
+// must not report anything.
+func TestReportForbiddenHits_ZeroIsQuiet(t *testing.T) {
+	rec := &errorfRecorder{}
+	reportForbiddenHits(rec, 0)
+	if len(rec.messages) != 0 {
+		t.Fatalf("Errorf calls = %d, want 0: %v", len(rec.messages), rec.messages)
+	}
+}
+
+// fatalRecorder embeds a real testing.TB and overrides Fatalf so the
+// construction-failure branch of NewTestClient can be observed instead of
+// aborting the running test.
+type fatalRecorder struct {
+	testing.TB
+	fatals []string
+}
+
+// Fatalf implements the override by recording the formatted message and
+// returning, unlike the real implementation which never returns.
+func (r *fatalRecorder) Fatalf(format string, args ...any) {
+	r.fatals = append(r.fatals, fmt.Sprintf(format, args...))
+}
+
+// TestNewTestClient_ConstructionFailureFatals verifies that NewTestClient
+// reports a fatal error when the underlying GitLab client constructor fails.
+// The constructor seam is stubbed because a live httptest URL can never make
+// the real constructor fail.
+func TestNewTestClient_ConstructionFailureFatals(t *testing.T) {
+	orig := newGitLabClient
+	newGitLabClient = func(*config.Config) (*gitlabclient.Client, error) {
+		return nil, errors.New("boom")
+	}
+	t.Cleanup(func() { newGitLabClient = orig })
+
+	rec := &fatalRecorder{TB: t}
+	client := NewTestClient(rec, http.NotFoundHandler())
+
+	if len(rec.fatals) != 1 {
+		t.Fatalf("Fatalf calls = %d, want 1: %v", len(rec.fatals), rec.fatals)
+	}
+	if !strings.Contains(rec.fatals[0], "boom") {
+		t.Errorf("fatal message = %q, want the constructor error named", rec.fatals[0])
+	}
+	if client != nil {
+		t.Errorf("client = %v, want nil after recorded fatal", client)
 	}
 }
