@@ -588,12 +588,22 @@ except Exception:
         # Project may already exist from a previous provisioning run.
         seed_path="${TEST_USER}/${REGISTRY_PROJECT_NAME}"
     fi
-    if docker pull busybox:stable >/dev/null \
-        && printf '%s' "${PAT}" | docker login "${REGISTRY_HOST}" -u "${TEST_USER}" --password-stdin >/dev/null \
-        && docker tag busybox:stable "${REGISTRY_HOST}/${seed_path}:seed-a" \
-        && docker tag busybox:stable "${REGISTRY_HOST}/${seed_path}:seed-b" \
-        && docker push "${REGISTRY_HOST}/${seed_path}:seed-a" >/dev/null \
-        && docker push "${REGISTRY_HOST}/${seed_path}:seed-b" >/dev/null; then
+    # docker login is avoided on purpose: on macOS the credential helper
+    # requires an unlocked keychain, which non-interactive sessions (CI,
+    # agents) do not have. A scratch DOCKER_CONFIG with the base64 auth
+    # written directly into config.json sidesteps the helper entirely;
+    # the contexts/cli-plugins symlinks keep the Docker Desktop context
+    # and buildx working from the scratch config.
+    seed_docker_config=$(mktemp -d)
+    seed_auth=$(printf '%s:%s' "${TEST_USER}" "${PAT}" | base64 | tr -d '\n')
+    printf '{"auths":{"%s":{"auth":"%s"}}}' "${REGISTRY_HOST}" "${seed_auth}" > "${seed_docker_config}/config.json"
+    [ -d "${HOME}/.docker/contexts" ] && ln -s "${HOME}/.docker/contexts" "${seed_docker_config}/contexts"
+    [ -d "${HOME}/.docker/cli-plugins" ] && ln -s "${HOME}/.docker/cli-plugins" "${seed_docker_config}/cli-plugins"
+    if DOCKER_CONFIG="${seed_docker_config}" docker pull busybox:stable >/dev/null \
+        && DOCKER_CONFIG="${seed_docker_config}" docker tag busybox:stable "${REGISTRY_HOST}/${seed_path}:seed-a" \
+        && DOCKER_CONFIG="${seed_docker_config}" docker tag busybox:stable "${REGISTRY_HOST}/${seed_path}:seed-b" \
+        && DOCKER_CONFIG="${seed_docker_config}" docker push "${REGISTRY_HOST}/${seed_path}:seed-a" >/dev/null \
+        && DOCKER_CONFIG="${seed_docker_config}" docker push "${REGISTRY_HOST}/${seed_path}:seed-b" >/dev/null; then
         echo "E2E_REGISTRY_PROJECT=${seed_path}" >> "${ENV_FILE}"
         echo "      Seeded ${REGISTRY_HOST}/${seed_path} with tags seed-a, seed-b"
     else
