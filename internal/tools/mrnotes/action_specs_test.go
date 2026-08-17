@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -154,8 +155,15 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 
 // TestCatalogSurface_DeleteConfirmDeclined covers destructive confirmation when the user declines.
 func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API when confirm is declined")
+	// The handler runs on the httptest goroutine, where t.Fatal is illegal
+	// (it only stops the calling goroutine); count hits atomically and
+	// assert from the test goroutine so an unexpected API call produces a
+	// diagnosable failure instead of a half-reported one.
+	var apiHits atomic.Int64
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiHits.Add(1)
+		t.Errorf("should not reach API when confirm is declined (hit %d: %s %s)", apiHits.Load(), r.Method, r.URL.Path)
+		testutil.RespondJSON(w, http.StatusInternalServerError, `{"message":"unexpected"}`)
 	}))
 	byTool := mrNoteSpecsByTool(t, ActionSpecs(client))
 
@@ -194,6 +202,18 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 	}
 	if result == nil {
 		t.Fatal("expected non-nil result for declined confirmation")
+	}
+	var text strings.Builder
+	for _, content := range result.Content {
+		if tc, ok := content.(*mcp.TextContent); ok {
+			text.WriteString(tc.Text)
+		}
+	}
+	if !strings.Contains(text.String(), "canceled") {
+		t.Fatalf("declined confirmation result = %q, want cancellation message", text.String())
+	}
+	if hits := apiHits.Load(); hits != 0 {
+		t.Fatalf("API was reached %d time(s) after a declined confirmation", hits)
 	}
 }
 
