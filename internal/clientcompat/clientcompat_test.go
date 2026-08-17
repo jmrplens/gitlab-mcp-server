@@ -512,11 +512,11 @@ func TestRoundPriority_Branches(t *testing.T) {
 		t.Errorf("roundPriority(nil) = %+v, want nil", got)
 	}
 	integer := &mcp.Annotations{Priority: 1}
-	if got := clientcompat.RoundPriorityForTest(integer); got != integer {
+	if clientcompat.RoundPriorityForTest(integer) != integer {
 		t.Errorf("roundPriority(integer) returned a clone; want same pointer")
 	}
 	zero := &mcp.Annotations{Audience: []mcp.Role{"user"}}
-	if got := clientcompat.RoundPriorityForTest(zero); got != zero {
+	if clientcompat.RoundPriorityForTest(zero) != zero {
 		t.Errorf("roundPriority(zero) returned a clone; want same pointer")
 	}
 	frac := &mcp.Annotations{Priority: 0.6}
