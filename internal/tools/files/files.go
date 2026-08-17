@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"path"
 	"strings"
@@ -585,10 +586,23 @@ func GetRaw(ctx context.Context, client *gitlabclient.Client, input RawInput) (R
 	if input.LFS != nil {
 		opts.LFS = input.LFS
 	}
-	data, _, err := client.GL().RepositoryFiles.GetRawFile(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
+	// Streamed via GetRawFileReader (client-go v2.58.0) so the configured
+	// file-size cap is enforced without buffering an arbitrarily large blob:
+	// reading stops one byte past the limit instead of downloading the rest.
+	reader, _, err := client.GL().RepositoryFiles.GetRawFileReader(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
 	if err != nil {
 		return RawOutput{}, toolutil.WrapErrWithStatusHint("fileGetRaw", err, http.StatusNotFound,
 			hintVerifyFilePathRef)
+	}
+	defer reader.Close()
+
+	maxSize := toolutil.GetUploadConfig().MaxFileSize
+	data, err := io.ReadAll(io.LimitReader(reader, maxSize+1))
+	if err != nil {
+		return RawOutput{}, toolutil.WrapErr("fileGetRaw", err)
+	}
+	if int64(len(data)) > maxSize {
+		return RawOutput{}, fmt.Errorf("fileGetRaw: %s exceeds the configured file size limit (%d bytes); raise UPLOAD_MAX_FILE_SIZE to fetch it", input.FilePath, maxSize)
 	}
 
 	imageMIME := toolutil.ImageMIMEType(input.FilePath)

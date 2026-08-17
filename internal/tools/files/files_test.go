@@ -4,13 +4,17 @@
 package files
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Test fixture values used across file operation tests.
@@ -954,6 +958,80 @@ func TestGetRaw_APIError(t *testing.T) {
 	_, err := GetRaw(context.Background(), client, RawInput{ProjectID: "42", FilePath: testFileMainGo})
 	if err == nil {
 		t.Fatal(errExpectedAPI)
+	}
+}
+
+// TestGetRaw_ExceedsSizeLimit_Rejected verifies that GetRaw stops reading and
+// returns a clear error when the raw file body is larger than the configured
+// UPLOAD_MAX_FILE_SIZE cap, instead of buffering the whole blob in memory.
+// The mock serves a body one byte over a temporarily lowered 16-byte limit.
+func TestGetRaw_ExceedsSizeLimit_Rejected(t *testing.T) {
+	original := toolutil.GetUploadConfig().MaxFileSize
+	toolutil.SetUploadConfig(16)
+	t.Cleanup(func() { toolutil.SetUploadConfig(original) })
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(bytes.Repeat([]byte("a"), 17))
+	}))
+
+	_, err := GetRaw(context.Background(), client, RawInput{ProjectID: "42", FilePath: testFileMainGo})
+	if err == nil {
+		t.Fatal("expected size-limit error, got nil")
+	}
+	if !strings.Contains(err.Error(), "UPLOAD_MAX_FILE_SIZE") {
+		t.Fatalf("error should point at UPLOAD_MAX_FILE_SIZE, got: %v", err)
+	}
+}
+
+// TestGetRaw_TruncatedBody_ReturnsReadError verifies the streaming read
+// error path: the mock declares a Content-Length larger than the bytes it
+// actually writes, so io.ReadAll on the response body fails with an
+// unexpected EOF that must surface as a wrapped fileGetRaw error.
+func TestGetRaw_TruncatedBody_ReturnsReadError(t *testing.T) {
+	// Pin the limit well above the 5-byte body so the limited reader cannot
+	// stop before the truncation surfaces; otherwise a small ambient limit
+	// would take the size-limit branch instead of the read-error branch.
+	original := toolutil.GetUploadConfig().MaxFileSize
+	toolutil.SetUploadConfig(64)
+	t.Cleanup(func() { toolutil.SetUploadConfig(original) })
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "64")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("short"))
+	}))
+
+	_, err := GetRaw(context.Background(), client, RawInput{ProjectID: "42", FilePath: testFileMainGo})
+	if err == nil {
+		t.Fatal("expected read error from truncated body, got nil")
+	}
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("expected io.ErrUnexpectedEOF from the truncated body, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "fileGetRaw") {
+		t.Fatalf("error should be wrapped as fileGetRaw, got: %v", err)
+	}
+}
+
+// TestGetRaw_AtSizeLimit_Succeeds verifies a body exactly at the configured
+// cap is delivered untruncated through the streaming reader.
+func TestGetRaw_AtSizeLimit_Succeeds(t *testing.T) {
+	original := toolutil.GetUploadConfig().MaxFileSize
+	toolutil.SetUploadConfig(16)
+	t.Cleanup(func() { toolutil.SetUploadConfig(original) })
+
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(bytes.Repeat([]byte("a"), 16))
+	}))
+
+	out, err := GetRaw(context.Background(), client, RawInput{ProjectID: "42", FilePath: testFileMainGo})
+	if err != nil {
+		t.Fatalf("GetRaw at limit: %v", err)
+	}
+	if out.Size != 16 || len(out.Content) != 16 {
+		t.Fatalf("expected full 16-byte content, got size=%d len=%d", out.Size, len(out.Content))
 	}
 }
 

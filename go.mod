@@ -12,10 +12,10 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/shirou/gopsutil/v4 v4.26.7
 	github.com/tiktoken-go/tokenizer v0.8.1
-	gitlab.com/gitlab-org/api/client-go/v2 v2.57.0
+	gitlab.com/gitlab-org/api/client-go/v2 v2.58.0
 	golang.org/x/crypto v0.55.0
 	golang.org/x/time v0.15.0
-	golang.org/x/tools v0.48.0
+	golang.org/x/tools v0.49.0
 )
 
 require (
@@ -33,7 +33,7 @@ require (
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/davidmz/go-pageant v1.0.2 // indirect
-	github.com/dlclark/regexp2/v2 v2.6.0 // indirect
+	github.com/dlclark/regexp2/v2 v2.7.1 // indirect
 	github.com/ebitengine/purego v0.10.2 // indirect
 	github.com/fatih/color v1.19.0 // indirect
 	github.com/go-fed/httpsig v1.1.0 // indirect
@@ -63,7 +63,7 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	gitlab.com/gitlab-org/api/client-go v1.46.0 // indirect
 	golang.org/x/exp v0.0.0-20260812173653-3d80eb74bc5b // indirect
-	golang.org/x/mod v0.39.0 // indirect
+	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
