@@ -26,28 +26,33 @@ go test -v -tags e2e -timeout 300s ./test/e2e/suite/
 
 ### Docker Mode
 
-Uses an ephemeral GitLab CE container. Requires Docker and ~4 GB RAM.
+Uses an ephemeral GitLab CE container plus a Bitbucket Data Center import fixture. Requires Docker and ~5.5 GB RAM.
 
 All Docker infrastructure is version-controlled in this directory:
 
-- `docker-compose.yml` — GitLab CE + Runner + fixture service definition
+- `docker-compose.yml` — GitLab CE + Runner + Bitbucket + fixture service definition
 - `scripts/setup-gitlab.sh` — Creates test user, PAT, generates `test/e2e/.env.docker`
+- `scripts/setup-bitbucket.sh` — Provisions the Bitbucket import fixture, appends `BITBUCKET_SERVER_*`
 - `scripts/register-runner.sh` — Registers CI runner
 - `scripts/wait-for-gitlab.sh` — Polls readiness endpoint
 
-All commands run from the **project root**:
+All commands run from the **project root**. The Bitbucket fixture needs an
+ephemeral admin password shared between compose and the provisioning script
+(`make test-e2e-docker` generates one per run automatically):
 
 ```bash
-docker compose -f test/e2e/docker-compose.yml up -d
+export E2E_BITBUCKET_ADMIN_PASSWORD=$(openssl rand -hex 16)
+docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
 ./test/e2e/scripts/wait-for-gitlab.sh
 ./test/e2e/scripts/setup-gitlab.sh
 ./test/e2e/scripts/register-runner.sh
+./test/e2e/scripts/setup-bitbucket.sh
 
 set -a && source test/e2e/.env.docker && set +a
 go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 
 # Cleanup
-docker compose -f test/e2e/docker-compose.yml down -v
+docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v
 ```
 
 Or use the Makefile target:
@@ -112,6 +117,33 @@ coverage that used to skip can run:
   macOS. Without a docker CLI the registry tag tests skip.
 - **GitLab Pages** is enabled in the omnibus config; the Pages write test
   publishes a real deployment through a `pages` CI job before asserting.
+- **Pending schema migration seed**: deletes the newest `schema_migrations`
+  row via `gitlab-psql` and records its version as
+  `E2E_DB_MIGRATION_VERSION`, so the mutating `db_migration_mark` path runs
+  for real — the test's mark call re-inserts the row, leaving the instance
+  as it started. The newest version is used because GitLab squashes old
+  migrations and only recent versions still have a resolvable migration
+  file.
+
+### What setup-bitbucket.sh provisions
+
+The CE docker target also starts a real Bitbucket Data Center container
+(`e2e-bitbucket`, compose profile `bitbucket`) so `import_bitbucket_server`
+runs instead of skipping:
+
+- **Unattended setup** is driven by a `bitbucket.properties` file written
+  before the stock entrypoint runs, using Atlassian's public 3-hour
+  [timebomb Data Center test license](https://developer.atlassian.com/platform/marketplace/timebomb-licenses-for-testing-server-apps/)
+  — long enough for an ephemeral run, torn down with the stack. Search is
+  disabled and the embedded eval database is used, keeping the container at
+  one ~1 GB JVM.
+- **Fixture content**: project `E2E`, repository `fixture` with an initial
+  commit seeded through the browse edit REST API, and an admin HTTP access
+  token for the importer.
+- The `BITBUCKET_SERVER_*` variables are appended to `.env.docker` with the
+  compose-network URL (`http://e2e-bitbucket:7990`) because GitLab — not the
+  test process — dereferences it. Provisioning is best-effort: on any
+  failure it warns and the suite falls back to the documented skip.
 
 ### Optional operator credentials
 
@@ -123,8 +155,8 @@ when unset:
 | --- | --- |
 | `GH_TOKEN` | `import_github` / `import_cancel_github` / `import_gists` (a repository owned by the token's user is resolved via the GitHub API) |
 | `BITBUCKET_USERNAME`, `BITBUCKET_API_TOKEN`, `BITBUCKET_EMAIL`, `BITBUCKET_REPO_PATH` | Bitbucket Cloud imports (Atlassian API token created **with Bitbucket scopes**, paired with the account email) |
-| `BITBUCKET_SERVER_URL`, `BITBUCKET_SERVER_USERNAME`, `BITBUCKET_SERVER_TOKEN`, `BITBUCKET_SERVER_PROJECT_KEY`, `BITBUCKET_SERVER_REPO_SLUG` | `import_bitbucket_server` against a self-hosted Bitbucket Server |
-| `E2E_DB_MIGRATION_VERSION` | The mutating `db_migration_mark` path (only meaningful when debugging a genuinely stuck migration; the error path always runs) |
+| `BITBUCKET_SERVER_URL`, `BITBUCKET_SERVER_USERNAME`, `BITBUCKET_SERVER_TOKEN`, `BITBUCKET_SERVER_PROJECT_KEY`, `BITBUCKET_SERVER_REPO_SLUG` | `import_bitbucket_server` against a self-hosted Bitbucket Server (auto-provisioned by the Docker fixture; set manually only for self-hosted mode) |
+| `E2E_DB_MIGRATION_VERSION` | The mutating `db_migration_mark` path (auto-seeded by setup-gitlab.sh in Docker mode; set manually only when debugging a genuinely stuck migration on a self-hosted instance — the error path always runs) |
 
 Imported projects are registered for permanent deletion in the per-test
 resource ledger.
