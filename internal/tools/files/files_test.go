@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -987,6 +989,13 @@ func TestGetRaw_ExceedsSizeLimit_Rejected(t *testing.T) {
 // actually writes, so io.ReadAll on the response body fails with an
 // unexpected EOF that must surface as a wrapped fileGetRaw error.
 func TestGetRaw_TruncatedBody_ReturnsReadError(t *testing.T) {
+	// Pin the limit well above the 5-byte body so the limited reader cannot
+	// stop before the truncation surfaces; otherwise a small ambient limit
+	// would take the size-limit branch instead of the read-error branch.
+	original := toolutil.GetUploadConfig().MaxFileSize
+	toolutil.SetUploadConfig(64)
+	t.Cleanup(func() { toolutil.SetUploadConfig(original) })
+
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Length", "64")
 		w.WriteHeader(http.StatusOK)
@@ -996,6 +1005,9 @@ func TestGetRaw_TruncatedBody_ReturnsReadError(t *testing.T) {
 	_, err := GetRaw(context.Background(), client, RawInput{ProjectID: "42", FilePath: testFileMainGo})
 	if err == nil {
 		t.Fatal("expected read error from truncated body, got nil")
+	}
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("expected io.ErrUnexpectedEOF from the truncated body, got: %v", err)
 	}
 	if !strings.Contains(err.Error(), "fileGetRaw") {
 		t.Fatalf("error should be wrapped as fileGetRaw, got: %v", err)
