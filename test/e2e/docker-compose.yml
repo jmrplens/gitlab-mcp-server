@@ -108,6 +108,9 @@ services:
           listen 8080;
           location = /hook { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"hook"}\n'; }
           location = /hook-updated { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"hook-updated"}\n'; }
+          location = /group-hook { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"group-hook"}\n'; }
+          location = /system-hook { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"system-hook"}\n'; }
+          location = /jira { add_header Content-Type application/json; return 200 '{"ok":true,"endpoint":"jira"}\n'; }
           location = /emoji.png { root /usr/share/nginx/html; add_header Content-Type image/png; }
         }
         NGINX
