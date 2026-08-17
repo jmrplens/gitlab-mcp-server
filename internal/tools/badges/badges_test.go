@@ -20,9 +20,6 @@ import (
 // errExpNonNilResult identifies the err exp non nil result constant used by this package.
 const errExpNonNilResult = "expected non-nil result"
 
-// errNoReachAPI identifies the err no reach API constant used by this package.
-const errNoReachAPI = "should not reach API"
-
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
