@@ -551,7 +551,7 @@ for _ in 1 2 3; do
 done
 
 # 4. Write .env.docker
-echo "  [4/4] Writing ${ENV_FILE_DISPLAY}..."
+echo "  [4/5] Writing ${ENV_FILE_DISPLAY}..."
 cat > "${ENV_FILE}" <<EOF
 GITLAB_URL=${GITLAB_URL}
 GITLAB_TOKEN=${PAT}
@@ -562,6 +562,46 @@ E2E_FIXTURE_URL=http://e2e-fixture:8080
 E2E_GITLAB_INTERNAL_URL=http://gitlab-e2e
 E2E_ROOT_TOKEN=${ROOT_TOKEN}
 EOF
+
+# 5. Seed a container image so the registry repository/tag e2e coverage can
+# exercise real repositories instead of skipping. The registry listens on
+# plain HTTP at localhost:5050 (Docker treats localhost registries as
+# insecure by default), and GitLab issues the push token for the test user's
+# PAT. Best-effort: without a docker CLI the suite skips those subtests.
+REGISTRY_HOST="${REGISTRY_HOST:-localhost:5050}"
+REGISTRY_PROJECT_NAME="e2e-registry-seed"
+if command -v docker >/dev/null 2>&1; then
+    echo "  [5/5] Seeding container registry image (${REGISTRY_HOST})..."
+    seed_project_json=$(curl -sS -X POST "${GITLAB_URL}/api/v4/projects" \
+        -H "PRIVATE-TOKEN: ${PAT}" \
+        --data "name=${REGISTRY_PROJECT_NAME}&visibility=private" \
+        --connect-timeout 5 --max-time 30 2>/dev/null || true)
+    seed_path=$(JSON_INPUT="${seed_project_json}" FIELD="path_with_namespace" python3 -c "
+import json, os
+data = os.environ.get('JSON_INPUT', '')
+try:
+    print(json.loads(data).get(os.environ.get('FIELD', ''), ''))
+except Exception:
+    print('')
+")
+    if [ -z "${seed_path}" ]; then
+        # Project may already exist from a previous provisioning run.
+        seed_path="${TEST_USER}/${REGISTRY_PROJECT_NAME}"
+    fi
+    if docker pull busybox:stable >/dev/null \
+        && printf '%s' "${PAT}" | docker login "${REGISTRY_HOST}" -u "${TEST_USER}" --password-stdin >/dev/null \
+        && docker tag busybox:stable "${REGISTRY_HOST}/${seed_path}:seed-a" \
+        && docker tag busybox:stable "${REGISTRY_HOST}/${seed_path}:seed-b" \
+        && docker push "${REGISTRY_HOST}/${seed_path}:seed-a" >/dev/null \
+        && docker push "${REGISTRY_HOST}/${seed_path}:seed-b" >/dev/null; then
+        echo "E2E_REGISTRY_PROJECT=${seed_path}" >> "${ENV_FILE}"
+        echo "      Seeded ${REGISTRY_HOST}/${seed_path} with tags seed-a, seed-b"
+    else
+        echo "      WARNING: registry image seeding failed; registry tag e2e coverage will skip"
+    fi
+else
+    echo "  [5/5] docker CLI not found; skipping registry image seeding"
+fi
 
 echo ""
 echo "=== Setup complete ==="

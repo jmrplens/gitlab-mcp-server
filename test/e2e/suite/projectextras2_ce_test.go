@@ -20,6 +20,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/integrations"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pages"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/pipelines"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectimportexport"
 )
 
@@ -41,13 +42,18 @@ func projectExtrasJiraURL() string {
 
 // projectExtrasSkipIfPagesDisabled skips the calling (sub)test when a Pages
 // API call failed because GitLab Pages is not enabled in the instance
-// configuration. The Docker omnibus config does not enable Pages, so these
-// call sites document intent (pending enabler, Wave 4) instead of failing.
+// configuration. The Docker omnibus config enables Pages, so in Docker mode
+// a rejection is a real failure; on self-hosted instances without Pages the
+// call site converts the rejection into a documented skip.
 func projectExtrasSkipIfPagesDisabled(t *testing.T, err error, action string) {
 	t.Helper()
-	if err != nil {
-		t.Skipf("%s: GitLab Pages is not enabled in the Docker omnibus config (pending enabler, Wave 4): %v", action, err)
+	if err == nil {
+		return
 	}
+	if isDockerMode() {
+		t.Fatalf("%s: GitLab Pages is enabled in the Docker omnibus config; call must succeed: %v", action, err)
+	}
+	t.Skipf("%s: GitLab Pages is not enabled on this instance: %v", action, err)
 }
 
 // TestMeta_ProjectExportDownloadImport exercises the export download and
@@ -364,17 +370,45 @@ func TestMeta_ProjectGroupIntegrations(t *testing.T) {
 	})
 }
 
+// projectExtrasPagesCIYAML publishes a minimal Pages site: the reserved
+// "pages" job uploads a public/ directory artifact, which GitLab deploys.
+const projectExtrasPagesCIYAML = `pages:
+  script:
+    - mkdir -p public
+    - echo "e2e pages" > public/index.html
+  artifacts:
+    paths:
+      - public
+`
+
+// projectExtrasDeployPages commits the Pages CI config, runs a pipeline on
+// the default branch, and waits for it to succeed so the project has a live
+// Pages deployment for the settings/domain/unpublish assertions.
+func projectExtrasDeployPages(ctx context.Context, t *testing.T, proj ProjectFixture) {
+	t.Helper()
+	commitFileMeta(ctx, t, sess.meta, proj, defaultBranch, ".gitlab-ci.yml", projectExtrasPagesCIYAML, "add pages CI config")
+	out, err := callToolOn[pipelines.DetailOutput](ctx, sess.meta, "gitlab_pipeline", map[string]any{
+		"action": "create",
+		"params": map[string]any{"project_id": proj.pidStr(), "ref": defaultBranch},
+	})
+	requireNoError(t, err, "create pages pipeline")
+	status := waitForPipeline(ctx, t, sess.glClient, proj.ID, out.ID, 300*time.Second)
+	requireTruef(t, status == "success", "pages pipeline %d = %q, want success", out.ID, status)
+	t.Logf("Pages deployment pipeline %d succeeded", out.ID)
+}
+
 // TestMeta_ProjectPagesWrite exercises the Pages write actions of the
 // gitlab_project meta-tool: pages_update, pages_domain_create/get/update/
 // delete, and pages_unpublish.
 //
-// GitLab Pages is not enabled in the Docker omnibus config, so each subtest
-// first attempts the real call and converts a Pages-disabled rejection into
-// a documented skip (pending enabler, Wave 4) while keeping the call sites
-// so the coverage audit records intent. When Pages is enabled the full
-// domain lifecycle and settings updates are asserted strictly.
+// In Docker mode the omnibus config enables Pages and the test first
+// publishes a real Pages deployment through a CI pipeline (the pages job
+// uploads a public/ artifact), so the settings update, domain lifecycle,
+// and unpublish are asserted strictly. On self-hosted instances without
+// Pages each call site converts the rejection into a documented skip.
 //
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
+// Build tag: e2e && !enterprise. Mode: CE (full assertions need the Docker
+// runner). Surface: meta.
 func TestMeta_ProjectPagesWrite(t *testing.T) {
 	t.Parallel()
 	if sess.meta == nil {
@@ -382,10 +416,13 @@ func TestMeta_ProjectPagesWrite(t *testing.T) {
 	}
 
 	e2e := NewE2EContext(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 420*time.Second)
 	defer cancel()
 
 	proj := CreateProjectMeta(ctx, e2e, sess.meta)
+	if isDockerMode() {
+		projectExtrasDeployPages(ctx, t, proj)
+	}
 
 	t.Run("PagesUpdate", func(t *testing.T) {
 		out, err := callToolOn[pages.Output](ctx, sess.meta, "gitlab_project", map[string]any{
