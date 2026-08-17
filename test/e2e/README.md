@@ -30,24 +30,29 @@ Uses an ephemeral GitLab CE container plus a Bitbucket Data Center import fixtur
 
 All Docker infrastructure is version-controlled in this directory:
 
-- `docker-compose.yml` — GitLab CE + Runner + fixture service definition
+- `docker-compose.yml` — GitLab CE + Runner + Bitbucket + fixture service definition
 - `scripts/setup-gitlab.sh` — Creates test user, PAT, generates `test/e2e/.env.docker`
+- `scripts/setup-bitbucket.sh` — Provisions the Bitbucket import fixture, appends `BITBUCKET_SERVER_*`
 - `scripts/register-runner.sh` — Registers CI runner
 - `scripts/wait-for-gitlab.sh` — Polls readiness endpoint
 
-All commands run from the **project root**:
+All commands run from the **project root**. The Bitbucket fixture needs an
+ephemeral admin password shared between compose and the provisioning script
+(`make test-e2e-docker` generates one per run automatically):
 
 ```bash
-docker compose -f test/e2e/docker-compose.yml up -d
+export E2E_BITBUCKET_ADMIN_PASSWORD=$(openssl rand -hex 16)
+docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
 ./test/e2e/scripts/wait-for-gitlab.sh
 ./test/e2e/scripts/setup-gitlab.sh
 ./test/e2e/scripts/register-runner.sh
+./test/e2e/scripts/setup-bitbucket.sh
 
 set -a && source test/e2e/.env.docker && set +a
 go test -v -tags e2e -timeout 600s ./test/e2e/suite/
 
 # Cleanup
-docker compose -f test/e2e/docker-compose.yml down -v
+docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v
 ```
 
 Or use the Makefile target:

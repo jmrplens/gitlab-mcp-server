@@ -115,14 +115,18 @@ services:
     container_name: e2e-bitbucket
     profiles: ["bitbucket"]
     ports:
-      - "7990:7990"
+      - "127.0.0.1:7990:7990"
     environment:
       SEARCH_ENABLED: "false"
       JVM_MAXIMUM_MEMORY: "1024m"
-      BITBUCKET_ADMIN_PASSWORD: ${E2E_BITBUCKET_ADMIN_PASSWORD:-E2e_BB_admin1}
+      BITBUCKET_ADMIN_PASSWORD: ${E2E_BITBUCKET_ADMIN_PASSWORD:-}
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
+        if [ -z "$${BITBUCKET_ADMIN_PASSWORD}" ]; then
+          echo "E2E_BITBUCKET_ADMIN_PASSWORD is required (the Makefile generates an ephemeral one per run)" >&2
+          exit 1
+        fi
         mkdir -p /var/atlassian/application-data/bitbucket/shared
         cat > /var/atlassian/application-data/bitbucket/shared/bitbucket.properties <<PROPS
         setup.displayName=E2E Bitbucket

@@ -19,7 +19,7 @@ set -uo pipefail
 BITBUCKET_URL="${1:-http://localhost:7990}"
 INTERNAL_URL="${E2E_BITBUCKET_INTERNAL_URL:-http://e2e-bitbucket:7990}"
 ADMIN_USER="admin"
-ADMIN_PASSWORD="${E2E_BITBUCKET_ADMIN_PASSWORD:-E2e_BB_admin1}"
+ADMIN_PASSWORD="${E2E_BITBUCKET_ADMIN_PASSWORD:-}"
 PROJECT_KEY="E2E"
 REPO_SLUG="fixture"
 WAIT_SECONDS="${2:-420}"
@@ -32,6 +32,8 @@ warn_skip() {
     echo "      WARNING: $1; import_bitbucket_server e2e coverage will skip"
     exit 0
 }
+
+[ -n "${ADMIN_PASSWORD}" ] || warn_skip "E2E_BITBUCKET_ADMIN_PASSWORD is not set (the Makefile generates an ephemeral one per run)"
 
 echo "  Waiting for Bitbucket at ${BITBUCKET_URL} (up to ${WAIT_SECONDS}s)..."
 deadline=$((SECONDS + WAIT_SECONDS))

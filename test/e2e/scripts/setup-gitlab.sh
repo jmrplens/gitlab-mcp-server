@@ -629,14 +629,13 @@ fi
 # guaranteed to still have a migration file the mark service can resolve.
 if command -v docker >/dev/null 2>&1; then
     echo "  [7/7] Seeding a pending schema migration for db_migration_mark coverage..."
-    compose_file="${REPO_ROOT}/test/e2e/docker-compose.yml"
     # The version must be one the Rails migration context can resolve to a
     # file — the newest schema_migrations row is not guaranteed to (structure
     # loads insert historical versions whose files were squashed away), so
     # Rails itself is asked for the newest migration it knows.
-    mig_version=$(docker compose -f "${compose_file}" exec -T gitlab gitlab-rails runner \
+    mig_version=$(docker compose -f "${COMPOSE_FILE}" exec -T gitlab gitlab-rails runner \
         "puts ActiveRecord::Base.connection_pool.migration_context.migrations.last.version" 2>/dev/null | tr -d '[:space:]' || true)
-    if [ -n "${mig_version}" ] && docker compose -f "${compose_file}" exec -T gitlab gitlab-psql -c \
+    if [ -n "${mig_version}" ] && docker compose -f "${COMPOSE_FILE}" exec -T gitlab gitlab-psql -c \
         "DELETE FROM schema_migrations WHERE version='${mig_version}'" >/dev/null 2>&1; then
         echo "E2E_DB_MIGRATION_VERSION=${mig_version}" >> "${ENV_FILE}"
         echo "      Removed schema_migrations row ${mig_version}; the mark test restores it"

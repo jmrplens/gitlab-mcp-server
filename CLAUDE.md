@@ -616,11 +616,12 @@ go test -tags e2e -c -o /dev/null ./test/e2e/suite/  # Linux
 **Docker mode** — ephemeral GitLab CE container with CI runner and fixture service (enables pipeline/job tests and deterministic webhook/custom-emoji/mirror endpoints):
 
 ```bash
-docker compose -f test/e2e/docker-compose.yml up -d
-./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh
+export E2E_BITBUCKET_ADMIN_PASSWORD=$(openssl rand -hex 16)
+docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
+./test/e2e/scripts/wait-for-gitlab.sh && ./test/e2e/scripts/setup-gitlab.sh && ./test/e2e/scripts/register-runner.sh && ./test/e2e/scripts/setup-bitbucket.sh
 set -a && source test/e2e/.env.docker && set +a
 go test -v -tags e2e -timeout 600s ./test/e2e/suite/
-docker compose -f test/e2e/docker-compose.yml down -v
+docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v
 ```
 
 The suite runs three sequential workflows:

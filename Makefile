@@ -146,7 +146,8 @@ test-e2e-docker:
 	@echo "=== Cleaning up previous containers (if any) ==="
 	docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v 2>/dev/null || true
 	@echo "=== Starting ephemeral GitLab CE and Bitbucket fixture ==="
-	docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
+	@openssl rand -hex 16 > test/e2e/.bitbucket-admin-pass
+	E2E_BITBUCKET_ADMIN_PASSWORD=$$(cat test/e2e/.bitbucket-admin-pass) docker compose -f test/e2e/docker-compose.yml --profile bitbucket up -d
 	@echo "=== Waiting for GitLab readiness ==="
 	./test/e2e/scripts/wait-for-gitlab.sh http://localhost:8929 600
 	@echo "=== Setting up test user and token ==="
@@ -165,7 +166,7 @@ test-e2e-docker:
 	@echo "=== Registering GitLab Runner ==="
 	./test/e2e/scripts/register-runner.sh http://localhost:8929
 	@echo "=== Provisioning Bitbucket import fixture ==="
-	./test/e2e/scripts/setup-bitbucket.sh http://localhost:7990
+	E2E_BITBUCKET_ADMIN_PASSWORD=$$(cat test/e2e/.bitbucket-admin-pass) ./test/e2e/scripts/setup-bitbucket.sh http://localhost:7990
 	@echo "=== Running E2E tests ==="
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	@set +e; \
