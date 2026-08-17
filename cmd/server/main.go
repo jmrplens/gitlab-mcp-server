@@ -53,6 +53,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cachehints"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/clientcompat"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/completions"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
@@ -764,6 +765,12 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 			)
 		},
 		KeepAlive: 30 * time.Second,
+		// One page must fit the whole catalog: OpenAI Codex ignores
+		// tools/list nextCursor in its default protocol mode, so any second
+		// page would be silently lost. The largest surface (individual mode,
+		// Ultimate tier) registers ~1071 tools — above the SDK default of
+		// 1000.
+		PageSize: 2000,
 		// Shared across every server this process creates: in HTTP mode the
 		// pool builds one MCP server per token+URL, and with the compiled
 		// schema pointers from toolutil.CompileToolSchemas this cache skips
@@ -774,6 +781,12 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	// SEP-2549 cache hints: catalogs and resource reads are token- and
 	// tier-dependent, so every cacheable result is stamped "private".
 	server.AddReceivingMiddleware(cachehints.Middleware())
+
+	// Per-client response compatibility (Codex float-priority workaround and
+	// structuredContent shadowing); CLIENT_COMPAT=off disables it.
+	if clientcompat.Enabled() {
+		server.AddReceivingMiddleware(clientcompat.Middleware())
+	}
 
 	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
 	var metaSchemaRoutes map[string]toolutil.ActionMap

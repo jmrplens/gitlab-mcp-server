@@ -535,6 +535,33 @@ Open the Cline sidebar in VS Code → click the MCP servers icon → **Edit Glob
 
 ---
 
+## OpenAI Codex
+
+### Stdio Mode
+
+Add the server to `~/.codex/config.toml`. The `default_tools_approval_mode = "approve"` line pre-approves tool calls; without it, Codex asks for approval on every tool whose annotations are not read-only (`gitlab_execute_action` and every mutating meta-tool), and non-interactive `codex exec` runs cancel those calls outright.
+
+```toml
+[mcp_servers.gitlab]
+command = "/path/to/gitlab-mcp-server"
+args = ["stdio"]
+startup_timeout_sec = 60
+default_tools_approval_mode = "approve"
+
+[mcp_servers.gitlab.env]
+GITLAB_URL = "https://gitlab.example.com"
+GITLAB_TOKEN = "glpat-xxxxxxxxxxxxxxxxxxxx"
+```
+
+Codex-specific notes:
+
+- The server detects Codex from its `clientInfo` (`codex-mcp-client`) and automatically rounds the float `priority` in content annotations to 0 or 1 — the Codex builds bundled with ChatGPT.app reject non-integer priorities and mark every affected call as `Unexpected response type`. All other fields (audience, `structuredContent`, `outputSchema`, icons) are delivered unchanged. Set `CLIENT_COMPAT=off` to disable this. See [Client Compatibility](client-compatibility.md).
+- When a result carries `structuredContent`, Codex forwards only that JSON to its model and discards the markdown content blocks ([openai/codex#10334](https://github.com/openai/codex/issues/10334)).
+- Keep `META_PARAM_SCHEMA` at its `opaque` default: Codex silently strips descriptions from any tool input schema larger than ~5 KB.
+- In its default protocol mode Codex reads only the first page of `tools/list`; the server sizes its page above the largest catalog so every surface fits in one page.
+
+---
+
 ## See Also
 
 ### Internal
