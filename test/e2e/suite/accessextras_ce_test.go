@@ -44,10 +44,13 @@ func accessExtrasStartSession(t *testing.T, label, token string) *mcp.ClientSess
 	skipTLS := strings.EqualFold(os.Getenv("GITLAB_SKIP_TLS_VERIFY"), "true")
 	client, err := gitlabclient.NewClientWithToken(baseURL, token, skipTLS)
 	requireNoError(t, err, "create GitLab client for extra session "+label)
+	// Elicitation options: destructive tools (e.g. token self-revoke) fail
+	// closed for clients that cannot prompt, so this ad-hoc session confirms
+	// them through the auto-accepting handler like the main workflow sessions.
 	running, err := startE2ESession(
 		"gitlab-mcp-server-e2e-"+label,
 		"e2e-"+label+"-client",
-		nil,
+		elicitationClientOptions(),
 		configureIndividualE2EServer(client, sess.enterprise),
 	)
 	requireNoError(t, err, "start extra MCP session "+label)
