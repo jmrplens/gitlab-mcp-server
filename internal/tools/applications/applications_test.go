@@ -13,29 +13,19 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// fmtUnexpPath identifies the fmt unexp path constant used by this package.
-const fmtUnexpPath = "unexpected path: %s"
-
 // errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// fmtUnexpMethod identifies the fmt unexp method constant used by this package.
-const fmtUnexpMethod = "unexpected method: %s"
-
 // TestList verifies the List handler.
 // The mock GitLab API at /api/v4/applications (GET) responds with HTTP OK.
 // It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/applications" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
-		if r.Method != http.MethodGet {
-			t.Fatalf(fmtUnexpMethod, r.Method)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/applications")
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
 		testutil.RespondJSON(w, http.StatusOK, `[
 			{"id": 1, "application_id": "app-1", "application_name": "My App", "secret": "sec", "callback_url": "http://localhost", "confidential": true, "scopes": ["api", "read_user"]}
 		]`)
@@ -78,12 +68,8 @@ func TestList_Error(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestCreate(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/applications" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
-		if r.Method != http.MethodPost {
-			t.Fatalf(fmtUnexpMethod, r.Method)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/applications")
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		testutil.RespondJSON(w, http.StatusCreated, `{
 			"id": 2,
 			"application_id": "app-2",
@@ -137,12 +123,8 @@ func TestCreate_Error(t *testing.T) {
 // It asserts the returned output carries the renewed secret and identity fields.
 func TestRenewSecret(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/applications/2/renew-secret" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
-		if r.Method != http.MethodPost {
-			t.Fatalf(fmtUnexpMethod, r.Method)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/applications/2/renew-secret")
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"id": 2,
 			"application_id": "app-2",
@@ -172,9 +154,7 @@ func TestRenewSecret(t *testing.T) {
 // TestRenewSecret_ValidationError verifies RenewSecret rejects non-positive ids
 // before touching the GitLab API.
 func TestRenewSecret_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	for _, id := range []int64{0, -1} {
 		if _, err := RenewSecret(t.Context(), client, RenewSecretInput{ID: id}); err == nil {
 			t.Errorf("ID=%d: expected error, got nil", id)
@@ -203,9 +183,7 @@ func TestRenewSecret_Error(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestDelete_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	for _, id := range []int64{0, -1} {
 		err := Delete(t.Context(), client, DeleteInput{ID: id})
 		if err == nil {
@@ -219,12 +197,8 @@ func TestDelete_ValidationError(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestDelete(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/applications/3" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
-		if r.Method != http.MethodDelete {
-			t.Fatalf(fmtUnexpMethod, r.Method)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/applications/3")
+		testutil.AssertRequestMethod(t, r, http.MethodDelete)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -323,9 +297,7 @@ func TestFormatRenewSecretMarkdown(t *testing.T) {
 func TestList_WithPagination(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/applications" && r.Method == http.MethodGet {
-			if r.URL.Query().Get("page") != "2" {
-				t.Errorf("expected page=2, got %s", r.URL.Query().Get("page"))
-			}
+			testutil.AssertQueryParam(t, r, "page", "2")
 			testutil.RespondJSON(w, http.StatusOK, `[
 				{"id": 5, "application_id": "app-5", "application_name": "Paged", "secret": "s", "callback_url": "http://cb", "confidential": false, "scopes": ["api"]}
 			]`)
@@ -352,19 +324,10 @@ func TestList_WithPagination(t *testing.T) {
 func TestList_WithKeysetAndSort(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/applications" && r.Method == http.MethodGet {
-			q := r.URL.Query()
-			if q.Get("pagination") != "keyset" {
-				t.Errorf("expected pagination=keyset, got %s", q.Get("pagination"))
-			}
-			if q.Get("page_token") != "tok-9" {
-				t.Errorf("expected page_token=tok-9, got %s", q.Get("page_token"))
-			}
-			if q.Get("order_by") != "id" {
-				t.Errorf("expected order_by=id, got %s", q.Get("order_by"))
-			}
-			if q.Get("sort") != "desc" {
-				t.Errorf("expected sort=desc, got %s", q.Get("sort"))
-			}
+			testutil.AssertQueryParam(t, r, "pagination", "keyset")
+			testutil.AssertQueryParam(t, r, "page_token", "tok-9")
+			testutil.AssertQueryParam(t, r, "order_by", "id")
+			testutil.AssertQueryParam(t, r, "sort", "desc")
 			testutil.RespondJSON(w, http.StatusOK, `[
 				{"id": 7, "application_id": "app-7", "application_name": "Keyset", "secret": "s", "callback_url": "http://cb", "confidential": false, "scopes": ["api"]}
 			]`)

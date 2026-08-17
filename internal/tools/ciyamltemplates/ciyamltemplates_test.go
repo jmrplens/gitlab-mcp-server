@@ -18,9 +18,7 @@ import (
 // It asserts the returned output matches the expected fields.
 func TestList(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/templates/gitlab_ci_ymls" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/templates/gitlab_ci_ymls")
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"Go","name":"Go"},{"key":"Python","name":"Python"}]`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -55,9 +53,7 @@ func TestList_Error(t *testing.T) {
 // It asserts the returned output matches the expected fields.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/templates/gitlab_ci_ymls/Go" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/templates/gitlab_ci_ymls/Go")
 		testutil.RespondJSON(w, http.StatusOK, `{"name":"Go","content":"stages:\n  - test"}`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -88,9 +84,7 @@ func TestGet_Error(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGet_EmptyKey(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("should not call API with empty key")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(t.Context(), client, GetInput{Key: ""})
 	if err == nil {
 		t.Fatal("expected error for empty key")

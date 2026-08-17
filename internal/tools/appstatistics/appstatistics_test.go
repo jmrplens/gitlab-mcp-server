@@ -17,9 +17,7 @@ import (
 // It asserts the returned output matches the expected fields.
 func TestGet(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/application/statistics" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/application/statistics")
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"forks": 10, "issues": 200, "merge_requests": 50,
 			"notes": 1000, "snippets": 5, "ssh_keys": 30,

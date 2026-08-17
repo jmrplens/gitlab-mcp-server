@@ -2337,11 +2337,11 @@ func TestCreateTodo_APIError(t *testing.T) {
 // TestCreateTodo_AlreadyExists verifies CreateTodo when GitLab returns 304 for an existing todo.
 func TestCreateTodo_AlreadyExists(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Fatalf("method = %s, want POST", r.Method)
-		}
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		if r.URL.Path != pathMR1+"/todo" {
-			t.Fatalf("path = %s, want %s", r.URL.Path, pathMR1+"/todo")
+			t.Errorf("path = %s, want %s", r.URL.Path, pathMR1+"/todo")
+			http.Error(w, "path, want", http.StatusInternalServerError)
+			return
 		}
 		w.WriteHeader(http.StatusNotModified)
 	}))
@@ -3436,7 +3436,9 @@ func TestCreate_AssigneeIDSingular(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathMRs {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			bodyStr := string(body)
 			if !strings.Contains(bodyStr, `"assignee_id":28`) {
@@ -3470,7 +3472,9 @@ func TestUpdate_AssigneeIDSingular(t *testing.T) {
 		if r.Method == http.MethodPut && r.URL.Path == pathMR1 {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			bodyStr := string(body)
 			if !strings.Contains(bodyStr, `"assignee_id":28`) {
@@ -3781,7 +3785,9 @@ func TestMerge_AutoDetectsSquashOnMerge(t *testing.T) {
 		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			mergeRequestBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
@@ -3819,7 +3825,9 @@ func TestMerge_AutoDetectsForceRemoveSourceBranch(t *testing.T) {
 		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			mergeRequestBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
@@ -3857,7 +3865,9 @@ func TestMerge_EnforcedSquashOverridesExplicitFalse(t *testing.T) {
 		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			mergeRequestBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)
@@ -3898,7 +3908,9 @@ func TestMerge_ExplicitSquashRespectedWhenNotEnforced(t *testing.T) {
 		case r.Method == http.MethodPut && r.URL.Path == pathMR1+"/merge":
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			mergeRequestBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, mrJSONCoverage)

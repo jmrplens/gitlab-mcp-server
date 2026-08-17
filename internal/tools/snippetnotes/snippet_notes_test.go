@@ -786,7 +786,9 @@ func TestCreate_CreatedAt(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathSnippetNotes {
 			raw, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read body: %v", err)
+				t.Errorf("read body: %v", err)
+				http.Error(w, "read body", http.StatusInternalServerError)
+				return
 			}
 			if !contains(string(raw), "2026-01-15T10:00:00Z") {
 				t.Errorf("request body missing created_at: %s", raw)

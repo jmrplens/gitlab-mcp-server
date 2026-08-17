@@ -471,3 +471,10 @@ Schedule cleanup when context is done:
 stop := context.AfterFunc(ctx, func() { conn.Close() })
 defer stop()
 ```
+
+## Test-goroutine assertion contract
+
+`t.Fatal`/`FailNow` must never run off the test goroutine (HTTP mock
+handlers, `go` statements, MCP handlers). See
+`test-goroutines.instructions.md` in this directory for the six-rule
+contract; `make check-test-goroutines` detects violations.

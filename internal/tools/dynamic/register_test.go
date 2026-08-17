@@ -5181,10 +5181,9 @@ func TestIntentBoost_SearchCodeSurfacesForCodeQueries(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query[:min(len(query), 60)], func(t *testing.T) {
 			t.Parallel()
-			var out SearchOutput
-			_, out, err = reg.Search(context.Background(), nil, SearchInput{Query: query, Limit: 5})
-			if err != nil {
-				t.Fatalf("search: %v", err)
+			_, out, searchErr := reg.Search(context.Background(), nil, SearchInput{Query: query, Limit: 5})
+			if searchErr != nil {
+				t.Fatalf("search: %v", searchErr)
 			}
 			if len(out.Results) == 0 {
 				t.Fatal("no results")
@@ -5217,10 +5216,9 @@ func TestIntentBoost_CurrentUserSurfacesForIdentityQueries(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			t.Parallel()
-			var out SearchOutput
-			_, out, err = reg.Search(context.Background(), nil, SearchInput{Query: query, Limit: 5})
-			if err != nil {
-				t.Fatalf("search: %v", err)
+			_, out, searchErr := reg.Search(context.Background(), nil, SearchInput{Query: query, Limit: 5})
+			if searchErr != nil {
+				t.Fatalf("search: %v", searchErr)
 			}
 			if len(out.Results) == 0 {
 				t.Fatal("no results")
@@ -5257,10 +5255,9 @@ func TestIntentBoost_ControlsNotHijacked(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.query, func(t *testing.T) {
 			t.Parallel()
-			var out SearchOutput
-			_, out, err = reg.Search(context.Background(), nil, SearchInput{Query: tc.query, Limit: 5})
-			if err != nil {
-				t.Fatalf("search: %v", err)
+			_, out, searchErr := reg.Search(context.Background(), nil, SearchInput{Query: tc.query, Limit: 5})
+			if searchErr != nil {
+				t.Fatalf("search: %v", searchErr)
 			}
 			if len(out.Results) == 0 {
 				t.Fatal("no results")

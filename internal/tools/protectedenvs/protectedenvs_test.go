@@ -218,7 +218,9 @@ func TestProtect_WithAllOptionalFields(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedEnvs {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, envJSON)
@@ -479,7 +481,9 @@ func TestUpdate_WithAllFields(t *testing.T) {
 		if r.Method == http.MethodPut && r.URL.Path == pathProtectedEnv1 {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, envJSON)
@@ -662,7 +666,9 @@ func TestProtect_WithRequiredApprovalCount(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProtectedEnvs {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, envJSON)

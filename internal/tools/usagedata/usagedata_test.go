@@ -13,9 +13,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// fmtUnexpPath identifies the fmt unexp path constant used by this package.
-const fmtUnexpPath = "unexpected path: %s"
-
 // errExpectedNil identifies the err expected nil constant used by this package.
 const errExpectedNil = "expected error, got nil"
 
@@ -25,12 +22,8 @@ const fmtUnexpErr = "unexpected error: %v"
 // TestGetServicePing verifies GetServicePing.
 func TestGetServicePing(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/usage_data/service_ping" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
-		if r.Method != http.MethodGet {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/usage_data/service_ping")
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"recorded_at": "2026-01-15T10:00:00Z",
 			"license": {"plan": "premium"},
@@ -86,9 +79,7 @@ func TestGetServicePing_Error(t *testing.T) {
 // TestGetNonSQLMetrics verifies GetNonSQLMetrics.
 func TestGetNonSQLMetrics(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/usage_data/non_sql_metrics" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/usage_data/non_sql_metrics")
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"recorded_at": "2026-01-15",
 			"uuid": "abc-123",
@@ -171,9 +162,7 @@ func TestGetNonSQLMetrics_NotFound_HintsAlternatives(t *testing.T) {
 // TestGetQueries verifies GetQueries.
 func TestGetQueries(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/usage_data/queries" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/usage_data/queries")
 		testutil.RespondJSON(w, http.StatusOK, `{
 			"recorded_at": "2026-01-15T10:00:00Z",
 			"uuid": "abc-123",
@@ -216,9 +205,7 @@ func TestGetQueries(t *testing.T) {
 func TestGetMetricDefinitions(t *testing.T) {
 	yamlContent := "---\nmetrics:\n  - name: users_count\n    description: Total users\n"
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/usage_data/metric_definitions" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/usage_data/metric_definitions")
 		w.Header().Set("Content-Type", "text/yaml")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(yamlContent))
@@ -248,12 +235,8 @@ func TestGetMetricDefinitions_Error(t *testing.T) {
 // TestTrackEvent verifies TrackEvent.
 func TestTrackEvent(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/usage_data/track_event" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
-		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/usage_data/track_event")
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -290,12 +273,8 @@ func TestTrackEvent_Error(t *testing.T) {
 // TestTrackEvents verifies TrackEvents.
 func TestTrackEvents(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/usage_data/track_events" {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
-		}
-		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/usage_data/track_events")
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	})
 	client := testutil.NewTestClient(t, handler)

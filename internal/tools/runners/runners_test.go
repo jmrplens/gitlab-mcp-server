@@ -1111,7 +1111,9 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 		if r.URL.Path == "/api/v4/runners/10" && r.Method == http.MethodPut {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "decode body", http.StatusInternalServerError)
+				return
 			}
 			if body["active"] != true {
 				t.Errorf("expected active=true in body, got %v", body["active"])
@@ -1423,7 +1425,9 @@ func TestRegister_AllOptionalFields(t *testing.T) {
 		if r.URL.Path == "/api/v4/runners" && r.Method == http.MethodPost {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "decode body", http.StatusInternalServerError)
+				return
 			}
 			if body["active"] != true {
 				t.Errorf("expected active=true in body, got %v", body["active"])
@@ -2037,9 +2041,7 @@ func TestListManagers_Success(t *testing.T) {
 
 // TestListManagers_ZeroRunnerID verifies validation of zero runner ID.
 func TestListManagers_ZeroRunnerID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListManagers(context.Background(), client, ListManagersInput{RunnerID: 0})
 	if err == nil {
 		t.Fatal("expected error for zero runner_id")
@@ -2048,9 +2050,7 @@ func TestListManagers_ZeroRunnerID(t *testing.T) {
 
 // TestListManagers_CancelledContext verifies cancellation before the API request.
 func TestListManagers_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListManagers(testutil.CancelledCtx(t), client, ListManagersInput{RunnerID: 1})
 	if err == nil {
 		t.Fatal("expected error for canceled context")

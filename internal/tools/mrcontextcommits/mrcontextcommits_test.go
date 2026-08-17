@@ -222,9 +222,7 @@ func assertContains(t *testing.T, err error, substr string) {
 
 // TestMRIIDRequired_Validation covers MRIIDRequired with table-driven subtests for validation.
 func TestMRIIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called when merge_request_iid is missing")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	tests := []struct {
 		name string
@@ -486,9 +484,7 @@ func newMRContextCommitsSpecsByTool(t *testing.T) map[string]toolutil.ActionSpec
 // TestList_EmptyProjectID verifies that List returns an error when project_id
 // is empty, covering the missed validation branch.
 func TestList_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(t.Context(), client, ListInput{ProjectID: "", MergeRequest: 1})
 	if err == nil {
 		t.Fatal("expected error for empty project_id")
@@ -498,9 +494,7 @@ func TestList_EmptyProjectID(t *testing.T) {
 // TestCreate_EmptyProjectID verifies that Create returns an error when
 // project_id is empty.
 func TestCreate_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Create(t.Context(), client, CreateInput{ProjectID: "", MergeRequest: 1, Commits: []string{"abc"}})
 	if err == nil {
 		t.Fatal("expected error for empty project_id")
@@ -510,9 +504,7 @@ func TestCreate_EmptyProjectID(t *testing.T) {
 // TestDelete_EmptyProjectID verifies that Delete returns an error when
 // project_id is empty.
 func TestDelete_EmptyProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(t.Context(), client, DeleteInput{ProjectID: "", MergeRequest: 1, Commits: []string{"abc"}})
 	if err == nil {
 		t.Fatal("expected error for empty project_id")

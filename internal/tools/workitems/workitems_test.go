@@ -39,9 +39,7 @@ func TestGet_Success(t *testing.T) {
 
 // TestGet_InvalidIID verifies Get when invalid IID.
 func TestGet_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	for _, iid := range []int64{0, -1, -100} {
 		_, err := Get(t.Context(), client, GetInput{FullPath: testFullPath, IID: iid})
 		if err == nil {
@@ -117,7 +115,9 @@ func TestList_Filters(t *testing.T) {
 			Variables map[string]any `json:"variables"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatalf("decode GraphQL request: %v", err)
+			t.Errorf("decode GraphQL request: %v", err)
+			http.Error(w, "decode GraphQL request", http.StatusInternalServerError)
+			return
 		}
 		expected := map[string]any{
 			"fullPath":           testFullPath,
@@ -133,7 +133,9 @@ func TestList_Filters(t *testing.T) {
 		}
 		for key, want := range expected {
 			if got := request.Variables[key]; got != want {
-				t.Fatalf("variable %s = %#v, want %#v", key, got, want)
+				t.Errorf("variable %s = %#v, want %#v", key, got, want)
+				http.Error(w, "variable, want", http.StatusInternalServerError)
+				return
 			}
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[]}}}}`)
@@ -167,7 +169,9 @@ func TestList_Children(t *testing.T) {
 			Query string `json:"query"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			t.Fatalf("decode GraphQL request: %v", err)
+			t.Errorf("decode GraphQL request: %v", err)
+			http.Error(w, "decode GraphQL request", http.StatusInternalServerError)
+			return
 		}
 		capturedQuery = request.Query
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[{"id":"gid://gitlab/WorkItem/1","iid":"10","workItemType":{"name":"Issue"},"state":"OPEN","title":"Parent","author":{"username":"dev1"},"features":{"hierarchy":{"hasChildren":true,"children":{"nodes":[{"iid":"20","namespace":{"fullPath":"my-group/child-a"}},{"iid":"21","namespace":{"fullPath":"my-group/child-b"}}]}}}}]}}}}`)
@@ -243,9 +247,7 @@ func TestList_Error(t *testing.T) {
 
 // TestList_MissingFullPath verifies List validates full_path before calling GitLab.
 func TestList_MissingFullPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(t.Context(), client, ListInput{})
 	if err == nil {
 		t.Fatal(errExpectedNil)
@@ -384,9 +386,7 @@ func TestDelete_Success(t *testing.T) {
 
 // TestDelete_InvalidIID verifies that Delete rejects invalid IIDs.
 func TestDelete_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	for _, iid := range []int64{0, -1, -100} {
 		err := Delete(t.Context(), client, DeleteInput{FullPath: testFullPath, IID: iid})
 		if err == nil {
@@ -1301,9 +1301,7 @@ func TestUpdate_AllOptions(t *testing.T) {
 // TestUpdate_InvalidIID verifies that Update rejects IID values <= 0
 // with an error mentioning "iid".
 func TestUpdate_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	for _, iid := range []int64{0, -1, -100} {
 		_, err := Update(t.Context(), client, UpdateInput{FullPath: testFullPath, IID: iid, Title: "x"})
 		if err == nil {
@@ -1881,9 +1879,7 @@ func TestListWorkItemTypes_Success(t *testing.T) {
 // TestListWorkItemTypes_EmptyFullPath verifies ListWorkItemTypes returns a
 // validation error when full_path is empty.
 func TestListWorkItemTypes_EmptyFullPath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListWorkItemTypes(t.Context(), client, ListWorkItemTypesInput{})
 	if err == nil {
 		t.Fatal(errExpectedNil)

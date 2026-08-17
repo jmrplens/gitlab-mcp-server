@@ -565,7 +565,9 @@ func TestSetJira_WithAllOptionalFields(t *testing.T) {
 		if r.Method == http.MethodPut {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"title":"Jira","slug":"jira","active":true}`)

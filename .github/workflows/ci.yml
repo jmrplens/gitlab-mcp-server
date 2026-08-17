@@ -38,6 +38,8 @@ jobs:
         run: make check-openplugin
       - name: Check README repository statistics
         run: make check-stats
+      - name: Check test-goroutine aborts
+        run: make check-test-goroutines
       - name: Check token footprint
         run: make check-footprint
       - name: Check site stats

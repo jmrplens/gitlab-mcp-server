@@ -16,8 +16,6 @@ import (
 )
 
 const (
-	// errNoReachAPI identifies the err no reach API constant used by this package.
-	errNoReachAPI = "should not reach API"
 	// fmtWantOneEvent identifies the fmt want one event constant used by this package.
 	fmtWantOneEvent = "got %d events, want 1"
 	// fmtGotStateWant identifies the fmt got state want constant used by this package.
@@ -80,9 +78,7 @@ func TestGetIssueLabelEvent_Success_DetailedFields(t *testing.T) {
 
 // TestListIssueLabelEvents_ValidationError verifies ListIssueLabelEvents when validation error.
 func TestListIssueLabelEvents_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueLabelEvents(context.Background(), client, ListIssueLabelEventsInput{IssueIID: 1})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
@@ -286,18 +282,14 @@ func contains(s, substr string) bool {
 
 // TestListIssueLabelEvents_InvalidIID verifies ListIssueLabelEvents when invalid IID.
 func TestListIssueLabelEvents_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueLabelEvents(context.Background(), client, ListIssueLabelEventsInput{ProjectID: "p", IssueIID: 0})
 	assertErrContains(t, err, "issue_iid")
 }
 
 // TestGetIssueLabelEvent_InvalidIDs verifies GetIssueLabelEvent when invalid IDs.
 func TestGetIssueLabelEvent_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetIssueLabelEvent(context.Background(), client, GetIssueLabelEventInput{ProjectID: "p", IssueIID: 0, LabelEventID: 1})
 	assertErrContains(t, err, "issue_iid")
 	_, err = GetIssueLabelEvent(context.Background(), client, GetIssueLabelEventInput{ProjectID: "p", IssueIID: 1, LabelEventID: 0})
@@ -306,18 +298,14 @@ func TestGetIssueLabelEvent_InvalidIDs(t *testing.T) {
 
 // TestListIssueMilestoneEvents_InvalidIID verifies ListIssueMilestoneEvents when invalid IID.
 func TestListIssueMilestoneEvents_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueMilestoneEvents(context.Background(), client, ListIssueMilestoneEventsInput{ProjectID: "p", IssueIID: 0})
 	assertErrContains(t, err, "issue_iid")
 }
 
 // TestGetIssueMilestoneEvent_InvalidIDs verifies GetIssueMilestoneEvent when invalid IDs.
 func TestGetIssueMilestoneEvent_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetIssueMilestoneEvent(context.Background(), client, GetIssueMilestoneEventInput{ProjectID: "p", IssueIID: 0, MilestoneEventID: 1})
 	assertErrContains(t, err, "issue_iid")
 	_, err = GetIssueMilestoneEvent(context.Background(), client, GetIssueMilestoneEventInput{ProjectID: "p", IssueIID: 1, MilestoneEventID: 0})
@@ -326,18 +314,14 @@ func TestGetIssueMilestoneEvent_InvalidIDs(t *testing.T) {
 
 // TestListIssueStateEvents_InvalidIID verifies ListIssueStateEvents when invalid IID.
 func TestListIssueStateEvents_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueStateEvents(context.Background(), client, ListIssueStateEventsInput{ProjectID: "p", IssueIID: 0})
 	assertErrContains(t, err, "issue_iid")
 }
 
 // TestGetIssueStateEvent_InvalidIDs verifies GetIssueStateEvent when invalid IDs.
 func TestGetIssueStateEvent_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetIssueStateEvent(context.Background(), client, GetIssueStateEventInput{ProjectID: "p", IssueIID: 0, StateEventID: 1})
 	assertErrContains(t, err, "issue_iid")
 	_, err = GetIssueStateEvent(context.Background(), client, GetIssueStateEventInput{ProjectID: "p", IssueIID: 1, StateEventID: 0})
@@ -346,18 +330,14 @@ func TestGetIssueStateEvent_InvalidIDs(t *testing.T) {
 
 // TestListMRLabelEvents_InvalidIID verifies ListMRLabelEvents when invalid IID.
 func TestListMRLabelEvents_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListMRLabelEvents(context.Background(), client, ListMRLabelEventsInput{ProjectID: "p", MRIID: 0})
 	assertErrContains(t, err, "merge_request_iid")
 }
 
 // TestGetMRLabelEvent_InvalidIDs verifies GetMRLabelEvent when invalid IDs.
 func TestGetMRLabelEvent_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetMRLabelEvent(context.Background(), client, GetMRLabelEventInput{ProjectID: "p", MRIID: 0, LabelEventID: 1})
 	assertErrContains(t, err, "merge_request_iid")
 	_, err = GetMRLabelEvent(context.Background(), client, GetMRLabelEventInput{ProjectID: "p", MRIID: 1, LabelEventID: 0})
@@ -366,18 +346,14 @@ func TestGetMRLabelEvent_InvalidIDs(t *testing.T) {
 
 // TestListMRMilestoneEvents_InvalidIID verifies ListMRMilestoneEvents when invalid IID.
 func TestListMRMilestoneEvents_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListMRMilestoneEvents(context.Background(), client, ListMRMilestoneEventsInput{ProjectID: "p", MRIID: 0})
 	assertErrContains(t, err, "merge_request_iid")
 }
 
 // TestGetMRMilestoneEvent_InvalidIDs verifies GetMRMilestoneEvent when invalid IDs.
 func TestGetMRMilestoneEvent_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetMRMilestoneEvent(context.Background(), client, GetMRMilestoneEventInput{ProjectID: "p", MRIID: 0, MilestoneEventID: 1})
 	assertErrContains(t, err, "merge_request_iid")
 	_, err = GetMRMilestoneEvent(context.Background(), client, GetMRMilestoneEventInput{ProjectID: "p", MRIID: 1, MilestoneEventID: 0})
@@ -386,18 +362,14 @@ func TestGetMRMilestoneEvent_InvalidIDs(t *testing.T) {
 
 // TestListMRStateEvents_InvalidIID verifies ListMRStateEvents when invalid IID.
 func TestListMRStateEvents_InvalidIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListMRStateEvents(context.Background(), client, ListMRStateEventsInput{ProjectID: "p", MRIID: 0})
 	assertErrContains(t, err, "merge_request_iid")
 }
 
 // TestGetMRStateEvent_InvalidIDs verifies GetMRStateEvent when invalid IDs.
 func TestGetMRStateEvent_InvalidIDs(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetMRStateEvent(context.Background(), client, GetMRStateEventInput{ProjectID: "p", MRIID: 0, StateEventID: 1})
 	assertErrContains(t, err, "merge_request_iid")
 	_, err = GetMRStateEvent(context.Background(), client, GetMRStateEventInput{ProjectID: "p", MRIID: 1, StateEventID: 0})
@@ -1048,9 +1020,7 @@ func TestListIssueIterationEvents_Success(t *testing.T) {
 
 // TestListIssueIterationEvents_ValidationError verifies error when ProjectID is empty.
 func TestListIssueIterationEvents_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueIterationEvents(context.Background(), client, ListIssueIterationEventsInput{IssueIID: 1})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
@@ -1059,9 +1029,7 @@ func TestListIssueIterationEvents_ValidationError(t *testing.T) {
 
 // TestListIssueIterationEvents_MissingIssueIID verifies error when IssueIID is 0.
 func TestListIssueIterationEvents_MissingIssueIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueIterationEvents(context.Background(), client, ListIssueIterationEventsInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected validation error for missing issue_iid, got nil")
@@ -1070,9 +1038,7 @@ func TestListIssueIterationEvents_MissingIssueIID(t *testing.T) {
 
 // TestGetIssueIterationEvent_MissingProjectID verifies error when ProjectID is empty.
 func TestGetIssueIterationEvent_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetIssueIterationEvent(context.Background(), client, GetIssueIterationEventInput{IssueIID: 1, IterationEventID: 1})
 	if err == nil {
 		t.Fatal("expected validation error for missing project_id, got nil")
@@ -1081,9 +1047,7 @@ func TestGetIssueIterationEvent_MissingProjectID(t *testing.T) {
 
 // TestGetIssueIterationEvent_MissingIssueIID verifies error when IssueIID is 0.
 func TestGetIssueIterationEvent_MissingIssueIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetIssueIterationEvent(context.Background(), client, GetIssueIterationEventInput{ProjectID: "42", IterationEventID: 1})
 	if err == nil {
 		t.Fatal("expected validation error for missing issue_iid, got nil")
@@ -1092,9 +1056,7 @@ func TestGetIssueIterationEvent_MissingIssueIID(t *testing.T) {
 
 // TestListIssueWeightEvents_MissingIssueIID verifies error when IssueIID is 0.
 func TestListIssueWeightEvents_MissingIssueIID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueWeightEvents(context.Background(), client, ListIssueWeightEventsInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected validation error for missing issue_iid, got nil")
@@ -1128,9 +1090,7 @@ func TestGetIssueIterationEvent_Success(t *testing.T) {
 
 // TestGetIssueIterationEvent_ValidationError_MissingEventID verifies error when IterationEventID is 0.
 func TestGetIssueIterationEvent_ValidationError_MissingEventID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetIssueIterationEvent(context.Background(), client, GetIssueIterationEventInput{ProjectID: "42", IssueIID: 1, IterationEventID: 0})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
@@ -1166,9 +1126,7 @@ func TestListIssueWeightEvents_Success(t *testing.T) {
 
 // TestListIssueWeightEvents_ValidationError verifies error when ProjectID is empty.
 func TestListIssueWeightEvents_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListIssueWeightEvents(context.Background(), client, ListIssueWeightEventsInput{IssueIID: 1})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
@@ -1265,9 +1223,7 @@ func covGID() toolutil.StringOrInt { return toolutil.StringOrInt("acme") }
 // rejects input missing the required group_id and epic_iid fields without
 // reaching the API.
 func TestListGroupEpicLabelEvents_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	if _, err := ListGroupEpicLabelEvents(t.Context(), client, ListGroupEpicLabelEventsInput{}); err == nil {
 		t.Fatal(errExpectedValidation)
 	}
@@ -1339,9 +1295,7 @@ func TestListGroupEpicLabelEvents_Success(t *testing.T) {
 // TestGetGroupEpicLabelEvent_Validation verifies GetGroupEpicLabelEvent rejects
 // input missing any required field without reaching the API.
 func TestGetGroupEpicLabelEvent_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	cases := []GetGroupEpicLabelEventInput{
 		{},
 		{GroupID: covGID()},

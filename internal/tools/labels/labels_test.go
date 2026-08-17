@@ -258,7 +258,9 @@ func TestLabelCreate_ArchivedFlag(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathProjectLabels {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":3,"name":"enhancement","color":"#00FF00","archived":true}`)
@@ -331,7 +333,9 @@ func TestLabelUpdate_ArchivedFlag(t *testing.T) {
 		if r.Method == http.MethodPut && r.URL.Path == pathLabelBug {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"critical-bug","color":"#FF0000","archived":true}`)
@@ -367,7 +371,9 @@ func TestLabelUpdate_NameBodyField(t *testing.T) {
 		if r.Method == http.MethodPut && r.URL.Path == pathLabelBug {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"bug","color":"#00FF00","is_project_label":true}`)

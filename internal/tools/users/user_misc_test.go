@@ -107,9 +107,7 @@ func TestUploadCurrentUserAvatar_Success_FilePath(t *testing.T) {
 // TestUploadCurrentUserAvatar_Validation covers the input-validation branches:
 // missing filename, no source, both sources, and invalid base64.
 func TestUploadCurrentUserAvatar_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called on validation error")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	cases := []struct {
 		name  string
 		input UploadCurrentUserAvatarInput
@@ -159,9 +157,7 @@ func TestUploadCurrentUserAvatar_UnauthorizedError(t *testing.T) {
 // TestUploadCurrentUserAvatar_ContextCancelled verifies the handler returns the
 // context error before performing any work when the context is already cancelled.
 func TestUploadCurrentUserAvatar_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called with a cancelled context")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	content := base64.StdEncoding.EncodeToString([]byte("fake"))
@@ -175,9 +171,7 @@ func TestUploadCurrentUserAvatar_ContextCancelled(t *testing.T) {
 // TestUploadCurrentUserAvatar_FilePathNotFound verifies a missing local file path
 // is surfaced as an error before any API call.
 func TestUploadCurrentUserAvatar_FilePathNotFound(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called when local file is missing")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	missing := filepath.Join(t.TempDir(), "does-not-exist.png")
 	if _, err := UploadCurrentUserAvatar(context.Background(), client, UploadCurrentUserAvatarInput{
 		Filename: "avatar.png", FilePath: missing,

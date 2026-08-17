@@ -546,9 +546,7 @@ func TestMemberDeleteServer_Error(t *testing.T) {
 
 // TestMemberGet_MissingUserID verifies MemberGet when missing user ID.
 func TestMemberGet_MissingUserID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(context.Background(), client, GetInput{ProjectID: testProjectID, UserID: 0})
 	if err == nil {
 		t.Fatal("Get() expected error for missing user_id, got nil")
@@ -560,9 +558,7 @@ func TestMemberGet_MissingUserID(t *testing.T) {
 
 // TestMemberGetInherited_MissingUserID verifies MemberGetInherited when missing user ID.
 func TestMemberGetInherited_MissingUserID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetInherited(context.Background(), client, GetInput{ProjectID: testProjectID, UserID: 0})
 	if err == nil {
 		t.Fatal("GetInherited() expected error for missing user_id, got nil")
@@ -574,9 +570,7 @@ func TestMemberGetInherited_MissingUserID(t *testing.T) {
 
 // TestMemberAdd_MissingUserID verifies MemberAdd when missing user ID.
 func TestMemberAdd_MissingUserID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Add(context.Background(), client, AddInput{ProjectID: testProjectID, UserID: 0, AccessLevel: 30})
 	if err == nil {
 		t.Fatal("Add() expected error for missing user_id, got nil")
@@ -588,9 +582,7 @@ func TestMemberAdd_MissingUserID(t *testing.T) {
 
 // TestMemberEdit_MissingUserID verifies MemberEdit when missing user ID.
 func TestMemberEdit_MissingUserID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Edit(context.Background(), client, EditInput{ProjectID: testProjectID, UserID: 0, AccessLevel: 30})
 	if err == nil {
 		t.Fatal("Edit() expected error for missing user_id, got nil")
@@ -602,9 +594,7 @@ func TestMemberEdit_MissingUserID(t *testing.T) {
 
 // TestMemberDelete_MissingUserID verifies MemberDelete when missing user ID.
 func TestMemberDelete_MissingUserID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(context.Background(), client, DeleteInput{ProjectID: testProjectID, UserID: 0})
 	if err == nil {
 		t.Fatal("Delete() expected error for missing user_id, got nil")

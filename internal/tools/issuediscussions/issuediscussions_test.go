@@ -295,9 +295,7 @@ func assertContains(t *testing.T, err error, substr string) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestIssueIIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when issue_iid is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = testProjectPath
 
@@ -337,9 +335,7 @@ func TestIssueIIDRequired_Validation(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestNoteIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when note_id is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = testProjectPath
 
@@ -366,9 +362,7 @@ func TestNoteIDRequired_Validation(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestProjectIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when project_id is empty")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 
 	tests := []struct {
@@ -404,9 +398,7 @@ func TestProjectIDRequired_Validation(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestDiscussionIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when discussion_id is empty")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = testProjectPath
 

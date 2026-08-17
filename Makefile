@@ -508,11 +508,12 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/5] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/5] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/5] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/5] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[5/5] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[1/6] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/6] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/6] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/6] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/6] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[6/6] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -825,6 +826,18 @@ audit-dynamic-aliases:
 ## audit-e2e-gaps: report catalog actions not exercised by the e2e suite (CE+EE).
 audit-e2e-gaps:
 	go run ./cmd/audit_e2e_gaps/
+
+## audit-test-goroutines: report testing.T aborts made off the test goroutine
+## (t.Fatal inside HTTP mock handlers, go statements, MCP tool handlers) and
+## t.Errorf calls without the contract-required return. Writes the JSON work
+## list consumed by the conversion batches.
+audit-test-goroutines:
+	go run ./cmd/audit_test_goroutines/ -json plan/test-goroutines-backlog.json
+
+## check-test-goroutines: fail when any testing.T abort remains off the test
+## goroutine. Wired into CI once the sweep lands (phase 4 of the plan).
+check-test-goroutines:
+	go run ./cmd/audit_test_goroutines/ -check
 
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:

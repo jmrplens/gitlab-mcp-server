@@ -275,9 +275,7 @@ func (failingReader) Read([]byte) (int, error) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestImportFile_InvalidArchivePath(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("ImportFile should reject invalid file path before API request")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ImportFile(t.Context(), client, ImportFileInput{Name: "test-group", Path: "test-group", File: ""})
 	if err == nil {
 		t.Fatal(errExpectedErr)

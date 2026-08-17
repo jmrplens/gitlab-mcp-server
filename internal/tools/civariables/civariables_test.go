@@ -635,14 +635,20 @@ func TestCIVariableUpdate_AllOptionalFields(t *testing.T) {
 		if r.URL.Path == "/api/v4/projects/1/variables/DB_HOST" && r.Method == http.MethodPut {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode request body: %v", err)
+				t.Errorf("decode request body: %v", err)
+				http.Error(w, "decode request body", http.StatusInternalServerError)
+				return
 			}
 			filter, hasFilter := body["filter"].(map[string]any)
 			if !hasFilter || filter["environment_scope"] != "staging" {
-				t.Fatalf("filter.environment_scope = %#v, want staging", body["filter"])
+				t.Errorf("filter.environment_scope = %#v, want staging", body["filter"])
+				http.Error(w, "filter.environment_scope, want staging", http.StatusInternalServerError)
+				return
 			}
 			if _, hasEnvironmentScope := body["environment_scope"]; hasEnvironmentScope {
-				t.Fatalf("request body contains environment_scope update field: %#v", body)
+				t.Errorf("request body contains environment_scope update field: %#v", body)
+				http.Error(w, "request body contains environment_scope update field", http.StatusInternalServerError)
+				return
 			}
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"key":"DB_HOST","value":"db.prod","variable_type":"file",
@@ -1122,7 +1128,9 @@ func TestCIVariableUpdate_FilterObject(t *testing.T) {
 		if r.URL.Path == "/api/v4/projects/10/variables/DB_URL" && r.Method == http.MethodPut {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode request body: %v", err)
+				t.Errorf("decode request body: %v", err)
+				http.Error(w, "decode request body", http.StatusInternalServerError)
+				return
 			}
 			filter, ok := body["filter"].(map[string]any)
 			if !ok || filter["environment_scope"] != testEnvScope {

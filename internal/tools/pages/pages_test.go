@@ -52,9 +52,7 @@ func TestGetPages_Success(t *testing.T) {
 
 // TestGetPages_ValidationError verifies GetPages when validation error.
 func TestGetPages_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetPages(context.Background(), client, GetPagesInput{})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
@@ -105,9 +103,7 @@ func TestUnpublishPages_Success(t *testing.T) {
 
 // TestUnpublishPages_ValidationError verifies UnpublishPages when validation error.
 func TestUnpublishPages_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := UnpublishPages(context.Background(), client, UnpublishPagesInput{})
 	if err == nil {
 		t.Fatal("expected validation error, got nil")
@@ -249,9 +245,7 @@ func TestGetDomain_Success(t *testing.T) {
 
 // TestGetDomain_ValidationError verifies GetDomain when validation error.
 func TestGetDomain_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetDomain(context.Background(), client, GetDomainInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal("expected validation error for missing domain")
@@ -358,8 +352,6 @@ const (
 	testDomainA = "a.com"
 	// testMyGroupProject identifies the test my group project constant used by this package.
 	testMyGroupProject = "mygroup/myproject"
-	// errNoHandler identifies the err no handler constant used by this package.
-	errNoHandler = "handler should not be called"
 	// errExpectedAPI identifies the err expected API constant used by this package.
 	errExpectedAPI = "expected API error, got nil"
 	// errEmptyProjID identifies the err empty proj ID constant used by this package.
@@ -378,9 +370,7 @@ const (
 
 // TestUpdatePages_ValidationError verifies UpdatePages when validation error.
 func TestUpdatePages_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoHandler)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := UpdatePages(context.Background(), client, UpdatePagesInput{})
 	if err == nil {
 		t.Fatal(errEmptyProjID)
@@ -474,9 +464,7 @@ func TestListAllDomains_APIError(t *testing.T) {
 
 // TestListDomains_ValidationError verifies ListDomains when validation error.
 func TestListDomains_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoHandler)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListDomains(context.Background(), client, ListDomainsInput{})
 	if err == nil {
 		t.Fatal(errEmptyProjID)
@@ -500,9 +488,7 @@ func TestListDomains_APIError(t *testing.T) {
 
 // TestGetDomain_ValidationMissingProjectID verifies GetDomain when validation missing project ID.
 func TestGetDomain_ValidationMissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoHandler)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetDomain(context.Background(), client, GetDomainInput{Domain: testDomain})
 	if err == nil {
 		t.Fatal(errEmptyProjID)
@@ -526,9 +512,7 @@ func TestGetDomain_APIError(t *testing.T) {
 
 // TestCreateDomain_ValidationMissingProjectID verifies CreateDomain when validation missing project ID.
 func TestCreateDomain_ValidationMissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoHandler)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := CreateDomain(context.Background(), client, CreateDomainInput{Domain: testDomain})
 	if err == nil {
 		t.Fatal(errEmptyProjID)
@@ -537,9 +521,7 @@ func TestCreateDomain_ValidationMissingProjectID(t *testing.T) {
 
 // TestCreateDomain_ValidationMissingDomain verifies CreateDomain when validation missing domain.
 func TestCreateDomain_ValidationMissingDomain(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoHandler)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := CreateDomain(context.Background(), client, CreateDomainInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errEmptyDomain)
@@ -586,9 +568,7 @@ func TestCreateDomain_WithCert(t *testing.T) {
 
 // TestUpdateDomain_ValidationMissingProjectID verifies UpdateDomain when validation missing project ID.
 func TestUpdateDomain_ValidationMissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoHandler)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := UpdateDomain(context.Background(), client, UpdateDomainInput{Domain: testDomain})
 	if err == nil {
 		t.Fatal(errEmptyProjID)
@@ -597,9 +577,7 @@ func TestUpdateDomain_ValidationMissingProjectID(t *testing.T) {
 
 // TestUpdateDomain_ValidationMissingDomain verifies UpdateDomain when validation missing domain.
 func TestUpdateDomain_ValidationMissingDomain(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoHandler)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := UpdateDomain(context.Background(), client, UpdateDomainInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errEmptyDomain)
@@ -646,9 +624,7 @@ func TestUpdateDomain_WithCert(t *testing.T) {
 
 // TestDeleteDomain_ValidationMissingProjectID verifies DeleteDomain when validation missing project ID.
 func TestDeleteDomain_ValidationMissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoHandler)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteDomain(context.Background(), client, DeleteDomainInput{Domain: testDomain})
 	if err == nil {
 		t.Fatal(errEmptyProjID)
@@ -657,9 +633,7 @@ func TestDeleteDomain_ValidationMissingProjectID(t *testing.T) {
 
 // TestDeleteDomain_ValidationMissingDomain verifies DeleteDomain when validation missing domain.
 func TestDeleteDomain_ValidationMissingDomain(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoHandler)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteDomain(context.Background(), client, DeleteDomainInput{ProjectID: "42"})
 	if err == nil {
 		t.Fatal(errEmptyDomain)

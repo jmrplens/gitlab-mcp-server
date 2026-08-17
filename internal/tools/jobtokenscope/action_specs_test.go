@@ -110,9 +110,7 @@ func TestActionSpecs_DeleteOutput(t *testing.T) {
 
 // TestCatalogSurface_RemoveConfirmDeclined covers destructive confirmation when the user declines.
 func TestCatalogSurface_RemoveConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API when confirm is declined")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	byTool := jobTokenScopeSpecsByTool(t, ActionSpecs(client))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)

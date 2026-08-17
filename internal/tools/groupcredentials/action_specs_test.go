@@ -131,9 +131,7 @@ func TestActionSpecs_DeleteOutputs(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestActionSpecs_DeleteOutputErrors(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when required identifiers are missing")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	tests := []struct {
 		name string
 		fn   func() (toolutil.DeleteOutput, error)
@@ -163,9 +161,7 @@ func TestActionSpecs_DeleteOutputErrors(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestCatalogSurface_ConfirmDeclined(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API when confirm is declined")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	byTool := groupCredentialSpecsByTool(t, ActionSpecs(client))
 
 	tools := []struct {

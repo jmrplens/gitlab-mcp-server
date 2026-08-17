@@ -242,9 +242,7 @@ func TestStreamDownload_UnwritablePath(t *testing.T) {
 // TestStreamDownload_OutputPathIsDirectory verifies streamDownloadPackageFile
 // returns the os.Create error when the requested output path is a directory.
 func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Download(context.Background(), nil, client, DownloadInput{
 		ProjectID:      "42",

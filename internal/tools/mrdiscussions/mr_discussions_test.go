@@ -521,7 +521,8 @@ func TestCreate_PositionValidationError(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, `[{"old_path":"other.go","new_path":"other.go","diff":"@@ -1,1 +1,1 @@\n-old\n+new\n"}]`)
 			return
 		}
-		t.Fatalf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		t.Errorf("unexpected API call: %s %s", r.Method, r.URL.Path)
+		http.Error(w, "unexpected API call", http.StatusInternalServerError)
 	}))
 
 	_, err := Create(context.Background(), client, CreateInput{

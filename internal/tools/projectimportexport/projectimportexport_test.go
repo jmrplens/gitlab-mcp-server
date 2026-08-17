@@ -218,9 +218,7 @@ func TestImportFromFile_FilePath_Success(t *testing.T) {
 // TestImportFromFile_BothParams_Error verifies that providing both file_path
 // and content_base64 returns an error.
 func TestImportFromFile_BothParams_Error(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called")
-	})
+	handler := testutil.ForbiddenHandler(t)
 	client := testutil.NewTestClient(t, handler)
 
 	_, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
@@ -235,9 +233,7 @@ func TestImportFromFile_BothParams_Error(t *testing.T) {
 // TestImportFromFile_NoParams_Error verifies that providing neither file_path
 // nor content_base64 returns an error.
 func TestImportFromFile_NoParams_Error(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called")
-	})
+	handler := testutil.ForbiddenHandler(t)
 	client := testutil.NewTestClient(t, handler)
 
 	_, err := ImportFromFile(t.Context(), client, ImportFromFileInput{})
@@ -249,9 +245,7 @@ func TestImportFromFile_NoParams_Error(t *testing.T) {
 // TestImportFromFile_InvalidBase64_Error verifies that invalid base64 content
 // returns an error before making API calls.
 func TestImportFromFile_InvalidBase64_Error(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called with invalid base64")
-	})
+	handler := testutil.ForbiddenHandler(t)
 	client := testutil.NewTestClient(t, handler)
 
 	_, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
@@ -370,9 +364,7 @@ func TestFormatExportDownloadMarkdown(t *testing.T) {
 
 // TestImportFromFile_FilePath_NonExistent_Error verifies error when file does not exist.
 func TestImportFromFile_FilePath_NonExistent_Error(t *testing.T) {
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called")
-	})
+	handler := testutil.ForbiddenHandler(t)
 	client := testutil.NewTestClient(t, handler)
 
 	_, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
@@ -389,9 +381,7 @@ func TestImportFromFile_FilePathOpenError(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("chmod-based unreadable file test is Unix-specific")
 	}
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	archivePath := t.TempDir() + "/unreadable.tar.gz"
 	if err := os.WriteFile(archivePath, []byte("fake archive"), 0o600); err != nil {
@@ -629,9 +619,7 @@ func TestActionSpecs_CallRoutes(t *testing.T) {
 // TestImportFromFile_FilePathReadError verifies that ImportFromFile returns
 // an error when the specified file path does not exist (os.ReadFile error).
 func TestImportFromFile_FilePathReadError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
 		FilePath: "/nonexistent/path/to/file.tar.gz",
 	})
@@ -646,9 +634,7 @@ func TestImportFromFile_FilePathReadError(t *testing.T) {
 // TestImportFromFile_Base64DecodeError verifies that invalid base64 in
 // content_base64 returns an appropriate error.
 func TestImportFromFile_Base64DecodeError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ImportFromFile(t.Context(), client, ImportFromFileInput{
 		ContentBase64: "not-valid-base64!!!",
 	})
@@ -716,9 +702,7 @@ func (errReader) Read([]byte) (int, error) { return 0, errors.New("forced read e
 // TestRawGetImportStatus_RequestError verifies rawGetImportStatus returns the
 // request-construction error when the path contains an invalid percent escape.
 func TestRawGetImportStatus_RequestError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when request construction fails")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	if _, err := rawGetImportStatus(t.Context(), client, "projects/%zz/import"); err == nil {
 		t.Fatal("expected request-construction error for invalid path escape, got nil")
 	}
@@ -727,9 +711,7 @@ func TestRawGetImportStatus_RequestError(t *testing.T) {
 // TestRawImportFromFile_RequestError verifies rawImportFromFile returns the
 // request-construction error when the archive reader fails during multipart copy.
 func TestRawImportFromFile_RequestError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when request construction fails")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	if _, err := rawImportFromFile(t.Context(), client, errReader{}, nil); err == nil {
 		t.Fatal("expected request-construction error for failing archive reader, got nil")
 	}
@@ -814,7 +796,9 @@ func TestImportFromFile_OverrideParams(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/v4/projects/import" && r.Method == http.MethodPost {
 			if err := r.ParseMultipartForm(1 << 20); err != nil { //nolint:gosec // Test handler parses a small in-memory fixture body.
-				t.Fatalf("parse multipart: %v", err)
+				t.Errorf("parse multipart: %v", err)
+				http.Error(w, "parse multipart", http.StatusInternalServerError)
+				return
 			}
 			for key, want := range wantParams {
 				if got := r.FormValue(key); got != want {

@@ -640,14 +640,20 @@ func TestUpdate_AllOptionalFields(t *testing.T) {
 		if r.URL.Path == "/api/v4/groups/10/variables/DB_HOST" && r.Method == http.MethodPut {
 			var body map[string]any
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode request body: %v", err)
+				t.Errorf("decode request body: %v", err)
+				http.Error(w, "decode request body", http.StatusInternalServerError)
+				return
 			}
 			filter, hasFilter := body["filter"].(map[string]any)
 			if !hasFilter || filter["environment_scope"] != "staging" {
-				t.Fatalf("filter.environment_scope = %#v, want staging", body["filter"])
+				t.Errorf("filter.environment_scope = %#v, want staging", body["filter"])
+				http.Error(w, "filter.environment_scope, want staging", http.StatusInternalServerError)
+				return
 			}
 			if _, hasEnvironmentScope := body["environment_scope"]; hasEnvironmentScope {
-				t.Fatalf("request body contains environment_scope update field: %#v", body)
+				t.Errorf("request body contains environment_scope update field: %#v", body)
+				http.Error(w, "request body contains environment_scope update field", http.StatusInternalServerError)
+				return
 			}
 			testutil.RespondJSON(w, http.StatusOK, `{
 				"key":"DB_HOST","value":"db.prod","variable_type":"file",
@@ -985,7 +991,9 @@ func TestUpdate_FilterObjectPrecedence(t *testing.T) {
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			filter, ok := body["filter"].(map[string]any)
 			if !ok || filter["environment_scope"] != "production" {
-				t.Fatalf("filter.environment_scope = %#v, want production", body["filter"])
+				t.Errorf("filter.environment_scope = %#v, want production", body["filter"])
+				http.Error(w, "filter.environment_scope, want production", http.StatusInternalServerError)
+				return
 			}
 			testutil.RespondJSON(w, http.StatusOK, varJSON)
 			return

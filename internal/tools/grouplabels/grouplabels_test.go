@@ -206,7 +206,9 @@ func TestCreate_ArchivedFlag(t *testing.T) {
 		if r.Method == http.MethodPost && r.URL.Path == pathGroupLabels {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, `{"id":1,"name":"bug","color":"#d9534f","archived":true}`)
@@ -281,7 +283,9 @@ func TestUpdate_ArchivedFlag(t *testing.T) {
 		if r.Method == http.MethodPut && r.URL.Path == pathLabel1 {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, `{"id":1,"name":"bug-fix","color":"#00ff00","archived":true}`)

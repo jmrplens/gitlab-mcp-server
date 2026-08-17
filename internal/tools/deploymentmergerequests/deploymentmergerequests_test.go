@@ -140,9 +140,7 @@ func TestList_WithFilters(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestList_InvalidDeploymentID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("should not reach API")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := List(t.Context(), client, ListInput{ProjectID: "42", DeploymentID: 0})
 	if err == nil {
 		t.Fatal("expected error for zero deployment_id")

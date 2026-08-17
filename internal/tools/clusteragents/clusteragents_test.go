@@ -18,9 +18,6 @@ import (
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
-// errAPIShouldNotCallZeroAgentID identifies the err API should not call zero agent ID constant used by this package.
-const errAPIShouldNotCallZeroAgentID = "API should not be called when AgentID is 0"
-
 // errExpectedZeroAgentID identifies the err expected zero agent ID constant used by this package.
 const errExpectedZeroAgentID = "expected error for zero AgentID, got nil"
 
@@ -215,9 +212,7 @@ func TestFormatTokensListMarkdown(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGetAgent_ZeroAgentID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPIShouldNotCallZeroAgentID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetAgent(t.Context(), client, GetAgentInput{ProjectID: "1", AgentID: 0})
 	if err == nil {
 		t.Fatal(errExpectedZeroAgentID)
@@ -228,9 +223,7 @@ func TestGetAgent_ZeroAgentID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestDeleteAgent_ZeroAgentID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPIShouldNotCallZeroAgentID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := DeleteAgent(t.Context(), client, DeleteAgentInput{ProjectID: "1", AgentID: 0})
 	if err == nil {
 		t.Fatal(errExpectedZeroAgentID)
@@ -241,9 +234,7 @@ func TestDeleteAgent_ZeroAgentID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestListAgentTokens_ZeroAgentID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPIShouldNotCallZeroAgentID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := ListAgentTokens(t.Context(), client, ListAgentTokensInput{ProjectID: "1", AgentID: 0})
 	if err == nil {
 		t.Fatal(errExpectedZeroAgentID)
@@ -254,9 +245,7 @@ func TestListAgentTokens_ZeroAgentID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGetAgentToken_ZeroAgentID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPIShouldNotCallZeroAgentID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetAgentToken(t.Context(), client, GetAgentTokenInput{ProjectID: "1", AgentID: 0, TokenID: 1})
 	if err == nil {
 		t.Fatal(errExpectedZeroAgentID)
@@ -267,9 +256,7 @@ func TestGetAgentToken_ZeroAgentID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestGetAgentToken_ZeroTokenID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called when TokenID is 0")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GetAgentToken(t.Context(), client, GetAgentTokenInput{ProjectID: "1", AgentID: 5, TokenID: 0})
 	if err == nil {
 		t.Fatal("expected error for zero TokenID, got nil")
@@ -280,9 +267,7 @@ func TestGetAgentToken_ZeroTokenID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestCreateAgentToken_ZeroAgentID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPIShouldNotCallZeroAgentID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := CreateAgentToken(t.Context(), client, CreateAgentTokenInput{ProjectID: "1", AgentID: 0, Name: "tok"})
 	if err == nil {
 		t.Fatal(errExpectedZeroAgentID)
@@ -293,9 +278,7 @@ func TestCreateAgentToken_ZeroAgentID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestRevokeAgentToken_ZeroAgentID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(errAPIShouldNotCallZeroAgentID)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := RevokeAgentToken(t.Context(), client, RevokeAgentTokenInput{ProjectID: "1", AgentID: 0, TokenID: 1})
 	if err == nil {
 		t.Fatal(errExpectedZeroAgentID)
@@ -306,9 +289,7 @@ func TestRevokeAgentToken_ZeroAgentID(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestRevokeAgentToken_ZeroTokenID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal("API should not be called when TokenID is 0")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := RevokeAgentToken(t.Context(), client, RevokeAgentTokenInput{ProjectID: "1", AgentID: 5, TokenID: 0})
 	if err == nil {
 		t.Fatal("expected error for zero TokenID, got nil")

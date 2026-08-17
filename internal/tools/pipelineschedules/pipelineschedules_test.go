@@ -825,9 +825,7 @@ func assertContains(t *testing.T, err error, substr string) {
 // TestScheduleIDRequired_Validation ensures all handlers that require schedule_id
 // reject zero and negative values.
 func TestScheduleIDRequired_Validation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when schedule_id is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 	const pid = "my/project"
 

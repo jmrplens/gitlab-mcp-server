@@ -97,9 +97,7 @@ func TestSetIntegration_NilConfig(t *testing.T) {
 
 // TestSetIntegration_MissingSlug verifies the slug-required validation guard.
 func TestSetIntegration_MissingSlug(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("transport should not be called when slug is empty")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	if _, err := SetIntegration(t.Context(), client, SetIntegrationInput{ProjectID: testProjectID}); err == nil {
 		t.Fatal("expected error for missing slug")
 	}
@@ -193,9 +191,7 @@ func TestGetGroupIntegration_Success(t *testing.T) {
 
 // TestGetGroupIntegration_MissingSlug verifies the slug-required guard.
 func TestGetGroupIntegration_MissingSlug(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("transport should not be called when slug is empty")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	if _, err := GetGroupIntegration(t.Context(), client, GetGroupIntegrationInput{GroupID: testGroupPath}); err == nil {
 		t.Fatal("expected error for missing slug")
 	}
@@ -246,9 +242,7 @@ func TestSetGroupIntegration_Success(t *testing.T) {
 
 // TestSetGroupIntegration_MissingSlug verifies the slug-required guard.
 func TestSetGroupIntegration_MissingSlug(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("transport should not be called when slug is empty")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	if _, err := SetGroupIntegration(t.Context(), client, SetGroupIntegrationInput{GroupID: testGroupPath}); err == nil {
 		t.Fatal("expected error for missing slug")
 	}
@@ -288,9 +282,7 @@ func TestDeleteGroupIntegration_Success(t *testing.T) {
 
 // TestDeleteGroupIntegration_MissingSlug verifies the slug-required guard.
 func TestDeleteGroupIntegration_MissingSlug(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("transport should not be called when slug is empty")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	if err := DeleteGroupIntegration(t.Context(), client, DeleteGroupIntegrationInput{GroupID: testGroupPath}); err == nil {
 		t.Fatal("expected error for missing slug")
 	}

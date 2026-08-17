@@ -19,9 +19,6 @@ import (
 // errExpNonNilResult identifies the err exp non nil result constant used by this package.
 const errExpNonNilResult = "expected non-nil result"
 
-// errNoReachAPI identifies the err no reach API constant used by this package.
-const errNoReachAPI = "should not reach API"
-
 // fmtUnexpErr identifies the fmt unexp err constant used by this package.
 const fmtUnexpErr = "unexpected error: %v"
 
@@ -231,9 +228,7 @@ func TestDelete_Error(t *testing.T) {
 
 // TestGet_InvalidTopicID verifies Get when invalid topic ID.
 func TestGet_InvalidTopicID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Get(t.Context(), client, GetInput{TopicID: 0})
 	if err == nil {
 		t.Fatal(errExpErrZeroTopicID)
@@ -249,9 +244,7 @@ func TestGet_InvalidTopicID(t *testing.T) {
 
 // TestUpdate_InvalidTopicID verifies Update when invalid topic ID.
 func TestUpdate_InvalidTopicID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Update(t.Context(), client, UpdateInput{TopicID: 0, Title: "x"})
 	if err == nil {
 		t.Fatal(errExpErrZeroTopicID)
@@ -267,9 +260,7 @@ func TestUpdate_InvalidTopicID(t *testing.T) {
 
 // TestDelete_InvalidTopicID verifies Delete when invalid topic ID.
 func TestDelete_InvalidTopicID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal(errNoReachAPI)
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	err := Delete(t.Context(), client, DeleteInput{TopicID: 0})
 	if err == nil {
 		t.Fatal(errExpErrZeroTopicID)
@@ -380,7 +371,9 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 		if r.Method == http.MethodPost {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusCreated, topicJSON)
@@ -426,7 +419,9 @@ func TestUpdate_WithAllOptionalFields(t *testing.T) {
 		if r.Method == http.MethodPut {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				t.Fatalf("read request body: %v", err)
+				t.Errorf("read request body: %v", err)
+				http.Error(w, "read request body", http.StatusInternalServerError)
+				return
 			}
 			capturedBody = string(body)
 			testutil.RespondJSON(w, http.StatusOK, topicJSON)

@@ -17,12 +17,8 @@ import (
 // It asserts the returned output matches the expected fields.
 func TestMark(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/admin/migrations/20240115100000/mark" {
-			t.Fatalf("unexpected path: %s", r.URL.Path)
-		}
-		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		testutil.AssertRequestPath(t, r, "/api/v4/admin/migrations/20240115100000/mark")
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		testutil.RespondJSON(w, http.StatusOK, `{}`)
 	})
 	client := testutil.NewTestClient(t, handler)
@@ -59,9 +55,7 @@ func TestMark_Error(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestMark_VersionValidation(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when version is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := context.Background()
 
 	tests := []struct {

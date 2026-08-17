@@ -348,9 +348,7 @@ func TestFormatFeatureMarkdown_NoDefinition(t *testing.T) {
 // the marshal error directly, and the handler wraps it with the operation
 // name so the LLM sees a meaningful diagnostic.
 func TestSet_NewRequestErrorOnUnserializableValue(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when body fails to marshal")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Set(context.Background(), client, SetInput{Name: "flag1", Value: make(chan int)})
 	if err == nil {

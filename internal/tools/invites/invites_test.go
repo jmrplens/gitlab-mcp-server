@@ -74,9 +74,7 @@ func TestListPendingProjectInvitations_WithQuery(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestListPendingProjectInvitations_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ListPendingProjectInvitations(context.Background(), client, ListPendingProjectInvitationsInput{})
 	if err == nil {
@@ -114,9 +112,7 @@ func TestListPendingGroupInvitations_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestListPendingGroupInvitations_ValidationError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ListPendingGroupInvitations(context.Background(), client, ListPendingGroupInvitationsInput{})
 	if err == nil {
@@ -149,9 +145,7 @@ func TestProjectInvites_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectInvites_ValidationError_NoProject(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{Email: "a@b.com", AccessLevel: 30})
 	if err == nil {
@@ -163,9 +157,7 @@ func TestProjectInvites_ValidationError_NoProject(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestProjectInvites_ValidationError_NoEmailOrUser(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := ProjectInvites(context.Background(), client, ProjectInvitesInput{ProjectID: "42", AccessLevel: 30})
 	if err == nil {
@@ -198,9 +190,7 @@ func TestGroupInvites_Success(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupInvites_ValidationError_NoGroup(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := GroupInvites(context.Background(), client, GroupInvitesInput{Email: "a@b.com", AccessLevel: 30})
 	if err == nil {
@@ -404,9 +394,7 @@ func TestProjectInvites_BadRequest(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts that the returned error is wrapped and contains a useful hint.
 func TestGroupInvites_ValidationErrorNoEmailOrUser(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("handler should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := GroupInvites(context.Background(), client, GroupInvitesInput{GroupID: "10", AccessLevel: 30})
 	if err == nil {
 		t.Fatal("expected error for missing email and user_id, got nil")

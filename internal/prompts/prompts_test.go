@@ -17,6 +17,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 )
 
 // Test endpoint paths and reusable format strings shared across prompt tests.
@@ -1830,9 +1831,7 @@ func TestMRRiskAssessmentPrompt_APIError(t *testing.T) {
 // summarize_pipeline_status prompt returns an error when the project_id
 // argument is empty.
 func TestSummarizePipelineStatusPrompt_MissingArgs(t *testing.T) {
-	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(msgHandlerNoCallMissingArgs)
-	}))
+	session := newMCPSession(t, testutil.ForbiddenHandler(t))
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      promptSummarizePipelineStatus,
@@ -1847,9 +1846,7 @@ func TestSummarizePipelineStatusPrompt_MissingArgs(t *testing.T) {
 // suggest_mr_reviewers prompt returns an error when the project_id argument
 // is empty.
 func TestSuggestMRReviewersPrompt_MissingArgs(t *testing.T) {
-	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(msgHandlerNoCallMissingArgs)
-	}))
+	session := newMCPSession(t, testutil.ForbiddenHandler(t))
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "suggest_mr_reviewers",
@@ -1864,9 +1861,7 @@ func TestSuggestMRReviewersPrompt_MissingArgs(t *testing.T) {
 // generate_release_notes prompt returns an error when the project_id
 // argument is empty.
 func TestGenerateReleaseNotesPrompt_MissingArgs(t *testing.T) {
-	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(msgHandlerNoCallMissingArgs)
-	}))
+	session := newMCPSession(t, testutil.ForbiddenHandler(t))
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "generate_release_notes",
@@ -1881,9 +1876,7 @@ func TestGenerateReleaseNotesPrompt_MissingArgs(t *testing.T) {
 // summarize_open_mrs prompt returns an error when the project_id argument
 // is empty.
 func TestSummarizeOpenMRsPrompt_MissingArgs(t *testing.T) {
-	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(msgHandlerNoCallMissingArgs)
-	}))
+	session := newMCPSession(t, testutil.ForbiddenHandler(t))
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "summarize_open_mrs",
@@ -1898,9 +1891,7 @@ func TestSummarizeOpenMRsPrompt_MissingArgs(t *testing.T) {
 // project_health_check prompt returns an error when the project_id argument
 // is empty.
 func TestProjectHealthCheckPrompt_MissingArgs(t *testing.T) {
-	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(msgHandlerNoCallMissingArgs)
-	}))
+	session := newMCPSession(t, testutil.ForbiddenHandler(t))
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "project_health_check",
@@ -1914,9 +1905,7 @@ func TestProjectHealthCheckPrompt_MissingArgs(t *testing.T) {
 // TestCompareBranchesPrompt_MissingArgs verifies that the compare_branches
 // prompt returns an error when the required from argument is empty.
 func TestCompareBranchesPrompt_MissingArgs(t *testing.T) {
-	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(msgHandlerNoCallMissingArgs)
-	}))
+	session := newMCPSession(t, testutil.ForbiddenHandler(t))
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "compare_branches",
@@ -1930,9 +1919,7 @@ func TestCompareBranchesPrompt_MissingArgs(t *testing.T) {
 // TestDailyStandupPrompt_MissingArgs verifies that the daily_standup prompt
 // returns an error when the project_id argument is empty.
 func TestDailyStandupPrompt_MissingArgs(t *testing.T) {
-	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(msgHandlerNoCallMissingArgs)
-	}))
+	session := newMCPSession(t, testutil.ForbiddenHandler(t))
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "daily_standup",
@@ -1947,9 +1934,7 @@ func TestDailyStandupPrompt_MissingArgs(t *testing.T) {
 // mr_risk_assessment prompt returns an error when the project_id argument
 // is empty.
 func TestMRRiskAssessmentPrompt_MissingArgs(t *testing.T) {
-	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(msgHandlerNoCallMissingArgs)
-	}))
+	session := newMCPSession(t, testutil.ForbiddenHandler(t))
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "mr_risk_assessment",
@@ -2076,9 +2061,7 @@ func TestSummarizePipeline_StatusPromptJobStatusBranches(t *testing.T) {
 // TestReviewMRPrompt_MissingArgs verifies that the review_mr prompt returns
 // an error when the project_id argument is empty.
 func TestReviewMRPrompt_MissingArgs(t *testing.T) {
-	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t.Fatal(msgHandlerNoCallMissingArgs)
-	}))
+	session := newMCPSession(t, testutil.ForbiddenHandler(t))
 
 	_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
 		Name:      "review_mr",

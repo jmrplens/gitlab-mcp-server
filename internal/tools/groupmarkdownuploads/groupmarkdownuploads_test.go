@@ -89,9 +89,7 @@ func TestDeleteByID_Error(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.
 func TestDeleteByID_ValidationUploadID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called when upload_id is invalid")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	for _, id := range []int64{0, -1} {
 		err := DeleteByID(t.Context(), client, DeleteByIDInput{GroupID: "5", UploadID: id})
 		if err == nil {

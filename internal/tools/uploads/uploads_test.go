@@ -142,9 +142,7 @@ func TestProjectUpload_ID_Omitted_VersionTolerance(t *testing.T) {
 // when the content_base64 field contains invalid base64 data. The mock should
 // never be called because validation occurs before the API request.
 func TestProjectUpload_InvalidBase64(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called with invalid base64 input")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Upload(context.Background(), nil, client, UploadInput{
 		ProjectID:     "42",
@@ -179,9 +177,7 @@ func TestProjectUpload_APIError(t *testing.T) {
 // TestProjectUpload_CancelledContext verifies that Upload returns an
 // error immediately when called with an already-canceled context.
 func TestProjectUpload_CancelledContext(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called with canceled context")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	ctx := testutil.CancelledCtx(t)
 
@@ -212,12 +208,16 @@ func TestProjectUpload_SendsFileContent(t *testing.T) {
 		r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 		err := r.ParseMultipartForm(10 << 20) //nolint:gosec // Test handler bounds r.Body with http.MaxBytesReader above.
 		if err != nil {
-			t.Fatalf("failed to parse multipart form: %v", err)
+			t.Errorf("failed to parse multipart form: %v", err)
+			http.Error(w, "failed to parse multipart form", http.StatusInternalServerError)
+			return
 		}
 
 		file, header, err := r.FormFile("file")
 		if err != nil {
-			t.Fatalf("failed to get form file: %v", err)
+			t.Errorf("failed to get form file: %v", err)
+			http.Error(w, "failed to get form file", http.StatusInternalServerError)
+			return
 		}
 		defer file.Close()
 
@@ -227,7 +227,9 @@ func TestProjectUpload_SendsFileContent(t *testing.T) {
 
 		body, err := io.ReadAll(file)
 		if err != nil {
-			t.Fatalf("failed to read file body: %v", err)
+			t.Errorf("failed to read file body: %v", err)
+			http.Error(w, "failed to read file body", http.StatusInternalServerError)
+			return
 		}
 
 		if string(body) != string(originalContent) {
@@ -271,15 +273,21 @@ func TestProjectUpload_WithProgressToken(t *testing.T) {
 		}
 		r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 		if err := r.ParseMultipartForm(10 << 20); err != nil { //nolint:gosec // Test handler bounds r.Body with http.MaxBytesReader above.
-			t.Fatalf("failed to parse multipart form: %v", err)
+			t.Errorf("failed to parse multipart form: %v", err)
+			http.Error(w, "parse multipart form", http.StatusInternalServerError)
+			return
 		}
 		file, _, err := r.FormFile("file")
 		if err != nil {
-			t.Fatalf("failed to get form file: %v", err)
+			t.Errorf("failed to get form file: %v", err)
+			http.Error(w, "failed to get form file", http.StatusInternalServerError)
+			return
 		}
 		defer file.Close()
 		if _, err = io.Copy(io.Discard, file); err != nil {
-			t.Fatalf("failed to read uploaded file: %v", err)
+			t.Errorf("failed to read uploaded file: %v", err)
+			http.Error(w, "failed to read uploaded file", http.StatusInternalServerError)
+			return
 		}
 		testutil.RespondJSON(w, http.StatusCreated, `{
 			"alt": "progress.txt",
@@ -360,11 +368,15 @@ func TestProjectUpload_FilePath_Success(t *testing.T) {
 
 		r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 		if err := r.ParseMultipartForm(10 << 20); err != nil { //nolint:gosec // Test handler bounds r.Body with http.MaxBytesReader above.
-			t.Fatalf("failed to parse multipart form: %v", err)
+			t.Errorf("failed to parse multipart form: %v", err)
+			http.Error(w, "parse multipart form", http.StatusInternalServerError)
+			return
 		}
 		file, _, err := r.FormFile("file")
 		if err != nil {
-			t.Fatalf("failed to get form file: %v", err)
+			t.Errorf("failed to get form file: %v", err)
+			http.Error(w, "failed to get form file", http.StatusInternalServerError)
+			return
 		}
 		defer file.Close()
 
@@ -406,9 +418,7 @@ func TestProjectUpload_FilePath_Success(t *testing.T) {
 
 // TestProjectUpload_BothParams_Error verifies error when both file_path and content_base64 are set.
 func TestProjectUpload_BothParams_Error(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Upload(context.Background(), nil, client, UploadInput{
 		ProjectID:     "42",
@@ -426,9 +436,7 @@ func TestProjectUpload_BothParams_Error(t *testing.T) {
 
 // TestProjectUpload_NeitherParams_Error verifies error when neither file_path nor content_base64 is set.
 func TestProjectUpload_NeitherParams_Error(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Upload(context.Background(), nil, client, UploadInput{
 		ProjectID: "42",
@@ -444,9 +452,7 @@ func TestProjectUpload_NeitherParams_Error(t *testing.T) {
 
 // TestProjectUpload_FilePath_NotFound verifies error when file_path doesn't exist.
 func TestProjectUpload_FilePath_NotFound(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Upload(context.Background(), nil, client, UploadInput{
 		ProjectID: "42",
@@ -460,9 +466,7 @@ func TestProjectUpload_FilePath_NotFound(t *testing.T) {
 
 // TestProjectUpload_FilePath_IsDirectory verifies error when file_path is a directory.
 func TestProjectUpload_FilePath_IsDirectory(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Upload(context.Background(), nil, client, UploadInput{
 		ProjectID: "42",
@@ -491,9 +495,7 @@ func TestProjectUpload_FilePath_TooLarge(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 
 	_, err := Upload(context.Background(), nil, client, UploadInput{
 		ProjectID: "42",
@@ -858,9 +860,7 @@ func TestDeleteBySecret_CancelledContext(t *testing.T) {
 
 // TestUpload_Base64DecodeError validates that invalid base64 returns an error.
 func TestUpload_Base64DecodeError(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Upload(t.Context(), nil, client, UploadInput{
 		ProjectID:     "p",
 		ContentBase64: "not-valid-base64!!!",
@@ -873,9 +873,7 @@ func TestUpload_Base64DecodeError(t *testing.T) {
 
 // TestUpload_ContextCancelled validates context cancellation in Upload.
 func TestUpload_ContextCancelled(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		t.Fatal("API should not be called")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	ctx := testutil.CancelledCtx(t)
 	_, err := Upload(ctx, nil, client, UploadInput{
 		ProjectID:     "p",
@@ -891,9 +889,7 @@ func TestUpload_ContextCancelled(t *testing.T) {
 // validation error when project_id is empty. The mock handler is never
 // invoked because validation occurs before any HTTP call.
 func TestProjectUpload_MissingProjectID(t *testing.T) {
-	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
-		t.Fatal("HTTP handler must not be invoked when project_id is empty")
-	}))
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 	_, err := Upload(context.Background(), nil, client, UploadInput{
 		ContentBase64: "dGVzdA==",
 		Filename:      "x.txt",

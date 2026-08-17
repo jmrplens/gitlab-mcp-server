@@ -37,11 +37,11 @@ const (
 func TestTodoList_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathTodos {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
+			t.Errorf(fmtUnexpPath, r.URL.Path)
+			http.Error(w, "assertion failed", http.StatusInternalServerError)
+			return
 		}
-		if r.Method != http.MethodGet {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		testutil.AssertRequestMethod(t, r, http.MethodGet)
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[
 			{
 				"id": 1,
@@ -156,11 +156,11 @@ func TestTodoList_CancelledContext(t *testing.T) {
 func TestTodoMarkDone_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathTodoMarkDone {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
+			t.Errorf(fmtUnexpPath, r.URL.Path)
+			http.Error(w, "assertion failed", http.StatusInternalServerError)
+			return
 		}
-		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
@@ -219,11 +219,11 @@ func TestTodoMarkDone_CancelledContext(t *testing.T) {
 func TestTodoMarkAllDone_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != pathTodoMarkAll {
-			t.Fatalf(fmtUnexpPath, r.URL.Path)
+			t.Errorf(fmtUnexpPath, r.URL.Path)
+			http.Error(w, "assertion failed", http.StatusInternalServerError)
+			return
 		}
-		if r.Method != http.MethodPost {
-			t.Fatalf("unexpected method: %s", r.Method)
-		}
+		testutil.AssertRequestMethod(t, r, http.MethodPost)
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
