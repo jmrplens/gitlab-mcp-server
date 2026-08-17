@@ -563,7 +563,16 @@ E2E_GITLAB_INTERNAL_URL=http://gitlab-e2e
 E2E_ROOT_TOKEN=${ROOT_TOKEN}
 EOF
 
-# 5. Seed a container image so the registry repository/tag e2e coverage can
+# 5. Enable the external importer sources: GitLab ships with them disabled,
+# and the importer e2e coverage (import_github, import_bitbucket, ...) needs
+# the instance to accept those sources before credentials even matter.
+echo "  [5/6] Enabling importer sources (github, bitbucket, bitbucket_server)..."
+curl -sS -o /dev/null -X PUT "${GITLAB_URL}/api/v4/application/settings" \
+    -H "PRIVATE-TOKEN: ${PAT}" \
+    --data "import_sources[]=github&import_sources[]=bitbucket&import_sources[]=bitbucket_server" \
+    --connect-timeout 5 --max-time 30 || echo "      WARNING: could not enable importer sources"
+
+# 6. Seed a container image so the registry repository/tag e2e coverage can
 # exercise real repositories instead of skipping. The registry listens on
 # plain HTTP at localhost:5050 (Docker treats localhost registries as
 # insecure by default), and GitLab issues the push token for the test user's
@@ -571,7 +580,7 @@ EOF
 REGISTRY_HOST="${REGISTRY_HOST:-localhost:5050}"
 REGISTRY_PROJECT_NAME="e2e-registry-seed"
 if command -v docker >/dev/null 2>&1; then
-    echo "  [5/5] Seeding container registry image (${REGISTRY_HOST})..."
+    echo "  [6/6] Seeding container registry image (${REGISTRY_HOST})..."
     seed_project_json=$(curl -sS -X POST "${GITLAB_URL}/api/v4/projects" \
         -H "PRIVATE-TOKEN: ${PAT}" \
         --data "name=${REGISTRY_PROJECT_NAME}&visibility=private" \
@@ -610,7 +619,7 @@ except Exception:
         echo "      WARNING: registry image seeding failed; registry tag e2e coverage will skip"
     fi
 else
-    echo "  [5/5] docker CLI not found; skipping registry image seeding"
+    echo "  [6/6] docker CLI not found; skipping registry image seeding"
 fi
 
 echo ""
