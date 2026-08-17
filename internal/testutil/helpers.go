@@ -39,6 +39,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
@@ -197,4 +198,32 @@ func RespondJSONWithPagination(w http.ResponseWriter, status int, body string, p
 	}
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(body))
+}
+
+// ForbiddenHandler returns an [http.Handler] for mocks that must never be
+// called. Each request is counted atomically and answered with a
+// deterministic 500 so the client under test fails loudly, and a
+// [testing.T.Cleanup] hook asserts on the test goroutine that no request
+// arrived. This is the sanctioned replacement for `t.Fatal("should not be
+// called")` inside handler literals, which the testing package forbids off
+// the test goroutine (see .github/instructions/test-goroutines.instructions.md).
+func ForbiddenHandler(t *testing.T) http.Handler {
+	t.Helper()
+	var hits atomic.Int64
+	t.Cleanup(func() {
+		if n := hits.Load(); n != 0 {
+			t.Errorf("mock API was called %d time(s); the test forbids any request", n)
+		}
+	})
+	return forbiddenHandlerCore(&hits)
+}
+
+// forbiddenHandlerCore is the response half of [ForbiddenHandler], split out
+// so tests can exercise the counting and the deterministic 500 without
+// arming the cleanup assertion.
+func forbiddenHandlerCore(hits *atomic.Int64) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		http.Error(w, "unexpected call: "+r.Method+" "+r.URL.Path, http.StatusInternalServerError)
+	})
 }

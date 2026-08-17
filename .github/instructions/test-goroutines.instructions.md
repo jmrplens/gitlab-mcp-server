@@ -40,10 +40,31 @@ MUST follow all of these:
    asserted afterwards. The `atomic` is mandatory: an unsynchronised variable
    written from the handler goroutine is a data race.
 
+The CI gate (`make check-test-goroutines`) fails only on abort sites
+(`t.Fatal`/`t.Fatalf`/`t.FailNow`, rule 1). Errorf-without-return sites are
+reported as an advisory list, not gated: most are the legitimate
+assert-then-respond shape where the handler keeps writing a deterministic
+response after the `t.Errorf`. Rule 2 applies when the `t.Errorf` replaces an
+abort that used to guard later statements — then the `return` is mandatory.
+
 ## Canonical shapes
+
+Prefer the shared helpers in `internal/testutil` over hand-rolled guards —
+they already follow every rule:
+
+- `testutil.AssertRequestPath(t, r, "/api/v4/...")` /
+  `testutil.AssertRequestMethod(t, r, http.MethodPost)` /
+  `testutil.AssertQueryParam(t, r, "page", "2")` — non-aborting request
+  validation inside a handler that then writes its canned response.
+- `testutil.ForbiddenHandler(t)` — a whole mock server that must never be
+  reached: counts hits atomically, answers 500, and asserts zero hits on the
+  test goroutine via `t.Cleanup`.
 
 ```go
 // Guard that must never fire (rule 6):
+client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+// Same shape hand-rolled, when the handler needs extra behavior:
 var hits atomic.Int64
 srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
     hits.Add(1)

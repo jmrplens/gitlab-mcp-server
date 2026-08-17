@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -48,14 +49,15 @@ func TestWrapMutatingToolsForSafeMode_ReadOnlyToolPassesThrough(t *testing.T) {
 // mutating tools return a SafeModePreview instead of executing.
 func TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	var mutatingCalls atomic.Int64
 	server.AddTool(&mcp.Tool{
 		Name:        "gitlab_create_issue",
 		Description: "Create an issue",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false},
 		InputSchema: &map[string]any{"type": "object"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		t.Fatal("mutating handler should not be called in safe mode")
-		return nil, errors.New("unreachable")
+		mutatingCalls.Add(1)
+		return nil, errors.New("mutating handler must not run in safe mode")
 	})
 
 	wrapped := WrapMutatingToolsForSafeMode(server)
@@ -66,6 +68,9 @@ func TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview(t *testing.T) {
 	args := json.RawMessage(`{"project_id":123,"title":"Bug report"}`)
 	result := callTool(t, server, "gitlab_create_issue", args)
 
+	if n := mutatingCalls.Load(); n != 0 {
+		t.Errorf("mutating handler was called %d time(s) in safe mode", n)
+	}
 	if result.IsError {
 		t.Fatal("safe mode preview should not be an error")
 	}
@@ -101,13 +106,14 @@ func TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview(t *testing.T) {
 // annotations are treated as mutating and get wrapped.
 func TestWrapMutatingToolsForSafeMode_NilAnnotations(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	var handlerCalls atomic.Int64
 	server.AddTool(&mcp.Tool{
 		Name:        "gitlab_delete_project",
 		Description: "Delete a project",
 		InputSchema: &map[string]any{"type": "object"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		t.Fatal("handler should not be called")
-		return nil, errors.New("unreachable")
+		handlerCalls.Add(1)
+		return nil, errors.New("wrapped handler must not run in safe mode")
 	})
 
 	wrapped := WrapMutatingToolsForSafeMode(server)
@@ -116,6 +122,9 @@ func TestWrapMutatingToolsForSafeMode_NilAnnotations(t *testing.T) {
 	}
 
 	result := callTool(t, server, "gitlab_delete_project", nil)
+	if n := handlerCalls.Load(); n != 0 {
+		t.Errorf("wrapped handler was called %d time(s) in safe mode", n)
+	}
 	var preview SafeModePreview
 	if err := json.Unmarshal([]byte(extractText(t, result)), &preview); err != nil {
 		t.Fatalf("failed to unmarshal preview: %v", err)
@@ -143,14 +152,15 @@ func TestWrapMutatingToolsForSafeMode_MixedTools(t *testing.T) {
 		}, nil
 	})
 
+	var mutatingCalls atomic.Int64
 	server.AddTool(&mcp.Tool{
 		Name:        "gitlab_update_issue",
 		Description: "Update an issue",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: false},
 		InputSchema: &map[string]any{"type": "object"},
 	}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		t.Fatal("mutating handler should not be called")
-		return nil, errors.New("unreachable")
+		mutatingCalls.Add(1)
+		return nil, errors.New("mutating handler must not run in safe mode")
 	})
 
 	wrapped := WrapMutatingToolsForSafeMode(server)
@@ -167,6 +177,9 @@ func TestWrapMutatingToolsForSafeMode_MixedTools(t *testing.T) {
 	}
 
 	result = callTool(t, server, "gitlab_update_issue", nil)
+	if n := mutatingCalls.Load(); n != 0 {
+		t.Errorf("mutating handler was called %d time(s) in safe mode", n)
+	}
 	var preview SafeModePreview
 	if err := json.Unmarshal([]byte(extractText(t, result)), &preview); err != nil {
 		t.Fatalf("failed to unmarshal preview: %v", err)

@@ -79,7 +79,7 @@ var errorNames = map[string]bool{"Error": true, "Errorf": true}
 
 func main() {
 	jsonPath := flag.String("json", "", "write the JSON work list to this path")
-	check := flag.Bool("check", false, "exit non-zero when any finding exists")
+	check := flag.Bool("check", false, "exit non-zero when any abort (Fatal/FailNow) site exists; errorf sites stay advisory")
 	flag.Parse()
 
 	dirs := flag.Args()
@@ -108,13 +108,20 @@ func main() {
 		fmt.Printf("work list written to %s\n", *jsonPath)
 	}
 
-	if *check && (len(report.Fatal) > 0 || len(report.ErrorfNoReturn) > 0) {
-		fmt.Printf("check: FAIL — %d abort site(s) and %d missing-return site(s) off the test goroutine\n",
+	// Pilot amendment (2026-08-17): only abort sites gate. The
+	// errorf-without-return list stays advisory — the sweep found that most
+	// of those sites are the legitimate assert-then-respond shape, where the
+	// handler still writes its canned response and no invalid state is used;
+	// rule 2 of the contract applies to converted Fatal guards, which review
+	// and the testutil helpers cover.
+	if *check && len(report.Fatal) > 0 {
+		fmt.Printf("check: FAIL — %d abort site(s) off the test goroutine (%d advisory errorf sites not gated)\n",
 			len(report.Fatal), len(report.ErrorfNoReturn))
 		os.Exit(1)
 	}
 	if *check {
-		fmt.Println("check: PASS — no testing.T aborts off the test goroutine")
+		fmt.Printf("check: PASS — no testing.T aborts off the test goroutine (%d advisory errorf site(s))\n",
+			len(report.ErrorfNoReturn))
 	}
 }
 
@@ -386,7 +393,7 @@ func printHuman(report *Report) {
 		c := perFile[f]
 		fmt.Printf("%-72s fatal=%-3d errorf_no_return=%d\n", f, c[0], c[1])
 	}
-	fmt.Printf("\nsummary: %d fatal sites (A=%d tail-position, B=%d truncating) + %d errorf-without-return across %d files\n",
+	fmt.Printf("\nsummary: %d fatal sites (A=%d tail-position, B=%d truncating) + %d advisory errorf-without-return across %d files\n",
 		report.Summary.FatalSites, report.Summary.CategoryA, report.Summary.CategoryB,
 		report.Summary.ErrorfNoReturn, report.Summary.Files)
 }
