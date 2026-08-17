@@ -1109,27 +1109,57 @@ func TestMeta_AdminExternalImporters(t *testing.T) {
 	})
 }
 
-// TestMeta_AdminDBMigrationMarkPermanentSkip documents why the database
-// migration marking action is permanently skipped: it mutates the
-// instance's migration bookkeeping (marking a background migration as
-// executed), which can corrupt any GitLab instance it runs against and is
-// not restorable through the API.
+// TestMeta_AdminDBMigrationMark exercises the db_migration_mark action.
+// The error path runs everywhere: marking a nonexistent migration version
+// must be rejected by GitLab without mutating any bookkeeping, which covers
+// the route, the destructive-action confirmation, and the error mapping end
+// to end. The mutating happy path requires a migration that is actually
+// stuck — something a healthy, freshly migrated instance cannot have — so
+// it only runs when the operator provides E2E_DB_MIGRATION_VERSION (and, as
+// a safety interlock for real instances, only in Docker mode).
 //
-// Build tag: e2e && !enterprise. Mode: n/a (documented permanent skip). Surface: meta.
-func TestMeta_AdminDBMigrationMarkPermanentSkip(t *testing.T) {
+// Build tag: e2e && !enterprise. Mode: any (error path) / Docker with
+// E2E_DB_MIGRATION_VERSION (mutating path). Surface: meta.
+func TestMeta_AdminDBMigrationMark(t *testing.T) {
 	t.Parallel()
-	t.Skip("permanent skip: db _ migration _ mark mutates database migration state irreversibly; exercising it would risk corrupting the instance")
+	if sess.meta == nil {
+		t.Skip("meta session not configured")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	t.Run("NonexistentVersionRejected", func(t *testing.T) {
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_admin", map[string]any{
+			"action": "db_migration_mark",
+			"params": map[string]any{"version": int64(19000101000000)},
+		})
+		if err != nil && isHTTPStatus(err, 403) {
+			t.Skipf("db_migration_mark requires an administrator token: %v", err)
+		}
+		requireTruef(t, err != nil, "marking a nonexistent migration version must fail")
+		requireTruef(t, !strings.Contains(err.Error(), "confirm=true"),
+			"call was blocked by the confirmation guard instead of reaching GitLab: %v", err)
+		t.Logf("Nonexistent migration version rejected as expected: %v", err)
+	})
+
+	t.Run("MarkConfiguredVersion", func(t *testing.T) {
+		version := os.Getenv("E2E_DB_MIGRATION_VERSION")
+		if version == "" {
+			t.Skip("E2E_DB_MIGRATION_VERSION not set: marking a real migration needs a stuck migration, which a healthy instance cannot provide")
+		}
+		if !isDockerMode() {
+			t.Skip("mutating migration bookkeeping is only exercised against the ephemeral Docker instance")
+		}
+		err := callToolVoidOn(ctx, sess.meta, "gitlab_admin", map[string]any{
+			"action": "db_migration_mark",
+			"params": map[string]any{"version": version},
+		})
+		requireNoError(t, err, "db_migration_mark "+version)
+		t.Logf("Marked migration %s as executed", version)
+	})
 }
 
-// TestMeta_AdminLicenseMutationPermanentSkip documents why the license
-// mutation actions (adding and deleting instance licenses) are permanently
-// skipped: the enterprise e2e workflow depends on the cached EE license
-// staying installed, and adding or deleting licenses from the suite could
-// invalidate that workflow. Only the read path is exercised (see
-// TestMeta_AdminLicenseGetCE).
-//
-// Build tag: e2e && !enterprise. Mode: n/a (documented permanent skip). Surface: meta.
-func TestMeta_AdminLicenseMutationPermanentSkip(t *testing.T) {
-	t.Parallel()
-	t.Skip("permanent skip: license _ add and license _ delete would mutate the instance license and could break the cached EE license workflow used by the enterprise e2e runs")
-}
+// License add/delete coverage lives in admin_license_ee_test.go: the
+// mutation endpoints only exist on EE runtimes, and the lifecycle there adds
+// a duplicate of the cached license and deletes that duplicate, so the
+// active plan never changes.
