@@ -32131,8 +32131,7 @@
                   }
                 },
                 "required": [
-                  "name",
-                  "released_at"
+                  "name"
                 ],
                 "type": "object"
               },
@@ -32152,7 +32151,6 @@
             "id",
             "name",
             "full_path",
-            "web_path",
             "star_count",
             "last_30_day_usage_count",
             "archived"
@@ -95034,7 +95032,6 @@
               "id",
               "name",
               "full_path",
-              "web_path",
               "star_count",
               "last_30_day_usage_count",
               "archived"

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -85,6 +86,15 @@ type groupIssueBoardAPI struct {
 	Weight          int64         `json:"weight"`
 }
 
+// newRawRequest builds a raw API request for the handlers that bypass broken
+// or missing client-go wrappers. It is a package variable so tests can
+// exercise the request-construction failure branches, which no valid input
+// reaches at runtime (PathEscape sanitizes everything interpolated into the
+// path).
+var newRawRequest = func(ctx context.Context, client *gitlabclient.Client, method, path string, opts any) (*retryablehttp.Request, error) {
+	return client.GL().NewRequest(method, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+}
+
 // rawListGroupBoards issues a raw REST GET for a group's issue boards, decoding
 // the full documented response (including each board's SDK-missing
 // hide_backlog_list/hide_closed_list/assignee/weight) into a slice of
@@ -93,7 +103,7 @@ type groupIssueBoardAPI struct {
 // [toolutil.PaginationFromResponse].
 func rawListGroupBoards(ctx context.Context, client *gitlabclient.Client, groupID string, opts *gl.ListGroupIssueBoardsOptions) ([]*groupIssueBoardAPI, *gl.Response, error) {
 	path := fmt.Sprintf("groups/%s/boards", gl.PathEscape(groupID))
-	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	req, err := newRawRequest(ctx, client, http.MethodGet, path, opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,7 +117,7 @@ func rawListGroupBoards(ctx context.Context, client *gitlabclient.Client, groupI
 // hide_backlog_list/hide_closed_list/assignee/weight) into a [groupIssueBoardAPI].
 func rawGetGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID string, boardID int64) (*groupIssueBoardAPI, *gl.Response, error) {
 	path := fmt.Sprintf("groups/%s/boards/%d", gl.PathEscape(groupID), boardID)
-	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	req, err := newRawRequest(ctx, client, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -121,7 +131,7 @@ func rawGetGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID 
 // SDK-missing hide_*_list/assignee/weight fields are surfaced.
 func rawCreateGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID string, opts *gl.CreateGroupIssueBoardOptions) (*groupIssueBoardAPI, *gl.Response, error) {
 	path := fmt.Sprintf("groups/%s/boards", gl.PathEscape(groupID))
-	req, err := client.GL().NewRequest(http.MethodPost, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	req, err := newRawRequest(ctx, client, http.MethodPost, path, opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -135,7 +145,7 @@ func rawCreateGroupBoard(ctx context.Context, client *gitlabclient.Client, group
 // SDK-missing hide_*_list/assignee/weight fields are surfaced.
 func rawUpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID string, boardID int64, opts *gl.UpdateGroupIssueBoardOptions) (*groupIssueBoardAPI, *gl.Response, error) {
 	path := fmt.Sprintf("groups/%s/boards/%d", gl.PathEscape(groupID), boardID)
-	req, err := client.GL().NewRequest(http.MethodPut, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	req, err := newRawRequest(ctx, client, http.MethodPut, path, opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -505,7 +515,7 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	// until the upstream signature is fixed (the project-level equivalent
 	// already returns *BoardList).
 	path := fmt.Sprintf("groups/%s/boards/%d/lists/%d", gl.PathEscape(string(input.GroupID)), input.BoardID, input.ListID)
-	req, err := client.GL().NewRequest(http.MethodPut, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	req, err := newRawRequest(ctx, client, http.MethodPut, path, opts)
 	if err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_update", err)
 	}

@@ -106,7 +106,8 @@ func TestMeta_GroupBoardListColumns(t *testing.T) {
 			},
 		})
 		requireNoError(t, err, "group_board_update_list")
-		requireTruef(t, out.ID > 0, "expected a board list in the update response")
+		requireTruef(t, out.ID == secondListID, "updated list ID = %d, want %d", out.ID, secondListID)
+		requireTruef(t, out.Position == 0, "updated list position = %d, want 0", out.Position)
 		t.Logf("Reordered board list %d to position %d", out.ID, out.Position)
 	})
 

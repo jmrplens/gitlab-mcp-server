@@ -58,7 +58,7 @@ func writeCatalogResourceSummary(sb *strings.Builder, r ResourceDetail) {
 	sb.WriteString("| Field | Value |\n|-------|-------|\n")
 	fmt.Fprintf(sb, "| ID | %s |\n", toolutil.EscapeMdTableCell(r.ID))
 	fmt.Fprintf(sb, "| Full Path | %s |\n", toolutil.EscapeMdTableCell(r.FullPath))
-	fmt.Fprintf(sb, "| Web Path | %s |\n", toolutil.EscapeMdTableCell(r.WebPath))
+	fmt.Fprintf(sb, "| Web Path | [%s](%s) |\n", toolutil.EscapeMdTableCell(r.WebPath), r.WebPath)
 	fmt.Fprintf(sb, "| Stars | %d |\n", r.StarCount)
 	fmt.Fprintf(sb, "| Usage (30d) | %d |\n", r.Last30DayUsageCount)
 	if r.VerificationLevel != "" {

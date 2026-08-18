@@ -18,7 +18,7 @@ type ResourceItem struct {
 	Description         string   `json:"description,omitempty"`
 	Icon                string   `json:"icon,omitempty"`
 	FullPath            string   `json:"full_path"`
-	WebPath             string   `json:"web_path"`
+	WebPath             string   `json:"web_path,omitempty"`
 	StarCount           int      `json:"star_count"`
 	Last30DayUsageCount int      `json:"last_30_day_usage_count"`
 	Archived            bool     `json:"archived"`
@@ -40,7 +40,7 @@ type ResourceDetail struct {
 // VersionItem represents a released version of a catalog resource.
 type VersionItem struct {
 	Name       string          `json:"name"`
-	ReleasedAt string          `json:"released_at"`
+	ReleasedAt string          `json:"released_at,omitempty"`
 	CreatedAt  string          `json:"created_at,omitempty"`
 	Semver     string          `json:"semver,omitempty"`
 	Path       string          `json:"path,omitempty"`
@@ -172,7 +172,7 @@ type gqlComponent struct {
 
 type gqlVersion struct {
 	Name       string             `json:"name"`
-	ReleasedAt string             `json:"releasedAt"`
+	ReleasedAt *string            `json:"releasedAt"`
 	CreatedAt  *string            `json:"createdAt"`
 	Semver     *gqlSemver         `json:"semver"`
 	Path       *string            `json:"path"`
@@ -181,11 +181,13 @@ type gqlVersion struct {
 }
 
 // gqlSemver mirrors CiCatalogResourceSemver, which the schema models as a
-// major/minor/patch object rather than a scalar.
+// major/minor/patch object rather than a scalar. All three components are
+// nullable in the schema, so they decode as pointers — a partial semver must
+// not collapse into a misleading "0.0.0".
 type gqlSemver struct {
-	Major int `json:"major"`
-	Minor int `json:"minor"`
-	Patch int `json:"patch"`
+	Major *int `json:"major"`
+	Minor *int `json:"minor"`
+	Patch *int `json:"patch"`
 }
 
 // gqlComponentNodes holds the component connection of a version.
@@ -284,8 +286,10 @@ func nodeToResourceDetail(n gqlResourceNode) ResourceDetail {
 // flattening the semver object and the component connection.
 func versionToItem(v gqlVersion) VersionItem {
 	item := VersionItem{
-		Name:       v.Name,
-		ReleasedAt: v.ReleasedAt,
+		Name: v.Name,
+	}
+	if v.ReleasedAt != nil {
+		item.ReleasedAt = *v.ReleasedAt
 	}
 	if v.Components != nil {
 		item.Components = convertComponents(v.Components.Nodes)
@@ -293,8 +297,8 @@ func versionToItem(v gqlVersion) VersionItem {
 	if v.CreatedAt != nil {
 		item.CreatedAt = *v.CreatedAt
 	}
-	if v.Semver != nil {
-		item.Semver = fmt.Sprintf("%d.%d.%d", v.Semver.Major, v.Semver.Minor, v.Semver.Patch)
+	if v.Semver != nil && v.Semver.Major != nil && v.Semver.Minor != nil && v.Semver.Patch != nil {
+		item.Semver = fmt.Sprintf("%d.%d.%d", *v.Semver.Major, *v.Semver.Minor, *v.Semver.Patch)
 	}
 	if v.Path != nil {
 		item.Path = *v.Path

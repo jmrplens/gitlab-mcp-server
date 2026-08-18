@@ -330,6 +330,112 @@ func TestGet_ByFullPath(t *testing.T) {
 	if r.Versions[1].Name != "2.0.0" {
 		t.Errorf("Versions[1].Name = %q", r.Versions[1].Name)
 	}
+	assertSampleDetailFields(t, r)
+}
+
+// assertSampleDetailFields checks the schema-mirroring fields the shared
+// fixture carries: version semver/timestamps/path plus the resource-level
+// archived, topics, visibility, verification, and usage fields.
+func assertSampleDetailFields(t *testing.T, r ResourceDetail) {
+	t.Helper()
+	if r.Versions[0].Semver != "2.1.0" {
+		t.Errorf("Versions[0].Semver = %q, want 2.1.0", r.Versions[0].Semver)
+	}
+	if r.Versions[0].CreatedAt != "2026-06-15T10:29:00Z" {
+		t.Errorf("Versions[0].CreatedAt = %q", r.Versions[0].CreatedAt)
+	}
+	if r.Versions[0].Path != "/my-group/go-pipeline/-/tags/2.1.0" {
+		t.Errorf("Versions[0].Path = %q", r.Versions[0].Path)
+	}
+	if r.Archived {
+		t.Error("Archived = true, want false")
+	}
+	if len(r.Topics) != 2 || r.Topics[0] != "go" || r.Topics[1] != "ci" {
+		t.Errorf("Topics = %v, want [go ci]", r.Topics)
+	}
+	if r.VisibilityLevel != "public" {
+		t.Errorf("VisibilityLevel = %q, want public", r.VisibilityLevel)
+	}
+	if r.VerificationLevel != "UNVERIFIED" {
+		t.Errorf("VerificationLevel = %q, want UNVERIFIED", r.VerificationLevel)
+	}
+	if r.Last30DayUsageCount != 7 {
+		t.Errorf("Last30DayUsageCount = %d, want 7", r.Last30DayUsageCount)
+	}
+}
+
+// TestGet_NoVersions verifies the detail conversion when the resource has no
+// versions node at all: the early return must leave README, components, and
+// versions empty without panicking.
+func TestGet_NoVersions(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"ciCatalogResource": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"ciCatalogResource": {
+					"id": "gid://gitlab/Ci::CatalogResource/9",
+					"name": "draft",
+					"fullPath": "g/draft",
+					"webPath": "/explore/catalog/g/draft",
+					"starCount": 0,
+					"last30DayUsageCount": 0,
+					"archived": false,
+					"topics": [],
+					"verificationLevel": null,
+					"visibilityLevel": null,
+					"latestReleasedAt": null,
+					"versions": null
+				}
+			}`)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := Get(context.Background(), client, GetInput{FullPath: "g/draft"})
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	r := out.Resource
+	if len(r.Versions) != 0 || len(r.Components) != 0 || r.ReadmeHTML != "" || r.LatestVersionName != "" {
+		t.Errorf("draft resource should have no versions/components/readme, got %+v", r)
+	}
+}
+
+// TestGet_PartialSemverStaysEmpty verifies a version whose semver object has
+// null components does not collapse into a misleading "0.0.0".
+func TestGet_PartialSemverStaysEmpty(t *testing.T) {
+	handler := graphqlMux(map[string]http.HandlerFunc{
+		"ciCatalogResource": func(w http.ResponseWriter, _ *http.Request) {
+			testutil.RespondGraphQL(w, http.StatusOK, `{
+				"ciCatalogResource": {
+					"id": "gid://gitlab/Ci::CatalogResource/9",
+					"name": "partial",
+					"fullPath": "g/partial",
+					"webPath": "/explore/catalog/g/partial",
+					"starCount": 0,
+					"last30DayUsageCount": 0,
+					"archived": false,
+					"topics": [],
+					"verificationLevel": null,
+					"visibilityLevel": null,
+					"latestReleasedAt": null,
+					"versions": {"nodes": [
+						{"name": "v1", "releasedAt": null, "createdAt": null, "semver": {"major": 1, "minor": null, "patch": null}, "path": null, "readmeHtml": null, "components": null}
+					]}
+				}
+			}`)
+		},
+	})
+	client := testutil.NewTestClient(t, handler)
+	out, err := Get(context.Background(), client, GetInput{FullPath: "g/partial"})
+	if err != nil {
+		t.Fatalf("Get() error = %v", err)
+	}
+	v := out.Resource.Versions[0]
+	if v.Semver != "" {
+		t.Errorf("Semver = %q, want empty for partial semver", v.Semver)
+	}
+	if v.ReleasedAt != "" {
+		t.Errorf("ReleasedAt = %q, want empty for null releasedAt", v.ReleasedAt)
+	}
 }
 
 // TestGet_ByID verifies the Get_ByID handler.
@@ -604,9 +710,21 @@ func TestFormatGetMarkdown_MinimalResource(t *testing.T) {
 				WebPath:           "/explore/catalog/group/minimal",
 				LatestReleasedAt:  "2026-01-01T00:00:00Z",
 				LatestVersionName: "1.0.0",
+				VerificationLevel: "GITLAB_MAINTAINED",
+				Topics:            []string{"go", "ci"},
+				Archived:          true,
 			},
 		},
 	})
+	if !strings.Contains(md, "GITLAB_MAINTAINED") {
+		t.Error("expected Verification row")
+	}
+	if !strings.Contains(md, "go, ci") {
+		t.Error("expected Topics row")
+	}
+	if !strings.Contains(md, "| Archived | yes |") {
+		t.Error("expected Archived row")
+	}
 	if !strings.Contains(md, "### Description") {
 		t.Error("expected Description section for non-empty description")
 	}

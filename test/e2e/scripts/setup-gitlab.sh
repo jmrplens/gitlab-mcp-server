@@ -671,6 +671,9 @@ if command -v docker >/dev/null 2>&1; then
             --data-urlencode "skip_confirmation=true" \
             --connect-timeout 5 --max-time 30 2>/dev/null || true)
         pending_id=$(json_field "${pending_json}" "id")
+        case "${pending_id}" in
+            *[!0-9]*) pending_id="" ;; # API data is interpolated into Ruby below: digits only
+        esac
         if [ -z "${pending_id}" ]; then
             echo "      WARNING: could not create pending-${role} user; approve/reject happy path will skip"
             pending_ids=""

@@ -6,12 +6,15 @@ package groupboards
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -1180,5 +1183,34 @@ func TestListGroupBoards_SurfacesDocumentedPremiumFields(t *testing.T) {
 func TestBasicUserOutput_Nil(t *testing.T) {
 	if got := basicUserOutput(nil); got != nil {
 		t.Errorf("basicUserOutput(nil) = %+v, want nil", got)
+	}
+}
+
+// TestRawRequestConstructionFailures verifies every raw-request handler
+// surfaces a request-construction error. The branch is unreachable with valid
+// inputs (PathEscape sanitizes the path), so the constructor seam is stubbed.
+func TestRawRequestConstructionFailures(t *testing.T) {
+	orig := newRawRequest
+	newRawRequest = func(context.Context, *gitlabclient.Client, string, string, any) (*retryablehttp.Request, error) {
+		return nil, errors.New("construction boom")
+	}
+	t.Cleanup(func() { newRawRequest = orig })
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+
+	if _, err := ListGroupBoards(ctx, client, ListGroupBoardsInput{GroupID: "42"}); err == nil {
+		t.Error("ListGroupBoards: expected construction error")
+	}
+	if _, err := GetGroupBoard(ctx, client, GetGroupBoardInput{GroupID: "42", BoardID: 1}); err == nil {
+		t.Error("GetGroupBoard: expected construction error")
+	}
+	if _, err := CreateGroupBoard(ctx, client, CreateGroupBoardInput{GroupID: "42", Name: "b"}); err == nil {
+		t.Error("CreateGroupBoard: expected construction error")
+	}
+	if _, err := UpdateGroupBoard(ctx, client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1}); err == nil {
+		t.Error("UpdateGroupBoard: expected construction error")
+	}
+	if _, err := UpdateGroupBoardList(ctx, client, UpdateGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 2, Position: 1}); err == nil {
+		t.Error("UpdateGroupBoardList: expected construction error")
 	}
 }
