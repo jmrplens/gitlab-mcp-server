@@ -659,12 +659,15 @@ if command -v docker >/dev/null 2>&1; then
     pending_ids=""
     for role in approve reject; do
         pending_username="e2e-pending-${role}-${pending_suffix}"
+        # Random throwaway credential; the account only ever gets approved or
+        # rejected and nothing logs in with it.
+        pending_password="E2eP!$(openssl rand -hex 8)"
         pending_json=$(curl -sS -X POST "${GITLAB_URL}/api/v4/users" \
             -H "PRIVATE-TOKEN: ${PAT}" \
             --data-urlencode "username=${pending_username}" \
             --data-urlencode "email=${pending_username}@e2e-test.local" \
             --data-urlencode "name=E2E Pending ${role}" \
-            --data-urlencode "password=E2eP!$(openssl rand -hex 8)" \
+            --data-urlencode "password=${pending_password}" \
             --data-urlencode "skip_confirmation=true" \
             --connect-timeout 5 --max-time 30 2>/dev/null || true)
         pending_id=$(json_field "${pending_json}" "id")
