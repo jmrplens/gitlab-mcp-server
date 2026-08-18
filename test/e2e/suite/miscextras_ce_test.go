@@ -10,6 +10,9 @@ package suite
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -138,7 +141,9 @@ func TestIndividual_CICatalogGet(t *testing.T) {
 		t.Skip("individual session not configured")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	// The Docker path publishes a real catalog version through a runner
+	// pipeline (image pull included), so it needs a pipeline-sized budget.
+	ctx, cancel := context.WithTimeout(context.Background(), 900*time.Second)
 	defer cancel()
 
 	proj := createProject(ctx, t, sess.individual)
@@ -165,17 +170,140 @@ func TestIndividual_CICatalogGet(t *testing.T) {
 		t.Skipf("could not mark project as a catalog resource: %v", resp.Data.CatalogResourcesCreate.Errors)
 	}
 
-	out, err := callToolOn[cicatalog.GetOutput](ctx, sess.individual, "gitlab_get_catalog_resource", cicatalog.GetInput{
-		FullPath: proj.Path,
+	// A draft catalog resource only becomes queryable once its first version
+	// is published, and catalog versions publish exclusively through the CI
+	// `release:` keyword — a REST-created release does not count. In Docker
+	// mode a real runner is registered, so the version is published for
+	// real: the component, README, and release job are committed, a semver
+	// tag triggers the pipeline, and the release job publishes the version.
+	if isDockerMode() {
+		miscExtrasPublishCatalogVersion(ctx, t, proj)
+	}
+
+	// Catalog publication is asynchronous: the version is created by a
+	// worker after the release lands, so the first successful GET can lag
+	// the pipeline by a few seconds.
+	var out cicatalog.GetOutput
+	var err error
+	pollErr := Poll(ctx, 3*time.Second, 90*time.Second, func() (bool, string, error) {
+		out, err = callToolOn[cicatalog.GetOutput](ctx, sess.individual, "gitlab_get_catalog_resource", cicatalog.GetInput{
+			FullPath: proj.Path,
+		})
+		if err == nil {
+			return true, "catalog resource queryable", nil
+		}
+		if isDockerMode() && strings.Contains(strings.ToLower(err.Error()), "not found") {
+			return false, "catalog version not published yet", nil
+		}
+		return true, "terminal result", nil
 	})
-	if err != nil && strings.Contains(strings.ToLower(err.Error()), "not found") {
-		// An unreleased (draft) catalog resource may not be queryable on all
-		// GitLab versions; the marking mutation above already succeeded.
+	if pollErr != nil && err == nil {
+		err = pollErr
+	}
+	if err != nil && !isDockerMode() && strings.Contains(strings.ToLower(err.Error()), "not found") {
+		// Without a runner no version can be published, and an unreleased
+		// (draft) catalog resource may not be queryable on all GitLab
+		// versions; the marking mutation above already succeeded.
 		t.Skipf("catalog resource not queryable before its first release on this GitLab version: %v", err)
 	}
 	requireNoError(t, err, "get catalog resource")
 	requireTruef(t, out.Resource.FullPath != "", "expected catalog resource full path, got empty")
 	t.Logf("Got catalog resource %s (id=%s)", out.Resource.FullPath, out.Resource.ID)
+}
+
+// miscExtrasPublishCatalogVersion publishes the first version of a catalog
+// resource through a real CI pipeline: it commits a CI/CD component, a
+// README, and a release job, creates a semver tag, and waits for the tag
+// pipeline's release job to succeed. Publishing through the pipeline is the
+// only supported path — the catalog ignores releases created via REST.
+func miscExtrasPublishCatalogVersion(ctx context.Context, t *testing.T, proj ProjectFixture) {
+	t.Helper()
+
+	component := `spec:
+  inputs:
+    stage:
+      default: test
+---
+component-job:
+  stage: $[[ inputs.stage ]]
+  script:
+    - echo "hello from the e2e component"
+`
+	// The release must be created from inside the pipeline with the job
+	// token — that is what publishes a catalog version (the release: keyword
+	// is sugar for exactly this release-cli call). The server URL cannot be
+	// left to the predefined CI variables: the instance's external_url
+	// (localhost) points at the job container itself, and GitLab pins the
+	// predefined server variables against yaml overrides, so release-cli is
+	// invoked explicitly with the compose-network address the job can reach.
+	internalURL := os.Getenv("E2E_GITLAB_INTERNAL_URL")
+	if internalURL == "" {
+		internalURL = "http://gitlab-e2e"
+	}
+	releaseJob := fmt.Sprintf(`create-release:
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  rules:
+    - if: $CI_COMMIT_TAG
+  script:
+    - release-cli --server-url %s --job-token "$CI_JOB_TOKEN" create --tag-name "$CI_COMMIT_TAG" --description "Release $CI_COMMIT_TAG"
+`, internalURL)
+	commitFileCreateOrUpdate(ctx, t, sess.individual, proj, defaultBranch, "README.md", "# e2e catalog component\n", "Add README")
+	commitFileCreateOrUpdate(ctx, t, sess.individual, proj, defaultBranch, "templates/hello.yml", component, "Add component")
+	commitFileCreateOrUpdate(ctx, t, sess.individual, proj, defaultBranch, ".gitlab-ci.yml", releaseJob, "Add release job")
+
+	// Tag pipelines are created asynchronously by sidekiq, which runs a deep
+	// backlog while the suite's parallel tests hammer the instance — drain
+	// it first and give the pipeline a generous window to materialize.
+	drainSidekiq(ctx, t, sess.glClient)
+
+	const tagName = "1.0.0"
+	_, _, tagErr := sess.glClient.GL().Tags.CreateTag(proj.ID, &gl.CreateTagOptions{
+		TagName: new(tagName),
+		Ref:     new(defaultBranch),
+	}, gl.WithContext(ctx))
+	requireNoError(t, tagErr, "create semver tag for catalog release")
+
+	var pipelineID int64
+	pollErr := Poll(ctx, 5*time.Second, 300*time.Second, func() (bool, string, error) {
+		pipelines, _, listErr := sess.glClient.GL().Pipelines.ListProjectPipelines(proj.ID, &gl.ListProjectPipelinesOptions{
+			Ref: new(tagName),
+		}, gl.WithContext(ctx))
+		if listErr != nil {
+			return false, "list tag pipelines: " + listErr.Error(), nil //nolint:nilerr // transient list errors are retried by the poll loop
+		}
+		if len(pipelines) == 0 {
+			return false, "tag pipeline not created yet", nil
+		}
+		pipelineID = pipelines[0].ID
+		return true, "tag pipeline found", nil
+	})
+	if pollErr != nil {
+		all, _, _ := sess.glClient.GL().Pipelines.ListProjectPipelines(proj.ID, &gl.ListProjectPipelinesOptions{}, gl.WithContext(ctx))
+		for _, p := range all {
+			t.Logf("project pipeline: id=%d ref=%q source=%q status=%q", p.ID, p.Ref, p.Source, p.Status)
+		}
+	}
+	requireNoError(t, pollErr, "wait for the tag pipeline to appear")
+
+	status := waitForPipeline(ctx, t, sess.glClient, proj.ID, pipelineID, 0)
+	if status != "success" {
+		jobs, _, _ := sess.glClient.GL().Jobs.ListPipelineJobs(proj.ID, pipelineID, &gl.ListJobsOptions{}, gl.WithContext(ctx))
+		for _, job := range jobs {
+			trace, _, traceErr := sess.glClient.GL().Jobs.GetTraceFile(proj.ID, job.ID, gl.WithContext(ctx))
+			if traceErr != nil {
+				t.Logf("job %d (%s) status=%s: trace unavailable: %v", job.ID, job.Name, job.Status, traceErr)
+				continue
+			}
+			raw, _ := io.ReadAll(trace)
+			tail := string(raw)
+			if len(tail) > 2000 {
+				tail = tail[len(tail)-2000:]
+			}
+			t.Logf("job %d (%s) status=%s trace tail:\n%s", job.ID, job.Name, job.Status, tail)
+		}
+	}
+	requireTruef(t, status == "success", "catalog release pipeline finished %q, want success", status)
+	t.Logf("Published catalog version %s through pipeline %d", tagName, pipelineID)
 }
 
 // TestIndividual_DeploymentMergeRequests exercises

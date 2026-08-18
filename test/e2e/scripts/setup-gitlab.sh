@@ -551,7 +551,7 @@ for _ in 1 2 3; do
 done
 
 # 4. Write .env.docker
-echo "  [4/7] Writing ${ENV_FILE_DISPLAY}..."
+echo "  [4/8] Writing ${ENV_FILE_DISPLAY}..."
 cat > "${ENV_FILE}" <<EOF
 GITLAB_URL=${GITLAB_URL}
 GITLAB_TOKEN=${PAT}
@@ -569,7 +569,7 @@ EOF
 # disable default-branch protection for new projects (GitLab applies that
 # protection asynchronously after project creation, so tests that unprotect
 # and immediately push were racing the protection job).
-echo "  [5/7] Applying instance settings (importer sources, no default branch protection)..."
+echo "  [5/8] Applying instance settings (importer sources, no default branch protection)..."
 curl -sSf -o /dev/null -X PUT "${GITLAB_URL}/api/v4/application/settings" \
     -H "PRIVATE-TOKEN: ${PAT}" \
     --data "import_sources[]=github&import_sources[]=bitbucket&import_sources[]=bitbucket_server&default_branch_protection=0" \
@@ -583,7 +583,7 @@ curl -sSf -o /dev/null -X PUT "${GITLAB_URL}/api/v4/application/settings" \
 REGISTRY_HOST="${REGISTRY_HOST:-localhost:5050}"
 REGISTRY_PROJECT_NAME="e2e-registry-seed"
 if command -v docker >/dev/null 2>&1; then
-    echo "  [6/7] Seeding container registry image (${REGISTRY_HOST})..."
+    echo "  [6/8] Seeding container registry image (${REGISTRY_HOST})..."
     seed_project_json=$(curl -sS -X POST "${GITLAB_URL}/api/v4/projects" \
         -H "PRIVATE-TOKEN: ${PAT}" \
         --data "name=${REGISTRY_PROJECT_NAME}&visibility=private" \
@@ -616,7 +616,7 @@ if command -v docker >/dev/null 2>&1; then
         echo "      WARNING: registry image seeding failed; registry tag e2e coverage will skip"
     fi
 else
-    echo "  [6/7] docker CLI not found; skipping registry image seeding"
+    echo "  [6/8] docker CLI not found; skipping registry image seeding"
 fi
 
 # 7. Seed a pending schema migration so the db_migration_mark happy path can
@@ -628,7 +628,7 @@ fi
 # used because GitLab squashes old migrations: only recent versions are
 # guaranteed to still have a migration file the mark service can resolve.
 if command -v docker >/dev/null 2>&1; then
-    echo "  [7/7] Seeding a pending schema migration for db_migration_mark coverage..."
+    echo "  [7/8] Seeding a pending schema migration for db_migration_mark coverage..."
     # The version must be one the Rails migration context can resolve to a
     # file — the newest schema_migrations row is not guaranteed to (structure
     # loads insert historical versions whose files were squashed away), so
@@ -643,7 +643,59 @@ if command -v docker >/dev/null 2>&1; then
         echo "      WARNING: could not seed a pending migration; db_migration_mark happy path will skip"
     fi
 else
-    echo "  [7/7] docker CLI not found; skipping db_migration_mark seeding"
+    echo "  [7/8] docker CLI not found; skipping db_migration_mark seeding"
+fi
+
+# 8. Seed two users in blocked_pending_approval state so the
+# approve_user/reject_user happy paths can run: admin-created users are born
+# active on current GitLab (the require-admin-approval setting only affects
+# self-signups, which have no API), so the users are created through the API
+# and their state is flipped through the Rails console — exactly the state a
+# real pending signup would have. The approve test re-activates one and the
+# reject test deletes the other, so nothing lingers.
+if command -v docker >/dev/null 2>&1; then
+    echo "  [8/8] Seeding pending-approval users for approve/reject coverage..."
+    pending_suffix=$(date +%s)
+    pending_ids=""
+    for role in approve reject; do
+        pending_username="e2e-pending-${role}-${pending_suffix}"
+        # Random throwaway credential; the account only ever gets approved or
+        # rejected and nothing logs in with it.
+        pending_password="E2eP!$(openssl rand -hex 8)"
+        pending_json=$(curl -sS -X POST "${GITLAB_URL}/api/v4/users" \
+            -H "PRIVATE-TOKEN: ${PAT}" \
+            --data-urlencode "username=${pending_username}" \
+            --data-urlencode "email=${pending_username}@e2e-test.local" \
+            --data-urlencode "name=E2E Pending ${role}" \
+            --data-urlencode "password=${pending_password}" \
+            --data-urlencode "skip_confirmation=true" \
+            --connect-timeout 5 --max-time 30 2>/dev/null || true)
+        pending_id=$(json_field "${pending_json}" "id")
+        case "${pending_id}" in
+            *[!0-9]*) pending_id="" ;; # API data is interpolated into Ruby below: digits only
+        esac
+        if [ -z "${pending_id}" ]; then
+            echo "      WARNING: could not create pending-${role} user; approve/reject happy path will skip"
+            pending_ids=""
+            break
+        fi
+        pending_ids="${pending_ids} ${pending_id}"
+    done
+    if [ -n "${pending_ids}" ]; then
+        pending_ids_csv=$(echo ${pending_ids} | tr ' ' ',')
+        if docker compose -f "${COMPOSE_FILE}" exec -T gitlab gitlab-rails runner \
+            "User.where(id: [${pending_ids_csv}]).update_all(state: 'blocked_pending_approval')" \
+            >/dev/null 2>&1; then
+            set -- ${pending_ids}
+            echo "E2E_PENDING_APPROVE_USER_ID=$1" >> "${ENV_FILE}"
+            echo "E2E_PENDING_REJECT_USER_ID=$2" >> "${ENV_FILE}"
+            echo "      Users $1 (approve) and $2 (reject) set to blocked_pending_approval"
+        else
+            echo "      WARNING: could not flip user states to pending approval; approve/reject happy path will skip"
+        fi
+    fi
+else
+    echo "  [8/8] docker CLI not found; skipping pending-approval user seeding"
 fi
 
 echo ""

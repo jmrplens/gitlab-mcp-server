@@ -2,7 +2,11 @@
 // cmd/gen_stats.
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // TestCollectStats_NonZeroCounts verifies collectStats returns non-zero
 // counts when run against the real repository root.
@@ -57,5 +61,26 @@ func TestIsTestFunctionName_ExcludesTestMain(t *testing.T) {
 	}
 	if isTestFunctionName("Testable") {
 		t.Error("isTestFunctionName(Testable) = true, want false (lowercase-ish suffix)")
+	}
+}
+
+// TestScanGoFile_SkipsRawStringFixtures verifies that fake test functions
+// embedded in multi-line raw strings (fixture sources) are not counted.
+func TestScanGoFile_SkipsRawStringFixtures(t *testing.T) {
+	dir := t.TempDir()
+	src := "package p\n\nconst fixture = `\nfunc TestFake(t *testing.T) {\n\tt.Run(\"sub\", nil)\n}\n`\n\nfunc TestReal(t *testing.T) {}\n"
+	path := filepath.Join(dir, "x_test.go")
+	if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	var s repoStats
+	if _, err := scanGoFile(path, false, true, &s); err != nil {
+		t.Fatalf("scanGoFile: %v", err)
+	}
+	if s.TestFuncs != 1 {
+		t.Errorf("TestFuncs = %d, want 1 (fixture-embedded fake must not count)", s.TestFuncs)
+	}
+	if s.Subtests != 0 {
+		t.Errorf("Subtests = %d, want 0", s.Subtests)
 	}
 }

@@ -31953,6 +31953,9 @@
         "resource": {
           "additionalProperties": false,
           "properties": {
+            "archived": {
+              "type": "boolean"
+            },
             "components": {
               "items": {
                 "additionalProperties": false,
@@ -32012,9 +32015,6 @@
             "description": {
               "type": "string"
             },
-            "forks_count": {
-              "type": "integer"
-            },
             "full_path": {
               "type": "string"
             },
@@ -32023,6 +32023,9 @@
             },
             "id": {
               "type": "string"
+            },
+            "last_30_day_usage_count": {
+              "type": "integer"
             },
             "latest_released_at": {
               "type": "string"
@@ -32033,17 +32036,23 @@
             "name": {
               "type": "string"
             },
-            "open_issues_count": {
-              "type": "integer"
-            },
-            "open_merge_requests_count": {
-              "type": "integer"
-            },
             "readme_html": {
               "type": "string"
             },
             "star_count": {
               "type": "integer"
+            },
+            "topics": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "verification_level": {
+              "type": "string"
             },
             "versions": {
               "items": {
@@ -32105,16 +32114,24 @@
                       "array"
                     ]
                   },
+                  "created_at": {
+                    "type": "string"
+                  },
                   "name": {
+                    "type": "string"
+                  },
+                  "path": {
                     "type": "string"
                   },
                   "released_at": {
                     "type": "string"
+                  },
+                  "semver": {
+                    "type": "string"
                   }
                 },
                 "required": [
-                  "name",
-                  "released_at"
+                  "name"
                 ],
                 "type": "object"
               },
@@ -32123,7 +32140,10 @@
                 "array"
               ]
             },
-            "web_url": {
+            "visibility_level": {
+              "type": "string"
+            },
+            "web_path": {
               "type": "string"
             }
           },
@@ -32131,11 +32151,9 @@
             "id",
             "name",
             "full_path",
-            "web_url",
             "star_count",
-            "forks_count",
-            "open_issues_count",
-            "open_merge_requests_count"
+            "last_30_day_usage_count",
+            "archived"
           ],
           "type": "object"
         }
@@ -94961,11 +94979,11 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "archived": {
+                "type": "boolean"
+              },
               "description": {
                 "type": "string"
-              },
-              "forks_count": {
-                "type": "integer"
               },
               "full_path": {
                 "type": "string"
@@ -94976,6 +94994,9 @@
               "id": {
                 "type": "string"
               },
+              "last_30_day_usage_count": {
+                "type": "integer"
+              },
               "latest_released_at": {
                 "type": "string"
               },
@@ -94985,16 +95006,25 @@
               "name": {
                 "type": "string"
               },
-              "open_issues_count": {
-                "type": "integer"
-              },
-              "open_merge_requests_count": {
-                "type": "integer"
-              },
               "star_count": {
                 "type": "integer"
               },
-              "web_url": {
+              "topics": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "verification_level": {
+                "type": "string"
+              },
+              "visibility_level": {
+                "type": "string"
+              },
+              "web_path": {
                 "type": "string"
               }
             },
@@ -95002,11 +95032,9 @@
               "id",
               "name",
               "full_path",
-              "web_url",
               "star_count",
-              "forks_count",
-              "open_issues_count",
-              "open_merge_requests_count"
+              "last_30_day_usage_count",
+              "archived"
             ],
             "type": "object"
           },

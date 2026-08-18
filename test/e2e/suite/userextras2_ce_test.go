@@ -16,6 +16,8 @@ package suite
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -222,14 +224,14 @@ func TestIndividual_UserCreateRunner(t *testing.T) {
 // TestIndividual_UserApproveReject exercises user.approve and user.reject
 // through the gitlab_approve_user and gitlab_reject_user individual tools.
 //
-// The test temporarily enables require_admin_approval_after_user_signup so
-// newly created users land in the blocked_pending_approval state, creates
-// two disposable users, approves one and rejects the other, then restores
-// the original setting. On GitLab versions where admin-created users bypass
-// the pending state, the test documents that with a skip because pending
-// signups cannot be produced through the API.
+// The test consumes the two users setup-gitlab.sh seeds in the
+// blocked_pending_approval state (created via the API, flipped through the
+// Rails console — the state a real pending signup would have, which the API
+// alone cannot produce). It approves one and rejects the other; rejection
+// deletes its user and the approved user is removed in cleanup. Docker mode
+// only: the seeded fixtures exist only on the disposable instance.
 //
-// Build tag: e2e && !enterprise. Mode: CE (Docker only). Surface: individual. Admin token required.
+// Build tag: e2e && !enterprise. Mode: Docker. Surface: individual.
 func TestIndividual_UserApproveReject(t *testing.T) {
 	t.Parallel()
 	if sess.individual == nil {
@@ -242,44 +244,41 @@ func TestIndividual_UserApproveReject(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 		defer cancel()
 
-		settings, _, settingsErr := sess.glClient.GL().Settings.GetSettings(gl.WithContext(ctx))
-		requireNoError(t, settingsErr, "read application settings")
-		original := settings.RequireAdminApprovalAfterUserSignup
-
-		_, _, settingsErr = sess.glClient.GL().Settings.UpdateSettings(&gl.UpdateSettingsOptions{
-			RequireAdminApprovalAfterUserSignup: new(true),
-		}, gl.WithContext(ctx))
-		requireNoError(t, settingsErr, "enable admin approval requirement")
-		defer func() {
+		// setup-gitlab.sh seeds two users flipped to blocked_pending_approval
+		// through the Rails console — the state a real pending signup would
+		// have, which the API alone cannot produce (admin-created users are
+		// born active and the require-admin-approval setting only affects
+		// self-signups). Without the seeded IDs the test documents that with
+		// a skip.
+		approveID, approveErr := strconv.ParseInt(os.Getenv("E2E_PENDING_APPROVE_USER_ID"), 10, 64)
+		rejectID, rejectErr := strconv.ParseInt(os.Getenv("E2E_PENDING_REJECT_USER_ID"), 10, 64)
+		if approveErr != nil || rejectErr != nil {
+			t.Skip("E2E_PENDING_APPROVE_USER_ID/E2E_PENDING_REJECT_USER_ID not seeded: pending signups cannot be produced via the API alone")
+		}
+		t.Cleanup(func() {
 			cctx, ccancel := cleanupContext(defaultCleanupTimeout)
 			defer ccancel()
-			_, _, _ = sess.glClient.GL().Settings.UpdateSettings(&gl.UpdateSettingsOptions{
-				RequireAdminApprovalAfterUserSignup: &original,
-			}, gl.WithContext(cctx))
-		}()
-
-		userApprove := userExtrasCreateUser(ctx, t, "usr-appr", nil)
-		userReject := userExtrasCreateUser(ctx, t, "usr-rejc", nil)
-		if userApprove.State != "blocked_pending_approval" || userReject.State != "blocked_pending_approval" {
-			t.Skipf("admin-created users bypass pending approval on this GitLab version (states %q/%q); pending signups cannot be produced via the API", userApprove.State, userReject.State)
-		}
+			// The rejected user is already deleted by the reject action;
+			// the approved user becomes active and is removed here.
+			_, _ = sess.glClient.GL().Users.DeleteUser(approveID, gl.WithContext(cctx))
+		})
 
 		t.Run("Approve", func(t *testing.T) {
 			out, err := callToolOn[users.AdminActionOutput](ctx, sess.individual, "gitlab_approve_user", users.AdminActionInput{
-				UserID: userApprove.ID,
+				UserID: approveID,
 			})
 			requireNoError(t, err, "approve user")
 			requireTruef(t, out.Success, "approve should succeed")
-			t.Logf("Approved user %d", userApprove.ID)
+			t.Logf("Approved user %d", approveID)
 		})
 
 		t.Run("Reject", func(t *testing.T) {
 			out, err := callToolOn[users.AdminActionOutput](ctx, sess.individual, "gitlab_reject_user", users.AdminActionInput{
-				UserID: userReject.ID,
+				UserID: rejectID,
 			})
 			requireNoError(t, err, "reject user")
 			requireTruef(t, out.Success, "reject should succeed")
-			t.Logf("Rejected user %d (rejection deletes the user)", userReject.ID)
+			t.Logf("Rejected user %d (rejection deletes the user)", rejectID)
 		})
 	})
 }

@@ -6,12 +6,15 @@ package groupboards
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
@@ -381,7 +384,10 @@ func TestCreateGroupBoardList_MissingParams(t *testing.T) {
 func TestUpdateGroupBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"position":2,"label":{"id":5,"name":"To Do"}}]`)
+		testutil.AssertRequestMethod(t, r, http.MethodPut)
+		// GitLab returns the single updated list object — not an array; the
+		// handler bypasses the client-go wrapper that expects []*BoardList.
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"position":2,"label":{"id":5,"name":"To Do"}}`)
 	})
 	client := testutil.NewTestClient(t, mux)
 
@@ -846,51 +852,6 @@ func TestUpdateGroupBoardList_CancelledContext(t *testing.T) {
 	}
 }
 
-// TestUpdateGroupBoardList_FallbackFirstElement verifies the UpdateGroupBoardList_FallbackFirstElement handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestUpdateGroupBoardList_FallbackFirstElement(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":99,"position":3,"label":{"id":7,"name":"Fallback"}}]`)
-	})
-	client := testutil.NewTestClient(t, mux)
-
-	out, err := UpdateGroupBoardList(context.Background(), client, UpdateGroupBoardListInput{
-		GroupID: "42", BoardID: 1, ListID: 10, Position: 3,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if out.ID != 99 {
-		t.Errorf("ID = %d, want 99 (fallback to first element)", out.ID)
-	}
-	if out.Label == nil || out.Label.Name != "Fallback" {
-		t.Errorf("label = %+v, want name Fallback", out.Label)
-	}
-}
-
-// TestUpdateGroupBoardList_EmptyResult verifies the UpdateGroupBoardList_EmptyResult handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestUpdateGroupBoardList_EmptyResult(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	})
-	client := testutil.NewTestClient(t, mux)
-
-	_, err := UpdateGroupBoardList(context.Background(), client, UpdateGroupBoardListInput{
-		GroupID: "42", BoardID: 1, ListID: 10, Position: 2,
-	})
-	if err == nil {
-		t.Fatal("expected error for empty result, got nil")
-	}
-	if !strings.Contains(err.Error(), "no board list returned") {
-		t.Errorf("error = %q, want 'no board list returned'", err.Error())
-	}
-}
-
 // ---------------------------------------------------------------------------
 // DeleteGroupBoardList — API error, canceled context
 // ---------------------------------------------------------------------------.
@@ -1222,5 +1183,34 @@ func TestListGroupBoards_SurfacesDocumentedPremiumFields(t *testing.T) {
 func TestBasicUserOutput_Nil(t *testing.T) {
 	if got := basicUserOutput(nil); got != nil {
 		t.Errorf("basicUserOutput(nil) = %+v, want nil", got)
+	}
+}
+
+// TestRawRequestConstructionFailures verifies every raw-request handler
+// surfaces a request-construction error. The branch is unreachable with valid
+// inputs (PathEscape sanitizes the path), so the constructor seam is stubbed.
+func TestRawRequestConstructionFailures(t *testing.T) {
+	orig := newRawRequest
+	newRawRequest = func(context.Context, *gitlabclient.Client, string, string, any) (*retryablehttp.Request, error) {
+		return nil, errors.New("construction boom")
+	}
+	t.Cleanup(func() { newRawRequest = orig })
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	ctx := context.Background()
+
+	if _, err := ListGroupBoards(ctx, client, ListGroupBoardsInput{GroupID: "42"}); err == nil {
+		t.Error("ListGroupBoards: expected construction error")
+	}
+	if _, err := GetGroupBoard(ctx, client, GetGroupBoardInput{GroupID: "42", BoardID: 1}); err == nil {
+		t.Error("GetGroupBoard: expected construction error")
+	}
+	if _, err := CreateGroupBoard(ctx, client, CreateGroupBoardInput{GroupID: "42", Name: "b"}); err == nil {
+		t.Error("CreateGroupBoard: expected construction error")
+	}
+	if _, err := UpdateGroupBoard(ctx, client, UpdateGroupBoardInput{GroupID: "42", BoardID: 1}); err == nil {
+		t.Error("UpdateGroupBoard: expected construction error")
+	}
+	if _, err := UpdateGroupBoardList(ctx, client, UpdateGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 2, Position: 1}); err == nil {
+		t.Error("UpdateGroupBoardList: expected construction error")
 	}
 }

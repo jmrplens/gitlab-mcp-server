@@ -2,10 +2,10 @@ package groupboards
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 
+	"github.com/hashicorp/go-retryablehttp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -86,6 +86,15 @@ type groupIssueBoardAPI struct {
 	Weight          int64         `json:"weight"`
 }
 
+// newRawRequest builds a raw API request for the handlers that bypass broken
+// or missing client-go wrappers. It is a package variable so tests can
+// exercise the request-construction failure branches, which no valid input
+// reaches at runtime (PathEscape sanitizes everything interpolated into the
+// path).
+var newRawRequest = func(ctx context.Context, client *gitlabclient.Client, method, path string, opts any) (*retryablehttp.Request, error) {
+	return client.GL().NewRequest(method, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+}
+
 // rawListGroupBoards issues a raw REST GET for a group's issue boards, decoding
 // the full documented response (including each board's SDK-missing
 // hide_backlog_list/hide_closed_list/assignee/weight) into a slice of
@@ -94,7 +103,7 @@ type groupIssueBoardAPI struct {
 // [toolutil.PaginationFromResponse].
 func rawListGroupBoards(ctx context.Context, client *gitlabclient.Client, groupID string, opts *gl.ListGroupIssueBoardsOptions) ([]*groupIssueBoardAPI, *gl.Response, error) {
 	path := fmt.Sprintf("groups/%s/boards", gl.PathEscape(groupID))
-	req, err := client.GL().NewRequest(http.MethodGet, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	req, err := newRawRequest(ctx, client, http.MethodGet, path, opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -108,7 +117,7 @@ func rawListGroupBoards(ctx context.Context, client *gitlabclient.Client, groupI
 // hide_backlog_list/hide_closed_list/assignee/weight) into a [groupIssueBoardAPI].
 func rawGetGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID string, boardID int64) (*groupIssueBoardAPI, *gl.Response, error) {
 	path := fmt.Sprintf("groups/%s/boards/%d", gl.PathEscape(groupID), boardID)
-	req, err := client.GL().NewRequest(http.MethodGet, path, nil, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	req, err := newRawRequest(ctx, client, http.MethodGet, path, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -122,7 +131,7 @@ func rawGetGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID 
 // SDK-missing hide_*_list/assignee/weight fields are surfaced.
 func rawCreateGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID string, opts *gl.CreateGroupIssueBoardOptions) (*groupIssueBoardAPI, *gl.Response, error) {
 	path := fmt.Sprintf("groups/%s/boards", gl.PathEscape(groupID))
-	req, err := client.GL().NewRequest(http.MethodPost, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	req, err := newRawRequest(ctx, client, http.MethodPost, path, opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -136,7 +145,7 @@ func rawCreateGroupBoard(ctx context.Context, client *gitlabclient.Client, group
 // SDK-missing hide_*_list/assignee/weight fields are surfaced.
 func rawUpdateGroupBoard(ctx context.Context, client *gitlabclient.Client, groupID string, boardID int64, opts *gl.UpdateGroupIssueBoardOptions) (*groupIssueBoardAPI, *gl.Response, error) {
 	path := fmt.Sprintf("groups/%s/boards/%d", gl.PathEscape(groupID), boardID)
-	req, err := client.GL().NewRequest(http.MethodPut, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
+	req, err := newRawRequest(ctx, client, http.MethodPut, path, opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -500,22 +509,22 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	opts := &gl.UpdateGroupIssueBoardListOptions{
 		Position: new(input.Position),
 	}
-	lists, _, err := client.GL().GroupIssueBoards.UpdateIssueBoardList(string(input.GroupID), input.BoardID, input.ListID, opts, gl.WithContext(ctx))
+	// client-go v2.58 declares []*BoardList for the group-level list update,
+	// but GitLab returns the single updated list object, so the wrapper can
+	// never unmarshal a successful response. The request is issued directly
+	// until the upstream signature is fixed (the project-level equivalent
+	// already returns *BoardList).
+	path := fmt.Sprintf("groups/%s/boards/%d/lists/%d", gl.PathEscape(string(input.GroupID)), input.BoardID, input.ListID)
+	req, err := newRawRequest(ctx, client, http.MethodPut, path, opts)
 	if err != nil {
+		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_update", err)
+	}
+	var list gl.BoardList
+	if _, err = client.GL().Do(req, &list); err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_update", err, http.StatusNotFound,
 			"list_id not found on this board (only the position can be updated; recreate the list to change its scope)")
 	}
-	// V2 returns a slice; find the updated list by ID
-	for _, l := range lists {
-		if l.ID == input.ListID {
-			return convertBoardList(l), nil
-		}
-	}
-	// Fallback to first element if available
-	if len(lists) > 0 {
-		return convertBoardList(lists[0]), nil
-	}
-	return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_update", errors.New("no board list returned"))
+	return convertBoardList(&list), nil
 }
 
 // DeleteGroupBoardListInput represents input for deleting a group board list.

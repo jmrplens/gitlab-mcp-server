@@ -63,22 +63,24 @@ Get full details of a CI/CD Catalog resource by GID or project full path. Return
 
 ### Output fields (detail)
 
-| Field                       | Type   | Description                       |
-| --------------------------- | ------ | --------------------------------- |
-| `id`                        | string | Resource GID                      |
-| `name`                      | string | Resource name                     |
-| `description`               | string | Resource description              |
-| `icon`                      | string | Resource icon                     |
-| `full_path`                 | string | Project full path                 |
-| `web_url`                   | string | URL to the resource in GitLab     |
-| `star_count`                | int    | Number of stars                   |
-| `forks_count`               | int    | Number of forks                   |
-| `open_issues_count`         | int    | Open issue count                  |
-| `open_merge_requests_count` | int    | Open MR count                     |
-| `latest_released_at`        | string | Date of latest release            |
-| `readme_html`               | string | Rendered README content           |
-| `versions`                  | array  | Released versions with components |
-| `components`                | array  | Components in the latest version  |
+| Field                     | Type   | Description                                                                     |
+| ------------------------- | ------ | ------------------------------------------------------------------------------- |
+| `id`                      | string | Resource GID                                                                    |
+| `name`                    | string | Resource name                                                                   |
+| `description`             | string | Resource description                                                            |
+| `icon`                    | string | Resource icon                                                                   |
+| `full_path`               | string | Project full path                                                               |
+| `web_path`                | string | Path to the resource in GitLab (relative to the instance)                       |
+| `star_count`              | int    | Number of stars                                                                 |
+| `last_30_day_usage_count` | int    | Unique projects that used a component in the last 30 days                       |
+| `archived`                | bool   | Whether the hosting project is archived                                         |
+| `topics`                  | array  | Project topics                                                                  |
+| `verification_level`      | string | Catalog verification level (e.g. `UNVERIFIED`, `GITLAB_MAINTAINED`)             |
+| `visibility_level`        | string | Project visibility (`private`, `internal`, `public`)                            |
+| `latest_released_at`      | string | Date of latest release                                                          |
+| `readme_html`             | string | Rendered README of the newest version                                           |
+| `versions`                | array  | Released versions with components (name, released_at, created_at, semver, path) |
+| `components`              | array  | Components in the newest version                                                |
 
 ### Component structure
 

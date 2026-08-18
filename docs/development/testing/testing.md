@@ -18,25 +18,25 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,049 |
-| Unit test functions                                   | 11,672 |
+| Total test functions                                  | 12,051 |
+| Unit test functions                                   | 11,674 |
 | E2E test functions                                    |    377 |
-| cmd test functions                                    |    959 |
+| cmd test functions                                    |    960 |
 | Test files (internal/)                                |    462 |
 | Test files (cmd/)                                     |     70 |
-| Test files (test/e2e/suite/)                          |    170 |
+| Test files (test/e2e/suite/)                          |    171 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     18 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  91.0% |
-| Overall coverage (`go test ./internal/...`)           |  94.8% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  91.1% |
+| Overall coverage (`go test ./internal/...`)           |  94.9% |
 | Average package coverage                              |  95.1% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,560 | 87.6% |
-| `TestFunc` (no underscore)             |    963 |  8.0% |
+| `TestFunc_Scenario` (2-part)           | 10,561 | 87.6% |
+| `TestFunc` (no underscore)             |    964 |  8.0% |
 | `TestFunc_Scenario_Expected` (3+ part) |    526 |  4.4% |
 
 ## Test Distribution
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,080 |        103 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          8,348 |        345 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            377 |        170 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            959 |         70 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,049** |    **702** |                                                                                                 |
+| Tool sub-packages (175) |          8,349 |        345 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |            377 |        171 | build-tagged real GitLab integration suite                                                      |
+| cmd packages            |            960 |         70 | server entry point and developer command utilities                                              |
+| **Total**               |     **12,051** |    **703** |                                                                                                 |
 
 ### Core Packages
 
@@ -132,7 +132,7 @@
 | branchrules             |        16 |          1 |   100.0% |         1 |
 | broadcastmessages       |        30 |          2 |   100.0% |         5 |
 | bulkimports             |        35 |          2 |   100.0% |         7 |
-| cicatalog               |        22 |          1 |   100.0% |         2 |
+| cicatalog               |        24 |          1 |   100.0% |         2 |
 | cilint                  |        26 |          1 |   100.0% |         2 |
 | civariables             |        46 |          2 |   100.0% |         5 |
 | ciyamltemplates         |        23 |          1 |   100.0% |         2 |
@@ -172,7 +172,7 @@
 | geo                     |        54 |          2 |   100.0% |         8 |
 | gitignoretemplates      |        15 |          1 |   100.0% |         2 |
 | groupanalytics          |         8 |          2 |   100.0% |         3 |
-| groupboards             |        65 |          2 |    98.5% |        10 |
+| groupboards             |        64 |          2 |   100.0% |        10 |
 | groupcredentials        |        43 |          3 |   100.0% |         4 |
 | groupepicboards         |        15 |          3 |    98.3% |         2 |
 | groupimportexport       |        29 |          1 |   100.0% |         3 |
@@ -288,7 +288,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        89 |          2 |    97.2% |         6 |
-| **Total**               | **8,348** |    **345** |          | **1,169** |
+| **Total**               | **8,349** |    **345** |          | **1,169** |
 
 </details>
 
@@ -299,7 +299,7 @@
 | Package                                        | Coverage |
 | ---------------------------------------------- | -------: |
 | cmd/audit_1to1                                 |    39.0% |
-| cmd/audit_1to1/internal/actions                |    87.7% |
+| cmd/audit_1to1/internal/actions                |    88.5% |
 | cmd/audit_1to1/internal/merge                  |    85.4% |
 | cmd/audit_1to1/internal/metadata               |    69.1% |
 | cmd/audit_1to1/internal/structs                |    95.3% |
@@ -324,7 +324,7 @@
 | cmd/gen_docker_tools                           |    86.6% |
 | cmd/gen_lhm_manifest                           |    78.5% |
 | cmd/gen_llms                                   |    24.7% |
-| cmd/gen_stats                                  |    49.8% |
+| cmd/gen_stats                                  |    51.5% |
 | cmd/gen_testing_docs                           |    27.4% |
 | cmd/godoc_tool                                 |    58.9% |
 | cmd/internal/apidocs                           |    86.7% |
@@ -419,7 +419,7 @@
 | geo                     |   100.0% |
 | gitignoretemplates      |   100.0% |
 | groupanalytics          |   100.0% |
-| groupboards             |    98.5% |
+| groupboards             |   100.0% |
 | groupcredentials        |   100.0% |
 | groupepicboards         |    98.3% |
 | groupimportexport       |   100.0% |
@@ -546,7 +546,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/eval_mcp_surfaces/internal/termio** (45.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_test_names** (48.1%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (48.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_stats** (49.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/gen_stats** (51.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_metrics** (52.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/godoc_tool** (58.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tokens** (59.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
@@ -567,7 +567,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/gen_docker_tools** (86.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/internal/apidocs** (86.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **edition** (87.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
-- **cmd/audit_1to1/internal/actions** (87.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_1to1/internal/actions** (88.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 
 <!-- END TESTING STATS -->

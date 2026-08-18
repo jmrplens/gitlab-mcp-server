@@ -274,9 +274,25 @@ func scanGoFile(path string, isE2E, isTest bool, s *repoStats) (int, error) {
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, scannerBufSize), scannerBufSize)
 
+	// Lines inside multi-line raw strings are data, not code: test fixtures
+	// (e.g. the goroutine-audit fixture sources) embed entire fake Go files
+	// whose "func Test..." lines would otherwise inflate every counter. A
+	// line with an odd number of backticks toggles the state; pairs on one
+	// line open and close within it.
+	inRawString := false
 	for sc.Scan() {
 		lines++
-		scanGoLine(sc.Text(), isE2E, isTest, s)
+		line := sc.Text()
+		if inRawString {
+			if strings.Count(line, "`")%2 == 1 {
+				inRawString = false
+			}
+			continue
+		}
+		scanGoLine(line, isE2E, isTest, s)
+		if strings.Count(line, "`")%2 == 1 {
+			inRawString = true
+		}
 	}
 	return lines, sc.Err()
 }
