@@ -1,9 +1,11 @@
 //go:build e2e && !enterprise
 
 // groupextras2_ce_test.go covers the remaining gitlab_group meta-tool
-// actions from the e2e gap audit: group board list (column) CRUD, group
-// markdown uploads, group export/import, group relations export, and
-// service-account PAT rotation.
+// actions from the e2e gap audit: group markdown uploads, group
+// export/import, group relations export, and service-account PAT rotation.
+// Group board list (column) CRUD lives in groupboardextras_ee_test.go:
+// provisioning a group issue board via API is a Premium capability, so the
+// coverage is enterprise-gated like the other EE tests.
 //
 // Build tag: e2e && !enterprise.
 package suite
@@ -22,106 +24,11 @@ import (
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupboards"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupimportexport"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/grouplabels"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupmarkdownuploads"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/grouprelationsexport"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/groupserviceaccounts"
 )
-
-// TestMeta_GroupBoardListColumns exercises group_board_create_list,
-// group_board_get_list, group_board_update_list, and group_board_delete_list
-// through the gitlab_group meta-tool.
-//
-// The test creates a group and a group label, provisions an issue board
-// through the raw SDK (board creation is Premium-gated on the meta surface,
-// and CE allows a single board per group), then creates a label-backed
-// column, fetches it, reorders it, and deletes it. When no board can be
-// provisioned (older CE builds without the board create route) the test
-// documents that with a skip.
-//
-// Build tag: e2e && !enterprise. Mode: CE. Surface: meta.
-func TestMeta_GroupBoardListColumns(t *testing.T) {
-	t.Parallel()
-	if sess.meta == nil {
-		t.Skip("meta session not configured")
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
-	defer cancel()
-
-	e2e := NewE2EContext(t)
-	grp := CreateGroupMeta(ctx, e2e, sess.meta, "grp-board-cols")
-
-	boardID, ok := groupExtrasEnsureBoard(ctx, t, grp)
-	if !ok {
-		t.Skip("no group issue board available: board provisioning via API is unsupported on this GitLab edition/version")
-	}
-	labelID := groupExtrasCreateGroupLabel(ctx, t, grp)
-
-	var listID int64
-
-	t.Run("CreateList", func(t *testing.T) {
-		out, err := callToolOn[groupboards.BoardListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "group_board_create_list",
-			"params": map[string]any{
-				"group_id": grp.gidStr(),
-				"board_id": boardID,
-				"label_id": labelID,
-			},
-		})
-		requireNoError(t, err, "group_board_create_list")
-		requireTruef(t, out.ID > 0, "expected positive board list ID")
-		listID = out.ID
-		t.Logf("Created board list %d on board %d", listID, boardID)
-	})
-
-	t.Run("GetList", func(t *testing.T) {
-		requireTruef(t, listID > 0, "listID not set")
-		out, err := callToolOn[groupboards.BoardListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "group_board_get_list",
-			"params": map[string]any{
-				"group_id": grp.gidStr(),
-				"board_id": boardID,
-				"list_id":  listID,
-			},
-		})
-		requireNoError(t, err, "group_board_get_list")
-		requireTruef(t, out.ID == listID, "got board list %d, want %d", out.ID, listID)
-		t.Logf("Got board list %d at position %d", out.ID, out.Position)
-	})
-
-	t.Run("UpdateList", func(t *testing.T) {
-		requireTruef(t, listID > 0, "listID not set")
-		out, err := callToolOn[groupboards.BoardListOutput](ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "group_board_update_list",
-			"params": map[string]any{
-				"group_id": grp.gidStr(),
-				"board_id": boardID,
-				"list_id":  listID,
-				"position": 0,
-			},
-		})
-		requireNoError(t, err, "group_board_update_list")
-		requireTruef(t, out.ID > 0, "expected a board list in the update response")
-		t.Logf("Reordered board list %d to position %d", out.ID, out.Position)
-	})
-
-	t.Run("DeleteList", func(t *testing.T) {
-		requireTruef(t, listID > 0, "listID not set")
-		err := callToolVoidOn(ctx, sess.meta, "gitlab_group", map[string]any{
-			"action": "group_board_delete_list",
-			"params": map[string]any{
-				"group_id": grp.gidStr(),
-				"board_id": boardID,
-				"list_id":  listID,
-			},
-		})
-		requireNoError(t, err, "group_board_delete_list")
-		t.Logf("Deleted board list %d", listID)
-	})
-}
 
 // TestMeta_GroupMarkdownUploads exercises group_upload_list,
 // group_upload_delete_by_id, and group_upload_delete_by_secret through the
@@ -490,42 +397,6 @@ func TestMeta_GroupServiceAccountPATRotate(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Fixture helpers (groupExtras prefix, shared with groupextras_ce_test.go)
 // ---------------------------------------------------------------------------
-
-// groupExtrasEnsureBoard returns an issue board ID for the group, reusing an
-// existing board when present or provisioning the group's single CE board
-// through the raw SDK. Returns false when no board can be obtained.
-func groupExtrasEnsureBoard(ctx context.Context, t *testing.T, grp GroupFixture) (int64, bool) {
-	t.Helper()
-	boards, _, err := sess.glClient.GL().GroupIssueBoards.ListGroupIssueBoards(grp.ID, &gl.ListGroupIssueBoardsOptions{}, gl.WithContext(ctx))
-	if err == nil && len(boards) > 0 {
-		return boards[0].ID, true
-	}
-	board, _, err := sess.glClient.GL().GroupIssueBoards.CreateGroupIssueBoard(grp.ID, &gl.CreateGroupIssueBoardOptions{
-		Name: new("E2E Board"),
-	}, gl.WithContext(ctx))
-	if err != nil {
-		t.Logf("cannot provision a group issue board on this instance: %v", err)
-		return 0, false
-	}
-	return board.ID, true
-}
-
-// groupExtrasCreateGroupLabel creates a group label through the meta-tool
-// and returns its numeric ID for label-backed board lists.
-func groupExtrasCreateGroupLabel(ctx context.Context, t *testing.T, grp GroupFixture) int64 {
-	t.Helper()
-	out, err := callToolOn[grouplabels.Output](ctx, sess.meta, "gitlab_group", map[string]any{
-		"action": "group_label_create",
-		"params": map[string]any{
-			"group_id": grp.gidStr(),
-			"name":     uniqueName("board-lbl"),
-			"color":    "#0000FF",
-		},
-	})
-	requireNoError(t, err, "create group label fixture")
-	requireTruef(t, out.ID > 0, "expected group label ID")
-	return out.ID
-}
 
 // groupExtrasUpload identifies one seeded group markdown upload.
 type groupExtrasUpload struct {

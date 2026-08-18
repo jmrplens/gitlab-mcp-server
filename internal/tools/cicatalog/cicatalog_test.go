@@ -21,36 +21,54 @@ const sampleResourceNode = `{
 	"description": "Reusable Go CI/CD pipeline components",
 	"icon": "https://gitlab.example.com/uploads/icon.png",
 	"fullPath": "my-group/go-pipeline",
-	"webUrl": "https://gitlab.example.com/my-group/go-pipeline",
+	"webPath": "/explore/catalog/my-group/go-pipeline",
 	"starCount": 42,
-	"forksCount": 5,
-	"openIssuesCount": 3,
-	"openMergeRequestsCount": 1,
+	"last30DayUsageCount": 7,
+	"archived": false,
+	"topics": ["go", "ci"],
+	"verificationLevel": "UNVERIFIED",
+	"visibilityLevel": "public",
 	"latestReleasedAt": "2026-06-15T10:30:00Z",
-	"latestVersion": {
-		"name": "2.1.0",
-		"releasedAt": "2026-06-15T10:30:00Z",
-		"components": [
-			{
-				"name": "build",
-				"description": "Build Go binary",
-				"includePath": "gitlab.example.com/my-group/go-pipeline/build@2.1.0",
-				"inputs": [
-					{"name": "go_version", "description": "Go version to use", "type": "string", "required": false, "default": "1.22"},
-					{"name": "binary_name", "description": "Output binary name", "type": "string", "required": true, "default": null}
-				]
-			},
-			{
-				"name": "test",
-				"description": "Run Go tests with coverage",
-				"includePath": "gitlab.example.com/my-group/go-pipeline/test@2.1.0",
-				"inputs": [
-					{"name": "coverage_threshold", "description": "Minimum coverage %", "type": "number", "required": false, "default": "80"}
-				]
-			}
-		]
-	},
-	"readmeHtml": "<h1>Go Pipeline</h1><p>Components for Go projects.</p>"
+	"versions": {"nodes": [
+		{
+			"name": "2.1.0",
+			"releasedAt": "2026-06-15T10:30:00Z",
+			"createdAt": "2026-06-15T10:29:00Z",
+			"semver": {"major": 2, "minor": 1, "patch": 0},
+			"path": "/my-group/go-pipeline/-/tags/2.1.0",
+			"readmeHtml": "<h1>Go Pipeline</h1><p>Components for Go projects.</p>",
+			"components": {"nodes": [
+				{
+					"name": "build",
+					"description": "Build Go binary",
+					"includePath": "gitlab.example.com/my-group/go-pipeline/build@2.1.0",
+					"inputs": [
+						{"name": "go_version", "description": "Go version to use", "type": "string", "required": false, "default": "1.22"},
+						{"name": "binary_name", "description": "Output binary name", "type": "string", "required": true, "default": null}
+					]
+				},
+				{
+					"name": "test",
+					"description": "Run Go tests with coverage",
+					"includePath": "gitlab.example.com/my-group/go-pipeline/test@2.1.0",
+					"inputs": [
+						{"name": "coverage_threshold", "description": "Minimum coverage %", "type": "number", "required": false, "default": "80"}
+					]
+				}
+			]}
+		},
+		{
+			"name": "2.0.0",
+			"releasedAt": "2026-03-01T08:00:00Z",
+			"createdAt": "2026-03-01T07:59:00Z",
+			"semver": {"major": 2, "minor": 0, "patch": 0},
+			"path": "/my-group/go-pipeline/-/tags/2.0.0",
+			"readmeHtml": null,
+			"components": {"nodes": [
+				{"name": "build", "description": null, "includePath": "gitlab.example.com/my-group/go-pipeline/build@2.0.0", "inputs": []}
+			]}
+		}
+	]}
 }`
 
 // graphqlMux returns an [http.Handler] that routes GraphQL requests to the
@@ -98,8 +116,11 @@ func TestList_Success(t *testing.T) {
 	if r.StarCount != 42 {
 		t.Errorf("StarCount = %d, want 42", r.StarCount)
 	}
-	if r.ForksCount != 5 {
-		t.Errorf("ForksCount = %d, want 5", r.ForksCount)
+	if r.Last30DayUsageCount != 7 {
+		t.Errorf("Last30DayUsageCount = %d, want 7", r.Last30DayUsageCount)
+	}
+	if r.VerificationLevel != "UNVERIFIED" {
+		t.Errorf("VerificationLevel = %q, want UNVERIFIED", r.VerificationLevel)
 	}
 	if r.LatestVersionName != "2.1.0" {
 		t.Errorf("LatestVersionName = %q, want 2.1.0", r.LatestVersionName)
@@ -107,8 +128,8 @@ func TestList_Success(t *testing.T) {
 	if r.LatestReleasedAt != "2026-06-15T10:30:00Z" {
 		t.Errorf("LatestReleasedAt = %q", r.LatestReleasedAt)
 	}
-	if r.WebURL != "https://gitlab.example.com/my-group/go-pipeline" {
-		t.Errorf("WebURL = %q", r.WebURL)
+	if r.WebPath != "/explore/catalog/my-group/go-pipeline" {
+		t.Errorf("WebPath = %q", r.WebPath)
 	}
 }
 
@@ -122,7 +143,9 @@ func TestList_WithFilters(t *testing.T) {
 				Variables map[string]any `json:"variables"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "decode body", http.StatusInternalServerError)
+				return
 			}
 			if body.Variables["search"] != "golang" {
 				t.Errorf("search = %v, want golang", body.Variables["search"])
@@ -205,7 +228,9 @@ func TestList_Pagination(t *testing.T) {
 				Variables map[string]any `json:"variables"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "decode body", http.StatusInternalServerError)
+				return
 			}
 			if body.Variables["after"] != "cursor123" {
 				t.Errorf("after = %v, want cursor123", body.Variables["after"])
@@ -240,33 +265,16 @@ func TestGet_ByFullPath(t *testing.T) {
 				Variables map[string]any `json:"variables"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "decode body", http.StatusInternalServerError)
+				return
 			}
 			if body.Variables["fullPath"] != "my-group/go-pipeline" {
 				t.Errorf("fullPath = %v, want my-group/go-pipeline", body.Variables["fullPath"])
 			}
 
-			detailNode := sampleResourceNode[:len(sampleResourceNode)-1] + `,
-				"versions": {"nodes": [
-					{
-						"name": "2.1.0",
-						"releasedAt": "2026-06-15T10:30:00Z",
-						"components": [
-							{"name": "build", "description": "Build Go binary", "includePath": "gitlab.example.com/my-group/go-pipeline/build@2.1.0", "inputs": []}
-						]
-					},
-					{
-						"name": "2.0.0",
-						"releasedAt": "2026-03-01T08:00:00Z",
-						"components": [
-							{"name": "build", "description": null, "includePath": "gitlab.example.com/my-group/go-pipeline/build@2.0.0", "inputs": []}
-						]
-					}
-				]}
-			}`
-
 			testutil.RespondGraphQL(w, http.StatusOK, `{
-				"ciCatalogResource": `+detailNode+`
+				"ciCatalogResource": `+sampleResourceNode+`
 			}`)
 		},
 	})
@@ -334,7 +342,9 @@ func TestGet_ByID(t *testing.T) {
 				Variables map[string]any `json:"variables"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Fatalf("decode body: %v", err)
+				t.Errorf("decode body: %v", err)
+				http.Error(w, "decode body", http.StatusInternalServerError)
+				return
 			}
 			if body.Variables["id"] != "gid://gitlab/Ci::CatalogResource/1" {
 				t.Errorf("id = %v, want gid://gitlab/Ci::CatalogResource/1", body.Variables["id"])
@@ -452,12 +462,12 @@ func TestFormatListMarkdown_WithItems(t *testing.T) {
 	md := FormatListMarkdown(ListOutput{
 		Resources: []ResourceItem{
 			{
-				Name:              "go-pipeline",
-				WebURL:            "https://gitlab.example.com/g/go-pipeline",
-				StarCount:         42,
-				ForksCount:        5,
-				LatestVersionName: "2.1.0",
-				LatestReleasedAt:  "2026-06-15T10:30:00Z",
+				Name:                "go-pipeline",
+				WebPath:             "/explore/catalog/g/go-pipeline",
+				StarCount:           42,
+				Last30DayUsageCount: 5,
+				LatestVersionName:   "2.1.0",
+				LatestReleasedAt:    "2026-06-15T10:30:00Z",
 			},
 		},
 	})
@@ -481,7 +491,7 @@ func TestFormatGetMarkdown_WithComponents(t *testing.T) {
 				ID:       "gid://gitlab/Ci::CatalogResource/1",
 				Name:     "go-pipeline",
 				FullPath: "my-group/go-pipeline",
-				WebURL:   "https://gitlab.example.com/my-group/go-pipeline",
+				WebPath:  "/explore/catalog/my-group/go-pipeline",
 			},
 			Components: []ComponentItem{
 				{
@@ -591,7 +601,7 @@ func TestFormatGetMarkdown_MinimalResource(t *testing.T) {
 				Name:              "minimal",
 				Description:       "A minimal catalog resource",
 				FullPath:          "group/minimal",
-				WebURL:            "https://gitlab.example.com/group/minimal",
+				WebPath:           "/explore/catalog/group/minimal",
 				LatestReleasedAt:  "2026-01-01T00:00:00Z",
 				LatestVersionName: "1.0.0",
 			},
@@ -624,7 +634,7 @@ func TestFormatGetMarkdown_ComponentWithoutInputs(t *testing.T) {
 				ID:       "gid://gitlab/Ci::CatalogResource/3",
 				Name:     "no-inputs",
 				FullPath: "group/no-inputs",
-				WebURL:   "https://gitlab.example.com/group/no-inputs",
+				WebPath:  "/explore/catalog/group/no-inputs",
 			},
 			Components: []ComponentItem{
 				{

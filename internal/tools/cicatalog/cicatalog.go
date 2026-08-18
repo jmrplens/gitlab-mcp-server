@@ -13,18 +13,20 @@ import (
 
 // ResourceItem represents a CI/CD Catalog resource summary.
 type ResourceItem struct {
-	ID                string `json:"id"`
-	Name              string `json:"name"`
-	Description       string `json:"description,omitempty"`
-	Icon              string `json:"icon,omitempty"`
-	FullPath          string `json:"full_path"`
-	WebURL            string `json:"web_url"`
-	StarCount         int    `json:"star_count"`
-	ForksCount        int    `json:"forks_count"`
-	OpenIssuesCount   int    `json:"open_issues_count"`
-	OpenMRsCount      int    `json:"open_merge_requests_count"`
-	LatestReleasedAt  string `json:"latest_released_at,omitempty"`
-	LatestVersionName string `json:"latest_version_name,omitempty"`
+	ID                  string   `json:"id"`
+	Name                string   `json:"name"`
+	Description         string   `json:"description,omitempty"`
+	Icon                string   `json:"icon,omitempty"`
+	FullPath            string   `json:"full_path"`
+	WebPath             string   `json:"web_path"`
+	StarCount           int      `json:"star_count"`
+	Last30DayUsageCount int      `json:"last_30_day_usage_count"`
+	Archived            bool     `json:"archived"`
+	Topics              []string `json:"topics,omitempty"`
+	VerificationLevel   string   `json:"verification_level,omitempty"`
+	VisibilityLevel     string   `json:"visibility_level,omitempty"`
+	LatestReleasedAt    string   `json:"latest_released_at,omitempty"`
+	LatestVersionName   string   `json:"latest_version_name,omitempty"`
 }
 
 // ResourceDetail extends ResourceItem with version and component information.
@@ -39,6 +41,9 @@ type ResourceDetail struct {
 type VersionItem struct {
 	Name       string          `json:"name"`
 	ReleasedAt string          `json:"released_at"`
+	CreatedAt  string          `json:"created_at,omitempty"`
+	Semver     string          `json:"semver,omitempty"`
+	Path       string          `json:"path,omitempty"`
 	Components []ComponentItem `json:"components,omitempty"`
 }
 
@@ -76,14 +81,18 @@ query($search: String, $scope: CiCatalogResourceScope, $sort: CiCatalogResourceS
       description
       icon
       fullPath
-      webUrl
+      webPath
       starCount
-      forksCount
-      openIssuesCount
-      openMergeRequestsCount
+      last30DayUsageCount
+      archived
+      topics
+      verificationLevel
+      visibilityLevel
       latestReleasedAt
-      latestVersion {
-        name
+      versions(first: 1) {
+        nodes {
+          name
+        }
       }
     }
     pageInfo {
@@ -104,43 +113,38 @@ query($id: CiCatalogResourceID, $fullPath: ID) {
     description
     icon
     fullPath
-    webUrl
+    webPath
     starCount
-    forksCount
-    openIssuesCount
-    openMergeRequestsCount
+    last30DayUsageCount
+    archived
+    topics
+    verificationLevel
+    visibilityLevel
     latestReleasedAt
-    readmeHtml
-    latestVersion {
-      name
-      releasedAt
-      components {
-        name
-        description
-        includePath
-        inputs {
-          name
-          description
-          type
-          required
-          default
-        }
-      }
-    }
     versions(first: 10) {
       nodes {
         name
         releasedAt
+        createdAt
+        semver {
+          major
+          minor
+          patch
+        }
+        path
+        readmeHtml
         components {
-          name
-          description
-          includePath
-          inputs {
+          nodes {
             name
             description
-            type
-            required
-            default
+            includePath
+            inputs {
+              name
+              description
+              type
+              required
+              default
+            }
           }
         }
       }
@@ -167,26 +171,43 @@ type gqlComponent struct {
 }
 
 type gqlVersion struct {
-	Name       string         `json:"name"`
-	ReleasedAt string         `json:"releasedAt"`
-	Components []gqlComponent `json:"components"`
+	Name       string             `json:"name"`
+	ReleasedAt string             `json:"releasedAt"`
+	CreatedAt  *string            `json:"createdAt"`
+	Semver     *gqlSemver         `json:"semver"`
+	Path       *string            `json:"path"`
+	ReadmeHTML *string            `json:"readmeHtml"`
+	Components *gqlComponentNodes `json:"components"`
+}
+
+// gqlSemver mirrors CiCatalogResourceSemver, which the schema models as a
+// major/minor/patch object rather than a scalar.
+type gqlSemver struct {
+	Major int `json:"major"`
+	Minor int `json:"minor"`
+	Patch int `json:"patch"`
+}
+
+// gqlComponentNodes holds the component connection of a version.
+type gqlComponentNodes struct {
+	Nodes []gqlComponent `json:"nodes"`
 }
 
 type gqlResourceNode struct {
-	ID                     string           `json:"id"`
-	Name                   string           `json:"name"`
-	Description            *string          `json:"description"`
-	Icon                   *string          `json:"icon"`
-	FullPath               string           `json:"fullPath"`
-	WebURL                 string           `json:"webUrl"`
-	StarCount              int              `json:"starCount"`
-	ForksCount             int              `json:"forksCount"`
-	OpenIssuesCount        int              `json:"openIssuesCount"`
-	OpenMergeRequestsCount int              `json:"openMergeRequestsCount"`
-	LatestReleasedAt       *string          `json:"latestReleasedAt"`
-	ReadmeHTML             *string          `json:"readmeHtml"`
-	LatestVersion          *gqlVersion      `json:"latestVersion"`
-	Versions               *gqlVersionNodes `json:"versions"`
+	ID                  string           `json:"id"`
+	Name                string           `json:"name"`
+	Description         *string          `json:"description"`
+	Icon                *string          `json:"icon"`
+	FullPath            string           `json:"fullPath"`
+	WebPath             string           `json:"webPath"`
+	StarCount           int              `json:"starCount"`
+	Last30DayUsageCount int              `json:"last30DayUsageCount"`
+	Archived            bool             `json:"archived"`
+	Topics              []string         `json:"topics"`
+	VerificationLevel   *string          `json:"verificationLevel"`
+	VisibilityLevel     *string          `json:"visibilityLevel"`
+	LatestReleasedAt    *string          `json:"latestReleasedAt"`
+	Versions            *gqlVersionNodes `json:"versions"`
 }
 
 // gqlVersionNodes holds a list of version nodes.
@@ -204,14 +225,14 @@ type gqlCatalogConnection struct {
 // [ResourceItem] output struct, extracting optional fields only when present.
 func nodeToResourceItem(n gqlResourceNode) ResourceItem {
 	item := ResourceItem{
-		ID:              n.ID,
-		Name:            n.Name,
-		FullPath:        n.FullPath,
-		WebURL:          n.WebURL,
-		StarCount:       n.StarCount,
-		ForksCount:      n.ForksCount,
-		OpenIssuesCount: n.OpenIssuesCount,
-		OpenMRsCount:    n.OpenMergeRequestsCount,
+		ID:                  n.ID,
+		Name:                n.Name,
+		FullPath:            n.FullPath,
+		WebPath:             n.WebPath,
+		StarCount:           n.StarCount,
+		Last30DayUsageCount: n.Last30DayUsageCount,
+		Archived:            n.Archived,
+		Topics:              n.Topics,
 	}
 	if n.Description != nil {
 		item.Description = *n.Description
@@ -219,11 +240,17 @@ func nodeToResourceItem(n gqlResourceNode) ResourceItem {
 	if n.Icon != nil {
 		item.Icon = *n.Icon
 	}
+	if n.VerificationLevel != nil {
+		item.VerificationLevel = *n.VerificationLevel
+	}
+	if n.VisibilityLevel != nil {
+		item.VisibilityLevel = *n.VisibilityLevel
+	}
 	if n.LatestReleasedAt != nil {
 		item.LatestReleasedAt = *n.LatestReleasedAt
 	}
-	if n.LatestVersion != nil {
-		item.LatestVersionName = n.LatestVersion.Name
+	if n.Versions != nil && len(n.Versions.Nodes) > 0 {
+		item.LatestVersionName = n.Versions.Nodes[0].Name
 	}
 	return item
 }
@@ -234,22 +261,45 @@ func nodeToResourceDetail(n gqlResourceNode) ResourceDetail {
 	detail := ResourceDetail{
 		ResourceItem: nodeToResourceItem(n),
 	}
-	if n.ReadmeHTML != nil {
-		detail.ReadmeHTML = *n.ReadmeHTML
+	if n.Versions == nil {
+		return detail
 	}
-	if n.LatestVersion != nil {
-		detail.Components = convertComponents(n.LatestVersion.Components)
-	}
-	if n.Versions != nil {
-		for _, v := range n.Versions.Nodes {
-			detail.Versions = append(detail.Versions, VersionItem{
-				Name:       v.Name,
-				ReleasedAt: v.ReleasedAt,
-				Components: convertComponents(v.Components),
-			})
+	for i, v := range n.Versions.Nodes {
+		item := versionToItem(v)
+		detail.Versions = append(detail.Versions, item)
+		// The newest version carries the resource's README and the
+		// component set shown at detail level — the schema moved both
+		// from the resource to its versions.
+		if i == 0 {
+			if v.ReadmeHTML != nil {
+				detail.ReadmeHTML = *v.ReadmeHTML
+			}
+			detail.Components = item.Components
 		}
 	}
 	return detail
+}
+
+// versionToItem converts a raw GraphQL version node into a [VersionItem],
+// flattening the semver object and the component connection.
+func versionToItem(v gqlVersion) VersionItem {
+	item := VersionItem{
+		Name:       v.Name,
+		ReleasedAt: v.ReleasedAt,
+	}
+	if v.Components != nil {
+		item.Components = convertComponents(v.Components.Nodes)
+	}
+	if v.CreatedAt != nil {
+		item.CreatedAt = *v.CreatedAt
+	}
+	if v.Semver != nil {
+		item.Semver = fmt.Sprintf("%d.%d.%d", v.Semver.Major, v.Semver.Minor, v.Semver.Patch)
+	}
+	if v.Path != nil {
+		item.Path = *v.Path
+	}
+	return item
 }
 
 // convertComponents transforms a slice of raw GraphQL component structs into

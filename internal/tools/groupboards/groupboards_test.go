@@ -381,7 +381,10 @@ func TestCreateGroupBoardList_MissingParams(t *testing.T) {
 func TestUpdateGroupBoardList_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, r *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"position":2,"label":{"id":5,"name":"To Do"}}]`)
+		testutil.AssertRequestMethod(t, r, http.MethodPut)
+		// GitLab returns the single updated list object — not an array; the
+		// handler bypasses the client-go wrapper that expects []*BoardList.
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"position":2,"label":{"id":5,"name":"To Do"}}`)
 	})
 	client := testutil.NewTestClient(t, mux)
 
@@ -843,51 +846,6 @@ func TestUpdateGroupBoardList_CancelledContext(t *testing.T) {
 	_, err := UpdateGroupBoardList(ctx, client, UpdateGroupBoardListInput{GroupID: "42", BoardID: 1, ListID: 10, Position: 2})
 	if err == nil {
 		t.Fatal(errExpCancelledCtx)
-	}
-}
-
-// TestUpdateGroupBoardList_FallbackFirstElement verifies the UpdateGroupBoardList_FallbackFirstElement handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestUpdateGroupBoardList_FallbackFirstElement(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":99,"position":3,"label":{"id":7,"name":"Fallback"}}]`)
-	})
-	client := testutil.NewTestClient(t, mux)
-
-	out, err := UpdateGroupBoardList(context.Background(), client, UpdateGroupBoardListInput{
-		GroupID: "42", BoardID: 1, ListID: 10, Position: 3,
-	})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if out.ID != 99 {
-		t.Errorf("ID = %d, want 99 (fallback to first element)", out.ID)
-	}
-	if out.Label == nil || out.Label.Name != "Fallback" {
-		t.Errorf("label = %+v, want name Fallback", out.Label)
-	}
-}
-
-// TestUpdateGroupBoardList_EmptyResult verifies the UpdateGroupBoardList_EmptyResult handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
-func TestUpdateGroupBoardList_EmptyResult(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[]`)
-	})
-	client := testutil.NewTestClient(t, mux)
-
-	_, err := UpdateGroupBoardList(context.Background(), client, UpdateGroupBoardListInput{
-		GroupID: "42", BoardID: 1, ListID: 10, Position: 2,
-	})
-	if err == nil {
-		t.Fatal("expected error for empty result, got nil")
-	}
-	if !strings.Contains(err.Error(), "no board list returned") {
-		t.Errorf("error = %q, want 'no board list returned'", err.Error())
 	}
 }
 

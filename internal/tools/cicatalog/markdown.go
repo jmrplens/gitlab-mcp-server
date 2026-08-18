@@ -18,20 +18,19 @@ func FormatListMarkdown(out ListOutput) string {
 		return sb.String()
 	}
 
-	sb.WriteString("| Name | Description | Stars | Forks | Issues | MRs | Latest Version | Released |\n")
-	sb.WriteString("|------|-------------|-------|-------|--------|-----|----------------|----------|\n")
+	sb.WriteString("| Name | Description | Stars | Usage (30d) | Verification | Latest Version | Released |\n")
+	sb.WriteString("|------|-------------|-------|-------------|--------------|----------------|----------|\n")
 
 	for _, r := range out.Resources {
 		desc := toolutil.EscapeMdTableCell(truncate(r.Description, 60))
-		name := fmt.Sprintf("[%s](%s)", toolutil.EscapeMdTableCell(r.Name), r.WebURL)
+		name := fmt.Sprintf("[%s](%s)", toolutil.EscapeMdTableCell(r.Name), r.WebPath)
 		fmt.Fprintf(
-			&sb, "| %s | %s | %d | %d | %d | %d | %s | %s |\n",
+			&sb, "| %s | %s | %d | %d | %s | %s | %s |\n",
 			name,
 			desc,
 			r.StarCount,
-			r.ForksCount,
-			r.OpenIssuesCount,
-			r.OpenMRsCount,
+			r.Last30DayUsageCount,
+			toolutil.EscapeMdTableCell(r.VerificationLevel),
 			toolutil.EscapeMdTableCell(r.LatestVersionName),
 			formatDate(r.LatestReleasedAt),
 		)
@@ -59,11 +58,18 @@ func writeCatalogResourceSummary(sb *strings.Builder, r ResourceDetail) {
 	sb.WriteString("| Field | Value |\n|-------|-------|\n")
 	fmt.Fprintf(sb, "| ID | %s |\n", toolutil.EscapeMdTableCell(r.ID))
 	fmt.Fprintf(sb, "| Full Path | %s |\n", toolutil.EscapeMdTableCell(r.FullPath))
-	fmt.Fprintf(sb, "| URL | [%s](%s) |\n", toolutil.EscapeMdTableCell(r.FullPath), r.WebURL)
+	fmt.Fprintf(sb, "| Web Path | %s |\n", toolutil.EscapeMdTableCell(r.WebPath))
 	fmt.Fprintf(sb, "| Stars | %d |\n", r.StarCount)
-	fmt.Fprintf(sb, "| Forks | %d |\n", r.ForksCount)
-	fmt.Fprintf(sb, "| Open Issues | %d |\n", r.OpenIssuesCount)
-	fmt.Fprintf(sb, "| Open MRs | %d |\n", r.OpenMRsCount)
+	fmt.Fprintf(sb, "| Usage (30d) | %d |\n", r.Last30DayUsageCount)
+	if r.VerificationLevel != "" {
+		fmt.Fprintf(sb, "| Verification | %s |\n", toolutil.EscapeMdTableCell(r.VerificationLevel))
+	}
+	if len(r.Topics) > 0 {
+		fmt.Fprintf(sb, "| Topics | %s |\n", toolutil.EscapeMdTableCell(strings.Join(r.Topics, ", ")))
+	}
+	if r.Archived {
+		sb.WriteString("| Archived | yes |\n")
+	}
 	if r.LatestReleasedAt != "" {
 		fmt.Fprintf(sb, "| Latest Release | %s |\n", formatDate(r.LatestReleasedAt))
 	}

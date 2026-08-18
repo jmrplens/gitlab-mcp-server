@@ -44,7 +44,7 @@ func TestActionSpecs_CallAllRoutes(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusCreated, boardListJSON)
 	})
 	handler.HandleFunc("PUT /api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
-		testutil.RespondJSON(w, http.StatusOK, `[{"id":10,"label":{"id":20,"name":"To Do"},"position":2}]`)
+		testutil.RespondJSON(w, http.StatusOK, `{"id":10,"label":{"id":20,"name":"To Do"},"position":2}`)
 	})
 	handler.HandleFunc("DELETE /api/v4/groups/42/boards/1/lists/10", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)

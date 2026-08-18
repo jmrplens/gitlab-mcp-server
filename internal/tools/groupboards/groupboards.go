@@ -2,7 +2,6 @@ package groupboards
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -500,22 +499,22 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	opts := &gl.UpdateGroupIssueBoardListOptions{
 		Position: new(input.Position),
 	}
-	lists, _, err := client.GL().GroupIssueBoards.UpdateIssueBoardList(string(input.GroupID), input.BoardID, input.ListID, opts, gl.WithContext(ctx))
+	// client-go v2.58 declares []*BoardList for the group-level list update,
+	// but GitLab returns the single updated list object, so the wrapper can
+	// never unmarshal a successful response. The request is issued directly
+	// until the upstream signature is fixed (the project-level equivalent
+	// already returns *BoardList).
+	path := fmt.Sprintf("groups/%s/boards/%d/lists/%d", gl.PathEscape(string(input.GroupID)), input.BoardID, input.ListID)
+	req, err := client.GL().NewRequest(http.MethodPut, path, opts, []gl.RequestOptionFunc{gl.WithContext(ctx)})
 	if err != nil {
+		return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_update", err)
+	}
+	var list gl.BoardList
+	if _, err = client.GL().Do(req, &list); err != nil {
 		return BoardListOutput{}, toolutil.WrapErrWithStatusHint("group_board_list_update", err, http.StatusNotFound,
 			"list_id not found on this board (only the position can be updated; recreate the list to change its scope)")
 	}
-	// V2 returns a slice; find the updated list by ID
-	for _, l := range lists {
-		if l.ID == input.ListID {
-			return convertBoardList(l), nil
-		}
-	}
-	// Fallback to first element if available
-	if len(lists) > 0 {
-		return convertBoardList(lists[0]), nil
-	}
-	return BoardListOutput{}, toolutil.WrapErrWithMessage("group_board_list_update", errors.New("no board list returned"))
+	return convertBoardList(&list), nil
 }
 
 // DeleteGroupBoardListInput represents input for deleting a group board list.

@@ -18,13 +18,13 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,049 |
-| Unit test functions                                   | 11,672 |
+| Total test functions                                  | 12,047 |
+| Unit test functions                                   | 11,670 |
 | E2E test functions                                    |    377 |
 | cmd test functions                                    |    959 |
 | Test files (internal/)                                |    462 |
 | Test files (cmd/)                                     |     70 |
-| Test files (test/e2e/suite/)                          |    170 |
+| Test files (test/e2e/suite/)                          |    171 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     18 |
 | Overall coverage (`go test ./internal/... ./cmd/...`) |  91.0% |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,560 | 87.6% |
+| `TestFunc_Scenario` (2-part)           | 10,558 | 87.6% |
 | `TestFunc` (no underscore)             |    963 |  8.0% |
 | `TestFunc_Scenario_Expected` (3+ part) |    526 |  4.4% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,080 |        103 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          8,348 |        345 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            377 |        170 | build-tagged real GitLab integration suite                                                      |
+| Tool sub-packages (175) |          8,346 |        345 | domain-specific GitLab tool handlers                                                            |
+| E2E integration         |            377 |        171 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            959 |         70 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,049** |    **702** |                                                                                                 |
+| **Total**               |     **12,047** |    **703** |                                                                                                 |
 
 ### Core Packages
 
@@ -71,7 +71,7 @@
 | prompts      |       261 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                        |
 | resources    |       182 |   100.0% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
 | serverpool   |        47 |    99.6% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
-| testutil     |        34 |    86.5% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
+| testutil     |        34 |    86.0% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
 | toolutil     |       704 |    98.3% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard       |       327 |   100.0% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
 | **Subtotal** | **2,080** |          |                                                                                                                                                                                                                   |
@@ -132,7 +132,7 @@
 | branchrules             |        16 |          1 |   100.0% |         1 |
 | broadcastmessages       |        30 |          2 |   100.0% |         5 |
 | bulkimports             |        35 |          2 |   100.0% |         7 |
-| cicatalog               |        22 |          1 |   100.0% |         2 |
+| cicatalog               |        22 |          1 |    97.8% |         2 |
 | cilint                  |        26 |          1 |   100.0% |         2 |
 | civariables             |        46 |          2 |   100.0% |         5 |
 | ciyamltemplates         |        23 |          1 |   100.0% |         2 |
@@ -172,7 +172,7 @@
 | geo                     |        54 |          2 |   100.0% |         8 |
 | gitignoretemplates      |        15 |          1 |   100.0% |         2 |
 | groupanalytics          |         8 |          2 |   100.0% |         3 |
-| groupboards             |        65 |          2 |    98.5% |        10 |
+| groupboards             |        63 |          2 |    98.1% |        10 |
 | groupcredentials        |        43 |          3 |   100.0% |         4 |
 | groupepicboards         |        15 |          3 |    98.3% |         2 |
 | groupimportexport       |        29 |          1 |   100.0% |         3 |
@@ -288,7 +288,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        89 |          2 |    97.2% |         6 |
-| **Total**               | **8,348** |    **345** |          | **1,169** |
+| **Total**               | **8,346** |    **345** |          | **1,169** |
 
 </details>
 
@@ -299,7 +299,7 @@
 | Package                                        | Coverage |
 | ---------------------------------------------- | -------: |
 | cmd/audit_1to1                                 |    39.0% |
-| cmd/audit_1to1/internal/actions                |    87.7% |
+| cmd/audit_1to1/internal/actions                |    88.5% |
 | cmd/audit_1to1/internal/merge                  |    85.4% |
 | cmd/audit_1to1/internal/metadata               |    69.1% |
 | cmd/audit_1to1/internal/structs                |    95.3% |
@@ -351,7 +351,7 @@
 | prompts      |   100.0% |
 | resources    |   100.0% |
 | serverpool   |    99.6% |
-| testutil     |    86.5% |
+| testutil     |    86.0% |
 | toolutil     |    98.3% |
 | wizard       |   100.0% |
 
@@ -379,7 +379,7 @@
 | branchrules             |   100.0% |
 | broadcastmessages       |   100.0% |
 | bulkimports             |   100.0% |
-| cicatalog               |   100.0% |
+| cicatalog               |    97.8% |
 | cilint                  |   100.0% |
 | civariables             |   100.0% |
 | ciyamltemplates         |   100.0% |
@@ -419,7 +419,7 @@
 | geo                     |   100.0% |
 | gitignoretemplates      |   100.0% |
 | groupanalytics          |   100.0% |
-| groupboards             |    98.5% |
+| groupboards             |    98.1% |
 | groupcredentials        |   100.0% |
 | groupepicboards         |    98.3% |
 | groupimportexport       |   100.0% |
@@ -563,11 +563,11 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/internal/mcpsurface** (81.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **elicitation** (85.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/audit_1to1/internal/merge** (85.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **testutil** (86.5%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
+- **testutil** (86.0%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **cmd/gen_docker_tools** (86.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/internal/apidocs** (86.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **edition** (87.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
-- **cmd/audit_1to1/internal/actions** (87.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_1to1/internal/actions** (88.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 
 <!-- END TESTING STATS -->
