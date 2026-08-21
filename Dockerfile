@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1@sha256:2780b5c3bab67f1f76c781860de469442999ed1a0d7992a5efdf2cffc0e3d769
 
 # --- Build stage ---
-FROM --platform=$BUILDPLATFORM golang:1.26.6-alpine3.24 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27.0-alpine3.24 AS builder
 
 # hadolint ignore=DL3018
 RUN apk add --no-cache git ca-certificates

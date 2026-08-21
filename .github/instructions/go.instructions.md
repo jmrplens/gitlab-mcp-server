@@ -406,9 +406,9 @@ func TestCovListMetricImagesWithPagination(t *testing.T) { ... }
 - Not considering the zero value of types
 - **Creating duplicate `package` declarations** - this is a compile error; always check existing files before adding package declarations
 
-## Go 1.26 Project Modern Features
+## Go 1.27 Project Modern Features
 
-This project declares `1.26.6`; prefer these modern patterns when they simplify code without reducing clarity:
+This project declares `1.27.0`; prefer these modern patterns when they simplify code without reducing clarity:
 
 ### Range-over-func Iterators (Go 1.23+)
 
