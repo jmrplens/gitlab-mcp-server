@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,051 |
-| Unit test functions                                   | 11,674 |
+| Total test functions                                  | 12,053 |
+| Unit test functions                                   | 11,676 |
 | E2E test functions                                    |    377 |
 | cmd test functions                                    |    960 |
 | Test files (internal/)                                |    462 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,561 | 87.6% |
+| `TestFunc_Scenario` (2-part)           | 10,563 | 87.6% |
 | `TestFunc` (no underscore)             |    964 |  8.0% |
 | `TestFunc_Scenario_Expected` (3+ part) |    526 |  4.4% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,080 |        103 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          8,349 |        345 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          8,351 |        345 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            377 |        171 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            960 |         70 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,051** |    **703** |                                                                                                 |
+| **Total**               |     **12,053** |    **703** |                                                                                                 |
 
 ### Core Packages
 
@@ -87,7 +87,7 @@
 | users             |   210 |   100.0% |    38 |
 | dynamic           |   159 |    99.7% |     2 |
 | jobs              |   147 |    99.6% |    17 |
-| packages          |   123 |    99.3% |     9 |
+| packages          |   125 |    99.5% |     9 |
 | search            |   118 |   100.0% |    10 |
 | commits           |   114 |    99.8% |    13 |
 | resourceevents    |   114 |   100.0% |    17 |
@@ -231,7 +231,7 @@
 | namespaces              |        37 |          1 |    99.2% |         4 |
 | notifications           |        29 |          1 |   100.0% |         6 |
 | orbit                   |        57 |          4 |   100.0% |         6 |
-| packages                |       123 |          5 |    99.3% |         9 |
+| packages                |       125 |          5 |    99.5% |         9 |
 | pages                   |        54 |          2 |   100.0% |         9 |
 | pipelines               |       111 |          3 |   100.0% |        12 |
 | pipelineschedules       |        94 |          2 |    99.7% |        11 |
@@ -288,7 +288,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        89 |          2 |    97.3% |         6 |
-| **Total**               | **8,349** |    **345** |          | **1,169** |
+| **Total**               | **8,351** |    **345** |          | **1,169** |
 
 </details>
 
@@ -478,7 +478,7 @@
 | namespaces              |    99.2% |
 | notifications           |   100.0% |
 | orbit                   |   100.0% |
-| packages                |    99.3% |
+| packages                |    99.5% |
 | pages                   |   100.0% |
 | pipelines               |   100.0% |
 | pipelineschedules       |    99.7% |

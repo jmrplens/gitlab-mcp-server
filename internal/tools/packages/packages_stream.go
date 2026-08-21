@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/progress"
@@ -40,7 +42,11 @@ func streamDownloadPackageFile(
 		projectID, input.PackageName, input.PackageVersion, input.FileName,
 	)
 	if err != nil {
-		return 0, "", fmt.Errorf("format package URL: %w", err)
+		hint := ""
+		if errors.Is(err, gl.ErrInvalidFileName) {
+			hint = " (file_name segments between / separators must not be empty, \".\", or \"..\")"
+		}
+		return 0, "", fmt.Errorf("format package URL: %w%s", err, hint)
 	}
 
 	httpReq, err := client.GL().NewRequest(http.MethodGet, apiPath, nil, nil)
