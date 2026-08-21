@@ -61,7 +61,7 @@ func handleMergeVelocity(ctx context.Context, client *gitlabclient.Client, req *
 	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:        new("merged"),
 		CreatedAfter: &since,
-		ListOptions:  gl.ListOptions{PerPage: maxListItems},
+		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("merge_velocity: %w", err)
@@ -167,7 +167,7 @@ func handleReleaseReadiness(ctx context.Context, client *gitlabclient.Client, re
 	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		TargetBranch: new(branch),
 		State:        new("opened"),
-		ListOptions:  gl.ListOptions{PerPage: maxListItems},
+		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("release_readiness: %w", err)
@@ -218,7 +218,7 @@ func countUnresolvedThreads(ctx context.Context, client *gitlabclient.Client, pr
 	total := 0
 	for _, mr := range mrs {
 		discussions, _, err := client.GL().Discussions.ListMergeRequestDiscussions(projectID, mr.IID, &gl.ListMergeRequestDiscussionsOptions{
-			ListOptions: gl.ListOptions{PerPage: maxListItems},
+			PerPage: maxListItems,
 		}, gl.WithContext(ctx))
 		if err != nil {
 			continue
@@ -271,7 +271,7 @@ func handleReleaseCadence(ctx context.Context, client *gitlabclient.Client, req 
 	since := sinceDate(days)
 
 	releases, _, err := client.GL().Releases.ListReleases(projectID, &gl.ListReleasesOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("release_cadence: %w", err)
@@ -390,7 +390,7 @@ func handleWeeklyTeamRecap(ctx context.Context, client *gitlabclient.Client, req
 	mergedMRs, _, err := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
 		State:        new("merged"),
 		CreatedAfter: &since,
-		ListOptions:  gl.ListOptions{PerPage: maxListItems},
+		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		slog.Warn("failed to fetch merged MRs", "error", err)
@@ -398,14 +398,14 @@ func handleWeeklyTeamRecap(ctx context.Context, client *gitlabclient.Client, req
 
 	// Open MRs
 	openMRs, _, _ := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
-		State:       new("opened"),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:   new("opened"),
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Open issues
 	openIssues, _, _ := client.GL().Issues.ListGroupIssues(groupID, &gl.ListGroupIssuesOptions{
-		State:       new("opened"),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:   new("opened"),
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder

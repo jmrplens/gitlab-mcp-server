@@ -100,13 +100,13 @@ func TestRepositoryTree_WithOptions(t *testing.T) {
 	}))
 
 	out, err := Tree(context.Background(), client, TreeInput{
-		ProjectID:             "42",
-		Path:                  "src",
-		Ref:                   "develop",
-		Recursive:             true,
-		OrderBy:               "path",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-1"},
+		ProjectID:  "42",
+		Path:       "src",
+		Ref:        "develop",
+		Recursive:  true,
+		OrderBy:    "path",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "cursor-1",
 	})
 	if err != nil {
 		t.Fatalf("Tree() unexpected error: %v", err)
@@ -881,13 +881,12 @@ func TestRepositoryContributors_WithOptions(t *testing.T) {
 	}))
 
 	input := ContributorsInput{
-		ProjectID:             "42",
-		OrderBy:               "name",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "next-cur"},
+		ProjectID:  "42",
+		OrderBy:    "name",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "next-cur",
+		Page: 2, PerPage: 10,
 	}
-	input.Page = 2
-	input.PerPage = 10
 
 	out, err := Contributors(context.Background(), client, input)
 	if err != nil {
@@ -1010,9 +1009,11 @@ func TestRepositoryTree_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	input := TreeInput{ProjectID: "42"}
-	input.Page = 3
-	input.PerPage = 5
+	input := TreeInput{
+		ProjectID: "42",
+		Page:      3,
+		PerPage:   5,
+	}
 
 	out, err := Tree(context.Background(), client, input)
 	if err != nil {

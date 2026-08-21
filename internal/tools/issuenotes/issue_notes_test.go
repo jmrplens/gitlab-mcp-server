@@ -190,9 +190,9 @@ func TestIssueNoteList_Pagination(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:       testProjectID,
-		IssueIID:        10,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+		ProjectID: testProjectID,
+		IssueIID:  10,
+		Page:      2, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf(fmtIssueNoteListErr, err)
@@ -768,11 +768,11 @@ func TestList_AllOptionalParams(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:       "42",
-		IssueIID:        10,
-		OrderBy:         "updated_at",
-		Sort:            "desc",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		ProjectID: "42",
+		IssueIID:  10,
+		OrderBy:   "updated_at",
+		Sort:      "desc",
+		Page:      2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
@@ -894,9 +894,9 @@ func TestList_KeysetPagination(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:             testProjectID,
-		IssueIID:              10,
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor99"},
+		ProjectID:  testProjectID,
+		IssueIID:   10,
+		Pagination: "keyset", PageToken: "cursor99",
 	})
 	if err != nil {
 		t.Fatalf(fmtIssueNoteListErr, err)

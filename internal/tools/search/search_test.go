@@ -102,7 +102,7 @@ func TestSearchCode_SearchType(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := Code(context.Background(), client, CodeInput{Query: "func main", TypeInput: TypeInput{SearchType: "zoekt"}})
+	out, err := Code(context.Background(), client, CodeInput{Query: "func main", SearchType: "zoekt"})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -849,70 +849,70 @@ func TestSearchHandlers_InvalidSearchType_ReturnValidationError(t *testing.T) {
 		{
 			name: "code",
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Code(ctx, client, CodeInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				_, err := Code(ctx, client, CodeInput{Query: "alpha", SearchType: "semantic"})
 				return err
 			},
 		},
 		{
 			name: "merge requests",
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := MergeRequests(ctx, client, MergeRequestsInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				_, err := MergeRequests(ctx, client, MergeRequestsInput{Query: "alpha", SearchType: "semantic"})
 				return err
 			},
 		},
 		{
 			name: "issues",
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Issues(ctx, client, IssuesInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				_, err := Issues(ctx, client, IssuesInput{Query: "alpha", SearchType: "semantic"})
 				return err
 			},
 		},
 		{
 			name: "commits",
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Commits(ctx, client, CommitsInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				_, err := Commits(ctx, client, CommitsInput{Query: "alpha", SearchType: "semantic"})
 				return err
 			},
 		},
 		{
 			name: "milestones",
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Milestones(ctx, client, MilestonesInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				_, err := Milestones(ctx, client, MilestonesInput{Query: "alpha", SearchType: "semantic"})
 				return err
 			},
 		},
 		{
 			name: "notes",
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Notes(ctx, client, NotesInput{ProjectID: "42", Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				_, err := Notes(ctx, client, NotesInput{ProjectID: "42", Query: "alpha", SearchType: "semantic"})
 				return err
 			},
 		},
 		{
 			name: "projects",
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Projects(ctx, client, ProjectsInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				_, err := Projects(ctx, client, ProjectsInput{Query: "alpha", SearchType: "semantic"})
 				return err
 			},
 		},
 		{
 			name: "snippets",
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Snippets(ctx, client, SnippetsInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				_, err := Snippets(ctx, client, SnippetsInput{Query: "alpha", SearchType: "semantic"})
 				return err
 			},
 		},
 		{
 			name: "users",
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Users(ctx, client, UsersInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				_, err := Users(ctx, client, UsersInput{Query: "alpha", SearchType: "semantic"})
 				return err
 			},
 		},
 		{
 			name: "wiki",
 			call: func(ctx context.Context, client *gitlabclient.Client) error {
-				_, err := Wiki(ctx, client, WikiInput{Query: "alpha", TypeInput: TypeInput{SearchType: "semantic"}})
+				_, err := Wiki(ctx, client, WikiInput{Query: "alpha", SearchType: "semantic"})
 				return err
 			},
 		},

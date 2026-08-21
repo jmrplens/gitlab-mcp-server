@@ -465,7 +465,7 @@ func createMergeableMRTemporaryProject(ctx context.Context, client *gitlabclient
 			Path:                  &path,
 			InitializeWithReadme:  &initializeWithReadme,
 			Visibility:            &visibility,
-			ApprovalsBeforeMerge:  &approvalsBeforeMerge,
+			ApprovalsBeforeMerge:  &approvalsBeforeMerge, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 			MergePipelinesEnabled: &mergePipelinesEnabled,
 			OnlyAllowMergeIfAllDiscussionsAreResolved: &onlyAllowMergeIfAllDiscussionsAreResolved,
 			OnlyAllowMergeIfAllStatusChecksPassed:     &onlyAllowMergeIfAllStatusChecksPassed,
@@ -535,7 +535,7 @@ func ensureJobTokenScopeProjectFixture(ctx context.Context, env FixtureContext) 
 
 func validateJobTokenScopeAllowlistTarget(ctx context.Context, client *gitlabclient.Client, sourceProjectID, targetProjectID int64) error {
 	projects, _, err := client.GL().JobTokenScope.GetProjectJobTokenInboundAllowList(sourceProjectID, &gl.GetJobTokenInboundAllowListOptions{
-		ListOptions: gl.ListOptions{PerPage: 100},
+		PerPage: 100,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return fmt.Errorf("validate job token allowlist project: %w", err)

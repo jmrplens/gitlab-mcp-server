@@ -461,8 +461,8 @@ func TestListAgents_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListAgents(t.Context(), client, ListAgentsInput{
-		ProjectID:       "1",
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+		ProjectID: "1",
+		Page:      1, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -488,9 +488,9 @@ func TestListAgentTokens_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListAgentTokens(t.Context(), client, ListAgentTokensInput{
-		ProjectID:       "1",
-		AgentID:         5,
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+		ProjectID: "1",
+		AgentID:   5,
+		Page:      1, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -525,10 +525,10 @@ func TestListAgents_KeysetAndOrdering(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"agent1","created_at":"2024-01-02T03:04:05Z","created_by_user_id":10,"config_project":{"id":99,"name":"cfg","path_with_namespace":"grp/cfg","created_at":"2023-01-01T00:00:00Z"}}]`)
 	}))
 	out, err := ListAgents(t.Context(), client, ListAgentsInput{
-		ProjectID:             "1",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
-		OrderBy:               "id",
-		Sort:                  "desc",
+		ProjectID:  "1",
+		Pagination: "keyset", PageToken: "42",
+		OrderBy: "id",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -569,11 +569,11 @@ func TestListAgentTokens_KeysetAndOrdering(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"tok","agent_id":5,"status":"active","created_at":"2024-02-03T04:05:06Z","created_by_user_id":11,"last_used_at":"2024-03-04T05:06:07Z"}]`)
 	}))
 	out, err := ListAgentTokens(t.Context(), client, ListAgentTokensInput{
-		ProjectID:             "1",
-		AgentID:               5,
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
-		OrderBy:               "id",
-		Sort:                  "asc",
+		ProjectID:  "1",
+		AgentID:    5,
+		Pagination: "keyset", PageToken: "7",
+		OrderBy: "id",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

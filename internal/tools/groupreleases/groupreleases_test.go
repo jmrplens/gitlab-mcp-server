@@ -512,10 +512,10 @@ func TestList_OrderingAndKeyset(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		GroupID:               "mygroup",
-		OrderBy:               "released_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+		GroupID:    "mygroup",
+		OrderBy:    "released_at",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

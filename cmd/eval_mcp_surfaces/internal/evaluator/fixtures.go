@@ -773,7 +773,7 @@ func (p *liveFixturePreparer) deleteEvaluationProjectHooks(ctx context.Context) 
 	deleted := 0
 	for page := int64(1); ; {
 		hooks, resp, err := p.client.GL().Projects.ListProjectHooks(p.state.ProjectID, &gl.ListProjectHooksOptions{
-			ListOptions: gl.ListOptions{Page: page, PerPage: 100},
+			Page: page, PerPage: 100,
 		}, gl.WithContext(ctx))
 		if err != nil {
 			return deleted, err
@@ -998,7 +998,7 @@ func (p *liveFixturePreparer) ensurePackage(ctx context.Context) error {
 		PackageName: new(liveFixturePackageName),
 		OrderBy:     new("created_at"),
 		Sort:        new("desc"),
-		ListOptions: gl.ListOptions{PerPage: 1},
+		PerPage:     1,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return err
@@ -1095,7 +1095,7 @@ func (p *liveFixturePreparer) ensurePipelineSchedules(ctx context.Context) error
 // cleanupPipelineSchedules removes cleanup pipeline schedules fixture resources for liveFixturePreparer when present.
 func (p *liveFixturePreparer) cleanupPipelineSchedules(ctx context.Context) error {
 	schedules, _, err := p.client.GL().PipelineSchedules.ListPipelineSchedules(p.state.ProjectID, &gl.ListPipelineSchedulesOptions{
-		ListOptions: gl.ListOptions{PerPage: 100},
+		PerPage: 100,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return err
@@ -1204,7 +1204,7 @@ func (p *liveFixturePreparer) ensureIssueAwardEmoji(ctx context.Context, name st
 	if err == nil {
 		return award.ID, nil
 	}
-	awards, _, listErr := p.client.GL().AwardEmoji.ListIssueAwardEmoji(p.state.ProjectID, p.state.IssueIID, &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
+	awards, _, listErr := p.client.GL().AwardEmoji.ListIssueAwardEmoji(p.state.ProjectID, p.state.IssueIID, &gl.ListAwardEmojiOptions{PerPage: 100}, gl.WithContext(ctx))
 	if listErr != nil {
 		return 0, listErr
 	}
@@ -1216,7 +1216,7 @@ func (p *liveFixturePreparer) ensureMergeRequestAwardEmoji(ctx context.Context, 
 	if err == nil {
 		return award.ID, nil
 	}
-	awards, _, listErr := p.client.GL().AwardEmoji.ListMergeRequestAwardEmoji(p.state.ProjectID, p.state.MergeRequestIID, &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
+	awards, _, listErr := p.client.GL().AwardEmoji.ListMergeRequestAwardEmoji(p.state.ProjectID, p.state.MergeRequestIID, &gl.ListAwardEmojiOptions{PerPage: 100}, gl.WithContext(ctx))
 	if listErr != nil {
 		return 0, listErr
 	}
@@ -1299,7 +1299,7 @@ func (p *liveFixturePreparer) ensureFixtureMergeRequest(ctx context.Context, sou
 		State:        &open,
 		SourceBranch: &sourceBranch,
 		TargetBranch: new(defaultRef),
-		ListOptions:  gl.ListOptions{PerPage: 1},
+		PerPage:      1,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, err
@@ -1356,7 +1356,7 @@ func (p *liveFixturePreparer) closeOpenMergeRequestsForBranch(ctx context.Contex
 		State:        &open,
 		SourceBranch: &sourceBranch,
 		TargetBranch: new(p.defaultRef()),
-		ListOptions:  gl.ListOptions{PerPage: 100},
+		PerPage:      100,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return err
@@ -1470,7 +1470,7 @@ func (p *liveFixturePreparer) waitForPipelineJobs(ctx context.Context, pipelineI
 	deadline := time.Now().Add(8 * time.Minute)
 	var lastStatuses []string
 	for time.Now().Before(deadline) {
-		jobs, _, err := p.client.GL().Jobs.ListPipelineJobs(p.state.ProjectID, pipelineID, &gl.ListJobsOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
+		jobs, _, err := p.client.GL().Jobs.ListPipelineJobs(p.state.ProjectID, pipelineID, &gl.ListJobsOptions{PerPage: 100}, gl.WithContext(ctx))
 		if err != nil {
 			return err
 		}

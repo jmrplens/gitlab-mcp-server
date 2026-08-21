@@ -128,7 +128,7 @@ func TestShapeConverters_SingleObjects(t *testing.T) {
 		&LicenseOutput{Key: "mit", Name: "MIT", Nickname: "n", HTMLURL: "h", SourceURL: "s"})
 
 	checkEqual(t, "containerExpirationPolicyOutput",
-		containerExpirationPolicyOutput(&gl.ContainerExpirationPolicy{Cadence: "1d", KeepN: 5, OlderThan: "30d", NameRegexDelete: "d", NameRegexKeep: "k", Enabled: true, NextRunAt: &now, NameRegex: "r"}),
+		containerExpirationPolicyOutput(&gl.ContainerExpirationPolicy{Cadence: "1d", KeepN: 5, OlderThan: "30d", NameRegexDelete: "d", NameRegexKeep: "k", Enabled: true, NextRunAt: &now, NameRegex: "r"}), //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 		&ContainerExpirationPolicyOutput{Cadence: "1d", KeepN: 5, OlderThan: "30d", NameRegexDelete: "d", NameRegexKeep: "k", Enabled: true, NextRunAt: rfc, NameRegex: "r"})
 }
 
@@ -205,9 +205,9 @@ func TestToOutput_NestedObjects(t *testing.T) {
 		SharedWithGroups:          []gl.ProjectSharedWithGroup{{GroupID: 9}},
 		License:                   &gl.ProjectLicense{Key: "mit"},
 		CustomAttributes:          []*gl.CustomAttribute{{Key: "k", Value: "v"}},
-		MarkedForDeletionAt:       &delAt,
+		MarkedForDeletionAt:       &delAt, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 		ContainerExpirationPolicy: &gl.ContainerExpirationPolicy{Cadence: "1d"},
-		TagList:                   []string{"t1"},
+		TagList:                   []string{"t1"}, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 		IssuesAccessLevel:         gl.EnabledAccessControl,
 		Mirror:                    true,
 		PublicJobs:                true,

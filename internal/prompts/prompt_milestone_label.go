@@ -87,8 +87,8 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 	milestoneTitle := req.Params.Arguments[argMilestone]
 
 	opts := &gl.ListMilestonesOptions{
-		State:       new("active"),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:   new("active"),
+		PerPage: maxListItems,
 	}
 	if milestoneTitle != "" {
 		opts.Title = new(milestoneTitle)
@@ -111,10 +111,10 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 		fmt.Fprintf(&b, "## %s\n\n", ms.Title)
 
 		issues, _, _ := client.GL().Milestones.GetMilestoneIssues(projectID, ms.ID, &gl.GetMilestoneIssuesOptions{
-			ListOptions: gl.ListOptions{PerPage: maxListItems},
+			PerPage: maxListItems,
 		}, gl.WithContext(ctx))
 		mrs, _, _ := client.GL().Milestones.GetMilestoneMergeRequests(projectID, ms.ID, &gl.GetMilestoneMergeRequestsOptions{
-			ListOptions: gl.ListOptions{PerPage: maxListItems},
+			PerPage: maxListItems,
 		}, gl.WithContext(ctx))
 
 		closedIssues, openIssues := countIssueStates(issues)
@@ -165,7 +165,7 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 	}
 
 	labels, _, err := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("label_distribution: %w", err)
@@ -245,8 +245,8 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 	}
 
 	milestones, _, err := client.GL().GroupMilestones.ListGroupMilestones(groupID, &gl.ListGroupMilestonesOptions{
-		State:       new("active"),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:   new("active"),
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("group_milestone_progress: %w", err)
@@ -264,10 +264,10 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 		fmt.Fprintf(&b, "## %s\n\n", ms.Title)
 
 		issues, _, _ := client.GL().GroupMilestones.GetGroupMilestoneIssues(groupID, ms.ID, &gl.GetGroupMilestoneIssuesOptions{
-			ListOptions: gl.ListOptions{PerPage: maxListItems},
+			PerPage: maxListItems,
 		}, gl.WithContext(ctx))
 		mrs, _, _ := client.GL().GroupMilestones.GetGroupMilestoneMergeRequests(groupID, ms.ID, &gl.GetGroupMilestoneMergeRequestsOptions{
-			ListOptions: gl.ListOptions{PerPage: maxListItems},
+			PerPage: maxListItems,
 		}, gl.WithContext(ctx))
 
 		closedIssues, _ := countIssueStates(issues)
@@ -314,7 +314,7 @@ func handleProjectContributors(ctx context.Context, client *gitlabclient.Client,
 	}
 
 	contributors, _, err := client.GL().Repositories.Contributors(projectID, &gl.ListContributorsOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("project_contributors: %w", err)

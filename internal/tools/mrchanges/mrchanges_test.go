@@ -767,13 +767,13 @@ func TestMRChangesGet_PaginationAndOptions(t *testing.T) {
 	}))
 
 	out, err := Get(context.Background(), client, GetInput{
-		ProjectID:             "42",
-		MRIID:                 1,
-		Unidiff:               true,
-		OrderBy:               "id",
-		Sort:                  "desc",
-		PaginationInput:       toolutil.PaginationInput{Page: 2, PerPage: 50},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+		ProjectID: "42",
+		MRIID:     1,
+		Unidiff:   true,
+		OrderBy:   "id",
+		Sort:      "desc",
+		Page:      2, PerPage: 50,
+		Pagination: "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf("Get() unexpected error: %v", err)
@@ -805,12 +805,12 @@ func TestListDiffVersions_PaginationAndOptions(t *testing.T) {
 	}))
 
 	_, err := ListDiffVersions(context.Background(), client, DiffVersionsListInput{
-		ProjectID:             "42",
-		MRIID:                 1,
-		OrderBy:               "id",
-		Sort:                  "asc",
-		PaginationInput:       toolutil.PaginationInput{Page: 3, PerPage: 25},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cur9"},
+		ProjectID: "42",
+		MRIID:     1,
+		OrderBy:   "id",
+		Sort:      "asc",
+		Page:      3, PerPage: 25,
+		Pagination: "keyset", PageToken: "cur9",
 	})
 	if err != nil {
 		t.Fatalf("ListDiffVersions() unexpected error: %v", err)

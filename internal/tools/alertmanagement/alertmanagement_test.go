@@ -366,9 +366,9 @@ func TestListMetricImages_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListMetricImages(t.Context(), client, ListMetricImagesInput{
-		ProjectID:       "1",
-		AlertIID:        5,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+		ProjectID: "1",
+		AlertIID:  5,
+		Page:      2, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -397,11 +397,11 @@ func TestListMetricImages_KeysetAndCreatedAt(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListMetricImages(t.Context(), client, ListMetricImagesInput{
-		ProjectID:             "1",
-		AlertIID:              5,
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+		ProjectID:  "1",
+		AlertIID:   5,
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "42",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

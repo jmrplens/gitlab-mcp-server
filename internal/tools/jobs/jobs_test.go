@@ -1040,10 +1040,10 @@ func TestJobList_WithPaginationAndIncludeRetried(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:       "42",
-		PipelineID:      10,
-		IncludeRetried:  true,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		ProjectID:      "42",
+		PipelineID:     10,
+		IncludeRetried: true,
+		Page:           2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1296,10 +1296,10 @@ func TestListProject_WithScopeAndPagination(t *testing.T) {
 	}))
 
 	out, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID:       "42",
-		Scope:           []string{"running", "failed"},
-		IncludeRetried:  true,
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+		ProjectID:      "42",
+		Scope:          []string{"running", "failed"},
+		IncludeRetried: true,
+		Page:           1, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1362,14 +1362,14 @@ func TestListBridges_WithScopeAndPagination(t *testing.T) {
 	}))
 
 	out, err := ListBridges(context.Background(), client, BridgeListInput{
-		ProjectID:             "42",
-		PipelineID:            10,
-		Scope:                 []string{"success"},
-		IncludeRetried:        true,
-		OrderBy:               "id",
-		Sort:                  "desc",
-		PaginationInput:       toolutil.PaginationInput{Page: 1, PerPage: 5},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+		ProjectID:      "42",
+		PipelineID:     10,
+		Scope:          []string{"success"},
+		IncludeRetried: true,
+		OrderBy:        "id",
+		Sort:           "desc",
+		Page:           1, PerPage: 5,
+		Pagination: "keyset", PageToken: "tok",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

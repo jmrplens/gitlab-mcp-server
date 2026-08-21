@@ -75,10 +75,10 @@ func TestList_OrderBySortKeyset(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:             "42",
-		OrderBy:               "name",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+		ProjectID:  "42",
+		OrderBy:    "name",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

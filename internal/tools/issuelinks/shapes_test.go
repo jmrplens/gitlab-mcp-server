@@ -146,7 +146,7 @@ func TestIssueRefOutput_Full(t *testing.T) {
 		IssueType:    new("incident"),
 		Author:       &gl.IssueAuthor{ID: 1, Username: "ann"},
 		Assignees:    []*gl.IssueAssignee{{ID: 2, Username: "bob"}, nil},
-		Assignee:     &gl.IssueAssignee{ID: 2, Username: "bob"},
+		Assignee:     &gl.IssueAssignee{ID: 2, Username: "bob"}, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 		ClosedBy:     &gl.IssueCloser{ID: 3, Username: "carol"},
 		Milestone:    &gl.Milestone{ID: 5, Title: "M1"},
 		References:   &gl.IssueReferences{Short: "s", Relative: "r", Full: "f"},

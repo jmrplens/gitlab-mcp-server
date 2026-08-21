@@ -103,7 +103,8 @@ func TestMiddleware_ResourcesRead_TTLDependsOnURI(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			res, err := cachehints.Middleware()(stubHandler(&mcp.ReadResourceResult{}))(
-				context.Background(), "resources/read", tt.req)
+				context.Background(), "resources/read", tt.req,
+			)
 			if err != nil {
 				t.Fatalf("handler: %v", err)
 			}

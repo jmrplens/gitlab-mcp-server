@@ -86,14 +86,14 @@ func ChangeApprovalConfig(ctx context.Context, client *gitlabclient.Client, inpu
 		return ApprovalConfigOutput{}, errors.New("projectChangeApprovalConfig: project_id is required")
 	}
 	opts := &gl.ChangeApprovalConfigurationOptions{
-		ApprovalsBeforeMerge:                      input.ApprovalsBeforeMerge,
+		ApprovalsBeforeMerge:                      input.ApprovalsBeforeMerge, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 		ResetApprovalsOnPush:                      input.ResetApprovalsOnPush,
 		DisableOverridingApproversPerMergeRequest: input.DisableOverridingApproversPerMergeRequest,
 		MergeRequestsAuthorApproval:               input.MergeRequestsAuthorApproval,
 		MergeRequestsDisableCommittersApproval:    input.MergeRequestsDisableCommittersApproval,
 		RequireReauthenticationToApprove:          input.RequireReauthenticationToApprove,
 		SelectiveCodeOwnerRemovals:                input.SelectiveCodeOwnerRemovals,
-		RequirePasswordToApprove:                  input.RequirePasswordToApprove,
+		RequirePasswordToApprove:                  input.RequirePasswordToApprove, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 	}
 	approvals, _, err := client.GL().Projects.ChangeApprovalConfiguration(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {

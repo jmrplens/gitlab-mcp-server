@@ -287,13 +287,13 @@ func TestTodoList_AllFilters(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		Action:          "assigned",
-		AuthorID:        5,
-		ProjectID:       10,
-		GroupID:         3,
-		State:           "pending",
-		Type:            "Issue",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 30},
+		Action:    "assigned",
+		AuthorID:  5,
+		ProjectID: 10,
+		GroupID:   3,
+		State:     "pending",
+		Type:      "Issue",
+		Page:      2, PerPage: 30,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -663,9 +663,9 @@ func TestList_OrderBySort(t *testing.T) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{Page: "1", Total: "0", TotalPages: "1", PerPage: "20"})
 	}))
 	_, err := List(context.Background(), client, ListInput{
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

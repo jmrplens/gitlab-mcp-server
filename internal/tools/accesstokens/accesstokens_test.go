@@ -1469,9 +1469,11 @@ func TestProjectList_WithPagination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, jsonNotFound)
 	}))
 
-	input := ProjectListInput{ProjectID: "42"}
-	input.Page = 2
-	input.PerPage = 5
+	input := ProjectListInput{
+		ProjectID: "42",
+		Page:      2,
+		PerPage:   5,
+	}
 	out, err := ProjectList(context.Background(), client, input)
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1521,9 +1523,11 @@ func TestGroupList_WithPagination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, jsonNotFound)
 	}))
 
-	input := GroupListInput{GroupID: "10"}
-	input.Page = 1
-	input.PerPage = 10
+	input := GroupListInput{
+		GroupID: "10",
+		Page:    1,
+		PerPage: 10,
+	}
 	out, err := GroupList(context.Background(), client, input)
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1568,9 +1572,10 @@ func TestPersonalList_WithPagination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusNotFound, jsonNotFound)
 	}))
 
-	input := PersonalListInput{}
-	input.Page = 3
-	input.PerPage = 5
+	input := PersonalListInput{
+		Page:    3,
+		PerPage: 5,
+	}
 	out, err := PersonalList(context.Background(), client, input)
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -2032,10 +2037,10 @@ func TestProjectList_WithOrderingAndKeyset(t *testing.T) {
 	}))
 
 	_, err := ProjectList(context.Background(), client, ProjectListInput{
-		ProjectID:             "42",
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "abc"},
+		ProjectID:  "42",
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "abc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -2075,18 +2080,18 @@ func TestGroupList_WithAllFilters(t *testing.T) {
 	}))
 
 	_, err := GroupList(context.Background(), client, GroupListInput{
-		GroupID:               "10",
-		Search:                "ci-bot",
-		Revoked:               &revoked,
-		CreatedAfter:          "2024-01-01",
-		CreatedBefore:         "2024-12-31",
-		ExpiresAfter:          "2025-01-01",
-		ExpiresBefore:         "2025-12-31",
-		LastUsedAfter:         "2024-06-01",
-		LastUsedBefore:        "2024-06-30",
-		OrderBy:               "created_at",
-		Sort:                  "created_desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "xyz"},
+		GroupID:        "10",
+		Search:         "ci-bot",
+		Revoked:        &revoked,
+		CreatedAfter:   "2024-01-01",
+		CreatedBefore:  "2024-12-31",
+		ExpiresAfter:   "2025-01-01",
+		ExpiresBefore:  "2025-12-31",
+		LastUsedAfter:  "2024-06-01",
+		LastUsedBefore: "2024-06-30",
+		OrderBy:        "created_at",
+		Sort:           "created_desc",
+		Pagination:     "keyset", PageToken: "xyz",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -2141,16 +2146,16 @@ func TestPersonalList_WithAllFilters(t *testing.T) {
 	}))
 
 	_, err := PersonalList(context.Background(), client, PersonalListInput{
-		Revoked:               &revoked,
-		CreatedAfter:          "2024-01-01",
-		CreatedBefore:         "2024-12-31",
-		ExpiresAfter:          "2025-01-01",
-		ExpiresBefore:         "2025-12-31",
-		LastUsedAfter:         "2024-06-01",
-		LastUsedBefore:        "2024-06-30",
-		OrderBy:               "created_at",
-		Sort:                  "name_asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "pat-cursor"},
+		Revoked:        &revoked,
+		CreatedAfter:   "2024-01-01",
+		CreatedBefore:  "2024-12-31",
+		ExpiresAfter:   "2025-01-01",
+		ExpiresBefore:  "2025-12-31",
+		LastUsedAfter:  "2024-06-01",
+		LastUsedBefore: "2024-06-30",
+		OrderBy:        "created_at",
+		Sort:           "name_asc",
+		Pagination:     "keyset", PageToken: "pat-cursor",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

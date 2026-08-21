@@ -112,7 +112,7 @@ func TestUpdateGlobalSettings_Success(t *testing.T) {
 
 	tr := true
 	out, err := UpdateGlobalSettings(t.Context(), client, UpdateGlobalInput{
-		eventFields: eventFields{Level: "custom", NewIssue: &tr},
+		Level: "custom", NewIssue: &tr,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -231,7 +231,7 @@ func TestUpdateGlobalSettings_APIError(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusBadRequest, `{"message":"bad"}`)
 	}))
-	_, err := UpdateGlobalSettings(t.Context(), client, UpdateGlobalInput{eventFields: eventFields{Level: "watch"}})
+	_, err := UpdateGlobalSettings(t.Context(), client, UpdateGlobalInput{Level: "watch"})
 	if err == nil {
 		t.Fatal(errExpectedErr)
 	}
@@ -244,7 +244,7 @@ func TestUpdateSettingsForProject_Success(t *testing.T) {
 	}))
 	tr := true
 	out, err := UpdateSettingsForProject(t.Context(), client, UpdateProjectInput{
-		ProjectID: "proj", eventFields: eventFields{Level: "custom", NewIssue: &tr},
+		ProjectID: "proj", Level: "custom", NewIssue: &tr,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -270,7 +270,7 @@ func TestUpdateSettingsForGroup_Success(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		testutil.RespondJSON(w, http.StatusOK, covSettingsJSON)
 	}))
-	out, err := UpdateSettingsForGroup(t.Context(), client, UpdateGroupInput{GroupID: "grp", eventFields: eventFields{Level: "watch"}})
+	out, err := UpdateSettingsForGroup(t.Context(), client, UpdateGroupInput{GroupID: "grp", Level: "watch"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

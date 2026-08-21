@@ -501,7 +501,7 @@ func TestListInstance_WithPagination(t *testing.T) {
 	}))
 
 	out, err := ListInstance(context.Background(), client, ListInstanceInput{
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+		Page: 2, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

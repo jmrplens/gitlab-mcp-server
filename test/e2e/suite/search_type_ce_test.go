@@ -49,9 +49,9 @@ func TestSearchType_BasicSearchWorks(t *testing.T) {
 
 	t.Run("IndividualCodeBasic", func(t *testing.T) {
 		out, err := callToolOn[search.CodeOutput](ctx, sess.individual, "gitlab_search_code", search.CodeInput{
-			ProjectID: proj.pidOf(),
-			Query:     searchToken,
-			TypeInput: search.TypeInput{SearchType: "basic"},
+			ProjectID:  proj.pidOf(),
+			Query:      searchToken,
+			SearchType: "basic",
 		})
 		requireNoError(t, err, "search code with basic search_type")
 		requireTruef(t, len(out.Blobs) >= 1, "expected >=1 code result with basic search_type, got %d", len(out.Blobs))
@@ -95,8 +95,8 @@ func TestSearchType_InvalidValueFails(t *testing.T) {
 
 	t.Run("IndividualInvalidSearchType", func(t *testing.T) {
 		_, err := callToolOn[search.CodeOutput](ctx, sess.individual, "gitlab_search_code", search.CodeInput{
-			Query:     "anything",
-			TypeInput: search.TypeInput{SearchType: "semantic"},
+			Query:      "anything",
+			SearchType: "semantic",
 		})
 		requireSearchTypeError(t, err)
 	})

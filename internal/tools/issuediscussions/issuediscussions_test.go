@@ -180,12 +180,12 @@ func TestList_AppliesListAndKeysetOptions(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	_, err := List(t.Context(), client, ListInput{
-		ProjectID:             "42",
-		IssueIID:              10,
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		PaginationInput:       toolutil.PaginationInput{Page: 3, PerPage: 25},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-99"},
+		ProjectID: "42",
+		IssueIID:  10,
+		OrderBy:   "created_at",
+		Sort:      "desc",
+		Page:      3, PerPage: 25,
+		Pagination: "keyset", PageToken: "cursor-99",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -714,9 +714,9 @@ func TestToListOutput_MultipleDiscussions(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	out, err := List(t.Context(), client, ListInput{
-		ProjectID:       "42",
-		IssueIID:        10,
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2},
+		ProjectID: "42",
+		IssueIID:  10,
+		Page:      1, PerPage: 2,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

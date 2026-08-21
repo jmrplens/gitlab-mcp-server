@@ -406,11 +406,12 @@ func TestListProject_PaginationParams(t *testing.T) {
 		ProjectID: toolutil.StringOrInt("42"),
 		OrderBy:   "id",
 		Sort:      "desc",
+
+		Page:       2,
+		PerPage:    5,
+		Pagination: "keyset",
+		PageToken:  "100",
 	}
-	in.Page = 2
-	in.PerPage = 5
-	in.Pagination = "keyset"
-	in.PageToken = "100"
 	out, err := ListProject(context.Background(), client, in)
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -474,11 +475,12 @@ func TestListGroup_PaginationParams(t *testing.T) {
 		GroupID: toolutil.StringOrInt("10"),
 		OrderBy: "id",
 		Sort:    "asc",
+
+		Page:       3,
+		PerPage:    10,
+		Pagination: "keyset",
+		PageToken:  "200",
 	}
-	in.Page = 3
-	in.PerPage = 10
-	in.Pagination = "keyset"
-	in.PageToken = "200"
 	out, err := ListGroup(context.Background(), client, in)
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

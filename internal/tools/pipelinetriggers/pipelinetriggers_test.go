@@ -359,10 +359,10 @@ func TestListTriggers_OrderBySort(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"description":"t","token":"a"}]`)
 	}))
 	_, err := ListTriggers(context.Background(), client, ListInput{
-		ProjectID:             "1",
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "5"},
+		ProjectID:  "1",
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "5",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -581,8 +581,8 @@ func TestListTriggers_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListTriggers(context.Background(), client, ListInput{
-		ProjectID:       "1",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 2},
+		ProjectID: "1",
+		Page:      2, PerPage: 2,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

@@ -238,8 +238,8 @@ func TestListExportStatus_WithPagination(t *testing.T) {
 		})
 	}))
 	out, err := ListExportStatus(t.Context(), client, ListExportStatusInput{
-		GroupID:         "10",
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2},
+		GroupID: "10",
+		Page:    1, PerPage: 2,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

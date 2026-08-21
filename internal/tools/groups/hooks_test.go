@@ -188,20 +188,18 @@ func TestAddHook_Success(t *testing.T) {
 
 	push := true
 	out, err := AddHook(context.Background(), client, AddHookInput{
-		GroupID: "99",
-		HookInput: HookInput{
-			URL:                       testHookURL,
-			SigningToken:              "signing-secret",
-			PushEvents:                &push,
-			MilestoneEvents:           &push,
-			FeatureFlagEvents:         &push,
-			VulnerabilityEvents:       &push,
-			EmojiEvents:               &push,
-			ResourceAccessTokenEvents: &push,
-			ProjectEvents:             &push,
-			PushEventsBranchFilter:    "main",
-			BranchFilterStrategy:      "wildcard",
-		},
+		GroupID:                   "99",
+		URL:                       testHookURL,
+		SigningToken:              "signing-secret",
+		PushEvents:                &push,
+		MilestoneEvents:           &push,
+		FeatureFlagEvents:         &push,
+		VulnerabilityEvents:       &push,
+		EmojiEvents:               &push,
+		ResourceAccessTokenEvents: &push,
+		ProjectEvents:             &push,
+		PushEventsBranchFilter:    "main",
+		BranchFilterStrategy:      "wildcard",
 	})
 	if err != nil {
 		t.Fatalf("AddHook() unexpected error: %v", err)
@@ -229,8 +227,8 @@ func TestAddHook_APIError(t *testing.T) {
 	}))
 
 	_, err := AddHook(context.Background(), client, AddHookInput{
-		GroupID:   "99",
-		HookInput: HookInput{URL: "https://bad.example.com"},
+		GroupID: "99",
+		URL:     "https://bad.example.com",
 	})
 	if err == nil {
 		t.Fatal("AddHook() expected error, got nil")
@@ -263,15 +261,13 @@ func TestEditHook_Success(t *testing.T) {
 
 	enabled := true
 	out, err := EditHook(context.Background(), client, EditHookInput{
-		GroupID: "99",
-		HookID:  10,
-		HookInput: HookInput{
-			URL:                 testHookURL,
-			SigningToken:        "new-signing-secret",
-			MilestoneEvents:     &enabled,
-			FeatureFlagEvents:   &enabled,
-			VulnerabilityEvents: &enabled,
-		},
+		GroupID:             "99",
+		HookID:              10,
+		URL:                 testHookURL,
+		SigningToken:        "new-signing-secret",
+		MilestoneEvents:     &enabled,
+		FeatureFlagEvents:   &enabled,
+		VulnerabilityEvents: &enabled,
 	})
 	if err != nil {
 		t.Fatalf("EditHook() unexpected error: %v", err)
@@ -295,9 +291,9 @@ func TestEditHook_APIError(t *testing.T) {
 	}))
 
 	_, err := EditHook(context.Background(), client, EditHookInput{
-		GroupID:   "99",
-		HookID:    999,
-		HookInput: HookInput{URL: "https://example.com"},
+		GroupID: "99",
+		HookID:  999,
+		URL:     "https://example.com",
 	})
 	if err == nil {
 		t.Fatal("EditHook() expected error, got nil")
@@ -876,12 +872,10 @@ func TestHook_AuditCustomFields(t *testing.T) {
 	}))
 
 	out, err := AddHook(context.Background(), client, AddHookInput{
-		GroupID: "99",
-		HookInput: HookInput{
-			URL:                   "https://example.com/hook",
-			CustomWebhookTemplate: `{"a":1}`,
-			CustomHeaders:         []HookCustomHeaderInput{{Key: "X-Token", Value: "secret"}},
-		},
+		GroupID:               "99",
+		URL:                   "https://example.com/hook",
+		CustomWebhookTemplate: `{"a":1}`,
+		CustomHeaders:         []HookCustomHeaderInput{{Key: "X-Token", Value: "secret"}},
 	})
 	if err != nil {
 		t.Fatalf("AddHook() unexpected error: %v", err)

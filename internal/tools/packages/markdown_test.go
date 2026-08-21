@@ -209,8 +209,8 @@ func TestFormatGroupListMarkdown_EmptyPackages(t *testing.T) {
 func TestFormatGroupListMarkdown_RendersProjectAndHint(t *testing.T) {
 	got := FormatGroupListMarkdown(GroupListOutput{
 		Packages: []GroupListItem{
-			{ListItem: ListItem{ID: 1, Name: "pkg-a", Version: "1.0.0", PackageType: "generic", Status: "default"}, ProjectID: 7, ProjectPath: "grp/proj"},
-			{ListItem: ListItem{ID: 2, Name: "pkg-b", Version: "2.0.0", PackageType: "npm", Status: "default"}, ProjectID: 8},
+			{ID: 1, Name: "pkg-a", Version: "1.0.0", PackageType: "generic", Status: "default", ProjectID: 7, ProjectPath: "grp/proj"},
+			{ID: 2, Name: "pkg-b", Version: "2.0.0", PackageType: "npm", Status: "default", ProjectID: 8},
 		},
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})

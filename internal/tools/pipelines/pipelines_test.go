@@ -732,11 +732,12 @@ func TestBuildListOpts_AllFilters(t *testing.T) {
 		CreatedBefore: "2026-12-31T23:59:59Z",
 		UpdatedAfter:  "2026-06-01T00:00:00Z",
 		UpdatedBefore: "2026-12-31T00:00:00Z",
+
+		Page:       2,
+		PerPage:    50,
+		Pagination: "keyset",
+		PageToken:  "cursor-123",
 	}
-	input.Page = 2
-	input.PerPage = 50
-	input.Pagination = "keyset"
-	input.PageToken = "cursor-123"
 
 	opts := buildListOpts(input)
 	assertPipelineListStringFilters(t, opts)
@@ -2054,9 +2055,11 @@ func TestGetLatest_FallbackKeysetAndFilters(t *testing.T) {
 		}
 	}))
 
-	input := GetLatestInput{ProjectID: "42", Status: "success", Source: "push"}
-	input.Pagination = "keyset"
-	input.PageToken = "cur-9"
+	input := GetLatestInput{
+		ProjectID: "42", Status: "success", Source: "push",
+		Pagination: "keyset",
+		PageToken:  "cur-9",
+	}
 	out, err := GetLatest(context.Background(), client, input)
 	if err != nil {
 		t.Fatalf("GetLatest() unexpected error: %v", err)

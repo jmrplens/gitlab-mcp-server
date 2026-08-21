@@ -142,8 +142,8 @@ func TestListPATs_WithPagination(t *testing.T) {
 	}))
 
 	_, err := ListPATs(context.Background(), client, ListPATsInput{
-		GroupID:         toolutil.StringOrInt("mygroup"),
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+		GroupID: toolutil.StringOrInt("mygroup"),
+		Page:    2, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("ListPATs() error: %v", err)
@@ -510,8 +510,8 @@ func TestListSSHKeys_WithPagination(t *testing.T) {
 	}))
 
 	_, err := ListSSHKeys(context.Background(), client, ListSSHKeysInput{
-		GroupID:         toolutil.StringOrInt("mygroup"),
-		PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 5},
+		GroupID: toolutil.StringOrInt("mygroup"),
+		Page:    3, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf("ListSSHKeys() error: %v", err)
@@ -662,10 +662,8 @@ func TestListPATs_WithDateAndKeysetFilters(t *testing.T) {
 		LastUsedBefore: "2026-11-30",
 		OrderBy:        "created_at",
 		Sort:           "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{
-			Pagination: "keyset",
-			PageToken:  "abc123",
-		},
+		Pagination:     "keyset",
+		PageToken:      "abc123",
 	})
 	if err != nil {
 		t.Fatalf("ListPATs() error: %v", err)
@@ -724,10 +722,8 @@ func TestListSSHKeys_WithDateAndKeysetFilters(t *testing.T) {
 		ExpiresBefore: "2026-10-31",
 		OrderBy:       "id",
 		Sort:          "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{
-			Pagination: "keyset",
-			PageToken:  "xyz789",
-		},
+		Pagination:    "keyset",
+		PageToken:     "xyz789",
 	})
 	if err != nil {
 		t.Fatalf("ListSSHKeys() error: %v", err)

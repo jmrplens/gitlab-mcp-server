@@ -118,7 +118,7 @@ func TestTagList_PagePerPage(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	})
 	client := testutil.NewTestClient(t, mux)
-	_, err := List(context.Background(), client, ListInput{ProjectID: "1", PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10}})
+	_, err := List(context.Background(), client, ListInput{ProjectID: "1", Page: 2, PerPage: 10})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -21,7 +21,6 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -532,11 +531,11 @@ func TestFileList_OrderingAndKeyset(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	_, err := FileList(context.Background(), client, FileListInput{
-		ProjectID:             "1",
-		PackageID:             "10",
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "20"},
+		ProjectID:  "1",
+		PackageID:  "10",
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "20",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -563,8 +562,8 @@ func TestList_KeysetPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:             "1",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "55"},
+		ProjectID:  "1",
+		Pagination: "keyset", PageToken: "55",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

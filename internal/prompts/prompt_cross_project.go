@@ -41,9 +41,9 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 	// MRs authored by the user
 	authoredMRs, _, errAuthored := client.GL().MergeRequests.ListMergeRequests(
 		&gl.ListMergeRequestsOptions{
-			AuthorID:    new(userID),
-			State:       new("opened"),
-			ListOptions: gl.ListOptions{PerPage: maxListItems},
+			AuthorID: new(userID),
+			State:    new("opened"),
+			PerPage:  maxListItems,
 		}, gl.WithContext(ctx),
 	)
 	if errAuthored != nil {
@@ -53,9 +53,9 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 	// MRs assigned to the user
 	assignedMRs, _, errAssigned := client.GL().MergeRequests.ListMergeRequests(
 		&gl.ListMergeRequestsOptions{
-			AssigneeID:  gl.AssigneeID(userID),
-			State:       new("opened"),
-			ListOptions: gl.ListOptions{PerPage: maxListItems},
+			AssigneeID: gl.AssigneeID(userID),
+			State:      new("opened"),
+			PerPage:    maxListItems,
 		}, gl.WithContext(ctx),
 	)
 	if errAssigned != nil {
@@ -132,9 +132,9 @@ func handleMyPendingReviews(ctx context.Context, client *gitlabclient.Client, re
 
 	mrs, _, err := client.GL().MergeRequests.ListMergeRequests(
 		&gl.ListMergeRequestsOptions{
-			ReviewerID:  gl.ReviewerID(userID),
-			State:       new("opened"),
-			ListOptions: gl.ListOptions{PerPage: maxListItems},
+			ReviewerID: gl.ReviewerID(userID),
+			State:      new("opened"),
+			PerPage:    maxListItems,
 		}, gl.WithContext(ctx),
 	)
 	if err != nil {
@@ -190,9 +190,9 @@ func handleMyIssues(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 
 	issues, _, err := client.GL().Issues.ListIssues(
 		&gl.ListIssuesOptions{
-			AssigneeID:  gl.AssigneeID(userID),
-			State:       new(state),
-			ListOptions: gl.ListOptions{PerPage: maxListItems},
+			AssigneeID: gl.AssigneeID(userID),
+			State:      new(state),
+			PerPage:    maxListItems,
 		}, gl.WithContext(ctx),
 	)
 	if err != nil {
@@ -270,7 +270,7 @@ func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, r
 			AuthorID:     new(userID),
 			State:        new("merged"),
 			CreatedAfter: &since,
-			ListOptions:  gl.ListOptions{PerPage: maxListItems},
+			PerPage:      maxListItems,
 		}, gl.WithContext(ctx),
 	)
 	if errMerged != nil {
@@ -282,7 +282,7 @@ func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, r
 		&gl.ListMergeRequestsOptions{
 			ReviewerID:   gl.ReviewerID(userID),
 			UpdatedAfter: new(since),
-			ListOptions:  gl.ListOptions{PerPage: maxListItems},
+			PerPage:      maxListItems,
 		}, gl.WithContext(ctx),
 	)
 	if errReviewed != nil {

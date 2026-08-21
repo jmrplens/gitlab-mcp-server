@@ -46,7 +46,7 @@ func TestListProjectEvents_Success(t *testing.T) {
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 	}))
 
-	out, err := ListProjectEvents(context.Background(), client, ListProjectEventsInput{ProjectID: "42", PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}})
+	out, err := ListProjectEvents(context.Background(), client, ListProjectEventsInput{ProjectID: "42", Page: 1, PerPage: 20})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -174,7 +174,7 @@ func TestListCurrentUserContributionEvents_Success(t *testing.T) {
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 	}))
 
-	out, err := ListCurrentUserContributionEvents(context.Background(), client, ListContributionEventsInput{PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}})
+	out, err := ListCurrentUserContributionEvents(context.Background(), client, ListContributionEventsInput{Page: 1, PerPage: 20})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -873,7 +873,7 @@ func TestToContributionEventOutput_FullMirror(t *testing.T) {
 			Resolvable: true, Resolved: true,
 			ResolvedBy:   gl.NoteResolvedBy{ID: 6, Username: "r"},
 			Internal:     true,
-			Confidential: true,
+			Confidential: true, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 			Position: &gl.NotePosition{
 				BaseSHA: "b", StartSHA: "s", HeadSHA: "h", PositionType: "text",
 				NewPath: "new.go", NewLine: 12, OldPath: "old.go", OldLine: 8,
@@ -1075,9 +1075,9 @@ func TestListProjectEvents_KeysetAndOrderBy(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListProjectEvents(t.Context(), client, ListProjectEventsInput{
-		ProjectID:             "42",
-		OrderBy:               "id",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "99"},
+		ProjectID:  "42",
+		OrderBy:    "id",
+		Pagination: "keyset", PageToken: "99",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -1101,8 +1101,8 @@ func TestListCurrentUserContributionEvents_KeysetAndOrderBy(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListCurrentUserContributionEvents(t.Context(), client, ListContributionEventsInput{
-		OrderBy:               "id",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
+		OrderBy:    "id",
+		Pagination: "keyset", PageToken: "7",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

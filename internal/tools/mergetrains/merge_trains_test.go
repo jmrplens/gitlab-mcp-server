@@ -447,10 +447,10 @@ func TestListProjectMergeTrains_KeysetAndOrdering(t *testing.T) {
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
 	}))
 	_, err := ListProjectMergeTrains(context.Background(), client, ListProjectInput{
-		ProjectID:             "42",
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+		ProjectID:  "42",
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -468,10 +468,10 @@ func TestListMergeRequestInMergeTrain_KeysetAndOrdering(t *testing.T) {
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "0", TotalPages: "0"})
 	}))
 	_, err := ListMergeRequestInMergeTrain(context.Background(), client, ListBranchInput{
-		ProjectID:             "42",
-		TargetBranch:          "main",
-		OrderBy:               "id",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+		ProjectID:    "42",
+		TargetBranch: "main",
+		OrderBy:      "id",
+		Pagination:   "keyset", PageToken: "tok",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

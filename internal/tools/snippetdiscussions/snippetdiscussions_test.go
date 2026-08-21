@@ -300,11 +300,11 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	out, err := List(t.Context(), client, ListInput{
-		ProjectID:             "1",
-		SnippetID:             5,
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok99"},
+		ProjectID:  "1",
+		SnippetID:  5,
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok99",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

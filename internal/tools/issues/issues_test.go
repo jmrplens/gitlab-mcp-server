@@ -364,8 +364,8 @@ func TestList_Pagination(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:       testProjectID,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		ProjectID: testProjectID,
+		Page:      2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtIssueListErr, err)
@@ -2021,7 +2021,7 @@ func TestToOutput_Populated(t *testing.T) {
 		Author:               &gl.IssueAuthor{ID: 1, Username: "alice", Name: "Alice"},
 		Milestone:            &gl.Milestone{ID: 7, Title: "v1"},
 		Assignees:            []*gl.IssueAssignee{{Username: "bob"}, {Username: "carol"}},
-		Assignee:             &gl.IssueAssignee{Username: "bob"},
+		Assignee:             &gl.IssueAssignee{Username: "bob"}, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 		WebURL:               "https://example.com",
 		Confidential:         true,
 		DiscussionLocked:     true,
@@ -2229,7 +2229,7 @@ func TestBasicMRToOutput(t *testing.T) {
 		Assignees: []*gl.BasicUser{{Username: "bob"}, nil, {Username: "carol"}},
 		Reviewers: []*gl.BasicUser{{Username: "dave"}},
 		MergeUser: &gl.BasicUser{Username: "merger"},
-		MergedBy:  &gl.BasicUser{Username: "mergedby"},
+		MergedBy:  &gl.BasicUser{Username: "mergedby"}, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 		ClosedBy:  &gl.BasicUser{Username: "closer"},
 		Milestone: &gl.Milestone{ID: 5, Title: "v1"},
 		Labels:    gl.Labels{"l1", "l2"},
@@ -3124,7 +3124,7 @@ func TestListAll_FilterFieldsCov(t *testing.T) {
 func TestListAll_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListAll(context.Background(), client, ListAllInput{
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+		Page: 1, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("ListAll with pagination: %v", err)
@@ -3156,8 +3156,8 @@ func TestListGroup_AllFilterFieldsCov(t *testing.T) {
 func TestListGroup_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListGroup(context.Background(), client, ListGroupInput{
-		GroupID:         "99",
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+		GroupID: "99",
+		Page:    1, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("ListGroup with pagination: %v", err)
@@ -3172,7 +3172,7 @@ func TestListMRsClosing_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListMRsClosing(context.Background(), client, ListMRsClosingInput{
 		ProjectID: testProjectID, IssueIID: 10,
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+		Page: 1, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("ListMRsClosing with pagination: %v", err)
@@ -3187,7 +3187,7 @@ func TestListMRsRelated_WithPagination(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(issueMockHandler))
 	out, err := ListMRsRelated(context.Background(), client, ListMRsRelatedInput{
 		ProjectID: testProjectID, IssueIID: 10,
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+		Page: 1, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("ListMRsRelated with pagination: %v", err)
@@ -3211,9 +3211,9 @@ func TestListMRsClosing_KeysetOrderSort(t *testing.T) {
 	}))
 	_, err := ListMRsClosing(context.Background(), client, ListMRsClosingInput{
 		ProjectID: testProjectID, IssueIID: 10,
-		OrderBy:               "created_at",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+		OrderBy:    "created_at",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "42",
 	})
 	if err != nil {
 		t.Fatalf("ListMRsClosing keyset: %v", err)
@@ -3239,9 +3239,9 @@ func TestListMRsRelated_KeysetOrderSort(t *testing.T) {
 	}))
 	_, err := ListMRsRelated(context.Background(), client, ListMRsRelatedInput{
 		ProjectID: testProjectID, IssueIID: 10,
-		OrderBy:               "updated_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
+		OrderBy:    "updated_at",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "7",
 	})
 	if err != nil {
 		t.Fatalf("ListMRsRelated keyset: %v", err)
@@ -3976,27 +3976,27 @@ func TestList_AdvancedFilters(t *testing.T) {
 	five, six, seven, eight, iter := int64(5), int64(6), int64(7), int64(8), int64(3)
 	yes := true
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:             testProjectID,
-		NotLabels:             []string{"wontfix"},
-		WithLabelsDetails:     &yes,
-		NotMilestone:          "v2",
-		In:                    "title",
-		NotIn:                 "description",
-		AssigneeID:            &five,
-		NotAssigneeID:         &six,
-		NotAssigneeUsername:   "mallory",
-		AuthorID:              &seven,
-		NotAuthorID:           &eight,
-		NotAuthorUsername:     "carol",
-		MyReactionEmoji:       "thumbsup",
-		NotMyReactionEmoji:    "thumbsdown",
-		IssueType:             "incident",
-		IterationID:           &iter,
-		DueDate:               "week",
-		IIDs:                  []int64{10, 11},
-		OrderBy:               "due_date",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+		ProjectID:           testProjectID,
+		NotLabels:           []string{"wontfix"},
+		WithLabelsDetails:   &yes,
+		NotMilestone:        "v2",
+		In:                  "title",
+		NotIn:               "description",
+		AssigneeID:          &five,
+		NotAssigneeID:       &six,
+		NotAssigneeUsername: "mallory",
+		AuthorID:            &seven,
+		NotAuthorID:         &eight,
+		NotAuthorUsername:   "carol",
+		MyReactionEmoji:     "thumbsup",
+		NotMyReactionEmoji:  "thumbsdown",
+		IssueType:           "incident",
+		IterationID:         &iter,
+		DueDate:             "week",
+		IIDs:                []int64{10, 11},
+		OrderBy:             "due_date",
+		Sort:                "asc",
+		Pagination:          "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf(fmtIssueListErr, err)

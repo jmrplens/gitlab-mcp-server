@@ -103,7 +103,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_custom_attribute", err, http.StatusNotFound, "verify resource_type, resource_id, and key \u2014 requires admin access")
 	}
-	return GetOutput{AttributeItem: AttributeItem{Key: attr.Key, Value: attr.Value}}, nil
+	return GetOutput{Key: attr.Key, Value: attr.Value}, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +147,7 @@ func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetO
 	if err != nil {
 		return SetOutput{}, toolutil.WrapErrWithStatusHint("set_custom_attribute", err, http.StatusNotFound, "verify resource_type and resource_id \u2014 requires admin access")
 	}
-	return SetOutput{AttributeItem: AttributeItem{Key: attr.Key, Value: attr.Value}}, nil
+	return SetOutput{Key: attr.Key, Value: attr.Value}, nil
 }
 
 // ---------------------------------------------------------------------------

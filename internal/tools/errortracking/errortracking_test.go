@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // errExpectedErr identifies the err expected err constant used by this package.
@@ -269,8 +268,8 @@ func TestListClientKeys_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListClientKeys(t.Context(), client, ListClientKeysInput{
-		ProjectID:       "1",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
+		ProjectID: "1",
+		Page:      2, PerPage: 1,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -314,10 +313,10 @@ func TestListClientKeys_WithKeyset(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListClientKeys(t.Context(), client, ListClientKeysInput{
-		ProjectID:             "1",
-		OrderBy:               "id",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-5"},
+		ProjectID:  "1",
+		OrderBy:    "id",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "tok-5",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

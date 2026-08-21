@@ -140,7 +140,7 @@ func TestDSL_WithResponseFormat_ReturnsRawBody(t *testing.T) {
 		_, _ = w.Write([]byte("@dsl\nquery_type: traversal\n"))
 	}))
 
-	out, err := DSL(context.Background(), client, DSLInput{ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"}})
+	out, err := DSL(context.Background(), client, DSLInput{ResponseFormat: "llm"})
 	if err != nil {
 		t.Fatalf("DSL() error: %v", err)
 	}
@@ -187,7 +187,7 @@ func TestQuery_Success_ForwardsRawQuery(t *testing.T) {
 			"query_type": "traversal",
 			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
 		},
-		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "raw"},
+		ResponseFormat: "raw",
 	})
 	if err != nil {
 		t.Fatalf("Query() error: %v", err)
@@ -229,7 +229,7 @@ func TestQuery_LLMResponseFormat_UsesRawResponse(t *testing.T) {
 			"query_type": "traversal",
 			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
 		},
-		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
+		ResponseFormat: "llm",
 	})
 	if err != nil {
 		t.Fatalf("Query() error: %v", err)
@@ -255,7 +255,7 @@ func TestQuery_LLMResponseFormat_RawError(t *testing.T) {
 			"query_type": "traversal",
 			"node":       map[string]any{"id": "p", "entity": "Project", "node_ids": []int{1}},
 		},
-		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
+		ResponseFormat: "llm",
 	})
 	if err == nil {
 		t.Fatal("expected error")
@@ -364,7 +364,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 		{
 			name: "invalid response format",
 			call: func() error {
-				_, err := Status(context.Background(), client, StatusInput{ResponseFormatInput: ResponseFormatInput{ResponseFormat: "xml"}})
+				_, err := Status(context.Background(), client, StatusInput{ResponseFormat: "xml"})
 				return err
 			},
 			want: "use raw, llm, or json",
@@ -425,7 +425,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 							"node_ids": []int{1},
 						},
 					},
-					ResponseFormatInput: ResponseFormatInput{ResponseFormat: "xml"},
+					ResponseFormat: "xml",
 				})
 				return err
 			},
@@ -434,7 +434,7 @@ func TestOrbit_ValidationErrors_ReturnActionableErrors(t *testing.T) {
 		{
 			name: "invalid dsl response format",
 			call: func() error {
-				_, err := DSL(context.Background(), client, DSLInput{ResponseFormatInput: ResponseFormatInput{ResponseFormat: "xml"}})
+				_, err := DSL(context.Background(), client, DSLInput{ResponseFormat: "xml"})
 				return err
 			},
 			want: "use raw, llm, or json",
@@ -901,7 +901,7 @@ func TestStatus_WithResponseFormat_ForwardsValue(t *testing.T) {
 	}))
 
 	out, err := Status(context.Background(), client, StatusInput{
-		ResponseFormatInput: ResponseFormatInput{ResponseFormat: "llm"},
+		ResponseFormat: "llm",
 	})
 	if err != nil {
 		t.Fatalf("Status() error: %v", err)

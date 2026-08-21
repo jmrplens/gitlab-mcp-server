@@ -161,16 +161,14 @@ func TestIntegrationToItem_MirrorsAllSDKFields(t *testing.T) {
 func TestGroupDatadogToItem_MirrorsAllSDKFields(t *testing.T) {
 	archive := true
 	src := &gl.GroupDatadogIntegration{
-		Integration: gl.Integration{
-			ID: 9, Title: "datadog", Slug: "datadog", Active: true,
-			AlertEvents: true, CommitEvents: true, ConfidentialIssuesEvents: true,
-			ConfidentialNoteEvents: true, DeploymentEvents: true,
-			GroupConfidentialMentionEvents: true, GroupMentionEvents: true,
-			IncidentEvents: true, IssuesEvents: true, JobEvents: true,
-			MergeRequestsEvents: true, NoteEvents: true, PipelineEvents: true,
-			PushEvents: true, TagPushEvents: true, VulnerabilityEvents: true,
-			WikiPageEvents: true, CommentOnEventEnabled: true, Inherited: true,
-		},
+		ID: 9, Title: "datadog", Slug: "datadog", Active: true,
+		AlertEvents: true, CommitEvents: true, ConfidentialIssuesEvents: true,
+		ConfidentialNoteEvents: true, DeploymentEvents: true,
+		GroupConfidentialMentionEvents: true, GroupMentionEvents: true,
+		IncidentEvents: true, IssuesEvents: true, JobEvents: true,
+		MergeRequestsEvents: true, NoteEvents: true, PipelineEvents: true,
+		PushEvents: true, TagPushEvents: true, VulnerabilityEvents: true,
+		WikiPageEvents: true, CommentOnEventEnabled: true, Inherited: true,
 		Properties: &gl.GroupDatadogIntegrationProperties{
 			APIURL: "https://api.datadoghq.com", DatadogEnv: "prod",
 			DatadogService: "svc", DatadogSite: "datadoghq.com", DatadogTags: "team:core",

@@ -95,7 +95,7 @@ func TestFormatListMarkdown(t *testing.T) {
 
 // TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
-	md := FormatGetMarkdown(GetOutput{LicenseItem: LicenseItem{Name: "MIT", Content: "text", Permissions: []string{"use"}}})
+	md := FormatGetMarkdown(GetOutput{Name: "MIT", Content: "text", Permissions: []string{"use"}})
 	if !strings.Contains(md, "MIT") || !strings.Contains(md, "use") {
 		t.Error("missing content")
 	}
@@ -124,14 +124,14 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 
 // TestFormatGetMarkdown_AllFields verifies FormatGetMarkdown when all fields.
 func TestFormatGetMarkdown_AllFields(t *testing.T) {
-	md := FormatGetMarkdown(GetOutput{LicenseItem: LicenseItem{
+	md := FormatGetMarkdown(GetOutput{
 		Name:        "Apache 2.0",
 		Description: "A permissive license",
 		Permissions: []string{"commercial-use", "modification"},
 		Conditions:  []string{"include-copyright", "document-changes"},
 		Limitations: []string{"no-liability", "no-warranty"},
 		Content:     "Apache License text here",
-	}})
+	})
 	for _, want := range []string{"Apache 2.0", "A permissive license", "commercial-use", "include-copyright", "no-liability", "Apache License text here"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("missing %q in markdown output", want)
@@ -148,9 +148,9 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 
 // TestFormatGetMarkdown_MinimalFields verifies FormatGetMarkdown when minimal fields.
 func TestFormatGetMarkdown_MinimalFields(t *testing.T) {
-	md := FormatGetMarkdown(GetOutput{LicenseItem: LicenseItem{
+	md := FormatGetMarkdown(GetOutput{
 		Name: "Minimal",
-	}})
+	})
 	if !strings.Contains(md, "Minimal") {
 		t.Error("expected license name")
 	}
@@ -226,7 +226,7 @@ func TestList_WithPagination(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"apache-2.0","name":"Apache License 2.0"}]`)
 	}))
-	out, err := List(context.Background(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10}})
+	out, err := List(context.Background(), client, ListInput{Page: 2, PerPage: 10})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -259,9 +259,9 @@ func TestList_WithKeysetAndOrdering(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"mit","name":"MIT License"}]`)
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		OrderBy:               "name",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-123"},
+		OrderBy:    "name",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "tok-123",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

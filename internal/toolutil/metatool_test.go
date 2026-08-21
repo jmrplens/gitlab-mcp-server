@@ -4048,8 +4048,7 @@ func TestUnmarshalParams_UnmarshalableValue_ReturnsValidationError(t *testing.T)
 	if err == nil {
 		t.Fatal("UnmarshalParams(func value) error = nil, want marshal error")
 	}
-	var validationErr *ParamValidationError
-	if !errors.As(err, &validationErr) {
+	if _, ok := errors.AsType[*ParamValidationError](err); !ok {
 		t.Errorf("UnmarshalParams(func value) error = %T, want *ParamValidationError", err)
 	}
 }
@@ -4077,8 +4076,7 @@ func TestUnmarshalParams_MapTarget_NaNRetryMarshalFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("UnmarshalParams(map target, NaN string) error = nil, want error")
 	}
-	var validationErr *ParamValidationError
-	if !errors.As(err, &validationErr) {
+	if _, ok := errors.AsType[*ParamValidationError](err); !ok {
 		t.Errorf("UnmarshalParams(NaN string) error = %T, want *ParamValidationError", err)
 	}
 }

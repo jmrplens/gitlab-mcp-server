@@ -46,7 +46,7 @@ func TestNoteToOutput_FullMapping(t *testing.T) {
 		ResolvedAt:   &resolved,
 		ResolvedBy:   gl.NoteResolvedBy{ID: 2, Username: "bob", Name: "Bob", State: "active"},
 		Internal:     true,
-		Confidential: true,
+		Confidential: true, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 		Position: &gl.NotePosition{
 			BaseSHA: "base", StartSHA: "start", HeadSHA: "head",
 			PositionType: "text", NewPath: "new.go", NewLine: 10,

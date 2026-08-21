@@ -544,18 +544,14 @@ func TestGetComments_Success(t *testing.T) {
 	}))
 
 	out, err := GetComments(context.Background(), client, CommentsInput{
-		ProjectID: "42",
-		SHA:       testSHA,
-		OrderBy:   "id",
-		Sort:      "asc",
-		PaginationInput: toolutil.PaginationInput{
-			Page:    2,
-			PerPage: 10,
-		},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{
-			Pagination: "keyset",
-			PageToken:  "c1",
-		},
+		ProjectID:  "42",
+		SHA:        testSHA,
+		OrderBy:    "id",
+		Sort:       "asc",
+		Page:       2,
+		PerPage:    10,
+		Pagination: "keyset",
+		PageToken:  "c1",
 	})
 	if err != nil {
 		t.Fatalf("GetComments() unexpected error: %v", err)
@@ -673,10 +669,8 @@ func TestGetStatuses_Success(t *testing.T) {
 		All:        true,
 		OrderBy:    "id",
 		Sort:       "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{
-			Pagination: "keyset",
-			PageToken:  "s1",
-		},
+		Pagination: "keyset",
+		PageToken:  "s1",
 	})
 	if err != nil {
 		t.Fatalf("GetStatuses() unexpected error: %v", err)
@@ -1543,14 +1537,10 @@ func TestCommitList_WithAllOptions(t *testing.T) {
 		Trailers:    true,
 		OrderBy:     "id",
 		Sort:        "asc",
-		PaginationInput: toolutil.PaginationInput{
-			Page:    2,
-			PerPage: 25,
-		},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{
-			Pagination: "keyset",
-			PageToken:  "tok1",
-		},
+		Page:        2,
+		PerPage:     25,
+		Pagination:  "keyset",
+		PageToken:   "tok1",
 	})
 	if err != nil {
 		t.Fatalf(fmtCommitListErr, err)
@@ -1599,19 +1589,15 @@ func TestCommitDiff_WithUnidiff(t *testing.T) {
 	}))
 
 	_, err := Diff(context.Background(), client, DiffInput{
-		ProjectID: "42",
-		SHA:       "abc",
-		Unidiff:   true,
-		OrderBy:   "id",
-		Sort:      "desc",
-		PaginationInput: toolutil.PaginationInput{
-			Page:    3,
-			PerPage: 10,
-		},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{
-			Pagination: "keyset",
-			PageToken:  "d1",
-		},
+		ProjectID:  "42",
+		SHA:        "abc",
+		Unidiff:    true,
+		OrderBy:    "id",
+		Sort:       "desc",
+		Page:       3,
+		PerPage:    10,
+		Pagination: "keyset",
+		PageToken:  "d1",
 	})
 	if err != nil {
 		t.Fatalf("Diff() unexpected error: %v", err)
@@ -1641,19 +1627,15 @@ func TestGetRefs_WithType(t *testing.T) {
 	}))
 
 	out, err := GetRefs(context.Background(), client, RefsInput{
-		ProjectID: "42",
-		SHA:       "abc",
-		Type:      "tag",
-		OrderBy:   "id",
-		Sort:      "asc",
-		PaginationInput: toolutil.PaginationInput{
-			Page:    2,
-			PerPage: 5,
-		},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{
-			Pagination: "keyset",
-			PageToken:  "r1",
-		},
+		ProjectID:  "42",
+		SHA:        "abc",
+		Type:       "tag",
+		OrderBy:    "id",
+		Sort:       "asc",
+		Page:       2,
+		PerPage:    5,
+		Pagination: "keyset",
+		PageToken:  "r1",
 	})
 	if err != nil {
 		t.Fatalf("GetRefs() unexpected error: %v", err)
@@ -1743,10 +1725,8 @@ func TestGetStatuses_WithFilters(t *testing.T) {
 		Name:       "lint",
 		PipelineID: 100,
 		All:        true,
-		PaginationInput: toolutil.PaginationInput{
-			Page:    4,
-			PerPage: 15,
-		},
+		Page:       4,
+		PerPage:    15,
 	})
 	if err != nil {
 		t.Fatalf("GetStatuses() unexpected error: %v", err)

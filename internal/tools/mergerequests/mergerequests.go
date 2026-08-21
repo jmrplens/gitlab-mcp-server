@@ -1650,12 +1650,10 @@ func timeStatsToOutput(ts *gl.TimeStats) TimeStatsOutput {
 		return TimeStatsOutput{}
 	}
 	return TimeStatsOutput{
-		TimeStatsOutput: toolutil.TimeStatsOutput{
-			HumanTimeEstimate:   ts.HumanTimeEstimate,
-			HumanTotalTimeSpent: ts.HumanTotalTimeSpent,
-			TimeEstimate:        ts.TimeEstimate,
-			TotalTimeSpent:      ts.TotalTimeSpent,
-		},
+		HumanTimeEstimate:   ts.HumanTimeEstimate,
+		HumanTotalTimeSpent: ts.HumanTotalTimeSpent,
+		TimeEstimate:        ts.TimeEstimate,
+		TotalTimeSpent:      ts.TotalTimeSpent,
 	}
 }
 

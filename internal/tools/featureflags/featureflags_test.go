@@ -101,10 +101,10 @@ func TestListFeatureFlags_OrderingAndKeyset(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	out, err := ListFeatureFlags(context.Background(), client, ListInput{
-		ProjectID:             "1",
-		OrderBy:               "name",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-1"},
+		ProjectID:  "1",
+		OrderBy:    "name",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "cursor-1",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

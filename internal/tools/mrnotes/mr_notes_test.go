@@ -210,7 +210,7 @@ func TestMRNotesList_PaginationQueryParamsAndMetadata(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, MRIID: 1, PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5}})
+	out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, MRIID: 1, Page: 2, PerPage: 5})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
 	}
@@ -835,9 +835,9 @@ func TestList_KeysetPagination(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:             testProjectID,
-		MRIID:                 1,
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor99"},
+		ProjectID:  testProjectID,
+		MRIID:      1,
+		Pagination: "keyset", PageToken: "cursor99",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

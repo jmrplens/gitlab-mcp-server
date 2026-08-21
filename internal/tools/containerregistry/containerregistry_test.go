@@ -1423,10 +1423,10 @@ func TestListProject_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	_, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID:             toolutil.StringOrInt("10"),
-		OrderBy:               "name",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok99"},
+		ProjectID:  toolutil.StringOrInt("10"),
+		OrderBy:    "name",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok99",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1448,10 +1448,10 @@ func TestListGroup_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	_, err := ListGroup(context.Background(), client, ListGroupInput{
-		GroupID:               toolutil.StringOrInt("5"),
-		OrderBy:               "id",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset"},
+		GroupID:    toolutil.StringOrInt("5"),
+		OrderBy:    "id",
+		Sort:       "asc",
+		Pagination: "keyset",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1473,11 +1473,11 @@ func TestListTags_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	_, err := ListTags(context.Background(), client, ListTagsInput{
-		ProjectID:             toolutil.StringOrInt("10"),
-		RepositoryID:          1,
-		OrderBy:               "name",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "t1"},
+		ProjectID:    toolutil.StringOrInt("10"),
+		RepositoryID: 1,
+		OrderBy:      "name",
+		Sort:         "desc",
+		Pagination:   "keyset", PageToken: "t1",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

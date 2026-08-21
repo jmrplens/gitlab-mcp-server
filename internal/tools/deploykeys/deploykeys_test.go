@@ -1240,8 +1240,8 @@ func TestListProject_WithPagination(t *testing.T) {
 	}))
 
 	out, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID:       "1",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 2},
+		ProjectID: "1",
+		Page:      2, PerPage: 2,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1276,8 +1276,8 @@ func TestListUserProject_WithPagination(t *testing.T) {
 	}))
 
 	out, err := ListUserProject(context.Background(), client, ListUserProjectInput{
-		UserID:          "42",
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10},
+		UserID: "42",
+		Page:   1, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1405,10 +1405,10 @@ func TestListProject_OrderingAndKeyset(t *testing.T) {
 	}))
 
 	_, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID:             "1",
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+		ProjectID:  "1",
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1434,9 +1434,9 @@ func TestListAll_OrderingAndKeyset(t *testing.T) {
 	}))
 
 	_, err := ListAll(context.Background(), client, ListAllInput{
-		OrderBy:               "title",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+		OrderBy:    "title",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "tok",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1462,10 +1462,10 @@ func TestListUserProject_OrderingAndKeyset(t *testing.T) {
 	}))
 
 	_, err := ListUserProject(context.Background(), client, ListUserProjectInput{
-		UserID:                "42",
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+		UserID:     "42",
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

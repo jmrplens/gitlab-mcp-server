@@ -92,7 +92,7 @@ func TestFormatListMarkdown(t *testing.T) {
 
 // TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
-	md := FormatGetMarkdown(GetOutput{TemplateItem: TemplateItem{Name: "MIT", Key: "mit", Content: "text", Permissions: []string{"use"}}})
+	md := FormatGetMarkdown(GetOutput{Name: "MIT", Key: "mit", Content: "text", Permissions: []string{"use"}})
 	if !strings.Contains(md, "MIT") || !strings.Contains(md, "use") {
 		t.Error("missing content")
 	}
@@ -132,7 +132,7 @@ func TestFormatListMarkdown_NonPopular(t *testing.T) {
 
 // TestFormatGetMarkdown_AllFields verifies FormatGetMarkdown when all fields.
 func TestFormatGetMarkdown_AllFields(t *testing.T) {
-	md := FormatGetMarkdown(GetOutput{TemplateItem: TemplateItem{
+	md := FormatGetMarkdown(GetOutput{
 		Key:         "mit",
 		Name:        "MIT License",
 		Nickname:    "MIT",
@@ -142,7 +142,7 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 		Conditions:  []string{"include-copyright"},
 		Limitations: []string{"no-liability"},
 		Content:     "MIT License text",
-	}})
+	})
 	for _, want := range []string{"MIT License", "MIT", "Popular", "A permissive license", "commercial-use", "include-copyright", "no-liability", "MIT License text"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("missing %q in markdown output", want)
@@ -156,10 +156,10 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 
 // TestFormatGetMarkdown_MinimalFields verifies FormatGetMarkdown when minimal fields.
 func TestFormatGetMarkdown_MinimalFields(t *testing.T) {
-	md := FormatGetMarkdown(GetOutput{TemplateItem: TemplateItem{
+	md := FormatGetMarkdown(GetOutput{
 		Key:  "basic",
 		Name: "Basic",
-	}})
+	})
 	if !strings.Contains(md, "Basic") {
 		t.Error("expected template name")
 	}
@@ -218,7 +218,7 @@ func TestList_WithPagination(t *testing.T) {
 	}))
 	out, err := List(context.Background(), client, ListInput{
 		ProjectID: "1", TemplateType: "gitignores",
-		PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 10},
+		Page: 3, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -268,13 +268,13 @@ func TestList_WithFiltersAndKeyset(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"mit","name":"MIT License"}]`)
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:             "1",
-		TemplateType:          "licenses",
-		ID:                    42,
-		Type:                  "licenses",
-		OrderBy:               "name",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+		ProjectID:    "1",
+		TemplateType: "licenses",
+		ID:           42,
+		Type:         "licenses",
+		OrderBy:      "name",
+		Sort:         "asc",
+		Pagination:   "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

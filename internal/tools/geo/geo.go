@@ -469,9 +469,9 @@ func Repair(ctx context.Context, client *gitlabclient.Client, in IDInput) (Outpu
 	}
 	if site == nil {
 		return Output{
-			HintableOutput: toolutil.HintableOutput{NextSteps: []string{
+			NextSteps: []string{
 				"Geo repair was accepted but GitLab returned an empty response; call action 'get' to refresh the Geo site.",
-			}},
+			},
 			ID: in.ID,
 		}, nil
 	}

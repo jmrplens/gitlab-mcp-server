@@ -63,7 +63,7 @@ func handleBranchMRSummary(ctx context.Context, client *gitlabclient.Client, req
 	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		TargetBranch: new(targetBranch),
 		State:        new(state),
-		ListOptions:  gl.ListOptions{PerPage: maxListItems},
+		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("branch_mr_summary: %w", err)
@@ -139,19 +139,19 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 	mergedMRs, _, _ := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:        new("merged"),
 		CreatedAfter: &since,
-		ListOptions:  gl.ListOptions{PerPage: maxListItems},
+		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Open MRs
 	openMRs, _, _ := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
-		State:       new("opened"),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:   new("opened"),
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Open issues
 	openIssues, _, _ := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
-		State:       new("opened"),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:   new("opened"),
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
@@ -224,8 +224,8 @@ func handleMRDiscussionHealth(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
-		State:       new("opened"),
-		ListOptions: gl.ListOptions{PerPage: 20},
+		State:   new("opened"),
+		PerPage: 20,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("mr_discussion_health: %w", err)
@@ -283,7 +283,7 @@ func collectMRDiscussionInfos(ctx context.Context, client *gitlabclient.Client, 
 			info.author = mr.Author.Username
 		}
 		discussions, _, dErr := client.GL().Discussions.ListMergeRequestDiscussions(projectID, mr.IID, &gl.ListMergeRequestDiscussionsOptions{
-			ListOptions: gl.ListOptions{PerPage: maxListItems},
+			PerPage: maxListItems,
 		}, gl.WithContext(ctx))
 		if dErr != nil {
 			slog.Warn("failed to fetch discussions", "merge_request_iid", mr.IID, "error", dErr)
@@ -334,16 +334,16 @@ func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req
 
 	// Unassigned MRs
 	unassignedMRs, _, _ := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
-		State:       new("opened"),
-		AssigneeID:  gl.AssigneeID(0),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:      new("opened"),
+		AssigneeID: gl.AssigneeID(0),
+		PerPage:    maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Unassigned issues
 	unassignedIssues, _, _ := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
-		State:       new("opened"),
-		AssigneeID:  gl.AssigneeID(0),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:      new("opened"),
+		AssigneeID: gl.AssigneeID(0),
+		PerPage:    maxListItems,
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
@@ -405,14 +405,14 @@ func handleStaleItemsReport(ctx context.Context, client *gitlabclient.Client, re
 	staleMRs, _, _ := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		State:         new("opened"),
 		UpdatedBefore: &staleDate,
-		ListOptions:   gl.ListOptions{PerPage: maxListItems},
+		PerPage:       maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Stale issues
 	staleIssues, _, _ := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
 		State:         new("opened"),
 		UpdatedBefore: &staleDate,
-		ListOptions:   gl.ListOptions{PerPage: maxListItems},
+		PerPage:       maxListItems,
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder

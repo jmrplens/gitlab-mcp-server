@@ -193,7 +193,7 @@ func TestProtectedBranchesList_PaginationQueryParamsAndMetadata(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := ProtectedList(context.Background(), client, ProtectedListInput{ProjectID: "42", PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 10}})
+	out, err := ProtectedList(context.Background(), client, ProtectedListInput{ProjectID: "42", Page: 1, PerPage: 10})
 	if err != nil {
 		t.Fatalf(fmtProtBranchListErr, err)
 	}
@@ -1333,8 +1333,8 @@ func TestBranchList_PaginationQueryParams(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:       "42",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		ProjectID: "42",
+		Page:      2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtBranchListErr, err)
@@ -2018,12 +2018,12 @@ func TestBranchList_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:             "42",
-		Search:                "feat",
-		Regex:                 "^feat",
-		OrderBy:               "updated",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+		ProjectID:  "42",
+		Search:     "feat",
+		Regex:      "^feat",
+		OrderBy:    "updated",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok",
 	})
 	if err != nil {
 		t.Fatalf(fmtBranchListErr, err)
@@ -2049,11 +2049,11 @@ func TestProtectedList_SearchKeysetAndOrdering(t *testing.T) {
 	}))
 
 	_, err := ProtectedList(context.Background(), client, ProtectedListInput{
-		ProjectID:             "42",
-		Search:                "main",
-		OrderBy:               "name",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok"},
+		ProjectID:  "42",
+		Search:     "main",
+		OrderBy:    "name",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "tok",
 	})
 	if err != nil {
 		t.Fatalf(fmtProtBranchListErr, err)

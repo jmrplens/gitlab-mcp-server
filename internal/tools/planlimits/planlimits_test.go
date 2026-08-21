@@ -121,16 +121,14 @@ func TestChange_Error(t *testing.T) {
 // TestFormatGetMarkdown verifies FormatGetMarkdown.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := GetOutput{
-		PlanLimitItem: PlanLimitItem{
-			ConanMaxFileSize:           3221225472,
-			GenericPackagesMaxFileSize: 5368709120,
-			HelmMaxFileSize:            5242880,
-			MavenMaxFileSize:           3221225472,
-			NPMMaxFileSize:             524288000,
-			NugetMaxFileSize:           524288000,
-			PyPiMaxFileSize:            3221225472,
-			TerraformModuleMaxFileSize: 1073741824,
-		},
+		ConanMaxFileSize:           3221225472,
+		GenericPackagesMaxFileSize: 5368709120,
+		HelmMaxFileSize:            5242880,
+		MavenMaxFileSize:           3221225472,
+		NPMMaxFileSize:             524288000,
+		NugetMaxFileSize:           524288000,
+		PyPiMaxFileSize:            3221225472,
+		TerraformModuleMaxFileSize: 1073741824,
 	}
 	md := FormatGetMarkdown(out)
 	if !strings.Contains(md, "Plan Limits") {
@@ -144,10 +142,8 @@ func TestFormatGetMarkdown(t *testing.T) {
 // TestFormatChangeMarkdown verifies FormatChangeMarkdown.
 func TestFormatChangeMarkdown(t *testing.T) {
 	out := ChangeOutput{
-		PlanLimitItem: PlanLimitItem{
-			ConanMaxFileSize: 3221225472,
-			HelmMaxFileSize:  5242880,
-		},
+		ConanMaxFileSize: 3221225472,
+		HelmMaxFileSize:  5242880,
 	}
 	md := FormatChangeMarkdown(out)
 	if !strings.Contains(md, "Updated Plan Limits") {
@@ -164,16 +160,14 @@ func TestFormatChangeMarkdown(t *testing.T) {
 // TestFormatGetMarkdown_AllFields verifies FormatGetMarkdown when all fields.
 func TestFormatGetMarkdown_AllFields(t *testing.T) {
 	out := GetOutput{
-		PlanLimitItem: PlanLimitItem{
-			ConanMaxFileSize:           100,
-			GenericPackagesMaxFileSize: 200,
-			HelmMaxFileSize:            300,
-			MavenMaxFileSize:           400,
-			NPMMaxFileSize:             500,
-			NugetMaxFileSize:           600,
-			PyPiMaxFileSize:            700,
-			TerraformModuleMaxFileSize: 800,
-		},
+		ConanMaxFileSize:           100,
+		GenericPackagesMaxFileSize: 200,
+		HelmMaxFileSize:            300,
+		MavenMaxFileSize:           400,
+		NPMMaxFileSize:             500,
+		NugetMaxFileSize:           600,
+		PyPiMaxFileSize:            700,
+		TerraformModuleMaxFileSize: 800,
 	}
 	md := FormatGetMarkdown(out)
 	for _, want := range []string{"100", "200", "300", "400", "500", "600", "700", "800", "Plan Limits"} {
@@ -190,16 +184,14 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 // TestFormatChangeMarkdown_AllFields verifies FormatChangeMarkdown when all fields.
 func TestFormatChangeMarkdown_AllFields(t *testing.T) {
 	out := ChangeOutput{
-		PlanLimitItem: PlanLimitItem{
-			ConanMaxFileSize:           1,
-			GenericPackagesMaxFileSize: 2,
-			HelmMaxFileSize:            3,
-			MavenMaxFileSize:           4,
-			NPMMaxFileSize:             5,
-			NugetMaxFileSize:           6,
-			PyPiMaxFileSize:            7,
-			TerraformModuleMaxFileSize: 8,
-		},
+		ConanMaxFileSize:           1,
+		GenericPackagesMaxFileSize: 2,
+		HelmMaxFileSize:            3,
+		MavenMaxFileSize:           4,
+		NPMMaxFileSize:             5,
+		NugetMaxFileSize:           6,
+		PyPiMaxFileSize:            7,
+		TerraformModuleMaxFileSize: 8,
 	}
 	md := FormatChangeMarkdown(out)
 	if !strings.Contains(md, "Updated Plan Limits") {

@@ -116,10 +116,10 @@ func TestPipelineScheduleList_KeysetAndSort(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:             "123",
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+		ProjectID:  "123",
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1461,7 +1461,7 @@ func TestListTriggeredPipelines_WithPagination(t *testing.T) {
 	}))
 	out, err := ListTriggeredPipelines(context.Background(), client, ListTriggeredPipelinesInput{
 		ProjectID: "1", ScheduleID: 1,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 2},
+		Page: 2, PerPage: 2,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

@@ -326,8 +326,8 @@ func TestListInboundAllowlist_WithPagination(t *testing.T) {
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "2", Total: "5", TotalPages: "3", NextPage: "2"})
 	}))
 	out, err := ListInboundAllowlist(context.Background(), client, ListInboundAllowlistInput{
-		ProjectID:       "42",
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2},
+		ProjectID: "42",
+		Page:      1, PerPage: 2,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -352,10 +352,10 @@ func TestListInboundAllowlist_KeysetOrdering(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListInboundAllowlist(context.Background(), client, ListInboundAllowlistInput{
-		ProjectID:             "42",
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-1"},
+		ProjectID:  "42",
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok-1",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -461,8 +461,8 @@ func TestListGroupAllowlist_WithPagination(t *testing.T) {
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "2", Total: "4", TotalPages: "2", NextPage: "2"})
 	}))
 	out, err := ListGroupAllowlist(context.Background(), client, ListGroupAllowlistInput{
-		ProjectID:       "42",
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2},
+		ProjectID: "42",
+		Page:      1, PerPage: 2,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -487,10 +487,10 @@ func TestListGroupAllowlist_KeysetOrdering(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListGroupAllowlist(context.Background(), client, ListGroupAllowlistInput{
-		ProjectID:             "42",
-		OrderBy:               "id",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-2"},
+		ProjectID:  "42",
+		OrderBy:    "id",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "tok-2",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

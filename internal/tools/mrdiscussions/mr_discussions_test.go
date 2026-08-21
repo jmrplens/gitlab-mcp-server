@@ -183,7 +183,7 @@ func TestMRDiscussionList_PaginationQueryParamsAndMetadata(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, MRIID: 1, PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 3}})
+	out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, MRIID: 1, Page: 1, PerPage: 3})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
 	}

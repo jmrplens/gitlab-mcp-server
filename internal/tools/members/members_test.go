@@ -13,7 +13,6 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Test endpoint paths and format strings for project member operation tests.
@@ -207,8 +206,8 @@ func TestProjectMembersList_WithPagination(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:       testProjectID,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		ProjectID: testProjectID,
+		Page:      2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtMembersListErr, err)
@@ -253,12 +252,12 @@ func TestProjectMembersList_AllListOptions(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:             testProjectID,
-		OrderBy:               "access_level",
-		Sort:                  "desc",
-		ShowSeatInfo:          true,
-		UserIDs:               []int{10, 20},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok42"},
+		ProjectID:    testProjectID,
+		OrderBy:      "access_level",
+		Sort:         "desc",
+		ShowSeatInfo: true,
+		UserIDs:      []int{10, 20},
+		Pagination:   "keyset", PageToken: "tok42",
 	})
 	if err != nil {
 		t.Fatalf(fmtMembersListErr, err)

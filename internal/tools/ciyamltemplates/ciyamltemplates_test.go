@@ -151,7 +151,7 @@ func TestList_WithPagination(t *testing.T) {
 		}
 		http.NotFound(w, r)
 	}))
-	out, err := List(context.Background(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2}})
+	out, err := List(context.Background(), client, ListInput{Page: 1, PerPage: 2})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -187,9 +187,9 @@ func TestList_OrderSortKeyset(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"Python","name":"Python"}]`)
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		OrderBy:               "name",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "Go"},
+		OrderBy:    "name",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "Go",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

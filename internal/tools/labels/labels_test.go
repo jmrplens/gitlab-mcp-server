@@ -131,13 +131,11 @@ func TestLabelList_OrderBySortKeyset(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID: "42",
-		OrderBy:   "name",
-		Sort:      "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{
-			Pagination: "keyset",
-			PageToken:  "tok123",
-		},
+		ProjectID:  "42",
+		OrderBy:    "name",
+		Sort:       "asc",
+		Pagination: "keyset",
+		PageToken:  "tok123",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
@@ -614,8 +612,8 @@ func TestList_WithPagination(t *testing.T) {
 			testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "10", TotalPages: "2"})
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:       "42",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		ProjectID: "42",
+		Page:      2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

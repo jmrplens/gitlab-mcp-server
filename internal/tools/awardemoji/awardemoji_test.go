@@ -1489,11 +1489,13 @@ func TestListIssueAwardEmoji_ForwardsListQuery(t *testing.T) {
 		testutil.RespondJSONWithPagination(w, http.StatusOK, `[]`, testutil.PaginationHeaders{Page: "1", TotalPages: "1", PerPage: "5", Total: "0"})
 	}))
 
-	in := IssueListInput{ProjectID: testProjectID, IID: 1, OrderBy: "created_at", Sort: "desc"}
-	in.Page = 2
-	in.PerPage = 5
-	in.Pagination = "keyset"
-	in.PageToken = "42"
+	in := IssueListInput{
+		ProjectID: testProjectID, IID: 1, OrderBy: "created_at", Sort: "desc",
+		Page:       2,
+		PerPage:    5,
+		Pagination: "keyset",
+		PageToken:  "42",
+	}
 	if _, err := ListIssueAwardEmoji(t.Context(), client, in); err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}

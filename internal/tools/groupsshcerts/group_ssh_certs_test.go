@@ -127,9 +127,9 @@ func TestList_PaginationParameters(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		GroupID:               toolutil.StringOrInt("mygroup"),
-		PaginationInput:       toolutil.PaginationInput{Page: 2, PerPage: 50},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-123"},
+		GroupID: toolutil.StringOrInt("mygroup"),
+		Page:    2, PerPage: 50,
+		Pagination: "keyset", PageToken: "tok-123",
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)

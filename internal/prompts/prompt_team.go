@@ -81,7 +81,7 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 		AuthorID:     new(userID),
 		State:        new("merged"),
 		CreatedAfter: new(since),
-		ListOptions:  gl.ListOptions{PerPage: maxListItems},
+		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
 
 	// MRs under review
@@ -89,7 +89,7 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 		ReviewerID:   gl.ReviewerID(userID),
 		State:        new("opened"),
 		UpdatedAfter: new(since),
-		ListOptions:  gl.ListOptions{PerPage: maxListItems},
+		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
@@ -188,7 +188,7 @@ func handleTeamOverview(ctx context.Context, client *gitlabclient.Client, req *m
 
 	// Group members
 	members, _, err := client.GL().Groups.ListGroupMembers(groupID, &gl.ListGroupMembersOptions{
-		ListOptions: gl.ListOptions{PerPage: 50},
+		PerPage: 50,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("team_overview: failed to list group members: %w", err)
@@ -196,15 +196,15 @@ func handleTeamOverview(ctx context.Context, client *gitlabclient.Client, req *m
 
 	// Open MRs for the group
 	openMRs, _, _ := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
-		State:       new("opened"),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:   new("opened"),
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	// Merged MRs in the period
 	mergedMRs, _, _ := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
 		State:        new("merged"),
 		CreatedAfter: new(since),
-		ListOptions:  gl.ListOptions{PerPage: maxListItems},
+		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
 
 	stats := buildTeamOverviewStats(members, openMRs, mergedMRs)
@@ -311,8 +311,8 @@ func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, re
 
 	state := getArgOr(req.Params.Arguments, argState, "opened")
 	opts := &gl.ListGroupMergeRequestsOptions{
-		State:       new(state),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:   new(state),
+		PerPage: maxListItems,
 	}
 	if tb := req.Params.Arguments[argTargetBranch]; tb != "" {
 		opts.TargetBranch = new(tb)
@@ -390,7 +390,7 @@ func handleReviewerWorkload(ctx context.Context, client *gitlabclient.Client, re
 
 	// Group members
 	members, _, err := client.GL().Groups.ListGroupMembers(groupID, &gl.ListGroupMembersOptions{
-		ListOptions: gl.ListOptions{PerPage: 50},
+		PerPage: 50,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("reviewer_workload: failed to list group members: %w", err)
@@ -398,8 +398,8 @@ func handleReviewerWorkload(ctx context.Context, client *gitlabclient.Client, re
 
 	// Open MRs
 	openMRs, _, _ := client.GL().MergeRequests.ListGroupMergeRequests(groupID, &gl.ListGroupMergeRequestsOptions{
-		State:       new("opened"),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:   new("opened"),
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	rStats := buildReviewerWorkloadStats(members, openMRs)

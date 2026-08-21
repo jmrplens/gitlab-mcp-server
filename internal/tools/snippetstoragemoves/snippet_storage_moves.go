@@ -103,7 +103,7 @@ func RetrieveAll(ctx context.Context, client *gitlabclient.Client, in ListInput)
 	}
 
 	opts := gl.RetrieveAllSnippetStorageMovesOptions{
-		ListOptions: gl.ListOptions{OrderBy: in.OrderBy, Sort: in.Sort},
+		OrderBy: in.OrderBy, Sort: in.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
 	moves, resp, err := client.GL().SnippetRepositoryStorageMove.RetrieveAllStorageMoves(opts, gl.WithContext(ctx))
@@ -130,7 +130,7 @@ func RetrieveForSnippet(ctx context.Context, client *gitlabclient.Client, in Lis
 	}
 
 	opts := gl.RetrieveAllSnippetStorageMovesOptions{
-		ListOptions: gl.ListOptions{OrderBy: in.OrderBy, Sort: in.Sort},
+		OrderBy: in.OrderBy, Sort: in.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, in.PaginationInput, in.KeysetPaginationInput)
 	moves, resp, err := client.GL().SnippetRepositoryStorageMove.RetrieveAllStorageMovesForSnippet(in.SnippetID, opts, gl.WithContext(ctx))

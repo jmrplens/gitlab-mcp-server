@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -77,11 +76,11 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	_, err := List(t.Context(), client, ListInput{
-		ProjectID:             "1",
-		OrderBy:               "id",
-		Sort:                  "desc",
-		PaginationInput:       toolutil.PaginationInput{PerPage: 50},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+		ProjectID:  "1",
+		OrderBy:    "id",
+		Sort:       "desc",
+		PerPage:    50,
+		Pagination: "keyset", PageToken: "42",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

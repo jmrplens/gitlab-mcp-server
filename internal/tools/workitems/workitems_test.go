@@ -523,7 +523,7 @@ func TestWorkItemToItem_FullData(t *testing.T) {
 		Assignees:    []*gl.BasicUser{{Username: testAuthorBob}, {Username: testAuthorCarol}},
 		Labels:       []gl.LabelDetails{{Name: testLabelBug}, {Name: testLabelUrgent}},
 		LinkedItems: []gl.LinkedWorkItem{
-			{WorkItemIID: gl.WorkItemIID{NamespacePath: "my-group/other", IID: 7}, LinkType: "blocks"},
+			{NamespacePath: "my-group/other", IID: 7, LinkType: "blocks"},
 		},
 		Children: []gl.WorkItemIID{
 			{NamespacePath: "my-group/child-proj", IID: 5},
@@ -1725,8 +1725,8 @@ func TestWorkItemToItem_WithLinkedItems(t *testing.T) {
 		State: testStateOpen,
 		Title: "With links",
 		LinkedItems: []gl.LinkedWorkItem{
-			{WorkItemIID: gl.WorkItemIID{NamespacePath: "group/proj", IID: 5}, LinkType: "relates_to"},
-			{WorkItemIID: gl.WorkItemIID{NamespacePath: "group/other", IID: 8}, LinkType: "blocks"},
+			{NamespacePath: "group/proj", IID: 5, LinkType: "relates_to"},
+			{NamespacePath: "group/other", IID: 8, LinkType: "blocks"},
 		},
 	}
 	item := workItemToItem(wi)
