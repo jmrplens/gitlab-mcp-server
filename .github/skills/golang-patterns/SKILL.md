@@ -674,7 +674,21 @@ func (c *Counter) Increment() { c.n++ }        // Pointer receiver
 
 **Remember**: Go code should be boring in the best way - predictable, consistent, and easy to understand. When in doubt, keep it simple.
 
-## Go 1.24+ / 1.25+ Modern Patterns
+## Go 1.24+ / 1.25+ / 1.27+ Modern Patterns
+
+### Promoted Fields in Composite Literals (Go 1.27+)
+
+Struct literals may assign promoted (embedded) fields directly — no embedded
+type wrapper needed. The `modernize/embedlit` check enforces this style:
+
+```go
+type Output struct {
+    toolutil.PaginationOutput // embeds Page, PerPage
+    Name string
+}
+
+out := Output{Name: "x", Page: 1, PerPage: 20} // Go 1.27+: promoted fields inline
+```
 
 ### Range-over-func Iterators (Go 1.23+)
 

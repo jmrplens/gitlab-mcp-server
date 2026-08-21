@@ -91,7 +91,8 @@ func admExtrasPushTerraformState(ctx context.Context, t *testing.T, projectID in
 	t.Helper()
 	stateBody := fmt.Sprintf(
 		`{"version":4,"terraform_version":"1.5.0","serial":%d,"lineage":"e2e-lineage-%d","outputs":{},"resources":[]}`,
-		serial, projectID)
+		serial, projectID,
+	)
 	stateURL := fmt.Sprintf("%s/api/v4/projects/%d/terraform/state/%s", os.Getenv("GITLAB_URL"), projectID, stateName)
 	status, payload := admExtrasHTTPDo(ctx, t, http.MethodPost, stateURL, map[string]string{
 		"Authorization": admExtrasBasicAuthHeader(t),
@@ -223,7 +224,8 @@ func TestMeta_AdminPlanLimitsChange(t *testing.T) {
 
 		const planName = "default"
 		current, _, err := sess.glClient.GL().PlanLimits.GetCurrentPlanLimits(
-			&gl.GetCurrentPlanLimitsOptions{PlanName: new(planName)}, gl.WithContext(ctx))
+			&gl.GetCurrentPlanLimitsOptions{PlanName: new(planName)}, gl.WithContext(ctx),
+		)
 		requireNoError(t, err, "read current plan limits")
 		original := current.PyPiMaxFileSize
 		defer func() {

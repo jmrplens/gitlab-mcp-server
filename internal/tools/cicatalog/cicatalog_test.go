@@ -246,7 +246,7 @@ func TestList_Pagination(t *testing.T) {
 
 	client := testutil.NewTestClient(t, handler)
 	out, err := List(context.Background(), client, ListInput{
-		GraphQLPaginationInput: toolutil.GraphQLPaginationInput{After: "cursor123"},
+		After: "cursor123",
 	})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)

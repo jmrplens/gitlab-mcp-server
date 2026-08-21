@@ -530,7 +530,7 @@ func findExistingMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, 
 	if err != nil {
 		return Output{}, false
 	}
-	opts := &gl.ListAwardEmojiOptions{ListOptions: gl.ListOptions{Page: 1, PerPage: 100}}
+	opts := &gl.ListAwardEmojiOptions{Page: 1, PerPage: 100}
 	for {
 		emojis, resp, listErr := client.GL().AwardEmoji.ListMergeRequestAwardEmoji(string(input.ProjectID), input.IID, opts, gl.WithContext(ctx))
 		if listErr != nil {

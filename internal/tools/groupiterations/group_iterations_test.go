@@ -136,13 +136,11 @@ func TestList_KeysetParams(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		GroupID: "7",
-		OrderBy: "due_date",
-		Sort:    "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{
-			Pagination: "keyset",
-			PageToken:  "cursor-1",
-		},
+		GroupID:    "7",
+		OrderBy:    "due_date",
+		Sort:       "desc",
+		Pagination: "keyset",
+		PageToken:  "cursor-1",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

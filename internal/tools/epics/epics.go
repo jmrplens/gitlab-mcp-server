@@ -401,7 +401,7 @@ func buildEpicListOptions(input ListInput) *gl.ListGroupEpicsOptions {
 	if input.First != nil && *input.First > 0 && *input.First <= 100 {
 		perPage = *input.First
 	}
-	opts := &gl.ListGroupEpicsOptions{ListOptions: gl.ListOptions{PerPage: perPage}}
+	opts := &gl.ListGroupEpicsOptions{PerPage: perPage}
 	if input.State != "" {
 		opts.State = &input.State
 	}

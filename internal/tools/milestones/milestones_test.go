@@ -796,8 +796,8 @@ func TestList_WithPagination(t *testing.T) {
 			testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "10", TotalPages: "2"})
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:       "42",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		ProjectID: "42",
+		Page:      2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -940,9 +940,9 @@ func TestGetIssues_WithPagination(t *testing.T) {
 			testutil.PaginationHeaders{Page: "2", PerPage: "10", Total: "1", TotalPages: "1"})
 	}))
 	out, err := GetIssues(context.Background(), client, GetIssuesInput{
-		ProjectID:       "42",
-		MilestoneIID:    1,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+		ProjectID:    "42",
+		MilestoneIID: 1,
+		Page:         2, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1000,9 +1000,9 @@ func TestGetMergeRequests_WithPagination(t *testing.T) {
 			testutil.PaginationHeaders{Page: "3", PerPage: "5", Total: "1", TotalPages: "1"})
 	}))
 	out, err := GetMergeRequests(context.Background(), client, GetMergeRequestsInput{
-		ProjectID:       "42",
-		MilestoneIID:    1,
-		PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 5},
+		ProjectID:    "42",
+		MilestoneIID: 1,
+		Page:         3, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1434,10 +1434,10 @@ func TestList_OrderBySortAndKeyset(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, covMilestoneListJSON)
 	}))
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:             "42",
-		OrderBy:               "due_date",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+		ProjectID:  "42",
+		OrderBy:    "due_date",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1472,11 +1472,11 @@ func TestGetIssues_OrderBySortAndKeyset(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	_, err := GetIssues(context.Background(), client, GetIssuesInput{
-		ProjectID:             "42",
-		MilestoneIID:          1,
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok9"},
+		ProjectID:    "42",
+		MilestoneIID: 1,
+		OrderBy:      "created_at",
+		Sort:         "desc",
+		Pagination:   "keyset", PageToken: "tok9",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1511,11 +1511,11 @@ func TestGetMergeRequests_OrderBySortAndKeyset(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	_, err := GetMergeRequests(context.Background(), client, GetMergeRequestsInput{
-		ProjectID:             "42",
-		MilestoneIID:          1,
-		OrderBy:               "updated_at",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok42"},
+		ProjectID:    "42",
+		MilestoneIID: 1,
+		OrderBy:      "updated_at",
+		Sort:         "asc",
+		Pagination:   "keyset", PageToken: "tok42",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

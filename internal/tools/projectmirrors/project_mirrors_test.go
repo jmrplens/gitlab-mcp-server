@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -164,10 +163,10 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:             testProjectID,
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "abc"},
+		ProjectID:  testProjectID,
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "abc",
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
@@ -241,8 +240,8 @@ func TestList_Pagination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, "[]")
 	}))
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:       testProjectID,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+		ProjectID: testProjectID,
+		Page:      2, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)

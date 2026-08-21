@@ -1,18 +1,19 @@
 module github.com/jmrplens/gitlab-mcp-server/v2
 
-go 1.26.6
+go 1.27.0
 
 require (
-	charm.land/bubbles/v2 v2.1.1
-	charm.land/bubbletea/v2 v2.0.8
+	charm.land/bubbles/v2 v2.2.0
+	charm.land/bubbletea/v2 v2.0.9
 	charm.land/lipgloss/v2 v2.0.6
 	github.com/creativeprojects/go-selfupdate v1.6.0
 	github.com/google/jsonschema-go v0.4.3
+	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/joho/godotenv v1.5.1
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/shirou/gopsutil/v4 v4.26.7
 	github.com/tiktoken-go/tokenizer v0.8.1
-	gitlab.com/gitlab-org/api/client-go/v2 v2.58.0
+	gitlab.com/gitlab-org/api/client-go/v2 v2.58.1
 	golang.org/x/crypto v0.55.0
 	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.49.0
@@ -41,14 +42,13 @@ require (
 	github.com/google/go-github/v86 v86.0.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
-	github.com/mattn/go-runewidth v0.0.27 // indirect
+	github.com/mattn/go-runewidth v0.0.28 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260805114148-88456608a4f6 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

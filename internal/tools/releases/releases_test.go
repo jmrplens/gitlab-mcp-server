@@ -246,7 +246,7 @@ func TestReleaseList_PaginationQueryParamsAndMetadata(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := List(context.Background(), client, ListInput{ProjectID: "42", PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2}})
+	out, err := List(context.Background(), client, ListInput{ProjectID: "42", Page: 1, PerPage: 2})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
 	}
@@ -1366,7 +1366,7 @@ func TestReleaseList_IncludeHTMLDescriptionAndKeyset(t *testing.T) {
 		OrderBy:                "created_at",
 		Sort:                   "asc",
 		IncludeHTMLDescription: true,
-		KeysetPaginationInput:  toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "99"},
+		Pagination:             "keyset", PageToken: "99",
 	}); err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
 	}

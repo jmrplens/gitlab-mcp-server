@@ -99,7 +99,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredInt64("issue_discussion_list", "issue_iid")
 	}
 	opts := &gl.ListIssueDiscussionsOptions{
-		ListOptions: gl.ListOptions{OrderBy: input.OrderBy, Sort: input.Sort},
+		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	discussions, resp, err := client.GL().Discussions.ListIssueDiscussions(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))

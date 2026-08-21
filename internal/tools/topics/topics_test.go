@@ -101,10 +101,10 @@ func TestList_KeysetPagination(t *testing.T) {
 	}))
 
 	out, err := List(t.Context(), client, ListInput{
-		PaginationInput:       toolutil.PaginationInput{PerPage: 50},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
-		OrderBy:               "name",
-		Sort:                  "desc",
+		PerPage:    50,
+		Pagination: "keyset", PageToken: "tok123",
+		OrderBy: "name",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

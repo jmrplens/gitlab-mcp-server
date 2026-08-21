@@ -93,11 +93,13 @@ func TestList_PaginationAndOrdering(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	input := ListInput{OrderBy: "created_at", Sort: "desc"}
-	input.Page = 2
-	input.PerPage = 50
-	input.Pagination = "keyset"
-	input.PageToken = "100"
+	input := ListInput{
+		OrderBy: "created_at", Sort: "desc",
+		Page:       2,
+		PerPage:    50,
+		Pagination: "keyset",
+		PageToken:  "100",
+	}
 
 	_, err := List(t.Context(), client, input)
 	if err != nil {

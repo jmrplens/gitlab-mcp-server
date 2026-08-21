@@ -395,14 +395,12 @@ func TestGroupDatadogToItem_AllFields(t *testing.T) {
 	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	updated := time.Date(2026, 6, 8, 11, 12, 13, 0, time.UTC)
 	src := &gl.GroupDatadogIntegration{
-		Integration: gl.Integration{
-			ID:        99,
-			Title:     "Datadog",
-			Slug:      "datadog",
-			Active:    true,
-			CreatedAt: &created,
-			UpdatedAt: &updated,
-		},
+		ID:        99,
+		Title:     "Datadog",
+		Slug:      "datadog",
+		Active:    true,
+		CreatedAt: &created,
+		UpdatedAt: &updated,
 		Properties: &gl.GroupDatadogIntegrationProperties{
 			APIURL:              testAPIURL,
 			DatadogEnv:          "prod",
@@ -442,7 +440,7 @@ func TestGroupDatadogToItem_AllFields(t *testing.T) {
 func TestGroupDatadogToItem_DeprecatedFlatFallback_CopiesFlatFields(t *testing.T) {
 	archive := true
 	src := &gl.GroupDatadogIntegration{
-		Integration: gl.Integration{ID: 99, Title: "Datadog", Slug: "datadog", Active: true},
+		ID: 99, Title: "Datadog", Slug: "datadog", Active: true,
 	}
 	src.APIURL = testAPIURL           //nolint:staticcheck // SA1019: exercising the deprecated flat fallback.
 	src.DatadogEnv = "prod"           //nolint:staticcheck // SA1019: exercising the deprecated flat fallback.
@@ -468,7 +466,7 @@ func TestGroupDatadogToItem_DeprecatedFlatFallback_CopiesFlatFields(t *testing.T
 // It asserts the returned output matches the expected fields.
 func TestGroupDatadogToItem_NilTimestamps(t *testing.T) {
 	got := groupDatadogToItem(&gl.GroupDatadogIntegration{
-		Integration: gl.Integration{ID: 1, Title: "Datadog", Slug: "datadog", Active: true},
+		ID: 1, Title: "Datadog", Slug: "datadog", Active: true,
 	})
 	if got.CreatedAt != "" || got.UpdatedAt != "" {
 		t.Errorf("expected empty timestamps, got %+v", got)

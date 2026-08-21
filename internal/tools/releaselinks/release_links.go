@@ -291,7 +291,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, errors.New("List: project_id is required. Use gitlab_project_list to find the ID first, then pass it as project_id")
 	}
 	opts := &gl.ListReleaseLinksOptions{
-		ListOptions: gl.ListOptions{OrderBy: input.OrderBy, Sort: input.Sort},
+		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	links, resp, err := client.GL().ReleaseLinks.ListReleaseLinks(string(input.ProjectID), input.TagName, opts, gl.WithContext(ctx))

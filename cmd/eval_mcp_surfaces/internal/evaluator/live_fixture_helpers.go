@@ -95,7 +95,7 @@ func createLiveTemporaryProject(ctx context.Context, client *gitlabclient.Client
 			NamespaceID:           new(toolsGroup.ID),
 			InitializeWithReadme:  new(true),
 			Visibility:            &visibility,
-			ApprovalsBeforeMerge:  &approvalsBeforeMerge,
+			ApprovalsBeforeMerge:  &approvalsBeforeMerge, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 			MergePipelinesEnabled: &mergePipelinesEnabled,
 			OnlyAllowMergeIfAllDiscussionsAreResolved: &onlyAllowMergeIfAllDiscussionsAreResolved,
 			OnlyAllowMergeIfAllStatusChecksPassed:     &onlyAllowMergeIfAllStatusChecksPassed,
@@ -165,7 +165,7 @@ func getLiveMergeRequestWithStatusRecheck(ctx context.Context, client *gitlabcli
 	mergeRequests, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
 		IIDs:                   &iids,
 		WithMergeStatusRecheck: &recheck,
-		ListOptions:            gl.ListOptions{PerPage: 1},
+		PerPage:                1,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, err
@@ -241,7 +241,7 @@ func waitForPipelineJobStatus(ctx context.Context, client *gitlabclient.Client, 
 	deadline := time.Now().Add(4 * time.Minute)
 	var lastStatuses []string
 	for time.Now().Before(deadline) {
-		jobs, _, err := client.GL().Jobs.ListPipelineJobs(projectID, pipelineID, &gl.ListJobsOptions{ListOptions: gl.ListOptions{PerPage: 100}}, gl.WithContext(ctx))
+		jobs, _, err := client.GL().Jobs.ListPipelineJobs(projectID, pipelineID, &gl.ListJobsOptions{PerPage: 100}, gl.WithContext(ctx))
 		if err != nil {
 			return 0, fmt.Errorf("%s: %w", listContext, err)
 		}

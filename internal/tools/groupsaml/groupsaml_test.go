@@ -14,7 +14,6 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestToSAMLUserOutput_AllFields verifies the 1:1 user conversion surfaces every
@@ -169,17 +168,17 @@ func TestSAMLUsersList_AllFilters(t *testing.T) {
 
 	active, blocked := true, false
 	out, err := SAMLUsersList(context.Background(), client, SAMLUsersListInput{
-		GroupID:               "mygroup",
-		Search:                "jane",
-		Username:              "jdoe",
-		Active:                &active,
-		Blocked:               &blocked,
-		CreatedAfter:          "2026-01-01T00:00:00Z",
-		CreatedBefore:         "2026-12-31T23:59:59Z",
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		PaginationInput:       toolutil.PaginationInput{Page: 2, PerPage: 5},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-123"},
+		GroupID:       "mygroup",
+		Search:        "jane",
+		Username:      "jdoe",
+		Active:        &active,
+		Blocked:       &blocked,
+		CreatedAfter:  "2026-01-01T00:00:00Z",
+		CreatedBefore: "2026-12-31T23:59:59Z",
+		OrderBy:       "created_at",
+		Sort:          "desc",
+		Page:          2, PerPage: 5,
+		Pagination: "keyset", PageToken: "tok-123",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

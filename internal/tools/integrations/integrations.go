@@ -236,7 +236,7 @@ func integrationFromService(service any, err error) (*gl.Integration, error) {
 	if !field.IsValid() || !field.CanAddr() {
 		return nil, err
 	}
-	integration, ok := field.Addr().Interface().(*gl.Integration)
+	integration, ok := reflect.TypeAssert[*gl.Integration](field.Addr())
 	if !ok {
 		return nil, err
 	}

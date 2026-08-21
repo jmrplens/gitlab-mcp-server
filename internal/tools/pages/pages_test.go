@@ -13,7 +13,6 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestGetPages_Success verifies GetPages when success.
@@ -183,11 +182,11 @@ func TestListDomains_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	_, err := ListDomains(context.Background(), client, ListDomainsInput{
-		ProjectID:             "42",
-		OrderBy:               "domain",
-		Sort:                  "asc",
-		PaginationInput:       toolutil.PaginationInput{PerPage: 50},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok42"},
+		ProjectID:  "42",
+		OrderBy:    "domain",
+		Sort:       "asc",
+		PerPage:    50,
+		Pagination: "keyset", PageToken: "tok42",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

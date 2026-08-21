@@ -66,12 +66,12 @@ func TestAuditProject_Settings(t *testing.T) {
 				Description:                      "A test project",
 				Visibility:                       gl.PrivateVisibility,
 				DefaultBranch:                    "main",
-				IssuesEnabled:                    true,
-				MergeRequestsEnabled:             true,
-				WikiEnabled:                      false,
-				SnippetsEnabled:                  false,
-				ContainerRegistryEnabled:         false,
-				PackagesEnabled:                  true,
+				IssuesEnabled:                    true,  //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
+				MergeRequestsEnabled:             true,  //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
+				WikiEnabled:                      false, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
+				SnippetsEnabled:                  false, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
+				ContainerRegistryEnabled:         false, //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
+				PackagesEnabled:                  true,  //nolint:staticcheck // deprecated SDK field/API is exposed deliberately: the 1:1 parity policy mirrors the full surface while upstream keeps it
 				MergeMethod:                      gl.FastForwardMerge,
 				SquashOption:                     "default_on",
 				OnlyAllowMergeIfPipelineSucceeds: true,

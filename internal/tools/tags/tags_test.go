@@ -181,7 +181,7 @@ func TestTagList_PaginationQueryParamsAndMetadata(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := List(context.Background(), client, ListInput{ProjectID: "42", PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 3}})
+	out, err := List(context.Background(), client, ListInput{ProjectID: "42", Page: 1, PerPage: 3})
 	if err != nil {
 		t.Fatalf(fmtListUnexpErr, err)
 	}
@@ -926,8 +926,8 @@ func TestTagListProtected_Pagination(t *testing.T) {
 	}))
 
 	out, err := ListProtectedTags(context.Background(), client, ListProtectedTagsInput{
-		ProjectID:       "42",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		ProjectID: "42",
+		Page:      2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf("ListProtectedTags() unexpected error: %v", err)
@@ -965,10 +965,10 @@ func TestTagListProtected_KeysetOrderingParams(t *testing.T) {
 	}))
 
 	out, err := ListProtectedTags(context.Background(), client, ListProtectedTagsInput{
-		ProjectID:             "42",
-		OrderBy:               "name",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+		ProjectID:  "42",
+		OrderBy:    "name",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf("ListProtectedTags() unexpected error: %v", err)
@@ -997,8 +997,8 @@ func TestTagList_KeysetParams(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:             "42",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor9"},
+		ProjectID:  "42",
+		Pagination: "keyset", PageToken: "cursor9",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

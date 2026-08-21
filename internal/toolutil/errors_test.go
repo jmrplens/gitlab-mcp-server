@@ -596,8 +596,7 @@ func TestWrapErrWithMessage_IncludesGitLabMessage(t *testing.T) {
 		t.Errorf("expected GitLab message detail, got: %s", msg)
 	}
 	// Verify error chain preserved
-	var glErr *gl.ErrorResponse
-	if !errors.As(wrapped, &glErr) {
+	if _, ok := errors.AsType[*gl.ErrorResponse](wrapped); !ok {
 		t.Error("expected errors.As to find gl.ErrorResponse in chain")
 	}
 }
@@ -669,8 +668,7 @@ func TestWrapErrWithHint_IncludesHintAndMessage(t *testing.T) {
 		t.Errorf("expected hint content, got: %s", msg)
 	}
 	// Verify error chain preserved
-	var glErr *gl.ErrorResponse
-	if !errors.As(wrapped, &glErr) {
+	if _, ok := errors.AsType[*gl.ErrorResponse](wrapped); !ok {
 		t.Error("expected errors.As to find gl.ErrorResponse in chain")
 	}
 }

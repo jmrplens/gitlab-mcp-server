@@ -514,8 +514,8 @@ func TestList_WithPaginationParams(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		GroupID:         "10",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		GroupID: "10",
+		Page:    2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
@@ -544,11 +544,11 @@ func TestList_WithKeysetAndSort(t *testing.T) {
 
 	archived := true
 	_, err := List(context.Background(), client, ListInput{
-		GroupID:               "10",
-		OrderBy:               "name",
-		Sort:                  "desc",
-		Archived:              &archived,
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-42"},
+		GroupID:    "10",
+		OrderBy:    "name",
+		Sort:       "desc",
+		Archived:   &archived,
+		Pagination: "keyset", PageToken: "cursor-42",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

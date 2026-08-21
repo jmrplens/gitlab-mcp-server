@@ -65,7 +65,7 @@ func ListMetricImages(ctx context.Context, client *gitlabclient.Client, input Li
 		return ListMetricImagesOutput{}, toolutil.ErrRequiredInt64("gitlab_list_alert_metric_images", "alert_iid")
 	}
 	opts := &gl.ListMetricImagesOptions{
-		ListOptions: gl.ListOptions{OrderBy: input.OrderBy, Sort: input.Sort},
+		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	images, resp, err := client.GL().AlertManagement.ListMetricImages(string(input.ProjectID), input.AlertIID, opts, gl.WithContext(ctx))

@@ -31,7 +31,7 @@ This directory contains Architectural Decision Records (ADRs) for gitlab-mcp-ser
 
 ADR-0001 through ADR-0003 were founding decisions made at project inception and not formally recorded as ADR documents. Their outcomes are reflected throughout the codebase:
 
-- **ADR-0001 (Go)**: Go 1.26+ is the sole implementation language — see [go.mod](../../../go.mod)
+- **ADR-0001 (Go)**: Go 1.27+ is the sole implementation language — see [go.mod](../../../go.mod)
 - **ADR-0002 (stdio transport)**: stdio is the primary transport — see [cmd/server/main.go](../../../cmd/server/main.go)
 - **ADR-0003 (GitLab REST API v4)**: Uses `gitlab.com/gitlab-org/api/client-go/v2` — see [go.mod](../../../go.mod)
 

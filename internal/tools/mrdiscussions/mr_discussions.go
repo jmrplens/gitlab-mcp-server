@@ -248,7 +248,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, toolutil.ErrRequiredInt64("mrDiscussionList", "merge_request_iid")
 	}
 	opts := &gl.ListMergeRequestDiscussionsOptions{
-		ListOptions: gl.ListOptions{OrderBy: input.OrderBy, Sort: input.Sort},
+		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	discussions, resp, err := client.GL().Discussions.ListMergeRequestDiscussions(string(input.ProjectID), input.MRIID, opts, gl.WithContext(ctx))
@@ -456,7 +456,7 @@ func buildLinePositionOptions(p *DiffLinePositionInput) *gl.LinePositionOptions 
 // error messages explaining what went wrong.
 func validatePosition(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, pos *DiffPosition) error {
 	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, mrIID, &gl.ListMergeRequestDiffsOptions{
-		ListOptions: gl.ListOptions{PerPage: 100},
+		PerPage: 100,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil //nolint:nilerr // Best-effort: if we can't fetch diffs, skip validation

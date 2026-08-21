@@ -647,31 +647,29 @@ func TestCreateInstance_WithAllPermissions(t *testing.T) {
 	}))
 
 	out, err := CreateInstance(context.Background(), client, CreateInstanceInput{
-		Name:            "full-perms",
-		BaseAccessLevel: 30,
-		Description:     "All permissions",
-		Permissions: Permissions{
-			AdminCICDVariables:         &trueVal,
-			AdminComplianceFramework:   &trueVal,
-			AdminGroupMembers:          &trueVal,
-			AdminMergeRequests:         &trueVal,
-			AdminPushRules:             &trueVal,
-			AdminTerraformState:        &trueVal,
-			AdminVulnerability:         &trueVal,
-			AdminWebHook:               &trueVal,
-			ArchiveProject:             &trueVal,
-			ManageDeployTokens:         &trueVal,
-			ManageGroupAccessTokens:    &trueVal,
-			ManageMergeRequestSettings: &trueVal,
-			ManageProjectAccessTokens:  &trueVal,
-			ManageSecurityPolicyLink:   &trueVal,
-			ReadCode:                   &trueVal,
-			ReadRunners:                &trueVal,
-			ReadDependency:             &trueVal,
-			ReadVulnerability:          &trueVal,
-			RemoveGroup:                &trueVal,
-			RemoveProject:              &trueVal,
-		},
+		Name:                       "full-perms",
+		BaseAccessLevel:            30,
+		Description:                "All permissions",
+		AdminCICDVariables:         &trueVal,
+		AdminComplianceFramework:   &trueVal,
+		AdminGroupMembers:          &trueVal,
+		AdminMergeRequests:         &trueVal,
+		AdminPushRules:             &trueVal,
+		AdminTerraformState:        &trueVal,
+		AdminVulnerability:         &trueVal,
+		AdminWebHook:               &trueVal,
+		ArchiveProject:             &trueVal,
+		ManageDeployTokens:         &trueVal,
+		ManageGroupAccessTokens:    &trueVal,
+		ManageMergeRequestSettings: &trueVal,
+		ManageProjectAccessTokens:  &trueVal,
+		ManageSecurityPolicyLink:   &trueVal,
+		ReadCode:                   &trueVal,
+		ReadRunners:                &trueVal,
+		ReadDependency:             &trueVal,
+		ReadVulnerability:          &trueVal,
+		RemoveGroup:                &trueVal,
+		RemoveProject:              &trueVal,
 	})
 	if err != nil {
 		t.Fatalf("CreateInstance() error: %v", err)
@@ -716,14 +714,12 @@ func TestCreateGroup_WithDescriptionAndPermissions(t *testing.T) {
 	}))
 
 	out, err := CreateGroup(context.Background(), client, CreateGroupInput{
-		GroupID:         toolutil.StringOrInt("mygroup"),
-		Name:            "group-role",
-		BaseAccessLevel: 20,
-		Description:     "Group role with perms",
-		Permissions: Permissions{
-			ReadCode:           &trueVal,
-			AdminMergeRequests: &trueVal,
-		},
+		GroupID:            toolutil.StringOrInt("mygroup"),
+		Name:               "group-role",
+		BaseAccessLevel:    20,
+		Description:        "Group role with perms",
+		ReadCode:           &trueVal,
+		AdminMergeRequests: &trueVal,
 	})
 	if err != nil {
 		t.Fatalf("CreateGroup() error: %v", err)

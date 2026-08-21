@@ -255,9 +255,9 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatCreateMarkdown(t *testing.T) {
-	out := CreateOutput{ApplicationItem: ApplicationItem{
+	out := CreateOutput{
 		ID: 2, ApplicationName: "New", ApplicationID: "aid-2", Secret: "sec", CallbackURL: "http://cb", Confidential: false,
-	}}
+	}
 	md := FormatCreateMarkdown(out)
 	if !strings.Contains(md, "New") {
 		t.Error("missing app name")
@@ -270,9 +270,9 @@ func TestFormatCreateMarkdown(t *testing.T) {
 // TestFormatRenewSecretMarkdown verifies the RenewSecret Markdown formatter
 // renders the application identity and the freshly rotated secret.
 func TestFormatRenewSecretMarkdown(t *testing.T) {
-	out := RenewSecretOutput{ApplicationItem: ApplicationItem{
+	out := RenewSecretOutput{
 		ID: 2, ApplicationName: "Rotated", ApplicationID: "aid-2", Secret: "freshsecret", CallbackURL: "http://cb", Confidential: true,
-	}}
+	}
 	md := FormatRenewSecretMarkdown(out)
 	if !strings.Contains(md, "Renewed") {
 		t.Error("missing renewed heading")
@@ -307,7 +307,7 @@ func TestList_WithPagination(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+		Page: 2, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -337,9 +337,9 @@ func TestList_WithKeysetAndSort(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, handler)
 	out, err := List(t.Context(), client, ListInput{
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-9"},
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok-9",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

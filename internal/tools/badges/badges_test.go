@@ -274,10 +274,10 @@ func TestListGroup_KeysetPagination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[`+badgeJSON+`]`)
 	}))
 	out, err := ListGroup(t.Context(), client, ListGroupInput{
-		GroupID:               "1",
-		OrderBy:               "name",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
+		GroupID:    "1",
+		OrderBy:    "name",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "7",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -680,10 +680,10 @@ func TestListProject_KeysetPagination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[`+badgeJSON+`]`)
 	}))
 	out, err := ListProject(t.Context(), client, ListProjectInput{
-		ProjectID:             "1",
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+		ProjectID:  "1",
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "42",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

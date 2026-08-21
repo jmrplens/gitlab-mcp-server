@@ -229,7 +229,7 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatGetMarkdown_Output(t *testing.T) {
-	md := FormatGetMarkdown(GetOutput{AttributeItem: AttributeItem{Key: "k", Value: "v"}})
+	md := FormatGetMarkdown(GetOutput{Key: "k", Value: "v"})
 	if !strings.Contains(md, "k") || !strings.Contains(md, "v") {
 		t.Error("missing key/value")
 	}
@@ -494,7 +494,7 @@ func TestList_Error(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatSetMarkdown_Coverage(t *testing.T) {
-	md := FormatSetMarkdown(SetOutput{AttributeItem: AttributeItem{Key: "env", Value: "prod"}})
+	md := FormatSetMarkdown(SetOutput{Key: "env", Value: "prod"})
 	if !strings.Contains(md, "env") || !strings.Contains(md, "prod") {
 		t.Error("missing key/value in markdown")
 	}

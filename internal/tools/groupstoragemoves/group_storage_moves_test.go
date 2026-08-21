@@ -328,7 +328,7 @@ func TestRetrieveAll_Pagination(t *testing.T) {
 	}))
 
 	out, err := RetrieveAll(context.Background(), client, ListInput{
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		Page: 2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf("RetrieveAll() error: %v", err)
@@ -390,8 +390,8 @@ func TestRetrieveForGroup_Pagination(t *testing.T) {
 	}))
 
 	out, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{
-		GroupID:         10,
-		PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 10},
+		GroupID: 10,
+		Page:    3, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("RetrieveForGroup() error: %v", err)
@@ -782,9 +782,9 @@ func TestRetrieveAll_KeysetAndSort(t *testing.T) {
 	}))
 
 	out, err := RetrieveAll(context.Background(), client, ListInput{
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "99"},
-		OrderBy:               "id",
-		Sort:                  "desc",
+		Pagination: "keyset", PageToken: "99",
+		OrderBy: "id",
+		Sort:    "desc",
 	})
 	if err != nil {
 		t.Fatalf("RetrieveAll() error: %v", err)
@@ -810,10 +810,10 @@ func TestRetrieveForGroup_KeysetAndSort(t *testing.T) {
 	}))
 
 	out, err := RetrieveForGroup(context.Background(), client, ListForGroupInput{
-		GroupID:               10,
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
-		OrderBy:               "id",
-		Sort:                  "asc",
+		GroupID:    10,
+		Pagination: "keyset", PageToken: "7",
+		OrderBy: "id",
+		Sort:    "asc",
 	})
 	if err != nil {
 		t.Fatalf("RetrieveForGroup() error: %v", err)

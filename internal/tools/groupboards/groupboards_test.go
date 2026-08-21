@@ -987,7 +987,7 @@ func TestListGroupBoards_OrderBySortKeyset(t *testing.T) {
 
 	_, err := ListGroupBoards(context.Background(), client, ListGroupBoardsInput{
 		GroupID: toolutil.StringOrInt("42"), OrderBy: "created_at", Sort: "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "100"},
+		Pagination: "keyset", PageToken: "100",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1013,7 +1013,7 @@ func TestListGroupBoardLists_OrderBySortKeyset(t *testing.T) {
 
 	_, err := ListGroupBoardLists(context.Background(), client, ListGroupBoardListsInput{
 		GroupID: toolutil.StringOrInt("42"), BoardID: 1, OrderBy: "position", Sort: "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "5"},
+		Pagination: "keyset", PageToken: "5",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

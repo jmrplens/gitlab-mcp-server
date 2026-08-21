@@ -816,8 +816,8 @@ func TestListBoards_WithPagination(t *testing.T) {
 			testutil.PaginationHeaders{Page: "2", PerPage: "5", Total: "10", TotalPages: "2"})
 	}))
 	out, err := ListBoards(context.Background(), client, ListBoardsInput{
-		ProjectID:       "10",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		ProjectID: "10",
+		Page:      2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1523,10 +1523,10 @@ func TestListBoards_OrderBySort(t *testing.T) {
 			testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "1", TotalPages: "1"})
 	}))
 	_, err := ListBoards(context.Background(), client, ListBoardsInput{
-		ProjectID:             "10",
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset"},
+		ProjectID:  "10",
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		Pagination: "keyset",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

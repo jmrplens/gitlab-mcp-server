@@ -284,11 +284,11 @@ func TestList_KeysetPaginationAndSort(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		GroupID:               toolutil.StringOrInt("42"),
-		OrderBy:               "id",
-		Sort:                  "desc",
-		PaginationInput:       toolutil.PaginationInput{PerPage: 50},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-99"},
+		GroupID:    toolutil.StringOrInt("42"),
+		OrderBy:    "id",
+		Sort:       "desc",
+		PerPage:    50,
+		Pagination: "keyset", PageToken: "cursor-99",
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)

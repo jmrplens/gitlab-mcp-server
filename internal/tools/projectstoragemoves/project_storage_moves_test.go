@@ -215,9 +215,9 @@ func TestRetrieveAll_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	in := ListInput{
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "99"},
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "99",
 	}
 	out, err := RetrieveAll(context.Background(), client, in)
 	if err != nil {
@@ -249,10 +249,10 @@ func TestRetrieveForProject_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	in := ListForProjectInput{
-		ProjectID:             42,
-		OrderBy:               "id",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
+		ProjectID:  42,
+		OrderBy:    "id",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "7",
 	}
 	out, err := RetrieveForProject(context.Background(), client, in)
 	if err != nil {

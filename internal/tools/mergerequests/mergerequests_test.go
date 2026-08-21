@@ -218,7 +218,7 @@ func TestMRList_PaginationQueryParamsAndMetadata(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10}})
+	out, err := List(context.Background(), client, ListInput{ProjectID: testProjectID, Page: 2, PerPage: 10})
 	if err != nil {
 		t.Fatalf(fmtMRListErr, err)
 	}
@@ -1568,7 +1568,7 @@ func TestMRPaginationBranches(t *testing.T) {
 			}
 			http.NotFound(w, r)
 		}))
-		_, err := Commits(context.Background(), client, CommitsInput{ProjectID: testProjectID, MRIID: 1, PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 7}})
+		_, err := Commits(context.Background(), client, CommitsInput{ProjectID: testProjectID, MRIID: 1, Page: 3, PerPage: 7})
 		if err != nil {
 			t.Fatalf("Commits() unexpected error: %v", err)
 		}
@@ -1584,7 +1584,7 @@ func TestMRPaginationBranches(t *testing.T) {
 			}
 			http.NotFound(w, r)
 		}))
-		_, err := IssuesClosed(context.Background(), client, IssuesClosedInput{ProjectID: testProjectID, MRIID: 1, PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5}})
+		_, err := IssuesClosed(context.Background(), client, IssuesClosedInput{ProjectID: testProjectID, MRIID: 1, Page: 2, PerPage: 5})
 		if err != nil {
 			t.Fatalf("IssuesClosed() unexpected error: %v", err)
 		}
@@ -1600,7 +1600,7 @@ func TestMRPaginationBranches(t *testing.T) {
 			}
 			http.NotFound(w, r)
 		}))
-		_, err := RelatedIssues(context.Background(), client, RelatedIssuesInput{ProjectID: testProjectID, MRIID: 1, PaginationInput: toolutil.PaginationInput{Page: 4, PerPage: 9}})
+		_, err := RelatedIssues(context.Background(), client, RelatedIssuesInput{ProjectID: testProjectID, MRIID: 1, Page: 4, PerPage: 9})
 		if err != nil {
 			t.Fatalf("RelatedIssues() unexpected error: %v", err)
 		}
@@ -1658,20 +1658,16 @@ func TestMRRebase_WithSkipCI(t *testing.T) {
 func TestDiagnoseMergeBlocker_Branches(t *testing.T) {
 	assertContains(t, diagnoseMergeBlocker(1, nil, io.EOF), "mrMerge")
 	assertContains(t, diagnoseMergeBlocker(1, &gl.MergeRequest{
-		BasicMergeRequest: gl.BasicMergeRequest{
-			Draft:                       true,
-			HasConflicts:                true,
-			BlockingDiscussionsResolved: false,
-			State:                       "closed",
-		},
-		MergeError: "pipeline failed",
+		Draft:                       true,
+		HasConflicts:                true,
+		BlockingDiscussionsResolved: false,
+		State:                       "closed",
+		MergeError:                  "pipeline failed",
 	}, io.EOF), "pipeline failed")
 	assertContains(t, diagnoseMergeBlocker(1, &gl.MergeRequest{
-		BasicMergeRequest: gl.BasicMergeRequest{
-			DetailedMergeStatus:         "mergeable",
-			BlockingDiscussionsResolved: true,
-			State:                       "opened",
-		},
+		DetailedMergeStatus:         "mergeable",
+		BlockingDiscussionsResolved: true,
+		State:                       "opened",
 	}, io.EOF), "mrMerge")
 }
 
@@ -2018,10 +2014,8 @@ func TestFormatCreatePipelineMarkdown_Minimal(t *testing.T) {
 // TestFormatTimeStatsMarkdown_Populated verifies FormatTimeStatsMarkdown when populated.
 func TestFormatTimeStatsMarkdown_Populated(t *testing.T) {
 	md := FormatTimeStatsMarkdown(TimeStatsOutput{
-		TimeStatsOutput: toolutil.TimeStatsOutput{
-			HumanTimeEstimate: "3h", HumanTotalTimeSpent: "1h30m",
-			TimeEstimate: 10800, TotalTimeSpent: 5400,
-		},
+		HumanTimeEstimate: "3h", HumanTotalTimeSpent: "1h30m",
+		TimeEstimate: 10800, TotalTimeSpent: 5400,
 	})
 	for _, want := range []string{"3h", "10800", "1h30m", "5400"} {
 		if !strings.Contains(md, want) {
@@ -3589,25 +3583,25 @@ func TestList_AllFilterFields(t *testing.T) {
 
 	boolTrue := true
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:       testProjectID,
-		State:           testStateOpened,
-		Labels:          testLabels,
-		NotLabels:       []string{testLabelWontfix},
-		Milestone:       testMilestoneV1,
-		Scope:           "all",
-		Search:          "login",
-		SourceBranch:    testBranchFeat,
-		TargetBranch:    testBranchMain,
-		AuthorUsername:  testAuthorAlice,
-		Draft:           &boolTrue,
-		IIDs:            []int64{1, 2},
-		CreatedAfter:    testCreatedAt,
-		CreatedBefore:   testCreatedBefore,
-		UpdatedAfter:    testCreatedAt,
-		UpdatedBefore:   testCreatedBefore,
-		OrderBy:         "created_at",
-		Sort:            "desc",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 50},
+		ProjectID:      testProjectID,
+		State:          testStateOpened,
+		Labels:         testLabels,
+		NotLabels:      []string{testLabelWontfix},
+		Milestone:      testMilestoneV1,
+		Scope:          "all",
+		Search:         "login",
+		SourceBranch:   testBranchFeat,
+		TargetBranch:   testBranchMain,
+		AuthorUsername: testAuthorAlice,
+		Draft:          &boolTrue,
+		IIDs:           []int64{1, 2},
+		CreatedAfter:   testCreatedAt,
+		CreatedBefore:  testCreatedBefore,
+		UpdatedAfter:   testCreatedAt,
+		UpdatedBefore:  testCreatedBefore,
+		OrderBy:        "created_at",
+		Sort:           "desc",
+		Page:           2, PerPage: 50,
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
@@ -3648,7 +3642,7 @@ func TestListGlobal_AllFilterFields(t *testing.T) {
 		UpdatedBefore:    testCreatedBefore,
 		OrderBy:          "created_at",
 		Sort:             "desc",
-		PaginationInput:  toolutil.PaginationInput{Page: 1, PerPage: 50},
+		Page:             1, PerPage: 50,
 	})
 	if err != nil {
 		t.Fatalf("ListGlobal() unexpected error: %v", err)
@@ -3690,7 +3684,7 @@ func TestListGroup_AllFilterFields(t *testing.T) {
 		UpdatedBefore:    testCreatedBefore,
 		OrderBy:          "created_at",
 		Sort:             "desc",
-		PaginationInput:  toolutil.PaginationInput{Page: 1, PerPage: 50},
+		Page:             1, PerPage: 50,
 	})
 	if err != nil {
 		t.Fatalf("ListGroup() unexpected error: %v", err)
@@ -4919,8 +4913,8 @@ func TestList_Keyset_ReachQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathMRs, &q))
 
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:             testProjectID,
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "500"},
+		ProjectID:  testProjectID,
+		Pagination: "keyset", PageToken: "500",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
@@ -4952,7 +4946,7 @@ func TestListGlobal_NewFilterFields_ReachQuery(t *testing.T) {
 		WithLabelsDetails:      &boolTrue,
 		WithMergeStatusRecheck: &boolTrue,
 		NonArchived:            &boolTrue,
-		KeysetPaginationInput:  toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "900"},
+		Pagination:             "keyset", PageToken: "900",
 	})
 	if err != nil {
 		t.Fatalf("ListGlobal() unexpected error: %v", err)
@@ -5002,7 +4996,7 @@ func TestListGroup_NewFilterFields_ReachQuery(t *testing.T) {
 		WithLabelsDetails:      &boolTrue,
 		WithMergeStatusRecheck: &boolTrue,
 		NonArchived:            &boolTrue,
-		KeysetPaginationInput:  toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "123"},
+		Pagination:             "keyset", PageToken: "123",
 	})
 	if err != nil {
 		t.Fatalf("ListGroup() unexpected error: %v", err)
@@ -5035,11 +5029,11 @@ func TestCommits_OrderSortKeyset_ReachQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathMR1+"/commits", &q))
 
 	_, err := Commits(context.Background(), client, CommitsInput{
-		ProjectID:             testProjectID,
-		MRIID:                 1,
-		OrderBy:               "created_at",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "77"},
+		ProjectID:  testProjectID,
+		MRIID:      1,
+		OrderBy:    "created_at",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "77",
 	})
 	if err != nil {
 		t.Fatalf("Commits() unexpected error: %v", err)
@@ -5057,11 +5051,11 @@ func TestIssuesClosed_OrderSortKeyset_ReachQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathMR1+"/closes_issues", &q))
 
 	_, err := IssuesClosed(context.Background(), client, IssuesClosedInput{
-		ProjectID:             testProjectID,
-		MRIID:                 1,
-		OrderBy:               "updated_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "88"},
+		ProjectID:  testProjectID,
+		MRIID:      1,
+		OrderBy:    "updated_at",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "88",
 	})
 	if err != nil {
 		t.Fatalf("IssuesClosed() unexpected error: %v", err)
@@ -5079,11 +5073,11 @@ func TestRelatedIssues_OrderSortKeyset_ReachQuery(t *testing.T) {
 	client := testutil.NewTestClient(t, captureQueryHandler(t, http.MethodGet, pathMR1+"/related_issues", &q))
 
 	_, err := RelatedIssues(context.Background(), client, RelatedIssuesInput{
-		ProjectID:             testProjectID,
-		MRIID:                 1,
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "99"},
+		ProjectID:  testProjectID,
+		MRIID:      1,
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "99",
 	})
 	if err != nil {
 		t.Fatalf("RelatedIssues() unexpected error: %v", err)

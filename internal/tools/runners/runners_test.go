@@ -1051,15 +1051,15 @@ func TestList_WithAllFilters(t *testing.T) {
 
 	paused := true
 	_, err := List(context.Background(), client, ListInput{
-		Type:                  "project_type",
-		Status:                "online",
-		Paused:                &paused,
-		TagList:               []string{"docker", "linux"},
-		Scope:                 "shared",
-		OrderBy:               "id",
-		Sort:                  "desc",
-		PaginationInput:       toolutil.PaginationInput{Page: 2, PerPage: 5},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-1"},
+		Type:    "project_type",
+		Status:  "online",
+		Paused:  &paused,
+		TagList: []string{"docker", "linux"},
+		Scope:   "shared",
+		OrderBy: "id",
+		Sort:    "desc",
+		Page:    2, PerPage: 5,
+		Pagination: "keyset", PageToken: "tok-1",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1224,12 +1224,12 @@ func TestListJobs_WithAllFilters(t *testing.T) {
 	}))
 
 	_, err := ListJobs(context.Background(), client, ListJobsInput{
-		RunnerID:              10,
-		Status:                "running",
-		OrderBy:               "id",
-		Sort:                  "desc",
-		PaginationInput:       toolutil.PaginationInput{Page: 3, PerPage: 10},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "j-tok"},
+		RunnerID: 10,
+		Status:   "running",
+		OrderBy:  "id",
+		Sort:     "desc",
+		Page:     3, PerPage: 10,
+		Pagination: "keyset", PageToken: "j-tok",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1278,16 +1278,16 @@ func TestListProject_AllFilters(t *testing.T) {
 
 	paused := false
 	_, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID:             "42",
-		Type:                  "group_type",
-		Status:                "online",
-		Paused:                &paused,
-		TagList:               []string{"docker", "linux"},
-		Scope:                 "active",
-		OrderBy:               "id",
-		Sort:                  "asc",
-		PaginationInput:       toolutil.PaginationInput{Page: 1, PerPage: 5},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "p-tok"},
+		ProjectID: "42",
+		Type:      "group_type",
+		Status:    "online",
+		Paused:    &paused,
+		TagList:   []string{"docker", "linux"},
+		Scope:     "active",
+		OrderBy:   "id",
+		Sort:      "asc",
+		Page:      1, PerPage: 5,
+		Pagination: "keyset", PageToken: "p-tok",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1381,11 +1381,11 @@ func TestListGroup_AllFilters(t *testing.T) {
 	}))
 
 	_, err := ListGroup(context.Background(), client, ListGroupInput{
-		GroupID:         "7",
-		Type:            "instance_type",
-		Status:          "offline",
-		TagList:         []string{"ci", "nightly"},
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 5},
+		GroupID: "7",
+		Type:    "instance_type",
+		Status:  "offline",
+		TagList: []string{"ci", "nightly"},
+		Page:    1, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1608,11 +1608,11 @@ func TestListAll_AllFilters(t *testing.T) {
 
 	paused := false
 	_, err := ListAll(context.Background(), client, ListAllInput{
-		Type:            "instance_type",
-		Status:          "online",
-		Paused:          &paused,
-		TagList:         []string{"docker", "ci"},
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 5},
+		Type:    "instance_type",
+		Status:  "online",
+		Paused:  &paused,
+		TagList: []string{"docker", "ci"},
+		Page:    1, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

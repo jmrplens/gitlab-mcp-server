@@ -33,7 +33,7 @@ func TestListPendingProjectInvitations_Success(t *testing.T) {
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 	}))
 
-	out, err := ListPendingProjectInvitations(context.Background(), client, ListPendingProjectInvitationsInput{ProjectID: "42", PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}})
+	out, err := ListPendingProjectInvitations(context.Background(), client, ListPendingProjectInvitationsInput{ProjectID: "42", Page: 1, PerPage: 20})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -755,11 +755,11 @@ func TestListPendingProjectInvitations_KeysetAndSort(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListPendingProjectInvitations(context.Background(), client, ListPendingProjectInvitationsInput{
-		ProjectID:             "42",
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		PaginationInput:       toolutil.PaginationInput{PerPage: 50},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-7"},
+		ProjectID:  "42",
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		PerPage:    50,
+		Pagination: "keyset", PageToken: "cursor-7",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -784,10 +784,10 @@ func TestListPendingGroupInvitations_KeysetAndSort(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListPendingGroupInvitations(context.Background(), client, ListPendingGroupInvitationsInput{
-		GroupID:               "10",
-		OrderBy:               "id",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-3"},
+		GroupID:    "10",
+		OrderBy:    "id",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "cursor-3",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

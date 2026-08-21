@@ -1263,9 +1263,9 @@ func TestDraftNoteList_Keyset(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:             "42",
-		MRIID:                 1,
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok99"},
+		ProjectID:  "42",
+		MRIID:      1,
+		Pagination: "keyset", PageToken: "tok99",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

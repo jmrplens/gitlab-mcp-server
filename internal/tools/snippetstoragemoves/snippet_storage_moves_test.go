@@ -333,9 +333,11 @@ func TestRetrieveForSnippet_Pagination(t *testing.T) {
 		})
 	}))
 
-	in := ListForSnippetInput{SnippetID: 55}
-	in.Page = 2
-	in.PerPage = 5
+	in := ListForSnippetInput{
+		SnippetID: 55,
+		Page:      2,
+		PerPage:   5,
+	}
 	out, err := RetrieveForSnippet(context.Background(), client, in)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -367,9 +369,10 @@ func TestRetrieveAll_Pagination(t *testing.T) {
 		})
 	}))
 
-	in := ListInput{}
-	in.Page = 3
-	in.PerPage = 10
+	in := ListInput{
+		Page:    3,
+		PerPage: 10,
+	}
 	out, err := RetrieveAll(context.Background(), client, in)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -778,9 +781,11 @@ func TestRetrieveAll_OrderingAndKeyset(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
 	}))
 
-	in := ListInput{OrderBy: "id", Sort: "desc"}
-	in.Pagination = "keyset"
-	in.PageToken = "100"
+	in := ListInput{
+		OrderBy: "id", Sort: "desc",
+		Pagination: "keyset",
+		PageToken:  "100",
+	}
 	out, err := RetrieveAll(context.Background(), client, in)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -801,9 +806,11 @@ func TestRetrieveForSnippet_OrderingAndKeyset(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[`+storageMoveJSON+`]`)
 	}))
 
-	in := ListForSnippetInput{SnippetID: 55, OrderBy: "id", Sort: "asc"}
-	in.Pagination = "keyset"
-	in.PageToken = "42"
+	in := ListForSnippetInput{
+		SnippetID: 55, OrderBy: "id", Sort: "asc",
+		Pagination: "keyset",
+		PageToken:  "42",
+	}
 	out, err := RetrieveForSnippet(context.Background(), client, in)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

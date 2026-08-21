@@ -4193,9 +4193,9 @@ func TestBranchList_WithSearchParam(t *testing.T) {
 	}))
 
 	out, err := branches.List(context.Background(), client, branches.ListInput{
-		ProjectID:       "42",
-		Search:          "feature",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+		ProjectID: "42",
+		Search:    "feature",
+		Page:      2, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("branchList() unexpected error: %v", err)

@@ -175,7 +175,7 @@ func handleAuditBranchProtection(ctx context.Context, client *gitlabclient.Clien
 	}
 
 	protectedBranches, _, err := client.GL().ProtectedBranches.ListProtectedBranches(projectID, &gl.ListProtectedBranchesOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("audit_branch_protection: failed to list protected branches: %w", err)
@@ -311,7 +311,7 @@ func handleAuditProjectAccess(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	members, _, err := client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil, fmt.Errorf("audit_project_access: failed to list members: %w", err)
@@ -419,7 +419,7 @@ func handleAuditProjectWorkflow(ctx context.Context, client *gitlabclient.Client
 	fmt.Fprintf(&b, "# Workflow Audit — %s\n\n", project.PathWithNamespace)
 
 	labels, _, labelsErr := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if labelsErr != nil {
 		slog.Warn("failed to fetch labels", "error", labelsErr)
@@ -427,23 +427,23 @@ func handleAuditProjectWorkflow(ctx context.Context, client *gitlabclient.Client
 	writeLabelsAudit(&b, labels)
 
 	activeMilestones, _, _ := client.GL().Milestones.ListMilestones(projectID, &gl.ListMilestonesOptions{
-		State:       new("active"),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:   new("active"),
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	closedMilestones, _, _ := client.GL().Milestones.ListMilestones(projectID, &gl.ListMilestonesOptions{
-		State:       new("closed"),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:   new("closed"),
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	writeMilestonesAudit(&b, activeMilestones, closedMilestones)
 
 	issueTemplates, _, issueTPLErr := client.GL().ProjectTemplates.ListTemplates(projectID, "issues", &gl.ListProjectTemplatesOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if issueTPLErr != nil {
 		slog.Debug("issue templates not available", "error", issueTPLErr)
 	}
 	mrTemplates, _, mrTPLErr := client.GL().ProjectTemplates.ListTemplates(projectID, "merge_requests", &gl.ListProjectTemplatesOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if mrTPLErr != nil {
 		slog.Debug("MR templates not available", "error", mrTPLErr)
@@ -576,34 +576,34 @@ func handleAuditProjectFull(ctx context.Context, client *gitlabclient.Client, re
 	}
 
 	protectedBranches, _, _ := client.GL().ProtectedBranches.ListProtectedBranches(projectID, &gl.ListProtectedBranchesOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	members, _, _ := client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	labels, _, _ := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	activeMilestones, _, _ := client.GL().Milestones.ListMilestones(projectID, &gl.ListMilestonesOptions{
-		State:       new("active"),
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		State:   new("active"),
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	issueTemplates, _, _ := client.GL().ProjectTemplates.ListTemplates(projectID, "issues", &gl.ListProjectTemplatesOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	mrTemplates, _, _ := client.GL().ProjectTemplates.ListTemplates(projectID, "merge_requests", &gl.ListProjectTemplatesOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	pushRule, _, _ := client.GL().Projects.GetProjectPushRules(projectID, gl.WithContext(ctx))
 
 	webhooks, _, _ := client.GL().Projects.ListProjectHooks(projectID, &gl.ListProjectHooksOptions{
-		ListOptions: gl.ListOptions{PerPage: maxListItems},
+		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder

@@ -13,7 +13,6 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // testMinimalWorkItem is a bare-minimum WorkItem for toOutput converter tests.
@@ -49,7 +48,7 @@ var testFullWorkItem = func() gl.WorkItem {
 		Author:       &gl.BasicUser{ID: 1, Username: "alice", Name: "Alice", State: "active", AvatarURL: "a.png", WebURL: "https://gitlab.example.com/alice", CreatedAt: &created},
 		Assignees:    []*gl.BasicUser{{Username: "bob"}, nil, {Username: "carol"}},
 		Labels:       []gl.LabelDetails{{Name: "planning"}, {Name: "priority"}},
-		LinkedItems:  []gl.LinkedWorkItem{{WorkItemIID: gl.WorkItemIID{IID: 5, NamespacePath: "g/sub"}, LinkType: "blocks"}},
+		LinkedItems:  []gl.LinkedWorkItem{{IID: 5, NamespacePath: "g/sub", LinkType: "blocks"}},
 		Color:        &color,
 		HealthStatus: &health,
 		Weight:       &weight,
@@ -187,23 +186,23 @@ func TestList_RESTFilterOptions(t *testing.T) {
 	first := int64(10)
 	authorID := int64(7)
 	out, err := List(context.Background(), client, ListInput{
-		FullPath:              testFullPath,
-		State:                 "opened",
-		Search:                "planning",
-		AuthorID:              &authorID,
-		LabelName:             []string{"urgent"},
-		MyReactionEmoji:       "thumbsup",
-		OrderBy:               "created_at",
-		Sort:                  "created_desc",
-		CreatedAfter:          "2026-01-01T00:00:00Z",
-		CreatedBefore:         "2026-12-31T23:59:59Z",
-		UpdatedAfter:          "2026-02-01T00:00:00Z",
-		UpdatedBefore:         "2026-11-30T23:59:59Z",
-		WithLabelsDetails:     &include,
-		First:                 &first,
-		IncludeAncestors:      &include,
-		IncludeDescendants:    &include,
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "123"},
+		FullPath:           testFullPath,
+		State:              "opened",
+		Search:             "planning",
+		AuthorID:           &authorID,
+		LabelName:          []string{"urgent"},
+		MyReactionEmoji:    "thumbsup",
+		OrderBy:            "created_at",
+		Sort:               "created_desc",
+		CreatedAfter:       "2026-01-01T00:00:00Z",
+		CreatedBefore:      "2026-12-31T23:59:59Z",
+		UpdatedAfter:       "2026-02-01T00:00:00Z",
+		UpdatedBefore:      "2026-11-30T23:59:59Z",
+		WithLabelsDetails:  &include,
+		First:              &first,
+		IncludeAncestors:   &include,
+		IncludeDescendants: &include,
+		Pagination:         "keyset", PageToken: "123",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

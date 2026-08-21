@@ -348,7 +348,8 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string
 func ConfirmFailedResult(err error) *mcp.CallToolResult {
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf(
-			"Confirmation failed: %v. The action was not executed. Re-send with \"confirm\": true only after the user explicitly approves this operation.", err)}},
+			"Confirmation failed: %v. The action was not executed. Re-send with \"confirm\": true only after the user explicitly approves this operation.", err,
+		)}},
 		IsError: true,
 	}
 }

@@ -144,7 +144,7 @@ func TestReleaseLinkList_PaginationQueryParamsAndMetadata(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := List(context.Background(), client, ListInput{ProjectID: "42", TagName: testTagV120, PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 5}})
+	out, err := List(context.Background(), client, ListInput{ProjectID: "42", TagName: testTagV120, Page: 1, PerPage: 5})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
 	}
@@ -1153,11 +1153,11 @@ func TestReleaseLinkList_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:             "42",
-		TagName:               testTagV120,
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "abc123"},
+		ProjectID:  "42",
+		TagName:    testTagV120,
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "abc123",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)

@@ -54,24 +54,22 @@ func TestTimeHelper(t *testing.T) {
 // and that hide_*_list flags are surfaced.
 func TestToOutputFullyPopulated(t *testing.T) {
 	board := &groupEpicBoardAPI{
-		GroupEpicBoard: gl.GroupEpicBoard{
-			ID:    1,
-			Name:  "Board",
-			Group: &gl.Group{ID: 7, Name: "G", FullPath: "ns/g", WebURL: "https://x"},
-		},
+		ID:              1,
+		Name:            "Board",
+		Group:           &gl.Group{ID: 7, Name: "G", FullPath: "ns/g", WebURL: "https://x"},
 		HideBacklogList: true,
 		HideClosedList:  true,
 		Labels: []*labelDetailsAPI{
 			{
-				LabelDetails: gl.LabelDetails{ID: 10, Name: "Priority", Color: "#f00", Description: "p", DescriptionHTML: "<p>p</p>", TextColor: "#fff"},
-				Title:        "Priority", GroupID: 7, ProjectID: 0, Template: false,
+				ID: 10, Name: "Priority", Color: "#f00", Description: "p", DescriptionHTML: "<p>p</p>", TextColor: "#fff",
+				Title: "Priority", GroupID: 7, ProjectID: 0, Template: false,
 				CreatedAt: "2023-01-27T10:40:59.738Z", UpdatedAt: "2023-01-27T10:40:59.738Z",
 			},
 			nil,
 		},
 		Lists: []*boardListAPI{
 			{
-				BoardList: gl.BoardList{ID: 100, Label: &gl.Label{ID: 10, Name: "Priority", Color: "#f00", Description: "p"}, Position: 1},
+				ID: 100, Label: &gl.Label{ID: 10, Name: "Priority", Color: "#f00", Description: "p"}, Position: 1,
 				ListType:  "label",
 				Collapsed: new(false),
 			},

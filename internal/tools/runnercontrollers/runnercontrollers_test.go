@@ -68,7 +68,7 @@ func TestList_WithPagination(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+		Page: 2, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf(errUnexpected, err)
@@ -89,7 +89,7 @@ func TestList_WithKeysetPagination(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-42"},
+		Pagination: "keyset", PageToken: "cursor-42",
 	})
 	if err != nil {
 		t.Fatalf(errUnexpected, err)
@@ -435,7 +435,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 // TestFormatDetailsMarkdown verifies detailed Markdown formatting.
 func TestFormatDetailsMarkdown(t *testing.T) {
 	out := DetailsOutput{
-		Output:    Output{ID: 1, Description: "ctrl-1", State: "enabled", CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z"},
+		ID: 1, Description: "ctrl-1", State: "enabled", CreatedAt: "2026-01-15T10:00:00Z", UpdatedAt: "2026-01-15T12:00:00Z",
 		Connected: true,
 	}
 
@@ -482,7 +482,7 @@ func TestFormatListMarkdown(t *testing.T) {
 // TestFormatGetMarkdown verifies FormatGetMarkdown returns a non-nil result.
 func TestFormatGetMarkdown(t *testing.T) {
 	out := DetailsOutput{
-		Output:    Output{ID: 1, Description: "ctrl-1", State: "enabled"},
+		ID: 1, Description: "ctrl-1", State: "enabled",
 		Connected: true,
 	}
 	result := FormatGetMarkdown(out)

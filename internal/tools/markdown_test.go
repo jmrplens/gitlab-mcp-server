@@ -1487,7 +1487,7 @@ var allMarkdownFixtureData = []markdownFixture{
 	{"mergerequests.ParticipantsOutput", mergerequests.ParticipantsOutput{Participants: []mergerequests.ParticipantOutput{{Username: "u"}}}},
 	{"mergerequests.ReviewersOutput", mergerequests.ReviewersOutput{Reviewers: []mergerequests.ReviewerOutput{{Username: "u"}}}},
 	{"mergerequests.IssuesClosedOutput", mergerequests.IssuesClosedOutput{Issues: []issues.Output{{IID: 1}}}},
-	{"mergerequests.TimeStatsOutput", mergerequests.TimeStatsOutput{TimeStatsOutput: toolutil.TimeStatsOutput{HumanTimeEstimate: "1h"}}},
+	{"mergerequests.TimeStatsOutput", mergerequests.TimeStatsOutput{HumanTimeEstimate: "1h"}},
 	{"mergerequests.RelatedIssuesOutput", mergerequests.RelatedIssuesOutput{Issues: []issues.Output{{IID: 1}}}},
 	{"mergerequests.CreateTodoOutput", mergerequests.CreateTodoOutput{ID: 1, ActionName: "marked"}},
 	{"mergerequests.DependencyOutput", mergerequests.DependencyOutput{ID: 1, BlockingMergeRequest: &mergerequests.BlockingMergeRequestOutput{IID: 2}}},

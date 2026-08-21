@@ -56,8 +56,8 @@ func TestList_WithPagination(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		ControllerID:    1,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+		ControllerID: 1,
+		Page:         2, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf(errUnexpected, err)
@@ -95,8 +95,8 @@ func TestList_WithKeyset(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		ControllerID:          1,
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "abc123"},
+		ControllerID: 1,
+		Pagination:   "keyset", PageToken: "abc123",
 	})
 	if err != nil {
 		t.Fatalf(errUnexpected, err)

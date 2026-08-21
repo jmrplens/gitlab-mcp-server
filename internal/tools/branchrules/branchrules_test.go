@@ -351,8 +351,8 @@ func TestList_Pagination(t *testing.T) {
 
 	// Second page.
 	out2, err := List(context.Background(), client, ListInput{
-		ProjectPath:            "my-group/my-project",
-		GraphQLPaginationInput: toolutil.GraphQLPaginationInput{After: "cursor1"},
+		ProjectPath: "my-group/my-project",
+		After:       "cursor1",
 	})
 	if err != nil {
 		t.Fatalf("List() page 2 error = %v", err)

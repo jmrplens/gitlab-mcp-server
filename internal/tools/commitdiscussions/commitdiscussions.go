@@ -127,7 +127,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 		return ListOutput{}, err
 	}
 	opts := &gl.ListCommitDiscussionsOptions{
-		ListOptions: gl.ListOptions{OrderBy: input.OrderBy, Sort: input.Sort},
+		OrderBy: input.OrderBy, Sort: input.Sort,
 	}
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	discussions, resp, err := client.GL().Discussions.ListCommitDiscussions(string(input.ProjectID), input.CommitSHA, opts, gl.WithContext(ctx))

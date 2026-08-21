@@ -372,7 +372,7 @@ func TestInstanceVariableList_WithPagination(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 2},
+		Page: 2, PerPage: 2,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -419,9 +419,9 @@ func TestInstanceVariableList_OrderSortKeyset(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		OrderBy:               "key",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-123"},
+		OrderBy:    "key",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "cursor-123",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

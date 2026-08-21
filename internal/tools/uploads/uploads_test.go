@@ -927,11 +927,11 @@ func TestList_KeysetPaginationParams(t *testing.T) {
 	client := testutil.NewTestClient(t, handler)
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:             "42",
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		PaginationInput:       toolutil.PaginationInput{Page: 2, PerPage: 50},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+		ProjectID: "42",
+		OrderBy:   "created_at",
+		Sort:      "desc",
+		Page:      2, PerPage: 50,
+		Pagination: "keyset", PageToken: "42",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

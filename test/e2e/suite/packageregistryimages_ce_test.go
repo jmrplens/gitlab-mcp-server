@@ -168,7 +168,8 @@ func pkgImgPushImage(ctx context.Context, t *testing.T, registryURL, repository,
 
 	manifest := fmt.Sprintf(
 		`{"schemaVersion":2,"mediaType":%q,"config":{"mediaType":"application/vnd.docker.container.image.v1+json","size":%d,"digest":%q},"layers":[{"mediaType":"application/vnd.docker.image.rootfs.diff.tar.gzip","size":%d,"digest":%q}]}`,
-		pkgImgManifestMediaType, len(config), configDigest, len(layer), layerDigest)
+		pkgImgManifestMediaType, len(config), configDigest, len(layer), layerDigest,
+	)
 
 	status, _, payload := pkgImgRequest(ctx, t, http.MethodPut,
 		registryURL+"/v2/"+repository+"/manifests/"+tag,

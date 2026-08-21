@@ -235,9 +235,9 @@ func TestPopulateHints_MixedContent(t *testing.T) {
 // first field in JSON when hints are populated.
 func TestHintableOutput_JSONWithHints(t *testing.T) {
 	out := hintTestOutput{
-		HintableOutput: HintableOutput{NextSteps: []string{"hint1", "hint2"}},
-		Name:           "test",
-		Value:          1,
+		NextSteps: []string{"hint1", "hint2"},
+		Name:      "test",
+		Value:     1,
 	}
 	data, err := json.Marshal(out)
 	if err != nil {

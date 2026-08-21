@@ -668,8 +668,8 @@ func TestList_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		GroupID:         "10",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		GroupID: "10",
+		Page:    2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -770,7 +770,7 @@ func TestList_AllFilterParams(t *testing.T) {
 		EndDate:                 "2026-12-31",
 		OrderBy:                 "due_date",
 		Sort:                    "asc",
-		KeysetPaginationInput:   toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "99"},
+		Pagination:              "keyset", PageToken: "99",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1087,12 +1087,12 @@ func TestGetIssues_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := GetIssues(context.Background(), client, GetIssuesInput{
-		GroupID:               "10",
-		MilestoneIID:          1,
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		PaginationInput:       toolutil.PaginationInput{Page: 1, PerPage: 20},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "50"},
+		GroupID:      "10",
+		MilestoneIID: 1,
+		OrderBy:      "created_at",
+		Sort:         "desc",
+		Page:         1, PerPage: 20,
+		Pagination: "keyset", PageToken: "50",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1183,12 +1183,12 @@ func TestGetMergeRequests_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := GetMergeRequests(context.Background(), client, GetMergeRequestsInput{
-		GroupID:               "10",
-		MilestoneIID:          1,
-		OrderBy:               "updated_at",
-		Sort:                  "asc",
-		PaginationInput:       toolutil.PaginationInput{Page: 1, PerPage: 20},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "70"},
+		GroupID:      "10",
+		MilestoneIID: 1,
+		OrderBy:      "updated_at",
+		Sort:         "asc",
+		Page:         1, PerPage: 20,
+		Pagination: "keyset", PageToken: "70",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1279,12 +1279,12 @@ func TestGetBurndownChartEvents_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := GetBurndownChartEvents(context.Background(), client, GetBurndownChartEventsInput{
-		GroupID:               "10",
-		MilestoneIID:          1,
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		PaginationInput:       toolutil.PaginationInput{Page: 1, PerPage: 20},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "80"},
+		GroupID:      "10",
+		MilestoneIID: 1,
+		OrderBy:      "created_at",
+		Sort:         "desc",
+		Page:         1, PerPage: 20,
+		Pagination: "keyset", PageToken: "80",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

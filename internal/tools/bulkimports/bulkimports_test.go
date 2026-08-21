@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestStartMigration verifies the StartMigration handler.
@@ -291,10 +290,10 @@ func TestList_OK(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	out, err := List(t.Context(), client, ListInput{
-		Status:                "started",
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset"},
+		Status:     "started",
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		Pagination: "keyset",
 	})
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -401,9 +400,9 @@ func TestListEntities_AllScope(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	out, err := ListEntities(t.Context(), client, ListEntitiesInput{
-		OrderBy:               "created_at",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok-1"},
+		OrderBy:    "created_at",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "tok-1",
 	})
 	if err != nil {
 		t.Fatalf("ListEntities: %v", err)

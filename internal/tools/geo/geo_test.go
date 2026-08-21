@@ -1016,9 +1016,9 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "42"},
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "42",
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
@@ -1051,9 +1051,9 @@ func TestListStatus_KeysetAndOrdering(t *testing.T) {
 	}))
 
 	_, err := ListStatus(context.Background(), client, ListStatusInput{
-		OrderBy:               "geo_node_id",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "7"},
+		OrderBy:    "geo_node_id",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "7",
 	})
 	if err != nil {
 		t.Fatalf("ListStatus() error: %v", err)

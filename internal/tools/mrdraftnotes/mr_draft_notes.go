@@ -462,7 +462,7 @@ func PublishAll(ctx context.Context, client *gitlabclient.Client, input PublishA
 // from being silently lost when published with out-of-range positions.
 func validatePosition(ctx context.Context, client *gitlabclient.Client, projectID string, mrIID int64, pos *DiffPosition) error {
 	diffs, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, mrIID, &gl.ListMergeRequestDiffsOptions{
-		ListOptions: gl.ListOptions{PerPage: 100},
+		PerPage: 100,
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return nil //nolint:nilerr // Best-effort: if we can't fetch diffs, skip validation

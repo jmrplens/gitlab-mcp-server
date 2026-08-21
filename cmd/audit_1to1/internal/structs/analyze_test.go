@@ -676,7 +676,13 @@ func TestDocGroundedSuppression(t *testing.T) {
 func TestBuildReport_AuditedPairFloors(t *testing.T) {
 	rep := cachedBuildReport(t, false)
 
-	const minInputPairs, minOutputPairs = 554, 324
+	// Floor history: 554 → 545 with Go 1.27's promoted-field composite
+	// literals (modernize/embedlit rewrote `Opts{ListOptions: gl.ListOptions{…}}`
+	// to promoted fields, removing the inner literal). The dropped pairs were
+	// the redundant `input × gl.ListOptions` keys those inner literals minted;
+	// each survives as the outer `input × gl.List*Options` pair, whose
+	// flattenFields already audits the embedded ListOptions fields.
+	const minInputPairs, minOutputPairs = 545, 324
 	if rep.Summary.InputPairs < minInputPairs {
 		t.Errorf("summary input_pairs = %d, want >= %d (resolver or handler-detection regression)", rep.Summary.InputPairs, minInputPairs)
 	}

@@ -517,8 +517,8 @@ func TestEnvironmentList_Pagination(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:       "1",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
+		ProjectID: "1",
+		Page:      2, PerPage: 1,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1352,13 +1352,11 @@ func TestEnvironmentList_OrderBySortKeyset(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID: "42",
-		OrderBy:   "name",
-		Sort:      "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{
-			Pagination: "keyset",
-			PageToken:  "tok42",
-		},
+		ProjectID:  "42",
+		OrderBy:    "name",
+		Sort:       "desc",
+		Pagination: "keyset",
+		PageToken:  "tok42",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

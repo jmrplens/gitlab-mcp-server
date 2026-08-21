@@ -172,7 +172,7 @@ func TestList_WithPagination(t *testing.T) {
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"Go","name":"Go"}]`)
 	}))
-	out, err := List(context.Background(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5}})
+	out, err := List(context.Background(), client, ListInput{Page: 2, PerPage: 5})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -202,9 +202,9 @@ func TestList_WithKeysetAndOrder(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[{"key":"Go","name":"Go"}]`)
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		OrderBy:               "name",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor123"},
+		OrderBy:    "name",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "cursor123",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

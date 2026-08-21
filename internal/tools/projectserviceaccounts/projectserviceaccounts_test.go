@@ -226,22 +226,22 @@ func TestPATList(t *testing.T) {
 			testutil.RespondJSON(w, http.StatusOK, projectServiceAccountPATsJSON)
 		}))
 		out, err := ListPATs(context.Background(), client, ListPATInput{
-			ProjectID:             "42",
-			ServiceAccountID:      7,
-			PaginationInput:       toolutil.PaginationInput{Page: 2, PerPage: 50},
-			KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "55"},
-			OrderBy:               "created_at",
-			CreatedAfter:          "2026-01-01T02:03:04Z",
-			CreatedBefore:         "2026-01-02",
-			ExpiresAfter:          "2026-01-01",
-			ExpiresBefore:         "2026-12-31",
-			LastUsedAfter:         "2026-01-03",
-			LastUsedBefore:        "2026-01-04T02:03:04Z",
-			Revoked:               &revoked,
-			UserID:                7,
-			Search:                "deploy",
-			Sort:                  "created_desc",
-			State:                 "active",
+			ProjectID:        "42",
+			ServiceAccountID: 7,
+			Page:             2, PerPage: 50,
+			Pagination: "keyset", PageToken: "55",
+			OrderBy:        "created_at",
+			CreatedAfter:   "2026-01-01T02:03:04Z",
+			CreatedBefore:  "2026-01-02",
+			ExpiresAfter:   "2026-01-01",
+			ExpiresBefore:  "2026-12-31",
+			LastUsedAfter:  "2026-01-03",
+			LastUsedBefore: "2026-01-04T02:03:04Z",
+			Revoked:        &revoked,
+			UserID:         7,
+			Search:         "deploy",
+			Sort:           "created_desc",
+			State:          "active",
 		})
 		if err != nil {
 			t.Fatalf("ListPATs() unexpected error: %v", err)

@@ -1132,7 +1132,7 @@ func TestList_WithPagination(t *testing.T) {
 		)
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		Page: 2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1181,8 +1181,8 @@ func TestMembersList_WithPagination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := MembersList(context.Background(), client, MembersListInput{
-		GroupID:         "99",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 10},
+		GroupID: "99",
+		Page:    2, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1208,8 +1208,8 @@ func TestSubgroupsList_WithPagination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := SubgroupsList(context.Background(), client, SubgroupsListInput{
-		GroupID:         "99",
-		PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 15},
+		GroupID: "99",
+		Page:    3, PerPage: 15,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1707,7 +1707,7 @@ func TestListProjects_AllOptionalFilters(t *testing.T) {
 		Starred:          true,
 		IncludeSubGroups: true,
 		WithShared:       &withShared,
-		PaginationInput:  toolutil.PaginationInput{Page: 1, PerPage: 20},
+		Page:             1, PerPage: 20,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1792,8 +1792,8 @@ func TestListHooks_WithPagination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
 	_, err := ListHooks(context.Background(), client, ListHooksInput{
-		GroupID:         "99",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		GroupID: "99",
+		Page:    2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1838,8 +1838,8 @@ func TestAddHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
 	_, err := AddHook(ctx, client, AddHookInput{
-		GroupID:   "99",
-		HookInput: HookInput{URL: "https://example.com"},
+		GroupID: "99",
+		URL:     "https://example.com",
 	})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1852,7 +1852,7 @@ func TestAddHook_CancelledContext(t *testing.T) {
 func TestAddHook_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := AddHook(context.Background(), client, AddHookInput{
-		HookInput: HookInput{URL: "https://example.com"},
+		URL: "https://example.com",
 	})
 	if err == nil {
 		t.Fatal("expected error for empty group_id, got nil")
@@ -1886,29 +1886,27 @@ func TestAddHook_AllOptionalFields(t *testing.T) {
 
 	bTrue := true
 	out, err := AddHook(context.Background(), client, AddHookInput{
-		GroupID: "99",
-		HookInput: HookInput{
-			URL:                      "https://hooks.example.com/ci",
-			Name:                     "Full Hook",
-			Description:              "All events",
-			Token:                    "secret-token",
-			PushEvents:               &bTrue,
-			TagPushEvents:            &bTrue,
-			MergeRequestsEvents:      &bTrue,
-			IssuesEvents:             &bTrue,
-			NoteEvents:               &bTrue,
-			JobEvents:                &bTrue,
-			PipelineEvents:           &bTrue,
-			WikiPageEvents:           &bTrue,
-			DeploymentEvents:         &bTrue,
-			ReleasesEvents:           &bTrue,
-			SubGroupEvents:           &bTrue,
-			MemberEvents:             &bTrue,
-			ConfidentialIssuesEvents: &bTrue,
-			ConfidentialNoteEvents:   &bTrue,
-			EnableSSLVerification:    &bTrue,
-			PushEventsBranchFilter:   "main",
-		},
+		GroupID:                  "99",
+		URL:                      "https://hooks.example.com/ci",
+		Name:                     "Full Hook",
+		Description:              "All events",
+		Token:                    "secret-token",
+		PushEvents:               &bTrue,
+		TagPushEvents:            &bTrue,
+		MergeRequestsEvents:      &bTrue,
+		IssuesEvents:             &bTrue,
+		NoteEvents:               &bTrue,
+		JobEvents:                &bTrue,
+		PipelineEvents:           &bTrue,
+		WikiPageEvents:           &bTrue,
+		DeploymentEvents:         &bTrue,
+		ReleasesEvents:           &bTrue,
+		SubGroupEvents:           &bTrue,
+		MemberEvents:             &bTrue,
+		ConfidentialIssuesEvents: &bTrue,
+		ConfidentialNoteEvents:   &bTrue,
+		EnableSSLVerification:    &bTrue,
+		PushEventsBranchFilter:   "main",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1938,9 +1936,9 @@ func TestEditHook_CancelledContext(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	ctx := testutil.CancelledCtx(t)
 	_, err := EditHook(ctx, client, EditHookInput{
-		GroupID:   "99",
-		HookID:    10,
-		HookInput: HookInput{URL: "https://example.com"},
+		GroupID: "99",
+		HookID:  10,
+		URL:     "https://example.com",
 	})
 	if err == nil {
 		t.Fatal(errExpCancelledNil)
@@ -1953,8 +1951,8 @@ func TestEditHook_CancelledContext(t *testing.T) {
 func TestEditHook_MissingGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	_, err := EditHook(context.Background(), client, EditHookInput{
-		HookID:    10,
-		HookInput: HookInput{URL: "https://example.com"},
+		HookID: 10,
+		URL:    "https://example.com",
 	})
 	if err == nil {
 		t.Fatal("expected error for empty group_id, got nil")
@@ -1978,30 +1976,28 @@ func TestEditHook_AllOptionalFields(t *testing.T) {
 	bTrue := true
 	bFalse := false
 	out, err := EditHook(context.Background(), client, EditHookInput{
-		GroupID: "99",
-		HookID:  10,
-		HookInput: HookInput{
-			URL:                      "https://hooks.example.com/updated",
-			Name:                     "Edited",
-			Description:              "Updated hook",
-			Token:                    "new-secret",
-			PushEvents:               &bFalse,
-			TagPushEvents:            &bTrue,
-			MergeRequestsEvents:      &bTrue,
-			IssuesEvents:             &bFalse,
-			NoteEvents:               &bTrue,
-			JobEvents:                &bFalse,
-			PipelineEvents:           &bTrue,
-			WikiPageEvents:           &bFalse,
-			DeploymentEvents:         &bTrue,
-			ReleasesEvents:           &bTrue,
-			SubGroupEvents:           &bFalse,
-			MemberEvents:             &bTrue,
-			ConfidentialIssuesEvents: &bFalse,
-			ConfidentialNoteEvents:   &bTrue,
-			EnableSSLVerification:    &bFalse,
-			PushEventsBranchFilter:   "develop",
-		},
+		GroupID:                  "99",
+		HookID:                   10,
+		URL:                      "https://hooks.example.com/updated",
+		Name:                     "Edited",
+		Description:              "Updated hook",
+		Token:                    "new-secret",
+		PushEvents:               &bFalse,
+		TagPushEvents:            &bTrue,
+		MergeRequestsEvents:      &bTrue,
+		IssuesEvents:             &bFalse,
+		NoteEvents:               &bTrue,
+		JobEvents:                &bFalse,
+		PipelineEvents:           &bTrue,
+		WikiPageEvents:           &bFalse,
+		DeploymentEvents:         &bTrue,
+		ReleasesEvents:           &bTrue,
+		SubGroupEvents:           &bFalse,
+		MemberEvents:             &bTrue,
+		ConfidentialIssuesEvents: &bFalse,
+		ConfidentialNoteEvents:   &bTrue,
+		EnableSSLVerification:    &bFalse,
+		PushEventsBranchFilter:   "develop",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -3471,7 +3467,7 @@ func TestSharedWithList_AllFilters(t *testing.T) {
 		Sort:                 "desc",
 		SkipGroups:           []int64{11, 12},
 		WithCustomAttributes: true,
-		PaginationInput:      toolutil.PaginationInput{Page: 2, PerPage: 10},
+		Page:                 2, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -3567,7 +3563,7 @@ func TestInvitedList_AllFilters(t *testing.T) {
 		MinAccessLevel:       20,
 		Relation:             []string{"direct", "inherited"},
 		WithCustomAttributes: true,
-		PaginationInput:      toolutil.PaginationInput{Page: 3, PerPage: 5},
+		Page:                 3, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -3658,9 +3654,9 @@ func TestTransferLocationsList_AllFilters(t *testing.T) {
 	client := testutil.NewTestClient(t, mux)
 
 	_, err := TransferLocationsList(context.Background(), client, TransferLocationsListInput{
-		GroupID:         toolutil.StringOrInt("7"),
-		Search:          "org",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 15},
+		GroupID: toolutil.StringOrInt("7"),
+		Search:  "org",
+		Page:    2, PerPage: 15,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

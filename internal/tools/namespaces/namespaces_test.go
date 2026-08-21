@@ -35,7 +35,7 @@ func TestList_Success(t *testing.T) {
 		]`, testutil.PaginationHeaders{Page: "1", PerPage: "20", Total: "2", TotalPages: "1"})
 	}))
 
-	out, err := List(context.Background(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}})
+	out, err := List(context.Background(), client, ListInput{Page: 1, PerPage: 20})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -313,9 +313,9 @@ func TestList_OrderBySortKeyset(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "100"},
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "100",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

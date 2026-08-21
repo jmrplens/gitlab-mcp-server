@@ -487,8 +487,8 @@ func TestListProject_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID:       "10",
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 2},
+		ProjectID: "10",
+		Page:      1, PerPage: 2,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -517,10 +517,10 @@ func TestListProject_WithKeyset(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListProject(context.Background(), client, ListProjectInput{
-		ProjectID:             "10",
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "5"},
+		ProjectID:  "10",
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "5",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -598,8 +598,8 @@ func TestListGroup_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListGroup(context.Background(), client, ListGroupInput{
-		GroupID:         "5",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
+		GroupID: "5",
+		Page:    2, PerPage: 1,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -628,10 +628,10 @@ func TestListGroup_WithKeyset(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 	out, err := ListGroup(context.Background(), client, ListGroupInput{
-		GroupID:               "5",
-		OrderBy:               "id",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "3"},
+		GroupID:    "5",
+		OrderBy:    "id",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "3",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

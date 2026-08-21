@@ -385,7 +385,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 | Component     | Technology                                       |
 | ------------- | ------------------------------------------------ |
-| Language      | Go 1.26+                                         |
+| Language      | Go 1.27+                                         |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.7.0  |
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.57.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
@@ -415,10 +415,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       977 |     196,110 |
-| Unit tests (`_test.go`)  |       532 |     302,592 |
-| End-to-end tests         |       174 |      45,154 |
-| **Total**                | **1,683** | **543,856** |
+| Source (`.go`, non-test) |       977 |     196,116 |
+| Unit tests (`_test.go`)  |       532 |     302,519 |
+| End-to-end tests         |       174 |      45,157 |
+| **Total**                | **1,683** | **543,792** |
 
 ### Functions
 
@@ -438,7 +438,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.54× more tests than code |
 | Average source file length         |                 ~200 lines |
 | Average test file length           |                 ~568 lines |
-| Comment lines in source            |  21,400 (~10.9% of source) |
+| Comment lines in source            |  21,404 (~10.9% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
@@ -448,7 +448,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | `if err != nil` checks             | 6,593 |
 | `defer` statements                 |   864 |
 | `struct` types defined             | 2,698 |
-| `//nolint` suppressions            |   226 |
+| `//nolint` suppressions            |   243 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
@@ -456,22 +456,22 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Metric                         | Value |
 | ------------------------------ | ----: |
 | Go packages                    |   232 |
-| Direct dependencies (`go.mod`) |    13 |
-| Indirect dependencies          |    50 |
+| Direct dependencies (`go.mod`) |    14 |
+| Indirect dependencies          |    49 |
 
 ### Hall of fame
 
 | Record              | File                                                     |
 | ------------------- | -------------------------------------------------------- |
 | Longest source file | `internal/tools/projects/projects.go` — 3,846 lines      |
-| Longest test file   | `internal/tools/projects/projects_test.go` — 8,204 lines |
+| Longest test file   | `internal/tools/projects/projects_test.go` — 8,183 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | Source code printed at 55 lines/page | ~3,565 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,396 (impossible to avoid)                                                                         |
+| Source lines mentioning `"gitlab"`   | 12,397 (impossible to avoid)                                                                         |
 | Longest function name in source      | `baseDestructiveEarlySinglePromptTemplateAndFixtures` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

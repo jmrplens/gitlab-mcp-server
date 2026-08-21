@@ -215,7 +215,7 @@ MCP Client → MCP Server → Tool Handler → GitLab Client → GitLab API → 
 
 ## Prerequisites
 
-- Go 1.24+
+- Go 1.27+
 - GitLab instance with PAT
 - VS Code with Go extension (recommended)
 

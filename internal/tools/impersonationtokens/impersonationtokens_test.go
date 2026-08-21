@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const (
@@ -331,7 +330,7 @@ func TestFormatMarkdownString(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatPATMarkdownString(t *testing.T) {
-	md := FormatPATMarkdownString(PATOutput{PersonalTokenOutput: toolutil.PersonalTokenOutput{ID: 1, Name: "test", Scopes: []string{"api"}, UserID: 42}})
+	md := FormatPATMarkdownString(PATOutput{ID: 1, Name: "test", Scopes: []string{"api"}, UserID: 42})
 	if md == "" {
 		t.Fatal("expected non-empty markdown")
 	}
@@ -350,8 +349,8 @@ func TestList_PaginationParams(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		UserID:          42,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 50},
+		UserID: 42,
+		Page:   2, PerPage: 50,
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
@@ -379,10 +378,10 @@ func TestList_KeysetAndSortParams(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		UserID:                42,
-		OrderBy:               "created_at",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "cursor-123"},
+		UserID:     42,
+		OrderBy:    "created_at",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "cursor-123",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
@@ -697,13 +696,13 @@ func TestFormatMarkdownString_MinimalFields(t *testing.T) {
 // TestFormatPATMarkdownString_AllOptionalFields verifies that FormatPATMarkdownString
 // renders Description, ExpiresAt, and Token fields when present.
 func TestFormatPATMarkdownString_AllOptionalFields(t *testing.T) {
-	out := PATOutput{PersonalTokenOutput: toolutil.PersonalTokenOutput{
+	out := PATOutput{
 		ID: 10, Name: "full-pat", Active: true,
 		Scopes: []string{"api"}, UserID: 42,
 		Description: "My important PAT",
 		ExpiresAt:   "2026-12-01",
 		Token:       "glpat-fullpat",
-	}}
+	}
 	md := FormatPATMarkdownString(out)
 
 	checks := []string{
@@ -725,7 +724,7 @@ func TestFormatPATMarkdownString_AllOptionalFields(t *testing.T) {
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the rendered Markdown contains the expected section headings and content.
 func TestFormatPATMarkdownString_MinimalFields(t *testing.T) {
-	out := PATOutput{PersonalTokenOutput: toolutil.PersonalTokenOutput{ID: 11, Name: "bare", Active: false, Scopes: []string{"read_api"}, UserID: 99}}
+	out := PATOutput{ID: 11, Name: "bare", Active: false, Scopes: []string{"read_api"}, UserID: 99}
 	md := FormatPATMarkdownString(out)
 
 	if strings.Contains(md, "**Description**") {

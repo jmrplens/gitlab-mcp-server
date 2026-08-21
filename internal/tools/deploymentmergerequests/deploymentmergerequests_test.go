@@ -256,7 +256,7 @@ func TestList_WithPagination(t *testing.T) {
 
 	out, err := List(context.Background(), client, ListInput{
 		ProjectID: "1", DeploymentID: 5,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 1},
+		Page: 2, PerPage: 1,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -322,12 +322,12 @@ func TestList_AllOptionalFilters(t *testing.T) {
 	}))
 
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:       "1",
-		DeploymentID:    2,
-		State:           "opened",
-		OrderBy:         "updated_at",
-		Sort:            "asc",
-		PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 50},
+		ProjectID:    "1",
+		DeploymentID: 2,
+		State:        "opened",
+		OrderBy:      "updated_at",
+		Sort:         "asc",
+		Page:         3, PerPage: 50,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -395,10 +395,8 @@ func TestList_MergeRequestFilters(t *testing.T) {
 		CreatedBefore:       "2025-12-31T23:59:59Z",
 		Draft:               &draft,
 		In:                  "title",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{
-			Pagination: "keyset",
-			PageToken:  "cursor-1",
-		},
+		Pagination:          "keyset",
+		PageToken:           "cursor-1",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

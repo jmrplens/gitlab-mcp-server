@@ -131,9 +131,9 @@ func TestList_Pagination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, "["+noteJSON+"]")
 	}))
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:       testProjectID,
-		SnippetID:       1,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 5},
+		ProjectID: testProjectID,
+		SnippetID: 1,
+		Page:      2, PerPage: 5,
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)
@@ -770,9 +770,9 @@ func TestList_KeysetPagination(t *testing.T) {
 		testutil.RespondJSON(w, http.StatusOK, "["+noteJSON+"]")
 	}))
 	_, err := List(context.Background(), client, ListInput{
-		ProjectID:             testProjectID,
-		SnippetID:             1,
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+		ProjectID:  testProjectID,
+		SnippetID:  1,
+		Pagination: "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf("List() error: %v", err)

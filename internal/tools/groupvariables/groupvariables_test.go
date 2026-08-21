@@ -378,8 +378,8 @@ func TestList_WithPagination(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		GroupID:         "42",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 2},
+		GroupID: "42",
+		Page:    2, PerPage: 2,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -947,8 +947,10 @@ func TestList_OrderBySortPageToken(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	in := ListInput{GroupID: "10", OrderBy: "key", Sort: "desc"}
-	in.PageToken = "next-page"
+	in := ListInput{
+		GroupID: "10", OrderBy: "key", Sort: "desc",
+		PageToken: "next-page",
+	}
 	if _, err := List(context.Background(), client, in); err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
 	}

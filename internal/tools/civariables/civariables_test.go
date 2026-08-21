@@ -423,8 +423,8 @@ func TestCIVariableList_WithPagination(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:       "42",
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 2},
+		ProjectID: "42",
+		Page:      2, PerPage: 2,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1076,10 +1076,10 @@ func TestCIVariableList_KeysetOrderBySort(t *testing.T) {
 	}))
 
 	out, err := List(context.Background(), client, ListInput{
-		ProjectID:             "42",
-		OrderBy:               "key",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+		ProjectID:  "42",
+		OrderBy:    "key",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

@@ -11,7 +11,7 @@ import (
 // during unmarshalling. It always stores the value as a string internally.
 // This is needed because LLMs frequently send numeric IDs (e.g. 405) as JSON
 // numbers rather than strings, even when the schema declares "type": "string".
-type StringOrInt string //nolint:recvcheck // UnmarshalJSON requires pointer receiver, others are value receivers by design
+type StringOrInt string
 
 // String returns the underlying string value.
 func (s StringOrInt) String() string {

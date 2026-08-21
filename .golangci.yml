@@ -10,7 +10,7 @@ issues:
   max-same-issues: 50
 
 run:
-  go: "1.26"
+  go: "1.27"
   timeout: 15m
   tests: true
   # golangci-lint defaults to one worker per logical CPU. Across 226 packages
@@ -275,7 +275,10 @@ formatters:
   settings:
     gofumpt:
       module-path: github.com/jmrplens/gitlab-mcp-server/v2
-      extra-rules: true
+      extra:
+        group-params: true
+        clothe-returns: true
+        balance-calls: true
     gci:
       sections:
         - standard

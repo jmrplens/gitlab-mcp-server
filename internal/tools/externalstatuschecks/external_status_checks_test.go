@@ -13,7 +13,6 @@ import (
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const fmtUnexpErr = "unexpected error: %v"
@@ -571,8 +570,8 @@ func TestListProjectStatusChecks_WithPagination(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 	out, err := ListProjectStatusChecks(context.Background(), client, ListProjectStatusChecksInput{
-		ProjectID:       "1",
-		PaginationInput: toolutil.PaginationInput{Page: 3, PerPage: 10},
+		ProjectID: "1",
+		Page:      3, PerPage: 10,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -596,10 +595,10 @@ func TestListProjectExternalStatusChecks_Keyset(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 	_, err := ListProjectExternalStatusChecks(context.Background(), client, ListProjectInput{
-		ProjectID:             "1",
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok123"},
+		ProjectID:  "1",
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok123",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -620,10 +619,10 @@ func TestListProjectStatusChecks_Keyset(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 	_, err := ListProjectStatusChecks(context.Background(), client, ListProjectStatusChecksInput{
-		ProjectID:             "1",
-		OrderBy:               "id",
-		Sort:                  "asc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok456"},
+		ProjectID:  "1",
+		OrderBy:    "id",
+		Sort:       "asc",
+		Pagination: "keyset", PageToken: "tok456",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -644,11 +643,11 @@ func TestListProjectMRExternalStatusChecks_Keyset(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 	_, err := ListProjectMRExternalStatusChecks(context.Background(), client, ListProjectMRInput{
-		ProjectID:             "1",
-		MRIID:                 10,
-		OrderBy:               "id",
-		Sort:                  "desc",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "tok789"},
+		ProjectID:  "1",
+		MRIID:      10,
+		OrderBy:    "id",
+		Sort:       "desc",
+		Pagination: "keyset", PageToken: "tok789",
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -696,9 +695,9 @@ func TestListProjectMRExternalStatusChecks_WithPagination(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 	out, err := ListProjectMRExternalStatusChecks(context.Background(), client, ListProjectMRInput{
-		ProjectID:       "1",
-		MRIID:           10,
-		PaginationInput: toolutil.PaginationInput{Page: 2, PerPage: 15},
+		ProjectID: "1",
+		MRIID:     10,
+		Page:      2, PerPage: 15,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -749,8 +748,8 @@ func TestListProjectExternalStatusChecks_WithPagination(t *testing.T) {
 	})
 	client := testutil.NewTestClient(t, mux)
 	out, err := ListProjectExternalStatusChecks(context.Background(), client, ListProjectInput{
-		ProjectID:       "1",
-		PaginationInput: toolutil.PaginationInput{Page: 4, PerPage: 25},
+		ProjectID: "1",
+		Page:      4, PerPage: 25,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)

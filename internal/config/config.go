@@ -404,7 +404,8 @@ func parseTierEnv(value string) (tier edition.Tier, explicit bool, err error) {
 	parsed, ok := edition.ParseTier(value)
 	if !ok {
 		return edition.Free, false, fmt.Errorf(
-			"invalid GITLAB_TIER value: expected free, ce, premium, or ultimate, got %q", value)
+			"invalid GITLAB_TIER value: expected free, ce, premium, or ultimate, got %q", value,
+		)
 	}
 	return parsed, true, nil
 }
@@ -423,7 +424,8 @@ func resolveTierEnv(tierValue, enterpriseValue string) (tier edition.Tier, expli
 		enabled, perr := strconv.ParseBool(raw)
 		if perr != nil {
 			return edition.Free, false, fmt.Errorf(
-				"invalid GITLAB_ENTERPRISE value: expected true or false, got %q", raw)
+				"invalid GITLAB_ENTERPRISE value: expected true or false, got %q", raw,
+			)
 		}
 		if enabled {
 			return edition.Ultimate, true, nil

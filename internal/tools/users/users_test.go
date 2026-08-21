@@ -699,7 +699,7 @@ func TestList_UsersWithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := List(context.Background(), client, ListInput{PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}})
+	out, err := List(context.Background(), client, ListInput{Page: 1, PerPage: 20})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -952,7 +952,7 @@ func TestListSSHKeys_WithPagination(t *testing.T) {
 		http.NotFound(w, r)
 	}))
 
-	out, err := ListSSHKeys(context.Background(), client, ListSSHKeysInput{PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20}})
+	out, err := ListSSHKeys(context.Background(), client, ListSSHKeysInput{Page: 1, PerPage: 20})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
@@ -1056,13 +1056,13 @@ func TestListContributionEvents_AllFilters(t *testing.T) {
 	}))
 
 	out, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{
-		UserID:          42,
-		Action:          "created",
-		TargetType:      "Issue",
-		Before:          "2026-12-31",
-		After:           "2026-01-01",
-		Sort:            "desc",
-		PaginationInput: toolutil.PaginationInput{Page: 1, PerPage: 20},
+		UserID:     42,
+		Action:     "created",
+		TargetType: "Issue",
+		Before:     "2026-12-31",
+		After:      "2026-01-01",
+		Sort:       "desc",
+		Page:       1, PerPage: 20,
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
@@ -1706,8 +1706,8 @@ func TestList_AllFilters(t *testing.T) {
 		TwoFactor: "enabled", ExternUID: "uid", Provider: "ldap", PublicEmail: "p@x.test",
 		CreatedAfter: "2026-01-01T00:00:00Z", CreatedBefore: "2026-12-31T00:00:00Z",
 		OrderBy: "id", Sort: "desc",
-		PaginationInput:       toolutil.PaginationInput{Page: 1, PerPage: 20},
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "100"},
+		Page: 1, PerPage: 20,
+		Pagination: "keyset", PageToken: "100",
 	})
 	if err != nil {
 		t.Fatalf("List() unexpected error: %v", err)
@@ -1738,10 +1738,10 @@ func TestListContributionEvents_ScopeAndKeyset(t *testing.T) {
 	}))
 
 	_, err := ListContributionEvents(context.Background(), client, ListContributionEventsInput{
-		UserID:                42,
-		Scope:                 "all",
-		OrderBy:               "id",
-		KeysetPaginationInput: toolutil.KeysetPaginationInput{Pagination: "keyset", PageToken: "5"},
+		UserID:     42,
+		Scope:      "all",
+		OrderBy:    "id",
+		Pagination: "keyset", PageToken: "5",
 	})
 	if err != nil {
 		t.Fatalf("ListContributionEvents() unexpected error: %v", err)
