@@ -938,19 +938,19 @@ func TestPtrString(t *testing.T) {
 // Ensure fmt is referenced to avoid unused import error.
 var _ = fmt.Sprintf
 
-// assertFileNameShapeResult checks one TestPublish_FileNameShapes outcome:
-// success for valid names, or an ErrInvalidFileName carrying the
-// segment-rule hint for rejected ones.
-func assertFileNameShapeResult(t *testing.T, fileName, wantErr string, err error) {
+// assertFileNameShapeResult checks one file-name-contract outcome for op
+// (Publish/Download): success for valid names, or an ErrInvalidFileName
+// carrying the segment-rule hint for rejected ones.
+func assertFileNameShapeResult(t *testing.T, op, fileName, wantErr string, err error) {
 	t.Helper()
 	if wantErr == "" {
 		if err != nil {
-			t.Fatalf("Publish() error = %v, want success for directory-structured file_name", err)
+			t.Fatalf("%s() error = %v, want success for directory-structured file_name", op, err)
 		}
 		return
 	}
 	if err == nil {
-		t.Fatalf("Publish() = nil error, want ErrInvalidFileName for %q", fileName)
+		t.Fatalf("%s() = nil error, want ErrInvalidFileName for %q", op, fileName)
 	}
 	if !errors.Is(err, gl.ErrInvalidFileName) {
 		t.Fatalf("error = %v, want errors.Is ErrInvalidFileName", err)
@@ -1006,7 +1006,7 @@ func TestPublish_FileNameShapes(t *testing.T) {
 				FileName:       tt.fileName,
 				ContentBase64:  "aGVsbG8=",
 			})
-			assertFileNameShapeResult(t, tt.fileName, tt.wantErr, err)
+			assertFileNameShapeResult(t, "Publish", tt.fileName, tt.wantErr, err)
 		})
 	}
 }
@@ -1052,24 +1052,10 @@ func TestDownload_FileNameShapes(t *testing.T) {
 				FileName:       tt.fileName,
 				OutputPath:     filepath.Join(t.TempDir(), "out", "tool.bin"),
 			})
-			if tt.wantErr == "" {
-				if err != nil {
-					t.Fatalf("Download() error = %v, want success for directory-structured file_name", err)
-				}
-				if out.Size != int64(len("binary-content")) {
-					t.Errorf("Size = %d, want %d", out.Size, len("binary-content"))
-				}
-				return
+			if tt.wantErr == "" && err == nil && out.Size != int64(len("binary-content")) {
+				t.Errorf("Size = %d, want %d", out.Size, len("binary-content"))
 			}
-			if err == nil {
-				t.Fatalf("Download() = nil error, want ErrInvalidFileName for %q", tt.fileName)
-			}
-			if !errors.Is(err, gl.ErrInvalidFileName) {
-				t.Fatalf("error = %v, want errors.Is ErrInvalidFileName", err)
-			}
-			if !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("error = %q, want segment-rule hint containing %q", err.Error(), tt.wantErr)
-			}
+			assertFileNameShapeResult(t, "Download", tt.fileName, tt.wantErr, err)
 		})
 	}
 }

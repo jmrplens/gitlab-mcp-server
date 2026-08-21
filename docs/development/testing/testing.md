@@ -87,7 +87,7 @@
 | users             |   210 |   100.0% |    38 |
 | dynamic           |   159 |    99.7% |     2 |
 | jobs              |   147 |    99.6% |    17 |
-| packages          |   125 |    99.3% |     9 |
+| packages          |   125 |    99.5% |     9 |
 | search            |   118 |   100.0% |    10 |
 | commits           |   114 |    99.8% |    13 |
 | resourceevents    |   114 |   100.0% |    17 |
@@ -231,7 +231,7 @@
 | namespaces              |        37 |          1 |    99.2% |         4 |
 | notifications           |        29 |          1 |   100.0% |         6 |
 | orbit                   |        57 |          4 |   100.0% |         6 |
-| packages                |       125 |          5 |    99.3% |         9 |
+| packages                |       125 |          5 |    99.5% |         9 |
 | pages                   |        54 |          2 |   100.0% |         9 |
 | pipelines               |       111 |          3 |   100.0% |        12 |
 | pipelineschedules       |        94 |          2 |    99.7% |        11 |
@@ -478,7 +478,7 @@
 | namespaces              |    99.2% |
 | notifications           |   100.0% |
 | orbit                   |   100.0% |
-| packages                |    99.3% |
+| packages                |    99.5% |
 | pages                   |   100.0% |
 | pipelines               |   100.0% |
 | pipelineschedules       |    99.7% |

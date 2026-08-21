@@ -42,10 +42,11 @@ func streamDownloadPackageFile(
 		projectID, input.PackageName, input.PackageVersion, input.FileName,
 	)
 	if err != nil {
+		hint := ""
 		if errors.Is(err, gl.ErrInvalidFileName) {
-			return 0, "", fmt.Errorf("format package URL: %w (file_name segments between / separators must not be empty, \".\", or \"..\")", err)
+			hint = " (file_name segments between / separators must not be empty, \".\", or \"..\")"
 		}
-		return 0, "", fmt.Errorf("format package URL: %w", err)
+		return 0, "", fmt.Errorf("format package URL: %w%s", err, hint)
 	}
 
 	httpReq, err := client.GL().NewRequest(http.MethodGet, apiPath, nil, nil)
