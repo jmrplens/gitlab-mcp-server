@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,052 |
-| Unit test functions                                   | 11,675 |
+| Total test functions                                  | 12,051 |
+| Unit test functions                                   | 11,674 |
 | E2E test functions                                    |    377 |
 | cmd test functions                                    |    960 |
 | Test files (internal/)                                |    462 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,562 | 87.6% |
+| `TestFunc_Scenario` (2-part)           | 10,561 | 87.6% |
 | `TestFunc` (no underscore)             |    964 |  8.0% |
 | `TestFunc_Scenario_Expected` (3+ part) |    526 |  4.4% |
 
@@ -47,10 +47,10 @@
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
 | Core packages           |          2,080 |        103 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          8,350 |        345 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          8,349 |        345 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            377 |        171 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            960 |         70 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,052** |    **703** |                                                                                                 |
+| **Total**               |     **12,051** |    **703** |                                                                                                 |
 
 ### Core Packages
 
@@ -101,8 +101,8 @@
 | groupmilestones   |    90 |   100.0% |     8 |
 | snippets          |    89 |    99.5% |    15 |
 | workitems         |    89 |    97.3% |     6 |
-| integrations      |    85 |    98.9% |    12 |
 | mrapprovals       |    85 |   100.0% |     7 |
+| integrations      |    84 |    98.9% |    12 |
 | files             |    83 |   100.0% |     8 |
 | tags              |    83 |   100.0% |     9 |
 
@@ -198,7 +198,7 @@
 | impersonationtokens     |        40 |          2 |   100.0% |         5 |
 | importservice           |        31 |          1 |   100.0% |         5 |
 | instancevariables       |        41 |          2 |   100.0% |         5 |
-| integrations            |        85 |          4 |    98.9% |        12 |
+| integrations            |        84 |          4 |    98.9% |        12 |
 | invites                 |        40 |          1 |   100.0% |         4 |
 | issuediscussions        |        44 |          2 |   100.0% |         6 |
 | issuelinks              |        68 |          3 |   100.0% |         4 |
@@ -288,7 +288,7 @@
 | waitpoll                |        13 |          1 |   100.0% |         0 |
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        89 |          2 |    97.3% |         6 |
-| **Total**               | **8,350** |    **345** |          | **1,169** |
+| **Total**               | **8,349** |    **345** |          | **1,169** |
 
 </details>
 

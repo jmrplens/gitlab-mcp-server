@@ -155,12 +155,22 @@ func TestIntegrationToItem_MirrorsAllSDKFields(t *testing.T) {
 	}
 }
 
-// TestGroupDatadogToItem_MirrorsAllSDKFields verifies that groupDatadogToItem
-// maps every embedded gl.Integration event flag and the Datadog-specific
-// fields onto GroupDatadogItem, pinning 1:1 coverage against client-go.
-func TestGroupDatadogToItem_MirrorsAllSDKFields(t *testing.T) {
-	archive := true
-	src := &gl.GroupDatadogIntegration{
+// TestGroupDatadogToItem_Scenarios verifies groupDatadogToItem across the two
+// payload shapes GitLab can return, as table-driven subtests:
+//
+//   - NestedPropertiesPayload: every embedded gl.Integration event flag and
+//     the Datadog-specific fields map onto GroupDatadogItem, the canonical
+//     nested Properties object is a field-for-field mirror of the SDK's, and
+//     the deprecated flat copies carry the same values (1:1 dual shape).
+//   - LegacyFlatPayload: older servers omit the nested "properties" object —
+//     the flat fields carry the SDK's deprecated flat values, Properties
+//     stays nil (the same state the SDK struct is in), and
+//     datadog_ci_visibility is never fabricated.
+func TestGroupDatadogToItem_Scenarios(t *testing.T) {
+	archiveOn := true
+	archiveOff := false
+
+	nestedSrc := &gl.GroupDatadogIntegration{
 		ID: 9, Title: "datadog", Slug: "datadog", Active: true,
 		AlertEvents: true, CommitEvents: true, ConfidentialIssuesEvents: true,
 		ConfidentialNoteEvents: true, DeploymentEvents: true,
@@ -172,74 +182,102 @@ func TestGroupDatadogToItem_MirrorsAllSDKFields(t *testing.T) {
 		Properties: &gl.GroupDatadogIntegrationProperties{
 			APIURL: "https://api.datadoghq.com", DatadogEnv: "prod",
 			DatadogService: "svc", DatadogSite: "datadoghq.com", DatadogTags: "team:core",
-			DatadogCIVisibility: true, ArchiveTraceEvents: archive,
+			DatadogCIVisibility: true, ArchiveTraceEvents: archiveOn,
 		},
 	}
-	got := groupDatadogToItem(src)
-	flags := map[string]bool{
-		"AlertEvents": got.AlertEvents, "CommitEvents": got.CommitEvents,
-		"ConfidentialIssuesEvents":       got.ConfidentialIssuesEvents,
-		"ConfidentialNoteEvents":         got.ConfidentialNoteEvents,
-		"DeploymentEvents":               got.DeploymentEvents,
-		"GroupConfidentialMentionEvents": got.GroupConfidentialMentionEvents,
-		"GroupMentionEvents":             got.GroupMentionEvents,
-		"IncidentEvents":                 got.IncidentEvents,
-		"IssuesEvents":                   got.IssuesEvents, "JobEvents": got.JobEvents,
-		"MergeRequestsEvents": got.MergeRequestsEvents, "NoteEvents": got.NoteEvents,
-		"PipelineEvents": got.PipelineEvents, "PushEvents": got.PushEvents,
-		"TagPushEvents": got.TagPushEvents, "VulnerabilityEvents": got.VulnerabilityEvents,
-		"WikiPageEvents": got.WikiPageEvents, "CommentOnEventEnabled": got.CommentOnEventEnabled,
-		"Inherited": got.Inherited,
+
+	legacySrc := &gl.GroupDatadogIntegration{ID: 3, Title: "datadog", Slug: "datadog"}
+	legacySrc.APIURL = "https://legacy.example" //nolint:staticcheck // SA1019: legacy flat payload under test.
+	legacySrc.DatadogEnv = "staging"            //nolint:staticcheck // SA1019: legacy flat payload under test.
+	legacySrc.DatadogService = "legacy-svc"     //nolint:staticcheck // SA1019: legacy flat payload under test.
+	legacySrc.DatadogSite = "datadoghq.eu"      //nolint:staticcheck // SA1019: legacy flat payload under test.
+	legacySrc.DatadogTags = "team:legacy"       //nolint:staticcheck // SA1019: legacy flat payload under test.
+	legacySrc.ArchiveTraceEvents = &archiveOff  //nolint:staticcheck // SA1019: legacy flat payload under test.
+
+	tests := []struct {
+		name   string
+		src    *gl.GroupDatadogIntegration
+		verify func(t *testing.T, got GroupDatadogItem)
+	}{
+		{
+			name:   "NestedPropertiesPayload",
+			src:    nestedSrc,
+			verify: verifyNestedDatadogItem(nestedSrc),
+		},
+		{
+			name:   "LegacyFlatPayload",
+			src:    legacySrc,
+			verify: verifyLegacyDatadogItem,
+		},
 	}
-	for name, set := range flags {
-		if !set {
-			t.Fatalf("groupDatadogToItem dropped event flag %s: %+v", name, got)
-		}
-	}
-	if got.APIURL != src.Properties.APIURL || got.DatadogEnv != src.Properties.DatadogEnv ||
-		got.DatadogService != src.Properties.DatadogService || got.DatadogSite != src.Properties.DatadogSite ||
-		got.DatadogTags != src.Properties.DatadogTags {
-		t.Fatalf("groupDatadogToItem dropped a Datadog field: %+v", got)
-	}
-	if got.DatadogCIVisibility == nil || !*got.DatadogCIVisibility {
-		t.Fatalf("groupDatadogToItem DatadogCIVisibility = %v, want true", got.DatadogCIVisibility)
-	}
-	if got.ArchiveTraceEvents == nil || !*got.ArchiveTraceEvents {
-		t.Fatalf("groupDatadogToItem ArchiveTraceEvents = %v, want true", got.ArchiveTraceEvents)
-	}
-	if got.Properties == nil {
-		t.Fatal("groupDatadogToItem dropped the canonical nested Properties object")
-	}
-	want := GroupDatadogProperties{
-		APIURL:              src.Properties.APIURL,
-		DatadogEnv:          src.Properties.DatadogEnv,
-		DatadogService:      src.Properties.DatadogService,
-		DatadogSite:         src.Properties.DatadogSite,
-		DatadogTags:         src.Properties.DatadogTags,
-		DatadogCIVisibility: src.Properties.DatadogCIVisibility,
-		ArchiveTraceEvents:  src.Properties.ArchiveTraceEvents,
-	}
-	if *got.Properties != want {
-		t.Fatalf("nested Properties mismatch:\n got %+v\nwant %+v", *got.Properties, want)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.verify(t, groupDatadogToItem(tt.src))
+		})
 	}
 }
 
-// TestGroupDatadogToItem_LegacyFlatPayloadKeepsPropertiesNil verifies the
-// fallback for older GitLab servers that omit the nested "properties"
-// object: the flat fields carry the SDK's deprecated flat values, the
-// nested Properties stays nil (the same state the SDK struct is in), and
-// datadog_ci_visibility is never fabricated.
-func TestGroupDatadogToItem_LegacyFlatPayloadKeepsPropertiesNil(t *testing.T) {
-	archive := false
-	src := &gl.GroupDatadogIntegration{ID: 3, Title: "datadog", Slug: "datadog"}
-	src.APIURL = "https://legacy.example" //nolint:staticcheck // SA1019: legacy flat payload under test.
-	src.DatadogEnv = "staging"            //nolint:staticcheck // SA1019: legacy flat payload under test.
-	src.DatadogService = "legacy-svc"     //nolint:staticcheck // SA1019: legacy flat payload under test.
-	src.DatadogSite = "datadoghq.eu"      //nolint:staticcheck // SA1019: legacy flat payload under test.
-	src.DatadogTags = "team:legacy"       //nolint:staticcheck // SA1019: legacy flat payload under test.
-	src.ArchiveTraceEvents = &archive     //nolint:staticcheck // SA1019: legacy flat payload under test.
+// verifyNestedDatadogItem returns the assertion set for the modern payload:
+// every event flag mapped, the deprecated flat copies populated, and the
+// canonical nested Properties object mirroring the SDK field for field.
+func verifyNestedDatadogItem(nestedSrc *gl.GroupDatadogIntegration) func(t *testing.T, got GroupDatadogItem) {
+	return func(t *testing.T, got GroupDatadogItem) {
+		t.Helper()
+		flags := map[string]bool{
+			"AlertEvents": got.AlertEvents, "CommitEvents": got.CommitEvents,
+			"ConfidentialIssuesEvents":       got.ConfidentialIssuesEvents,
+			"ConfidentialNoteEvents":         got.ConfidentialNoteEvents,
+			"DeploymentEvents":               got.DeploymentEvents,
+			"GroupConfidentialMentionEvents": got.GroupConfidentialMentionEvents,
+			"GroupMentionEvents":             got.GroupMentionEvents,
+			"IncidentEvents":                 got.IncidentEvents,
+			"IssuesEvents":                   got.IssuesEvents, "JobEvents": got.JobEvents,
+			"MergeRequestsEvents": got.MergeRequestsEvents, "NoteEvents": got.NoteEvents,
+			"PipelineEvents": got.PipelineEvents, "PushEvents": got.PushEvents,
+			"TagPushEvents": got.TagPushEvents, "VulnerabilityEvents": got.VulnerabilityEvents,
+			"WikiPageEvents": got.WikiPageEvents, "CommentOnEventEnabled": got.CommentOnEventEnabled,
+			"Inherited": got.Inherited,
+		}
+		for name, set := range flags {
+			if !set {
+				t.Fatalf("groupDatadogToItem dropped event flag %s: %+v", name, got)
+			}
+		}
+		if got.APIURL != nestedSrc.Properties.APIURL || got.DatadogEnv != nestedSrc.Properties.DatadogEnv ||
+			got.DatadogService != nestedSrc.Properties.DatadogService || got.DatadogSite != nestedSrc.Properties.DatadogSite ||
+			got.DatadogTags != nestedSrc.Properties.DatadogTags {
+			t.Fatalf("groupDatadogToItem dropped a Datadog field: %+v", got)
+		}
+		if got.DatadogCIVisibility == nil || !*got.DatadogCIVisibility {
+			t.Fatalf("groupDatadogToItem DatadogCIVisibility = %v, want true", got.DatadogCIVisibility)
+		}
+		if got.ArchiveTraceEvents == nil || !*got.ArchiveTraceEvents {
+			t.Fatalf("groupDatadogToItem ArchiveTraceEvents = %v, want true", got.ArchiveTraceEvents)
+		}
+		if got.Properties == nil {
+			t.Fatal("groupDatadogToItem dropped the canonical nested Properties object")
+		}
+		want := GroupDatadogProperties{
+			APIURL:              nestedSrc.Properties.APIURL,
+			DatadogEnv:          nestedSrc.Properties.DatadogEnv,
+			DatadogService:      nestedSrc.Properties.DatadogService,
+			DatadogSite:         nestedSrc.Properties.DatadogSite,
+			DatadogTags:         nestedSrc.Properties.DatadogTags,
+			DatadogCIVisibility: nestedSrc.Properties.DatadogCIVisibility,
+			ArchiveTraceEvents:  nestedSrc.Properties.ArchiveTraceEvents,
+		}
+		if *got.Properties != want {
+			t.Fatalf("nested Properties mismatch:\n got %+v\nwant %+v", *got.Properties, want)
+		}
+	}
+}
 
-	got := groupDatadogToItem(src)
+// verifyLegacyDatadogItem asserts the fallback for servers that omit the
+// nested "properties" object: flat fields carry the deprecated SDK values,
+// Properties stays nil, and datadog_ci_visibility is never fabricated.
+func verifyLegacyDatadogItem(t *testing.T, got GroupDatadogItem) {
+	t.Helper()
 	if got.Properties != nil {
 		t.Fatalf("Properties = %+v, want nil for a legacy flat payload", got.Properties)
 	}
