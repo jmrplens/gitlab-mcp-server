@@ -38,7 +38,7 @@ Tools marked **Delete** require user confirmation before execution.
 
 ### `gitlab_package_publish`
 
-Publish (upload) a file to the GitLab Generic Package Registry. Provide either file_path (absolute local path) or content_base64 (base64-encoded content), not both. Returns the package file ID, size, SHA256, and download URL.
+Publish (upload) a file to the GitLab Generic Package Registry. Provide either file_path (absolute local path) or content_base64 (base64-encoded content), not both. The `file_name` may include `/` to describe a directory structure inside the package; segments between separators must not be empty, `.`, or `..`. Returns the package file ID, size, SHA256, and download URL.
 
 | Annotation | **Create** |
 | ---------- | ---------- |

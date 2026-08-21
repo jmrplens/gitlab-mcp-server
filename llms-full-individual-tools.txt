@@ -10278,7 +10278,7 @@ Download a single file from the Generic Package Registry to a local path. Return
 
 **Parameters:**
 
-- `file_name` (string) (required): File name to download
+- `file_name` (string) (required): File name to download; may include / to describe a directory structure (segments must not be empty or . or ..)
 - `output_path` (string) (required): Absolute path where the file will be saved on the local filesystem
 - `package_name` (string) (required): Package name
 - `package_version` (string) (required): Package version
@@ -10344,7 +10344,7 @@ Publish a single file to the Generic Package Registry. Returns: the published fi
 **Parameters:**
 
 - `content_base64` (string): Base64-encoded file content. Only one should be provided.
-- `file_name` (string) (required): Name of the file within the package
+- `file_name` (string) (required): Name of the file within the package; may include / to describe a directory structure (segments must not be empty or . or ..)
 - `file_path` (string): Absolute path to a local file. Alternative to content_base64. Only one of file_path or content_base64 should be provided.
 - `package_name` (string) (required): Package name (alphanumeric, dots, dashes, underscores)
 - `package_version` (string) (required): Package version (e.g. 1.0.0)

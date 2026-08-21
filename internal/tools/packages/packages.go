@@ -27,7 +27,7 @@ type PublishInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	PackageName    string               `json:"package_name" jsonschema:"Package name (alphanumeric, dots, dashes, underscores),required"`
 	PackageVersion string               `json:"package_version" jsonschema:"Package version (e.g. 1.0.0),required"`
-	FileName       string               `json:"file_name" jsonschema:"Name of the file within the package,required"`
+	FileName       string               `json:"file_name" jsonschema:"Name of the file within the package; may include / to describe a directory structure (segments must not be empty or . or ..),required"`
 	FilePath       string               `json:"file_path,omitempty" jsonschema:"Absolute path to a local file. Alternative to content_base64. Only one of file_path or content_base64 should be provided."`
 	ContentBase64  string               `json:"content_base64,omitempty" jsonschema:"Base64-encoded file content. Only one should be provided."`
 	Status         string               `json:"status,omitempty" jsonschema:"Package status: default or hidden"`
@@ -119,6 +119,10 @@ func Publish(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient
 		},
 	)
 	if err != nil {
+		if errors.Is(err, gl.ErrInvalidFileName) {
+			return PublishOutput{}, toolutil.WrapErrWithHint("packagePublish", err,
+				"file_name segments between / separators must not be empty, \".\", or \"..\"")
+		}
 		return PublishOutput{}, toolutil.WrapErrWithStatusHint("packagePublish", err, http.StatusBadRequest,
 			"package_name and package_version must match pattern [A-Za-z0-9.\\-_]+ with version following SemVer; verify file_name does not already exist in this package or use status=hidden to override")
 	}
@@ -171,7 +175,7 @@ type DownloadInput struct {
 	ProjectID      toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	PackageName    string               `json:"package_name" jsonschema:"Package name,required"`
 	PackageVersion string               `json:"package_version" jsonschema:"Package version,required"`
-	FileName       string               `json:"file_name" jsonschema:"File name to download,required"`
+	FileName       string               `json:"file_name" jsonschema:"File name to download; may include / to describe a directory structure (segments must not be empty or . or ..),required"`
 	OutputPath     string               `json:"output_path" jsonschema:"Absolute path where the file will be saved on the local filesystem,required"`
 }
 

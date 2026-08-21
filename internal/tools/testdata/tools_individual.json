@@ -137995,7 +137995,7 @@
       "additionalProperties": false,
       "properties": {
         "file_name": {
-          "description": "File name to download",
+          "description": "File name to download; may include / to describe a directory structure (segments must not be empty or . or ..)",
           "type": "string"
         },
         "output_path": {
@@ -138682,7 +138682,7 @@
           "type": "string"
         },
         "file_name": {
-          "description": "Name of the file within the package",
+          "description": "Name of the file within the package; may include / to describe a directory structure (segments must not be empty or . or ..)",
           "type": "string"
         },
         "file_path": {

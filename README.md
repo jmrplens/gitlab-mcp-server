@@ -415,10 +415,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       977 |     196,155 |
-| Unit tests (`_test.go`)  |       532 |     302,604 |
+| Source (`.go`, non-test) |       977 |     196,164 |
+| Unit tests (`_test.go`)  |       532 |     302,678 |
 | End-to-end tests         |       174 |      45,157 |
-| **Total**                | **1,683** | **543,916** |
+| **Total**                | **1,683** | **543,999** |
 
 ### Functions
 
@@ -427,8 +427,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  7,352 |
 | — exported (public)             |  2,586 |
 | — unexported (private)          |  4,766 |
-| Unit test functions (`TestXxx`) | 11,464 |
-| Subtests (`t.Run(...)`)         |  2,848 |
+| Unit test functions (`TestXxx`) | 11,465 |
+| Subtests (`t.Run(...)`)         |  2,849 |
 | End-to-end test functions       |    381 |
 
 ### Ratios worth noting
@@ -445,7 +445,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,593 |
+| `if err != nil` checks             | 6,594 |
 | `defer` statements                 |   864 |
 | `struct` types defined             | 2,699 |
 | `//nolint` suppressions            |   249 |
@@ -471,7 +471,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | Source code printed at 55 lines/page | ~3,566 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,400 (impossible to avoid)                                                                         |
+| Source lines mentioning `"gitlab"`   | 12,401 (impossible to avoid)                                                                         |
 | Longest function name in source      | `baseDestructiveEarlySinglePromptTemplateAndFixtures` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

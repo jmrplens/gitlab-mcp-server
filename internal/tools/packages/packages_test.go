@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -936,3 +937,76 @@ func TestPtrString(t *testing.T) {
 
 // Ensure fmt is referenced to avoid unused import error.
 var _ = fmt.Sprintf
+
+// assertFileNameShapeResult checks one TestPublish_FileNameShapes outcome:
+// success for valid names, or an ErrInvalidFileName carrying the
+// segment-rule hint for rejected ones.
+func assertFileNameShapeResult(t *testing.T, fileName, wantErr string, err error) {
+	t.Helper()
+	if wantErr == "" {
+		if err != nil {
+			t.Fatalf("Publish() error = %v, want success for directory-structured file_name", err)
+		}
+		return
+	}
+	if err == nil {
+		t.Fatalf("Publish() = nil error, want ErrInvalidFileName for %q", fileName)
+	}
+	if !errors.Is(err, gl.ErrInvalidFileName) {
+		t.Fatalf("error = %v, want errors.Is ErrInvalidFileName", err)
+	}
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("error = %q, want segment-rule hint containing %q", err.Error(), wantErr)
+	}
+}
+
+// TestPublish_FileNameShapes verifies the v2.58.2 file-name contract through
+// the publish handler, as table-driven subtests:
+//
+//   - DirectoryStructure: a file_name with "/" separators reaches the API
+//     with the separators preserved and each segment escaped individually.
+//   - InvalidDotSegment: a "." segment is rejected client-side by client-go's
+//     ErrInvalidFileName before any request, and the wrapped error carries
+//     the segment-rule hint.
+func TestPublish_FileNameShapes(t *testing.T) {
+	tests := []struct {
+		name     string
+		fileName string
+		wantErr  string // empty = expect success
+	}{
+		{name: "DirectoryStructure", fileName: "dist/linux-amd64/tool.bin"},
+		{name: "InvalidDotSegment", fileName: "dist/./tool.bin", wantErr: "must not be empty"},
+		{name: "InvalidParentSegment", fileName: "../escape.bin", wantErr: "must not be empty"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var handler http.Handler
+			if tt.wantErr == "" {
+				handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					// EscapedPath distinguishes real "/" separators from the
+					// %2F-escaped flat name pre-2.58.2 client-go sent (Go
+					// preserves %2F escapes, and canonicalizes needless ones
+					// like %2E away).
+					if got := r.URL.EscapedPath(); got != "/api/v4/projects/42/packages/generic/pkg/1.0.0/dist/linux-amd64/tool.bin" {
+						t.Errorf("escaped path = %q, want directory separators preserved (no %%2F)", got)
+					}
+					testutil.RespondJSON(w, http.StatusCreated, `{"message":"201 Created"}`)
+				})
+			} else {
+				// The SDK must reject the name before any request is issued.
+				handler = testutil.ForbiddenHandler(t)
+			}
+			client := testutil.NewTestClient(t, handler)
+
+			_, err := Publish(context.Background(), nil, client, PublishInput{
+				ProjectID:      "42",
+				PackageName:    "pkg",
+				PackageVersion: "1.0.0",
+				FileName:       tt.fileName,
+				ContentBase64:  "aGVsbG8=",
+			})
+			assertFileNameShapeResult(t, tt.fileName, tt.wantErr, err)
+		})
+	}
+}
