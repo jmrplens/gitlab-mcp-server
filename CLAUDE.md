@@ -237,6 +237,8 @@ For targeted debugging, append `PRESET=...` to any evaluator target to run a sin
 
 ### Release process
 
+**Major-version policy**: the server's major tracks client-go's major — when client-go moves to v3, this project moves to v3 in that same dependency bump (removing the deprecated compatibility fields kept during v2, e.g. the flat copies in the dual-shape group Datadog output). All other dependency updates ship as minor/patch.
+
 When creating a new release and uploading binaries to GitHub Releases:
 
 1. Build cross-platform binaries with `make release` (uses GoReleaser locally, flattens `dist/` to match GitHub Release asset names)

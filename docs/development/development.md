@@ -122,6 +122,14 @@ See [Architecture Overview](../concepts/architecture.md) for detailed diagrams a
 
 The project version is defined in the `VERSION` file at the repository root.
 
+**Major-version policy**: the server's major tracks the major of
+`gitlab.com/gitlab-org/api/client-go`, the GitLab API client it is built on.
+When client-go releases v3 (which drops its deprecated fields), this project
+moves to v3 in the same dependency bump — that release also removes the
+deprecated compatibility fields kept during the v2 cycle (e.g. the flat
+copies in the dual-shape group Datadog output). All other dependency updates
+ship as minor or patch releases.
+
 ```text
 VERSION           # Contains e.g. "1.1.7" — no "v" prefix, no trailing newline
   ├─ Makefile     # Reads VERSION → passes via -ldflags to go build
