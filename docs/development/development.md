@@ -2,13 +2,13 @@
 
 > **Diátaxis type**: How-to
 > **Audience**: 🔧 Developers, contributors
-> **Prerequisites**: Go 1.26+, Node.js 24.18+, GitLab instance with PAT, Git, Make
+> **Prerequisites**: Go 1.27+, Node.js 24.18+, GitLab instance with PAT, Git, Make
 
 ---
 
 ## Prerequisites
 
-- **Go 1.26+** ([download](https://go.dev/dl/))
+- **Go 1.27+** ([download](https://go.dev/dl/))
 - **Node.js 24.18+ with Corepack** for the documentation site and MCP Inspector. The site uses `pnpm@11.22.0`; keep pnpm configuration in `site/pnpm-workspace.yaml` rather than the `pnpm` field in `package.json`.
 - **GitLab instance** with Personal Access Token (`api` scope)
 - **Git** for version control
@@ -494,7 +494,7 @@ Install the Go extension and add to `.vscode/mcp.json`:
 | Dependency                               | Version | Purpose                         |
 | ---------------------------------------- | ------- | ------------------------------- |
 | `github.com/modelcontextprotocol/go-sdk` | v1.7.0  | MCP server framework            |
-| `gitlab.com/gitlab-org/api/client-go/v2` | v2.58.0 | Official GitLab REST API client |
+| `gitlab.com/gitlab-org/api/client-go/v2` | v2.58.1 | Official GitLab REST API client |
 | `github.com/joho/godotenv`               | v1.5.1  | .env file loading for dev       |
 
 ## External References
