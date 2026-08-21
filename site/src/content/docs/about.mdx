@@ -47,6 +47,8 @@ This is an independent open-source project. It is not affiliated with, endorsed 
 
 The project is released under the [MIT license](https://github.com/jmrplens/gitlab-mcp-server/blob/main/LICENSE) and follows semantic versioning. Current version: **{stats.version}**.
 
+The major version tracks the major of [`gitlab-org/api/client-go`](https://gitlab.com/gitlab-org/api/client-go), the official GitLab API client this server is built on: when client-go moves to v3, this project moves to v3 in the same release, and deprecated compatibility fields kept during the v2 cycle are removed there. Every other dependency update ships as a minor or patch release.
+
 Every release publishes signed binaries for Linux, macOS and Windows on both amd64 and arm64, a container image on GHCR and Docker Hub, and a Claude Desktop extension. Release notes and downloads are on the [Releases page](https://github.com/jmrplens/gitlab-mcp-server/releases); binary signatures can be verified with Cosign as described under [release integrity](/gitlab-mcp-server/operations/security/).
 
 ## Reporting problems and contributing

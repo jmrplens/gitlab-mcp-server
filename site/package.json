@@ -30,18 +30,18 @@
   "type": "module",
   "dependencies": {
     "@astrojs/starlight": "^0.41.7",
-    "astro": "^7.2.2",
-    "mermaid": "^11.16.1",
+    "astro": "^7.2.4",
+    "mermaid": "^11.17.0",
     "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@typescript-eslint/eslint-plugin": "^8.67.0",
     "@typescript-eslint/parser": "^8.67.0",
-    "eslint": "^10.8.1",
+    "eslint": "^10.9.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-astro": "^3.1.0",
-    "html-validate": "^11.8.0",
+    "html-validate": "^11.9.0",
     "htmlhint": "^1.9.2",
     "pa11y-ci": "^4.1.1",
     "playwright": "^1.62.1",
