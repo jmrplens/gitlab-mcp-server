@@ -314,6 +314,13 @@ func isDocAddedField(pkg, mcpType, tag string) bool {
 // This makes the auditor's extra-output total fully explained: every accepted extra
 // is here with a reason, so any NEW extra surfaces as a genuine finding.
 var acceptedExtraOutputs = map[string]string{
+	// Dual-shape deprecation window: GroupDatadogItem mirrors client-go's own
+	// dual shape (nested Properties + deprecated flat copies, both retiring in
+	// client-go v3). The SDK never had a flat datadog_ci_visibility — GitLab
+	// added the field after the flat era — so our flat copy has no SDK
+	// counterpart to pair with. It is removed together with the other flat
+	// copies at the client-go v3 bump.
+	"integrations.GroupDatadogItem.datadog_ci_visibility": "deprecated flat convenience copy of properties.datadog_ci_visibility; the SDK has no flat counterpart (field postdates the flat era); retires with the client-go v3 bump",
 	// GraphQL-sourced output types: workitems/epics map GraphQL response structs
 	// (gl.WorkItem/gl.Epic) that carry no REST json tags, so the REST-tag diff flags
 	// every documented GraphQL field as extra. The fields are real and documented by

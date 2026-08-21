@@ -302,7 +302,7 @@
 | cmd/audit_1to1/internal/actions                |    87.9% |
 | cmd/audit_1to1/internal/merge                  |    86.4% |
 | cmd/audit_1to1/internal/metadata               |    70.4% |
-| cmd/audit_1to1/internal/structs                |    95.5% |
+| cmd/audit_1to1/internal/structs                |    95.3% |
 | cmd/audit_catalog_first                        |    80.4% |
 | cmd/audit_discovery_completeness               |    77.6% |
 | cmd/audit_doc_coverage                         |    81.5% |
