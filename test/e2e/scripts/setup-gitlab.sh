@@ -629,12 +629,17 @@ fi
 # guaranteed to still have a migration file the mark service can resolve.
 if command -v docker >/dev/null 2>&1; then
     echo "  [7/8] Seeding a pending schema migration for db_migration_mark coverage..."
-    # The version must be one the Rails migration context can resolve to a
-    # file — the newest schema_migrations row is not guaranteed to (structure
-    # loads insert historical versions whose files were squashed away), so
-    # Rails itself is asked for the newest migration it knows.
+    # The version must be one the WEB process can resolve to a migration
+    # file. Omnibus configures the migration paths as ["db/migrate",
+    # "/opt/.../db/post_migrate"] — the first entry is relative, and Puma
+    # runs with cwd=/ (verified on gitlab-ce 19.3), so the API's migration
+    # context resolves only the absolutely-pathed post_migrate directory.
+    # A db/migrate version therefore 404s on POST /admin/migrations/:v/mark
+    # even though gitlab-rails runner (cwd = the Rails root) sees it. Seed
+    # the newest post_migrate migration: both processes resolve it, and it
+    # is recent enough to never be a squashed structure-load row.
     mig_version=$(docker compose -f "${COMPOSE_FILE}" exec -T gitlab gitlab-rails runner \
-        "puts ActiveRecord::Base.connection_pool.migration_context.migrations.last.version" 2>/dev/null | tr -d '[:space:]' || true)
+        "puts ActiveRecord::Base.connection_pool.migration_context.migrations.select { |m| m.filename.include?('/post_migrate/') }.last.version" 2>/dev/null | tr -d '[:space:]' || true)
     if [ -n "${mig_version}" ] && docker compose -f "${COMPOSE_FILE}" exec -T gitlab gitlab-psql -c \
         "DELETE FROM schema_migrations WHERE version='${mig_version}'" >/dev/null 2>&1; then
         echo "E2E_DB_MIGRATION_VERSION=${mig_version}" >> "${ENV_FILE}"
