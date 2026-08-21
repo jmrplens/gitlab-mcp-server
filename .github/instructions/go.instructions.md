@@ -410,6 +410,20 @@ func TestCovListMetricImagesWithPagination(t *testing.T) { ... }
 
 This project declares `1.27.0`; prefer these modern patterns when they simplify code without reducing clarity:
 
+### Promoted Fields in Composite Literals (Go 1.27+)
+
+Composite literals may name promoted (embedded) fields directly; the
+`modernize/embedlit` linter enforces this over wrapping them in the embedded
+type:
+
+```go
+// Before (pre-1.27): the embedded type had to be spelled out
+out := Output{PaginationOutput: toolutil.PaginationOutput{Page: 1, PerPage: 20}}
+
+// Now: promoted fields go straight into the literal
+out := Output{Page: 1, PerPage: 20}
+```
+
 ### Range-over-func Iterators (Go 1.23+)
 
 Use `iter.Seq` and `iter.Seq2` for custom iteration:

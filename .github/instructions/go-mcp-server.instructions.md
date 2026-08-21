@@ -402,7 +402,7 @@ Your `go.mod` should include:
 ```go
 module github.com/yourusername/yourserver
 
-go 1.23
+go 1.27
 
 require github.com/modelcontextprotocol/go-sdk v1.7.0
 ```
