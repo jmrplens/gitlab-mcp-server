@@ -207,6 +207,53 @@ func TestGroupDatadogToItem_MirrorsAllSDKFields(t *testing.T) {
 	if got.ArchiveTraceEvents == nil || !*got.ArchiveTraceEvents {
 		t.Fatalf("groupDatadogToItem ArchiveTraceEvents = %v, want true", got.ArchiveTraceEvents)
 	}
+	if got.Properties == nil {
+		t.Fatal("groupDatadogToItem dropped the canonical nested Properties object")
+	}
+	want := GroupDatadogProperties{
+		APIURL:              src.Properties.APIURL,
+		DatadogEnv:          src.Properties.DatadogEnv,
+		DatadogService:      src.Properties.DatadogService,
+		DatadogSite:         src.Properties.DatadogSite,
+		DatadogTags:         src.Properties.DatadogTags,
+		DatadogCIVisibility: src.Properties.DatadogCIVisibility,
+		ArchiveTraceEvents:  src.Properties.ArchiveTraceEvents,
+	}
+	if *got.Properties != want {
+		t.Fatalf("nested Properties mismatch:\n got %+v\nwant %+v", *got.Properties, want)
+	}
+}
+
+// TestGroupDatadogToItem_LegacyFlatPayloadKeepsPropertiesNil verifies the
+// fallback for older GitLab servers that omit the nested "properties"
+// object: the flat fields carry the SDK's deprecated flat values, the
+// nested Properties stays nil (the same state the SDK struct is in), and
+// datadog_ci_visibility is never fabricated.
+func TestGroupDatadogToItem_LegacyFlatPayloadKeepsPropertiesNil(t *testing.T) {
+	archive := false
+	src := &gl.GroupDatadogIntegration{ID: 3, Title: "datadog", Slug: "datadog"}
+	src.APIURL = "https://legacy.example" //nolint:staticcheck // SA1019: legacy flat payload under test.
+	src.DatadogEnv = "staging"            //nolint:staticcheck // SA1019: legacy flat payload under test.
+	src.DatadogService = "legacy-svc"     //nolint:staticcheck // SA1019: legacy flat payload under test.
+	src.DatadogSite = "datadoghq.eu"      //nolint:staticcheck // SA1019: legacy flat payload under test.
+	src.DatadogTags = "team:legacy"       //nolint:staticcheck // SA1019: legacy flat payload under test.
+	src.ArchiveTraceEvents = &archive     //nolint:staticcheck // SA1019: legacy flat payload under test.
+
+	got := groupDatadogToItem(src)
+	if got.Properties != nil {
+		t.Fatalf("Properties = %+v, want nil for a legacy flat payload", got.Properties)
+	}
+	if got.APIURL != "https://legacy.example" || got.DatadogEnv != "staging" ||
+		got.DatadogService != "legacy-svc" || got.DatadogSite != "datadoghq.eu" ||
+		got.DatadogTags != "team:legacy" {
+		t.Fatalf("flat fallback dropped a Datadog field: %+v", got)
+	}
+	if got.DatadogCIVisibility != nil {
+		t.Fatalf("DatadogCIVisibility = %v, want nil (never fabricated for legacy payloads)", got.DatadogCIVisibility)
+	}
+	if got.ArchiveTraceEvents == nil || *got.ArchiveTraceEvents {
+		t.Fatalf("ArchiveTraceEvents = %v, want explicit false from the legacy flat field", got.ArchiveTraceEvents)
+	}
 }
 
 // TestGet_JiraSuccess verifies the Get_JiraSuccess handler.

@@ -34004,7 +34004,7 @@
   },
   {
     "name": "gitlab_get_group_datadog_integration",
-    "description": "Read the Datadog integration configured on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The api_key is never returned.\n\nReturns: JSON with the group's Datadog integration details (api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events).\n\nSee also: gitlab_set_group_datadog_integration, gitlab_delete_group_datadog_integration",
+    "description": "Read the Datadog integration configured on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The api_key is never returned.\n\nReturns: JSON with the group's Datadog integration details. The canonical configuration is the nested properties object (api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events); the flat top-level copies of those fields are deprecated and will be removed — prefer properties.*.\n\nSee also: gitlab_set_group_datadog_integration, gitlab_delete_group_datadog_integration",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -34104,6 +34104,46 @@
             },
             "pipeline_events": {
               "type": "boolean"
+            },
+            "properties": {
+              "additionalProperties": false,
+              "description": "Canonical Datadog configuration object; prefer these values over the deprecated flat copies",
+              "properties": {
+                "api_url": {
+                  "type": "string"
+                },
+                "archive_trace_events": {
+                  "type": "boolean"
+                },
+                "datadog_ci_visibility": {
+                  "type": "boolean"
+                },
+                "datadog_env": {
+                  "type": "string"
+                },
+                "datadog_service": {
+                  "type": "string"
+                },
+                "datadog_site": {
+                  "type": "string"
+                },
+                "datadog_tags": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "api_url",
+                "datadog_env",
+                "datadog_service",
+                "datadog_site",
+                "datadog_tags",
+                "datadog_ci_visibility",
+                "archive_trace_events"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
             },
             "push_events": {
               "type": "boolean"
@@ -194246,7 +194286,7 @@
   },
   {
     "name": "gitlab_set_group_datadog_integration",
-    "description": "Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, or use_inherited_settings=true must be supplied.\n\nReturns: JSON with the updated Datadog integration details.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration",
+    "description": "Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, or use_inherited_settings=true must be supplied.\n\nReturns: JSON with the updated Datadog integration details (canonical values in the nested properties object; flat copies are deprecated — prefer properties.*).\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -194391,6 +194431,46 @@
             },
             "pipeline_events": {
               "type": "boolean"
+            },
+            "properties": {
+              "additionalProperties": false,
+              "description": "Canonical Datadog configuration object; prefer these values over the deprecated flat copies",
+              "properties": {
+                "api_url": {
+                  "type": "string"
+                },
+                "archive_trace_events": {
+                  "type": "boolean"
+                },
+                "datadog_ci_visibility": {
+                  "type": "boolean"
+                },
+                "datadog_env": {
+                  "type": "string"
+                },
+                "datadog_service": {
+                  "type": "string"
+                },
+                "datadog_site": {
+                  "type": "string"
+                },
+                "datadog_tags": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "api_url",
+                "datadog_env",
+                "datadog_service",
+                "datadog_site",
+                "datadog_tags",
+                "datadog_ci_visibility",
+                "archive_trace_events"
+              ],
+              "type": [
+                "null",
+                "object"
+              ]
             },
             "push_events": {
               "type": "boolean"
