@@ -1010,3 +1010,66 @@ func TestPublish_FileNameShapes(t *testing.T) {
 		})
 	}
 }
+
+// TestDownload_FileNameShapes verifies the v2.58.2 file-name contract on the
+// download path, as table-driven subtests:
+//
+//   - DirectoryStructure: a directory-structured file_name reaches the API
+//     with real "/" separators and the file streams to disk.
+//   - InvalidDotSegment: FormatPackageURL rejects the name client-side with
+//     ErrInvalidFileName (no request leaves) and the wrapped error carries
+//     the segment-rule hint.
+func TestDownload_FileNameShapes(t *testing.T) {
+	tests := []struct {
+		name     string
+		fileName string
+		wantErr  string // empty = expect success
+	}{
+		{name: "DirectoryStructure", fileName: "dist/linux-amd64/tool.bin"},
+		{name: "InvalidDotSegment", fileName: "dist/../escape.bin", wantErr: "must not be empty"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var handler http.Handler
+			if tt.wantErr == "" {
+				handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if got := r.URL.EscapedPath(); got != "/api/v4/projects/42/packages/generic/pkg/1.0.0/dist/linux-amd64/tool.bin" {
+						t.Errorf("escaped path = %q, want directory separators preserved (no %%2F)", got)
+					}
+					w.Header().Set("Content-Type", "application/octet-stream")
+					_, _ = w.Write([]byte("binary-content"))
+				})
+			} else {
+				handler = testutil.ForbiddenHandler(t)
+			}
+			client := testutil.NewTestClient(t, handler)
+
+			out, err := Download(context.Background(), nil, client, DownloadInput{
+				ProjectID:      "42",
+				PackageName:    "pkg",
+				PackageVersion: "1.0.0",
+				FileName:       tt.fileName,
+				OutputPath:     filepath.Join(t.TempDir(), "out", "tool.bin"),
+			})
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Download() error = %v, want success for directory-structured file_name", err)
+				}
+				if out.Size != int64(len("binary-content")) {
+					t.Errorf("Size = %d, want %d", out.Size, len("binary-content"))
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("Download() = nil error, want ErrInvalidFileName for %q", tt.fileName)
+			}
+			if !errors.Is(err, gl.ErrInvalidFileName) {
+				t.Fatalf("error = %v, want errors.Is ErrInvalidFileName", err)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("error = %q, want segment-rule hint containing %q", err.Error(), tt.wantErr)
+			}
+		})
+	}
+}
