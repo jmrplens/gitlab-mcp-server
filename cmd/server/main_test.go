@@ -1919,11 +1919,10 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	defer resp.Body.Close()
+	respBody := readAndCloseBody(t, resp)
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
+		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, respBody)
 	}
 
 	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
@@ -1979,11 +1978,10 @@ func TestServeHTTP_CrossOriginProtection_RejectsCrossSitePost(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	defer resp.Body.Close()
+	respBody := readAndCloseBody(t, resp)
 
 	if resp.StatusCode != http.StatusForbidden {
-		respBody, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected 403 Forbidden, got %d: %s", resp.StatusCode, string(respBody))
+		t.Fatalf("expected 403 Forbidden, got %d: %s", resp.StatusCode, respBody)
 	}
 
 	cancel()
@@ -2037,11 +2035,10 @@ func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	defer resp.Body.Close()
+	respBody := readAndCloseBody(t, resp)
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
+		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, respBody)
 	}
 
 	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
@@ -2102,7 +2099,7 @@ func TestServeHTTP_MissingGitLabURLDefaultsToPublic(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	defer resp.Body.Close()
+	readAndCloseBody(t, resp)
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected 200 (missing GITLAB-URL now defaults to gitlab.com), got %d", resp.StatusCode)
@@ -2159,7 +2156,7 @@ func TestServeHTTP_InvalidGitLabURLHeader(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	defer resp.Body.Close()
+	readAndCloseBody(t, resp)
 
 	if resp.StatusCode == http.StatusOK {
 		t.Error("expected non-200 for invalid GITLAB-URL header")
@@ -2248,12 +2245,19 @@ func TestServeHTTP_MissingToken(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	defer resp.Body.Close()
+	respBody := readAndCloseBody(t, resp)
 
-	// The server factory returns nil for missing token → MCP SDK responds
-	// with an error status (400 or 401).
-	if resp.StatusCode == http.StatusOK {
-		t.Error("expected non-200 for request without token")
+	// The request gate rejects a credential-less POST before the MCP handler
+	// runs, so the status is exactly 401 with an RFC 9110 challenge — not the
+	// blanket 400 the SDK used to emit when the server factory returned nil.
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d: %s", resp.StatusCode, http.StatusUnauthorized, respBody)
+	}
+	if challenge := resp.Header.Get("WWW-Authenticate"); challenge == "" {
+		t.Error("401 without WWW-Authenticate violates RFC 9110")
+	}
+	if !strings.Contains(respBody, "\"jsonrpc\"") {
+		t.Errorf("body is not a JSON-RPC error: %s", respBody)
 	}
 
 	cancel()
@@ -2749,6 +2753,29 @@ const readinessConsecutiveSuccesses = 2
 // of flaking against a tight fixed 5s budget.
 const testHTTPLivenessTimeout = 30 * time.Second
 
+// readAndCloseBody consumes the response body and closes it immediately,
+// returning the contents for assertions.
+//
+// Callers that later cancel a serveHTTP context MUST use this instead of a
+// deferred Close. http.Server.Shutdown waits for connections to return to
+// idle, and a connection whose response body the client has not consumed is
+// not idle: a deferred close still holds it open while Shutdown is running, so
+// Shutdown burns its whole budget and returns "context deadline exceeded".
+// Locally the client has usually drained a small body already and the race is
+// invisible; on a loaded CI runner it is not.
+func readAndCloseBody(t *testing.T, resp *http.Response) string {
+	t.Helper()
+
+	body, err := io.ReadAll(resp.Body)
+	if closeErr := resp.Body.Close(); closeErr != nil {
+		t.Errorf("closing response body: %v", closeErr)
+	}
+	if err != nil {
+		t.Errorf("reading response body: %v", err)
+	}
+	return string(body)
+}
+
 // waitForHTTPServerReady polls /health until the HTTP server is reachable,
 // or fails fast if serveHTTP exits early with an error.
 //
@@ -2927,6 +2954,8 @@ func TestServeHTTP_OAuthMode_AcceptsValidBearer(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", err)
 	}
+	// parseJSONRPCResponse consumes the body below, which is what returns the
+	// connection to idle before the context is cancelled.
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -2988,11 +3017,10 @@ func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	respBody := readAndCloseBody(t, resp)
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected 200 OK (PRIVATE-TOKEN converted to Bearer), got %d: %s", resp.StatusCode, string(respBody))
+		t.Fatalf("expected 200 OK (PRIVATE-TOKEN converted to Bearer), got %d: %s", resp.StatusCode, respBody)
 	}
 
 	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
