@@ -478,3 +478,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 <!-- END STATS -->
 
 </details>
+
+---
+
+Maintained by [José M. Requena Plens](https://jmrp.io/) ·
+[Project page](https://jmrp.io/projects/) ·
+Hosted instance: [mcp.jmrp.io/gitlab](https://mcp.jmrp.io/gitlab) (POST-only; a GET returns 405 by design)

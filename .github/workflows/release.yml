@@ -329,3 +329,22 @@ jobs:
         env:
           IMAGE_REF: docker.io/${{ env.DOCKERHUB_IMAGE }}@${{ steps.docker-push.outputs.digest }}
         run: bash .github/scripts/cosign-sign-retry.sh "$IMAGE_REF"
+
+      # The Docker Hub repository descriptions are owned by this repo so they
+      # cannot drift (they had been empty since the repository was published,
+      # across thousands of pulls): the short description and the curated
+      # description file are re-pushed on every release, right after the
+      # image publish. The full README (~33KB) exceeds Docker Hub's 25,000
+      # character limit, so .github/dockerhub-description.md carries the
+      # Docker-relevant sections verbatim. DOCKERHUB_TOKEN must be a Docker
+      # Hub PAT with read/write/delete scope — the descriptions API rejects
+      # narrower ones.
+      - name: Update Docker Hub description
+        if: steps.dockerhub-login.outputs.skip == 'false'
+        uses: peter-evans/dockerhub-description@v5
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.DOCKERHUB_IMAGE }}
+          short-description: "MCP server exposing 1,000+ GitLab operations as AI-accessible tools. By jmrp.io"
+          readme-filepath: ./.github/dockerhub-description.md
