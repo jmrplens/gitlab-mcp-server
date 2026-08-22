@@ -531,7 +531,25 @@ La concurrencia la acotan `--max-http-clients` (100 por defecto) y `--session-ti
 
 ## Verificación de salud
 
-Puedes verificar que el servidor está funcionando enviando una solicitud `tools/list`:
+`GET /health` no necesita credenciales y responde `200` con un cuerpo JSON:
+
+```bash
+curl -s http://localhost:8080/health
+```
+
+```json
+{
+  "status": "ok",
+  "version": "2.6.6",
+  "commit": "a6561ff7",
+  "started_at": "2026-08-22T09:14:03Z",
+  "uptime_seconds": 1209600
+}
+```
+
+`started_at` es el instante de arranque del proceso (RFC 3339, UTC) y `uptime_seconds` son los segundos enteros transcurridos desde entonces. Se publican ambos porque hacen cosas distintas: `started_at` es idéntico byte a byte entre sondas, así que un monitor puede cachearlo y detectar un reinicio al ver que cambió, mientras que `uptime_seconds` es el valor que se lee de un vistazo.
+
+`/health` solo informa de que el proceso está en marcha — no hace ninguna llamada a GitLab. Para verificar la conectividad de extremo a extremo de un token concreto, llama a un método MCP autenticado:
 
 ```bash
 curl -s -X POST http://localhost:8080/mcp \
