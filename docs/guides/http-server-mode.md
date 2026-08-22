@@ -629,7 +629,33 @@ The server logs key events to stderr in JSON format:
 
 ### Health Check
 
-In HTTP mode, you can use the tools/list endpoint to verify the server is running:
+`GET /health` needs no credentials and answers `200` with a JSON body:
+
+```bash
+curl -s http://localhost:8080/health
+```
+
+```json
+{
+  "status": "ok",
+  "version": "2.6.5",
+  "commit": "318f49c1",
+  "started_at": "2026-08-22T09:14:03Z",
+  "uptime_seconds": 1209600
+}
+```
+
+| Field            | Meaning                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| `status`         | Always `ok` when the process is serving; the HTTP status carries liveness               |
+| `version`        | Build version                                                                           |
+| `commit`         | Build commit                                                                            |
+| `started_at`     | Process start instant, RFC 3339 in UTC                                                  |
+| `uptime_seconds` | Whole seconds since `started_at`, truncated (never a second that has not fully elapsed) |
+
+Liveness is reported both ways on purpose. `started_at` is the stable fact — it is byte-identical across probes, so a monitor can cache it and detect a restart by noticing it moved, which is why Prometheus exposes `process_start_time_seconds` rather than an uptime counter. `uptime_seconds` is the derived convenience value, in the unit the [IETF health check draft](https://datatracker.ietf.org/doc/html/draft-inadarei-api-health-check-06) uses for it (`"observedUnit": "s"`).
+
+`/health` reports only that the process is up; it performs no GitLab round-trip. To verify end-to-end connectivity for a specific token, call an authenticated MCP method:
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}" \

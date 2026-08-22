@@ -1186,11 +1186,31 @@ func startPeriodicCleanup(ctx context.Context, cleanup func()) {
 	}()
 }
 
+// processStartTime marks when this process began serving.
+//
+// Package-level initialization runs before main, so this is the earliest
+// instant the program can observe about itself. Tests override it to make
+// uptime deterministic.
+var processStartTime = time.Now()
+
 // healthResponse is the JSON body returned by the /health endpoint.
+//
+// Liveness is reported two ways on purpose. StartedAt is the stable fact: it
+// does not change between probes, so a monitor can cache it, deduplicate it,
+// and detect a restart by noticing it moved — the same reason Prometheus
+// exposes process_start_time_seconds rather than an uptime counter.
+// UptimeSeconds is the derived convenience value, in the unit the IETF health
+// check draft uses for it ("observedUnit": "s").
 type healthResponse struct {
 	Status  string `json:"status"`
 	Version string `json:"version"`
 	Commit  string `json:"commit"`
+	// StartedAt is the process start instant in RFC 3339, matching how this
+	// project renders timestamps everywhere else.
+	StartedAt string `json:"started_at"`
+	// UptimeSeconds is whole seconds since StartedAt. Sub-second precision
+	// would be noise on an endpoint polled at probe intervals.
+	UptimeSeconds int64 `json:"uptime_seconds"`
 }
 
 // logIgnoredRequestOptions reports request-scoped configuration headers that
@@ -1354,11 +1374,26 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 // and load-balancer probes. It does not require authentication.
 func healthHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(healthResponse{ //nolint:errchkjson // healthcheck: client write errors are non-actionable
-		Status:  "ok",
-		Version: version,
-		Commit:  commit,
-	})
+	_ = json.NewEncoder(w).Encode(newHealthResponse(processStartTime, time.Now())) //nolint:errchkjson // healthcheck: client write errors are non-actionable
+}
+
+// newHealthResponse builds the /health body for a start instant observed at
+// now. Both instants are parameters so the uptime arithmetic can be tested
+// without mutating a package-level clock from concurrent tests.
+func newHealthResponse(startedAt, now time.Time) healthResponse {
+	// Truncating instead of rounding keeps uptime from reporting a second that
+	// has not fully elapsed. The clamp guards a caller that observes an instant
+	// before the start; time.Now within one process cannot, because its
+	// monotonic reading never goes backwards.
+	uptime := int64(now.Sub(startedAt).Seconds())
+	uptime = max(uptime, 0)
+	return healthResponse{
+		Status:        "ok",
+		Version:       version,
+		Commit:        commit,
+		StartedAt:     startedAt.UTC().Format(time.RFC3339),
+		UptimeSeconds: uptime,
+	}
 }
 
 // buildServerCard creates a Smithery-compatible server-card JSON by spinning up

@@ -2330,6 +2330,98 @@ func TestHealthHandler_ReturnsOK(t *testing.T) {
 	}
 }
 
+// TestNewHealthResponse_UptimeAndStartedAt verifies the two liveness fields
+// against controlled instants: started_at must be RFC 3339 in UTC, and
+// uptime_seconds must be whole seconds since that instant.
+//
+// Passing both instants in is what makes this deterministic — reading the
+// package-level clock would make the expected value a moving target and would
+// race with any parallel test that wrote to it.
+func TestNewHealthResponse_UptimeAndStartedAt(t *testing.T) {
+	t.Parallel()
+
+	start := time.Date(2026, 8, 22, 10, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name       string
+		now        time.Time
+		wantUptime int64
+	}{
+		{name: "same instant", now: start, wantUptime: 0},
+		{name: "partial second truncates down", now: start.Add(1900 * time.Millisecond), wantUptime: 1},
+		{name: "whole minute", now: start.Add(time.Minute), wantUptime: 60},
+		{name: "two weeks", now: start.Add(14 * 24 * time.Hour), wantUptime: 1_209_600},
+		{name: "observation before start is clamped", now: start.Add(-time.Hour), wantUptime: 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := newHealthResponse(start, tc.now)
+			if got.UptimeSeconds != tc.wantUptime {
+				t.Errorf("uptime_seconds = %d, want %d", got.UptimeSeconds, tc.wantUptime)
+			}
+			if got.StartedAt != "2026-08-22T10:00:00Z" {
+				t.Errorf("started_at = %q, want RFC 3339 UTC", got.StartedAt)
+			}
+		})
+	}
+}
+
+// TestNewHealthResponse_StartedAtIsRFC3339InUTC pins the timestamp format and
+// the UTC normalisation, so a non-UTC process clock cannot change the wire
+// representation.
+func TestNewHealthResponse_StartedAtIsRFC3339InUTC(t *testing.T) {
+	t.Parallel()
+
+	madrid, err := time.LoadLocation("Europe/Madrid")
+	if err != nil {
+		t.Skipf("tzdata unavailable: %v", err)
+	}
+	start := time.Date(2026, 8, 22, 12, 0, 0, 0, madrid) // 10:00 UTC
+
+	got := newHealthResponse(start, start)
+	parsed, err := time.Parse(time.RFC3339, got.StartedAt)
+	if err != nil {
+		t.Fatalf("started_at %q does not parse as RFC 3339: %v", got.StartedAt, err)
+	}
+	if !parsed.Equal(start) {
+		t.Errorf("started_at = %v, want the same instant as %v", parsed, start)
+	}
+	if !strings.HasSuffix(got.StartedAt, "Z") {
+		t.Errorf("started_at = %q, want a UTC (Z) offset regardless of process timezone", got.StartedAt)
+	}
+}
+
+// TestHealthHandler_ExposesLivenessFields checks the wired endpoint: the two
+// fields reach the JSON body, and they agree with each other.
+func TestHealthHandler_ExposesLivenessFields(t *testing.T) {
+	t.Parallel()
+
+	rec := httptest.NewRecorder()
+	healthHandler(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", nil))
+
+	var body healthResponse
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	startedAt, err := time.Parse(time.RFC3339, body.StartedAt)
+	if err != nil {
+		t.Fatalf("started_at %q does not parse as RFC 3339: %v", body.StartedAt, err)
+	}
+	if startedAt.After(time.Now()) {
+		t.Errorf("started_at %v is in the future", startedAt)
+	}
+	if body.UptimeSeconds < 0 {
+		t.Errorf("uptime_seconds = %d, want a non-negative value", body.UptimeSeconds)
+	}
+	// The two fields describe the same interval, so uptime cannot outrun the
+	// gap since started_at. A unit slip (milliseconds, nanoseconds) trips this.
+	if elapsed := int64(time.Since(startedAt).Seconds()) + 1; body.UptimeSeconds > elapsed {
+		t.Errorf("uptime_seconds = %d exceeds %d seconds elapsed since started_at", body.UptimeSeconds, elapsed)
+	}
+}
+
 // TestSafeTokenSuffix verifies short tokens are fully masked and longer
 // tokens expose only the suffix used for non-sensitive diagnostics.
 func TestSafeTokenSuffix(t *testing.T) {
