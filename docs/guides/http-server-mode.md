@@ -278,11 +278,20 @@ Every request that cannot be served is classified before it reaches the MCP hand
 | Condition                                              | Status | JSON-RPC code | Notable headers    |
 | ------------------------------------------------------ | ------ | ------------- | ------------------ |
 | No `PRIVATE-TOKEN` and no `Authorization: Bearer`      | `401`  | `-40100`      | `WWW-Authenticate` |
+| GitLab answered `401`/`403` to the credential          | `401`  | `-40100`      | `WWW-Authenticate` |
 | `GITLAB-URL` header is not a parseable URL             | `400`  | `-32600`      | —                  |
 | More than 10 auth failures from one IP within a minute | `429`  | `-42900`      | `Retry-After`      |
 | GitLab session could not be built for the token        | `503`  | `-50300`      | —                  |
 
 All four return `Content-Type: application/json` with a JSON-RPC error response. This matters beyond readability: protocol revision 2026-07-28 tells a client that receives a `400` whose body is _not_ a recognised JSON-RPC error to conclude the server is initialization-era and downgrade, so a plain-text `400` would turn a missing header into a false protocol diagnosis.
+
+#### Credential Verification
+
+A token is verified against the instance once, when its pooled session is first built — never on subsequent requests, which are served from the pool. The probe is `GET /api/v4/user`, and only an explicit `401` or `403` rejects it.
+
+Verifying is what stops an unauthenticated caller from obtaining a working session with any non-empty string, and stops a stream of invented tokens from churning the session pool. Token _format_ is deliberately not checked: GitLab lets self-managed administrators change the `glpat-` prefix, so a prefix rule would reject legitimate self-hosted tokens while still admitting any well-shaped fake.
+
+Every other outcome — a transport error, a `5xx`, a `404` from an instance that does not expose the endpoint — means no verdict was obtained, and the session is admitted. Failing closed whenever GitLab is unreachable would turn an instance outage into a total denial of service. The probe does not retry and is bounded at 5 seconds.
 
 Codes are allocated outside the JSON-RPC reserved range (`-32768` to `-32000`), as the MCP specification requires for application-defined errors, and mirror their HTTP status. `GET` and `DELETE` are not gated: they continue to receive `405 Method Not Allowed`, the answer protocol 2026-07-28 prescribes for them.
 

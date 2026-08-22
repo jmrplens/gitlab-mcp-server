@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -211,12 +212,28 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	logIgnoredRequestOptions(token, options)
 
 	server, err := g.pool.GetOrCreate(token, options.GitLabURL)
+	if errors.Is(err, serverpool.ErrInvalidCredential) {
+		// GitLab itself rejected the token, so this is an authentication
+		// failure in the full sense: 401, and it does count against the
+		// limiter — this is the path that stops a stream of invented tokens
+		// from churning the pool.
+		if g.limiter != nil {
+			g.limiter.RecordFailure(ip)
+		}
+		slog.Info("request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
+		return nil, &gateFailure{
+			status:  http.StatusUnauthorized,
+			code:    errCodeUnauthorized,
+			message: "GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.",
+			header:  http.Header{"WWW-Authenticate": []string{g.challenge}},
+		}
+	}
 	if err != nil {
-		// Deliberately not charged to the authentication limiter. A pool
-		// failure means the backend could not be reached or the server could
-		// not be built — the credential was never judged. Counting it would
-		// let a GitLab outage lock out clients holding valid tokens, which is
-		// the same conflation of causes this gate exists to remove.
+		// Deliberately not charged to the authentication limiter. Any other
+		// pool failure means the backend could not be reached or the server
+		// could not be built — the credential was never judged. Counting it
+		// would let a GitLab outage lock out clients holding valid tokens,
+		// which is the same conflation of causes this gate exists to remove.
 		slog.Error("failed to create server for token", "error", err)
 		// The pool error can name internal state, so it is logged but not
 		// returned to the caller.

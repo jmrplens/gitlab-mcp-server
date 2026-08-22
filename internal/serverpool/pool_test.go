@@ -1035,3 +1035,102 @@ func TestSessionKey(t *testing.T) {
 		t.Errorf("key length = %d, want 64 (SHA-256 hex)", len(k1))
 	}
 }
+
+// userProbeServer returns a GitLab stub whose GET /api/v4/user accepts exactly
+// one token and answers `status` to every other one.
+func userProbeServer(t *testing.T, validToken string, status int) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("PRIVATE-TOKEN")
+		if token == "" {
+			if bearer, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+				token = bearer
+			}
+		}
+		if token != validToken {
+			http.Error(w, `{"message":"401 Unauthorized"}`, status)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": 42, "username": "testuser"})
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestGetOrCreate_RejectsCredentialGitLabRefuses verifies the admission check:
+// a token GitLab answers 401 or 403 to never gets a pool entry.
+//
+// Without it the pool builds an entry for any non-empty string, so an
+// unauthenticated caller obtains a full MCP session with "PRIVATE-TOKEN: x"
+// and a stream of invented tokens churns the LRU.
+func TestGetOrCreate_RejectsCredentialGitLabRefuses(t *testing.T) {
+	for name, status := range map[string]int{
+		"unauthorized": http.StatusUnauthorized,
+		"forbidden":    http.StatusForbidden,
+	} {
+		t.Run(name, func(t *testing.T) {
+			srv := userProbeServer(t, "glpat-valid", status)
+			pool := New(testConfig(srv.URL), testFactory())
+
+			got, err := pool.GetOrCreate("glpat-invented", srv.URL)
+			if !errors.Is(err, ErrInvalidCredential) {
+				t.Errorf("error = %v, want it to wrap ErrInvalidCredential", err)
+			}
+			if got != nil {
+				t.Error("a refused credential must not receive a server")
+			}
+			if size := pool.Size(); size != 0 {
+				t.Errorf("pool size = %d, want 0 — a refused credential must not occupy an entry", size)
+			}
+		})
+	}
+}
+
+// TestGetOrCreate_AdmitsCredentialGitLabAccepts is the positive half: a token
+// GitLab accepts is pooled as before.
+func TestGetOrCreate_AdmitsCredentialGitLabAccepts(t *testing.T) {
+	srv := userProbeServer(t, "glpat-valid", http.StatusUnauthorized)
+	pool := New(testConfig(srv.URL), testFactory())
+
+	got, err := pool.GetOrCreate("glpat-valid", srv.URL)
+	if err != nil {
+		t.Fatalf("GetOrCreate(valid token) error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("expected a server for an accepted credential")
+	}
+	if size := pool.Size(); size != 1 {
+		t.Errorf("pool size = %d, want 1", size)
+	}
+}
+
+// TestGetOrCreate_AdmitsWhenNoVerdictIsAvailable pins the fail-open policy.
+//
+// Only an explicit 401 or 403 is a verdict about the credential. A 404 from a
+// stubbed instance, a 5xx, or an unreachable host means none was obtained, and
+// the entry is admitted: failing closed whenever GitLab is unreachable would
+// turn an instance outage into a total denial of service.
+func TestGetOrCreate_AdmitsWhenNoVerdictIsAvailable(t *testing.T) {
+	tests := map[string]int{
+		"not found":           http.StatusNotFound,
+		"internal error":      http.StatusInternalServerError,
+		"service unavailable": http.StatusServiceUnavailable,
+	}
+	for name, status := range tests {
+		t.Run(name, func(t *testing.T) {
+			srv := userProbeServer(t, "glpat-nobody", status)
+			pool := New(testConfig(srv.URL), testFactory())
+
+			got, err := pool.GetOrCreate("glpat-unknown", srv.URL)
+			if err != nil {
+				t.Fatalf("GetOrCreate must admit when GitLab gives no verdict, got: %v", err)
+			}
+			if got == nil {
+				t.Error("expected a server when no verdict is available")
+			}
+		})
+	}
+}

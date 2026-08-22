@@ -20,12 +20,31 @@ import (
 
 const gateTestToken = "glpat-test-token-value"
 
-// newGateTestPool builds a pool whose entries need no GitLab round-trip: the
-// tier is pinned and scope detection is off, so entryConfig performs no I/O.
-func newGateTestPool(t *testing.T, factory serverpool.ServerFactory) *serverpool.ServerPool {
+// gateStubGitLab returns a GitLab stub for the pool's credential probe. It
+// accepts every token unless reject is true, in which case it answers 401.
+func gateStubGitLab(t *testing.T, reject bool) string {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		if reject {
+			http.Error(w, `{"message":"401 Unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":42,"username":"testuser"}`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv.URL
+}
+
+// newGateTestPool builds a pool against a stub instance. The tier is pinned and
+// scope detection is off, so the only GitLab round-trip is the credential
+// probe — and it is served locally rather than over the real network.
+func newGateTestPool(t *testing.T, factory serverpool.ServerFactory, gitlabURL string) *serverpool.ServerPool {
 	t.Helper()
 	cfg := &config.Config{
-		GitLabURL:    "https://gitlab.example.com",
+		GitLabURL:    gitlabURL,
 		Tier:         edition.Free,
 		TierExplicit: true,
 		IgnoreScopes: true,
@@ -42,12 +61,19 @@ func failingFactory(_ *gitlabclient.Client, _ *config.ServerConfig) (*mcp.Server
 	return nil, errors.New("internal pool detail that must not reach the client")
 }
 
-// newGate wires a gate the way registerLegacyMCPHandlers does.
+// newGate wires a gate the way registerLegacyMCPHandlers does, against a stub
+// GitLab that accepts any credential.
 func newGate(t *testing.T, factory serverpool.ServerFactory) *mcpServerGate {
 	t.Helper()
+	return newGateAgainst(t, factory, gateStubGitLab(t, false))
+}
+
+// newGateAgainst wires a gate against a specific GitLab base URL.
+func newGateAgainst(t *testing.T, factory serverpool.ServerFactory, gitlabURL string) *mcpServerGate {
+	t.Helper()
 	return &mcpServerGate{
-		pool:      newGateTestPool(t, factory),
-		gitlabURL: "https://gitlab.example.com",
+		pool:      newGateTestPool(t, factory, gitlabURL),
+		gitlabURL: gitlabURL,
 		limiter:   serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow),
 		challenge: legacyAuthChallenge,
 	}
@@ -183,6 +209,36 @@ func TestMCPServerGate_PoolFailure_Returns503WithoutLeakingDetail(t *testing.T) 
 	}
 	if strings.Contains(decoded.Error.Message, "internal pool detail") {
 		t.Errorf("message %q leaks the internal pool error", decoded.Error.Message)
+	}
+}
+
+// TestMCPServerGate_CredentialGitLabRefuses_Returns401 covers the admission
+// check: a token GitLab answers 401 to is an authentication failure, so it must
+// surface as 401 with a challenge — not as the 503 every other pool error gets.
+//
+// This is also what stops a stream of invented tokens from churning the pool:
+// each one is refused before it can occupy an entry.
+func TestMCPServerGate_CredentialGitLabRefuses_Returns401(t *testing.T) {
+	gate := newGateAgainst(t, okFactory, gateStubGitLab(t, true))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+	req.Header.Set("PRIVATE-TOKEN", "glpat-invented")
+	rec := httptest.NewRecorder()
+
+	gate.middleware(http.NotFoundHandler()).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d (a refused credential is not a backend failure)",
+			rec.Code, http.StatusUnauthorized)
+	}
+	if rec.Header().Get("WWW-Authenticate") == "" {
+		t.Error("401 without WWW-Authenticate violates RFC 9110")
+	}
+	decoded := decodeJSONRPCError(t, rec.Body.String())
+	if decoded.Error.Code != errCodeUnauthorized {
+		t.Errorf("error.code = %d, want %d", decoded.Error.Code, errCodeUnauthorized)
+	}
+	if gate.pool.Size() != 0 {
+		t.Errorf("pool size = %d, want 0 — a refused credential must not occupy an entry", gate.pool.Size())
 	}
 }
 
@@ -364,7 +420,7 @@ func TestRegisterLegacyMCPHandlers_UnauthenticatedPOST_NeverReturnsNoServerAvail
 		Stateless:    true,
 	}
 	mux := http.NewServeMux()
-	registerLegacyMCPHandlers(t.Context(), cfg, newGateTestPool(t, okFactory), mux)
+	registerLegacyMCPHandlers(t.Context(), cfg, newGateTestPool(t, okFactory, cfg.GitLabURL), mux)
 
 	srv := httptest.NewServer(mux)
 	defer srv.Close()

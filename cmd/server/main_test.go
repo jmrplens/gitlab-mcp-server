@@ -2099,12 +2099,28 @@ func TestServeHTTP_MissingGitLabURLDefaultsToPublic(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	readAndCloseBody(t, resp)
+	respBody := readAndCloseBody(t, resp)
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected 200 (missing GITLAB-URL now defaults to gitlab.com), got %d", resp.StatusCode)
+	// The assertion is that omitting GITLAB-URL is accepted rather than
+	// rejected as a missing or malformed instance URL. It deliberately does
+	// not assert 200.
+	//
+	// The default resolves to the public gitlab.com, so the outcome now
+	// depends on what that instance says about the test token: with network
+	// access the credential probe is refused and the gate answers 401,
+	// without it the probe fails open and the handshake succeeds. Pinning
+	// either one would make this test depend on the runner having internet.
+	// The resolution semantics themselves are covered hermetically by
+	// TestResolveRequestOptions in internal/serverpool.
+	if resp.StatusCode == http.StatusBadRequest {
+		t.Errorf("omitting GITLAB-URL was rejected as a bad request: %s", respBody)
 	}
-	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
+	if strings.Contains(respBody, "GITLAB-URL") {
+		t.Errorf("response complains about the instance URL, so the default did not apply: %s", respBody)
+	}
+	if resp.StatusCode == http.StatusOK {
+		closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
+	}
 
 	cancel()
 	select {
