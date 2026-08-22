@@ -212,9 +212,11 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 
 	server, err := g.pool.GetOrCreate(token, options.GitLabURL)
 	if err != nil {
-		if g.limiter != nil {
-			g.limiter.RecordFailure(ip)
-		}
+		// Deliberately not charged to the authentication limiter. A pool
+		// failure means the backend could not be reached or the server could
+		// not be built — the credential was never judged. Counting it would
+		// let a GitLab outage lock out clients holding valid tokens, which is
+		// the same conflation of causes this gate exists to remove.
 		slog.Error("failed to create server for token", "error", err)
 		// The pool error can name internal state, so it is logged but not
 		// returned to the caller.

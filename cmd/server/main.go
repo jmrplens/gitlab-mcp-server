@@ -1189,8 +1189,9 @@ func startPeriodicCleanup(ctx context.Context, cleanup func()) {
 // processStartTime marks when this process began serving.
 //
 // Package-level initialization runs before main, so this is the earliest
-// instant the program can observe about itself. Tests override it to make
-// uptime deterministic.
+// instant the program can observe about itself. Tests do not override it:
+// newHealthResponse takes both instants as parameters instead, so uptime is
+// deterministic without a mutable package-level clock.
 var processStartTime = time.Now()
 
 // healthResponse is the JSON body returned by the /health endpoint.

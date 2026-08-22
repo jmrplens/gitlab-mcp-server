@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -185,6 +186,37 @@ func TestMCPServerGate_PoolFailure_Returns503WithoutLeakingDetail(t *testing.T) 
 	}
 }
 
+// TestMCPServerGate_PoolFailures_DoNotConsumeAuthRateLimit pins the boundary
+// between "the credential was rejected" and "the backend was unreachable".
+//
+// A pool failure never judged the credential, so charging it to the
+// authentication limiter would let a GitLab outage lock out clients holding
+// perfectly valid tokens — the same conflation of causes this gate removes.
+func TestMCPServerGate_PoolFailures_DoNotConsumeAuthRateLimit(t *testing.T) {
+	gate := newGate(t, failingFactory)
+	handler := gate.middleware(http.NotFoundHandler())
+
+	// Far more pool failures than the limiter's threshold.
+	for range authFailureLimit * 2 {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+		req.Header.Set("PRIVATE-TOKEN", gateTestToken)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+		}
+	}
+
+	// The limiter must be untouched: a credential-less request still gets the
+	// ordinary 401, not the 429 that an exhausted limiter would produce.
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}")))
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d — backend failures must not consume the auth rate limit",
+			rec.Code, http.StatusUnauthorized)
+	}
+}
+
 // TestMCPServerGate_RepeatedAuthFailures_Returns429WithRetryAfter checks the
 // fourth branch. Exhausting the limiter must report 429 with Retry-After rather
 // than reusing the credential-missing 401.
@@ -256,24 +288,27 @@ func TestMCPServerGate_ValidToken_AttachesServerAndResolvesPoolOnce(t *testing.T
 		seen = serverFromRequestContext(r)
 	}))
 
-	for _, header := range []string{"PRIVATE-TOKEN", "Authorization"} {
-		value := gateTestToken
-		if header == "Authorization" {
-			value = "Bearer " + gateTestToken
-		}
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
-		req.Header.Set(header, value)
-		rec := httptest.NewRecorder()
+	// No t.Parallel in these subtests: they share `seen` and the factory
+	// counter asserted after the loop.
+	for _, tc := range []struct{ header, value string }{
+		{header: "PRIVATE-TOKEN", value: gateTestToken},
+		{header: "Authorization", value: "Bearer " + gateTestToken},
+	} {
+		t.Run(tc.header, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+			req.Header.Set(tc.header, tc.value)
+			rec := httptest.NewRecorder()
 
-		seen = nil
-		handler.ServeHTTP(rec, req)
+			seen = nil
+			handler.ServeHTTP(rec, req)
 
-		if seen == nil {
-			t.Errorf("%s: handler received no server from the request context", header)
-		}
-		if rec.Code != http.StatusOK {
-			t.Errorf("%s: status = %d, want %d", header, rec.Code, http.StatusOK)
-		}
+			if seen == nil {
+				t.Error("handler received no server from the request context")
+			}
+			if rec.Code != http.StatusOK {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+		})
 	}
 
 	// Both headers carry the same token, so the pool must build exactly one entry.
@@ -348,9 +383,13 @@ func TestRegisterLegacyMCPHandlers_UnauthenticatedPOST_NeverReturnsNoServerAvail
 	}
 	defer resp.Body.Close()
 
-	body := make([]byte, 1024)
-	n, _ := resp.Body.Read(body)
-	got := string(body[:n])
+	// io.ReadAll, not a single Read: a short read would truncate the JSON and
+	// fail the decode below for reasons unrelated to the gate.
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("reading response body: %v", err)
+	}
+	got := string(body)
 
 	if strings.Contains(got, "no server available") {
 		t.Errorf("response still carries the SDK's opaque rejection: %q", got)
