@@ -341,7 +341,11 @@ jobs:
       # narrower ones.
       - name: Update Docker Hub description
         if: steps.dockerhub-login.outputs.skip == 'false'
-        uses: peter-evans/dockerhub-description@v5
+        # Pinned to a commit SHA (unlike the org-owned actions above) because
+        # this is an individually-maintained action that receives
+        # DOCKERHUB_TOKEN — a mutable tag would let a compromised release
+        # exfiltrate it.
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
