@@ -1135,65 +1135,40 @@ func streamableHTTPOptions(cfg *config.Config) *mcp.StreamableHTTPOptions {
 }
 
 func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, mux *http.ServeMux) {
-	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
-		token := serverpool.ExtractToken(r)
-		if token == "" {
-			slog.Error("request rejected: missing token after OAuth middleware (unexpected)")
-			return nil
-		}
-		requestOptions, err := serverpool.ResolveRequestOptions(r, cfg.GitLabURL)
-		if err != nil {
-			slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
-			return nil
-		}
-		logIgnoredRequestOptions(token, requestOptions)
-		server, err := pool.GetOrCreate(token, requestOptions.GitLabURL)
-		if err != nil {
-			slog.Error("failed to create server for token", "error", err)
-			return nil
-		}
-		return server
-	}, streamableHTTPOptions(cfg))
+	resourceMetadataURL := "http://" + httpAddr + "/.well-known/oauth-protected-resource"
+	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))
+
+	// No rate limiter: the SDK's bearer middleware rejects unauthenticated
+	// requests before the gate sees them. The gate still classifies the
+	// GITLAB-URL and pool failures that the middleware cannot know about.
+	gate := &mcpServerGate{
+		pool:               pool,
+		gitlabURL:          cfg.GitLabURL,
+		trustedProxyHeader: cfg.TrustedProxyHeader,
+		challenge:          `Bearer resource_metadata="` + resourceMetadataURL + `"`,
+	}
 
 	tokenCache := oauth.NewTokenCache()
 	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cfg.OAuthCacheTTL, tokenCache)
-	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: "http://" + httpAddr + "/.well-known/oauth-protected-resource", Scopes: []string{"api"}})
+	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{"api"}})
 	mux.Handle("GET /.well-known/oauth-protected-resource", oauth.NewProtectedResourceHandler("http://"+httpAddr+"/mcp", cfg.GitLabURL))
-	mux.Handle("/", oauth.NormalizeAuthHeader(authMiddleware(mcpHandler)))
+	mux.Handle("/", oauth.NormalizeAuthHeader(authMiddleware(gate.middleware(mcpHandler))))
 	startPeriodicCleanup(ctx, tokenCache.Cleanup)
 	slog.Info("oauth mode enabled", "cache_ttl", cfg.OAuthCacheTTL, "metadata_endpoint", "/.well-known/oauth-protected-resource")
 }
 
 func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, mux *http.ServeMux) {
-	authLimiter := serverpool.NewAuthRateLimiter(10, 1*time.Minute)
+	authLimiter := serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
-	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
-		ip := clientIP(r, cfg.TrustedProxyHeader)
-		if authLimiter.IsBlocked(ip) {
-			slog.Warn("request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
-			return nil
-		}
-		token := serverpool.ExtractToken(r)
-		if token == "" {
-			authLimiter.RecordFailure(ip)
-			slog.Error("request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
-			return nil
-		}
-		requestOptions, err := serverpool.ResolveRequestOptions(r, cfg.GitLabURL)
-		if err != nil {
-			slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
-			return nil
-		}
-		logIgnoredRequestOptions(token, requestOptions)
-		server, err := pool.GetOrCreate(token, requestOptions.GitLabURL)
-		if err != nil {
-			authLimiter.RecordFailure(ip)
-			slog.Error("failed to create server for token", "error", err)
-			return nil
-		}
-		return server
-	}, streamableHTTPOptions(cfg))
-	mux.Handle("/", mcpHandler)
+	gate := &mcpServerGate{
+		pool:               pool,
+		gitlabURL:          cfg.GitLabURL,
+		limiter:            authLimiter,
+		trustedProxyHeader: cfg.TrustedProxyHeader,
+		challenge:          legacyAuthChallenge,
+	}
+	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))
+	mux.Handle("/", gate.middleware(mcpHandler))
 }
 
 func startPeriodicCleanup(ctx context.Context, cleanup func()) {
@@ -1211,11 +1186,32 @@ func startPeriodicCleanup(ctx context.Context, cleanup func()) {
 	}()
 }
 
+// processStartTime marks when this process began serving.
+//
+// Package-level initialization runs before main, so this is the earliest
+// instant the program can observe about itself. Tests do not override it:
+// newHealthResponse takes both instants as parameters instead, so uptime is
+// deterministic without a mutable package-level clock.
+var processStartTime = time.Now()
+
 // healthResponse is the JSON body returned by the /health endpoint.
+//
+// Liveness is reported two ways on purpose. StartedAt is the stable fact: it
+// does not change between probes, so a monitor can cache it, deduplicate it,
+// and detect a restart by noticing it moved — the same reason Prometheus
+// exposes process_start_time_seconds rather than an uptime counter.
+// UptimeSeconds is the derived convenience value, in the unit the IETF health
+// check draft uses for it ("observedUnit": "s").
 type healthResponse struct {
 	Status  string `json:"status"`
 	Version string `json:"version"`
 	Commit  string `json:"commit"`
+	// StartedAt is the process start instant in RFC 3339, matching how this
+	// project renders timestamps everywhere else.
+	StartedAt string `json:"started_at"`
+	// UptimeSeconds is whole seconds since StartedAt. Sub-second precision
+	// would be noise on an endpoint polled at probe intervals.
+	UptimeSeconds int64 `json:"uptime_seconds"`
 }
 
 // logIgnoredRequestOptions reports request-scoped configuration headers that
@@ -1379,11 +1375,26 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 // and load-balancer probes. It does not require authentication.
 func healthHandler(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(healthResponse{ //nolint:errchkjson // healthcheck: client write errors are non-actionable
-		Status:  "ok",
-		Version: version,
-		Commit:  commit,
-	})
+	_ = json.NewEncoder(w).Encode(newHealthResponse(processStartTime, time.Now())) //nolint:errchkjson // healthcheck: client write errors are non-actionable
+}
+
+// newHealthResponse builds the /health body for a start instant observed at
+// now. Both instants are parameters so the uptime arithmetic can be tested
+// without mutating a package-level clock from concurrent tests.
+func newHealthResponse(startedAt, now time.Time) healthResponse {
+	// Truncating instead of rounding keeps uptime from reporting a second that
+	// has not fully elapsed. The clamp guards a caller that observes an instant
+	// before the start; time.Now within one process cannot, because its
+	// monotonic reading never goes backwards.
+	uptime := int64(now.Sub(startedAt).Seconds())
+	uptime = max(uptime, 0)
+	return healthResponse{
+		Status:        "ok",
+		Version:       version,
+		Commit:        commit,
+		StartedAt:     startedAt.UTC().Format(time.RFC3339),
+		UptimeSeconds: uptime,
+	}
 }
 
 // buildServerCard creates a Smithery-compatible server-card JSON by spinning up

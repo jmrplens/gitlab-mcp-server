@@ -416,6 +416,35 @@ func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) 
 	return &versionInfo, nil
 }
 
+// CredentialRejected reports whether GitLab actively refuses this credential.
+//
+// It issues GET /api/v4/user through the raw health client rather than the SDK
+// on purpose: client-go wraps requests in retryablehttp with RetryMax 5 and a
+// linear backoff, which turns a refused connection or a struggling instance
+// into seconds of stalling. A liveness question about a credential should be
+// asked once and answered fast.
+//
+// Only an explicit 401 or 403 counts as a rejection. Every other outcome — a
+// transport error, a 404 from a stubbed instance, a 5xx — means no verdict was
+// obtained and is reported as false, so callers fail open.
+func (c *Client) CredentialRejected(ctx context.Context) bool {
+	probeURL := strings.TrimRight(c.baseURL, "/") + "/api/v4/user"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, http.NoBody) //#nosec G704 -- built from a normalized GitLab base URL
+	if err != nil {
+		return false
+	}
+	req.Header.Set("PRIVATE-TOKEN", c.token)
+
+	resp, err := c.healthClient.Do(req) //#nosec G704 -- request URL derived from normalized GitLab config
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<10))
+
+	return resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden
+}
+
 // buildBaseTransport returns the base HTTP round tripper with optional TLS
 // configuration. When skipTLSVerify is true, TLS certificate verification is
 // disabled to support self-signed certificates in development environments.

@@ -253,11 +253,47 @@ If both headers are present, `PRIVATE-TOKEN` wins.
 
 #### Missing Token
 
-Requests without a valid token are rejected — the server returns no MCP session. The error is logged server-side:
+A request with no token is rejected with `401 Unauthorized`, an RFC 9110 challenge, and a JSON-RPC error body naming both accepted headers:
+
+```http
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer realm="gitlab-mcp-server"
+Content-Type: application/json
+
+{"jsonrpc":"2.0","id":null,"error":{"code":-40100,"message":"Authentication required: send a GitLab personal access token as 'Authorization: Bearer <glpat-...>' or 'PRIVATE-TOKEN: <glpat-...>'. ..."}}
+```
+
+The challenge deliberately omits the `resource_metadata` parameter. Clients discover an OAuth authorization server through that parameter, and legacy mode has none — advertising it would start a discovery flow that cannot complete. Use `--auth-mode=oauth` for a challenge that does point at [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata.
+
+Each rejection is also logged server-side:
 
 ```json
-{"level":"ERROR","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
+{"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
 ```
+
+#### Rejection Status Codes
+
+Every request that cannot be served is classified before it reaches the MCP handler, so the status distinguishes the cause:
+
+| Condition                                              | Status | JSON-RPC code | Notable headers    |
+| ------------------------------------------------------ | ------ | ------------- | ------------------ |
+| No `PRIVATE-TOKEN` and no `Authorization: Bearer`      | `401`  | `-40100`      | `WWW-Authenticate` |
+| GitLab answered `401`/`403` to the credential          | `401`  | `-40100`      | `WWW-Authenticate` |
+| `GITLAB-URL` header is not a parseable URL             | `400`  | `-32600`      | —                  |
+| More than 10 auth failures from one IP within a minute | `429`  | `-42900`      | `Retry-After`      |
+| GitLab session could not be built for the token        | `503`  | `-50300`      | —                  |
+
+All four return `Content-Type: application/json` with a JSON-RPC error response. This matters beyond readability: protocol revision 2026-07-28 tells a client that receives a `400` whose body is _not_ a recognised JSON-RPC error to conclude the server is initialization-era and downgrade, so a plain-text `400` would turn a missing header into a false protocol diagnosis.
+
+#### Credential Verification
+
+A token is verified against the instance once, when its pooled session is first built — never on subsequent requests, which are served from the pool. The probe is `GET /api/v4/user`, and only an explicit `401` or `403` rejects it.
+
+Verifying is what stops an unauthenticated caller from obtaining a working session with any non-empty string, and stops a stream of invented tokens from churning the session pool. Token _format_ is deliberately not checked: GitLab lets self-managed administrators change the `glpat-` prefix, so a prefix rule would reject legitimate self-hosted tokens while still admitting any well-shaped fake.
+
+Every other outcome — a transport error, a `5xx`, a `404` from an instance that does not expose the endpoint — means no verdict was obtained, and the session is admitted. Failing closed whenever GitLab is unreachable would turn an instance outage into a total denial of service. The probe does not retry and is bounded at 5 seconds.
+
+Codes are allocated outside the JSON-RPC reserved range (`-32768` to `-32000`), as the MCP specification requires for application-defined errors, and mirror their HTTP status. `GET` and `DELETE` are not gated: they continue to receive `405 Method Not Allowed`, the answer protocol 2026-07-28 prescribes for them.
 
 ## Authentication Modes
 
@@ -597,12 +633,38 @@ The server logs key events to stderr in JSON format:
 {"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","enterprise":true,"enterprise_source":"configured","scopes_detected":true,"token_suffix":"...c3d4"}
 {"level":"WARN","msg":"request options ignored due to MCP configuration","ignored_options":["GITLAB-URL"],"token_suffix":"...a1b2"}
 {"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"gitlab_url":"https://gitlab.com","enterprise":false}
-{"level":"ERROR","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
+{"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
 ```
 
 ### Health Check
 
-In HTTP mode, you can use the tools/list endpoint to verify the server is running:
+`GET /health` needs no credentials and answers `200` with a JSON body:
+
+```bash
+curl -s http://localhost:8080/health
+```
+
+```json
+{
+  "status": "ok",
+  "version": "2.6.6",
+  "commit": "318f49c1",
+  "started_at": "2026-08-22T09:14:03Z",
+  "uptime_seconds": 1209600
+}
+```
+
+| Field            | Meaning                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------- |
+| `status`         | Always `ok` when the process is serving; the HTTP status carries liveness               |
+| `version`        | Build version                                                                           |
+| `commit`         | Build commit                                                                            |
+| `started_at`     | Process start instant, RFC 3339 in UTC                                                  |
+| `uptime_seconds` | Whole seconds since `started_at`, truncated (never a second that has not fully elapsed) |
+
+Liveness is reported both ways on purpose. `started_at` is the stable fact — it is byte-identical across probes, so a monitor can cache it and detect a restart by noticing it moved, which is why Prometheus exposes `process_start_time_seconds` rather than an uptime counter. `uptime_seconds` is the derived convenience value, in the unit the [IETF health check draft](https://datatracker.ietf.org/doc/html/draft-inadarei-api-health-check-06) uses for it (`"observedUnit": "s"`).
+
+`/health` reports only that the process is up; it performs no GitLab round-trip. To verify end-to-end connectivity for a specific token, call an authenticated MCP method:
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}" \

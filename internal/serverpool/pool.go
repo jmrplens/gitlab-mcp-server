@@ -182,6 +182,10 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 	}
 	client.SetTier(p.cfg.Tier)
 
+	if verifyErr := verifyCredential(client); verifyErr != nil {
+		return nil, verifyErr
+	}
+
 	entryCfg := p.entryConfig(client, gitlabURL)
 	server, err := p.factory(client, entryCfg)
 	if err != nil {
@@ -244,6 +248,48 @@ func (p *ServerPool) existingServerLocked(key string) (*mcp.Server, bool) {
 	p.metrics.Hits.Add(1)
 	return entry.server, true
 }
+
+// ErrInvalidCredential reports that GitLab itself rejected the credential.
+//
+// It is distinct from every other pool error: those mean the instance could
+// not be reached or the server could not be built, whereas this one is a
+// verdict from GitLab about the token. Callers map it to 401 rather than 503.
+var ErrInvalidCredential = errors.New("gitlab rejected the credential")
+
+// verifyCredential asks GitLab whether the token is usable before the pool
+// admits an entry for it.
+//
+// Without this, the pool builds an entry for any non-empty string, so an
+// unauthenticated caller can obtain a full MCP session with PRIVATE-TOKEN: x
+// and a stream of distinct invented tokens churns the LRU. Checking the token
+// format instead would be wrong: GitLab lets self-managed administrators
+// change the glpat- prefix, so a prefix rule would reject legitimate
+// self-hosted tokens while still admitting any well-shaped fake.
+//
+// GET /user is the probe rather than the calls entryConfig already makes,
+// because neither of those is a verdict about the credential: /license
+// answers 403 to a valid non-admin token, and /personal_access_tokens/self
+// answers 401 to a valid credential that is not a PAT.
+//
+// Only an explicit 401 or 403 rejects. Any other outcome — a network error, a
+// 5xx, a 404 from a stubbed instance — means no verdict was obtained, and the
+// entry is admitted: failing closed whenever GitLab is unreachable would turn
+// an instance outage into a total denial of service, which is worse than the
+// churn this prevents.
+func verifyCredential(client *gitlabclient.Client) error {
+	ctx, cancel := context.WithTimeout(context.Background(), credentialCheckTimeout)
+	defer cancel()
+
+	if client.CredentialRejected(ctx) {
+		return fmt.Errorf("%w", ErrInvalidCredential)
+	}
+	return nil
+}
+
+// credentialCheckTimeout bounds the GET /user probe in verifyCredential. It
+// runs once per new pool entry, not per request, and the probe does not retry,
+// so this is a ceiling on a single round trip rather than on a retry budget.
+const credentialCheckTimeout = 5 * time.Second
 
 // entryConfig builds the per-pool-entry server configuration, applying the
 // resolved GitLab URL plus optional edition and token-scope discovery.

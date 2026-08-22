@@ -1919,11 +1919,10 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	defer resp.Body.Close()
+	respBody := readAndCloseBody(t, resp)
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
+		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, respBody)
 	}
 
 	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
@@ -1979,11 +1978,10 @@ func TestServeHTTP_CrossOriginProtection_RejectsCrossSitePost(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	defer resp.Body.Close()
+	respBody := readAndCloseBody(t, resp)
 
 	if resp.StatusCode != http.StatusForbidden {
-		respBody, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected 403 Forbidden, got %d: %s", resp.StatusCode, string(respBody))
+		t.Fatalf("expected 403 Forbidden, got %d: %s", resp.StatusCode, respBody)
 	}
 
 	cancel()
@@ -2037,11 +2035,10 @@ func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	defer resp.Body.Close()
+	respBody := readAndCloseBody(t, resp)
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, string(respBody))
+		t.Errorf("expected 200 OK, got %d: %s", resp.StatusCode, respBody)
 	}
 
 	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
@@ -2102,12 +2099,28 @@ func TestServeHTTP_MissingGitLabURLDefaultsToPublic(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	defer resp.Body.Close()
+	respBody := readAndCloseBody(t, resp)
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected 200 (missing GITLAB-URL now defaults to gitlab.com), got %d", resp.StatusCode)
+	// The assertion is that omitting GITLAB-URL is accepted rather than
+	// rejected as a missing or malformed instance URL. It deliberately does
+	// not assert 200.
+	//
+	// The default resolves to the public gitlab.com, so the outcome now
+	// depends on what that instance says about the test token: with network
+	// access the credential probe is refused and the gate answers 401,
+	// without it the probe fails open and the handshake succeeds. Pinning
+	// either one would make this test depend on the runner having internet.
+	// The resolution semantics themselves are covered hermetically by
+	// TestResolveRequestOptions in internal/serverpool.
+	if resp.StatusCode == http.StatusBadRequest {
+		t.Errorf("omitting GITLAB-URL was rejected as a bad request: %s", respBody)
 	}
-	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
+	if strings.Contains(respBody, "GITLAB-URL") {
+		t.Errorf("response complains about the instance URL, so the default did not apply: %s", respBody)
+	}
+	if resp.StatusCode == http.StatusOK {
+		closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
+	}
 
 	cancel()
 	select {
@@ -2159,7 +2172,7 @@ func TestServeHTTP_InvalidGitLabURLHeader(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	defer resp.Body.Close()
+	readAndCloseBody(t, resp)
 
 	if resp.StatusCode == http.StatusOK {
 		t.Error("expected non-200 for invalid GITLAB-URL header")
@@ -2248,12 +2261,19 @@ func TestServeHTTP_MissingToken(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", reqErr)
 	}
-	defer resp.Body.Close()
+	respBody := readAndCloseBody(t, resp)
 
-	// The server factory returns nil for missing token → MCP SDK responds
-	// with an error status (400 or 401).
-	if resp.StatusCode == http.StatusOK {
-		t.Error("expected non-200 for request without token")
+	// The request gate rejects a credential-less POST before the MCP handler
+	// runs, so the status is exactly 401 with an RFC 9110 challenge — not the
+	// blanket 400 the SDK used to emit when the server factory returned nil.
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d: %s", resp.StatusCode, http.StatusUnauthorized, respBody)
+	}
+	if challenge := resp.Header.Get("WWW-Authenticate"); challenge == "" {
+		t.Error("401 without WWW-Authenticate violates RFC 9110")
+	}
+	if !strings.Contains(respBody, "\"jsonrpc\"") {
+		t.Errorf("body is not a JSON-RPC error: %s", respBody)
 	}
 
 	cancel()
@@ -2327,6 +2347,98 @@ func TestHealthHandler_ReturnsOK(t *testing.T) {
 	}
 	if body.Commit == "" {
 		t.Error("expected non-empty commit")
+	}
+}
+
+// TestNewHealthResponse_UptimeAndStartedAt verifies the two liveness fields
+// against controlled instants: started_at must be RFC 3339 in UTC, and
+// uptime_seconds must be whole seconds since that instant.
+//
+// Passing both instants in is what makes this deterministic — reading the
+// package-level clock would make the expected value a moving target and would
+// race with any parallel test that wrote to it.
+func TestNewHealthResponse_UptimeAndStartedAt(t *testing.T) {
+	t.Parallel()
+
+	start := time.Date(2026, 8, 22, 10, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name       string
+		now        time.Time
+		wantUptime int64
+	}{
+		{name: "same instant", now: start, wantUptime: 0},
+		{name: "partial second truncates down", now: start.Add(1900 * time.Millisecond), wantUptime: 1},
+		{name: "whole minute", now: start.Add(time.Minute), wantUptime: 60},
+		{name: "two weeks", now: start.Add(14 * 24 * time.Hour), wantUptime: 1_209_600},
+		{name: "observation before start is clamped", now: start.Add(-time.Hour), wantUptime: 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := newHealthResponse(start, tc.now)
+			if got.UptimeSeconds != tc.wantUptime {
+				t.Errorf("uptime_seconds = %d, want %d", got.UptimeSeconds, tc.wantUptime)
+			}
+			if got.StartedAt != "2026-08-22T10:00:00Z" {
+				t.Errorf("started_at = %q, want RFC 3339 UTC", got.StartedAt)
+			}
+		})
+	}
+}
+
+// TestNewHealthResponse_StartedAtIsRFC3339InUTC pins the timestamp format and
+// the UTC normalisation, so a non-UTC process clock cannot change the wire
+// representation.
+func TestNewHealthResponse_StartedAtIsRFC3339InUTC(t *testing.T) {
+	t.Parallel()
+
+	madrid, err := time.LoadLocation("Europe/Madrid")
+	if err != nil {
+		t.Skipf("tzdata unavailable: %v", err)
+	}
+	start := time.Date(2026, 8, 22, 12, 0, 0, 0, madrid) // 10:00 UTC
+
+	got := newHealthResponse(start, start)
+	parsed, err := time.Parse(time.RFC3339, got.StartedAt)
+	if err != nil {
+		t.Fatalf("started_at %q does not parse as RFC 3339: %v", got.StartedAt, err)
+	}
+	if !parsed.Equal(start) {
+		t.Errorf("started_at = %v, want the same instant as %v", parsed, start)
+	}
+	if !strings.HasSuffix(got.StartedAt, "Z") {
+		t.Errorf("started_at = %q, want a UTC (Z) offset regardless of process timezone", got.StartedAt)
+	}
+}
+
+// TestHealthHandler_ExposesLivenessFields checks the wired endpoint: the two
+// fields reach the JSON body, and they agree with each other.
+func TestHealthHandler_ExposesLivenessFields(t *testing.T) {
+	t.Parallel()
+
+	rec := httptest.NewRecorder()
+	healthHandler(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", nil))
+
+	var body healthResponse
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	startedAt, err := time.Parse(time.RFC3339, body.StartedAt)
+	if err != nil {
+		t.Fatalf("started_at %q does not parse as RFC 3339: %v", body.StartedAt, err)
+	}
+	if startedAt.After(time.Now()) {
+		t.Errorf("started_at %v is in the future", startedAt)
+	}
+	if body.UptimeSeconds < 0 {
+		t.Errorf("uptime_seconds = %d, want a non-negative value", body.UptimeSeconds)
+	}
+	// The two fields describe the same interval, so uptime cannot outrun the
+	// gap since started_at. A unit slip (milliseconds, nanoseconds) trips this.
+	if elapsed := int64(time.Since(startedAt).Seconds()) + 1; body.UptimeSeconds > elapsed {
+		t.Errorf("uptime_seconds = %d exceeds %d seconds elapsed since started_at", body.UptimeSeconds, elapsed)
 	}
 }
 
@@ -2657,6 +2769,29 @@ const readinessConsecutiveSuccesses = 2
 // of flaking against a tight fixed 5s budget.
 const testHTTPLivenessTimeout = 30 * time.Second
 
+// readAndCloseBody consumes the response body and closes it immediately,
+// returning the contents for assertions.
+//
+// Callers that later cancel a serveHTTP context MUST use this instead of a
+// deferred Close. http.Server.Shutdown waits for connections to return to
+// idle, and a connection whose response body the client has not consumed is
+// not idle: a deferred close still holds it open while Shutdown is running, so
+// Shutdown burns its whole budget and returns "context deadline exceeded".
+// Locally the client has usually drained a small body already and the race is
+// invisible; on a loaded CI runner it is not.
+func readAndCloseBody(t *testing.T, resp *http.Response) string {
+	t.Helper()
+
+	body, err := io.ReadAll(resp.Body)
+	if closeErr := resp.Body.Close(); closeErr != nil {
+		t.Errorf("closing response body: %v", closeErr)
+	}
+	if err != nil {
+		t.Errorf("reading response body: %v", err)
+	}
+	return string(body)
+}
+
 // waitForHTTPServerReady polls /health until the HTTP server is reachable,
 // or fails fast if serveHTTP exits early with an error.
 //
@@ -2835,6 +2970,8 @@ func TestServeHTTP_OAuthMode_AcceptsValidBearer(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", err)
 	}
+	// parseJSONRPCResponse consumes the body below, which is what returns the
+	// connection to idle before the context is cancelled.
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -2896,11 +3033,10 @@ func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
 		cancel()
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	respBody := readAndCloseBody(t, resp)
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
-		t.Fatalf("expected 200 OK (PRIVATE-TOKEN converted to Bearer), got %d: %s", resp.StatusCode, string(respBody))
+		t.Fatalf("expected 200 OK (PRIVATE-TOKEN converted to Bearer), got %d: %s", resp.StatusCode, respBody)
 	}
 
 	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
