@@ -1,0 +1,368 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
+)
+
+const gateTestToken = "glpat-test-token-value"
+
+// newGateTestPool builds a pool whose entries need no GitLab round-trip: the
+// tier is pinned and scope detection is off, so entryConfig performs no I/O.
+func newGateTestPool(t *testing.T, factory serverpool.ServerFactory) *serverpool.ServerPool {
+	t.Helper()
+	cfg := &config.Config{
+		GitLabURL:    "https://gitlab.example.com",
+		Tier:         edition.Free,
+		TierExplicit: true,
+		IgnoreScopes: true,
+	}
+	return serverpool.New(cfg, factory)
+}
+
+// okFactory returns a minimal server, standing in for a fully registered one.
+func okFactory(_ *gitlabclient.Client, _ *config.ServerConfig) (*mcp.Server, error) {
+	return mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil), nil
+}
+
+func failingFactory(_ *gitlabclient.Client, _ *config.ServerConfig) (*mcp.Server, error) {
+	return nil, errors.New("internal pool detail that must not reach the client")
+}
+
+// newGate wires a gate the way registerLegacyMCPHandlers does.
+func newGate(t *testing.T, factory serverpool.ServerFactory) *mcpServerGate {
+	t.Helper()
+	return &mcpServerGate{
+		pool:      newGateTestPool(t, factory),
+		gitlabURL: "https://gitlab.example.com",
+		limiter:   serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow),
+		challenge: legacyAuthChallenge,
+	}
+}
+
+// decodeJSONRPCError asserts the body is a JSON-RPC error response and returns it.
+func decodeJSONRPCError(t *testing.T, body string) jsonRPCError {
+	t.Helper()
+	var decoded jsonRPCError
+	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+		t.Fatalf("body is not JSON: %v (body=%q)", err, body)
+	}
+	if decoded.JSONRPC != "2.0" {
+		t.Errorf("jsonrpc = %q, want \"2.0\"", decoded.JSONRPC)
+	}
+	if decoded.ID != nil {
+		t.Errorf("id = %v, want null (the request body was never parsed)", *decoded.ID)
+	}
+	if decoded.Error.Message == "" {
+		t.Error("error.message is empty; the rejection must say what went wrong")
+	}
+	return decoded
+}
+
+// TestMCPServerGate_MissingCredential_Returns401WithBearerChallenge verifies the
+// core fix: a request with no credential must be a 401 carrying a
+// WWW-Authenticate challenge, never the SDK's opaque 400.
+//
+// The challenge must NOT advertise resource_metadata, because legacy mode
+// mounts no protected-resource document and clients would start an OAuth
+// discovery flow that cannot complete.
+func TestMCPServerGate_MissingCredential_Returns401WithBearerChallenge(t *testing.T) {
+	gate := newGate(t, okFactory)
+	rec := httptest.NewRecorder()
+
+	gate.middleware(http.NotFoundHandler()).ServeHTTP(
+		rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}")),
+	)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+	challenge := rec.Header().Get("WWW-Authenticate")
+	if challenge == "" {
+		t.Fatal("401 without WWW-Authenticate violates RFC 9110")
+	}
+	if !strings.HasPrefix(challenge, "Bearer ") {
+		t.Errorf("challenge = %q, want a Bearer challenge", challenge)
+	}
+	if strings.Contains(challenge, "resource_metadata") {
+		t.Errorf("challenge = %q must not advertise OAuth discovery in legacy mode", challenge)
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", got)
+	}
+
+	decoded := decodeJSONRPCError(t, rec.Body.String())
+	if decoded.Error.Code != errCodeUnauthorized {
+		t.Errorf("error.code = %d, want %d", decoded.Error.Code, errCodeUnauthorized)
+	}
+	// The message is the only place the caller learns the accepted headers.
+	for _, want := range []string{"PRIVATE-TOKEN", "Bearer"} {
+		if !strings.Contains(decoded.Error.Message, want) {
+			t.Errorf("message %q does not mention %q", decoded.Error.Message, want)
+		}
+	}
+}
+
+// TestMCPServerGate_OAuthChallenge_AdvertisesResourceMetadata is the mirror of
+// the legacy case: in OAuth mode the discovery document does exist, so the
+// challenge must point at it.
+func TestMCPServerGate_OAuthChallenge_AdvertisesResourceMetadata(t *testing.T) {
+	gate := newGate(t, okFactory)
+	gate.limiter = nil // OAuth mode has no gate-level limiter
+	gate.challenge = `Bearer resource_metadata="http://localhost:8080/.well-known/oauth-protected-resource"`
+	rec := httptest.NewRecorder()
+
+	gate.middleware(http.NotFoundHandler()).ServeHTTP(
+		rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}")),
+	)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+	if got := rec.Header().Get("WWW-Authenticate"); !strings.Contains(got, "resource_metadata=") {
+		t.Errorf("challenge = %q, want a resource_metadata parameter", got)
+	}
+}
+
+// TestMCPServerGate_InvalidGitLabURLHeader_Returns400WithReason checks the
+// second nil-returning branch. It stays a 400 — the request really is
+// malformed — but gains a JSON-RPC body naming the offending header, so a
+// client can tell it apart from a protocol-version rejection.
+func TestMCPServerGate_InvalidGitLabURLHeader_Returns400WithReason(t *testing.T) {
+	gate := newGate(t, okFactory)
+	gate.gitlabURL = "" // no fixed instance, so the header is authoritative
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+	req.Header.Set("PRIVATE-TOKEN", gateTestToken)
+	req.Header.Set("GITLAB-URL", "://not a url")
+	rec := httptest.NewRecorder()
+
+	gate.middleware(http.NotFoundHandler()).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	decoded := decodeJSONRPCError(t, rec.Body.String())
+	if decoded.Error.Code != errCodeInvalidRequest {
+		t.Errorf("error.code = %d, want %d", decoded.Error.Code, errCodeInvalidRequest)
+	}
+	if !strings.Contains(decoded.Error.Message, "GITLAB-URL") {
+		t.Errorf("message %q does not name the offending header", decoded.Error.Message)
+	}
+}
+
+// TestMCPServerGate_PoolFailure_Returns503WithoutLeakingDetail covers the third
+// branch. A backend that cannot be initialized is 503, not 400, and the pool's
+// internal error text must stay in the logs.
+func TestMCPServerGate_PoolFailure_Returns503WithoutLeakingDetail(t *testing.T) {
+	gate := newGate(t, failingFactory)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+	req.Header.Set("PRIVATE-TOKEN", gateTestToken)
+	rec := httptest.NewRecorder()
+
+	gate.middleware(http.NotFoundHandler()).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusServiceUnavailable)
+	}
+	decoded := decodeJSONRPCError(t, rec.Body.String())
+	if decoded.Error.Code != errCodeUpstreamUnavailable {
+		t.Errorf("error.code = %d, want %d", decoded.Error.Code, errCodeUpstreamUnavailable)
+	}
+	if strings.Contains(decoded.Error.Message, "internal pool detail") {
+		t.Errorf("message %q leaks the internal pool error", decoded.Error.Message)
+	}
+}
+
+// TestMCPServerGate_RepeatedAuthFailures_Returns429WithRetryAfter checks the
+// fourth branch. Exhausting the limiter must report 429 with Retry-After rather
+// than reusing the credential-missing 401.
+func TestMCPServerGate_RepeatedAuthFailures_Returns429WithRetryAfter(t *testing.T) {
+	gate := newGate(t, okFactory)
+	handler := gate.middleware(http.NotFoundHandler())
+
+	// Each credential-less POST records one failure; the limit blocks the next.
+	for range authFailureLimit {
+		handler.ServeHTTP(httptest.NewRecorder(),
+			httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}")))
+	}
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}")))
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d after %d failures", rec.Code, http.StatusTooManyRequests, authFailureLimit)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Error("429 without Retry-After leaves the client guessing")
+	}
+	decoded := decodeJSONRPCError(t, rec.Body.String())
+	if decoded.Error.Code != errCodeTooManyRequests {
+		t.Errorf("error.code = %d, want %d", decoded.Error.Code, errCodeTooManyRequests)
+	}
+}
+
+// TestMCPServerGate_NonPOSTMethods_ReachTheHandler guards a regression the gate
+// could easily cause: GET and DELETE must still reach the SDK so it answers 405,
+// which is what protocol 2026-07-28 prescribes for them. Gating them as 401
+// would replace a correct answer with a misleading one.
+func TestMCPServerGate_NonPOSTMethods_ReachTheHandler(t *testing.T) {
+	for _, method := range []string{http.MethodGet, http.MethodDelete, http.MethodOptions} {
+		t.Run(method, func(t *testing.T) {
+			gate := newGate(t, okFactory)
+			var reached atomic.Bool
+			handler := gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				reached.Store(true)
+				w.WriteHeader(http.StatusMethodNotAllowed)
+			}))
+
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), method, "/", nil))
+
+			if !reached.Load() {
+				t.Errorf("%s was gated; it must pass through so the SDK can answer 405", method)
+			}
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Errorf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+			}
+		})
+	}
+}
+
+// TestMCPServerGate_ValidToken_AttachesServerAndResolvesPoolOnce verifies the
+// happy path and the reason the server travels in the context: the pool is
+// consulted by the gate, not again by the SDK callback.
+func TestMCPServerGate_ValidToken_AttachesServerAndResolvesPoolOnce(t *testing.T) {
+	var factoryCalls atomic.Int32
+	countingFactory := func(c *gitlabclient.Client, cfg *config.ServerConfig) (*mcp.Server, error) {
+		factoryCalls.Add(1)
+		return okFactory(c, cfg)
+	}
+	gate := newGate(t, countingFactory)
+
+	var seen *mcp.Server
+	handler := gate.middleware(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		seen = serverFromRequestContext(r)
+	}))
+
+	for _, header := range []string{"PRIVATE-TOKEN", "Authorization"} {
+		value := gateTestToken
+		if header == "Authorization" {
+			value = "Bearer " + gateTestToken
+		}
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+		req.Header.Set(header, value)
+		rec := httptest.NewRecorder()
+
+		seen = nil
+		handler.ServeHTTP(rec, req)
+
+		if seen == nil {
+			t.Errorf("%s: handler received no server from the request context", header)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("%s: status = %d, want %d", header, rec.Code, http.StatusOK)
+		}
+	}
+
+	// Both headers carry the same token, so the pool must build exactly one entry.
+	if got := factoryCalls.Load(); got != 1 {
+		t.Errorf("factory called %d times, want 1 (both requests share a pool key)", got)
+	}
+}
+
+// TestServerFromRequestContext_WithoutGate_ReturnsNil documents the fallback:
+// without the gate the callback has nothing to return, which is the very
+// "no server available" path the gate exists to prevent.
+func TestServerFromRequestContext_WithoutGate_ReturnsNil(t *testing.T) {
+	if got := serverFromRequestContext(httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", nil)); got != nil {
+		t.Errorf("server = %v, want nil when the gate did not run", got)
+	}
+}
+
+// TestGateErrorCodes_AllocatedOutsideReservedRange enforces the MCP error-code
+// policy: -32000..-32019 is legacy, -32020..-32099 belongs to the specification,
+// and application codes must sit outside the whole -32768..-32000 reserved
+// range. Only the standard JSON-RPC codes may fall inside it.
+func TestGateErrorCodes_AllocatedOutsideReservedRange(t *testing.T) {
+	standard := map[int]bool{-32700: true, -32600: true, -32601: true, -32602: true, -32603: true}
+	for name, code := range map[string]int{
+		"errCodeInvalidRequest":      errCodeInvalidRequest,
+		"errCodeUnauthorized":        errCodeUnauthorized,
+		"errCodeTooManyRequests":     errCodeTooManyRequests,
+		"errCodeUpstreamUnavailable": errCodeUpstreamUnavailable,
+	} {
+		if standard[code] {
+			continue
+		}
+		if code >= -32768 && code <= -32000 {
+			t.Errorf("%s = %d is inside the JSON-RPC reserved range; application codes must be outside it", name, code)
+		}
+	}
+}
+
+// TestRegisterLegacyMCPHandlers_UnauthenticatedPOST_NeverReturnsNoServerAvailable
+// is the end-to-end guard for the reported defect. It exercises the real mux
+// wiring rather than the gate in isolation, because the bug was never in a
+// helper: it was that the SDK's getServer callback could return nil, and the
+// SDK answers every nil with "400 no server available" in text/plain.
+//
+// That string is emitted inside go-sdk (mcp/streamable.go), so it cannot be
+// caught by grepping this repository — only by asserting on a real response.
+func TestRegisterLegacyMCPHandlers_UnauthenticatedPOST_NeverReturnsNoServerAvailable(t *testing.T) {
+	cfg := &config.Config{
+		GitLabURL:    "https://gitlab.example.com",
+		Tier:         edition.Free,
+		TierExplicit: true,
+		IgnoreScopes: true,
+		Stateless:    true,
+	}
+	mux := http.NewServeMux()
+	registerLegacyMCPHandlers(t.Context(), cfg, newGateTestPool(t, okFactory), mux)
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, srv.URL,
+		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`))
+	if err != nil {
+		t.Fatalf("building request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+
+	resp, err := srv.Client().Do(req)
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body := make([]byte, 1024)
+	n, _ := resp.Body.Read(body)
+	got := string(body[:n])
+
+	if strings.Contains(got, "no server available") {
+		t.Errorf("response still carries the SDK's opaque rejection: %q", got)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
+	if resp.Header.Get("WWW-Authenticate") == "" {
+		t.Error("401 without WWW-Authenticate violates RFC 9110")
+	}
+	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Errorf("Content-Type = %q, want application/json so clients can parse the reason", ct)
+	}
+	decodeJSONRPCError(t, got)
+}

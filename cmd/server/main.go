@@ -1135,65 +1135,40 @@ func streamableHTTPOptions(cfg *config.Config) *mcp.StreamableHTTPOptions {
 }
 
 func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, mux *http.ServeMux) {
-	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
-		token := serverpool.ExtractToken(r)
-		if token == "" {
-			slog.Error("request rejected: missing token after OAuth middleware (unexpected)")
-			return nil
-		}
-		requestOptions, err := serverpool.ResolveRequestOptions(r, cfg.GitLabURL)
-		if err != nil {
-			slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
-			return nil
-		}
-		logIgnoredRequestOptions(token, requestOptions)
-		server, err := pool.GetOrCreate(token, requestOptions.GitLabURL)
-		if err != nil {
-			slog.Error("failed to create server for token", "error", err)
-			return nil
-		}
-		return server
-	}, streamableHTTPOptions(cfg))
+	resourceMetadataURL := "http://" + httpAddr + "/.well-known/oauth-protected-resource"
+	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))
+
+	// No rate limiter: the SDK's bearer middleware rejects unauthenticated
+	// requests before the gate sees them. The gate still classifies the
+	// GITLAB-URL and pool failures that the middleware cannot know about.
+	gate := &mcpServerGate{
+		pool:               pool,
+		gitlabURL:          cfg.GitLabURL,
+		trustedProxyHeader: cfg.TrustedProxyHeader,
+		challenge:          `Bearer resource_metadata="` + resourceMetadataURL + `"`,
+	}
 
 	tokenCache := oauth.NewTokenCache()
 	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cfg.OAuthCacheTTL, tokenCache)
-	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: "http://" + httpAddr + "/.well-known/oauth-protected-resource", Scopes: []string{"api"}})
+	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{"api"}})
 	mux.Handle("GET /.well-known/oauth-protected-resource", oauth.NewProtectedResourceHandler("http://"+httpAddr+"/mcp", cfg.GitLabURL))
-	mux.Handle("/", oauth.NormalizeAuthHeader(authMiddleware(mcpHandler)))
+	mux.Handle("/", oauth.NormalizeAuthHeader(authMiddleware(gate.middleware(mcpHandler))))
 	startPeriodicCleanup(ctx, tokenCache.Cleanup)
 	slog.Info("oauth mode enabled", "cache_ttl", cfg.OAuthCacheTTL, "metadata_endpoint", "/.well-known/oauth-protected-resource")
 }
 
 func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, mux *http.ServeMux) {
-	authLimiter := serverpool.NewAuthRateLimiter(10, 1*time.Minute)
+	authLimiter := serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
-	mcpHandler := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server { //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
-		ip := clientIP(r, cfg.TrustedProxyHeader)
-		if authLimiter.IsBlocked(ip) {
-			slog.Warn("request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
-			return nil
-		}
-		token := serverpool.ExtractToken(r)
-		if token == "" {
-			authLimiter.RecordFailure(ip)
-			slog.Error("request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
-			return nil
-		}
-		requestOptions, err := serverpool.ResolveRequestOptions(r, cfg.GitLabURL)
-		if err != nil {
-			slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
-			return nil
-		}
-		logIgnoredRequestOptions(token, requestOptions)
-		server, err := pool.GetOrCreate(token, requestOptions.GitLabURL)
-		if err != nil {
-			authLimiter.RecordFailure(ip)
-			slog.Error("failed to create server for token", "error", err)
-			return nil
-		}
-		return server
-	}, streamableHTTPOptions(cfg))
-	mux.Handle("/", mcpHandler)
+	gate := &mcpServerGate{
+		pool:               pool,
+		gitlabURL:          cfg.GitLabURL,
+		limiter:            authLimiter,
+		trustedProxyHeader: cfg.TrustedProxyHeader,
+		challenge:          legacyAuthChallenge,
+	}
+	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))
+	mux.Handle("/", gate.middleware(mcpHandler))
 }
 
 func startPeriodicCleanup(ctx context.Context, cleanup func()) {

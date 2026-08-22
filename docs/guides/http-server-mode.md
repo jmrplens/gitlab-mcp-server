@@ -253,11 +253,38 @@ If both headers are present, `PRIVATE-TOKEN` wins.
 
 #### Missing Token
 
-Requests without a valid token are rejected — the server returns no MCP session. The error is logged server-side:
+A request with no token is rejected with `401 Unauthorized`, an RFC 9110 challenge, and a JSON-RPC error body naming both accepted headers:
+
+```http
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer realm="gitlab-mcp-server"
+Content-Type: application/json
+
+{"jsonrpc":"2.0","id":null,"error":{"code":-40100,"message":"Authentication required: send a GitLab personal access token as 'Authorization: Bearer <glpat-...>' or 'PRIVATE-TOKEN: <glpat-...>'. ..."}}
+```
+
+The challenge deliberately omits the `resource_metadata` parameter. Clients discover an OAuth authorization server through that parameter, and legacy mode has none — advertising it would start a discovery flow that cannot complete. Use `--auth-mode=oauth` for a challenge that does point at [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata.
+
+Each rejection is also logged server-side:
 
 ```json
-{"level":"ERROR","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
+{"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
 ```
+
+#### Rejection Status Codes
+
+Every request that cannot be served is classified before it reaches the MCP handler, so the status distinguishes the cause:
+
+| Condition                                              | Status | JSON-RPC code | Notable headers    |
+| ------------------------------------------------------ | ------ | ------------- | ------------------ |
+| No `PRIVATE-TOKEN` and no `Authorization: Bearer`      | `401`  | `-40100`      | `WWW-Authenticate` |
+| `GITLAB-URL` header is not a parseable URL             | `400`  | `-32600`      | —                  |
+| More than 10 auth failures from one IP within a minute | `429`  | `-42900`      | `Retry-After`      |
+| GitLab session could not be built for the token        | `503`  | `-50300`      | —                  |
+
+All four return `Content-Type: application/json` with a JSON-RPC error response. This matters beyond readability: protocol revision 2026-07-28 tells a client that receives a `400` whose body is _not_ a recognised JSON-RPC error to conclude the server is initialization-era and downgrade, so a plain-text `400` would turn a missing header into a false protocol diagnosis.
+
+Codes are allocated outside the JSON-RPC reserved range (`-32768` to `-32000`), as the MCP specification requires for application-defined errors, and mirror their HTTP status. `GET` and `DELETE` are not gated: they continue to receive `405 Method Not Allowed`, the answer protocol 2026-07-28 prescribes for them.
 
 ## Authentication Modes
 
@@ -597,7 +624,7 @@ The server logs key events to stderr in JSON format:
 {"level":"INFO","msg":"server pool: created new entry","pool_size":2,"gitlab_url":"https://gitlab.example.com","enterprise":true,"enterprise_source":"configured","scopes_detected":true,"token_suffix":"...c3d4"}
 {"level":"WARN","msg":"request options ignored due to MCP configuration","ignored_options":["GITLAB-URL"],"token_suffix":"...a1b2"}
 {"level":"INFO","msg":"server pool: evicted LRU entry","pool_size":99,"gitlab_url":"https://gitlab.com","enterprise":false}
-{"level":"ERROR","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
+{"level":"INFO","msg":"request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)"}
 ```
 
 ### Health Check
