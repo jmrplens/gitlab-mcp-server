@@ -638,7 +638,7 @@ curl -s http://localhost:8080/health
 ```json
 {
   "status": "ok",
-  "version": "2.6.5",
+  "version": "2.6.6",
   "commit": "318f49c1",
   "started_at": "2026-08-22T09:14:03Z",
   "uptime_seconds": 1209600
