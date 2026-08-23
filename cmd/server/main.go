@@ -83,6 +83,15 @@ const (
 	projectAuthor     = "Jose Manuel Requena Plens"
 	projectDepartment = ""
 	projectRepository = "https://github.com/jmrplens/gitlab-mcp-server"
+
+	// projectDescription is the server's self-description at handshake, shown
+	// wherever a client or registry renders the MCP Implementation. It is kept
+	// free of tool counts and tier names so it never drifts out of date; the
+	// per-channel manifests (server.json, lhm.plugin.json, mcpb/manifest.json)
+	// carry the marketing copy that does.
+	projectDescription = "Model Context Protocol server for GitLab: projects, issues, merge requests, " +
+		"pipelines, repositories, releases, groups, and admin workflows over the " +
+		"GitLab REST and GraphQL APIs."
 )
 
 // httpConfig holds CLI-flag configuration for HTTP server mode.
@@ -723,11 +732,12 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	}
 
 	server := mcp.NewServer(&mcp.Implementation{
-		Name:       "gitlab-mcp-server",
-		Title:      "GitLab MCP Server",
-		Version:    version,
-		WebsiteURL: projectRepository,
-		Icons:      toolutil.IconServer,
+		Name:        "gitlab-mcp-server",
+		Title:       "GitLab MCP Server",
+		Description: projectDescription,
+		Version:     version,
+		WebsiteURL:  projectRepository,
+		Icons:       toolutil.IconServer,
 	}, &mcp.ServerOptions{
 		Instructions: "gitlab-mcp-server is a GitLab MCP server providing tools for projects, merge requests, " +
 			"issues, branches, tags, releases, repositories, commits, files, groups, members, " +
@@ -1559,11 +1569,12 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 		}
 	}
 
+	// Take serverInfo from the handshake rather than restating it, so the card
+	// cannot advertise less than the server does: it previously hardcoded name
+	// and version and silently dropped Title, Description, WebsiteURL and
+	// Icons — exactly the fields a registry listing renders.
 	card := map[string]any{
-		"serverInfo": map[string]any{
-			"name":    "gitlab-mcp-server",
-			"version": version,
-		},
+		"serverInfo": session.InitializeResult().ServerInfo,
 		"authentication": map[string]any{
 			"required": true,
 			"schemes":  []string{"header-token"},

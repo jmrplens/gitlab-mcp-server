@@ -1441,10 +1441,11 @@ func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession) 
 }
 
 // TestCreateServer_EveryAdvertisedEntryIsFullyDescribed verifies that every
-// entry the server advertises over MCP — tools, resources, resource templates,
-// prompts, and prompt arguments — carries the display metadata the catalog is
-// meant to expose: a human-readable Title alongside the programmatic Name, and
-// client Annotations on every resource and resource template.
+// entry the server advertises over MCP — the handshake Implementation, tools,
+// resources, resource templates, prompts, and prompt arguments — carries the
+// display metadata the catalog is meant to expose: a human-readable Title
+// alongside the programmatic Name, and client Annotations on every resource
+// and resource template.
 //
 // Both fields are optional in the MCP spec, so nothing in the SDK enforces
 // them; external consumers that render the catalog (the server card at
@@ -1479,6 +1480,7 @@ func assertEveryEntryIsFullyDescribed(t *testing.T, session *mcp.ClientSession) 
 	t.Helper()
 
 	gaps := &metadataGaps{t: t}
+	collectServerInfoMetadataGaps(t, session, gaps)
 	collectToolMetadataGaps(t, session, gaps)
 	collectResourceMetadataGaps(t, session, gaps)
 	collectResourceTemplateMetadataGaps(t, session, gaps)
@@ -1504,6 +1506,24 @@ func (g *metadataGaps) require(present bool, kind, id, field string) {
 	if !present {
 		g.entries = append(g.entries, kind+" "+id+": missing "+field)
 	}
+}
+
+// collectServerInfoMetadataGaps checks the Implementation returned by the
+// handshake. It is the first thing a client or registry renders, and unlike
+// the catalog entries there is only one of it, so an omission here is easy to
+// miss and expensive when it lands in a listing.
+func collectServerInfoMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *metadataGaps) {
+	t.Helper()
+	info := session.InitializeResult().ServerInfo
+	if info == nil {
+		t.Fatal("handshake returned no ServerInfo")
+	}
+	gaps.require(info.Name != "", "server", "info", "Name")
+	gaps.require(info.Title != "", "server", "info", "Title")
+	gaps.require(info.Description != "", "server", "info", "Description")
+	gaps.require(info.Version != "", "server", "info", "Version")
+	gaps.require(info.WebsiteURL != "", "server", "info", "WebsiteURL")
+	gaps.require(len(info.Icons) > 0, "server", "info", "Icons")
 }
 
 func collectToolMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *metadataGaps) {
