@@ -783,6 +783,7 @@ const (
 // footprint matrix.
 const (
 	dynamicDefaultConfiguration = "`dynamic` / `full` (default)"
+	dynamicMinimalConfiguration = "`dynamic` / `minimal`"
 	individualConfiguration     = "`individual` / `full`"
 	ultimateTierLabel           = "Ultimate"
 )
@@ -936,8 +937,18 @@ func runFootprint(client *gitlabclient.Client) error {
 // documentation site (site/src/data/token-footprint.json).
 type siteFootprint struct {
 	Tokenizer  string                             `json:"tokenizer"`
+	Shared     siteFootprintShared                `json:"shared"`
 	Dynamic    siteFootprintSurface               `json:"dynamic"`
 	Individual map[string]siteFootprintIndividual `json:"individual"`
+}
+
+// siteFootprintShared is the resource + prompt cost that every surface pays on
+// top of its tool schemas, per capability surface. It is identical across
+// tiers and tool surfaces, which is why the site quotes it as a single figure
+// rather than a per-row column.
+type siteFootprintShared struct {
+	Full    int `json:"full"`
+	Minimal int `json:"minimal"`
 }
 
 // siteFootprintSurface is one measured surface: how many tool definitions the
@@ -961,13 +972,25 @@ func renderSiteFootprintJSON(rows []tokenFootprintRow) ([]byte, error) {
 	tierKeys := map[string]string{"Free/CE": "free", "Premium": "premium", ultimateTierLabel: "ultimate"}
 
 	var dynamic siteFootprintSurface
+	var shared siteFootprintShared
 	for _, r := range rows {
-		if r.Configuration == dynamicDefaultConfiguration && r.Tier == ultimateTierLabel {
+		if r.Tier != ultimateTierLabel {
+			continue
+		}
+		switch r.Configuration {
+		case dynamicDefaultConfiguration:
 			dynamic = siteFootprintSurface{VisibleTools: r.VisibleTools, ToolSchemaTokens: r.ToolSchemaTokens}
+			shared.Full = r.SharedTokens
+		case dynamicMinimalConfiguration:
+			shared.Minimal = r.SharedTokens
 		}
 	}
 	if dynamic.ToolSchemaTokens == 0 {
 		return nil, fmt.Errorf("no %s row found for the %s tier", dynamicDefaultConfiguration, ultimateTierLabel)
+	}
+	if shared.Full == 0 || shared.Minimal == 0 {
+		return nil, fmt.Errorf("missing shared token counts for the %s tier (full=%d, minimal=%d)",
+			ultimateTierLabel, shared.Full, shared.Minimal)
 	}
 
 	individual := make(map[string]siteFootprintIndividual, len(tierKeys))
@@ -988,6 +1011,7 @@ func renderSiteFootprintJSON(rows []tokenFootprintRow) ([]byte, error) {
 
 	raw, err := json.MarshalIndent(siteFootprint{
 		Tokenizer:  "cl100k_base",
+		Shared:     shared,
 		Dynamic:    dynamic,
 		Individual: individual,
 	}, "", "  ")
@@ -1095,8 +1119,8 @@ func measureTierFootprint(client *gitlabclient.Client, tier edition.Tier, tierLa
 	}
 
 	rows := []tokenFootprintRow{
-		{Tier: tierLabel, Configuration: "`dynamic` / `full` (default)", VisibleTools: len(dynamicTools), ReachableActions: reachableActions, ToolSchemaTokens: dynamicToolTokens, SharedTokens: dynamicFullShared},
-		{Tier: tierLabel, Configuration: "`dynamic` / `minimal`", VisibleTools: len(dynamicTools), ReachableActions: reachableActions, ToolSchemaTokens: dynamicToolTokens, SharedTokens: dynamicMinimalShared},
+		{Tier: tierLabel, Configuration: dynamicDefaultConfiguration, VisibleTools: len(dynamicTools), ReachableActions: reachableActions, ToolSchemaTokens: dynamicToolTokens, SharedTokens: dynamicFullShared},
+		{Tier: tierLabel, Configuration: dynamicMinimalConfiguration, VisibleTools: len(dynamicTools), ReachableActions: reachableActions, ToolSchemaTokens: dynamicToolTokens, SharedTokens: dynamicMinimalShared},
 	}
 
 	metaSchemaModes := []string{"opaque", "compact", "full"}
