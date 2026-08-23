@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -482,10 +483,13 @@ func TestFootprintStaleTargets_DriftPerTarget_NamesOnlyTheDivergingFile(t *testi
 func completeFootprintRows() []tokenFootprintRow {
 	return []tokenFootprintRow{
 		{Tier: "Free/CE", Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
+		{Tier: "Free/CE", Configuration: dynamicMinimalConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 1088},
 		{Tier: "Free/CE", Configuration: individualConfiguration, VisibleTools: 847, ToolSchemaTokens: 767793, SharedTokens: 31758},
 		{Tier: "Premium", Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
+		{Tier: "Premium", Configuration: dynamicMinimalConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 1088},
 		{Tier: "Premium", Configuration: individualConfiguration, VisibleTools: 999, ToolSchemaTokens: 917625, SharedTokens: 31758},
 		{Tier: ultimateTierLabel, Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 31758},
+		{Tier: ultimateTierLabel, Configuration: dynamicMinimalConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180, SharedTokens: 1088},
 		{Tier: ultimateTierLabel, Configuration: individualConfiguration, VisibleTools: 1065, ToolSchemaTokens: 966698, SharedTokens: 31758},
 	}
 }
@@ -511,6 +515,11 @@ func TestRenderSiteFootprintJSON_CompleteMatrix_DerivesReductionFactor(t *testin
 	}
 	if got.Dynamic.VisibleTools != 2 || got.Dynamic.ToolSchemaTokens != 2180 {
 		t.Errorf("Dynamic = %+v, want {2 2180}", got.Dynamic)
+	}
+	// The site quotes these two in prose; publishing a zero would read as
+	// "resources and prompts are free" rather than as missing data.
+	if got.Shared.Full != 31758 || got.Shared.Minimal != 1088 {
+		t.Errorf("Shared = %+v, want {31758 1088}", got.Shared)
 	}
 	if len(got.Individual) != 3 {
 		t.Fatalf("len(Individual) = %d, want 3", len(got.Individual))
@@ -543,6 +552,15 @@ func TestRenderSiteFootprintJSON_IncompleteMatrix_ReturnsError(t *testing.T) {
 				{Tier: ultimateTierLabel, Configuration: dynamicDefaultConfiguration, VisibleTools: 2, ToolSchemaTokens: 2180},
 				{Tier: ultimateTierLabel, Configuration: individualConfiguration, VisibleTools: 1065, ToolSchemaTokens: 966698},
 			},
+		},
+		{
+			name: "missing the minimal capability-surface row",
+			rows: func() []tokenFootprintRow {
+				rows := completeFootprintRows()
+				return slices.DeleteFunc(rows, func(r tokenFootprintRow) bool {
+					return r.Configuration == dynamicMinimalConfiguration
+				})
+			}(),
 		},
 	}
 

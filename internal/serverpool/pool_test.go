@@ -1134,3 +1134,103 @@ func TestGetOrCreate_AdmitsWhenNoVerdictIsAvailable(t *testing.T) {
 		})
 	}
 }
+
+// TestEvictIdle_ReclaimsOnlyStaleEntries verifies that the idle sweep drops
+// entries unused past the timeout and leaves recently used ones alone. Without
+// it an abandoned entry lives until 100 distinct token+URL pairs push it out
+// of the LRU, holding a registered server and drawing a revalidation ping at
+// every interval on behalf of a client that is gone.
+func TestEvictIdle_ReclaimsOnlyStaleEntries(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithIdleTimeout(30*time.Minute))
+
+	for _, token := range []string{"stale-token", "fresh-token"} {
+		if _, err := pool.GetOrCreate(token, "http://localhost"); err != nil {
+			t.Fatalf("GetOrCreate(%s) error: %v", token, err)
+		}
+	}
+
+	// Age one entry past the timeout without waiting for wall-clock time.
+	pool.mu.Lock()
+	pool.entries[sessionKey("stale-token", "http://localhost")].lastUsed = time.Now().Add(-time.Hour)
+	pool.mu.Unlock()
+
+	pool.evictIdle()
+
+	if pool.Size() != 1 {
+		t.Fatalf("pool.Size() = %d, want 1 after the idle sweep", pool.Size())
+	}
+	if _, ok := pool.entries[sessionKey("fresh-token", "http://localhost")]; !ok {
+		t.Error("the recently used entry was evicted")
+	}
+	if got := pool.Stats().IdleEvictions; got != 1 {
+		t.Errorf("IdleEvictions = %d, want 1", got)
+	}
+	// The LRU list must shrink with the map, or the next eviction walks a
+	// element whose entry no longer exists.
+	if pool.lru.Len() != 1 {
+		t.Errorf("lru.Len() = %d, want 1", pool.lru.Len())
+	}
+}
+
+// TestEvictIdle_HitRefreshesLastUsed verifies that serving a request keeps an
+// entry alive. GetOrCreate answers established entries from a fast path that
+// bypasses existingServerLocked, so that path has to refresh lastUsed itself;
+// if it does not, the sweep reclaims servers that are actively in use.
+func TestEvictIdle_HitRefreshesLastUsed(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithIdleTimeout(30*time.Minute))
+
+	if _, err := pool.GetOrCreate("token", "http://localhost"); err != nil {
+		t.Fatalf("GetOrCreate error: %v", err)
+	}
+	key := sessionKey("token", "http://localhost")
+
+	pool.mu.Lock()
+	pool.entries[key].lastUsed = time.Now().Add(-time.Hour)
+	pool.mu.Unlock()
+
+	// A hit through the public API must reset the clock.
+	if _, err := pool.GetOrCreate("token", "http://localhost"); err != nil {
+		t.Fatalf("GetOrCreate (hit) error: %v", err)
+	}
+
+	pool.evictIdle()
+
+	if pool.Size() != 1 {
+		t.Fatalf("pool.Size() = %d, want 1: a served entry must survive the sweep", pool.Size())
+	}
+}
+
+// TestEvictIdle_DisabledKeepsEverything verifies that a zero timeout turns the
+// sweep off, leaving the LRU bound as the only reclamation path.
+func TestEvictIdle_DisabledKeepsEverything(t *testing.T) {
+	cfg := testConfig("http://localhost")
+	pool := New(cfg, testFactory(), WithIdleTimeout(0))
+
+	if _, err := pool.GetOrCreate("token", "http://localhost"); err != nil {
+		t.Fatalf("GetOrCreate error: %v", err)
+	}
+	pool.mu.Lock()
+	pool.entries[sessionKey("token", "http://localhost")].lastUsed = time.Time{}
+	pool.mu.Unlock()
+
+	pool.evictIdle()
+
+	if pool.Size() != 1 {
+		t.Errorf("pool.Size() = %d, want 1 with idle eviction disabled", pool.Size())
+	}
+}
+
+// TestStartIdleEviction_DisabledReturnsWithoutGoroutine verifies the start
+// helper is a no-op when the timeout is non-positive, and that a cancelled
+// context stops a running sweeper.
+func TestStartIdleEviction_DisabledReturnsWithoutGoroutine(t *testing.T) {
+	cfg := testConfig("http://localhost")
+
+	New(cfg, testFactory(), WithIdleTimeout(0)).StartIdleEviction(t.Context())
+
+	ctx, cancel := context.WithCancel(t.Context())
+	New(cfg, testFactory(), WithIdleTimeout(time.Hour)).StartIdleEviction(ctx)
+	cancel()
+}

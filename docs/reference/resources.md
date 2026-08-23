@@ -105,13 +105,13 @@ For example, `gitlab://tools/project.get` describes a dynamic action that calls 
 
 Static best-practice guides that provide AI assistants with GitLab workflow knowledge without requiring API calls.
 
-| #   | Name                             | URI                                        | Description                                                                                      |
-| --- | -------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| 42  | `guide_git_workflow`             | `gitlab://guides/git-workflow`             | Git branching strategy, commit hygiene, and merge best practices for GitLab projects.            |
-| 43  | `guide_merge_request_hygiene`    | `gitlab://guides/merge-request-hygiene`    | MR best practices: sizing, descriptions, review workflow, and merge strategies.                  |
-| 44  | `guide_conventional_commits`     | `gitlab://guides/conventional-commits`     | Conventional Commits specification with GitLab-specific examples and automation tips.            |
-| 45  | `guide_code_review`              | `gitlab://guides/code-review`              | Structured code review checklist covering quality, security, testing, and architecture.          |
-| 46  | `guide_pipeline_troubleshooting` | `gitlab://guides/pipeline-troubleshooting` | CI/CD pipeline debugging guide: common failures, job logs, retry strategies, and caching issues. |
+| #   | Name                       | Title                          | URI                                        | Description                                                                                           |
+| --- | -------------------------- | ------------------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| 42  | `git_workflow`             | Git Workflow Guide             | `gitlab://guides/git-workflow`             | Best practices for Git branching strategies with GitLab (feature branches, trunk-based, GitLab Flow). |
+| 43  | `merge_request_hygiene`    | Merge Request Hygiene Guide    | `gitlab://guides/merge-request-hygiene`    | Guidelines for creating and reviewing high-quality merge requests.                                    |
+| 44  | `conventional_commits`     | Conventional Commits Guide     | `gitlab://guides/conventional-commits`     | Conventional commit message format and examples for consistent Git history.                           |
+| 45  | `code_review`              | Code Review Guide              | `gitlab://guides/code-review`              | Code review checklist and best practices for GitLab merge request reviews.                            |
+| 46  | `pipeline_troubleshooting` | Pipeline Troubleshooting Guide | `gitlab://guides/pipeline-troubleshooting` | Common GitLab CI/CD pipeline issues and how to diagnose and fix them.                                 |
 
 ## URI Parameters
 

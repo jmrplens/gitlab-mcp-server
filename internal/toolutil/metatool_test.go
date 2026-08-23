@@ -2291,28 +2291,30 @@ func TestDeriveAnnotations_EmptyMap(t *testing.T) {
 	}
 }
 
-// TestDeriveAnnotationsWithTitle verifies that DeriveAnnotationsWithTitle
-// delegates to DeriveAnnotations and sets Title from the tool name.
-// Covers both destructive and non-destructive route maps.
-func TestDeriveAnnotationsWithTitle(t *testing.T) {
+// TestDeriveAnnotations_LeavesTitleUnset verifies that route-derived
+// annotations carry the destructive hint but no Title, for both destructive
+// and non-destructive route maps. The meta-tool's own top-level Title is the
+// display name under MCP 2025-06-18, so duplicating it into
+// Annotations.Title would only repeat the string in every tools/list response.
+func TestDeriveAnnotations_LeavesTitleUnset(t *testing.T) {
 	noop := func(_ context.Context, _ map[string]any) (any, error) { return struct{}{}, nil }
 
-	t.Run("non-destructive routes set title and DestructiveHint=false", func(t *testing.T) {
+	t.Run("non-destructive routes produce DestructiveHint=false and no title", func(t *testing.T) {
 		routes := ActionMap{"list": Route(noop), "get": Route(noop)}
-		ann := DeriveAnnotationsWithTitle("gitlab_branch", routes)
-		if ann.Title != "Branch" {
-			t.Errorf("Title = %q, want %q", ann.Title, "Branch")
+		ann := DeriveAnnotations(routes)
+		if ann.Title != "" {
+			t.Errorf("Title = %q, want empty: the tool's top-level Title supersedes it", ann.Title)
 		}
 		if ann.DestructiveHint == nil || *ann.DestructiveHint != false {
 			t.Error("non-destructive routes should produce DestructiveHint=false")
 		}
 	})
 
-	t.Run("destructive routes set title and DestructiveHint=true", func(t *testing.T) {
+	t.Run("destructive routes produce DestructiveHint=true and no title", func(t *testing.T) {
 		routes := ActionMap{"list": Route(noop), "delete": DestructiveRoute(noop)}
-		ann := DeriveAnnotationsWithTitle("gitlab_merge_request", routes)
-		if ann.Title != "Merge Request" {
-			t.Errorf("Title = %q, want %q", ann.Title, "Merge Request")
+		ann := DeriveAnnotations(routes)
+		if ann.Title != "" {
+			t.Errorf("Title = %q, want empty: the tool's top-level Title supersedes it", ann.Title)
 		}
 		if ann.DestructiveHint == nil || *ann.DestructiveHint != true {
 			t.Error("destructive routes should produce DestructiveHint=true")
@@ -2320,14 +2322,19 @@ func TestDeriveAnnotationsWithTitle(t *testing.T) {
 	})
 }
 
-// TestReadOnlyMetaAnnotationsWithTitle verifies that ReadOnlyMetaAnnotationsWithTitle
-// returns a copy of ReadOnlyMetaAnnotations with the Title set and all read-only
-// fields preserved. Also verifies the shared singleton is not mutated.
-func TestReadOnlyMetaAnnotationsWithTitle(t *testing.T) {
-	ann := ReadOnlyMetaAnnotationsWithTitle("gitlab_search")
+// TestCopyReadOnlyMetaAnnotations verifies that CopyReadOnlyMetaAnnotations
+// returns a copy of ReadOnlyMetaAnnotations with all read-only fields
+// preserved and no Title, and that the shared singleton is not mutated.
+// Annotations.Title is intentionally left unset: the tool carries a top-level
+// Title, which takes precedence over it under MCP 2025-06-18.
+func TestCopyReadOnlyMetaAnnotations(t *testing.T) {
+	ann := CopyReadOnlyMetaAnnotations()
 
-	if ann.Title != "Search" {
-		t.Errorf("Title = %q, want %q", ann.Title, "Search")
+	if ann.Title != "" {
+		t.Errorf("Title = %q, want empty: the tool's top-level Title supersedes it", ann.Title)
+	}
+	if ann == ReadOnlyMetaAnnotations {
+		t.Error("returned the shared singleton instead of a copy")
 	}
 	if !ann.ReadOnlyHint {
 		t.Error("ReadOnlyHint should be true")
@@ -2382,8 +2389,11 @@ func TestAddMetaTool_RegistersSharedMetadata(t *testing.T) {
 	if tool.Annotations == nil || tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint != true {
 		t.Fatal("destructive meta-tool should have DestructiveHint=true")
 	}
-	if tool.Annotations.Title != "Test Meta" {
-		t.Errorf("annotation title = %q, want %q", tool.Annotations.Title, "Test Meta")
+	if tool.Title != "Test Meta" {
+		t.Errorf("tool title = %q, want %q", tool.Title, "Test Meta")
+	}
+	if tool.Annotations.Title != "" {
+		t.Errorf("annotation title = %q, want empty: the top-level Title supersedes it", tool.Annotations.Title)
 	}
 	if tool.InputSchema == nil {
 		t.Fatal("input schema is nil")
@@ -2422,8 +2432,11 @@ func TestAddReadOnlyMetaTool_RegistersReadOnlyMetadata(t *testing.T) {
 	if tool.Annotations.DestructiveHint == nil || *tool.Annotations.DestructiveHint != false {
 		t.Error("DestructiveHint should be false")
 	}
-	if tool.Annotations.Title != "Test Read" {
-		t.Errorf("annotation title = %q, want %q", tool.Annotations.Title, "Test Read")
+	if tool.Title != "Test Read" {
+		t.Errorf("tool title = %q, want %q", tool.Title, "Test Read")
+	}
+	if tool.Annotations.Title != "" {
+		t.Errorf("annotation title = %q, want empty: the top-level Title supersedes it", tool.Annotations.Title)
 	}
 }
 

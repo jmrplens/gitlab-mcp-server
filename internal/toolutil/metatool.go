@@ -2215,7 +2215,7 @@ func AddMetaTool(server *mcp.Server, name, desc string, routes ActionMap, icons 
 		Name:         name,
 		Title:        TitleFromName(name),
 		Description:  MetaToolDescriptionPrefix(name, routes) + desc,
-		Annotations:  DeriveAnnotationsWithTitle(name, routes),
+		Annotations:  DeriveAnnotations(routes),
 		Icons:        icons,
 		InputSchema:  MetaToolSchema(routes),
 		OutputSchema: MetaToolOutputSchema(),
@@ -2234,7 +2234,7 @@ func AddReadOnlyMetaTool(server *mcp.Server, name, desc string, routes ActionMap
 		Name:         name,
 		Title:        TitleFromName(name),
 		Description:  MetaToolDescriptionPrefix(name, routes) + desc,
-		Annotations:  ReadOnlyMetaAnnotationsWithTitle(name),
+		Annotations:  CopyReadOnlyMetaAnnotations(),
 		Icons:        icons,
 		InputSchema:  MetaToolSchema(routes),
 		OutputSchema: MetaToolOutputSchema(),
@@ -2857,16 +2857,16 @@ func DeriveAnnotations(routes ActionMap) *mcp.ToolAnnotations {
 	return &cp
 }
 
-// DeriveAnnotationsWithTitle returns route-derived annotations with Title set from the tool name.
-func DeriveAnnotationsWithTitle(name string, routes ActionMap) *mcp.ToolAnnotations {
-	a := DeriveAnnotations(routes)
-	a.Title = TitleFromName(name)
-	return a
-}
-
-// ReadOnlyMetaAnnotationsWithTitle returns a copy of ReadOnlyMetaAnnotations with Title set.
-func ReadOnlyMetaAnnotationsWithTitle(name string) *mcp.ToolAnnotations {
+// CopyReadOnlyMetaAnnotations returns a copy of ReadOnlyMetaAnnotations so
+// callers never alias the shared singleton.
+//
+// Note on ToolAnnotations.Title: it is deliberately left unset here and in
+// [DeriveAnnotations]. Since MCP 2025-06-18 a Tool carries its own top-level
+// Title, and the display-name precedence is Title → Annotations.Title → Name,
+// so setting both only duplicates the string in every tools/list response. The
+// individual-tool projection has always relied on the top-level Title alone;
+// the meta surface now matches it.
+func CopyReadOnlyMetaAnnotations() *mcp.ToolAnnotations {
 	a := *ReadOnlyMetaAnnotations
-	a.Title = TitleFromName(name)
 	return &a
 }

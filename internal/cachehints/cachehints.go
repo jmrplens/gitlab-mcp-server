@@ -13,10 +13,23 @@ import (
 )
 
 // TTL hints in milliseconds.
+//
+// One hour is the ceiling for anything catalog-shaped. The only event that
+// legitimately changes the tool set under a running server is a new binary,
+// and auto-update checks hourly by default, so a longer window could outlive
+// the build that issued it.
 const (
-	// listTTLMs marks list catalogs fresh for 5 minutes: they only change
-	// when the server process (or its auto-updated binary) changes.
-	listTTLMs = 300_000
+	// staticListTTLMs marks the catalogs compiled into the binary — prompts,
+	// resources and resource templates — fresh for 1 hour. None of them
+	// depends on the licensing tier or on the token's scopes, so nothing at
+	// runtime can change them.
+	staticListTTLMs = 3_600_000
+	// detectedListTTLMs marks the tool catalog fresh for 5 minutes when the
+	// licensing tier is detected per instance rather than configured. A tier
+	// change adds or removes whole tool families, and the shorter window
+	// bounds how long a client keeps calling a catalog that no longer matches
+	// its license.
+	detectedListTTLMs = 300_000
 	// staticReadTTLMs marks static resource reads (docs, manifests, guides,
 	// schemas) fresh for 1 hour.
 	staticReadTTLMs = 3_600_000
@@ -28,26 +41,50 @@ const (
 const scopePrivate = "private"
 
 // staticResourcePrefixes lists the URI prefixes served entirely from process
-// memory: workflow guides ([resources.RegisterWorkflowGuides]), the dynamic
-// and meta action schemas, and the tool manifest. Every other gitlab:// URI
-// registered in internal/resources is backed by a live GitLab API call, so it
-// gets no freshness window.
+// memory and independent of the catalog: workflow guides
+// ([resources.RegisterWorkflowGuides]) and the dynamic and meta action
+// schemas. Every other gitlab:// URI registered in internal/resources is
+// backed by a live GitLab API call, so it gets no freshness window.
 var staticResourcePrefixes = []string{
 	"gitlab://guides/",
 	"gitlab://schema/",
-	"gitlab://tools",
+}
+
+// toolManifestPrefix covers gitlab://tools and gitlab://tools/{id}. Both are
+// served from process memory, but they describe the visible tool catalog, so
+// they vary with the same tier input as tools/list and share its window rather
+// than the static one. Caching the manifest for an hour while the tool list
+// refreshes every five minutes would let a client hold two disagreeing views
+// of the same catalog.
+const toolManifestPrefix = "gitlab://tools"
+
+// Options configures the freshness windows the middleware stamps.
+type Options struct {
+	// TierPinned reports that the licensing tier was configured rather than
+	// detected from the instance license, so it cannot change while the
+	// server runs. It lifts the tool catalog to the same one-hour window as
+	// the catalogs compiled into the binary.
+	//
+	// A token's scopes are still detected per pool entry and also filter the
+	// catalog, but that variation is bounded by the client's own token and
+	// every hint is stamped "private", so no other client can observe it.
+	TierPinned bool
 }
 
 // Middleware returns a receiving middleware that stamps cache hints on every
 // CacheableResult according to the package policy.
-func Middleware() mcp.Middleware {
+func Middleware(opts Options) mcp.Middleware {
+	toolListTTL := detectedListTTLMs
+	if opts.TierPinned {
+		toolListTTL = staticListTTLMs
+	}
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			res, err := next(ctx, method, req)
 			if err != nil || res == nil {
 				return res, err
 			}
-			applyHints(method, req, res)
+			applyHints(method, req, res, toolListTTL)
 			return res, nil
 		}
 	}
@@ -55,12 +92,17 @@ func Middleware() mcp.Middleware {
 
 // applyHints mutates the Cacheable fields embedded in res for the methods
 // covered by the policy; other results pass through untouched.
-func applyHints(method string, req mcp.Request, res mcp.Result) {
+func applyHints(method string, req mcp.Request, res mcp.Result, toolListTTL int) {
 	switch method {
-	case "tools/list", "prompts/list", "resources/list", "resources/templates/list", "server/discover":
-		setCacheable(res, scopePrivate, listTTLMs)
+	case "prompts/list", "resources/list", "resources/templates/list":
+		// Compiled into the binary; no runtime input can change them.
+		setCacheable(res, scopePrivate, staticListTTLMs)
+	case "tools/list", "server/discover":
+		// Tier-dependent: the tool catalog, and the instructions and
+		// capabilities that discover carries alongside it.
+		setCacheable(res, scopePrivate, toolListTTL)
 	case "resources/read":
-		setCacheable(res, scopePrivate, readTTL(req))
+		setCacheable(res, scopePrivate, readTTL(req, toolListTTL))
 	}
 }
 
@@ -86,15 +128,20 @@ func setCacheable(res mcp.Result, scope string, ttlMs int) {
 	}
 }
 
-// readTTL returns the freshness window for a resources/read result: one hour
-// for static content, and 0 (immediately stale) for resources backed by live
-// GitLab data or for requests whose URI cannot be determined.
-func readTTL(req mcp.Request) int {
+// readTTL returns the freshness window for a resources/read result: the tool
+// catalog's own window for the tool manifest, one hour for static content
+// independent of the catalog, and 0 (immediately stale) for resources backed
+// by live GitLab data or for requests whose URI cannot be determined.
+func readTTL(req mcp.Request, toolListTTL int) int {
 	readReq, ok := req.(*mcp.ReadResourceRequest)
 	if !ok || readReq.Params == nil {
 		return 0
 	}
-	if isStaticResourceURI(readReq.Params.URI) {
+	uri := readReq.Params.URI
+	if strings.HasPrefix(uri, toolManifestPrefix) {
+		return toolListTTL
+	}
+	if isStaticResourceURI(uri) {
 		return staticReadTTLMs
 	}
 	return 0

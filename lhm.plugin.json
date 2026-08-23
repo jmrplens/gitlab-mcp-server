@@ -53,8 +53,7 @@
         "destructiveHint": true,
         "idempotentHint": false,
         "openWorldHint": true,
-        "readOnlyHint": false,
-        "title": "GitLab Execute Action"
+        "readOnlyHint": false
       }
     },
     {
@@ -86,8 +85,7 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": true,
-        "readOnlyHint": true,
-        "title": "GitLab Find Action"
+        "readOnlyHint": true
       }
     }
   ],
@@ -740,14 +738,30 @@
     {
       "uri": "gitlab://guides/code-review",
       "name": "code_review",
+      "title": "Code Review Guide",
       "description": "Code review checklist and best practices for GitLab merge request reviews.",
-      "mimeType": "text/markdown"
+      "mimeType": "text/markdown",
+      "annotations": {
+        "audience": [
+          "user",
+          "assistant"
+        ],
+        "priority": 0.6
+      }
     },
     {
       "uri": "gitlab://guides/conventional-commits",
       "name": "conventional_commits",
+      "title": "Conventional Commits Guide",
       "description": "Conventional commit message format and examples for consistent Git history.",
-      "mimeType": "text/markdown"
+      "mimeType": "text/markdown",
+      "annotations": {
+        "audience": [
+          "user",
+          "assistant"
+        ],
+        "priority": 0.6
+      }
     },
     {
       "uri": "gitlab://user/current",
@@ -757,6 +771,7 @@
       "mimeType": "application/json",
       "annotations": {
         "audience": [
+          "user",
           "assistant"
         ],
         "priority": 0.6
@@ -765,8 +780,16 @@
     {
       "uri": "gitlab://guides/git-workflow",
       "name": "git_workflow",
+      "title": "Git Workflow Guide",
       "description": "Best practices for Git branching strategies with GitLab (feature branches, trunk-based, GitLab Flow).",
-      "mimeType": "text/markdown"
+      "mimeType": "text/markdown",
+      "annotations": {
+        "audience": [
+          "user",
+          "assistant"
+        ],
+        "priority": 0.6
+      }
     },
     {
       "uri": "gitlab://groups",
@@ -776,6 +799,7 @@
       "mimeType": "application/json",
       "annotations": {
         "audience": [
+          "user",
           "assistant"
         ],
         "priority": 0.4
@@ -784,14 +808,30 @@
     {
       "uri": "gitlab://guides/merge-request-hygiene",
       "name": "merge_request_hygiene",
+      "title": "Merge Request Hygiene Guide",
       "description": "Guidelines for creating and reviewing high-quality merge requests.",
-      "mimeType": "text/markdown"
+      "mimeType": "text/markdown",
+      "annotations": {
+        "audience": [
+          "user",
+          "assistant"
+        ],
+        "priority": 0.6
+      }
     },
     {
       "uri": "gitlab://guides/pipeline-troubleshooting",
       "name": "pipeline_troubleshooting",
+      "title": "Pipeline Troubleshooting Guide",
       "description": "Common GitLab CI/CD pipeline issues and how to diagnose and fix them.",
-      "mimeType": "text/markdown"
+      "mimeType": "text/markdown",
+      "annotations": {
+        "audience": [
+          "user",
+          "assistant"
+        ],
+        "priority": 0.6
+      }
     },
     {
       "uri": "gitlab://tools",
@@ -801,6 +841,7 @@
       "mimeType": "application/json",
       "annotations": {
         "audience": [
+          "user",
           "assistant"
         ],
         "priority": 0.4

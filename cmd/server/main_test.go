@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -1142,6 +1143,96 @@ func TestProjectMetadata_Constants(t *testing.T) {
 	if projectRepository == "" {
 		t.Error("projectRepository should not be empty")
 	}
+	if projectWebsite == "" {
+		t.Error("projectWebsite should not be empty")
+	}
+}
+
+// TestResolveBuildVersion_Fallbacks verifies that an unstamped binary recovers
+// its identity from the embedded module build info, and that -ldflags values
+// always win. Release binaries are stamped from the VERSION file, so a build
+// info value must never override one.
+func TestResolveBuildVersion_Fallbacks(t *testing.T) {
+	buildInfo := func(mainVersion, revision string) func() (*debug.BuildInfo, bool) {
+		return func() (*debug.BuildInfo, bool) {
+			info := &debug.BuildInfo{}
+			info.Main.Version = mainVersion
+			if revision != "" {
+				info.Settings = []debug.BuildSetting{{Key: "vcs.revision", Value: revision}}
+			}
+			return info, true
+		}
+	}
+
+	tests := []struct {
+		name        string
+		version     string
+		commit      string
+		readInfo    func() (*debug.BuildInfo, bool)
+		wantVersion string
+		wantCommit  string
+	}{
+		{
+			name:        "go install records the module version",
+			version:     "dev",
+			commit:      "none",
+			readInfo:    buildInfo("v2.6.6", "cafe1234"),
+			wantVersion: "2.6.6",
+			wantCommit:  "cafe1234",
+		},
+		{
+			name:        "ldflags values are never overridden",
+			version:     "2.6.6",
+			commit:      "abc1234",
+			readInfo:    buildInfo("v9.9.9", "deadbeef"),
+			wantVersion: "2.6.6",
+			wantCommit:  "abc1234",
+		},
+		{
+			name:        "a working-tree build reports no module version",
+			version:     "dev",
+			commit:      "none",
+			readInfo:    buildInfo("(devel)", "beef5678"),
+			wantVersion: "dev",
+			wantCommit:  "beef5678",
+		},
+		{
+			name:        "build info without a revision leaves the commit alone",
+			version:     "dev",
+			commit:      "none",
+			readInfo:    buildInfo("v2.6.6", ""),
+			wantVersion: "2.6.6",
+			wantCommit:  "none",
+		},
+		{
+			name:        "unavailable build info changes nothing",
+			version:     "dev",
+			commit:      "none",
+			readInfo:    func() (*debug.BuildInfo, bool) { return nil, false },
+			wantVersion: "dev",
+			wantCommit:  "none",
+		},
+		{
+			name:        "nil build info with ok=true changes nothing",
+			version:     "dev",
+			commit:      "none",
+			readInfo:    func() (*debug.BuildInfo, bool) { return nil, true },
+			wantVersion: "dev",
+			wantCommit:  "none",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotVersion, gotCommit := resolveBuildVersion(tt.version, tt.commit, tt.readInfo)
+			if gotVersion != tt.wantVersion {
+				t.Errorf("version = %q, want %q", gotVersion, tt.wantVersion)
+			}
+			if gotCommit != tt.wantCommit {
+				t.Errorf("commit = %q, want %q", gotCommit, tt.wantCommit)
+			}
+		})
+	}
 }
 
 // TestCreateServer_MetaToolsEnabled verifies that createServer registers
@@ -1437,6 +1528,214 @@ func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession) 
 	}
 	if len(result.Completion.Values) != 0 {
 		t.Fatalf("Complete() values = %v, want empty result for unknown argument", result.Completion.Values)
+	}
+}
+
+// TestCreateServer_EveryAdvertisedEntryIsFullyDescribed verifies that every
+// entry the server advertises over MCP — the handshake Implementation, tools,
+// resources, resource templates, prompts, and prompt arguments — carries the
+// display metadata the catalog is meant to expose: a human-readable Title
+// alongside the programmatic Name, and client Annotations on every resource
+// and resource template.
+//
+// Both fields are optional in the MCP spec, so nothing in the SDK enforces
+// them; external consumers that render the catalog (the server card at
+// /.well-known/mcp/server-card.json, registry scanners, documentation
+// generators) silently fall back to the machine name when Title is absent.
+// This test walks the finalized catalog for all three tool surfaces and
+// reports every incomplete entry at once, so a registration path that forgets
+// to propagate the metadata cannot reach a release unnoticed.
+//
+// Resource Size is deliberately not asserted: it is only knowable ahead of a
+// read for static content, and the API-backed resources correctly omit it.
+func TestCreateServer_EveryAdvertisedEntryIsFullyDescribed(t *testing.T) {
+	client := newMockGitLabClient(t)
+	for _, toolSurface := range []string{config.ToolSurfaceIndividual, config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
+		t.Run(toolSurface, func(t *testing.T) {
+			server := mustCreateServer(t, client, &config.ServerConfig{
+				MetaTools:         true,
+				ToolSurface:       toolSurface,
+				CapabilitySurface: config.CapabilitySurfaceFull,
+			})
+			assertEveryEntryIsFullyDescribed(t, newInMemorySession(t, server))
+		})
+	}
+}
+
+// assertEveryEntryIsFullyDescribed enumerates the full advertised catalog of
+// session and fails with the complete list of entries missing display
+// metadata. The paginating iterators are used rather than the single-page
+// List* calls so that a catalog larger than one page is still covered end to
+// end.
+func assertEveryEntryIsFullyDescribed(t *testing.T, session *mcp.ClientSession) {
+	t.Helper()
+
+	gaps := &metadataGaps{t: t}
+	collectServerInfoMetadataGaps(t, session, gaps)
+	collectToolMetadataGaps(t, session, gaps)
+	collectResourceMetadataGaps(t, session, gaps)
+	collectResourceTemplateMetadataGaps(t, session, gaps)
+	collectPromptMetadataGaps(t, session, gaps)
+
+	if len(gaps.entries) > 0 {
+		slices.Sort(gaps.entries)
+		t.Errorf("%d advertised entries are missing display metadata:\n%s",
+			len(gaps.entries), strings.Join(gaps.entries, "\n"))
+	}
+}
+
+// metadataGaps accumulates the display-metadata omissions found while walking
+// an advertised catalog so that a single failure can name all of them.
+type metadataGaps struct {
+	t       *testing.T
+	entries []string
+}
+
+// require records a gap for kind/id when present is false.
+func (g *metadataGaps) require(present bool, kind, id, field string) {
+	g.t.Helper()
+	if !present {
+		g.entries = append(g.entries, kind+" "+id+": missing "+field)
+	}
+}
+
+// collectServerInfoMetadataGaps checks the Implementation returned by the
+// handshake. It is the first thing a client or registry renders, and unlike
+// the catalog entries there is only one of it, so an omission here is easy to
+// miss and expensive when it lands in a listing.
+func collectServerInfoMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *metadataGaps) {
+	t.Helper()
+	info := session.InitializeResult().ServerInfo
+	if info == nil {
+		t.Fatal("handshake returned no ServerInfo")
+	}
+	gaps.require(info.Name != "", "server", "info", "Name")
+	gaps.require(info.Title != "", "server", "info", "Title")
+	gaps.require(info.Description != "", "server", "info", "Description")
+	gaps.require(info.Version != "", "server", "info", "Version")
+	gaps.require(info.WebsiteURL != "", "server", "info", "WebsiteURL")
+	gaps.require(len(info.Icons) > 0, "server", "info", "Icons")
+}
+
+func collectToolMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *metadataGaps) {
+	t.Helper()
+	for tool, err := range session.Tools(t.Context(), nil) {
+		if err != nil {
+			t.Fatalf("list tools: %v", err)
+		}
+		gaps.require(tool.Title != "", "tool", tool.Name, "Title")
+		// Annotations.Title is the pre-2025-06-18 display name and is
+		// superseded by the top-level Title asserted above. The meta surface
+		// used to set both; keeping it unset holds all three tool surfaces on
+		// the same rule instead of duplicating the string per tools/list entry.
+		if tool.Annotations != nil && tool.Annotations.Title != "" {
+			gaps.entries = append(gaps.entries,
+				"tool "+tool.Name+": redundant Annotations.Title (top-level Title supersedes it)")
+		}
+	}
+}
+
+func collectResourceMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *metadataGaps) {
+	t.Helper()
+	for resource, err := range session.Resources(t.Context(), nil) {
+		if err != nil {
+			t.Fatalf("list resources: %v", err)
+		}
+		gaps.require(resource.Title != "", "resource", resource.URI, "Title")
+		gaps.require(resource.Annotations != nil, "resource", resource.URI, "Annotations")
+	}
+}
+
+func collectResourceTemplateMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *metadataGaps) {
+	t.Helper()
+	for template, err := range session.ResourceTemplates(t.Context(), nil) {
+		if err != nil {
+			t.Fatalf("list resource templates: %v", err)
+		}
+		gaps.require(template.Title != "", "resource template", template.URITemplate, "Title")
+		gaps.require(template.Annotations != nil, "resource template", template.URITemplate, "Annotations")
+	}
+}
+
+func collectPromptMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *metadataGaps) {
+	t.Helper()
+	for prompt, err := range session.Prompts(t.Context(), nil) {
+		if err != nil {
+			t.Fatalf("list prompts: %v", err)
+		}
+		gaps.require(prompt.Title != "", "prompt", prompt.Name, "Title")
+		for _, arg := range prompt.Arguments {
+			gaps.require(arg.Title != "", "prompt argument", prompt.Name+"."+arg.Name, "Title")
+		}
+	}
+}
+
+// TestCreateServer_ToolManifestEntriesCoverEveryVisibleTool verifies the
+// gitlab://tools promise that it lists "every executable entry": a client
+// enumerating entries must be able to reach every tool the server exposes.
+//
+// A tool is reachable either through an entry of its own or as the tool an
+// entry dispatches to — gitlab_execute_action and the meta dispatchers are
+// named by the entries they route. Standalone utilities belong to no
+// dispatcher, so they need their own entry; on the meta surface the five of
+// them were advertised in visible_tools while missing from entries.
+func TestCreateServer_ToolManifestEntriesCoverEveryVisibleTool(t *testing.T) {
+	client := newMockGitLabClient(t)
+	for _, toolSurface := range []string{config.ToolSurfaceIndividual, config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
+		t.Run(toolSurface, func(t *testing.T) {
+			server := mustCreateServer(t, client, &config.ServerConfig{
+				MetaTools:         true,
+				ToolSurface:       toolSurface,
+				CapabilitySurface: config.CapabilitySurfaceFull,
+			})
+			assertManifestCoversVisibleTools(t, newInMemorySession(t, server))
+		})
+	}
+}
+
+func assertManifestCoversVisibleTools(t *testing.T, session *mcp.ClientSession) {
+	t.Helper()
+
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"})
+	if err != nil {
+		t.Fatalf("read gitlab://tools: %v", err)
+	}
+	if len(result.Contents) == 0 {
+		t.Fatal("gitlab://tools returned no contents")
+	}
+
+	var manifest struct {
+		VisibleTools []struct {
+			Name string `json:"name"`
+		} `json:"visible_tools"`
+		Entries []struct {
+			ID   string `json:"id"`
+			Tool string `json:"tool"`
+		} `json:"entries"`
+	}
+	if unmarshalErr := json.Unmarshal([]byte(result.Contents[0].Text), &manifest); unmarshalErr != nil {
+		t.Fatalf("unmarshal tool manifest: %v", unmarshalErr)
+	}
+	if len(manifest.VisibleTools) == 0 {
+		t.Fatal("manifest advertises no visible tools")
+	}
+
+	reachable := make(map[string]struct{}, len(manifest.Entries))
+	for _, entry := range manifest.Entries {
+		reachable[entry.Tool] = struct{}{}
+		reachable[entry.ID] = struct{}{}
+	}
+
+	var unreachable []string
+	for _, tool := range manifest.VisibleTools {
+		if _, ok := reachable[tool.Name]; !ok {
+			unreachable = append(unreachable, tool.Name)
+		}
+	}
+	if len(unreachable) > 0 {
+		slices.Sort(unreachable)
+		t.Errorf("%d visible tools are absent from the manifest entries:\n%s",
+			len(unreachable), strings.Join(unreachable, "\n"))
 	}
 }
 

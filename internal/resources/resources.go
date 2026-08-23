@@ -509,7 +509,7 @@ func registerCurrentUserResource(server *mcp.Server, client *gitlabclient.Client
 		Title:       "Current User Profile",
 		MIMEType:    mimeJSON,
 		Description: "Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconUser,
 	}, func(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		u, _, err := client.GL().Users.CurrentUser(gl.WithContext(ctx))
@@ -538,7 +538,7 @@ func registerGroupsResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "All Groups",
 		MIMEType:    mimeJSON,
 		Description: "List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconGroup,
 	}, func(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		groups, _, err := client.GL().Groups.ListGroups(&gl.ListGroupsOptions{}, gl.WithContext(ctx))
@@ -570,7 +570,7 @@ func registerProjectResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Project Metadata",
 		MIMEType:    mimeJSON,
 		Description: "Get basic metadata for a GitLab project by numeric ID or URL-encoded path. Returns name, namespace path, visibility, web URL, description, and default branch.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconProject,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID := extractSuffix(req.Params.URI, uriProjectPrefix)
@@ -626,7 +626,7 @@ func registerLatestPipelineResource(server *mcp.Server, client *gitlabclient.Cli
 		Title:       "Latest Pipeline",
 		MIMEType:    mimeJSON,
 		Description: "Get the most recent CI/CD pipeline for a GitLab project. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconPipeline,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/pipelines/latest")
@@ -652,7 +652,7 @@ func registerPipelineResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Pipeline Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details of a specific CI/CD pipeline by its numeric ID. Returns pipeline status, ref, SHA, source, and web URL.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconPipeline,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		return readProjectIntResource(ctx, req, "/pipeline/", "failed to get pipeline",
@@ -676,7 +676,7 @@ func registerPipelineJobsResource(server *mcp.Server, client *gitlabclient.Clien
 		Title:       "Pipeline Jobs",
 		MIMEType:    mimeJSON,
 		Description: "List all jobs for a specific CI/CD pipeline including each job's name, stage, status, duration, failure reason (if failed), and web URL.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconJob,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		uri := strings.TrimSuffix(req.Params.URI, "/jobs")
@@ -719,7 +719,7 @@ func registerProjectLabelsResource(server *mcp.Server, client *gitlabclient.Clie
 		Title:       "Project Labels",
 		MIMEType:    mimeJSON,
 		Description: "List all labels defined in a GitLab project. Returns each label's name, color, description, and counts of open issues and merge requests using the label.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/labels")
@@ -755,7 +755,7 @@ func registerProjectMilestonesResource(server *mcp.Server, client *gitlabclient.
 		Title:       "Project Milestones",
 		MIMEType:    mimeJSON,
 		Description: "List all milestones in a GitLab project. Returns each milestone's title, description, state (active/closed), due date, and web URL.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconMilestone,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/milestones")
@@ -795,7 +795,7 @@ func registerMergeRequestResource(server *mcp.Server, client *gitlabclient.Clien
 		Title:       "Merge Request Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details of a specific merge request by its IID (project-scoped ID). Returns title, state, source/target branches, author, merge status, and web URL.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, mrIIDStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/mr/")
@@ -839,7 +839,7 @@ func registerProjectBranchesResource(server *mcp.Server, client *gitlabclient.Cl
 		Title:       "Project Branches",
 		MIMEType:    mimeJSON,
 		Description: "List all branches in a GitLab project. Returns each branch's name, protection status, merge status, default flag, and web URL.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconBranch,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/branches")
@@ -873,7 +873,7 @@ func registerGroupResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Group Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a specific GitLab group by numeric ID or URL-encoded path. Returns name, full path, description, visibility, and web URL.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconGroup,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		groupID := extractSuffix(req.Params.URI, uriGroupPrefix)
@@ -921,7 +921,7 @@ func registerGroupMembersResource(server *mcp.Server, client *gitlabclient.Clien
 
 func registerMembersResource(server *mcp.Server, tmpl *mcp.ResourceTemplate, uriPrefix, operation string, list func(context.Context, string) ([]MemberResourceOutput, error)) {
 	tmpl.MIMEType = mimeJSON
-	tmpl.Annotations = toolutil.ContentList
+	tmpl.Annotations = toolutil.ResourceList
 	tmpl.Icons = toolutil.IconUser
 	server.AddResourceTemplate(tmpl, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		scopeID := extractMiddle(req.Params.URI, uriPrefix, "/members")
@@ -946,7 +946,7 @@ func registerGroupProjectsResource(server *mcp.Server, client *gitlabclient.Clie
 		Title:       "Group Projects",
 		MIMEType:    mimeJSON,
 		Description: "List all projects within a GitLab group. Returns each project's ID, name, namespace path, visibility, web URL, description, and default branch.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconProject,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		groupID := extractMiddle(req.Params.URI, uriGroupPrefix, "/projects")
@@ -983,7 +983,7 @@ func registerProjectIssuesResource(server *mcp.Server, client *gitlabclient.Clie
 		Title:       "Project Issues",
 		MIMEType:    mimeJSON,
 		Description: "List open issues for a GitLab project. Returns each issue's IID, title, state, labels, assignees, author, web URL, and creation date.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconIssue,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/issues")
@@ -1015,7 +1015,7 @@ func registerIssueResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Issue Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details of a specific issue by its IID (project-scoped ID). Returns title, state, labels, assignees, author, web URL, and creation date.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconIssue,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		return readProjectIntResource(ctx, req, "/issue/", "failed to get issue",
@@ -1039,7 +1039,7 @@ func registerProjectReleasesResource(server *mcp.Server, client *gitlabclient.Cl
 		Title:       "Project Releases",
 		MIMEType:    mimeJSON,
 		Description: "List all releases for a GitLab project. Returns each release's tag name, name, description, author, and creation/release dates.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconRelease,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/releases")
@@ -1080,7 +1080,7 @@ func registerProjectTagsResource(server *mcp.Server, client *gitlabclient.Client
 		Title:       "Project Tags",
 		MIMEType:    mimeJSON,
 		Description: "List all repository tags for a GitLab project. Returns each tag's name, message, target commit SHA, protection status, and creation date.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconTag,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID := extractMiddle(req.Params.URI, uriProjectPrefix, "/tags")
@@ -1119,7 +1119,7 @@ func registerCommitResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Commit Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single commit by SHA. Returns short_id, title, message, author, committer, authored/committed dates, parent commits, web URL, and stats (additions/deletions).",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconCommit,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, sha := extractTwoParts(req.Params.URI, uriProjectPrefix, "/commit/")
@@ -1169,7 +1169,7 @@ func registerFileBlobResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Repository File",
 		MIMEType:    mimeJSON,
 		Description: "Get the contents of a repository file at a specific ref (branch, tag, or SHA). Path may include slashes. Files over 1 MiB return metadata only with truncated=true. Binary files return metadata with empty content.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconFile,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, ref, filePath := extractFileBlobURI(req.Params.URI)
@@ -1213,7 +1213,7 @@ func registerWikiResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Wiki Page",
 		MIMEType:    mimeJSON,
 		Description: "Get a wiki page by slug. Returns title, slug, format (markdown/rdoc/asciidoc/org), and raw content. Slugs are case-sensitive and use hyphens for spaces.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconWiki,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, slug := extractTwoParts(req.Params.URI, uriProjectPrefix, "/wiki/")
@@ -1245,7 +1245,7 @@ func registerMergeRequestNotesResource(server *mcp.Server, client *gitlabclient.
 		Title:       "Merge Request Notes",
 		MIMEType:    mimeJSON,
 		Description: "List notes (comments) on a merge request. Returns each note's id, author username, body, system flag, resolvable/resolved flags, and timestamps.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		uri := strings.TrimSuffix(req.Params.URI, "/notes")
@@ -1296,7 +1296,7 @@ func registerMergeRequestDiscussionsResource(server *mcp.Server, client *gitlabc
 		Title:       "Merge Request Discussions",
 		MIMEType:    mimeJSON,
 		Description: "List discussion threads on a merge request. Each discussion has an id, individual_note flag, and an array of notes (id, author, body, system, resolved/resolvable, created_at).",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		uri := strings.TrimSuffix(req.Params.URI, "/discussions")
@@ -1354,7 +1354,7 @@ func registerReleaseResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Release Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single GitLab release by tag name. Returns tag_name, name, description, author, creation/release dates.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconRelease,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, tagName := extractTwoParts(req.Params.URI, uriProjectPrefix, "/release/")
@@ -1391,7 +1391,7 @@ func registerBranchResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Branch Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single repository branch. Returns name, protection status, merge status, default flag, and web URL.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconBranch,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, branch := extractTwoParts(req.Params.URI, uriProjectPrefix, "/branch/")
@@ -1423,7 +1423,7 @@ func registerTagResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Tag Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single Git tag. Returns name, target commit SHA, annotation message, and protection status.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconTag,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		return readProjectNamedResource(ctx, req, "/tag/", "failed to get tag",
@@ -1448,7 +1448,7 @@ func registerLabelResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Label Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single project label by numeric ID or label name. Returns id, name, color, description, and open issue/MR counts.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, labelID := extractTwoParts(req.Params.URI, uriProjectPrefix, "/label/")
@@ -1484,7 +1484,7 @@ func registerMilestoneResource(server *mcp.Server, client *gitlabclient.Client) 
 		Title:       "Milestone Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single project milestone by IID. Returns id, iid, title, description, state, due date, and web URL.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconMilestone,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, iidStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/milestone/")
@@ -1726,7 +1726,7 @@ func registerDeploymentResource(server *mcp.Server, client *gitlabclient.Client)
 		Title:       "Deployment Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single project deployment by numeric ID. Returns id, iid, ref, sha, status, and environment name.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconDeploy,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/deployment/")
@@ -1766,7 +1766,7 @@ func registerEnvironmentResource(server *mcp.Server, client *gitlabclient.Client
 		Title:       "Environment Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single project environment by numeric ID. Returns id, name, slug, state, and tier.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconEnvironment,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/environment/")
@@ -1802,7 +1802,7 @@ func registerJobResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Job Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single CI job by numeric ID. Returns id, name, stage, status, ref, duration, and web URL.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconJob,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/job/")
@@ -1841,7 +1841,7 @@ func registerSnippetResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Snippet Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single personal/global snippet by numeric ID. Returns id, title, file_name, description, visibility, and web URL.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconSnippet,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		idStr := extractSuffix(req.Params.URI, uriSnippetPrefix)
@@ -1879,7 +1879,7 @@ func registerProjectSnippetResource(server *mcp.Server, client *gitlabclient.Cli
 		Title:       "Project Snippet Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single project snippet by numeric ID. Returns id, title, file_name, description, visibility, and web URL.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconSnippet,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/snippet/")
@@ -1917,7 +1917,7 @@ func registerFeatureFlagResource(server *mcp.Server, client *gitlabclient.Client
 		Title:       "Feature Flag Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single project feature flag by name. Returns name, description, active, and version.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconConfig,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		return readProjectNamedResource(ctx, req, "/feature_flag/", "failed to get feature flag",
@@ -1942,7 +1942,7 @@ func registerDeployKeyResource(server *mcp.Server, client *gitlabclient.Client) 
 		Title:       "Deploy Key Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single project deploy key by numeric ID. Returns id, title, key, and fingerprint.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconKey,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/deploy_key/")
@@ -1978,7 +1978,7 @@ func registerBoardResource(server *mcp.Server, client *gitlabclient.Client) {
 		Title:       "Board Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single project issue board by numeric ID. Returns id and name.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconBoard,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		projectID, idStr := extractTwoParts(req.Params.URI, uriProjectPrefix, "/board/")
@@ -2008,7 +2008,7 @@ func registerGroupMilestoneResource(server *mcp.Server, client *gitlabclient.Cli
 		Title:       "Group Milestone Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single group milestone by IID. Returns id, iid, title, description, state, due date, and web URL.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconMilestone,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		groupID, iidStr := extractGroupTwoParts(req.Params.URI, "milestone")
@@ -2053,7 +2053,7 @@ func registerGroupLabelResource(server *mcp.Server, client *gitlabclient.Client)
 		Title:       "Group Label Details",
 		MIMEType:    mimeJSON,
 		Description: "Get details for a single group label by numeric ID or name. Returns id, name, color, description, and open issue/MR counts.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		groupID, labelID := extractGroupTwoParts(req.Params.URI, "label")

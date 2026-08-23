@@ -42,6 +42,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -73,16 +74,73 @@ import (
 
 // version and commit are set at build time via -ldflags.
 // The VERSION file at the repo root is the single source of truth for version.
+//
+// When neither is stamped — a plain `go build`, or `go install <module>@vX.Y.Z`
+// — [resolveBuildVersion] recovers what it can from the embedded build info so
+// the handshake never reports a bare "dev" to a client that has a real version
+// to show.
 var (
 	version = "dev"
 	commit  = "none"
 )
+
+func init() {
+	version, commit = resolveBuildVersion(version, commit, debug.ReadBuildInfo)
+}
+
+// resolveBuildVersion fills in an unstamped version and commit from the module
+// build info Go embeds in every binary. `go install module@version` records the
+// module version, and any VCS build records the revision, so a source install
+// still identifies itself. Values passed via -ldflags always win: release
+// binaries are stamped from the VERSION file, which is the source of truth.
+//
+// readBuildInfo is injected so tests can exercise the paths where build info is
+// unavailable or carries no usable values.
+func resolveBuildVersion(ldflagsVersion, ldflagsCommit string, readBuildInfo func() (*debug.BuildInfo, bool)) (resolvedVersion, resolvedCommit string) {
+	resolvedVersion, resolvedCommit = ldflagsVersion, ldflagsCommit
+	info, ok := readBuildInfo()
+	if !ok || info == nil {
+		return resolvedVersion, resolvedCommit
+	}
+
+	// "(devel)" is what the toolchain records for a build from a working tree
+	// rather than a module version; it is no more informative than "dev".
+	if resolvedVersion == "dev" && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		resolvedVersion = strings.TrimPrefix(info.Main.Version, "v")
+	}
+	if resolvedCommit == "none" {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.revision" && setting.Value != "" {
+				resolvedCommit = setting.Value
+				break
+			}
+		}
+	}
+	return resolvedVersion, resolvedCommit
+}
 
 // Project metadata.
 const (
 	projectAuthor     = "Jose Manuel Requena Plens"
 	projectDepartment = ""
 	projectRepository = "https://github.com/jmrplens/gitlab-mcp-server"
+
+	// projectWebsite is the Implementation.WebsiteURL advertised at handshake.
+	// It is the vanity redirect to the documentation site rather than the
+	// repository: a client rendering serverInfo shows this to an end user, for
+	// whom the guides are more useful than a source tree. It matches the
+	// homepage/documentation fields in mcpb/manifest.json and
+	// .plugin/plugin.json.
+	projectWebsite = "https://jmrp.io/docs/gitlab-mcp-server"
+
+	// projectDescription is the server's self-description at handshake, shown
+	// wherever a client or registry renders the MCP Implementation. It is kept
+	// free of tool counts and tier names so it never drifts out of date; the
+	// per-channel manifests (server.json, lhm.plugin.json, mcpb/manifest.json)
+	// carry the marketing copy that does.
+	projectDescription = "Model Context Protocol server for GitLab: projects, issues, merge requests, " +
+		"pipelines, repositories, releases, groups, and admin workflows over the " +
+		"GitLab REST and GraphQL APIs."
 )
 
 // httpConfig holds CLI-flag configuration for HTTP server mode.
@@ -111,6 +169,7 @@ type httpConfig struct {
 	autoUpdateInterval  time.Duration
 	autoUpdateTimeout   time.Duration
 	revalidateInterval  time.Duration
+	poolIdleTimeout     time.Duration
 	authMode            string
 	oauthCacheTTL       time.Duration
 	trustedProxyHeader  string
@@ -194,6 +253,7 @@ func main() {
 	flag.DurationVar(&hcfg.autoUpdateInterval, "auto-update-interval", config.DefaultAutoUpdateInterval, "How often to check for updates")
 	flag.DurationVar(&hcfg.autoUpdateTimeout, "auto-update-timeout", config.DefaultAutoUpdateTimeout, "Timeout for startup/background update checks (range 5s\u201310m)")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval (0 to disable)")
+	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token-and-URL server entry after this long unused (0 to disable)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
@@ -322,6 +382,7 @@ FLAGS
   -ignore-scopes            Skip PAT scope detection, register all tools (default false)
   -max-http-clients int     Maximum concurrent client sessions (default %d)
   -session-timeout duration Idle session timeout (default %s)
+  -pool-idle-timeout dur    Reclaim a pooled per-token-and-URL server entry after this long unused (default %s, 0 to disable)
   -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure so -session-timeout governs
   -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28). Use -stateless=false for legacy stateful sessions
   -json-response            Return application/json responses instead of SSE (default false)
@@ -398,7 +459,7 @@ JSON CONFIGURATION EXAMPLES
   gitlab-mcp-server --http --http-addr=:8080
 `, version, commit,
 		projectAuthor, projectDepartment, projectRepository,
-		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout,
+		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout, config.DefaultPoolIdleTimeout,
 		config.DefaultAutoUpdateRepo, config.DefaultAutoUpdateInterval,
 		config.DefaultAutoUpdateTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
@@ -509,6 +570,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		MaxHTTPClients:      hcfg.maxHTTPClients,
 		SessionTimeout:      hcfg.sessionTimeout,
 		RevalidateInterval:  hcfg.revalidateInterval,
+		PoolIdleTimeout:     hcfg.poolIdleTimeout,
 		Stateless:           hcfg.stateless,
 		JSONResponse:        hcfg.jsonResponse,
 		MaxRequestBodyBytes: hcfg.maxRequestBodyBytes,
@@ -600,6 +662,9 @@ func validateHTTPDurationConfig(cfg *config.Config) error {
 	}
 	if cfg.RevalidateInterval > config.MaxRevalidateInterval {
 		return fmt.Errorf("--revalidate-interval %s exceeds maximum of %s", cfg.RevalidateInterval, config.MaxRevalidateInterval)
+	}
+	if cfg.PoolIdleTimeout > config.MaxPoolIdleTimeout {
+		return fmt.Errorf("--pool-idle-timeout %s exceeds maximum of %s", cfg.PoolIdleTimeout, config.MaxPoolIdleTimeout)
 	}
 	if cfg.AutoUpdateTimeout < config.MinAutoUpdateTimeout {
 		return fmt.Errorf("--auto-update-timeout %s is below minimum of %s", cfg.AutoUpdateTimeout, config.MinAutoUpdateTimeout)
@@ -714,6 +779,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 
 	completionHandler := completions.NewHandler(client)
 	capabilitySurface := config.EffectiveCapabilitySurface(cfg.CapabilitySurface)
+	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
 	serverCapabilities := &mcp.ServerCapabilities{
 		Tools:     &mcp.ToolCapabilities{ListChanged: true},
 		Resources: &mcp.ResourceCapabilities{ListChanged: true},
@@ -723,35 +789,17 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	}
 
 	server := mcp.NewServer(&mcp.Implementation{
-		Name:       "gitlab-mcp-server",
-		Title:      "GitLab MCP Server",
-		Version:    version,
-		WebsiteURL: projectRepository,
-		Icons:      toolutil.IconServer,
+		Name:        "gitlab-mcp-server",
+		Title:       "GitLab MCP Server",
+		Description: projectDescription,
+		Version:     version,
+		WebsiteURL:  projectWebsite,
+		Icons:       toolutil.IconServer,
 	}, &mcp.ServerOptions{
-		Instructions: "gitlab-mcp-server is a GitLab MCP server providing tools for projects, merge requests, " +
-			"issues, branches, tags, releases, repositories, commits, files, groups, members, " +
-			"and uploads.\n\n" +
-			"PROJECT DISCOVERY — To find the project_id needed for most operations:\n" +
-			"1. Read the .git/config file from the workspace to find [remote \"origin\"] url = ...\n" +
-			"2. Call gitlab_resolve_project_from_remote with that URL to get the project_id.\n" +
-			"3. Alternatively, use gitlab_list_projects (owned=true) or gitlab_search_projects to find projects by name.\n\n" +
-			"DEFAULT BRANCH — When generating URLs to repository files or branches:\n" +
-			"1. Call gitlab_project_get to retrieve the project metadata, which includes the default_branch field.\n" +
-			"2. ALWAYS use the returned default_branch value (e.g. develop, master) instead of assuming 'main'.\n" +
-			"3. Projects can use any branch as default, so NEVER hardcode 'main' in URLs.\n\n" +
-			"PACKAGE + RELEASE WORKFLOW — When uploading packages and linking them to releases:\n" +
-			"1. Preferred: Use gitlab_package_publish_and_link to upload a file and create the release link in one step.\n" +
-			"2. Alternative: Use gitlab_package_publish first, then use the 'url' field from its response as the URL for gitlab_release_link_create.\n" +
-			"3. NEVER construct package download URLs manually — always use the actual URL returned by the publish tool.\n" +
-			"4. RELEASE LINK NAMING: The link_name MUST be the exact filename (e.g. 'checksums.txt.asc'), NEVER add descriptive suffixes like '(GPG signature)'. go-selfupdate and other tools match asset names exactly.\n\n" +
-			"RELEASE CREATION — When creating releases:\n" +
-			"1. You do NOT need to create the tag first. Provide 'ref' (branch or SHA) in gitlab_release_create and GitLab auto-creates the tag.\n" +
-			"2. The response includes 'assets_sources' with auto-generated tar.gz/zip archive URLs — use those, never construct source archive URLs.\n" +
-			"3. Use 'tag_message' to create an annotated tag instead of a lightweight one.\n\n" +
-			"ID vs IID — GitLab uses two identifiers for issues and merge requests:\n" +
-			"1. IID is the project-scoped number shown in URLs and UI (e.g. issue #3, MR !5). Most tools expect IID.\n" +
-			"2. ID is the global numeric identifier. Only use gitlab_issue_get_by_id when you have a global ID from another API response.",
+		// Named tools differ per surface, so the guidance is built for the
+		// surface this server actually registers: a dynamic-mode model can
+		// only see gitlab_find_action and gitlab_execute_action.
+		Instructions: buildInstructions(toolSurface),
 		Logger:       slog.Default(),
 		Capabilities: serverCapabilities,
 		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
@@ -779,8 +827,12 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	})
 
 	// SEP-2549 cache hints: catalogs and resource reads are token- and
-	// tier-dependent, so every cacheable result is stamped "private".
-	server.AddReceivingMiddleware(cachehints.Middleware())
+	// tier-dependent, so every cacheable result is stamped "private". A
+	// configured tier cannot change while the server runs, which earns the
+	// tool catalog the same freshness window as the compiled-in catalogs.
+	server.AddReceivingMiddleware(cachehints.Middleware(cachehints.Options{
+		TierPinned: cfg.TierExplicit,
+	}))
 
 	// Per-client response compatibility (Codex float-priority workaround and
 	// structuredContent shadowing); CLIENT_COMPAT=off disables it.
@@ -788,7 +840,6 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		server.AddReceivingMiddleware(clientcompat.Middleware())
 	}
 
-	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
 	var metaSchemaRoutes map[string]toolutil.ActionMap
 	var surfaceCatalog *actioncatalog.Catalog
 	if toolSurface != config.ToolSurfaceIndividual {
@@ -1052,10 +1103,12 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdl
 	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
 		return createServer(client, serverCfg, nil)
 	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
-		serverpool.WithRevalidateInterval(cfg.RevalidateInterval))
+		serverpool.WithRevalidateInterval(cfg.RevalidateInterval),
+		serverpool.WithIdleTimeout(cfg.PoolIdleTimeout))
 	defer pool.Close()
 
 	pool.StartRevalidation(ctx)
+	pool.StartIdleEviction(ctx)
 
 	// Build server-card JSON once at startup using an ephemeral MCP server
 	// so that /.well-known/mcp/server-card.json is served without authentication.
@@ -1474,6 +1527,7 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 		Title       string           `json:"title,omitempty"`
 		Description string           `json:"description,omitempty"`
 		MIMEType    string           `json:"mimeType,omitempty"`
+		Size        int64            `json:"size,omitempty"`
 		Annotations *mcp.Annotations `json:"annotations,omitempty"`
 	}
 
@@ -1489,6 +1543,7 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 			Title:       r.Title,
 			Description: r.Description,
 			MIMEType:    r.MIMEType,
+			Size:        r.Size,
 			Annotations: r.Annotations,
 		})
 	}
@@ -1557,11 +1612,12 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 		}
 	}
 
+	// Take serverInfo from the handshake rather than restating it, so the card
+	// cannot advertise less than the server does: it previously hardcoded name
+	// and version and silently dropped Title, Description, WebsiteURL and
+	// Icons — exactly the fields a registry listing renders.
 	card := map[string]any{
-		"serverInfo": map[string]any{
-			"name":    "gitlab-mcp-server",
-			"version": version,
-		},
+		"serverInfo": session.InitializeResult().ServerInfo,
 		"authentication": map[string]any{
 			"required": true,
 			"schemes":  []string{"header-token"},

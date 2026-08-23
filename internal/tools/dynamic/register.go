@@ -238,7 +238,7 @@ func addFindTool(server *mcp.Server, registry *Registry) {
 		Name:         findToolName,
 		Title:        "GitLab Find Action",
 		Description:  findToolDescription,
-		Annotations:  annotationsWithTitle(toolutil.ReadAnnotations, "GitLab Find Action"),
+		Annotations:  copyAnnotations(toolutil.ReadAnnotations),
 		Icons:        toolutil.IconSearch,
 		OutputSchema: nil,
 	}, registry.Find)
@@ -259,7 +259,6 @@ func addExecuteActionTool(server *mcp.Server, registry *Registry) {
 		InputSchema:  executeActionInputSchema(),
 		OutputSchema: toolutil.ActionDispatchOutputSchema(),
 		Annotations: &mcp.ToolAnnotations{
-			Title:           "GitLab Execute Action",
 			ReadOnlyHint:    readOnly,
 			DestructiveHint: &destructiveHint,
 			OpenWorldHint:   &openWorldHint,
@@ -742,12 +741,15 @@ func actionSchemaProperties(schema map[string]any) map[string]any {
 	return properties
 }
 
-func annotationsWithTitle(base *mcp.ToolAnnotations, title string) *mcp.ToolAnnotations {
+// copyAnnotations returns a copy of base so callers never alias a shared
+// annotation singleton. Title is left unset on purpose: the tool carries its
+// own top-level Title, which supersedes Annotations.Title under MCP
+// 2025-06-18, so setting both would only repeat the string in tools/list.
+func copyAnnotations(base *mcp.ToolAnnotations) *mcp.ToolAnnotations {
 	if base == nil {
-		return &mcp.ToolAnnotations{Title: title}
+		return &mcp.ToolAnnotations{}
 	}
 	annotation := *base
-	annotation.Title = title
 	return &annotation
 }
 

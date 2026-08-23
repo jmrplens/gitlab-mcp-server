@@ -144,7 +144,7 @@ func registerToolManifestIndex(server *mcp.Server, snapshot toolSurfaceSnapshot)
 		Title:       "Tool Manifest",
 		MIMEType:    mimeJSON,
 		Description: "Surface-aware manifest of the tools and executable actions available in this server instance. Use gitlab://tools/{id} to fetch one entry's accepted call shape and input schema.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		return marshalResourceJSON(snapshot.manifest)
@@ -161,7 +161,7 @@ func registerToolManifestTemplate(server *mcp.Server, snapshot toolSurfaceSnapsh
 		Title:       "Tool Detail",
 		MIMEType:    mimeJSON,
 		Description: "Accepted call shape and input schema for one entry from gitlab://tools. Replace {id} with an entry ID from the active surface, such as project.get in dynamic mode, gitlab_project.get in meta mode, or gitlab_get_project in individual mode.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		id := parseToolManifestURI(req.Params.URI)
@@ -202,6 +202,7 @@ func newToolSurfaceSnapshot(opts ToolSurfaceResourceOptions) toolSurfaceSnapshot
 			snapshot.addDirectToolEntry(tool, toolManifestKindIndividualTool)
 		}
 	}
+	snapshot.addUncoveredDirectTools(toolDetails)
 	sort.Slice(snapshot.manifest.Entries, func(i, j int) bool {
 		return snapshot.manifest.Entries[i].ID < snapshot.manifest.Entries[j].ID
 	})
@@ -353,6 +354,32 @@ func (snapshot *toolSurfaceSnapshot) addMetaEntry(entry ToolSurfaceEntry, routes
 	}
 	schema, _ := lookupMetaActionSchema(routes, entry.Tool, entry.Action)
 	snapshot.addEntry(entry, call, schema)
+}
+
+// addUncoveredDirectTools gives an entry to every visible tool the
+// surface-specific pass left unaccounted for.
+//
+// The manifest promises every executable entry, but the dynamic and meta
+// passes only enumerate actions reached through a dispatcher. Standalone
+// utilities — project discovery, the interactive creation flows — are called
+// directly under their own name, so they belong to no dispatcher and were
+// listed in visible_tools while missing from entries: a model enumerating
+// entries to learn what it could call never saw them. On the individual
+// surface every tool is already its own entry, so this pass is a no-op there.
+//
+// A tool counts as covered when some entry names it as the tool to call,
+// which is how gitlab_execute_action and the meta dispatchers are represented.
+func (snapshot *toolSurfaceSnapshot) addUncoveredDirectTools(tools []toolSnapshot) {
+	covered := make(map[string]struct{}, len(snapshot.manifest.Entries))
+	for _, entry := range snapshot.manifest.Entries {
+		covered[entry.Tool] = struct{}{}
+	}
+	for _, tool := range tools {
+		if _, ok := covered[tool.Name]; ok {
+			continue
+		}
+		snapshot.addDirectToolEntry(tool, toolManifestKindVisibleTool)
+	}
 }
 
 func (snapshot *toolSurfaceSnapshot) addDirectToolEntry(tool toolSnapshot, kind string) {
