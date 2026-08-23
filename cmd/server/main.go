@@ -1474,6 +1474,7 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 		Title       string           `json:"title,omitempty"`
 		Description string           `json:"description,omitempty"`
 		MIMEType    string           `json:"mimeType,omitempty"`
+		Size        int64            `json:"size,omitempty"`
 		Annotations *mcp.Annotations `json:"annotations,omitempty"`
 	}
 
@@ -1489,6 +1490,7 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 			Title:       r.Title,
 			Description: r.Description,
 			MIMEType:    r.MIMEType,
+			Size:        r.Size,
 			Annotations: r.Annotations,
 		})
 	}

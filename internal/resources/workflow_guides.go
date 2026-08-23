@@ -24,11 +24,17 @@ func RegisterWorkflowGuides(server *mcp.Server) {
 	for _, g := range workflowGuides {
 		guide := g // capture for closure
 		server.AddResource(&mcp.Resource{
-			URI:         guide.uri,
-			Name:        guide.name,
-			MIMEType:    "text/markdown",
-			Icons:       toolutil.IconWiki,
+			URI:      guide.uri,
+			Name:     guide.name,
+			Title:    guide.title,
+			MIMEType: "text/markdown",
+			Icons:    toolutil.IconWiki,
+			// Guide content is a compile-time constant, so unlike the
+			// API-backed resources its byte length is known before a read and
+			// hosts can budget context for it up front.
+			Size:        int64(len(guide.content)),
 			Description: guide.description,
+			Annotations: toolutil.ContentDetail,
 		}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 			return &mcp.ReadResourceResult{
 				Contents: []*mcp.ResourceContents{{
@@ -44,6 +50,7 @@ func RegisterWorkflowGuides(server *mcp.Server) {
 type workflowGuide struct {
 	uri         string
 	name        string
+	title       string
 	description string
 	content     string
 }
@@ -52,6 +59,7 @@ var workflowGuides = []workflowGuide{
 	{
 		uri:         "gitlab://guides/git-workflow",
 		name:        "git_workflow",
+		title:       "Git Workflow Guide",
 		description: "Best practices for Git branching strategies with GitLab (feature branches, trunk-based, GitLab Flow).",
 		content: `# Git Workflow Best Practices
 
@@ -79,6 +87,7 @@ var workflowGuides = []workflowGuide{
 	{
 		uri:         "gitlab://guides/merge-request-hygiene",
 		name:        "merge_request_hygiene",
+		title:       "Merge Request Hygiene Guide",
 		description: "Guidelines for creating and reviewing high-quality merge requests.",
 		content: `# Merge Request Hygiene
 
@@ -106,6 +115,7 @@ var workflowGuides = []workflowGuide{
 	{
 		uri:         "gitlab://guides/conventional-commits",
 		name:        "conventional_commits",
+		title:       "Conventional Commits Guide",
 		description: "Conventional commit message format and examples for consistent Git history.",
 		content: `# Conventional Commits
 
@@ -151,6 +161,7 @@ BREAKING CHANGE: /auth/login is now /api/v2/auth/login
 	{
 		uri:         "gitlab://guides/code-review",
 		name:        "code_review",
+		title:       "Code Review Guide",
 		description: "Code review checklist and best practices for GitLab merge request reviews.",
 		content: `# Code Review Checklist
 
@@ -192,6 +203,7 @@ BREAKING CHANGE: /auth/login is now /api/v2/auth/login
 	{
 		uri:         "gitlab://guides/pipeline-troubleshooting",
 		name:        "pipeline_troubleshooting",
+		title:       "Pipeline Troubleshooting Guide",
 		description: "Common GitLab CI/CD pipeline issues and how to diagnose and fix them.",
 		content: `# Pipeline Troubleshooting
 

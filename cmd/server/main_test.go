@@ -1440,6 +1440,117 @@ func assertCompletionHandlerAvailable(t *testing.T, session *mcp.ClientSession) 
 	}
 }
 
+// TestCreateServer_EveryAdvertisedEntryIsFullyDescribed verifies that every
+// entry the server advertises over MCP — tools, resources, resource templates,
+// prompts, and prompt arguments — carries the display metadata the catalog is
+// meant to expose: a human-readable Title alongside the programmatic Name, and
+// client Annotations on every resource and resource template.
+//
+// Both fields are optional in the MCP spec, so nothing in the SDK enforces
+// them; external consumers that render the catalog (the server card at
+// /.well-known/mcp/server-card.json, registry scanners, documentation
+// generators) silently fall back to the machine name when Title is absent.
+// This test walks the finalized catalog for all three tool surfaces and
+// reports every incomplete entry at once, so a registration path that forgets
+// to propagate the metadata cannot reach a release unnoticed.
+//
+// Resource Size is deliberately not asserted: it is only knowable ahead of a
+// read for static content, and the API-backed resources correctly omit it.
+func TestCreateServer_EveryAdvertisedEntryIsFullyDescribed(t *testing.T) {
+	client := newMockGitLabClient(t)
+	for _, toolSurface := range []string{config.ToolSurfaceIndividual, config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
+		t.Run(toolSurface, func(t *testing.T) {
+			server := mustCreateServer(t, client, &config.ServerConfig{
+				MetaTools:         true,
+				ToolSurface:       toolSurface,
+				CapabilitySurface: config.CapabilitySurfaceFull,
+			})
+			assertEveryEntryIsFullyDescribed(t, newInMemorySession(t, server))
+		})
+	}
+}
+
+// assertEveryEntryIsFullyDescribed enumerates the full advertised catalog of
+// session and fails with the complete list of entries missing display
+// metadata. The paginating iterators are used rather than the single-page
+// List* calls so that a catalog larger than one page is still covered end to
+// end.
+func assertEveryEntryIsFullyDescribed(t *testing.T, session *mcp.ClientSession) {
+	t.Helper()
+
+	gaps := &metadataGaps{t: t}
+	collectToolMetadataGaps(t, session, gaps)
+	collectResourceMetadataGaps(t, session, gaps)
+	collectResourceTemplateMetadataGaps(t, session, gaps)
+	collectPromptMetadataGaps(t, session, gaps)
+
+	if len(gaps.entries) > 0 {
+		slices.Sort(gaps.entries)
+		t.Errorf("%d advertised entries are missing display metadata:\n%s",
+			len(gaps.entries), strings.Join(gaps.entries, "\n"))
+	}
+}
+
+// metadataGaps accumulates the display-metadata omissions found while walking
+// an advertised catalog so that a single failure can name all of them.
+type metadataGaps struct {
+	t       *testing.T
+	entries []string
+}
+
+// require records a gap for kind/id when present is false.
+func (g *metadataGaps) require(present bool, kind, id, field string) {
+	g.t.Helper()
+	if !present {
+		g.entries = append(g.entries, kind+" "+id+": missing "+field)
+	}
+}
+
+func collectToolMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *metadataGaps) {
+	t.Helper()
+	for tool, err := range session.Tools(t.Context(), nil) {
+		if err != nil {
+			t.Fatalf("list tools: %v", err)
+		}
+		gaps.require(tool.Title != "", "tool", tool.Name, "Title")
+	}
+}
+
+func collectResourceMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *metadataGaps) {
+	t.Helper()
+	for resource, err := range session.Resources(t.Context(), nil) {
+		if err != nil {
+			t.Fatalf("list resources: %v", err)
+		}
+		gaps.require(resource.Title != "", "resource", resource.URI, "Title")
+		gaps.require(resource.Annotations != nil, "resource", resource.URI, "Annotations")
+	}
+}
+
+func collectResourceTemplateMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *metadataGaps) {
+	t.Helper()
+	for template, err := range session.ResourceTemplates(t.Context(), nil) {
+		if err != nil {
+			t.Fatalf("list resource templates: %v", err)
+		}
+		gaps.require(template.Title != "", "resource template", template.URITemplate, "Title")
+		gaps.require(template.Annotations != nil, "resource template", template.URITemplate, "Annotations")
+	}
+}
+
+func collectPromptMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *metadataGaps) {
+	t.Helper()
+	for prompt, err := range session.Prompts(t.Context(), nil) {
+		if err != nil {
+			t.Fatalf("list prompts: %v", err)
+		}
+		gaps.require(prompt.Title != "", "prompt", prompt.Name, "Title")
+		for _, arg := range prompt.Arguments {
+			gaps.require(arg.Title != "", "prompt argument", prompt.Name+"."+arg.Name, "Title")
+		}
+	}
+}
+
 // TestCreateServer_DynamicReadOnlyRemovesExecute verifies that read-only mode
 // keeps discovery but removes execution from the dynamic surface.
 func TestCreateServer_DynamicReadOnlyKeepsExecuteForReadActions(t *testing.T) {
