@@ -148,11 +148,15 @@ const (
 // without requiring a GITLAB_TOKEN — each client must provide its own token
 // via PRIVATE-TOKEN header or Authorization: Bearer.
 type httpConfig struct {
-	addr                string
-	gitlabURL           string
-	skipTLSVerify       bool
-	metaTools           bool
-	metaToolsSet        bool
+	addr          string
+	gitlabURL     string
+	skipTLSVerify bool
+	metaTools     bool
+	metaToolsSet  bool
+	// setFlags names the flags the operator passed explicitly, which is what
+	// separates "chose the default" from "did not choose", and therefore
+	// whether the environment may supply the value instead.
+	setFlags            map[string]bool
 	toolSurface         string
 	capabilitySurface   string
 	tier                string
@@ -265,7 +269,9 @@ func main() {
 	flag.BoolVar(&hcfg.jsonResponse, "json-response", false, "Return application/json responses instead of text/event-stream (SSE)")
 	flag.Int64Var(&hcfg.maxRequestBodyBytes, "max-request-body-bytes", 0, "Maximum streamable HTTP request body size in bytes; 0 uses the SDK default (4 MiB)")
 	flag.Parse()
+	hcfg.setFlags = make(map[string]bool)
 	flag.Visit(func(f *flag.Flag) {
+		hcfg.setFlags[f.Name] = true
 		switch f.Name {
 		case "tier":
 			hcfg.tierSet = true
@@ -494,6 +500,16 @@ func runWithContext(ctx context.Context, hcfg *httpConfig) error {
 // request via the GITLAB-URL header when no global URL is configured. At least
 // one URL source must be available for each request.
 func runHTTP(ctx context.Context, hcfg *httpConfig) error {
+	// Environment sits between the explicitly passed flags and the built-in
+	// defaults. It runs before URL normalization and surface/tier resolution so
+	// those see the final values, and it never touches a flag the operator
+	// passed.
+	overlay, overlayErr := config.LoadHTTPEnvOverlay()
+	if overlayErr != nil {
+		return fmt.Errorf("loading environment configuration: %w", overlayErr)
+	}
+	applyHTTPEnvOverlay(hcfg, overlay)
+
 	if err := normalizeFixedGitLabURL(hcfg); err != nil {
 		return err
 	}
@@ -764,7 +780,7 @@ func runStdio(ctx context.Context) error {
 }
 
 // sharedSchemaCache caches resolved tool schemas across every MCP server
-// created by this process (stdio startup and the per-token servers of the
+// created by this process (stdio startup and the per-token-and-URL servers of the
 // HTTP pool). See mcp.ServerOptions.SchemaCache.
 var sharedSchemaCache = mcp.NewSchemaCache()
 
@@ -794,7 +810,9 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		Description: projectDescription,
 		Version:     version,
 		WebsiteURL:  projectWebsite,
-		Icons:       toolutil.IconServer,
+		// The brand mark, not a domain glyph: this identifies the server
+		// itself, and IconServer is already the icon of gitlab_execute_action.
+		Icons: toolutil.IconBrand,
 	}, &mcp.ServerOptions{
 		// Named tools differ per surface, so the guidance is built for the
 		// surface this server actually registers: a dynamic-mode model can
@@ -895,7 +913,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	}
 
 	// Optional per-server tools/call rate limit. In HTTP mode each pooled
-	// per-token server gets its own bucket (effectively per-token). In
+	// per-token-and-URL server entry gets its own bucket. In
 	// stdio mode the bucket is global to the process. Disabled when
 	// RateLimitRPS is 0 (default).
 	if limiter := toolutil.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst); limiter != nil {

@@ -190,7 +190,7 @@ func TestDiscoverMarkdownFiles_SortsMarkdownFiles(t *testing.T) {
 	}
 	defer rootFS.Close()
 
-	files, err := discoverMarkdownFiles(rootFS, root, []string{"docs"})
+	files, err := discoverMarkdownFiles(rootFS, root, []string{"docs"}, false)
 	if err != nil {
 		t.Fatalf("discoverMarkdownFiles() error: %v", err)
 	}
@@ -431,4 +431,89 @@ func readTestFile(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(content)
+}
+
+// TestDiscoverMarkdownFiles_MissingPathHandling verifies the two ways a
+// missing path is treated. The default list describes this repository's
+// layout, so an absent entry — a checkout without the documentation site, or a
+// future layout change — is skipped rather than aborting the run. A path the
+// caller named explicitly still errors, so a typo on the command line cannot
+// silently format nothing.
+func TestDiscoverMarkdownFiles_MissingPathHandling(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "README.md"), "# Title\n")
+
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	t.Run("a missing default path is skipped", func(t *testing.T) {
+		files, discoverErr := discoverMarkdownFiles(rootFS, root, defaultPaths, true)
+		if discoverErr != nil {
+			t.Fatalf("discoverMarkdownFiles() error: %v", discoverErr)
+		}
+		if len(files) != 1 || files[0] != "README.md" {
+			t.Errorf("files = %v, want only README.md", files)
+		}
+	})
+
+	t.Run("a missing explicit path is an error", func(t *testing.T) {
+		if _, discoverErr := discoverMarkdownFiles(rootFS, root, []string{"nope"}, false); discoverErr == nil {
+			t.Error("discoverMarkdownFiles() error = nil, want an error for an explicit missing path")
+		}
+	})
+}
+
+// TestDiscoverMarkdownFiles_FindsMDX verifies that the Astro site's .mdx pages
+// are discovered, both when named directly and when reached by walking a
+// directory. The walk previously matched .md alone, which is why the site's
+// tables were aligned by hand; the pipe-table syntax is identical in both.
+func TestDiscoverMarkdownFiles_FindsMDX(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "page.mdx"), "# Page\n")
+	writeTestFile(t, filepath.Join(root, "site", "en", "guide.mdx"), "# Guide\n")
+	writeTestFile(t, filepath.Join(root, "site", "es", "guia.mdx"), "# Guia\n")
+	writeTestFile(t, filepath.Join(root, "site", "notes.md"), "# Notes\n")
+	writeTestFile(t, filepath.Join(root, "site", "styles.css"), "body{}\n")
+
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	tests := []struct {
+		name  string
+		paths []string
+		want  []string
+	}{
+		{
+			name:  "a directly named .mdx file",
+			paths: []string{"page.mdx"},
+			want:  []string{"page.mdx"},
+		},
+		{
+			name:  "walking a directory picks up .mdx and .md, and nothing else",
+			paths: []string{"site"},
+			want: []string{
+				filepath.Join("site", "en", "guide.mdx"),
+				filepath.Join("site", "es", "guia.mdx"),
+				filepath.Join("site", "notes.md"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, discoverErr := discoverMarkdownFiles(rootFS, root, tt.paths, false)
+			if discoverErr != nil {
+				t.Fatalf("discoverMarkdownFiles() error: %v", discoverErr)
+			}
+			if strings.Join(got, "|") != strings.Join(tt.want, "|") {
+				t.Errorf("files = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

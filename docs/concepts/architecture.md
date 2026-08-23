@@ -79,7 +79,7 @@ graph TD
         COMP[completions<br/>17 completion types]
         PROG[progress<br/>Progress notifications]
         ELICIT[elicitation<br/>User input client]
-        ICN[icons<br/>50 SVG domain icons]
+        ICN[icons<br/>50 domain icons + brand mark]
         SRV[MCP Server<br/>go-sdk/mcp v1.7.0]
         STDIO[StdioTransport]
         HTTP[StreamableHTTPHandler]

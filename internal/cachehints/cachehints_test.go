@@ -123,8 +123,11 @@ func TestMiddleware_ResourcesRead_TTLDependsOnURI(t *testing.T) {
 		wantTTL int
 	}{
 		{"workflow_guide", readRequest("gitlab://guides/git-workflow"), 3600000},
-		{"dynamic_schema_index", readRequest("gitlab://schema/dynamic/"), 3600000},
-		{"meta_schema_detail", readRequest("gitlab://schema/meta/gitlab_issue/list"), 3600000},
+		// The legacy schema resources are never registered by the server, and
+		// were they wired up they would be catalog-derived rather than static,
+		// so they get no static freshness window here.
+		{"dynamic_schema_index", readRequest("gitlab://schema/dynamic/"), 0},
+		{"meta_schema_detail", readRequest("gitlab://schema/meta/gitlab_issue/list"), 0},
 		{"live_project", readRequest("gitlab://project/42"), 0},
 		{"live_user", readRequest("gitlab://user/current"), 0},
 		{"nil_request", nil, 0},
