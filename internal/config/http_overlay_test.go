@@ -3,6 +3,8 @@
 package config
 
 import (
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -272,35 +274,35 @@ func presentVariableCases() []presentVariableCase {
 // value is an error rather than a silent fallback, and that the message names
 // the variable so a typo in a deployment manifest is self-diagnosing.
 func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
-	tests := []struct{ name, value string }{
-		{"TOOL_SURFACE", "bogus"},
-		{"META_TOOLS", "bogus"},
-		{"CAPABILITY_SURFACE", "bogus"},
-		{"META_PARAM_SCHEMA", "bogus"},
-		{"GITLAB_TIER", "bogus"},
-		{"GITLAB_ENTERPRISE", "bogus"},
-		{"GITLAB_SKIP_TLS_VERIFY", "bogus"},
-		{"GITLAB_READ_ONLY", "bogus"},
-		{"MAX_HTTP_CLIENTS", "bogus"},
-		{"SESSION_TIMEOUT", "bogus"},
-		{"POOL_IDLE_TIMEOUT", "bogus"},
-		{"SESSION_REVALIDATE_INTERVAL", "bogus"},
-		{"OAUTH_CACHE_TTL", "bogus"},
-		{"RATE_LIMIT_RPS", "bogus"},
-		{"RATE_LIMIT_BURST", "bogus"},
-		{"AUTO_UPDATE_INTERVAL", "bogus"},
-		{"AUTO_UPDATE_TIMEOUT", "bogus"},
-		{"POOL_IDLE_TIMEOUT_over_max", "48h"},
+	tests := []struct {
+		name    string
+		value   string
+		wantMsg string
+	}{
+		{"TOOL_SURFACE", "bogus", "TOOL_SURFACE"},
+		{"META_TOOLS", "bogus", "META_TOOLS"},
+		{"CAPABILITY_SURFACE", "bogus", "CAPABILITY_SURFACE"},
+		{"META_PARAM_SCHEMA", "bogus", "META_PARAM_SCHEMA"},
+		{"GITLAB_TIER", "bogus", "GITLAB_TIER"},
+		{"GITLAB_ENTERPRISE", "bogus", "GITLAB_ENTERPRISE"},
+		{"GITLAB_SKIP_TLS_VERIFY", "bogus", "GITLAB_SKIP_TLS_VERIFY"},
+		{"GITLAB_READ_ONLY", "bogus", "GITLAB_READ_ONLY"},
+		{"MAX_HTTP_CLIENTS", "bogus", "MAX_HTTP_CLIENTS"},
+		{"SESSION_TIMEOUT", "bogus", "SESSION_TIMEOUT"},
+		{"POOL_IDLE_TIMEOUT", "bogus", "POOL_IDLE_TIMEOUT"},
+		{"SESSION_REVALIDATE_INTERVAL", "bogus", "SESSION_REVALIDATE_INTERVAL"},
+		{"OAUTH_CACHE_TTL", "bogus", "OAUTH_CACHE_TTL"},
+		{"RATE_LIMIT_RPS", "bogus", "RATE_LIMIT_RPS"},
+		{"RATE_LIMIT_BURST", "bogus", "RATE_LIMIT_BURST"},
+		{"AUTO_UPDATE_INTERVAL", "bogus", "AUTO_UPDATE_INTERVAL"},
+		{"AUTO_UPDATE_TIMEOUT", "bogus", "AUTO_UPDATE_TIMEOUT"},
+		{"POOL_IDLE_TIMEOUT", "48h", "exceeds maximum"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name+"="+tt.value, func(t *testing.T) {
 			clearOverlayEnv(t)
-			name := tt.name
-			if name == "POOL_IDLE_TIMEOUT_over_max" {
-				name = "POOL_IDLE_TIMEOUT"
-			}
-			t.Setenv(name, tt.value)
+			t.Setenv(tt.name, tt.value)
 
 			overlay, err := LoadHTTPEnvOverlay()
 			if err == nil {
@@ -308,6 +310,11 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 			}
 			if overlay != nil {
 				t.Errorf("overlay = %+v, want nil alongside the error", overlay)
+			}
+			// The message has to be self-diagnosing: a bare strconv error
+			// would leave an operator hunting for which variable is wrong.
+			if !strings.Contains(err.Error(), tt.wantMsg) {
+				t.Errorf("error = %q, want it to mention %q", err, tt.wantMsg)
 			}
 		})
 	}
@@ -356,7 +363,13 @@ func clearOverlayEnv(t *testing.T) {
 		"AUTH_MODE", "OAUTH_CACHE_TTL", "RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
 		"AUTO_UPDATE", "AUTO_UPDATE_REPO", "AUTO_UPDATE_INTERVAL", "AUTO_UPDATE_TIMEOUT",
 	} {
+		// t.Setenv registers the restore; unsetting afterwards makes the
+		// variable genuinely absent rather than present-and-empty, which is
+		// the state these tests claim to exercise.
 		t.Setenv(name, "")
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatalf("unset %s: %v", name, err)
+		}
 	}
 }
 

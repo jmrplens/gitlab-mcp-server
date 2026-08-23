@@ -98,6 +98,37 @@ func TestMarshalModelFacing_KeepsEverythingElse(t *testing.T) {
 	}
 }
 
+// TestMarshalModelFacing_MarshalErrorsSurface verifies the error return, which
+// nothing else exercises. A channel cannot be serialized, so it reaches the
+// error path through both the typed branches and the default one.
+func TestMarshalModelFacing_MarshalErrorsSurface(t *testing.T) {
+	tests := []struct {
+		name  string
+		entry any
+	}{
+		{
+			name:  "a tool whose input schema cannot be serialized",
+			entry: &mcp.Tool{Name: "gitlab_broken", InputSchema: make(chan int)},
+		},
+		{
+			name:  "an unknown type that cannot be serialized",
+			entry: make(chan int),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			raw, err := marshalModelFacing(tt.entry)
+			if err == nil {
+				t.Fatalf("marshalModelFacing() error = nil, want a marshal error; raw = %s", raw)
+			}
+			if raw != nil {
+				t.Errorf("raw = %s, want nil alongside the error", raw)
+			}
+		})
+	}
+}
+
 // TestMarshalModelFacing_UnknownTypePassesThrough verifies the default branch,
 // so a result type without a presentation field still measures rather than
 // silently returning nothing.
