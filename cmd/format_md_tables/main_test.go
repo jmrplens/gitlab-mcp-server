@@ -465,3 +465,55 @@ func TestDiscoverMarkdownFiles_MissingPathHandling(t *testing.T) {
 		}
 	})
 }
+
+// TestDiscoverMarkdownFiles_FindsMDX verifies that the Astro site's .mdx pages
+// are discovered, both when named directly and when reached by walking a
+// directory. The walk previously matched .md alone, which is why the site's
+// tables were aligned by hand; the pipe-table syntax is identical in both.
+func TestDiscoverMarkdownFiles_FindsMDX(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "page.mdx"), "# Page\n")
+	writeTestFile(t, filepath.Join(root, "site", "en", "guide.mdx"), "# Guide\n")
+	writeTestFile(t, filepath.Join(root, "site", "es", "guia.mdx"), "# Guia\n")
+	writeTestFile(t, filepath.Join(root, "site", "notes.md"), "# Notes\n")
+	writeTestFile(t, filepath.Join(root, "site", "styles.css"), "body{}\n")
+
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	tests := []struct {
+		name  string
+		paths []string
+		want  []string
+	}{
+		{
+			name:  "a directly named .mdx file",
+			paths: []string{"page.mdx"},
+			want:  []string{"page.mdx"},
+		},
+		{
+			name:  "walking a directory picks up .mdx and .md, and nothing else",
+			paths: []string{"site"},
+			want: []string{
+				filepath.Join("site", "en", "guide.mdx"),
+				filepath.Join("site", "es", "guia.mdx"),
+				filepath.Join("site", "notes.md"),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, discoverErr := discoverMarkdownFiles(rootFS, root, tt.paths, false)
+			if discoverErr != nil {
+				t.Fatalf("discoverMarkdownFiles() error: %v", discoverErr)
+			}
+			if strings.Join(got, "|") != strings.Join(tt.want, "|") {
+				t.Errorf("files = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

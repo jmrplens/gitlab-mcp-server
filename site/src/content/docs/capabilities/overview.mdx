@@ -59,7 +59,12 @@ Capability support varies by MCP client, and GitLab MCP Server adapts automatica
 | Progress    | ✅              | ✅               | ✅      | ✅           |
 | Completions | ✅              | ✅               | ❓      | ✅           |
 | Elicitation | ✅              | ❌               | ❌      | ✅           |
-| Icons       | ✅              | ✅               | ✅      | ✅           |
+| Icons¹      | ❌              | ✅               | ❓      | ❌           |
+
+¹ Icons are not a negotiated capability: the server always attaches them and a
+client that cannot render them simply ignores them, losing nothing functional.
+The column therefore records whether a client _renders_ icons, not whether it
+declares support. See [Icons](icons/) for the full client matrix.
 
 :::note
 Client support evolves rapidly. Check your MCP client's documentation for the latest capability support.
