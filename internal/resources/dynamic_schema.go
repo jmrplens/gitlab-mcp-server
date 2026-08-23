@@ -74,7 +74,7 @@ func registerDynamicSchemaIndex(server *mcp.Server, catalog *actioncatalog.Catal
 		Title:       "Dynamic Action Index",
 		MIMEType:    mimeJSON,
 		Description: "Catalog of canonical dynamic action IDs accepted by gitlab_execute_action. Use gitlab://schema/dynamic/{action} to fetch an action-specific params schema by domain.action ID.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		return marshalResourceJSON(buildDynamicSchemaIndex(catalog))
@@ -91,7 +91,7 @@ func registerDynamicSchemaTemplate(server *mcp.Server, catalog *actioncatalog.Ca
 		Title:       "Dynamic Action Schema",
 		MIMEType:    mimeJSON,
 		Description: "JSON Schema for the params object of a canonical dynamic action ID. Replace {action} with a domain.action ID such as project.get or merge_request.create.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		return readDynamicSchemaResource(catalog, req.Params.URI)

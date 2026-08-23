@@ -743,6 +743,7 @@
       "mimeType": "text/markdown",
       "annotations": {
         "audience": [
+          "user",
           "assistant"
         ],
         "priority": 0.6
@@ -756,6 +757,7 @@
       "mimeType": "text/markdown",
       "annotations": {
         "audience": [
+          "user",
           "assistant"
         ],
         "priority": 0.6
@@ -769,6 +771,7 @@
       "mimeType": "application/json",
       "annotations": {
         "audience": [
+          "user",
           "assistant"
         ],
         "priority": 0.6
@@ -782,6 +785,7 @@
       "mimeType": "text/markdown",
       "annotations": {
         "audience": [
+          "user",
           "assistant"
         ],
         "priority": 0.6
@@ -795,6 +799,7 @@
       "mimeType": "application/json",
       "annotations": {
         "audience": [
+          "user",
           "assistant"
         ],
         "priority": 0.4
@@ -808,6 +813,7 @@
       "mimeType": "text/markdown",
       "annotations": {
         "audience": [
+          "user",
           "assistant"
         ],
         "priority": 0.6
@@ -821,6 +827,7 @@
       "mimeType": "text/markdown",
       "annotations": {
         "audience": [
+          "user",
           "assistant"
         ],
         "priority": 0.6
@@ -834,6 +841,7 @@
       "mimeType": "application/json",
       "annotations": {
         "audience": [
+          "user",
           "assistant"
         ],
         "priority": 0.4

@@ -59,7 +59,7 @@ func registerMetaSchemaIndex(server *mcp.Server, routes map[string]toolutil.Acti
 		Title:       "Meta-Tool Schema Index",
 		MIMEType:    mimeJSON,
 		Description: "Catalog of every registered meta-tool and its actions. Use the gitlab://schema/meta/{tool}/{action} template resource to fetch the JSON Schema for a specific action's params.",
-		Annotations: toolutil.ContentList,
+		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		return marshalResourceJSON(buildMetaSchemaIndex(routes))
@@ -77,7 +77,7 @@ func registerMetaSchemaTemplate(server *mcp.Server, routes map[string]toolutil.A
 		Title:       "Meta-Tool Action Schema",
 		MIMEType:    mimeJSON,
 		Description: "JSON Schema for the `params` property of a specific meta-tool action. Replace {tool} with a meta-tool name (e.g. gitlab_merge_request) and {action} with one of its actions (e.g. create). Use the `gitlab://schema/meta/` index resource to enumerate valid combinations.",
-		Annotations: toolutil.ContentDetail,
+		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		tool, action := parseMetaSchemaURI(req.Params.URI)

@@ -97,3 +97,24 @@ var (
 		Priority: 0.8,
 	}
 )
+
+// Resource-facing annotation presets.
+//
+// These mirror the priorities of the operation presets above but add the
+// "user" role, and the difference is deliberate. The assistant-only audience
+// exists to stop a client rendering a tool result twice, once from Content and
+// once from StructuredContent. A resource has no such duality: it is content a
+// person asks for by URI — a workflow guide, a project's issues — so telling
+// the client not to show it to that person describes it wrongly.
+var (
+	// ResourceList marks list-shaped resources, readable by user and model.
+	ResourceList = &mcp.Annotations{
+		Audience: []mcp.Role{"user", "assistant"},
+		Priority: 0.4,
+	}
+	// ResourceDetail marks single-entity resources, readable by user and model.
+	ResourceDetail = &mcp.Annotations{
+		Audience: []mcp.Role{"user", "assistant"},
+		Priority: 0.6,
+	}
+)

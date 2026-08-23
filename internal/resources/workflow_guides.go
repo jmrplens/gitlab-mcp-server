@@ -34,7 +34,7 @@ func RegisterWorkflowGuides(server *mcp.Server) {
 			// hosts can budget context for it up front.
 			Size:        int64(len(guide.content)),
 			Description: guide.description,
-			Annotations: toolutil.ContentDetail,
+			Annotations: toolutil.ResourceDetail,
 		}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 			return &mcp.ReadResourceResult{
 				Contents: []*mcp.ResourceContents{{
