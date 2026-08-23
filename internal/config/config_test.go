@@ -1787,3 +1787,45 @@ func TestResolveTierEnv_InvalidEnterpriseValue(t *testing.T) {
 		t.Errorf("resolveTierEnv err = %v, want invalid GITLAB_ENTERPRISE error", err)
 	}
 }
+
+// TestLoad_DisableableDurations_AcceptZero verifies that the two settings
+// documented as "0 disables" actually accept 0 from the environment.
+//
+// Both route through parseDisableableDurationEnv rather than the shared
+// parseDuration, which rejects any non-positive value. Without that split the
+// documented way to switch these off failed at startup, while the equivalent
+// CLI flags accepted it. SESSION_TIMEOUT is covered as a control: it documents
+// no zero behavior, so zero must still be an error there.
+func TestLoad_DisableableDurations_AcceptZero(t *testing.T) {
+	t.Setenv("GITLAB_URL", testHTTPExampleURL)
+	t.Setenv("GITLAB_TOKEN", "test")
+
+	t.Run("POOL_IDLE_TIMEOUT=0 disables idle eviction", func(t *testing.T) {
+		t.Setenv("POOL_IDLE_TIMEOUT", "0")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf(fmtLoadErr, err)
+		}
+		if cfg.PoolIdleTimeout != 0 {
+			t.Errorf("PoolIdleTimeout = %v, want 0", cfg.PoolIdleTimeout)
+		}
+	})
+
+	t.Run("SESSION_REVALIDATE_INTERVAL=0 disables revalidation", func(t *testing.T) {
+		t.Setenv("SESSION_REVALIDATE_INTERVAL", "0")
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf(fmtLoadErr, err)
+		}
+		if cfg.RevalidateInterval != 0 {
+			t.Errorf("RevalidateInterval = %v, want 0", cfg.RevalidateInterval)
+		}
+	})
+
+	t.Run("zero stays invalid where it is not documented", func(t *testing.T) {
+		t.Setenv("SESSION_TIMEOUT", "0")
+		if _, err := Load(); err == nil {
+			t.Error("Load() error = nil, want an error for SESSION_TIMEOUT=0")
+		}
+	})
+}

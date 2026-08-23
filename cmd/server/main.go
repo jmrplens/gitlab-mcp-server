@@ -253,7 +253,7 @@ func main() {
 	flag.DurationVar(&hcfg.autoUpdateInterval, "auto-update-interval", config.DefaultAutoUpdateInterval, "How often to check for updates")
 	flag.DurationVar(&hcfg.autoUpdateTimeout, "auto-update-timeout", config.DefaultAutoUpdateTimeout, "Timeout for startup/background update checks (range 5s\u201310m)")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval (0 to disable)")
-	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token server after this long unused (0 to disable)")
+	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token-and-URL server entry after this long unused (0 to disable)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
@@ -382,7 +382,7 @@ FLAGS
   -ignore-scopes            Skip PAT scope detection, register all tools (default false)
   -max-http-clients int     Maximum concurrent client sessions (default %d)
   -session-timeout duration Idle session timeout (default %s)
-  -pool-idle-timeout dur    Reclaim a pooled per-token server after this long unused (default %s, 0 to disable)
+  -pool-idle-timeout dur    Reclaim a pooled per-token-and-URL server entry after this long unused (default %s, 0 to disable)
   -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure so -session-timeout governs
   -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28). Use -stateless=false for legacy stateful sessions
   -json-response            Return application/json responses instead of SSE (default false)

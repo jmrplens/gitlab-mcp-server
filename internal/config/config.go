@@ -143,7 +143,7 @@ type Config struct {
 	MaxHTTPClients     int           // Maximum unique tokens in the server pool (HTTP mode only)
 	SessionTimeout     time.Duration // Idle MCP session timeout (HTTP mode only)
 	RevalidateInterval time.Duration // Token re-validation interval (HTTP mode only)
-	// PoolIdleTimeout is how long a pooled per-token server may go unused
+	// PoolIdleTimeout is how long a pooled per-token-and-URL server entry may go unused
 	// before it is reclaimed; 0 keeps entries until the pool's size bound
 	// evicts them (HTTP mode only).
 	PoolIdleTimeout time.Duration
@@ -477,13 +477,26 @@ func loadLimitEnv() (limitEnv, error) {
 	if values.sessionTimeout, err = parseBoundedDurationEnv("SESSION_TIMEOUT", DefaultSessionTimeout, MaxSessionTimeout); err != nil {
 		return limitEnv{}, err
 	}
-	if values.poolIdleTimeout, err = parseBoundedDurationEnv("POOL_IDLE_TIMEOUT", DefaultPoolIdleTimeout, MaxPoolIdleTimeout); err != nil {
-		return values, err
+	if values.poolIdleTimeout, err = parseDisableableDurationEnv("POOL_IDLE_TIMEOUT", DefaultPoolIdleTimeout, MaxPoolIdleTimeout); err != nil {
+		return limitEnv{}, err
 	}
-	if values.revalidateInterval, err = parseBoundedDurationEnv("SESSION_REVALIDATE_INTERVAL", DefaultRevalidateInterval, MaxRevalidateInterval); err != nil {
+	if values.revalidateInterval, err = parseDisableableDurationEnv("SESSION_REVALIDATE_INTERVAL", DefaultRevalidateInterval, MaxRevalidateInterval); err != nil {
 		return limitEnv{}, err
 	}
 	return values, nil
+}
+
+// parseDisableableDurationEnv parses a bounded duration whose zero value is a
+// meaningful setting rather than an error: both POOL_IDLE_TIMEOUT and
+// SESSION_REVALIDATE_INTERVAL document "0" as "turn this off", and their
+// consumers already treat a non-positive value that way. The shared
+// [parseDuration] rejects "0" outright, so routing these through
+// [parseBoundedDurationEnv] made a documented setting fail at startup.
+func parseDisableableDurationEnv(name string, defaultValue, maxValue time.Duration) (time.Duration, error) {
+	if strings.TrimSpace(os.Getenv(name)) == "0" {
+		return 0, nil
+	}
+	return parseBoundedDurationEnv(name, defaultValue, maxValue)
 }
 
 func parseBoundedDurationEnv(name string, defaultValue, maxValue time.Duration) (time.Duration, error) {

@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,083 |
-| Unit test functions                                   | 11,706 |
+| Total test functions                                  | 12,085 |
+| Unit test functions                                   | 11,708 |
 | E2E test functions                                    |    377 |
 | cmd test functions                                    |    982 |
 | Test files (internal/)                                |    463 |
@@ -37,7 +37,7 @@
 | -------------------------------------- | -----: | ----: |
 | `TestFunc_Scenario` (2-part)           | 10,582 | 87.6% |
 | `TestFunc` (no underscore)             |    963 |  8.0% |
-| `TestFunc_Scenario_Expected` (3+ part) |    538 |  4.5% |
+| `TestFunc_Scenario_Expected` (3+ part) |    540 |  4.5% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,088 |        104 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,090 |        104 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (175) |          8,351 |        345 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            377 |        171 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |            982 |         72 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,083** |    **706** |                                                                                                 |
+| **Total**               |     **12,085** |    **706** |                                                                                                 |
 
 ### Core Packages
 
@@ -58,11 +58,11 @@
 | ------------ | --------: | -------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | auditclient  |         2 |   100.0% | Package auditclient creates GitLab clients for command-line audit tools.                                                                                                                                          |
 | autoupdate   |       122 |    95.4% | Package autoupdate provides self-update capability for the gitlab-mcp-server MCP server.                                                                                                                          |
-| cachehints   |         7 |   100.0% | Package cachehints applies SEP-2549 cache hints (ttlMs/cacheScope) to MCP results.                                                                                                                                |
+| cachehints   |         8 |   100.0% | Package cachehints applies SEP-2549 cache hints (ttlMs/cacheScope) to MCP results.                                                                                                                                |
 | clientcompat |        18 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                           |
 | cmdutil      |         5 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                         |
 | completions  |        96 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                          |
-| config       |        74 |    99.3% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                  |
+| config       |        75 |    99.4% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                  |
 | edition      |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                     |
 | elicitation  |       100 |    84.9% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                      |
 | gitlab       |        44 |    92.2% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                           |
@@ -74,7 +74,7 @@
 | testutil     |        34 |    88.7% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
 | toolutil     |       705 |    98.4% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard       |       327 |   100.0% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal** | **2,088** |          |                                                                                                                                                                                                                   |
+| **Subtotal** | **2,090** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -342,7 +342,7 @@
 | clientcompat |   100.0% |
 | cmdutil      |   100.0% |
 | completions  |   100.0% |
-| config       |    99.3% |
+| config       |    99.4% |
 | edition      |    87.0% |
 | elicitation  |    84.9% |
 | gitlab       |    92.2% |

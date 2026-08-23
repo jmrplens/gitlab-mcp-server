@@ -125,8 +125,6 @@ func TestMiddleware_ResourcesRead_TTLDependsOnURI(t *testing.T) {
 		{"workflow_guide", readRequest("gitlab://guides/git-workflow"), 3600000},
 		{"dynamic_schema_index", readRequest("gitlab://schema/dynamic/"), 3600000},
 		{"meta_schema_detail", readRequest("gitlab://schema/meta/gitlab_issue/list"), 3600000},
-		{"tool_manifest", readRequest("gitlab://tools"), 3600000},
-		{"tool_manifest_detail", readRequest("gitlab://tools/gitlab_find_action"), 3600000},
 		{"live_project", readRequest("gitlab://project/42"), 0},
 		{"live_user", readRequest("gitlab://user/current"), 0},
 		{"nil_request", nil, 0},
@@ -205,5 +203,52 @@ func TestMiddleware_ErrorPassthrough(t *testing.T) {
 	_, err := cachehints.Middleware(cachehints.Options{})(failing)(context.Background(), "tools/list", nil)
 	if !errors.Is(err, wantErr) {
 		t.Errorf("err = %v, want %v", err, wantErr)
+	}
+}
+
+// TestMiddleware_ToolManifestRead_TTLFollowsTierSource verifies that reading
+// gitlab://tools and gitlab://tools/{id} gets the tool catalog's window rather
+// than the static one. Both are served from memory, but they describe the
+// visible catalog and vary with the same tier input as tools/list; caching the
+// manifest for an hour while the tool list refreshed every five minutes would
+// let a client hold two disagreeing views of the same catalog.
+func TestMiddleware_ToolManifestRead_TTLFollowsTierSource(t *testing.T) {
+	uris := []struct {
+		name string
+		uri  string
+	}{
+		{"manifest_index", "gitlab://tools"},
+		{"manifest_detail", "gitlab://tools/gitlab_find_action"},
+	}
+	tierSources := []struct {
+		name    string
+		opts    cachehints.Options
+		wantTTL int
+	}{
+		{"detected tier keeps the short window", cachehints.Options{TierPinned: false}, 300000},
+		{"configured tier earns the long window", cachehints.Options{TierPinned: true}, 3600000},
+	}
+
+	for _, u := range uris {
+		for _, ts := range tierSources {
+			t.Run(u.name+"/"+ts.name, func(t *testing.T) {
+				res, err := cachehints.Middleware(ts.opts)(stubHandler(&mcp.ReadResourceResult{}))(
+					context.Background(), "resources/read", readRequest(u.uri),
+				)
+				if err != nil {
+					t.Fatalf("handler: %v", err)
+				}
+				cacheable, ok := res.(mcp.CacheableResult)
+				if !ok {
+					t.Fatalf("result %T does not implement CacheableResult", res)
+				}
+				if got := cacheable.GetCacheScope(); got != "private" {
+					t.Errorf("CacheScope = %q, want private", got)
+				}
+				if got := cacheable.GetTTLMs(); got != ts.wantTTL {
+					t.Errorf("TTLMs = %d, want %d", got, ts.wantTTL)
+				}
+			})
+		}
 	}
 }
