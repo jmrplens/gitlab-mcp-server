@@ -25,18 +25,18 @@ GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition 
 
 | Feature                                              | Community (CE) | Enterprise (EE) |
 | ---------------------------------------------------- | :------------: | :-------------: |
-| Projects, Issues, MRs, Pipelines, CI/CD              |       ✅       |       ✅        |
-| Wikis, Labels, Milestones, Releases                  |       ✅       |       ✅        |
-| Users, Groups, Members, Search                       |       ✅       |       ✅        |
-| Deployments, Environments, Packages                  |       ✅       |       ✅        |
-| {stats.meta.base} base meta-tools                    |       ✅       |       ✅        |
-| {stats.resources} resources, {stats.prompts} prompts |       ✅       |       ✅        |
-| Merge Trains                                         |       ❌       |       ✅        |
-| DORA Metrics                                         |       ❌       |       ✅        |
-| Vulnerability Management                             |       ❌       |       ✅        |
-| Audit Events                                         |       ❌       |       ✅        |
-| Compliance Policies                                  |       ❌       |       ✅        |
-| +16 enterprise meta-tools                            |       ❌       |       ✅        |
+| Projects, Issues, MRs, Pipelines, CI/CD              |       ✅        |        ✅        |
+| Wikis, Labels, Milestones, Releases                  |       ✅        |        ✅        |
+| Users, Groups, Members, Search                       |       ✅        |        ✅        |
+| Deployments, Environments, Packages                  |       ✅        |        ✅        |
+| {stats.meta.base} base meta-tools                    |       ✅        |        ✅        |
+| {stats.resources} resources, {stats.prompts} prompts |       ✅        |        ✅        |
+| Merge Trains                                         |       ❌        |        ✅        |
+| DORA Metrics                                         |       ❌        |        ✅        |
+| Vulnerability Management                             |       ❌        |        ✅        |
+| Audit Events                                         |       ❌        |        ✅        |
+| Compliance Policies                                  |       ❌        |        ✅        |
+| +16 enterprise meta-tools                            |       ❌        |        ✅        |
 
 To enable enterprise features in stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`. In HTTP mode, set `--tier=premium`/`--tier=ultimate` to force the Enterprise/Premium catalog, or omit it to let the server auto-detect CE/EE per token+URL entry when GitLab reports edition. The legacy `GITLAB_ENTERPRISE=true` (stdio) and `--enterprise` (HTTP) flags are still honored for back-compat.
 
@@ -59,16 +59,16 @@ Any client supporting the Model Context Protocol stdio transport can use this se
 
 | Client                     | Transport | Status |
 | -------------------------- | --------- | :----: |
-| VS Code + GitHub Copilot   | stdio     |   ✅   |
-| Claude Desktop             | stdio     |   ✅   |
-| Cursor                     | stdio     |   ✅   |
-| Claude Code (CLI)          | stdio     |   ✅   |
-| Windsurf                   | stdio     |   ✅   |
-| JetBrains IDEs             | stdio     |   ✅   |
-| Zed                        | stdio     |   ✅   |
-| Kiro                       | stdio     |   ✅   |
-| OpenAI Codex               | stdio     |   ✅   |
-| Any Streamable HTTP client | HTTP      |   ✅   |
+| VS Code + GitHub Copilot   | stdio     |   ✅    |
+| Claude Desktop             | stdio     |   ✅    |
+| Cursor                     | stdio     |   ✅    |
+| Claude Code (CLI)          | stdio     |   ✅    |
+| Windsurf                   | stdio     |   ✅    |
+| JetBrains IDEs             | stdio     |   ✅    |
+| Zed                        | stdio     |   ✅    |
+| Kiro                       | stdio     |   ✅    |
+| OpenAI Codex               | stdio     |   ✅    |
+| Any Streamable HTTP client | HTTP      |   ✅    |
 
 ### Per-client compatibility profiles
 
@@ -93,8 +93,8 @@ Keep the default `dynamic` tool surface for clients with tool-count limits (Curs
 
 GitLab MCP Server implements the full set of MCP capabilities beyond tools — resources, prompts, completions, elicitation, and progress notifications — so compatible clients get contextual data, prompt templates, and argument autocompletion in addition to tool calls.
 
-| Capability  |                                                                                                                      Supported                                                                                                                       |
-| ----------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| Capability  |                                                                                                                      Supported                                                                                                                      |
+| ----------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 | Tools       | ✅ (up to {stats.tools.ultimate_self_managed} self-managed Enterprise / {stats.tools.gitlab_com} GitLab.com + Orbit individual / {stats.meta.base} base, {stats.meta.self_managed_enterprise} self-managed, {stats.meta.gitlab_com} GitLab.com meta) |
 | Resources   |                                                                                                                ✅ ({stats.resources})                                                                                                                |
 | Prompts     |                                                                                                                 ✅ ({stats.prompts})                                                                                                                 |

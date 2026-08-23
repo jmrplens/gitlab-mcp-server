@@ -102,7 +102,9 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 
 HTTP clients control only their GitLab token and, in multi-instance mode, the `GITLAB-URL` selector. Server policy options such as `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode`, and `--trusted-proxy-header` are fixed by the MCP server process and cannot be changed per user, session, or JSON-RPC request.
 
-If a client sends config-like headers such as `TOOL-SURFACE`, `META-TOOLS`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, or `GITLAB-SAFE-MODE`, the server ignores them and logs their option names in `ignored_options` without logging their values. Deprecated `META-TOOLS` headers are also identified in `deprecated_options`.
+If a client sends config-like headers such as `TOOL-SURFACE`, `META-TOOLS`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, `POOL-IDLE-TIMEOUT`, or `GITLAB-SAFE-MODE`, the server ignores them and logs their option names in `ignored_options` without logging their values. Deprecated `META-TOOLS` headers are also identified in `deprecated_options`.
+
+Server settings resolve in three layers, highest first: a CLI flag passed explicitly, then the matching environment variable, then the built-in default. All three are process-side; no client can reach any of them, so one user can never change behaviour for themselves or for anyone else.
 
 ## Authentication
 
@@ -206,7 +208,7 @@ Stateless is the **default** transport model, following the sessionless design i
 - GET and DELETE on the MCP endpoint return `405 Method Not Allowed` (`Allow: POST`). `/health` and `/.well-known/*` endpoints are unaffected.
 - Synchronous server-initiated requests are unavailable. Clients on protocol `2026-07-28` keep full elicitation through multi-round-trip requests (MRTR), which travel inside the tool result; only legacy-protocol clients fall back to non-interactive alternatives (e.g. the `confirm` parameter for destructive actions).
 - `--session-timeout` has no effect: no session outlives its request.
-- The per-token server pool still applies, so repeated requests reuse a cached server instance.
+- The per-token-and-URL server pool still applies, so repeated requests reuse a cached server instance.
 
 Stateless mode suits load-balanced deployments where requests from one client may land on different replicas. Combine with `--json-response` for clients or gateways that prefer plain JSON bodies over SSE:
 
@@ -240,7 +242,7 @@ On the dynamic tool surface, the `action` property of `gitlab_execute_action` ca
 ## Session management
 
 :::note
-MCP session lifecycle (the `Mcp-Session-Id` handshake, idle expiry via `--session-timeout`, and DELETE termination) applies to **legacy stateful mode** (`--stateless=false`) only. In the default stateless mode there are no MCP sessions — the server pool below still applies, since pool entries are keyed by token, not by session.
+MCP session lifecycle (the `Mcp-Session-Id` handshake, idle expiry via `--session-timeout`, and DELETE termination) applies to **legacy stateful mode** (`--stateless=false`) only. In the default stateless mode there are no MCP sessions — the server pool below still applies, since pool entries are keyed by token and GitLab URL, not by session.
 :::
 
 ### Server pool architecture

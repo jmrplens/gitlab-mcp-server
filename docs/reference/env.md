@@ -71,7 +71,7 @@ These are checked by the elicitation subsystem. When the MCP client supports eli
 
 ## Optional — HTTP Mode (Server Pool)
 
-These variables configure the HTTP server pool when running in HTTP mode. In stdio mode, they are parsed but only used if the configuration is shared with HTTP mode logic.
+These variables configure the HTTP server pool. Each has a CLI flag counterpart, and the flag wins when it is passed explicitly — see [HTTP Mode Equivalents](#http-mode-equivalents) below. In stdio mode they are parsed but unused, since stdio runs a single server with no pool.
 
 | Variable                      | Default  | Description                                                                                                                                                                  |
 | ----------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -133,7 +133,15 @@ For self-managed GitLab, add `GITLAB_URL=https://gitlab.example.com`.
 
 ## HTTP Mode Equivalents
 
-In HTTP mode, configuration comes from CLI flags instead of environment variables. See [CLI Reference](cli.md) for the full flag list.
+In HTTP mode, configuration resolves in three layers, highest first:
+
+1. **A CLI flag passed explicitly on the command line.** Always wins.
+2. **The environment variable**, when the corresponding flag was not passed.
+3. **The built-in default.**
+
+Passing a flag whose value happens to equal the default still counts as choosing it, so the environment cannot override it. See [CLI Reference](cli.md) for the full flag list.
+
+Nothing in this table is reachable from a request. Clients control only their GitLab token and, when the server was started without `--gitlab-url`, the `GITLAB-URL` header; every other configuration header is ignored and reported in the `ignored_options` log field. See [Configuration Precedence](../guides/http-server-mode.md#configuration-precedence).
 
 | Environment Variable          | CLI Flag                 | Notes                                                                                                                                                                                                                                                                    |
 | ----------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

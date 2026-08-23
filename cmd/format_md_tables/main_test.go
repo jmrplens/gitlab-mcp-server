@@ -190,7 +190,7 @@ func TestDiscoverMarkdownFiles_SortsMarkdownFiles(t *testing.T) {
 	}
 	defer rootFS.Close()
 
-	files, err := discoverMarkdownFiles(rootFS, root, []string{"docs"})
+	files, err := discoverMarkdownFiles(rootFS, root, []string{"docs"}, false)
 	if err != nil {
 		t.Fatalf("discoverMarkdownFiles() error: %v", err)
 	}
@@ -431,4 +431,37 @@ func readTestFile(t *testing.T, path string) string {
 		t.Fatalf("read %s: %v", path, err)
 	}
 	return string(content)
+}
+
+// TestDiscoverMarkdownFiles_MissingPathHandling verifies the two ways a
+// missing path is treated. The default list describes this repository's
+// layout, so an absent entry — a checkout without the documentation site, or a
+// future layout change — is skipped rather than aborting the run. A path the
+// caller named explicitly still errors, so a typo on the command line cannot
+// silently format nothing.
+func TestDiscoverMarkdownFiles_MissingPathHandling(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "README.md"), "# Title\n")
+
+	rootFS, err := os.OpenRoot(root)
+	if err != nil {
+		t.Fatalf("open root: %v", err)
+	}
+	defer rootFS.Close()
+
+	t.Run("a missing default path is skipped", func(t *testing.T) {
+		files, discoverErr := discoverMarkdownFiles(rootFS, root, defaultPaths, true)
+		if discoverErr != nil {
+			t.Fatalf("discoverMarkdownFiles() error: %v", discoverErr)
+		}
+		if len(files) != 1 || files[0] != "README.md" {
+			t.Errorf("files = %v, want only README.md", files)
+		}
+	})
+
+	t.Run("a missing explicit path is an error", func(t *testing.T) {
+		if _, discoverErr := discoverMarkdownFiles(rootFS, root, []string{"nope"}, false); discoverErr == nil {
+			t.Error("discoverMarkdownFiles() error = nil, want an error for an explicit missing path")
+		}
+	})
 }

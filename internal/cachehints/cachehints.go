@@ -41,13 +41,21 @@ const (
 const scopePrivate = "private"
 
 // staticResourcePrefixes lists the URI prefixes served entirely from process
-// memory and independent of the catalog: workflow guides
-// ([resources.RegisterWorkflowGuides]) and the dynamic and meta action
-// schemas. Every other gitlab:// URI registered in internal/resources is
-// backed by a live GitLab API call, so it gets no freshness window.
+// memory and independent of the catalog. Only the workflow guides
+// ([resources.RegisterWorkflowGuides]) qualify: their content is a
+// compile-time constant, so no runtime input can change it. Every other
+// gitlab:// URI registered in internal/resources is backed by a live GitLab
+// API call, so it gets no freshness window.
+//
+// The legacy gitlab://schema/ resources are deliberately absent. The server
+// never registers them — RegisterMetaSchemaResources and
+// RegisterDynamicSchemaResources survive for isolated tests and audits, and
+// the tool manifest replaced them for clients — but listing them here would
+// also have been wrong on the merits: both are derived from the action
+// catalog, so they vary with the licensing tier exactly as the manifest does.
+// If they are ever wired up, they belong with the tool manifest below.
 var staticResourcePrefixes = []string{
 	"gitlab://guides/",
-	"gitlab://schema/",
 }
 
 // toolManifestPrefix covers gitlab://tools and gitlab://tools/{id}. Both are

@@ -103,7 +103,7 @@ introduced by [SEP-2567](https://github.com/modelcontextprotocol/modelcontextpro
   non-interactive error hints and the `confirm` parameter. See
   [Elicitation](../reference/capabilities/elicitation.md).
 - `--session-timeout` has no effect: no session outlives its request.
-- The per-token server pool still applies: repeated requests with the same
+- The per-token-and-URL server pool still applies: repeated requests with the same
   token and GitLab URL reuse a cached `*mcp.Server`, so stateless mode does
   not pay client-rebuild costs per request.
 
@@ -161,6 +161,8 @@ the request header, without parsing the JSON-RPC body.
 ### Configuration Precedence
 
 HTTP mode has a narrow request-controlled surface. GitLab identity always comes from the request token, and the GitLab instance comes from `GITLAB-URL` only when the server was started without `--gitlab-url`. All other MCP server settings are process policy and cannot be changed per user, per session, or per JSON-RPC request.
+
+Process policy itself resolves in three layers, highest first: a CLI flag passed explicitly, then the matching environment variable, then the built-in default. Passing a flag whose value happens to equal the default still counts as choosing it, so a stray environment variable cannot displace a deliberate command line. A client has no way to reach any of those layers, so one user can never change behaviour for themselves or for anyone else.
 
 | Configuration area                  | Source of truth                                                                                                                                                                                                        | Can a client override it?                   | Behavior when a client sends a matching header                                                                                                                                                                                       |
 | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

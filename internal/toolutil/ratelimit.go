@@ -22,8 +22,8 @@ import (
 // current behavior.
 //
 // The limiter shares a single bucket across the server. In HTTP mode each
-// per-token server instance from the pool gets its own RateLimiter, so the
-// limit is effectively per-token. In stdio mode the bucket is global to
+// server instance from the pool gets its own RateLimiter, so the limit is
+// effectively per token and GitLab URL. In stdio mode the bucket is global to
 // the single process.
 //
 // [rate.Limiter] is safe for concurrent use by design, so RateLimiter does

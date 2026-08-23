@@ -102,7 +102,9 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 
 Los clientes HTTP solo controlan su token de GitLab y, en modo multi-instancia, el selector `GITLAB-URL`. Las opciones de política del servidor como `--tool-surface`, `--capability-surface`, `--meta-param-schema`, `--rate-limit-rps`, `--read-only`, `--safe-mode`, `--auth-mode` y `--trusted-proxy-header` quedan fijadas por el proceso MCP y no pueden cambiarse por usuario, sesión ni petición JSON-RPC.
 
-Si un cliente envía cabeceras con aspecto de configuración, como `TOOL-SURFACE`, `META-TOOLS`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS` o `GITLAB-SAFE-MODE`, el servidor las ignora y registra sus nombres en `ignored_options` sin registrar sus valores. Las cabeceras deprecadas `META-TOOLS` también se identifican en `deprecated_options`.
+Si un cliente envía cabeceras con aspecto de configuración, como `TOOL-SURFACE`, `META-TOOLS`, `CAPABILITY-SURFACE`, `META-PARAM-SCHEMA`, `RATE-LIMIT-RPS`, `POOL-IDLE-TIMEOUT` o `GITLAB-SAFE-MODE`, el servidor las ignora y registra sus nombres en `ignored_options` sin registrar sus valores. Las cabeceras deprecadas `META-TOOLS` también se identifican en `deprecated_options`.
+
+La configuración del servidor se resuelve en tres capas, de mayor a menor prioridad: un flag de CLI pasado explícitamente, después la variable de entorno correspondiente y por último el valor por defecto. Las tres son del lado del proceso; ningún cliente puede alcanzarlas, así que un usuario nunca puede cambiar el comportamiento ni para sí mismo ni para los demás.
 
 ## Autenticación
 
@@ -206,7 +208,7 @@ El modo sin estado es el **predeterminado** y sigue el diseño sin sesiones intr
 - GET y DELETE sobre el endpoint MCP devuelven `405 Method Not Allowed` (`Allow: POST`). Los endpoints `/health` y `/.well-known/*` no se ven afectados.
 - Las peticiones síncronas iniciadas por el servidor no están disponibles. Los clientes con protocolo `2026-07-28` conservan la elicitación completa mediante peticiones multi-ronda (MRTR), que viajan dentro del resultado de la herramienta; solo los clientes con protocolo heredado recurren a las alternativas no interactivas (p. ej. el parámetro `confirm` para acciones destructivas).
 - `--session-timeout` no tiene efecto: ninguna sesión sobrevive a su petición.
-- El pool de servidores por token sigue aplicando, así que las peticiones repetidas reutilizan una instancia de servidor cacheada.
+- El pool de servidores por token y URL sigue aplicando, así que las peticiones repetidas reutilizan una instancia de servidor cacheada.
 
 El modo sin estado encaja en despliegues con balanceo de carga donde las peticiones de un cliente pueden aterrizar en réplicas distintas. Combínalo con `--json-response` para clientes o gateways que prefieren cuerpos JSON planos en lugar de SSE:
 
@@ -240,7 +242,7 @@ En la superficie dinámica de herramientas, la propiedad `action` de `gitlab_exe
 ## Gestión de sesiones
 
 :::note
-El ciclo de vida de sesión MCP (el intercambio `Mcp-Session-Id`, la expiración por inactividad con `--session-timeout` y la terminación con DELETE) aplica solo al **modo stateful heredado** (`--stateless=false`). En el modo sin estado por defecto no hay sesiones MCP — el pool de servidores descrito abajo sigue aplicando, porque sus entradas se indexan por token, no por sesión.
+El ciclo de vida de sesión MCP (el intercambio `Mcp-Session-Id`, la expiración por inactividad con `--session-timeout` y la terminación con DELETE) aplica solo al **modo stateful heredado** (`--stateless=false`). En el modo sin estado por defecto no hay sesiones MCP — el pool de servidores descrito abajo sigue aplicando, porque sus entradas se indexan por token y URL de GitLab, no por sesión.
 :::
 
 ### Arquitectura del pool de servidores

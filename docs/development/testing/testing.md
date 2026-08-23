@@ -18,24 +18,24 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,085 |
-| Unit test functions                                   | 11,708 |
+| Total test functions                                  | 12,092 |
+| Unit test functions                                   | 11,715 |
 | E2E test functions                                    |    377 |
-| cmd test functions                                    |    982 |
+| cmd test functions                                    |    989 |
 | Test files (internal/)                                |    463 |
-| Test files (cmd/)                                     |     72 |
+| Test files (cmd/)                                     |     73 |
 | Test files (test/e2e/suite/)                          |    171 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     18 |
-| Overall coverage (`go test ./internal/... ./cmd/...`) |  90.4% |
-| Overall coverage (`go test ./internal/...`)           |  95.6% |
-| Average package coverage                              |  94.9% |
+| Overall coverage (`go test ./internal/... ./cmd/...`) |  90.3% |
+| Overall coverage (`go test ./internal/...`)           |  95.5% |
+| Average package coverage                              |  94.8% |
 
 ### Naming Convention Stats
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,582 | 87.6% |
+| `TestFunc_Scenario` (2-part)           | 10,589 | 87.6% |
 | `TestFunc` (no underscore)             |    963 |  8.0% |
 | `TestFunc_Scenario_Expected` (3+ part) |    540 |  4.5% |
 
@@ -49,8 +49,8 @@
 | Tools orchestration     |            285 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (175) |          8,351 |        345 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            377 |        171 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |            982 |         72 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,085** |    **706** |                                                                                                 |
+| cmd packages            |            989 |         73 | server entry point and developer command utilities                                              |
+| **Total**               |     **12,092** |    **707** |                                                                                                 |
 
 ### Core Packages
 
@@ -62,7 +62,7 @@
 | clientcompat |        18 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                           |
 | cmdutil      |         5 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                         |
 | completions  |        96 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                          |
-| config       |        75 |    99.4% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                  |
+| config       |        75 |    75.9% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                  |
 | edition      |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                     |
 | elicitation  |       100 |    84.9% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                      |
 | gitlab       |        44 |    92.2% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                           |
@@ -319,7 +319,7 @@
 | cmd/eval_mcp_surfaces/internal/evaluator       |    80.5% |
 | cmd/eval_mcp_surfaces/internal/evaluator/cases |    99.6% |
 | cmd/eval_mcp_surfaces/internal/termio          |    45.7% |
-| cmd/format_md_tables                           |    93.0% |
+| cmd/format_md_tables                           |    93.3% |
 | cmd/gen_action_catalog_manifest                |    35.6% |
 | cmd/gen_docker_tools                           |    88.3% |
 | cmd/gen_lhm_manifest                           |    78.5% |
@@ -330,7 +330,7 @@
 | cmd/internal/apidocs                           |    87.3% |
 | cmd/internal/docgen                            |    99.6% |
 | cmd/internal/mcpsurface                        |    85.0% |
-| cmd/server                                     |    83.1% |
+| cmd/server                                     |    83.5% |
 
 ### Core Packages
 
@@ -342,7 +342,7 @@
 | clientcompat |   100.0% |
 | cmdutil      |   100.0% |
 | completions  |   100.0% |
-| config       |    99.4% |
+| config       |    75.9% |
 | edition      |    87.0% |
 | elicitation  |    84.9% |
 | gitlab       |    92.2% |
@@ -553,13 +553,14 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_surface_quality** (63.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_test_goroutines** (65.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_1to1/internal/metadata** (70.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **config** (75.9%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/audit_discovery_completeness** (77.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_lhm_manifest** (78.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_catalog_first** (80.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/evaluator** (80.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_e2e_gaps** (81.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_doc_coverage** (81.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/server** (83.1%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
+- **cmd/server** (83.5%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **elicitation** (84.9%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/internal/mcpsurface** (85.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_1to1/internal/merge** (86.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

@@ -1,13 +1,15 @@
-// Command format_md_tables normalizes Markdown pipe tables in README.md and docs/.
+// Command format_md_tables normalizes Markdown pipe tables in README.md, docs/
+// and the Astro documentation site under site/src/content/docs/.
 //
 // Usage:
 //
 //	go run ./cmd/format_md_tables/
 //	go run ./cmd/format_md_tables/ --check
-//	go run ./cmd/format_md_tables/ README.md docs
+//	go run ./cmd/format_md_tables/ README.md docs site/src/content/docs
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -29,14 +31,18 @@ const (
 // options describes the resolved CLI flags and positional arguments for
 // [run].
 //
-// root is the repository root containing README.md and docs/. check enables
+// root is the repository root containing README.md, docs/ and the site
+// content. check enables
 // non-mutating CI mode that fails when any table would change. paths is
 // the list of explicit files or directories to format; it falls back to
-// {"README.md", "docs"} when empty.
+// {"README.md", "docs", "site/src/content/docs"} when empty.
 type options struct {
 	root  string
 	check bool
 	paths []string
+	// pathsAreDefaults reports that paths came from defaultPaths rather than
+	// the command line, which is what makes a missing entry skippable.
+	pathsAreDefaults bool
 }
 
 func main() {
@@ -63,7 +69,7 @@ func run(args []string, stdout io.Writer) error {
 	}
 	defer rootFS.Close()
 
-	files, err := discoverMarkdownFiles(rootFS, opts.root, opts.paths)
+	files, err := discoverMarkdownFiles(rootFS, opts.root, opts.paths, opts.pathsAreDefaults)
 	if err != nil {
 		return err
 	}
@@ -112,23 +118,35 @@ func parseOptions(args []string) (options, error) {
 	flags := flag.NewFlagSet("format_md_tables", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	opts := options{}
-	flags.StringVar(&opts.root, "root", defaultRoot, "repository root containing README.md and docs/")
+	flags.StringVar(&opts.root, "root", defaultRoot, "repository root containing README.md, docs/ and site/src/content/docs")
 	flags.BoolVar(&opts.check, "check", false, "fail if any Markdown table needs formatting")
 	if err := flags.Parse(args); err != nil {
 		return options{}, err
 	}
 	opts.paths = flags.Args()
 	if len(opts.paths) == 0 {
-		opts.paths = []string{"README.md", "docs"}
+		opts.paths = defaultPaths
+		opts.pathsAreDefaults = true
 	}
 	return opts, nil
 }
 
-func discoverMarkdownFiles(rootFS *os.Root, root string, paths []string) ([]string, error) {
+// defaultPaths are the trees formatted when the caller names none.
+var defaultPaths = []string{"README.md", "docs", "site/src/content/docs"}
+
+func discoverMarkdownFiles(rootFS *os.Root, root string, paths []string, optional bool) ([]string, error) {
 	files := make([]string, 0)
 	for _, item := range paths {
 		discovered, err := markdownFilesForInput(rootFS, root, item)
 		if err != nil {
+			// A default path that is not present is skipped rather than
+			// fatal: the defaults describe this repository's layout, and a
+			// checkout without the documentation site should still be able to
+			// format its Markdown. A path the caller named explicitly still
+			// errors, so a typo never passes silently.
+			if optional && errors.Is(err, iofs.ErrNotExist) {
+				continue
+			}
 			return nil, err
 		}
 		files = append(files, discovered...)
@@ -151,16 +169,25 @@ func markdownFilesForInput(rootFS *os.Root, root, item string) ([]string, error)
 	if info.IsDir() {
 		return markdownFilesInDir(rootFS, rel, item)
 	}
-	if !strings.EqualFold(filepath.Ext(rel), ".md") {
+	if !isMarkdownFile(rel) {
 		return nil, nil
 	}
 	return []string{rel}, nil
 }
 
+// isMarkdownFile reports whether name is a file this command formats. The Astro
+// site authors its pages as .mdx, and its tables were previously aligned by
+// hand because the walk only matched .md; the pipe-table syntax is identical in
+// both, so they are treated alike.
+func isMarkdownFile(name string) bool {
+	ext := filepath.Ext(name)
+	return strings.EqualFold(ext, ".md") || strings.EqualFold(ext, ".mdx")
+}
+
 func markdownFilesInDir(rootFS *os.Root, rel, item string) ([]string, error) {
 	files := make([]string, 0)
 	walkErr := iofs.WalkDir(rootFS.FS(), filepath.ToSlash(rel), func(path string, entry iofs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".md") {
+		if err != nil || entry.IsDir() || !isMarkdownFile(entry.Name()) {
 			return err
 		}
 		relPath := filepath.FromSlash(path)
