@@ -4101,9 +4101,12 @@ func assertExecuteInitializesNilParams(t *testing.T, registry *Registry) {
 // token dynamic action surface.
 func TestRegistry_HelperCoverage(t *testing.T) {
 	t.Run("annotations with nil base", func(t *testing.T) {
-		got := annotationsWithTitle(nil, "Dynamic Search")
-		if got == nil || got.Title != "Dynamic Search" {
-			t.Fatalf("annotationsWithTitle(nil) = %+v, want title", got)
+		got := copyAnnotations(nil)
+		if got == nil {
+			t.Fatal("copyAnnotations(nil) = nil, want zero-value annotations")
+		}
+		if got.Title != "" {
+			t.Fatalf("copyAnnotations(nil).Title = %q, want empty", got.Title)
 		}
 	})
 
@@ -4833,17 +4836,22 @@ func TestNormalization_FormattingBranches(t *testing.T) {
 	})
 }
 
-// TestAnnotationsWithTitle_CopiesBase verifies that annotation updates do not
-// mutate the caller's base annotations. The dynamic tool registration uses this
-// when assigning distinct titles to otherwise shared tool metadata.
-func TestAnnotationsWithTitle_CopiesBase(t *testing.T) {
-	base := &mcp.ToolAnnotations{Title: "Original", ReadOnlyHint: true}
-	got := annotationsWithTitle(base, "Updated")
-	if got == nil || got.Title != "Updated" || !got.ReadOnlyHint {
-		t.Fatalf("annotationsWithTitle(base) = %+v, want copied read-only annotation with updated title", got)
+// TestCopyAnnotations_CopiesBase verifies that the returned annotations are a
+// distinct value carrying the base hints, so a caller mutating the result
+// cannot reach the shared annotation singletons the dynamic tools register
+// from.
+func TestCopyAnnotations_CopiesBase(t *testing.T) {
+	base := &mcp.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}
+	got := copyAnnotations(base)
+	if got == nil || !got.ReadOnlyHint || !got.IdempotentHint {
+		t.Fatalf("copyAnnotations(base) = %+v, want copied read-only annotation", got)
 	}
-	if base.Title != "Original" {
-		t.Fatalf("base title = %q, want unchanged Original", base.Title)
+	if got == base {
+		t.Fatal("copyAnnotations returned the base pointer instead of a copy")
+	}
+	got.ReadOnlyHint = false
+	if !base.ReadOnlyHint {
+		t.Fatal("mutating the copy changed the base annotations")
 	}
 }
 

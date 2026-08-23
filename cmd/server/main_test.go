@@ -1533,6 +1533,14 @@ func collectToolMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *met
 			t.Fatalf("list tools: %v", err)
 		}
 		gaps.require(tool.Title != "", "tool", tool.Name, "Title")
+		// Annotations.Title is the pre-2025-06-18 display name and is
+		// superseded by the top-level Title asserted above. The meta surface
+		// used to set both; keeping it unset holds all three tool surfaces on
+		// the same rule instead of duplicating the string per tools/list entry.
+		if tool.Annotations != nil && tool.Annotations.Title != "" {
+			gaps.entries = append(gaps.entries,
+				"tool "+tool.Name+": redundant Annotations.Title (top-level Title supersedes it)")
+		}
 	}
 }
 

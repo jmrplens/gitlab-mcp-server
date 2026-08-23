@@ -53,8 +53,7 @@
         "destructiveHint": true,
         "idempotentHint": false,
         "openWorldHint": true,
-        "readOnlyHint": false,
-        "title": "GitLab Execute Action"
+        "readOnlyHint": false
       }
     },
     {
@@ -86,8 +85,7 @@
         "destructiveHint": false,
         "idempotentHint": true,
         "openWorldHint": true,
-        "readOnlyHint": true,
-        "title": "GitLab Find Action"
+        "readOnlyHint": true
       }
     }
   ],
