@@ -56,4 +56,4 @@ A public instance runs at **`https://mcp.jmrp.io/gitlab`** — nothing to instal
 
 Maintained by [José M. Requena Plens](https://jmrp.io/) ·
 [Project page](https://jmrp.io/projects/) ·
-Hosted instance: [mcp.jmrp.io/gitlab](https://mcp.jmrp.io/gitlab) (POST-only; a GET returns 405 by design)
+Hosted instance: [mcp.jmrp.io/gitlab](https://mcp.jmrp.io/gitlab)

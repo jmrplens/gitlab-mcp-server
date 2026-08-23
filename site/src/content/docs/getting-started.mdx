@@ -172,7 +172,7 @@ A public instance runs at **`https://mcp.jmrp.io/gitlab`** — nothing to instal
 
 `PRIVATE-TOKEN` is required and travels per request — it is never stored on the server. `GITLAB-URL` is optional and defaults to `https://gitlab.com`; set it to reach another instance, which must be reachable from the public internet.
 
-It is the fastest way to try the server, and the right way to keep using it is still **locally** (any option above) or through [Smithery](https://smithery.ai/servers/jmrp/gitlab-mcp-server), for one concrete reason: your token and every request pass through someone else's machine. Running it locally keeps both on your own computer — the only sensible option for a private self-managed instance.
+It is the fastest way to try the server, and the right way to keep using it is still **locally** (any option above), for one concrete reason: your token and every request pass through someone else's machine. Running it locally keeps both on your own computer — the only sensible option for a private self-managed instance.
 
 The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport, `GET` on it answers `405` by design, and `https://mcp.jmrp.io/gitlab/health` answers `ok`. It is one of the servers listed at [mcp.jmrp.io](https://mcp.jmrp.io/), a directory of the MCP servers maintained by this author, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
 
