@@ -1670,6 +1670,75 @@ func collectPromptMetadataGaps(t *testing.T, session *mcp.ClientSession, gaps *m
 	}
 }
 
+// TestCreateServer_ToolManifestEntriesCoverEveryVisibleTool verifies the
+// gitlab://tools promise that it lists "every executable entry": a client
+// enumerating entries must be able to reach every tool the server exposes.
+//
+// A tool is reachable either through an entry of its own or as the tool an
+// entry dispatches to — gitlab_execute_action and the meta dispatchers are
+// named by the entries they route. Standalone utilities belong to no
+// dispatcher, so they need their own entry; on the meta surface the five of
+// them were advertised in visible_tools while missing from entries.
+func TestCreateServer_ToolManifestEntriesCoverEveryVisibleTool(t *testing.T) {
+	client := newMockGitLabClient(t)
+	for _, toolSurface := range []string{config.ToolSurfaceIndividual, config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
+		t.Run(toolSurface, func(t *testing.T) {
+			server := mustCreateServer(t, client, &config.ServerConfig{
+				MetaTools:         true,
+				ToolSurface:       toolSurface,
+				CapabilitySurface: config.CapabilitySurfaceFull,
+			})
+			assertManifestCoversVisibleTools(t, newInMemorySession(t, server))
+		})
+	}
+}
+
+func assertManifestCoversVisibleTools(t *testing.T, session *mcp.ClientSession) {
+	t.Helper()
+
+	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools"})
+	if err != nil {
+		t.Fatalf("read gitlab://tools: %v", err)
+	}
+	if len(result.Contents) == 0 {
+		t.Fatal("gitlab://tools returned no contents")
+	}
+
+	var manifest struct {
+		VisibleTools []struct {
+			Name string `json:"name"`
+		} `json:"visible_tools"`
+		Entries []struct {
+			ID   string `json:"id"`
+			Tool string `json:"tool"`
+		} `json:"entries"`
+	}
+	if unmarshalErr := json.Unmarshal([]byte(result.Contents[0].Text), &manifest); unmarshalErr != nil {
+		t.Fatalf("unmarshal tool manifest: %v", unmarshalErr)
+	}
+	if len(manifest.VisibleTools) == 0 {
+		t.Fatal("manifest advertises no visible tools")
+	}
+
+	reachable := make(map[string]struct{}, len(manifest.Entries))
+	for _, entry := range manifest.Entries {
+		reachable[entry.Tool] = struct{}{}
+		reachable[entry.ID] = struct{}{}
+	}
+
+	var unreachable []string
+	for _, tool := range manifest.VisibleTools {
+		if _, ok := reachable[tool.Name]; !ok {
+			unreachable = append(unreachable, tool.Name)
+		}
+	}
+	if len(unreachable) > 0 {
+		slices.Sort(unreachable)
+		t.Errorf("%d visible tools are absent from the manifest entries:\n%s",
+			len(unreachable), strings.Join(unreachable, "\n"))
+	}
+}
+
 // TestCreateServer_DynamicReadOnlyRemovesExecute verifies that read-only mode
 // keeps discovery but removes execution from the dynamic surface.
 func TestCreateServer_DynamicReadOnlyKeepsExecuteForReadActions(t *testing.T) {

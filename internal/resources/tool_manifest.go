@@ -202,6 +202,7 @@ func newToolSurfaceSnapshot(opts ToolSurfaceResourceOptions) toolSurfaceSnapshot
 			snapshot.addDirectToolEntry(tool, toolManifestKindIndividualTool)
 		}
 	}
+	snapshot.addUncoveredDirectTools(toolDetails)
 	sort.Slice(snapshot.manifest.Entries, func(i, j int) bool {
 		return snapshot.manifest.Entries[i].ID < snapshot.manifest.Entries[j].ID
 	})
@@ -353,6 +354,32 @@ func (snapshot *toolSurfaceSnapshot) addMetaEntry(entry ToolSurfaceEntry, routes
 	}
 	schema, _ := lookupMetaActionSchema(routes, entry.Tool, entry.Action)
 	snapshot.addEntry(entry, call, schema)
+}
+
+// addUncoveredDirectTools gives an entry to every visible tool the
+// surface-specific pass left unaccounted for.
+//
+// The manifest promises every executable entry, but the dynamic and meta
+// passes only enumerate actions reached through a dispatcher. Standalone
+// utilities — project discovery, the interactive creation flows — are called
+// directly under their own name, so they belong to no dispatcher and were
+// listed in visible_tools while missing from entries: a model enumerating
+// entries to learn what it could call never saw them. On the individual
+// surface every tool is already its own entry, so this pass is a no-op there.
+//
+// A tool counts as covered when some entry names it as the tool to call,
+// which is how gitlab_execute_action and the meta dispatchers are represented.
+func (snapshot *toolSurfaceSnapshot) addUncoveredDirectTools(tools []toolSnapshot) {
+	covered := make(map[string]struct{}, len(snapshot.manifest.Entries))
+	for _, entry := range snapshot.manifest.Entries {
+		covered[entry.Tool] = struct{}{}
+	}
+	for _, tool := range tools {
+		if _, ok := covered[tool.Name]; ok {
+			continue
+		}
+		snapshot.addDirectToolEntry(tool, toolManifestKindVisibleTool)
+	}
 }
 
 func (snapshot *toolSurfaceSnapshot) addDirectToolEntry(tool toolSnapshot, kind string) {

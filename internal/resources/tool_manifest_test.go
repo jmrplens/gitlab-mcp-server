@@ -59,10 +59,15 @@ func TestToolManifest_DynamicSurfaceUsesCanonicalActionIDs(t *testing.T) {
 	})
 
 	manifest := readToolManifest(t, session, "gitlab://tools")
-	if manifest.Surface != toolSurfaceDynamic || manifest.VisibleToolCount != 2 || manifest.EntryCount != 2 {
-		t.Fatalf("manifest = %+v, want dynamic with two visible tools and two entries", manifest)
+	// Three entries: the two catalog actions, plus gitlab_find_action, which
+	// is directly callable and belongs to no dispatcher.
+	if manifest.Surface != toolSurfaceDynamic || manifest.VisibleToolCount != 2 || manifest.EntryCount != 3 {
+		t.Fatalf("manifest = %+v, want dynamic with two visible tools and three entries", manifest)
 	}
-	if manifest.Entries[0].ID != "widget.create" || manifest.Entries[1].ID != "widget.delete" {
+	if manifest.Entries[0].ID != "gitlab_find_action" {
+		t.Fatalf("entries = %+v, want the directly callable find tool sorted first", manifest.Entries)
+	}
+	if manifest.Entries[1].ID != "widget.create" || manifest.Entries[2].ID != "widget.delete" {
 		t.Fatalf("entries = %+v, want canonical dynamic IDs sorted", manifest.Entries)
 	}
 
@@ -88,10 +93,11 @@ func TestToolManifest_DynamicSurfaceUsesCanonicalActionIDs(t *testing.T) {
 }
 
 // TestToolManifest_DynamicSurfaceSkipsActionsWithoutExecuteTool
-// verifies that in dynamic mode the manifest is empty when the
-// gitlab_execute_action tool is not in the visible tools list, even if
-// the action catalog is populated. The visible "find" tool is still
-// reported in VisibleToolCount.
+// verifies that in dynamic mode the manifest lists no catalog actions when the
+// gitlab_execute_action tool is not in the visible tools list, even if the
+// action catalog is populated: without the dispatcher there is no way to run
+// them. The visible "find" tool is still reported, and — being directly
+// callable — keeps an entry of its own.
 func TestToolManifest_DynamicSurfaceSkipsActionsWithoutExecuteTool(t *testing.T) {
 	catalog := widgetCatalog(t)
 	session := toolManifestSession(t, ToolSurfaceResourceOptions{
@@ -101,8 +107,16 @@ func TestToolManifest_DynamicSurfaceSkipsActionsWithoutExecuteTool(t *testing.T)
 	})
 
 	manifest := readToolManifest(t, session, "gitlab://tools")
-	if manifest.VisibleToolCount != 1 || manifest.EntryCount != 0 {
-		t.Fatalf("manifest = %+v, want visible find tool and no executable action entries", manifest)
+	if manifest.VisibleToolCount != 1 {
+		t.Fatalf("manifest = %+v, want the visible find tool reported", manifest)
+	}
+	for _, entry := range manifest.Entries {
+		if entry.Kind == toolManifestKindDynamicAction {
+			t.Fatalf("entries = %+v, want no dynamic action entries without the execute tool", manifest.Entries)
+		}
+	}
+	if manifest.EntryCount != 1 || manifest.Entries[0].ID != "gitlab_find_action" {
+		t.Fatalf("entries = %+v, want only the directly callable find tool", manifest.Entries)
 	}
 }
 
