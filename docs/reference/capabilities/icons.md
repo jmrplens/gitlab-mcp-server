@@ -7,7 +7,7 @@ Visual identity for every tool, resource, and prompt in gitlab-mcp-server.
 
 ## Overview
 
-gitlab-mcp-server ships **50 unique SVG icons** assigned to all 1061 self-managed Enterprise/Premium tools (1067 on GitLab.com Enterprise/Premium with Orbit), 32 base meta-tools (48 self-managed Enterprise, 49 GitLab.com Enterprise), 45 resources, and 37 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, Orbit, etc.).
+gitlab-mcp-server ships **50 unique domain SVG icons** assigned to all 1061 self-managed Enterprise/Premium tools (1067 on GitLab.com Enterprise/Premium with Orbit), 32 base meta-tools (48 self-managed Enterprise, 49 GitLab.com Enterprise), 45 resources, and 37 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, Orbit, etc.).
 
 Icons are defined in [`internal/toolutil/icons.go`](../../../internal/toolutil/icons.go) and consumed via the `Icons` field on every `mcp.Tool`, `mcp.Resource`, and `mcp.Prompt` registration.
 
@@ -96,7 +96,7 @@ func icon(svg string) []mcp.Icon {
 
 ## Icon Gallery
 
-All 50 icons with their SVG preview, exported variable name, and the tool packages that use each one.
+All 50 domain icons with their SVG preview, exported variable name, and the tool packages that use each one. The brand mark is documented separately below.
 
 <!-- markdownlint-disable MD033 -->
 
@@ -219,7 +219,7 @@ All 50 icons with their SVG preview, exported variable name, and the tool packag
 
 ## Complete Icon-to-Package Reference
 
-Alphabetical listing of all 50 icons and every sub-package that uses each one.
+Alphabetical listing of all 50 domain icons and every sub-package that uses each one.
 
 | Icon          | Variable            | Packages                                                                                                                          |
 | ------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -273,6 +273,35 @@ Alphabetical listing of all 50 icons and every sub-package that uses each one.
 | Variable      | `IconVariable`      | civariables, groupvariables, instancevariables                                                                                    |
 | Vulnerability | `IconVulnerability` | securityfindings, vulnerabilities                                                                                                 |
 | Wiki          | `IconWiki`          | wikis                                                                                                                             |
+
+## Brand Mark
+
+`IconBrand` is the one icon that identifies no domain. It is attached to
+`Implementation.Icons` — the server's own identity in the handshake — rather
+than to any tool, resource or prompt.
+
+| Variable    | Attached to                              | Source                                           |
+| ----------- | ---------------------------------------- | ------------------------------------------------ |
+| `IconBrand` | `Implementation.Icons` in `createServer` | [Simple Icons](https://simpleicons.org), CC0 1.0 |
+
+Three details differ from the domain icons:
+
+- **It keeps its source 24×24 viewBox** instead of the 16×16 the domain icons
+  use. The viewBox only defines a coordinate system, so nothing renders
+  differently; keeping it verbatim avoids rescaling coordinates by hand.
+- **It is a single closed path.** The full logo in `site/src/assets` cannot be
+  reduced this way: its coloured paths are open contours that close only
+  against each other, so filling any one of them alone renders a broken shape.
+- **It still uses `currentColor` and declares no `Theme`.** A monochrome mark
+  that inherits the client's colour needs one entry, not a light/dark pair, and
+  works in themes the specification does not name. It also keeps the handshake
+  small — the mark costs roughly 190 bytes more than a domain glyph, and under
+  SEP-2575 the whole `Implementation` rides in the `_meta` of every response,
+  not just the handshake.
+
+Before this existed the server advertised `IconServer`, the same glyph as
+`gitlab_execute_action`, so a client rendering both showed one picture for the
+server and for one of its tools.
 
 ## Testing
 

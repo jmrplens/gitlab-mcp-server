@@ -361,7 +361,7 @@ func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
 func measureTools(toolList []*mcp.Tool) []toolTokenInfo {
 	infos := make([]toolTokenInfo, 0, len(toolList))
 	for _, t := range toolList {
-		b, err := json.Marshal(t)
+		b, err := marshalModelFacing(t)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "marshal tool %s: %v\n", t.Name, err)
 			os.Exit(1)
@@ -441,7 +441,7 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 		fatalWithSession("list resources: %v\n", err)
 	}
 	for _, r := range res.Resources {
-		b, mErr := json.Marshal(r)
+		b, mErr := marshalModelFacing(r)
 		if mErr != nil {
 			fatalWithSession("marshal resource %s: %v\n", r.Name, mErr)
 		}
@@ -453,7 +453,7 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 		fatalWithSession("list resource templates: %v\n", err)
 	}
 	for _, t := range tpl.ResourceTemplates {
-		b, mErr := json.Marshal(t)
+		b, mErr := marshalModelFacing(t)
 		if mErr != nil {
 			fatalWithSession("marshal template %s: %v\n", t.Name, mErr)
 		}
@@ -501,7 +501,7 @@ func measurePrompts(client *gitlabclient.Client) int {
 	p, err := session.ListPrompts(ctx, nil)
 	if err == nil {
 		for _, pr := range p.Prompts {
-			b, mErr := json.Marshal(pr)
+			b, mErr := marshalModelFacing(pr)
 			if mErr != nil {
 				_ = session.Close()
 				_ = serverSession.Close()
@@ -1285,7 +1285,7 @@ func fpListToolsFromServer(server *mcp.Server) ([]*mcp.Tool, error) {
 func measureToolSchemaTokens(toolList []*mcp.Tool) (int, error) {
 	totalTokens := 0
 	for _, t := range toolList {
-		b, err := json.Marshal(t)
+		b, err := marshalModelFacing(t)
 		if err != nil {
 			return 0, fmt.Errorf("marshal tool %s: %w", t.Name, err)
 		}
@@ -1339,7 +1339,7 @@ func fpMeasureResourcesWithOptions(client *gitlabclient.Client, routes map[strin
 			return 0, fmt.Errorf("list resources: %w", err)
 		}
 		for _, r := range res.Resources {
-			b, mErr := json.Marshal(r)
+			b, mErr := marshalModelFacing(r)
 			if mErr != nil {
 				return 0, fmt.Errorf("marshal resource %s: %w", r.Name, mErr)
 			}
@@ -1351,7 +1351,7 @@ func fpMeasureResourcesWithOptions(client *gitlabclient.Client, routes map[strin
 			return 0, fmt.Errorf("list resource templates: %w", err)
 		}
 		for _, t := range tpl.ResourceTemplates {
-			b, mErr := json.Marshal(t)
+			b, mErr := marshalModelFacing(t)
 			if mErr != nil {
 				return 0, fmt.Errorf("marshal template %s: %w", t.Name, mErr)
 			}
@@ -1374,7 +1374,7 @@ func fpMeasurePrompts(client *gitlabclient.Client) (int, error) {
 			return 0, fmt.Errorf("list prompts: %w", err)
 		}
 		for _, pr := range promptList.Prompts {
-			b, mErr := json.Marshal(pr)
+			b, mErr := marshalModelFacing(pr)
 			if mErr != nil {
 				return 0, fmt.Errorf("marshal prompt %s: %w", pr.Name, mErr)
 			}

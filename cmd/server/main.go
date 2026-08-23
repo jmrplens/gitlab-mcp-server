@@ -810,7 +810,9 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		Description: projectDescription,
 		Version:     version,
 		WebsiteURL:  projectWebsite,
-		Icons:       toolutil.IconServer,
+		// The brand mark, not a domain glyph: this identifies the server
+		// itself, and IconServer is already the icon of gitlab_execute_action.
+		Icons: toolutil.IconBrand,
 	}, &mcp.ServerOptions{
 		// Named tools differ per surface, so the guidance is built for the
 		// surface this server actually registers: a dynamic-mode model can

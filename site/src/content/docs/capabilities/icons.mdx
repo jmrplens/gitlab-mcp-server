@@ -1,10 +1,10 @@
 ---
 title: Icons
-description: GitLab MCP Server assigns 50 unique SVG icons to every tool, resource, and prompt as base64 data URIs that adapt to light and dark themes.
+description: GitLab MCP Server assigns 50 unique domain SVG icons to every tool, resource, and prompt, plus a brand mark for the server identity, as base64 data URIs that adapt to light and dark themes.
 datePublished: "2026-04-21"
 faq:
   - q: "What are the icons in GitLab MCP Server?"
-    a: 'GitLab MCP Server assigns **50 unique SVG icons** to every tool, resource, and prompt it exposes, so MCP clients can render recognizable UI elements for each GitLab domain. Related tools share one icon for visual grouping — for example, branches, repository, and submodules all use `IconBranch`. Icons are stored as base64-encoded SVG data URIs with `Sizes: ["any"]` for scalability, drawn on a 16×16 viewport, and filled with `currentColor` so they adapt automatically to light and dark themes. They are optional presentation metadata, not a negotiated MCP protocol capability.'
+    a: 'GitLab MCP Server assigns **50 unique domain SVG icons** to every tool, resource, and prompt it exposes, plus a 51st brand mark on the server identity itself, so MCP clients can render recognizable UI elements for each GitLab domain. Related tools share one icon for visual grouping — for example, branches, repository, and submodules all use `IconBranch`. Icons are stored as base64-encoded SVG data URIs with `Sizes: ["any"]` for scalability, drawn on a 16×16 viewport, and filled with `currentColor` so they adapt automatically to light and dark themes. They are optional presentation metadata, not a negotiated MCP protocol capability.'
   - q: "How are GitLab MCP Server icons designed and encoded?"
     a: "Each icon uses a minimal **16×16 viewport** optimized for tool lists and sidebars, with a `currentColor` fill so it adapts to light and dark themes. Icons are embedded inline as base64-encoded SVG data URIs (`data:image/svg+xml;base64,...`) directly in the binary, requiring zero network requests, and one icon is shared per domain so related tools group visually. They are registered through catalog action specs and group specs, then projected into the meta, individual, and dynamic tool surfaces. The source lives in [`internal/toolutil/icons.go`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/internal/toolutil/icons.go)."
   - q: "Which MCP clients render tool icons?"
@@ -17,7 +17,7 @@ import { Badge } from "@astrojs/starlight/components";
 import FAQ from "../../../components/FAQ.astro";
 import stats from "../../../data/stats.json";
 
-GitLab MCP Server assigns **50 unique SVG icons** to all {stats.tools.ultimate_self_managed} self-managed Enterprise/Premium tools ({stats.tools.gitlab_com} on GitLab.com Enterprise/Premium with Orbit), {stats.meta.base} base meta-tools ({stats.meta.self_managed_enterprise} self-managed Enterprise, {stats.meta.gitlab_com} GitLab.com Enterprise), {stats.resources} resources, and {stats.prompts} prompts. Icons are stored as base64-encoded SVG data URIs (`data:image/svg+xml;base64,...`) with `Sizes: ["any"]` for scalability, and help MCP clients render recognizable UI elements for each GitLab domain. They are optional presentation metadata, not a negotiated MCP protocol capability: a client that cannot render icons simply ignores them, and tool behavior is unchanged.
+GitLab MCP Server assigns **50 unique domain SVG icons** to all {stats.tools.ultimate_self_managed} self-managed Enterprise/Premium tools ({stats.tools.gitlab_com} on GitLab.com Enterprise/Premium with Orbit), {stats.meta.base} base meta-tools ({stats.meta.self_managed_enterprise} self-managed Enterprise, {stats.meta.gitlab_com} GitLab.com Enterprise), {stats.resources} resources, and {stats.prompts} prompts. Icons are stored as base64-encoded SVG data URIs (`data:image/svg+xml;base64,...`) with `Sizes: ["any"]` for scalability, and help MCP clients render recognizable UI elements for each GitLab domain. They are optional presentation metadata, not a negotiated MCP protocol capability: a client that cannot render icons simply ignores them, and tool behavior is unchanged.
 
 ## How are GitLab MCP Server icons designed?
 
