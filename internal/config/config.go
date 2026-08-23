@@ -44,9 +44,11 @@ const (
 	DefaultMaxHTTPClients     = 100
 	DefaultSessionTimeout     = 30 * time.Minute
 	DefaultRevalidateInterval = 15 * time.Minute
+	DefaultPoolIdleTimeout    = 1 * time.Hour
 	MaxHTTPClients            = 10000
 	MaxSessionTimeout         = 24 * time.Hour
 	MaxRevalidateInterval     = 24 * time.Hour
+	MaxPoolIdleTimeout        = 24 * time.Hour
 )
 
 // OAuth defaults.
@@ -141,6 +143,10 @@ type Config struct {
 	MaxHTTPClients     int           // Maximum unique tokens in the server pool (HTTP mode only)
 	SessionTimeout     time.Duration // Idle MCP session timeout (HTTP mode only)
 	RevalidateInterval time.Duration // Token re-validation interval (HTTP mode only)
+	// PoolIdleTimeout is how long a pooled per-token server may go unused
+	// before it is reclaimed; 0 keeps entries until the pool's size bound
+	// evicts them (HTTP mode only).
+	PoolIdleTimeout time.Duration
 
 	// Stateless enables sessionless streamable HTTP (SEP-2567, protocol
 	// 2026-07-28): the server neither reads nor sets Mcp-Session-Id, every
@@ -324,6 +330,7 @@ func Load() (*Config, error) {
 		MaxHTTPClients:     limits.maxHTTPClients,
 		SessionTimeout:     limits.sessionTimeout,
 		RevalidateInterval: limits.revalidateInterval,
+		PoolIdleTimeout:    limits.poolIdleTimeout,
 		AutoUpdate:         updates.mode,
 		AutoUpdateRepo:     updates.repo,
 		AutoUpdateInterval: updates.interval,
@@ -357,6 +364,7 @@ type limitEnv struct {
 	maxHTTPClients     int
 	sessionTimeout     time.Duration
 	revalidateInterval time.Duration
+	poolIdleTimeout    time.Duration
 }
 
 type autoUpdateEnv struct {
@@ -468,6 +476,9 @@ func loadLimitEnv() (limitEnv, error) {
 	}
 	if values.sessionTimeout, err = parseBoundedDurationEnv("SESSION_TIMEOUT", DefaultSessionTimeout, MaxSessionTimeout); err != nil {
 		return limitEnv{}, err
+	}
+	if values.poolIdleTimeout, err = parseBoundedDurationEnv("POOL_IDLE_TIMEOUT", DefaultPoolIdleTimeout, MaxPoolIdleTimeout); err != nil {
+		return values, err
 	}
 	if values.revalidateInterval, err = parseBoundedDurationEnv("SESSION_REVALIDATE_INTERVAL", DefaultRevalidateInterval, MaxRevalidateInterval); err != nil {
 		return limitEnv{}, err

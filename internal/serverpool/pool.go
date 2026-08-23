@@ -35,6 +35,7 @@ type poolEntry struct {
 	element       *list.Element
 	createdAt     time.Time
 	lastValidated time.Time
+	lastUsed      time.Time
 }
 
 // defaultMaxSize is the fallback number of HTTP client sessions retained when
@@ -45,12 +46,27 @@ const defaultMaxSize = 100
 // checks via a lightweight GitLab API call.
 const DefaultRevalidateInterval = 15 * time.Minute
 
+// DefaultIdleTimeout is how long an entry may go unused before the pool
+// reclaims it. Without it an abandoned entry survives until enough distinct
+// token+URL pairs push it out of the LRU, holding a fully registered server
+// and drawing a revalidation ping against GitLab every interval, forever.
+const DefaultIdleTimeout = 1 * time.Hour
+
+// idleSweepDivisor sets the sweep cadence as a fraction of the idle timeout,
+// so an entry outlives its timeout by at most a quarter of it. The sweep never
+// runs more often than idleSweepMinInterval.
+const (
+	idleSweepDivisor     = 4
+	idleSweepMinInterval = 1 * time.Minute
+)
+
 // Metrics holds operational counters for the [ServerPool]. All counters are
 // monotonically increasing and use lock-free atomic increments.
 type Metrics struct {
 	Hits                   atomic.Int64
 	Misses                 atomic.Int64
 	Evictions              atomic.Int64
+	IdleEvictions          atomic.Int64
 	RevalidationsFailed    atomic.Int64
 	RevalidationsSucceeded atomic.Int64
 }
@@ -61,6 +77,7 @@ type Snapshot struct {
 	Hits                   int64     `json:"hits"`
 	Misses                 int64     `json:"misses"`
 	Evictions              int64     `json:"evictions"`
+	IdleEvictions          int64     `json:"idle_evictions"`
 	RevalidationsFailed    int64     `json:"revalidations_failed"`
 	RevalidationsSucceeded int64     `json:"revalidations_succeeded"`
 	CurrentSize            int       `json:"current_size"`
@@ -80,6 +97,7 @@ type ServerPool struct {
 	cfg                *config.Config
 	factory            ServerFactory
 	revalidateInterval time.Duration
+	idleTimeout        time.Duration
 	metrics            Metrics
 	createdAt          time.Time
 }
@@ -105,6 +123,15 @@ func WithRevalidateInterval(d time.Duration) Option {
 	}
 }
 
+// WithIdleTimeout sets how long an entry may go unused before the pool
+// reclaims it. Values <= 0 disable idle eviction, leaving the LRU bound as the
+// only reclamation path.
+func WithIdleTimeout(d time.Duration) Option {
+	return func(p *ServerPool) {
+		p.idleTimeout = d
+	}
+}
+
 // New creates a [ServerPool]. The cfg provides shared server-wide settings
 // (GitLabURL, SkipTLSVerify, etc.). The factory function creates a fully
 // registered [*mcp.Server] for each new GitLab client.
@@ -116,6 +143,7 @@ func New(cfg *config.Config, factory ServerFactory, opts ...Option) *ServerPool 
 		cfg:                cfg,
 		factory:            factory,
 		revalidateInterval: DefaultRevalidateInterval,
+		idleTimeout:        DefaultIdleTimeout,
 		createdAt:          time.Now(),
 	}
 	for _, opt := range opts {
@@ -145,6 +173,9 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 		p.mu.RUnlock()
 		p.mu.Lock()
 		p.lru.MoveToFront(entry.element)
+		// This is the hot path for every request on an established entry, so
+		// it is what keeps an active entry out of reach of idle eviction.
+		entry.lastUsed = time.Now()
 		p.mu.Unlock()
 		p.metrics.Hits.Add(1)
 		return entry.server, nil
@@ -222,6 +253,7 @@ func (p *ServerPool) insertEntry(key, token string, entry *poolEntry) *mcp.Serve
 	entry.element = p.lru.PushFront(key)
 	entry.createdAt = now
 	entry.lastValidated = now
+	entry.lastUsed = now
 	p.entries[key] = entry
 
 	slog.Info(
@@ -239,12 +271,16 @@ func (p *ServerPool) insertEntry(key, token string, entry *poolEntry) *mcp.Serve
 }
 
 // existingServerLocked returns an existing server for key while p.mu is held.
+// Every hit refreshes lastUsed, which is what idle eviction reads; the LRU
+// position alone cannot serve that purpose because it only orders entries
+// relative to each other and carries no wall-clock age.
 func (p *ServerPool) existingServerLocked(key string) (*mcp.Server, bool) {
 	entry, ok := p.entries[key]
 	if !ok {
 		return nil, false
 	}
 	p.lru.MoveToFront(entry.element)
+	entry.lastUsed = time.Now()
 	p.metrics.Hits.Add(1)
 	return entry.server, true
 }
@@ -342,6 +378,7 @@ func (p *ServerPool) Stats() Snapshot {
 		Hits:                   p.metrics.Hits.Load(),
 		Misses:                 p.metrics.Misses.Load(),
 		Evictions:              p.metrics.Evictions.Load(),
+		IdleEvictions:          p.metrics.IdleEvictions.Load(),
 		RevalidationsFailed:    p.metrics.RevalidationsFailed.Load(),
 		RevalidationsSucceeded: p.metrics.RevalidationsSucceeded.Load(),
 		CurrentSize:            size,
@@ -405,6 +442,79 @@ func tokenSuffix(token string) string {
 		return "****"
 	}
 	return "..." + token[len(token)-4:]
+}
+
+// StartIdleEviction launches a background goroutine that reclaims entries
+// unused for longer than the configured idle timeout. Cancel the context to
+// stop it. It is a no-op when idle eviction is disabled.
+//
+// Idle eviction runs independently of revalidation so that disabling one does
+// not silently disable the other. It also needs no network I/O: an idle entry
+// is dropped on its timestamp alone, which is the point — the entries it
+// reclaims are exactly the ones revalidation would otherwise keep pinging
+// GitLab about on behalf of a client that is gone.
+func (p *ServerPool) StartIdleEviction(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background() //nolint:contextcheck // defensive: nil-ctx guard for callers that pass uninitialized context
+	}
+	if p.idleTimeout <= 0 {
+		slog.Info("server pool: idle eviction disabled")
+		return
+	}
+
+	interval := max(p.idleTimeout/idleSweepDivisor, idleSweepMinInterval)
+	slog.Info("server pool: starting idle eviction",
+		"idle_timeout", p.idleTimeout, "sweep_interval", interval)
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("server pool: idle eviction goroutine panicked", "panic", r)
+			}
+		}()
+
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				slog.Info("server pool: idle eviction stopped")
+				return
+			case <-ticker.C:
+				p.evictIdle()
+			}
+		}
+	}()
+}
+
+// evictIdle removes every entry whose last use is older than the idle timeout.
+// Eviction only drops the pool's reference: live sessions already holding the
+// server keep working, mirroring [ServerPool.Close].
+func (p *ServerPool) evictIdle() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.idleTimeout <= 0 {
+		return
+	}
+	cutoff := time.Now().Add(-p.idleTimeout)
+	for key, entry := range p.entries {
+		if entry.lastUsed.After(cutoff) {
+			continue
+		}
+		gitlabURL, enterprise := poolEntryConfigLogValues(entry)
+		p.lru.Remove(entry.element)
+		delete(p.entries, key)
+		p.metrics.IdleEvictions.Add(1)
+		slog.Info(
+			"server pool: evicted idle entry",
+			"pool_size", len(p.entries),
+			"idle_for", time.Since(entry.lastUsed).Round(time.Second),
+			"gitlab_url", gitlabURL,
+			"enterprise", enterprise,
+		)
+	}
 }
 
 // StartRevalidation launches a background goroutine that periodically

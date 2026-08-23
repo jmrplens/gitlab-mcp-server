@@ -169,6 +169,7 @@ type httpConfig struct {
 	autoUpdateInterval  time.Duration
 	autoUpdateTimeout   time.Duration
 	revalidateInterval  time.Duration
+	poolIdleTimeout     time.Duration
 	authMode            string
 	oauthCacheTTL       time.Duration
 	trustedProxyHeader  string
@@ -252,6 +253,7 @@ func main() {
 	flag.DurationVar(&hcfg.autoUpdateInterval, "auto-update-interval", config.DefaultAutoUpdateInterval, "How often to check for updates")
 	flag.DurationVar(&hcfg.autoUpdateTimeout, "auto-update-timeout", config.DefaultAutoUpdateTimeout, "Timeout for startup/background update checks (range 5s\u201310m)")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval (0 to disable)")
+	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token server after this long unused (0 to disable)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
@@ -380,6 +382,7 @@ FLAGS
   -ignore-scopes            Skip PAT scope detection, register all tools (default false)
   -max-http-clients int     Maximum concurrent client sessions (default %d)
   -session-timeout duration Idle session timeout (default %s)
+  -pool-idle-timeout dur    Reclaim a pooled per-token server after this long unused (default %s, 0 to disable)
   -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure so -session-timeout governs
   -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28). Use -stateless=false for legacy stateful sessions
   -json-response            Return application/json responses instead of SSE (default false)
@@ -456,7 +459,7 @@ JSON CONFIGURATION EXAMPLES
   gitlab-mcp-server --http --http-addr=:8080
 `, version, commit,
 		projectAuthor, projectDepartment, projectRepository,
-		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout,
+		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout, config.DefaultPoolIdleTimeout,
 		config.DefaultAutoUpdateRepo, config.DefaultAutoUpdateInterval,
 		config.DefaultAutoUpdateTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
@@ -567,6 +570,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		MaxHTTPClients:      hcfg.maxHTTPClients,
 		SessionTimeout:      hcfg.sessionTimeout,
 		RevalidateInterval:  hcfg.revalidateInterval,
+		PoolIdleTimeout:     hcfg.poolIdleTimeout,
 		Stateless:           hcfg.stateless,
 		JSONResponse:        hcfg.jsonResponse,
 		MaxRequestBodyBytes: hcfg.maxRequestBodyBytes,
@@ -658,6 +662,9 @@ func validateHTTPDurationConfig(cfg *config.Config) error {
 	}
 	if cfg.RevalidateInterval > config.MaxRevalidateInterval {
 		return fmt.Errorf("--revalidate-interval %s exceeds maximum of %s", cfg.RevalidateInterval, config.MaxRevalidateInterval)
+	}
+	if cfg.PoolIdleTimeout > config.MaxPoolIdleTimeout {
+		return fmt.Errorf("--pool-idle-timeout %s exceeds maximum of %s", cfg.PoolIdleTimeout, config.MaxPoolIdleTimeout)
 	}
 	if cfg.AutoUpdateTimeout < config.MinAutoUpdateTimeout {
 		return fmt.Errorf("--auto-update-timeout %s is below minimum of %s", cfg.AutoUpdateTimeout, config.MinAutoUpdateTimeout)
@@ -820,8 +827,12 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 	})
 
 	// SEP-2549 cache hints: catalogs and resource reads are token- and
-	// tier-dependent, so every cacheable result is stamped "private".
-	server.AddReceivingMiddleware(cachehints.Middleware())
+	// tier-dependent, so every cacheable result is stamped "private". A
+	// configured tier cannot change while the server runs, which earns the
+	// tool catalog the same freshness window as the compiled-in catalogs.
+	server.AddReceivingMiddleware(cachehints.Middleware(cachehints.Options{
+		TierPinned: cfg.TierExplicit,
+	}))
 
 	// Per-client response compatibility (Codex float-priority workaround and
 	// structuredContent shadowing); CLIENT_COMPAT=off disables it.
@@ -1092,10 +1103,12 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdl
 	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
 		return createServer(client, serverCfg, nil)
 	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
-		serverpool.WithRevalidateInterval(cfg.RevalidateInterval))
+		serverpool.WithRevalidateInterval(cfg.RevalidateInterval),
+		serverpool.WithIdleTimeout(cfg.PoolIdleTimeout))
 	defer pool.Close()
 
 	pool.StartRevalidation(ctx)
+	pool.StartIdleEviction(ctx)
 
 	// Build server-card JSON once at startup using an ephemeral MCP server
 	// so that /.well-known/mcp/server-card.json is served without authentication.
