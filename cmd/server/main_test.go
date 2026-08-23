@@ -20,6 +20,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -1141,6 +1142,96 @@ func TestProjectMetadata_Constants(t *testing.T) {
 	}
 	if projectRepository == "" {
 		t.Error("projectRepository should not be empty")
+	}
+	if projectWebsite == "" {
+		t.Error("projectWebsite should not be empty")
+	}
+}
+
+// TestResolveBuildVersion_Fallbacks verifies that an unstamped binary recovers
+// its identity from the embedded module build info, and that -ldflags values
+// always win. Release binaries are stamped from the VERSION file, so a build
+// info value must never override one.
+func TestResolveBuildVersion_Fallbacks(t *testing.T) {
+	buildInfo := func(mainVersion, revision string) func() (*debug.BuildInfo, bool) {
+		return func() (*debug.BuildInfo, bool) {
+			info := &debug.BuildInfo{}
+			info.Main.Version = mainVersion
+			if revision != "" {
+				info.Settings = []debug.BuildSetting{{Key: "vcs.revision", Value: revision}}
+			}
+			return info, true
+		}
+	}
+
+	tests := []struct {
+		name        string
+		version     string
+		commit      string
+		readInfo    func() (*debug.BuildInfo, bool)
+		wantVersion string
+		wantCommit  string
+	}{
+		{
+			name:        "go install records the module version",
+			version:     "dev",
+			commit:      "none",
+			readInfo:    buildInfo("v2.6.6", "cafe1234"),
+			wantVersion: "2.6.6",
+			wantCommit:  "cafe1234",
+		},
+		{
+			name:        "ldflags values are never overridden",
+			version:     "2.6.6",
+			commit:      "abc1234",
+			readInfo:    buildInfo("v9.9.9", "deadbeef"),
+			wantVersion: "2.6.6",
+			wantCommit:  "abc1234",
+		},
+		{
+			name:        "a working-tree build reports no module version",
+			version:     "dev",
+			commit:      "none",
+			readInfo:    buildInfo("(devel)", "beef5678"),
+			wantVersion: "dev",
+			wantCommit:  "beef5678",
+		},
+		{
+			name:        "build info without a revision leaves the commit alone",
+			version:     "dev",
+			commit:      "none",
+			readInfo:    buildInfo("v2.6.6", ""),
+			wantVersion: "2.6.6",
+			wantCommit:  "none",
+		},
+		{
+			name:        "unavailable build info changes nothing",
+			version:     "dev",
+			commit:      "none",
+			readInfo:    func() (*debug.BuildInfo, bool) { return nil, false },
+			wantVersion: "dev",
+			wantCommit:  "none",
+		},
+		{
+			name:        "nil build info with ok=true changes nothing",
+			version:     "dev",
+			commit:      "none",
+			readInfo:    func() (*debug.BuildInfo, bool) { return nil, true },
+			wantVersion: "dev",
+			wantCommit:  "none",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotVersion, gotCommit := resolveBuildVersion(tt.version, tt.commit, tt.readInfo)
+			if gotVersion != tt.wantVersion {
+				t.Errorf("version = %q, want %q", gotVersion, tt.wantVersion)
+			}
+			if gotCommit != tt.wantCommit {
+				t.Errorf("commit = %q, want %q", gotCommit, tt.wantCommit)
+			}
+		})
 	}
 }
 

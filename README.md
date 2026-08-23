@@ -415,20 +415,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       978 |     196,547 |
-| Unit tests (`_test.go`)  |       533 |     303,585 |
+| Source (`.go`, non-test) |       978 |     196,601 |
+| Unit tests (`_test.go`)  |       533 |     303,694 |
 | End-to-end tests         |       174 |      45,157 |
-| **Total**                | **1,685** | **545,289** |
+| **Total**                | **1,685** | **545,452** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,360 |
+| Source functions                |  7,362 |
 | — exported (public)             |  2,586 |
-| — unexported (private)          |  4,774 |
-| Unit test functions (`TestXxx`) | 11,485 |
-| Subtests (`t.Run(...)`)         |  2,856 |
+| — unexported (private)          |  4,776 |
+| Unit test functions (`TestXxx`) | 11,486 |
+| Subtests (`t.Run(...)`)         |  2,857 |
 | End-to-end test functions       |    381 |
 
 ### Ratios worth noting
@@ -436,9 +436,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.54× more tests than code |
-| Average source file length         |                 ~200 lines |
+| Average source file length         |                 ~201 lines |
 | Average test file length           |                 ~569 lines |
-| Comment lines in source            |  21,599 (~11.0% of source) |
+| Comment lines in source            |  21,627 (~11.0% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
@@ -447,7 +447,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | ----: |
 | `if err != nil` checks             | 6,607 |
 | `defer` statements                 |   861 |
-| `struct` types defined             | 2,704 |
+| `struct` types defined             | 2,705 |
 | `//nolint` suppressions            |   248 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -470,8 +470,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,573 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,424 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,574 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,417 (impossible to avoid)                                                                         |
 | Longest function name in source      | `baseDestructiveEarlySinglePromptTemplateAndFixtures` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

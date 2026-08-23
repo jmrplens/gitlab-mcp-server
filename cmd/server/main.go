@@ -42,6 +42,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -73,16 +74,64 @@ import (
 
 // version and commit are set at build time via -ldflags.
 // The VERSION file at the repo root is the single source of truth for version.
+//
+// When neither is stamped — a plain `go build`, or `go install <module>@vX.Y.Z`
+// — [resolveBuildVersion] recovers what it can from the embedded build info so
+// the handshake never reports a bare "dev" to a client that has a real version
+// to show.
 var (
 	version = "dev"
 	commit  = "none"
 )
+
+func init() {
+	version, commit = resolveBuildVersion(version, commit, debug.ReadBuildInfo)
+}
+
+// resolveBuildVersion fills in an unstamped version and commit from the module
+// build info Go embeds in every binary. `go install module@version` records the
+// module version, and any VCS build records the revision, so a source install
+// still identifies itself. Values passed via -ldflags always win: release
+// binaries are stamped from the VERSION file, which is the source of truth.
+//
+// readBuildInfo is injected so tests can exercise the paths where build info is
+// unavailable or carries no usable values.
+func resolveBuildVersion(ldflagsVersion, ldflagsCommit string, readBuildInfo func() (*debug.BuildInfo, bool)) (resolvedVersion, resolvedCommit string) {
+	resolvedVersion, resolvedCommit = ldflagsVersion, ldflagsCommit
+	info, ok := readBuildInfo()
+	if !ok || info == nil {
+		return resolvedVersion, resolvedCommit
+	}
+
+	// "(devel)" is what the toolchain records for a build from a working tree
+	// rather than a module version; it is no more informative than "dev".
+	if resolvedVersion == "dev" && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		resolvedVersion = strings.TrimPrefix(info.Main.Version, "v")
+	}
+	if resolvedCommit == "none" {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.revision" && setting.Value != "" {
+				resolvedCommit = setting.Value
+				break
+			}
+		}
+	}
+	return resolvedVersion, resolvedCommit
+}
 
 // Project metadata.
 const (
 	projectAuthor     = "Jose Manuel Requena Plens"
 	projectDepartment = ""
 	projectRepository = "https://github.com/jmrplens/gitlab-mcp-server"
+
+	// projectWebsite is the Implementation.WebsiteURL advertised at handshake.
+	// It is the vanity redirect to the documentation site rather than the
+	// repository: a client rendering serverInfo shows this to an end user, for
+	// whom the guides are more useful than a source tree. It matches the
+	// homepage/documentation fields in mcpb/manifest.json and
+	// .plugin/plugin.json.
+	projectWebsite = "https://jmrp.io/docs/gitlab-mcp-server"
 
 	// projectDescription is the server's self-description at handshake, shown
 	// wherever a client or registry renders the MCP Implementation. It is kept
@@ -723,6 +772,7 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 
 	completionHandler := completions.NewHandler(client)
 	capabilitySurface := config.EffectiveCapabilitySurface(cfg.CapabilitySurface)
+	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
 	serverCapabilities := &mcp.ServerCapabilities{
 		Tools:     &mcp.ToolCapabilities{ListChanged: true},
 		Resources: &mcp.ResourceCapabilities{ListChanged: true},
@@ -736,32 +786,13 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		Title:       "GitLab MCP Server",
 		Description: projectDescription,
 		Version:     version,
-		WebsiteURL:  projectRepository,
+		WebsiteURL:  projectWebsite,
 		Icons:       toolutil.IconServer,
 	}, &mcp.ServerOptions{
-		Instructions: "gitlab-mcp-server is a GitLab MCP server providing tools for projects, merge requests, " +
-			"issues, branches, tags, releases, repositories, commits, files, groups, members, " +
-			"and uploads.\n\n" +
-			"PROJECT DISCOVERY — To find the project_id needed for most operations:\n" +
-			"1. Read the .git/config file from the workspace to find [remote \"origin\"] url = ...\n" +
-			"2. Call gitlab_resolve_project_from_remote with that URL to get the project_id.\n" +
-			"3. Alternatively, use gitlab_list_projects (owned=true) or gitlab_search_projects to find projects by name.\n\n" +
-			"DEFAULT BRANCH — When generating URLs to repository files or branches:\n" +
-			"1. Call gitlab_project_get to retrieve the project metadata, which includes the default_branch field.\n" +
-			"2. ALWAYS use the returned default_branch value (e.g. develop, master) instead of assuming 'main'.\n" +
-			"3. Projects can use any branch as default, so NEVER hardcode 'main' in URLs.\n\n" +
-			"PACKAGE + RELEASE WORKFLOW — When uploading packages and linking them to releases:\n" +
-			"1. Preferred: Use gitlab_package_publish_and_link to upload a file and create the release link in one step.\n" +
-			"2. Alternative: Use gitlab_package_publish first, then use the 'url' field from its response as the URL for gitlab_release_link_create.\n" +
-			"3. NEVER construct package download URLs manually — always use the actual URL returned by the publish tool.\n" +
-			"4. RELEASE LINK NAMING: The link_name MUST be the exact filename (e.g. 'checksums.txt.asc'), NEVER add descriptive suffixes like '(GPG signature)'. go-selfupdate and other tools match asset names exactly.\n\n" +
-			"RELEASE CREATION — When creating releases:\n" +
-			"1. You do NOT need to create the tag first. Provide 'ref' (branch or SHA) in gitlab_release_create and GitLab auto-creates the tag.\n" +
-			"2. The response includes 'assets_sources' with auto-generated tar.gz/zip archive URLs — use those, never construct source archive URLs.\n" +
-			"3. Use 'tag_message' to create an annotated tag instead of a lightweight one.\n\n" +
-			"ID vs IID — GitLab uses two identifiers for issues and merge requests:\n" +
-			"1. IID is the project-scoped number shown in URLs and UI (e.g. issue #3, MR !5). Most tools expect IID.\n" +
-			"2. ID is the global numeric identifier. Only use gitlab_issue_get_by_id when you have a global ID from another API response.",
+		// Named tools differ per surface, so the guidance is built for the
+		// surface this server actually registers: a dynamic-mode model can
+		// only see gitlab_find_action and gitlab_execute_action.
+		Instructions: buildInstructions(toolSurface),
 		Logger:       slog.Default(),
 		Capabilities: serverCapabilities,
 		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
@@ -798,7 +829,6 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		server.AddReceivingMiddleware(clientcompat.Middleware())
 	}
 
-	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
 	var metaSchemaRoutes map[string]toolutil.ActionMap
 	var surfaceCatalog *actioncatalog.Catalog
 	if toolSurface != config.ToolSurfaceIndividual {
