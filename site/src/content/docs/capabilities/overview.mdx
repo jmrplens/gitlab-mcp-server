@@ -23,12 +23,12 @@ The three capabilities are negotiated during the MCP initialization handshake, w
 
 GitLab MCP Server provides four distinct features, summarized below. Progress and elicitation push information from the server to the client, completions pull suggestions from the server on demand, and icons are static metadata attached to every surface.
 
-| Capability                                                   | Direction       | What It Enables                                                         |
-| ------------------------------------------------------------ | --------------- | ----------------------------------------------------------------------- |
-| [Progress](/gitlab-mcp-server/capabilities/progress/)        | Server → Client | Real-time progress updates for long-running operations                  |
-| [Elicitation](/gitlab-mcp-server/capabilities/elicitation/)  | Server → Client | Interactive wizards — step-by-step forms for creating complex resources |
-| [Completions](/gitlab-mcp-server/capabilities/completions/)  | Client → Server | Argument autocompletion for project names, branches, users, and more    |
-| [Icons](/gitlab-mcp-server/capabilities/icons/) _(metadata)_ | Server → Client | SVG icons for every tool, resource, and prompt                          |
+| Capability                                                   | Direction       | What It Enables                                                                 |
+| ------------------------------------------------------------ | --------------- | ------------------------------------------------------------------------------- |
+| [Progress](/gitlab-mcp-server/capabilities/progress/)        | Server → Client | Real-time progress updates for long-running operations                          |
+| [Elicitation](/gitlab-mcp-server/capabilities/elicitation/)  | Server → Client | Interactive wizards — step-by-step forms for creating complex resources         |
+| [Completions](/gitlab-mcp-server/capabilities/completions/)  | Client → Server | Argument autocompletion for project names, branches, users, and more            |
+| [Icons](/gitlab-mcp-server/capabilities/icons/) _(metadata)_ | Server → Client | Icons for every tool, resource, and prompt — SVG plus light/dark WebP fallbacks |
 
 ## How are MCP capabilities negotiated?
 
@@ -62,9 +62,13 @@ Capability support varies by MCP client, and GitLab MCP Server adapts automatica
 | Icons¹      | ❌              | ✅               | ❓      | ❌           |
 
 ¹ Icons are not a negotiated capability: the server always attaches them and a
-client that cannot render them simply ignores them, losing nothing functional.
-The column therefore records whether a client _renders_ icons, not whether it
-declares support. See [Icons](/gitlab-mcp-server/capabilities/icons/) for the full client matrix.
+client that cannot render any of them simply ignores them, losing nothing
+functional. The column records whether a client renders at least one of the
+three entries gitlab-mcp-server attaches to every icon — a scalable SVG plus
+light/dark WebP fallbacks — not whether it supports every format. VS Code
+Copilot, for example, rejects the SVG entry (`image/svg+xml` is not in its
+MIME allowlist) but renders the theme-matched WebP fallback instead. See
+[Icons](/gitlab-mcp-server/capabilities/icons/) for the full client matrix.
 
 :::note
 Client support evolves rapidly. Check your MCP client's documentation for the latest capability support.

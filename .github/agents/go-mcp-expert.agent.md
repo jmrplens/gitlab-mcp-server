@@ -187,7 +187,7 @@ Always write idiomatic Go code that follows the official SDK patterns and Go com
 - **MCPGODEBUG**: Environment variable for behavior change compatibility (`MCPGODEBUG=x=1,y=2`)
 - **Input validation errors**: Return as tool results (not JSON-RPC errors) so LLMs can self-correct
 - **Tool name validation**: `/^[a-zA-Z0-9_-]+$/` — no dots, spaces, or special chars
-- **Icons**: SVG icon support on tools, resources, and prompts via `mcp.Icon` (SEP-973)
+- **Icons**: icon support on tools, resources, and prompts via `mcp.Icon` (SEP-973) — this project ships an SVG entry plus `Theme`-tagged light/dark WebP fallbacks per icon (`internal/toolutil/icons.go`, `cmd/gen_icon_webp`) for clients that reject SVG
 - **Elicitation**: URL mode for OAuth flows (SEP-1036), enum improvements (SEP-1330)
 - **SSE polling**: Server-Sent Events polling transport (SEP-1699) — avoid in favor of streamable HTTP
 

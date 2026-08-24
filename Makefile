@@ -11,7 +11,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest check-server-json check-openplugin check-mcpb mcpb publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-openplugin check-mcpb mcpb publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        inspector inspector-stop help
@@ -641,6 +641,22 @@ gen-lhm-manifest:
 ## check-lhm-manifest: verify lhm.plugin.json declares the registered MCP surface.
 check-lhm-manifest:
 	go run ./cmd/gen_lhm_manifest/ --check
+
+# ─── Icon Assets ─────────────────────────────────────────────────────────────
+
+## gen-icon-webp: regenerate the light/dark WebP fallbacks for every icon in
+## internal/toolutil/icons.go. Maintainer-only: requires rsvg-convert
+## (librsvg) and cwebp (libwebp) on PATH — `brew install librsvg webp` or the
+## equivalent apt/dnf packages. Not part of CI; the generated .webp files
+## under internal/toolutil/icons/webp/ are committed, so ordinary builds
+## never invoke this. Run it after adding or editing an icon.
+gen-icon-webp:
+	go run ./cmd/gen_icon_webp/
+
+## check-icon-webp: verify the committed WebP icon assets match icons.go.
+## Same external-tool requirement as gen-icon-webp.
+check-icon-webp:
+	go run ./cmd/gen_icon_webp/ --check
 
 ## check-server-json: validate server.json with the official MCP Registry publisher.
 check-server-json:
