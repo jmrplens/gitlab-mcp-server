@@ -186,6 +186,23 @@ func TestAllIcons_WebPFallbackTheme(t *testing.T) {
 	}
 }
 
+// TestWebpIcon_PanicsOnMissingAsset verifies webpIcon fails fast, with an
+// actionable message, when an icon name has no matching embedded WebP asset
+// instead of silently returning a broken or empty mcp.Icon.
+func TestWebpIcon_PanicsOnMissingAsset(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("webpIcon() did not panic for a name with no embedded asset")
+		}
+		msg, ok := r.(string)
+		if !ok || !strings.Contains(msg, "missing embedded icon asset") || !strings.Contains(msg, "gen_icon_webp") {
+			t.Errorf("panic value = %v, want it to name the missing asset and point at cmd/gen_icon_webp", r)
+		}
+	}()
+	webpIcon("this-icon-name-has-no-webp-asset", "light", mcp.IconThemeLight)
+}
+
 // TestAllIcons_WebPFallbackDecodes verifies the light/dark WebP payloads
 // decode to a valid 16x16 image, catching a corrupt embed or a stale
 // generated asset that no longer matches its declared Sizes.
