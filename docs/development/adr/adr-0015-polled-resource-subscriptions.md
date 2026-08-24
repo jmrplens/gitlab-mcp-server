@@ -123,7 +123,10 @@ make the worst case something an operator can predict.
   resources it applies to are registered.
 - NEU-002: If GitLab ever ships an events API reachable from this process,
   the reader interface is the seam to swap; the cadence, bounds and lease
-  logic are independent of where the content comes from.
+  logic are independent of where the content comes from. Webhook deliveries
+  were investigated and declined as that events source — see
+  [ADR-0016](adr-0016-no-webhook-ingestion.md) — but this seam remains open
+  for a genuinely pull-safe future events API, not for inbound push.
 
 ## Alternatives Considered
 

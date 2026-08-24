@@ -1,17 +1,12 @@
 // Package subscriptions implements MCP resource subscriptions
 // (resources/subscribe) over GitLab resources.
 //
-// Delivery is polling-based in both transports: a watcher re-reads a
+// Delivery is polling-based, in both transports: a watcher re-reads a
 // subscribed URI on an interval and emits notifications/resources/updated
-// only when the content actually changed. Webhook deliveries, when
-// configured, only wake a watcher early — they are never trusted as the
-// authoritative signal, because a webhook body cannot answer "is this
-// particular subscriber still allowed to see this?" and GitLab documents
-// neither a retry policy nor a delivery ordering guarantee.
-//
-// See plan/2026-08-24-resource-subscriptions-design.md for the full design
-// and plan/2026-08-24-webhook-research-synthesis.md for the primary-source
-// research behind the webhook decisions.
+// only when the content actually changed. There is no webhook path — this
+// server does not run an inbound receiver of any kind, a decision recorded
+// in ADR-0016 (docs/development/adr/adr-0016-no-webhook-ingestion.md), not
+// a gap left for later.
 package subscriptions
 
 import (
