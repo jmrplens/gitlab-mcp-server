@@ -26,6 +26,7 @@ dist/
 /add_docs
 /find_dupes
 /gen_docker_tools
+/gen_icon_webp
 /gen_llms
 /gen_stats
 /gitlab-mcp-server
