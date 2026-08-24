@@ -788,14 +788,29 @@ var sharedSchemaCache = mcp.NewSchemaCache()
 // resources, and prompts registered for the given GitLab client.
 // Used both by stdio mode (single call) and by the HTTP server pool factory.
 // If updater is non-nil, server update MCP tools are registered.
-func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) (*mcp.Server, error) {
+func createServer(
+	client *gitlabclient.Client,
+	cfg *config.ServerConfig,
+	updater *autoupdate.Updater,
+	opts ...serverOption,
+) (*mcp.Server, error) {
 	if client == nil {
 		return nil, errors.New("createServer: client must not be nil")
 	}
 
+	settings := newServerSettings(opts)
 	completionHandler := completions.NewHandler(client)
 	capabilitySurface := config.EffectiveCapabilitySurface(cfg.CapabilitySurface)
 	toolSurface := config.EffectiveToolSurface(cfg.MetaTools, cfg.ToolSurface)
+
+	// Resource subscriptions. The manager has to exist before the server,
+	// because its handlers travel in ServerOptions; the notifier is
+	// attached to the server once there is one. The SDK turns the
+	// resources.subscribe capability on by itself when a SubscribeHandler
+	// is set, so leaving these nil is what withholds the capability on a
+	// surface that registers no subscribable resources.
+	subs := newSubscriptionRuntime(client, cfg, settings.subscriptions)
+	subscribeHandler, unsubscribeHandler := subs.handlers()
 	serverCapabilities := &mcp.ServerCapabilities{
 		Tools:     &mcp.ToolCapabilities{ListChanged: true},
 		Resources: &mcp.ResourceCapabilities{ListChanged: true},
@@ -830,7 +845,12 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 				"progress", req.Params.Progress,
 			)
 		},
-		KeepAlive: 30 * time.Second,
+		// Resource subscriptions. Setting these is what makes the SDK
+		// advertise resources.subscribe; both are nil together on a
+		// surface that registers no subscribable resources.
+		SubscribeHandler:   subscribeHandler,
+		UnsubscribeHandler: unsubscribeHandler,
+		KeepAlive:          30 * time.Second,
 		// One page must fit the whole catalog: OpenAI Codex ignores
 		// tools/list nextCursor in its default protocol mode, so any second
 		// page would be silently lost. The largest surface (individual mode,
@@ -843,6 +863,8 @@ func createServer(client *gitlabclient.Client, cfg *config.ServerConfig, updater
 		// schema resolution on every registration after the first.
 		SchemaCache: sharedSchemaCache,
 	})
+
+	subs.attach(server)
 
 	// SEP-2549 cache hints: catalogs and resource reads are token- and
 	// tier-dependent, so every cacheable result is stamped "private". A
