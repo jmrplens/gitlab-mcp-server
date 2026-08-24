@@ -123,7 +123,7 @@ mcp.AddTool(server, tool, func(ctx context.Context, req *mcp.CallToolRequest, in
 
 ### Tool Icons
 
-Provide domain-specific SVG icons on all tools, resources, and prompts for visual identification in client UIs.
+Provide domain-specific icons on all tools, resources, and prompts for visual identification in client UIs. Each icon ships as an SVG entry plus `Theme`-tagged light/dark WebP fallbacks, so clients that reject SVG (VS Code Copilot, for example) still render one.
 
 ### Elicitation
 

@@ -7,7 +7,7 @@ Visual identity for every tool, resource, and prompt in gitlab-mcp-server.
 
 ## Overview
 
-gitlab-mcp-server ships **50 unique domain SVG icons** assigned to all 1061 self-managed Enterprise/Premium tools (1067 on GitLab.com Enterprise/Premium with Orbit), 32 base meta-tools (48 self-managed Enterprise, 49 GitLab.com Enterprise), 45 resources, and 37 prompts. Icons help MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, Orbit, etc.).
+gitlab-mcp-server ships **50 unique domain icons** assigned to all 1061 self-managed Enterprise/Premium tools (1067 on GitLab.com Enterprise/Premium with Orbit), 32 base meta-tools (48 self-managed Enterprise, 49 GitLab.com Enterprise), 45 resources, and 37 prompts. Each icon carries an SVG entry plus light/dark WebP fallbacks (see [Encoding Format](#encoding-format)), so MCP clients render recognizable UI elements for each GitLab domain (branches, issues, pipelines, merge requests, Orbit, etc.) whether or not they accept SVG.
 
 Icons are defined in [`internal/toolutil/icons.go`](../../../internal/toolutil/icons.go) and consumed via the `Icons` field on every `mcp.Tool`, `mcp.Resource`, and `mcp.Prompt` registration.
 
@@ -33,15 +33,37 @@ interface Icon {
 | `image/svg+xml` | **SHOULD** support | Scalable, used by this project |
 | `image/webp`    | **SHOULD** support | Modern efficient format        |
 
-gitlab-mcp-server uses `image/svg+xml` exclusively. Clients that only implement the MUST-level MIME types (PNG/JPEG) will not render these icons.
+gitlab-mcp-server ships every icon as **three entries**: one `image/svg+xml`
+entry plus two `image/webp` fallbacks, so a client that rejects the SVG
+entry (an allowed choice — SVG is only **SHOULD**-level per the table above)
+still renders an icon instead of none. Clients that support neither format
+(PNG/JPEG-only, MUST-level clients) will not render these icons.
 
 ### Client Compatibility
 
-| MCP Client               | SVG Icons | Notes                      |
-| ------------------------ | --------- | -------------------------- |
-| VS Code (GitHub Copilot) | Yes       | Full SVG rendering support |
-| Claude Desktop           | No        | Does not render tool icons |
-| Continue.dev             | Partial   | Depends on version         |
+Sourced from a primary-source (client source code and official docs, not
+marketing copy) survey of 15 MCP clients on 2026-08-24, cross-checked
+against each client's actual behavior rather than the spec's aspirational
+"SHOULD support" language:
+
+| MCP Client                        | Renders | Notes                                                                                                                                                                                                                                                                |
+| --------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VS Code (GitHub Copilot)          | Yes     | Rejects the SVG entry (`image/svg+xml` not in its MIME allowlist) but renders the `Theme`-matched WebP fallback                                                                                                                                                      |
+| Cursor                            | Unclear | Accepts the SVG format in validation, but server-icon rendering itself was staff-confirmed absent as of March 2026 (an unconfirmed hint of improvement followed in June 2026); tool/resource/prompt icon rendering unverified either way                             |
+| OpenAI Codex (CLI + IDE core)     | Unclear | Server and tool icons are captured and forwarded through Codex's internal protocol, but no code that reads them back out for rendering was found anywhere in the open-source TUI; the closed-source VS Code extension and ChatGPT desktop app could not be inspected |
+| Windsurf / Devin Desktop          | Unknown | No icon documentation found anywhere; closed source, no public client to inspect                                                                                                                                                                                     |
+| JetBrains AI Assistant / Junie    | Unknown | Resources and prompts are unsupported entirely (open, unaddressed tracker items JUNIE-1606/1607), so most icon placements are moot; server/tool icon rendering unverified                                                                                            |
+| Claude Desktop                    | No      | The protocol-level `Implementation.icons`/`Tool.icons` fields are not confirmed rendered anywhere; a *separate*, unrelated `.mcpb` manifest icon mechanism does work for locally-installed extensions, which is not what this project ships                          |
+| Claude Code                       | No      | Text-only interface — a generic placeholder and the raw tool name, confirmed by several open feature requests asking for exactly this                                                                                                                                |
+| Kiro (AWS)                        | No      | Prompts and resource templates show a generic "MCP" protocol badge next to every entry, not the per-item `Icons` field this project populates                                                                                                                        |
+| Zed                               | No      | Verified in source: none of its `Implementation`/`Tool`/`Resource`/`Prompt` types carry an `icons` field at all                                                                                                                                                      |
+| Cline                             | No      | No icon rendering found anywhere in the client (verified in source)                                                                                                                                                                                                  |
+| Continue.dev                      | No      | Does not read the MCP Icons field in any version, in any format; has an unrelated proprietary `faviconUrl` setting instead                                                                                                                                           |
+| Goose (Block)                     | No      | The underlying `rmcp` SDK carries the field; Goose's own client code never reads it back out                                                                                                                                                                         |
+| LibreChat                         | No      | No icon rendering found anywhere in the client                                                                                                                                                                                                                       |
+| Open WebUI                        | No      | No icon rendering found anywhere in the client                                                                                                                                                                                                                       |
+| 5ire / Witsy                      | No      | No icon rendering found in either client                                                                                                                                                                                                                             |
+| *Custom clients (direct LLM API)* | Depends | Renders whichever entries its own MCP client implementation honors — this project's SVG-plus-WebP pair covers both the scalable and the MIME-restricted path a spec-faithful (SEP-973) implementation would choose between                                           |
 
 ## Implementation Details
 
@@ -51,19 +73,35 @@ All icons use inline **base64-encoded data URIs** to avoid external network depe
 
 ```text
 data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIC4uLj4uLi48L3N2Zz4=
+data:image/webp;base64,UklGRiYAAABXRUJQVlA4...
 ```
 
-Each `mcp.Icon` advertises:
+Each icon's `[]mcp.Icon` slice carries three entries:
 
-- `Source` — the base64 data URI shown above.
-- `MIMEType` — `image/svg+xml`.
-- `Sizes` — `["any"]`, signalling that the SVG is scalable.
+| Entry | `MIMEType`      | `Sizes`     | `Theme`  | Fill                 |
+| ----- | --------------- | ----------- | -------- | -------------------- |
+| SVG   | `image/svg+xml` | `["any"]`   | *(none)* | `currentColor`       |
+| WebP  | `image/webp`    | `["16x16"]` | `light`  | near-black `#1A1A1A` |
+| WebP  | `image/webp`    | `["16x16"]` | `dark`   | near-white `#FAFAFA` |
+
+The SVG entry is resolution-independent and theme-adaptive through
+`currentColor`; every SVG-capable client renders it. The two WebP entries
+are pre-rasterized at 16×16 (a raster format cannot declare
+`Sizes: ["any"]`) and colored per theme rather than left in a single
+saturated color, so a client that reads `Icon.Theme` gets an icon that
+matches its UI instead of clashing with it. See
+[`cmd/gen_icon_webp`](../../../cmd/gen_icon_webp/main.go) for the generator
+and the size/format tradeoff it was built against: WebP lossless beat
+optimized PNG by ~32% at the same 16×16 size; JPEG and GIF were disqualified
+outright (JPEG has no alpha channel, and GIF's 256-color, 1-bit-alpha
+palette would band the antialiased edges).
 
 ### Design Principles
 
 - **16×16 viewport** — minimal size optimized for tool lists and sidebars
 - **Single-path SVGs** — lightweight markup, fast parsing
-- **`currentColor` fill** — icons inherit the client's text color, adapting to light and dark themes automatically
+- **`currentColor` fill on the SVG entry** — icons inherit the client's text color, adapting to light and dark themes automatically
+- **`Theme`-paired WebP fallback** — clients that reject SVG still get a themed icon instead of none
 - **No external dependencies** — data URIs embedded in the binary, zero network requests
 - **One icon per domain** — related tools share the same icon for visual grouping
 
@@ -81,18 +119,31 @@ func RegisterAll(server *mcp.Server, client *gitlab.Client, opts RegisterOptions
 }
 ```
 
-The `icon()` helper in `toolutil` base64-encodes each SVG constant once at registration time and wraps the result in a `[]mcp.Icon` slice:
+The `icon()` helper in `toolutil` base64-encodes each SVG constant, reads its
+pre-generated WebP fallbacks from an embedded filesystem, and wraps all
+three as a `[]mcp.Icon` slice:
 
 ```go
-func icon(svg string) []mcp.Icon {
+//go:embed icons/webp/*.webp
+var webpFS embed.FS
+
+func icon(name, svg string) []mcp.Icon {
     encoded := base64.StdEncoding.EncodeToString([]byte(svg))
-    return []mcp.Icon{{
-        Source:   "data:" + svgMIME + ";base64," + encoded,
-        MIMEType: svgMIME,
-        Sizes:    []string{"any"},
-    }}
+    return []mcp.Icon{
+        {Source: "data:" + svgMIME + ";base64," + encoded, MIMEType: svgMIME, Sizes: []string{"any"}},
+        webpIcon(name, "light", mcp.IconThemeLight),
+        webpIcon(name, "dark", mcp.IconThemeDark),
+    }
 }
 ```
+
+The WebP assets under `internal/toolutil/icons/webp/` are generated by
+[`cmd/gen_icon_webp`](../../../cmd/gen_icon_webp/main.go) from the SVG
+constants (`go run ./cmd/gen_icon_webp/`, or `make gen-icon-webp`) and
+committed to the repository; ordinary builds only embed them, they never
+regenerate them. Regeneration requires `rsvg-convert` (librsvg) and `cwebp`
+(libwebp) on `PATH` and is a maintainer-only step — `make check-icon-webp`
+verifies the committed assets are still current.
 
 ## Icon Gallery
 
@@ -292,12 +343,16 @@ Three details differ from the domain icons:
 - **It is a single closed path.** The full logo in `site/src/assets` cannot be
   reduced this way: its coloured paths are open contours that close only
   against each other, so filling any one of them alone renders a broken shape.
-- **It still uses `currentColor` and declares no `Theme`.** A monochrome mark
-  that inherits the client's colour needs one entry, not a light/dark pair, and
-  works in themes the specification does not name. It also keeps the handshake
-  small — the mark costs roughly 190 bytes more than a domain glyph, and under
-  SEP-2575 the whole `Implementation` rides in the `_meta` of every response,
-  not just the handshake.
+- **Its SVG entry uses `currentColor` and declares no `Theme`**, same as the
+  domain icons — it works in themes the specification does not name. It gets
+  the same `light`/`dark` WebP pair as every other icon, for the same reason:
+  a client that rejects SVG (VS Code) still needs something to render. Under
+  SEP-2575 the whole `Implementation` — all three entries — rides in the
+  `_meta` of every response, not just the handshake, which is why the SVG
+  entry alone is still worth keeping minimal: at 584 raw bytes it is the
+  largest single icon in the set, about twice the ~298-byte domain-icon
+  average, because a recognizable logo needs more path detail than a simple
+  glyph.
 
 Before this existed the server advertised `IconServer`, the same glyph as
 `gitlab_execute_action`, so a client rendering both showed one picture for the
@@ -305,15 +360,18 @@ server and for one of its tools.
 
 ## Testing
 
-Icon integrity is validated by 5 unit tests in [`internal/toolutil/icons_test.go`](../../../internal/toolutil/icons_test.go):
+Icon integrity is validated by 8 unit tests in [`internal/toolutil/icons_test.go`](../../../internal/toolutil/icons_test.go):
 
-| Test                           | Validates                                                  |
-| ------------------------------ | ---------------------------------------------------------- |
-| `TestAllIcons_ValidDataURI`    | Every icon Source starts with `data:image/svg+xml;base64,` |
-| `TestAllIcons_CorrectMIMEType` | MIME type is `image/svg+xml`                               |
-| `TestAllIcons_NonEmpty`        | Source is not empty                                        |
-| `TestAllIcons_DecodesToSVG`    | Base64 payload decodes to a `<svg>...</svg>` document      |
-| `TestAllIcons_SizesAny`        | `Sizes` field equals `["any"]` (scalable)                  |
+| Test                               | Validates                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| `TestAllIcons_ThreeEntries`        | Every icon has exactly 3 entries (SVG + WebP light + WebP dark)          |
+| `TestAllIcons_ValidDataURI`        | Every entry's Source starts with the matching `data:<MIMEType>;base64,`  |
+| `TestAllIcons_CorrectMIMEType`     | Entry 0 is `image/svg+xml`; entries 1–2 are `image/webp`                 |
+| `TestAllIcons_NonEmpty`            | No entry's Source is empty                                               |
+| `TestAllIcons_DecodesToSVG`        | The SVG entry's base64 payload decodes to a `<svg>...</svg>` document    |
+| `TestAllIcons_SizesAny`            | The SVG entry's `Sizes` field equals `["any"]` (scalable)                |
+| `TestAllIcons_WebPFallbackTheme`   | WebP entries declare `Theme` `light`/`dark` and `Sizes: ["16x16"]`       |
+| `TestAllIcons_WebPFallbackDecodes` | WebP payloads decode to a real 16×16 image via `golang.org/x/image/webp` |
 
 ## Security Considerations
 
@@ -332,3 +390,4 @@ This project mitigates these risks by using self-contained inline SVGs with no e
 - [SVG Data URI Encoding](https://developer.mozilla.org/en-US/docs/Web/SVG/Tutorial/SVG_as_an_Image)
 - [Source Code — icons.go](../../../internal/toolutil/icons.go)
 - [Source Code — icons_test.go](../../../internal/toolutil/icons_test.go)
+- [Source Code — cmd/gen_icon_webp](../../../cmd/gen_icon_webp/main.go)

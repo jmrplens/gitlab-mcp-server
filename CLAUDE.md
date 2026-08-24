@@ -28,7 +28,7 @@
 | MCP Prompts               | 37 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit)      |
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 3 (progress, elicitation, completions)                                             |
-| MCP Icons                 | 51 SVG icons (base64 data URIs, `Sizes: ["any"]`): 50 domain icons on tools, resources and prompts, plus the brand mark on the server identity |
+| MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG |
 | Source files (tools)      | 756 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 362 test files under `internal/tools/`                                                                       |
 | Go packages               | 224 total; 176 under `internal/tools/...`                                                                    |
@@ -61,6 +61,7 @@ gitlab-mcp-server/
 │   ├── format_md_tables/        # Formats Markdown pipe tables in README.md and docs/
 │   ├── gen_action_catalog_manifest/ # Generates audited action catalog manifest
 │   ├── gen_docker_tools/        # Generates Docker-related tool metadata
+│   ├── gen_icon_webp/           # Regenerates light/dark WebP icon fallbacks from icons.go (maintainer-only, requires rsvg-convert + cwebp)
 │   ├── gen_lhm_manifest/        # Generates the capability arrays in lhm.plugin.json (LobeHub)
 │   ├── gen_llms/                # Generates llms.txt and llms-full.txt for LLM discovery
 │   ├── gen_stats/               # Generates README stats section from codebase metrics

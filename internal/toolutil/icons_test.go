@@ -3,13 +3,16 @@ package toolutil
 
 import (
 	"encoding/base64"
+	"image"
 	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	_ "golang.org/x/image/webp" // registers the "webp" format with image.DecodeConfig
 )
 
-// allIcons returns every domain icon slice for exhaustive validation.
+// allIcons returns every icon slice (domain icons plus the brand mark) for
+// exhaustive validation.
 func allIcons() map[string][]mcp.Icon {
 	return map[string][]mcp.Icon{
 		"Branch":        IconBranch,
@@ -62,51 +65,73 @@ func allIcons() map[string][]mcp.Icon {
 		"Bot":           IconBot,
 		"Vulnerability": IconVulnerability,
 		"Compliance":    IconCompliance,
+		"Brand":         IconBrand,
+	}
+}
+
+// TestAllIcons_ThreeEntries verifies every icon carries exactly three
+// entries: the SVG plus its light and dark WebP fallbacks.
+func TestAllIcons_ThreeEntries(t *testing.T) {
+	for name, icons := range allIcons() {
+		t.Run(name, func(t *testing.T) {
+			if len(icons) != 3 {
+				t.Fatalf("expected 3 icon entries (SVG + WebP light + WebP dark), got %d", len(icons))
+			}
+		})
 	}
 }
 
 // TestAllIcons_ValidDataURI verifies every icon uses a valid base64-encoded
-// data URI prefix per RFC 2397.
+// data URI prefix per RFC 2397, matching its declared MIME type.
 func TestAllIcons_ValidDataURI(t *testing.T) {
-	const prefix = "data:image/svg+xml;base64,"
 	for name, icons := range allIcons() {
 		t.Run(name, func(t *testing.T) {
-			if len(icons) != 1 {
-				t.Fatalf("expected 1 icon, got %d", len(icons))
-			}
-			ic := icons[0]
-			if !strings.HasPrefix(ic.Source, prefix) {
-				t.Errorf("Source does not start with %q: %s", prefix, ic.Source[:min(60, len(ic.Source))])
+			for i, ic := range icons {
+				prefix := "data:" + ic.MIMEType + ";base64,"
+				if !strings.HasPrefix(ic.Source, prefix) {
+					t.Errorf("entry %d: Source does not start with %q: %s", i, prefix, ic.Source[:min(60, len(ic.Source))])
+				}
 			}
 		})
 	}
 }
 
-// TestAllIcons_CorrectMIMEType verifies every icon reports the correct MIME type.
+// TestAllIcons_CorrectMIMEType verifies the SVG entry and both WebP
+// fallback entries report the correct MIME type.
 func TestAllIcons_CorrectMIMEType(t *testing.T) {
 	for name, icons := range allIcons() {
 		t.Run(name, func(t *testing.T) {
-			if icons[0].MIMEType != "image/svg+xml" {
-				t.Errorf("MIMEType = %q, want %q", icons[0].MIMEType, "image/svg+xml")
+			svgIcon, light, dark := icons[0], icons[1], icons[2]
+			if svgIcon.MIMEType != "image/svg+xml" {
+				t.Errorf("SVG entry MIMEType = %q, want %q", svgIcon.MIMEType, "image/svg+xml")
+			}
+			if light.MIMEType != "image/webp" {
+				t.Errorf("light entry MIMEType = %q, want %q", light.MIMEType, "image/webp")
+			}
+			if dark.MIMEType != "image/webp" {
+				t.Errorf("dark entry MIMEType = %q, want %q", dark.MIMEType, "image/webp")
 			}
 		})
 	}
 }
 
-// TestAllIcons_NonEmpty verifies no icon has an empty Source.
+// TestAllIcons_NonEmpty verifies no icon entry has an empty Source.
 func TestAllIcons_NonEmpty(t *testing.T) {
 	for name, icons := range allIcons() {
 		t.Run(name, func(t *testing.T) {
-			if icons[0].Source == "" {
-				t.Error("Source is empty")
+			for i, ic := range icons {
+				if ic.Source == "" {
+					t.Errorf("entry %d: Source is empty", i)
+				}
 			}
 		})
 	}
 }
 
-// TestAllIcons_DecodesToSVG verifies the base64-encoded payload decodes to
-// well-formed SVG markup. This catches regressions where the encoder emits
-// invalid base64 or where a raw SVG sneaks back into the data URI.
+// TestAllIcons_DecodesToSVG verifies the SVG entry's base64-encoded payload
+// decodes to well-formed SVG markup. This catches regressions where the
+// encoder emits invalid base64 or where a raw SVG sneaks back into the data
+// URI.
 func TestAllIcons_DecodesToSVG(t *testing.T) {
 	const prefix = "data:image/svg+xml;base64,"
 	for name, icons := range allIcons() {
@@ -126,14 +151,64 @@ func TestAllIcons_DecodesToSVG(t *testing.T) {
 	}
 }
 
-// TestAllIcons_SizesAny verifies every icon advertises Sizes=["any"] so
-// clients know the SVG is resolution-independent.
+// TestAllIcons_SizesAny verifies the SVG entry advertises Sizes=["any"] so
+// clients know it is resolution-independent.
 func TestAllIcons_SizesAny(t *testing.T) {
 	for name, icons := range allIcons() {
 		t.Run(name, func(t *testing.T) {
 			sizes := icons[0].Sizes
 			if len(sizes) != 1 || sizes[0] != "any" {
-				t.Errorf("Sizes = %v, want [\"any\"]", sizes)
+				t.Errorf("SVG entry Sizes = %v, want [\"any\"]", sizes)
+			}
+		})
+	}
+}
+
+// TestAllIcons_WebPFallbackTheme verifies the light/dark WebP entries
+// declare the matching mcp.IconTheme and a concrete 16x16 size, since a
+// raster image is not resolution-independent like the SVG entry.
+func TestAllIcons_WebPFallbackTheme(t *testing.T) {
+	for name, icons := range allIcons() {
+		t.Run(name, func(t *testing.T) {
+			light, dark := icons[1], icons[2]
+			if light.Theme != mcp.IconThemeLight {
+				t.Errorf("light entry Theme = %q, want %q", light.Theme, mcp.IconThemeLight)
+			}
+			if dark.Theme != mcp.IconThemeDark {
+				t.Errorf("dark entry Theme = %q, want %q", dark.Theme, mcp.IconThemeDark)
+			}
+			for i, ic := range []mcp.Icon{light, dark} {
+				if len(ic.Sizes) != 1 || ic.Sizes[0] != "16x16" {
+					t.Errorf("WebP entry %d Sizes = %v, want [\"16x16\"]", i+1, ic.Sizes)
+				}
+			}
+		})
+	}
+}
+
+// TestAllIcons_WebPFallbackDecodes verifies the light/dark WebP payloads
+// decode to a valid 16x16 image, catching a corrupt embed or a stale
+// generated asset that no longer matches its declared Sizes.
+func TestAllIcons_WebPFallbackDecodes(t *testing.T) {
+	const prefix = "data:image/webp;base64,"
+	for name, icons := range allIcons() {
+		t.Run(name, func(t *testing.T) {
+			for i, ic := range []mcp.Icon{icons[1], icons[2]} {
+				payload := strings.TrimPrefix(ic.Source, prefix)
+				decoded, err := base64.StdEncoding.DecodeString(payload)
+				if err != nil {
+					t.Fatalf("entry %d: base64 decode failed: %v", i+1, err)
+				}
+				cfg, format, err := image.DecodeConfig(strings.NewReader(string(decoded)))
+				if err != nil {
+					t.Fatalf("entry %d: image.DecodeConfig failed: %v", i+1, err)
+				}
+				if format != "webp" {
+					t.Errorf("entry %d: decoded format = %q, want %q", i+1, format, "webp")
+				}
+				if cfg.Width != 16 || cfg.Height != 16 {
+					t.Errorf("entry %d: decoded dimensions = %dx%d, want 16x16", i+1, cfg.Width, cfg.Height)
+				}
 			}
 		})
 	}
