@@ -23,6 +23,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -45,11 +46,13 @@ const (
 	colorDark  = "#FAFAFA" // near-white, for Icon.Theme "dark" (dark background)
 )
 
+// iconSource is one svg<Name> constant extracted from icons.go.
 type iconSource struct {
 	name string // lowercase icon name, e.g. "branch"
 	svg  string
 }
 
+// variant is one of the two themed WebP files generated per icon.
 type variant struct {
 	suffix string
 	color  string
@@ -62,68 +65,95 @@ func variants() []variant {
 	}
 }
 
-func main() {
-	check := len(os.Args) > 1 && os.Args[1] == "--check"
+// rasterizer renders svg (with "currentColor" replaced by color) into an
+// encoded image and returns its bytes. Production code uses [rasterize]
+// (rsvg-convert + cwebp); tests inject a fake so checkAll/generateAll are
+// exercised without requiring those external tools on PATH.
+type rasterizer func(svg, color string) ([]byte, error)
 
+func main() {
+	check := flag.Bool("check", false, "verify the committed WebP assets match icons.go without writing them")
+	flag.Parse()
+
+	if err := requireTools("rsvg-convert", "cwebp"); err != nil {
+		fatal(err)
+	}
+	if err := run(*check, rasterize); err != nil {
+		fatal(err)
+	}
+}
+
+// run locates the repository root and delegates to runIn with this
+// command's real source/output paths.
+func run(check bool, raster rasterizer) error {
 	root, err := repoRoot()
 	if err != nil {
-		fatal(err)
+		return err
 	}
+	return runIn(root, sourceFile, outDir, check, raster)
+}
 
-	icons, err := extractIcons(filepath.Join(root, sourceFile))
+// runIn is gen_icon_webp's testable core: given an explicit repo root, an
+// icons.go path and a WebP output directory (both relative to root), it
+// extracts every svg<Name> constant and either verifies (check) or
+// (re)writes the WebP assets for all of them using raster.
+func runIn(root, source, out string, check bool, raster rasterizer) error {
+	icons, err := extractIcons(filepath.Join(root, source))
 	if err != nil {
-		fatal(err)
+		return err
 	}
 	if len(icons) == 0 {
-		fatal(fmt.Errorf("no svg<Name> constants found in %s", sourceFile))
+		return fmt.Errorf("no svg<Name> constants found in %s", source)
 	}
 
-	if toolErr := requireTools("rsvg-convert", "cwebp"); toolErr != nil {
-		fatal(toolErr)
-	}
-
-	dir := filepath.Join(root, outDir)
+	dir := filepath.Join(root, out)
 	if check {
-		runCheck(dir, icons)
-		return
+		if checkErr := checkAll(dir, icons, raster); checkErr != nil {
+			return checkErr
+		}
+		fmt.Printf("icon webp assets are up to date (%d icons, %d files)\n", len(icons), len(icons)*2)
+		return nil
 	}
-	runGenerate(dir, icons)
+
+	written, genErr := generateAll(dir, icons, raster)
+	if genErr != nil {
+		return genErr
+	}
+	fmt.Printf("wrote %d webp files for %d icons into %s\n", written, len(icons), out)
+	return nil
 }
 
-func runCheck(dir string, icons []iconSource) {
-	if err := checkAll(dir, icons); err != nil {
-		fatal(err)
-	}
-	fmt.Printf("icon webp assets are up to date (%d icons, %d files)\n", len(icons), len(icons)*2)
-}
-
-func runGenerate(dir string, icons []iconSource) {
-	if mkErr := os.MkdirAll(dir, 0o750); mkErr != nil {
-		fatal(mkErr)
+// generateAll (re)writes every icon's light/dark WebP file under dir,
+// returning how many files it wrote.
+func generateAll(dir string, icons []iconSource, raster rasterizer) (int, error) {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return 0, err
 	}
 	written := 0
 	for _, ic := range icons {
 		for _, v := range variants() {
 			path := filepath.Join(dir, ic.name+v.suffix+".webp")
-			data, rasterErr := rasterize(ic.svg, v.color)
+			data, rasterErr := raster(ic.svg, v.color)
 			if rasterErr != nil {
-				fatal(fmt.Errorf("%s: %w", ic.name, rasterErr))
+				return written, fmt.Errorf("%s: %w", ic.name, rasterErr)
 			}
 			if writeErr := os.WriteFile(path, data, 0o644); writeErr != nil { //nolint:gosec // generated asset, not sensitive
-				fatal(writeErr)
+				return written, writeErr
 			}
 			written++
 		}
 	}
-	fmt.Printf("wrote %d webp files for %d icons into %s\n", written, len(icons), outDir)
+	return written, nil
 }
 
-func checkAll(dir string, icons []iconSource) error {
+// checkAll reports whether every icon's light/dark WebP file under dir is
+// present and byte-identical to what raster would produce.
+func checkAll(dir string, icons []iconSource, raster rasterizer) error {
 	var stale []string
 	for _, ic := range icons {
 		for _, v := range variants() {
 			path := filepath.Join(dir, ic.name+v.suffix+".webp")
-			want, err := rasterize(ic.svg, v.color)
+			want, err := raster(ic.svg, v.color)
 			if err != nil {
 				return fmt.Errorf("%s: %w", ic.name, err)
 			}
@@ -142,28 +172,49 @@ func checkAll(dir string, icons []iconSource) error {
 
 // rasterize renders svg (with every "currentColor" replaced by color) to a
 // 16x16 PNG via rsvg-convert, then re-encodes it as lossless WebP via cwebp.
+// This is the only function that shells out to external tools; production
+// code reaches it through the [rasterizer] indirection.
+//
+// Both tools are invoked by their exec.LookPath-resolved absolute path,
+// not by bare name: passing a bare name lets exec.Command re-resolve it
+// against PATH at run time, which a writable-PATH-entry attack could hijack
+// (Sonar go:S4036 / CWE-427 uncontrolled search path).
+//
+// Coverage note: the rsvg-convert LookPath and Run failure branches are
+// each tested directly; the cwebp LookPath and Run failures are not, since
+// forcing "rsvg-convert present, cwebp absent" needs test-machine-specific
+// PATH surgery, and forcing cwebp's Run to fail needs a PNG rsvg-convert
+// itself refuses to ever emit — not worth it for a maintainer-only tool.
 func rasterize(svg, color string) ([]byte, error) {
 	colored := strings.ReplaceAll(svg, "currentColor", color)
 	ctx := context.Background()
 
-	rsvg := exec.CommandContext(ctx, "rsvg-convert", "-w", rasterSize, "-h", rasterSize, "--format=png")
+	rsvgPath, err := exec.LookPath("rsvg-convert")
+	if err != nil {
+		return nil, err
+	}
+	rsvg := exec.CommandContext(ctx, rsvgPath, "-w", rasterSize, "-h", rasterSize, "--format=png")
 	rsvg.Stdin = strings.NewReader(colored)
 	var png bytes.Buffer
 	rsvg.Stdout = &png
 	var rsvgErr bytes.Buffer
 	rsvg.Stderr = &rsvgErr
-	if err := rsvg.Run(); err != nil {
-		return nil, fmt.Errorf("rsvg-convert: %w: %s", err, rsvgErr.String())
+	if runErr := rsvg.Run(); runErr != nil {
+		return nil, fmt.Errorf("rsvg-convert: %w: %s", runErr, rsvgErr.String())
 	}
 
-	cwebp := exec.CommandContext(ctx, "cwebp", "-lossless", "-z", "9", "-quiet", "-o", "-", "--", "-")
+	cwebpPath, err := exec.LookPath("cwebp")
+	if err != nil {
+		return nil, err
+	}
+	cwebp := exec.CommandContext(ctx, cwebpPath, "-lossless", "-z", "9", "-quiet", "-o", "-", "--", "-")
 	cwebp.Stdin = bytes.NewReader(png.Bytes())
 	var webp bytes.Buffer
 	cwebp.Stdout = &webp
 	var cwebpErr bytes.Buffer
 	cwebp.Stderr = &cwebpErr
-	if err := cwebp.Run(); err != nil {
-		return nil, fmt.Errorf("cwebp: %w: %s", err, cwebpErr.String())
+	if runErr := cwebp.Run(); runErr != nil {
+		return nil, fmt.Errorf("cwebp: %w: %s", runErr, cwebpErr.String())
 	}
 	return webp.Bytes(), nil
 }
@@ -199,7 +250,10 @@ func constDeclIcons(decl ast.Decl) []iconSource {
 }
 
 // valueSpecIcons returns every svg<Name> = `<svg ...>` constant declared by
-// a single `name = value` spec (specs can declare several names at once).
+// a single `name = value` spec (a spec can declare several names at once,
+// and a grouped const block can also declare a name with no value of its
+// own, inheriting the previous spec's — that case is skipped here since
+// Names and Values no longer line up).
 func valueSpecIcons(spec ast.Spec) []iconSource {
 	vs, ok := spec.(*ast.ValueSpec)
 	if !ok || len(vs.Names) != len(vs.Values) {
@@ -221,14 +275,12 @@ func svgConstIcon(name string, expr ast.Expr) (iconSource, bool) {
 	if !ok || lit.Kind != token.STRING {
 		return iconSource{}, false
 	}
+	// lit.Value is a lexically valid Go string literal (single-quoted,
+	// double-quoted, or backquoted) because the parser already accepted it,
+	// so Unquote only fails here for a literal this function doesn't want
+	// anyway (its content isn't SVG markup).
 	value, err := strconv.Unquote(lit.Value)
-	if err != nil {
-		// Raw (backtick) string literals are not valid input to
-		// strconv.Unquote; strip the surrounding backticks directly since
-		// our SVG bodies never contain one.
-		value = strings.Trim(lit.Value, "`")
-	}
-	if !strings.HasPrefix(name, "svg") || !strings.HasPrefix(value, "<svg") {
+	if err != nil || !strings.HasPrefix(name, "svg") || !strings.HasPrefix(value, "<svg") {
 		return iconSource{}, false
 	}
 	return iconSource{name: iconFileName(strings.TrimPrefix(name, "svg")), svg: value}, true
@@ -245,6 +297,8 @@ func iconFileName(s string) string {
 	}, s))
 }
 
+// requireTools reports an actionable error naming every tool in names that
+// is missing from PATH, or nil if all are present.
 func requireTools(names ...string) error {
 	var missing []string
 	for _, n := range names {
@@ -258,6 +312,12 @@ func requireTools(names ...string) error {
 	return nil
 }
 
+// repoRoot walks up from the working directory to the nearest ancestor
+// containing a go.mod file.
+//
+// Coverage note: os.Getwd()'s own error path is not tested — reliably
+// forcing it requires deleting the process's current directory out from
+// under it, which is racy and OS-dependent.
 func repoRoot() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
