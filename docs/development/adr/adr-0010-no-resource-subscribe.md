@@ -2,7 +2,15 @@
 
 ## Status
 
-Accepted — 2026-04-26
+Superseded by [ADR-0015](adr-0015-polled-resource-subscriptions.md) —
+2026-08-24. Accepted 2026-04-26.
+
+> The reasoning below is kept as written. What changed is the third
+> rationale: clients did turn out to subscribe — VS Code to everything it
+> reads, and Cursor even to servers advertising `subscribe: false` — so
+> declining the capability stopped the feature without stopping the
+> requests. ADR-0015 accepts the polling this ADR rejects, under explicit
+> bounds.
 
 ## Context
 
