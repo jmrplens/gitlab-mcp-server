@@ -94,10 +94,11 @@ type Notifier interface {
 }
 
 // Defaults for [Options]. The interval numbers come from GitLab's rate
-// limits rather than from taste: a self-managed instance throttles at 120
-// requests a minute by default, so ten watchers at a five-second interval
-// would consume a user's entire budget while that same user is making tool
-// calls through it.
+// limits rather than from taste: a self-managed instance that enables the
+// optional authenticated-API throttle gets 120 requests a minute by
+// default (the throttle itself ships disabled — see ADR-0017), so ten
+// watchers at a five-second interval would consume such a user's entire
+// budget while that same user is making tool calls through it.
 const (
 	DefaultBaseInterval = 15 * time.Second
 	DefaultMinInterval  = 5 * time.Second
@@ -143,9 +144,9 @@ type Options struct {
 	// [DefaultSlowInterval].
 	//
 	// At ten minutes, ten abandoned subscriptions cost one request a
-	// minute against a self-managed instance's default budget of 120 —
-	// cheap enough to leave running, slow enough that nobody would rely on
-	// it, which is what makes a renewal worth asking for.
+	// minute against the 120-a-minute budget of a throttled self-managed
+	// instance — cheap enough to leave running, slow enough that nobody
+	// would rely on it, which is what makes a renewal worth asking for.
 	SlowInterval time.Duration
 	// MaxLifetime is the absolute cap on a single subscription, renewals
 	// included. Defaults to [DefaultMaxLifetime]. This is the only deadline

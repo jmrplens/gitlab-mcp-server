@@ -126,7 +126,12 @@ make the worst case something an operator can predict.
   logic are independent of where the content comes from. Webhook deliveries
   were investigated and declined as that events source — see
   [ADR-0016](adr-0016-no-webhook-ingestion.md) — but this seam remains open
-  for a genuinely pull-safe future events API, not for inbound push.
+  for a genuinely pull-safe future events API, not for inbound push. The
+  pull-safe candidates GitLab offers today (Events API, GraphQL
+  subscriptions over ActionCable, conditional requests) were then surveyed
+  with live probes and declined too — see
+  [ADR-0017](adr-0017-pull-safe-event-sources-surveyed.md) for the evidence
+  and the triggers that would reopen this.
 
 ## Alternatives Considered
 

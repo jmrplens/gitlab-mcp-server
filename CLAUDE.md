@@ -520,6 +520,7 @@ ADRs document key decisions in `docs/development/adr`:
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
 | ADR-0015 | Polled resource subscriptions (supersedes ADR-0010)            | Accepted (26 subscribable kinds, 10 watchers/token, lease demotes rather than stops) |
 | ADR-0016 | No webhook ingestion                                           | Accepted (`Reader` seam unchanged; no inbound HTTP surface added) |
+| ADR-0017 | Pull-safe event sources surveyed and declined                  | Accepted (Events API, ActionCable, ETag probed live; polling stays the only freshness source; revisit triggers recorded) |
 
 ### Modular tools sub-packages (ADR-0004)
 

@@ -147,9 +147,9 @@ func stateActivity(state string) activity {
 //
 // The floor exists because five seconds per subscription is defensible for
 // one watcher and indefensible as a fleet default: a self-managed instance
-// throttles at 120 requests a minute by default, so ten watchers at five
-// seconds would consume a user's entire budget while that same user is
-// making tool calls through it.
+// that enables the optional authenticated-API throttle gets 120 requests a
+// minute, so ten watchers at five seconds would consume such a user's
+// entire budget while that same user is making tool calls through it.
 func (k Kind) pollInterval(content []byte, base, floor time.Duration) time.Duration {
 	if floor > base {
 		floor = base

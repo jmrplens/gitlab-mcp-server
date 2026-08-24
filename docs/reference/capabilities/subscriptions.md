@@ -62,6 +62,12 @@ reopens, a merged merge request can still be edited — so a watcher that
 stopped at `success` would go blind to a real change its subscriber asked
 about.
 
+Latency is cadence-bounded by design: no pull-safe event channel GitLab
+offers today changes that — the Events API, GraphQL subscriptions over
+ActionCable, and conditional requests were each surveyed with live probes
+and declined; see
+[ADR-0017](../../development/adr/adr-0017-pull-safe-event-sources-surveyed.md).
+
 `manual` and `scheduled` count as settled: both are waiting on something
 outside CI, so polling them at the floor spends budget on a resource that
 cannot change until a human or a clock acts.

@@ -28,6 +28,7 @@ This directory contains Architectural Decision Records (ADRs) for gitlab-mcp-ser
 | [ADR-0014](adr-0014-catalog-first-runtime-architecture.md) | Catalog-first runtime architecture                              | Accepted                                                | Current                                         | 2026-05-15 |
 | [ADR-0015](adr-0015-polled-resource-subscriptions.md)      | Polled resource subscriptions (supersedes ADR-0010)             | Accepted                                                | Current                                         | 2026-08-24 |
 | [ADR-0016](adr-0016-no-webhook-ingestion.md)               | No webhook ingestion                                            | Accepted                                                | Current                                         | 2026-08-25 |
+| [ADR-0017](adr-0017-pull-safe-event-sources-surveyed.md)   | Pull-safe event sources surveyed and declined                   | Accepted                                                | Current                                         | 2026-08-25 |
 
 ## About Missing ADRs
 
