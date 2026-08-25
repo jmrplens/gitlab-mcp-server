@@ -31,10 +31,20 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		pipelineReadSpec("test_report", toolutil.RouteAction(client, GetTestReport), "gitlab_pipeline_test_report"),
 		pipelineReadSpec("test_report_summary", toolutil.RouteAction(client, GetTestReportSummary), "gitlab_pipeline_test_report_summary"),
 		pipelineReadSpec("latest", toolutil.RouteAction(client, GetLatest), "gitlab_pipeline_latest"),
-		pipelineMutationSpec("create", toolutil.RouteAction(client, Create), "gitlab_pipeline_create"),
+		pipelineMutationSpec("create", createRoute(client), "gitlab_pipeline_create"),
 		pipelineUpdateSpec("update_metadata", toolutil.RouteAction(client, UpdateMetadata), "gitlab_pipeline_update_metadata"),
 		pipelineReadSpec("wait", toolutil.RouteActionWithRequest(client, Wait), "gitlab_pipeline_wait"),
 	}
+}
+
+// createRoute returns the create action route with its input schema
+// constrained: inputs values are limited to the shapes
+// toolutil.BuildPipelineInputs accepts instead of the open map the struct
+// field alone would advertise.
+func createRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, Create)
+	route.InputSchema = toolutil.PipelineInputsSchema[CreateInput]("inputs")
+	return route
 }
 
 func pipelineGetRoute(client *gitlabclient.Client) toolutil.ActionRoute {

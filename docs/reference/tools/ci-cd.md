@@ -174,7 +174,7 @@ Retry a failed or canceled CI/CD job in a GitLab project. Returns the new job de
 
 ### `gitlab_job_play`
 
-Trigger (play) a manual CI/CD job. Supports passing job variables. Returns updated job details.
+Trigger (play) a manual CI/CD job. Supports passing job variables and `job_inputs` (values for the inputs declared in `.gitlab-ci.yml` `spec:inputs`). Returns updated job details.
 
 | Annotation | **Update** |
 | ---------- | ---------- |

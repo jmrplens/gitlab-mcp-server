@@ -3,7 +3,6 @@ package pipelines
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -625,7 +624,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		opts.Variables = &vars
 	}
 	if len(input.Inputs) > 0 {
-		inputs, err := buildPipelineInputs(input.Inputs)
+		inputs, err := toolutil.BuildPipelineInputs(input.Inputs)
 		if err != nil {
 			return DetailOutput{}, toolutil.WrapErrWithHint("pipelineCreate", err,
 				"pipeline inputs must be string, number, boolean, or array of strings")
@@ -641,43 +640,6 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		return DetailOutput{}, toolutil.WrapErrWithMessage("pipelineCreate", err)
 	}
 	return DetailToOutput(p), nil
-}
-
-// buildPipelineInputs converts a JSON-decoded inputs map into the SDK's
-// type-safe gl.PipelineInputsOption. JSON numbers decode to float64 and JSON
-// arrays to []any; both are normalized to the SDK's supported value types
-// (string, float64, bool, []string). An unsupported value type returns an error.
-func buildPipelineInputs(raw map[string]any) (gl.PipelineInputsOption, error) {
-	inputs := make(gl.PipelineInputsOption, len(raw))
-	for name, value := range raw {
-		switch v := value.(type) {
-		case string:
-			inputs[name] = gl.NewPipelineInputValue(v)
-		case bool:
-			inputs[name] = gl.NewPipelineInputValue(v)
-		case float64:
-			inputs[name] = gl.NewPipelineInputValue(v)
-		case int:
-			inputs[name] = gl.NewPipelineInputValue(v)
-		case int64:
-			inputs[name] = gl.NewPipelineInputValue(v)
-		case []string:
-			inputs[name] = gl.NewPipelineInputValue(v)
-		case []any:
-			strs := make([]string, 0, len(v))
-			for _, e := range v {
-				s, ok := e.(string)
-				if !ok {
-					return nil, fmt.Errorf("input %q: array elements must be strings", name)
-				}
-				strs = append(strs, s)
-			}
-			inputs[name] = gl.NewPipelineInputValue(strs)
-		default:
-			return nil, fmt.Errorf("input %q: unsupported value type %T", name, value)
-		}
-	}
-	return inputs, nil
 }
 
 // UpdateMetadataInput defines parameters for updating pipeline metadata.

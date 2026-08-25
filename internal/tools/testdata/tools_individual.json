@@ -91167,6 +91167,30 @@
           "description": "Job ID to run",
           "type": "integer"
         },
+        "job_inputs": {
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "description": "Job input parameters keyed by input name. Values may be string, number, boolean, or array of strings, matching the inputs declared in .gitlab-ci.yml spec:inputs.",
+          "properties": {},
+          "type": "object"
+        },
         "job_variables_attributes": {
           "description": "Job variables to inject into the manual job run",
           "items": {
@@ -140856,7 +140880,25 @@
       "additionalProperties": false,
       "properties": {
         "inputs": {
-          "additionalProperties": true,
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
           "description": "Pipeline input parameters keyed by input name. Values may be string, number, boolean, or array of strings, matching the inputs declared in .gitlab-ci.yml spec:inputs.",
           "properties": {},
           "type": "object"

@@ -767,6 +767,7 @@ type PlayInput struct {
 	ProjectID              toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	JobID                  int64                `json:"job_id"     jsonschema:"Job ID to run,required"`
 	JobVariablesAttributes []JobVariableInput   `json:"job_variables_attributes,omitempty" jsonschema:"Job variables to inject into the manual job run"`
+	JobInputs              map[string]any       `json:"job_inputs,omitempty" jsonschema:"Job input parameters keyed by input name. Values may be string, number, boolean, or array of strings, matching the inputs declared in .gitlab-ci.yml spec:inputs."`
 }
 
 // JobVariableInput represents a variable to pass when playing a job. It mirrors
@@ -792,6 +793,14 @@ func Play(ctx context.Context, client *gitlabclient.Client, input PlayInput) (Ou
 		return Output{}, toolutil.ErrRequiredInt64("jobPlay", "job_id")
 	}
 	opts := &gl.PlayJobOptions{}
+	if len(input.JobInputs) > 0 {
+		inputs, err := toolutil.BuildPipelineInputs(input.JobInputs)
+		if err != nil {
+			return Output{}, toolutil.WrapErrWithHint("jobPlay", err,
+				"job inputs must be string, number, boolean, or array of strings")
+		}
+		opts.JobInputs = inputs
+	}
 	if len(input.JobVariablesAttributes) > 0 {
 		vars := make([]*gl.JobVariableOptions, len(input.JobVariablesAttributes))
 		for i, v := range input.JobVariablesAttributes {
