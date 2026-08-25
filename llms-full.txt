@@ -20355,6 +20355,7 @@ Run a manual CI job with optional variable overrides. Returns: the started job s
 **Parameters:**
 
 - `job_id` (integer) (required): Job ID to run
+- `job_inputs` (object): Job input parameters keyed by input name. Values may be string, number, boolean, or array of strings, matching the inputs declared in .gitlab-ci.yml spec:inputs.
 - `job_variables_attributes` (array of objects): Job variables to inject into the manual job run
 - `project_id` (string) (required): Project ID or URL-encoded path
 

@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
@@ -1705,6 +1707,54 @@ func TestPlay_WithVariables(t *testing.T) {
 	if out.ID != 100 {
 		t.Errorf("ID = %d, want 100", out.ID)
 	}
+}
+
+// TestPlay_WithJobInputs verifies Play forwards job_inputs in the request
+// body, converted to the SDK's typed pipeline-input values.
+func TestPlay_WithJobInputs(t *testing.T) {
+	var gotBody atomic.Value
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == pathJobPlay {
+			body, readErr := io.ReadAll(r.Body)
+			if readErr != nil {
+				t.Errorf("read body: %v", readErr)
+			}
+			gotBody.Store(string(body))
+			testutil.RespondJSON(w, http.StatusOK, jobJSON)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+
+	_, err := Play(context.Background(), client, PlayInput{
+		ProjectID: "42",
+		JobID:     100,
+		JobInputs: map[string]any{"environment": "staging", "replicas": float64(3), "debug": true},
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	body, _ := gotBody.Load().(string)
+	for _, want := range []string{`"job_inputs"`, `"environment":"staging"`, `"replicas":3`, `"debug":true`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("request body = %s, want it to contain %s", body, want)
+		}
+	}
+}
+
+// TestPlay_InvalidJobInputs verifies Play rejects an unsupported job-input
+// value type before any request is made.
+func TestPlay_InvalidJobInputs(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+	}))
+
+	_, err := Play(context.Background(), client, PlayInput{
+		ProjectID: "42",
+		JobID:     100,
+		JobInputs: map[string]any{"bad": map[string]any{"nested": true}},
+	})
+	assertContains(t, err, "job inputs must be string, number, boolean, or array of strings")
 }
 
 // ---------------------------------------------------------------------------
