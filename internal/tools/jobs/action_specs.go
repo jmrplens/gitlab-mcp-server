@@ -102,7 +102,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_job_keep_artifacts — prevent artifact expiration.
 		jobMutationSpec("keep_artifacts", toolutil.RouteAction(client, KeepArtifacts), "gitlab_job_keep_artifacts", "artifact"),
 		// gitlab_job_play — trigger a manual job.
-		jobMutationSpec("play", toolutil.RouteAction(client, Play), "gitlab_job_play"),
+		jobMutationSpec("play", playRoute(client), "gitlab_job_play"),
 		// gitlab_job_delete_artifacts — delete a job's artifacts (destructive).
 		jobDeleteSpec("delete_artifacts", toolutil.DestructiveVoidAction(client, DeleteArtifacts), "gitlab_job_delete_artifacts", "artifact"),
 		// gitlab_job_delete_project_artifacts — delete every artifact in a project (destructive).
@@ -126,6 +126,15 @@ func jobGetSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	}
 	options.IndividualTool.Description = "Get one CI job. Returns: status, stage, ref, embedded commit/pipeline/project/runner/user objects, timing fields, and failure metadata. See also: gitlab_job_trace, gitlab_job_cancel, gitlab_job_retry."
 	return toolutil.NewReadActionSpec("get", route, options)
+}
+
+// playRoute returns the play action route with its input schema constrained:
+// job_inputs values are limited to the shapes toolutil.BuildPipelineInputs
+// accepts instead of the open map the struct field alone would advertise.
+func playRoute(client *gitlabclient.Client) toolutil.ActionRoute {
+	route := toolutil.RouteAction(client, Play)
+	route.InputSchema = toolutil.PipelineInputsSchema[PlayInput]("job_inputs")
+	return route
 }
 
 // jobReadSpec builds a read-only [toolutil.ActionSpec] for a jobs

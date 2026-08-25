@@ -1709,9 +1709,10 @@ func TestPlay_WithVariables(t *testing.T) {
 	}
 }
 
-// TestPlay_WithJobInputs verifies Play forwards job_inputs in the request
-// body, converted to the SDK's typed pipeline-input values.
-func TestPlay_WithJobInputs(t *testing.T) {
+// TestPlay_WithJobInputs_ForwardsInRequestBody verifies Play forwards
+// job_inputs in the request body, converted to the SDK's typed
+// pipeline-input values, string arrays included.
+func TestPlay_WithJobInputs_ForwardsInRequestBody(t *testing.T) {
 	var gotBody atomic.Value
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && r.URL.Path == pathJobPlay {
@@ -1729,22 +1730,22 @@ func TestPlay_WithJobInputs(t *testing.T) {
 	_, err := Play(context.Background(), client, PlayInput{
 		ProjectID: "42",
 		JobID:     100,
-		JobInputs: map[string]any{"environment": "staging", "replicas": float64(3), "debug": true},
+		JobInputs: map[string]any{"environment": "staging", "replicas": float64(3), "debug": true, "regions": []any{"eu", "us"}},
 	})
 	if err != nil {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	body, _ := gotBody.Load().(string)
-	for _, want := range []string{`"job_inputs"`, `"environment":"staging"`, `"replicas":3`, `"debug":true`} {
+	for _, want := range []string{`"job_inputs"`, `"environment":"staging"`, `"replicas":3`, `"debug":true`, `"regions":["eu","us"]`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("request body = %s, want it to contain %s", body, want)
 		}
 	}
 }
 
-// TestPlay_InvalidJobInputs verifies Play rejects an unsupported job-input
-// value type before any request is made.
-func TestPlay_InvalidJobInputs(t *testing.T) {
+// TestPlay_InvalidJobInputs_RejectedBeforeRequest verifies Play rejects an
+// unsupported job-input value type before any request is made.
+func TestPlay_InvalidJobInputs_RejectedBeforeRequest(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
 	}))
