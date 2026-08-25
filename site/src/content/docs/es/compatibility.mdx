@@ -25,18 +25,18 @@ GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise 
 
 | Funcionalidad                                       | Community (CE) | Enterprise (EE) |
 | --------------------------------------------------- | :------------: | :-------------: |
-| Proyectos, Issues, MRs, Pipelines, CI/CD            |       ✅        |        ✅        |
-| Wikis, Etiquetas, Hitos, Releases                   |       ✅        |        ✅        |
-| Usuarios, Grupos, Miembros, Búsqueda                |       ✅        |        ✅        |
-| Despliegues, Entornos, Paquetes                     |       ✅        |        ✅        |
-| {stats.meta.base} meta-herramientas base            |       ✅        |        ✅        |
-| {stats.resources} recursos, {stats.prompts} prompts |       ✅        |        ✅        |
-| Merge Trains                                        |       ❌        |        ✅        |
-| Métricas DORA                                       |       ❌        |        ✅        |
-| Gestión de vulnerabilidades                         |       ❌        |        ✅        |
-| Eventos de auditoría                                |       ❌        |        ✅        |
-| Políticas de cumplimiento                           |       ❌        |        ✅        |
-| +16 meta-herramientas enterprise                    |       ❌        |        ✅        |
+| Proyectos, Issues, MRs, Pipelines, CI/CD            |       ✅       |       ✅        |
+| Wikis, Etiquetas, Hitos, Releases                   |       ✅       |       ✅        |
+| Usuarios, Grupos, Miembros, Búsqueda                |       ✅       |       ✅        |
+| Despliegues, Entornos, Paquetes                     |       ✅       |       ✅        |
+| {stats.meta.base} meta-herramientas base            |       ✅       |       ✅        |
+| {stats.resources} recursos, {stats.prompts} prompts |       ✅       |       ✅        |
+| Merge Trains                                        |       ❌       |       ✅        |
+| Métricas DORA                                       |       ❌       |       ✅        |
+| Gestión de vulnerabilidades                         |       ❌       |       ✅        |
+| Eventos de auditoría                                |       ❌       |       ✅        |
+| Políticas de cumplimiento                           |       ❌       |       ✅        |
+| +16 meta-herramientas enterprise                    |       ❌       |       ✅        |
 
 Para habilitar funcionalidades enterprise en modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`. En modo HTTP, configura `--tier=premium`/`--tier=ultimate` para forzar el catálogo Enterprise/Premium, u omítelo para que el servidor autodetecte CE/EE por entrada token+URL cuando GitLab informe la edición. Los flags heredados `GITLAB_ENTERPRISE=true` (stdio) y `--enterprise` (HTTP) siguen respetándose por compatibilidad.
 
@@ -59,16 +59,16 @@ Cualquier cliente que soporte el transporte stdio del Model Context Protocol pue
 
 | Cliente                           | Transporte | Estado |
 | --------------------------------- | ---------- | :----: |
-| VS Code + GitHub Copilot          | stdio      |   ✅    |
-| Claude Desktop                    | stdio      |   ✅    |
-| Cursor                            | stdio      |   ✅    |
-| Claude Code (CLI)                 | stdio      |   ✅    |
-| Windsurf                          | stdio      |   ✅    |
-| JetBrains IDEs                    | stdio      |   ✅    |
-| Zed                               | stdio      |   ✅    |
-| Kiro                              | stdio      |   ✅    |
-| OpenAI Codex                      | stdio      |   ✅    |
-| Cualquier cliente Streamable HTTP | HTTP       |   ✅    |
+| VS Code + GitHub Copilot          | stdio      |   ✅   |
+| Claude Desktop                    | stdio      |   ✅   |
+| Cursor                            | stdio      |   ✅   |
+| Claude Code (CLI)                 | stdio      |   ✅   |
+| Windsurf                          | stdio      |   ✅   |
+| JetBrains IDEs                    | stdio      |   ✅   |
+| Zed                               | stdio      |   ✅   |
+| Kiro                              | stdio      |   ✅   |
+| OpenAI Codex                      | stdio      |   ✅   |
+| Cualquier cliente Streamable HTTP | HTTP       |   ✅   |
 
 ### Perfiles de compatibilidad por cliente
 
@@ -93,8 +93,8 @@ Mantén la superficie de herramientas `dynamic` por defecto para clientes con l�
 
 GitLab MCP Server implementa el conjunto completo de capacidades MCP más allá de las herramientas — recursos, prompts, completions, elicitation, notificaciones de progreso y suscripciones a recursos — para que los clientes compatibles obtengan datos contextuales, plantillas de prompts, autocompletado de argumentos y notificaciones de cambio en vivo además de las llamadas a herramientas.
 
-| Capacidad     |                                                                                                                       Soportada                                                                                                                       |
-| ------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
+| Capacidad     |                                                                                                                       Soportada                                                                                                                        |
+| ------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
 | Tools         | ✅ (hasta {stats.tools.ultimate_self_managed} autoalojadas Enterprise / {stats.tools.gitlab_com} GitLab.com + Orbit individuales / {stats.meta.base} base, {stats.meta.self_managed_enterprise} autoalojadas, {stats.meta.gitlab_com} GitLab.com meta) |
 | Resources     |                                                                                                                 ✅ ({stats.resources})                                                                                                                 |
 | Prompts       |                                                                                                                  ✅ ({stats.prompts})                                                                                                                  |

@@ -1,0 +1,383 @@
+/* ------------------------------------------------------------------ *
+ * The landing page.
+ *
+ * The idiom is a catalogue card: numbered, ruled sections; hairlines instead of
+ * shadows; a monospaced treatment wherever a count or an identifier appears.
+ * ------------------------------------------------------------------ */
+
+/* The splash template has no sidebar and no table of contents, so the reading
+   column can be wider than it is on a documentation page without the line
+   length running away. Starlight stamps `data-has-hero` on the landing only. */
+:root[data-has-hero] {
+	--sl-content-width: 52rem;
+}
+
+.home {
+	--home-gap: clamp(2.5rem, 6vw, 4rem);
+	display: flex;
+	flex-direction: column;
+	gap: var(--home-gap);
+	margin-top: 1rem;
+	counter-reset: home-block;
+}
+
+/* Starlight's markdown reset puts a top margin on almost everything, which
+   inside these blocks fights the flex gaps. Zero specificity, so any rule in
+   this file — or in a component — still wins without an escalation. */
+:where(.sl-markdown-content .home *) {
+	margin-top: 0;
+}
+
+/* ---- Numbered, ruled sections ---- *
+ *
+ * The counter is decorative and hidden from the accessibility tree; the heading
+ * carries the meaning.
+ *
+ * It is a real box in the layout, never an absolutely positioned one. The
+ * number and the block body are the two items of a WRAPPING flex line, so the
+ * space the number occupies is always reserved by the layout itself: when the
+ * line has room the number sits in the gutter beside the heading, and when it
+ * does not, the body wraps onto the next line and the number ends up above it.
+ * Both states come from one rule, at any width, browser zoom or default text
+ * size, so the number can never be painted over the title. The obvious
+ * implementation — a `::before` in a padding gutter reserved inside a
+ * `min-width` query — fails at 200 % zoom and at any width once the reader's
+ * default text size grows, because a rem-based query is evaluated in that size.
+ */
+.block {
+	counter-increment: home-block;
+	border-block-start: 1px solid var(--gm-border);
+	padding-block-start: 1.4rem;
+	display: flex;
+	flex-wrap: wrap;
+	/* The number's baseline sits on the heading's, at every text size. */
+	align-items: baseline;
+	/* Only applies between wrapped lines, i.e. only once the number has dropped
+	   onto its own line above the heading. */
+	row-gap: 0.4rem;
+}
+.block-n {
+	/* The gutter, reserved: fixed width, no growth, no shrink. */
+	flex: 0 0 3.5rem;
+	font-family: var(--gm-mono);
+	font-size: var(--sl-text-2xs);
+	line-height: 1.4;
+	letter-spacing: 0.12em;
+	color: var(--gm-mark);
+}
+.block-n::before {
+	content: counter(home-block, decimal-leading-zero);
+}
+.block-body {
+	/* Wraps under the number as soon as the line cannot hold both. */
+	flex: 1 1 26rem;
+	min-width: 0;
+}
+.block-body > h2 {
+	font-size: var(--sl-text-2xl);
+	line-height: 1.2;
+	margin-bottom: 0.5rem;
+	letter-spacing: -0.01em;
+}
+@media (min-width: 50rem) {
+	.block-body > h2 {
+		font-size: var(--sl-text-3xl);
+	}
+}
+.block h3 {
+	font-size: var(--sl-text-lg);
+	margin-bottom: 0.35rem;
+}
+.lead {
+	color: var(--sl-color-gray-3);
+	max-width: 62ch;
+	margin-bottom: 1.25rem;
+}
+
+/* ---- The readout: the numbers, stated once, up top ---- */
+.readout {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+	/* The 1px gap over a bordered ground is what draws the cell separators, so
+	   there is one rule between cells rather than two abutting borders. */
+	gap: 1px;
+	background: var(--gm-border);
+	border: 1px solid var(--gm-border);
+	border-radius: var(--gm-radius);
+	overflow: hidden;
+}
+.readout-cell {
+	background: var(--gm-surface);
+	padding: 1rem 1.1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	min-width: 0;
+}
+.readout-value {
+	font-family: var(--gm-mono);
+	font-size: var(--sl-text-2xl);
+	font-variant-numeric: tabular-nums;
+	color: var(--gm-accent-ink);
+	line-height: 1.1;
+}
+.readout-label {
+	font-size: var(--sl-text-xs);
+	color: var(--sl-color-gray-3);
+	line-height: 1.4;
+}
+/* The labels are links, but the readout is a row of figures rather than a list
+   of destinations: underlining all four turns the strip into navigation. The
+   rule appears on hover and focus, where it is asked for. */
+.readout-label a {
+	color: inherit;
+	text-decoration: none;
+}
+.readout-label a:hover,
+.readout-label a:focus-visible {
+	color: var(--sl-color-white);
+	text-decoration: underline;
+	text-decoration-color: var(--gm-mark);
+}
+
+/* ---- Prose ---- */
+.prose {
+	max-width: 68ch;
+}
+.prose p {
+	margin-bottom: 0.9rem;
+}
+
+/* ---- Who it is for / what it is not ---- */
+.two-up {
+	display: grid;
+	gap: 1.25rem;
+	margin-top: 1.75rem;
+}
+@media (min-width: 55rem) {
+	.two-up {
+		grid-template-columns: 1fr 1fr;
+		align-items: start;
+	}
+}
+.panel {
+	border: 1px solid var(--gm-border);
+	border-radius: var(--gm-radius);
+	background: var(--gm-surface);
+	padding: 1.25rem 1.4rem;
+	min-width: 0;
+}
+.panel > h3 {
+	font-size: var(--sl-text-lg);
+	margin-bottom: 0.75rem;
+}
+/* The boundary claims are a quieter panel than the audience claims: same
+   structure, no fill, a dashed rule. They are the half a reader is more likely
+   to skip and the half that matters more, so they get their own treatment
+   rather than a second identical box. */
+.panel-quiet {
+	background: transparent;
+	border-style: dashed;
+}
+ul.tick {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+}
+ul.tick li {
+	position: relative;
+	padding-inline-start: 1.4rem;
+	font-size: var(--sl-text-sm);
+	line-height: 1.6;
+}
+ul.tick li::before {
+	content: "+";
+	position: absolute;
+	inset-inline-start: 0;
+	font-family: var(--gm-mono);
+	color: var(--gm-mark);
+}
+ul.tick-minus li::before {
+	content: "−";
+	color: var(--sl-color-gray-4);
+}
+
+/* ---- Shows rather than tells ---- */
+.demo {
+	border: 1px solid var(--gm-border);
+	border-radius: var(--gm-radius);
+	padding: 1.25rem 1.4rem 1.4rem;
+	margin-bottom: 1.25rem;
+	background: var(--gm-surface);
+	min-width: 0;
+}
+.demo:last-child {
+	margin-bottom: 0;
+}
+.note {
+	font-size: var(--sl-text-sm);
+	color: var(--sl-color-gray-3);
+	max-width: 68ch;
+	margin-bottom: 1rem;
+}
+
+/* ---- The two landing tables ---- *
+ *
+ * Both are two-column, both stack below 45rem, and both keep their row header
+ * as the emphasised half. They are styled together because they are the same
+ * object: a label and the thing it maps to.
+ */
+.home table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: var(--sl-text-sm);
+}
+.home table th,
+.home table td {
+	text-align: start;
+	vertical-align: top;
+	padding: 0.7rem 0.9rem 0.7rem 0;
+	border-block-end: 1px solid var(--gm-border);
+}
+.home table thead th {
+	font-size: var(--sl-text-2xs);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--sl-color-gray-3);
+	font-weight: 600;
+	border-block-end-color: var(--gm-border-strong);
+}
+.home table tbody th {
+	font-weight: 600;
+	color: var(--sl-color-white);
+	padding-inline-end: 1.4rem;
+}
+.stage-summary {
+	display: block;
+	font-weight: 400;
+	font-size: var(--sl-text-xs);
+	color: var(--sl-color-gray-3);
+	margin-top: 0.2rem;
+	max-width: 34ch;
+}
+
+/* Below 45rem the two columns stack. `display: block` on a table element drops
+   its implicit role, which is why Home.astro restates every role explicitly. */
+@media (max-width: 45rem) {
+	.home table,
+	.home tbody,
+	.home tr,
+	.home th,
+	.home td {
+		display: block;
+	}
+	.home thead {
+		display: none;
+	}
+	.home table tbody th {
+		border-block-end: none;
+		padding-block-end: 0.35rem;
+	}
+	.home table td {
+		padding-inline-start: 0;
+	}
+}
+
+/* ---- Source chips ---- */
+.chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.35rem;
+}
+.chip {
+	font-family: var(--gm-mono);
+	font-size: var(--sl-text-2xs);
+	line-height: 1.5;
+	padding: 0.15em 0.5em;
+	border: 1px solid var(--gm-border-strong);
+	border-radius: 999px;
+	color: var(--sl-color-gray-2);
+	white-space: nowrap;
+}
+/* An edition chip: the GitLab-orange counterpoint at text weight, on its own
+   fill. The tier is a category of the subject, never a second accent. */
+.chip-tier {
+	color: var(--gm-tier-ink);
+	border-color: var(--gm-tier-line);
+	background: var(--gm-tier-fill);
+}
+.tier-chips {
+	display: inline-flex;
+	margin-inline-end: 0.5rem;
+	vertical-align: middle;
+}
+
+/* The per-surface tool counts: figures, so they read as figures. */
+.count-cell {
+	font-family: var(--gm-mono);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	color: var(--gm-accent-ink);
+}
+
+/* The ringed-chip legend. Small, muted, and directly under the table it
+   explains, with a rule in the ring's own colour so the reader matches a shape
+   rather than parsing a sentence. */
+.legend {
+	font-size: var(--sl-text-xs);
+	color: var(--sl-color-gray-3);
+	margin-top: 0.9rem;
+	max-width: 68ch;
+	padding-inline-start: 0.75rem;
+	border-inline-start: 2px solid var(--gm-mark);
+}
+
+/* ---- Start here ---- */
+ol.steps {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: grid;
+	gap: 1.25rem;
+}
+@media (min-width: 60rem) {
+	ol.steps {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+}
+ol.steps > li {
+	border: 1px solid var(--gm-border);
+	border-radius: var(--gm-radius);
+	background: var(--gm-surface);
+	padding: 1.1rem 1.25rem 1.25rem;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+.step-n {
+	font-family: var(--gm-mono);
+	font-size: var(--sl-text-2xs);
+	letter-spacing: 0.12em;
+	color: var(--gm-mark);
+	margin-bottom: 0.5rem;
+}
+ol.steps p {
+	font-size: var(--sl-text-sm);
+	color: var(--sl-color-gray-3);
+	margin-bottom: 0.9rem;
+}
+.step-link {
+	margin-top: auto;
+	font-size: var(--sl-text-sm);
+	font-weight: 600;
+}
+
+/* The hero's call to action. Starlight rounds its buttons hard; everything else
+   on this site is a 4px corner, and the primary button is the one place that
+   difference is loud. */
+.hero .sl-link-button {
+	border-radius: var(--gm-radius);
+}

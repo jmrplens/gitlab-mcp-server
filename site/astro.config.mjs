@@ -776,6 +776,9 @@ export default defineConfig({
 				// layered defaults, and every later sheet reads its tokens.
 				"./src/styles/theme.css",
 				"./src/styles/typography.css",
+				"./src/styles/sidebar.css",
+				"./src/styles/splash-menu.css",
+				"./src/styles/home.css",
 				"./src/styles/custom.css",
 			],
 		}),

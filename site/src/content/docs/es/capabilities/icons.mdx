@@ -6,7 +6,7 @@ faq:
   - q: "¿Qué son los iconos en GitLab MCP Server?"
     a: 'GitLab MCP Server asigna **50 iconos de dominio** a cada herramienta, recurso y prompt que expone, más una marca —la 51.ª— en la identidad del propio servidor, para que los clientes MCP puedan mostrar elementos de interfaz reconocibles para cada dominio de GitLab. Las herramientas relacionadas comparten un mismo icono para agrupación visual — por ejemplo, branches, repository y submodules usan todos `IconBranch`. Cada icono lleva tres entradas: un SVG escalable (`Sizes: ["any"]`, relleno `currentColor`, se adapta a cualquier tema automáticamente) más dos variantes WebP de 16×16 sin pérdida etiquetadas `Theme: "light"`/`"dark"`, para clientes que rechazan SVG pero respetan la pista de tema. Son metadatos de presentación opcionales, no una capacidad de protocolo MCP negociada.'
   - q: "¿Cómo se diseñan y codifican los iconos de GitLab MCP Server?"
-    a: "Cada icono usa un **viewport mínimo de 16×16** optimizado para listas de herramientas y barras laterales. La entrada principal es un SVG con relleno `currentColor` que se adapta a los temas claro y oscuro automáticamente; se incrusta como data URI base64 (`data:image/svg+xml;base64,...`) directamente en el binario, sin peticiones de red. Otras dos entradas son variantes WebP prerasterizadas y sin pérdida (`data:image/webp;base64,...`, 16×16, casi negro para `Theme: \"light\"` y casi blanco para `Theme: \"dark\"`) generadas por `cmd/gen_icon_webp` para clientes cuya lista de MIME permitidos excluye SVG. Se comparte un icono por dominio para que las herramientas relacionadas se agrupen visualmente. Se registran mediante specs de acciones y grupos del catálogo, y luego se proyectan en las superficies meta, individual y dinámica. El código fuente está en [`internal/toolutil/icons.go`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/internal/toolutil/icons.go)."
+    a: 'Cada icono usa un **viewport mínimo de 16×16** optimizado para listas de herramientas y barras laterales. La entrada principal es un SVG con relleno `currentColor` que se adapta a los temas claro y oscuro automáticamente; se incrusta como data URI base64 (`data:image/svg+xml;base64,...`) directamente en el binario, sin peticiones de red. Otras dos entradas son variantes WebP prerasterizadas y sin pérdida (`data:image/webp;base64,...`, 16×16, casi negro para `Theme: "light"` y casi blanco para `Theme: "dark"`) generadas por `cmd/gen_icon_webp` para clientes cuya lista de MIME permitidos excluye SVG. Se comparte un icono por dominio para que las herramientas relacionadas se agrupen visualmente. Se registran mediante specs de acciones y grupos del catálogo, y luego se proyectan en las superficies meta, individual y dinámica. El código fuente está en [`internal/toolutil/icons.go`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/internal/toolutil/icons.go).'
   - q: "¿Qué clientes MCP renderizan los iconos de herramientas?"
     a: "El renderizado de iconos varía según el cliente. **VS Code con GitHub Copilot** renderiza iconos de herramientas, servidor y recursos — rechaza la entrada SVG (`image/svg+xml` no está en su lista de MIME permitidos) pero renderiza la variante WebP que coincide con su tema. **Continue.dev** no renderiza iconos del protocolo MCP en ninguna versión actual, en ningún formato; tiene un ajuste de favicon por servidor no relacionado que a veces se confunde con soporte de iconos. **Claude Desktop** no renderiza iconos de herramientas, y **Claude Code** es una interfaz solo de texto que no los muestra. Como los iconos son metadatos opcionales, los clientes que no admiten su renderizado simplemente los ignoran y la funcionalidad de las herramientas no se ve afectada."
   - q: "¿Afectan los iconos a la funcionalidad de las herramientas?"
@@ -848,14 +848,14 @@ Todos los iconos a 32px de tamaño, agrupados por categoría. La columna `Nombre
 
 El renderizado de iconos depende del cliente MCP. El servidor adjunta los mismos metadatos de iconos en todos los casos; que aparezcan depende del cliente. Los iconos son opcionales, así que los clientes que no los renderizan no pierden nada funcional. Esta tabla refleja una investigación de fuentes primarias (código fuente del cliente y documentación oficial, no material de marketing) sobre 15 clientes, realizada el 2026-08-24.
 
-| Cliente MCP                             | Renderiza     | Notas                                                                                                                                                                                                                                                                                        |
-| --------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cliente MCP                             | Renderiza      | Notas                                                                                                                                                                                                                                                                                        |
+| --------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | VS Code (GitHub Copilot)                | ✅ Sí          | Rechaza la entrada SVG (`image/svg+xml` no está en su lista de MIME permitidos), renderiza la variante WebP que coincide con su tema                                                                                                                                                         |
 | Cursor                                  | ❓ Incierto    | Acepta el formato SVG en validación, pero el renderizado del icono de servidor fue confirmado ausente por el equipo en marzo de 2026 (un indicio no confirmado de mejora llegó en junio); iconos de herramienta/recurso/prompt sin verificar                                                 |
 | OpenAI Codex (CLI + núcleo IDE)         | ❓ Incierto    | Los iconos de servidor/herramienta se capturan y reenvían internamente, pero no se encontró código de renderizado en la TUI de código abierto; la extensión de VS Code y la app de escritorio de ChatGPT, de código cerrado, no se pudieron inspeccionar                                     |
 | Windsurf / Devin Desktop                | ❓ Desconocido | No se encontró documentación de iconos en ningún sitio; código cerrado, sin cliente público que inspeccionar                                                                                                                                                                                 |
 | JetBrains AI Assistant / Junie          | ❌ No          | Los documentos de configuración solo enumeran iconos genéricos de botones de acción (añadir/eliminar/editar/reconectar) y un indicador de estado de conexión — no hay campo de icono propio del servidor; los recursos y prompts siguen sin soporte alguno (JUNIE-1606/1607, ambos abiertos) |
-| Claude Desktop                          | ❌ No          | Los iconos a nivel de protocolo no se confirman renderizados en ningún sitio; un mecanismo *distinto* y no relacionado de icono de manifiesto `.mcpb` sí funciona para extensiones locales, que no es lo que este proyecto usa                                                               |
+| Claude Desktop                          | ❌ No          | Los iconos a nivel de protocolo no se confirman renderizados en ningún sitio; un mecanismo _distinto_ y no relacionado de icono de manifiesto `.mcpb` sí funciona para extensiones locales, que no es lo que este proyecto usa                                                               |
 | Claude Code                             | ❌ No          | Interfaz solo texto — un marcador genérico y el nombre bruto de la herramienta                                                                                                                                                                                                               |
 | Kiro (AWS)                              | ❌ No          | Prompts/recursos muestran una insignia genérica "MCP", no el icono por elemento de este proyecto                                                                                                                                                                                             |
 | Zed                                     | ❌ No          | Verificado en el código fuente: ninguno de sus tipos Implementation/Tool/Resource/Prompt lleva un campo `icons`                                                                                                                                                                              |
@@ -865,7 +865,7 @@ El renderizado de iconos depende del cliente MCP. El servidor adjunta los mismos
 | LibreChat                               | ❌ No          | No se encontró renderizado de iconos en ninguna parte del cliente                                                                                                                                                                                                                            |
 | Open WebUI                              | ❌ No          | No se encontró renderizado de iconos en ninguna parte del cliente                                                                                                                                                                                                                            |
 | 5ire / Witsy                            | ❌ No          | No se encontró renderizado de iconos en ninguno de los dos clientes                                                                                                                                                                                                                          |
-| *Clientes propios (API de LLM directa)* | Depende       | Renderiza las entradas que su propia implementación de cliente MCP admita — consulta [¿Construyes tu propio cliente MCP?](#construyes-tu-propio-cliente-mcp) más abajo para un algoritmo de selección concreto                                                                               |
+| _Clientes propios (API de LLM directa)_ | Depende        | Renderiza las entradas que su propia implementación de cliente MCP admita — consulta [¿Construyes tu propio cliente MCP?](#construyes-tu-propio-cliente-mcp) más abajo para un algoritmo de selección concreto                                                                               |
 
 :::note
 Los iconos son metadatos opcionales. Los clientes que no renderizan ninguna de las tres entradas simplemente los ignoran — la funcionalidad de las herramientas no se ve afectada.
@@ -892,8 +892,8 @@ Cada `Icon` es `{ src, mimeType?, sizes?, theme? }`. `src` es una URI `data:` o 
 
 Pasa cada array de iconos candidato por tres filtros, en este orden. Detente en cuanto un candidato sobreviva; si ninguno lo hace, recurre a tu glifo genérico.
 
-1. **Soporte de formato.** Decide de antemano qué puede mostrar tu renderizador — normalmente formatos rasterizados que tu toolkit de interfaz/decodificador de imágenes maneja de forma nativa (`image/png`, `image/jpeg`, `image/webp`, `image/gif`), más `image/svg+xml` *solo si* has construido la ruta de sanitización descrita más abajo. Filtra por el `mimeType` declarado cuando esté presente; cuando falte, analiza los bytes reales (número mágico para `data:`, o una comprobación `HEAD`/`Content-Type` para `https:`) en lugar de adivinar por la extensión del archivo en la URI — `mimeType` es un metadato suministrado por el servidor, no fiable, no una garantía.
-2. **Coincidencia de tema.** Si tu cliente tiene un tema de interfaz claro/oscuro, prefiere los iconos cuyo `theme` coincida. Importante: **un icono sin campo `theme` es agnóstico al tema, no "sin tema"** — está diseñado para renderizarse correctamente sin importar el tema del anfitrión (por ejemplo, un SVG que usa `currentColor` y hereda el color de texto de tu interfaz). Hazlo coincidir en *ambos* modos, claro y oscuro, en lugar de omitirlo o tratarlo como una opción por defecto al azar. En concreto: gitlab-mcp-server envía tres entradas `Icon` por icono — un SVG con `sizes: ["any"]` y sin `theme` (se adapta vía `currentColor`), más un par WebP con `sizes: ["16x16"]` y `theme: "light"` / `theme: "dark"` explícitos (renderizados de antemano en casi negro / casi blanco). Un cliente correcto o bien renderiza el SVG (ya es correcto para cualquier tema, así que este paso es un no-op), o bien, si no puede con SVG, elige el WebP cuyo `theme` coincida con el tema actual de su interfaz.
+1. **Soporte de formato.** Decide de antemano qué puede mostrar tu renderizador — normalmente formatos rasterizados que tu toolkit de interfaz/decodificador de imágenes maneja de forma nativa (`image/png`, `image/jpeg`, `image/webp`, `image/gif`), más `image/svg+xml` _solo si_ has construido la ruta de sanitización descrita más abajo. Filtra por el `mimeType` declarado cuando esté presente; cuando falte, analiza los bytes reales (número mágico para `data:`, o una comprobación `HEAD`/`Content-Type` para `https:`) en lugar de adivinar por la extensión del archivo en la URI — `mimeType` es un metadato suministrado por el servidor, no fiable, no una garantía.
+2. **Coincidencia de tema.** Si tu cliente tiene un tema de interfaz claro/oscuro, prefiere los iconos cuyo `theme` coincida. Importante: **un icono sin campo `theme` es agnóstico al tema, no "sin tema"** — está diseñado para renderizarse correctamente sin importar el tema del anfitrión (por ejemplo, un SVG que usa `currentColor` y hereda el color de texto de tu interfaz). Hazlo coincidir en _ambos_ modos, claro y oscuro, en lugar de omitirlo o tratarlo como una opción por defecto al azar. En concreto: gitlab-mcp-server envía tres entradas `Icon` por icono — un SVG con `sizes: ["any"]` y sin `theme` (se adapta vía `currentColor`), más un par WebP con `sizes: ["16x16"]` y `theme: "light"` / `theme: "dark"` explícitos (renderizados de antemano en casi negro / casi blanco). Un cliente correcto o bien renderiza el SVG (ya es correcto para cualquier tema, así que este paso es un no-op), o bien, si no puede con SVG, elige el WebP cuyo `theme` coincida con el tema actual de su interfaz.
 3. **Coincidencia de tamaño, con reserva.** `sizes: ["any"]` significa escalable/vectorial — satisface cualquier tamaño solicitado, así que trátalo como primera opción siempre que tu filtro de formato admita SVG. Para candidatos rasterizados, analiza cada cadena `AnchoxAlto`, ordénalas de forma ascendente y elige la más pequeña que siga siendo `>= tu tamaño de renderizado objetivo` (así lo hace VS Code) en lugar de la más cercana por diferencia absoluta — un icono más grande de lo necesario se reduce de forma limpia; uno más pequeño no se amplía limpiamente. Si ninguno alcanza el objetivo, toma el disponible más grande en lugar de fallar.
 
 ### Lista de comprobación de seguridad
@@ -903,22 +903,36 @@ Los iconos proceden de un servidor que quizá no controlas, así que trata cada 
 - **Lista blanca de esquemas.** Acepta solo `data:` y `https:` (trata `http:` sin más como no confiable salvo que admitas deliberadamente servidores locales/de desarrollo con transporte HTTP). Rechaza cualquier otro esquema (`file:`, `javascript:`, etc.) sin más.
 - **Comprobación de dominio en URLs remotas.** La especificación indica que los consumidores DEBERÍAN verificar que una URL de icono `https:`/`http:` pertenece al mismo dominio que el cliente/servidor o es de confianza por otro motivo — no renderices a ciegas un `<img src>` que apunte a un tercero arbitrario. El enfoque de VS Code es un buen listón concreto: para un servidor alcanzado por transporte HTTP, solo acepta URLs de icono cuya autoridad coincida con la de ese mismo servidor; rechaza cualquier otra.
 - **Las URIs `data:` también necesitan validación.** Verifica que el MIME declarado/detectado sea uno que realmente admites, limita el tamaño en bytes decodificado antes de entregarlo a tu decodificador de imágenes (un servidor malicioso puede incrustar una carga sobredimensionada o malformada como DoS barato contra tu renderizador), y rechaza ante cualquier error de decodificación en lugar de dejarlo pasar en el mejor de los casos.
-- **Las descargas remotas son peticiones de red reales.** Un icono `https:` no es un metadato inerte — resolverlo filtra la IP del espectador y habilita patrones de seguimiento/baliza, y si *tú* lo descargas del lado del servidor (por ejemplo, para hacer proxy o cachearlo) eso es una descarga de URL controlada por el usuario y necesita las mismas protecciones SSRF que cualquier otra: bloquear rangos privados/link-local, limitar redirecciones, establecer un tiempo límite y un tope de tamaño en bytes.
+- **Las descargas remotas son peticiones de red reales.** Un icono `https:` no es un metadato inerte — resolverlo filtra la IP del espectador y habilita patrones de seguimiento/baliza, y si _tú_ lo descargas del lado del servidor (por ejemplo, para hacer proxy o cachearlo) eso es una descarga de URL controlada por el usuario y necesita las mismas protecciones SSRF que cualquier otra: bloquear rangos privados/link-local, limitar redirecciones, establecer un tiempo límite y un tope de tamaño en bytes.
 - **SVG es el formato de mayor riesgo** — la especificación lo señala explícitamente: SVG puede incrustar `<script>` y atributos de gestor de eventos. Dos rutas aceptables: (a) no admitir `image/svg+xml` en absoluto y pasar directamente al siguiente candidato (así lo hace VS Code — la opción segura más simple), o (b) si quieres iconos vectoriales nítidos, sanitiza antes de renderizar — elimina `<script>`, todos los atributos `on*`, `<foreignObject>` y referencias externas (por ejemplo con una configuración de DOMPurify de perfil SVG) antes de incrustar el marcado o pasarlo a tu DOM/renderizador. Nunca pases bytes SVG en crudo procedentes de un servidor no confiable directamente a un sumidero de tipo `<svg>` inline o `dangerouslySetInnerHTML`.
 - **Limita lo que evalúas.** Un servidor hostil puede devolver cientos de entradas `Icon` por objeto; acota cuántas inspeccionas por llamada de selección para que una respuesta malformada no convierta el renderizado de iconos en un vector de amplificación.
 
 ### Lógica de selección, de principio a fin
 
 ```typescript
-type Icon = { src: string; mimeType?: string; sizes?: string[]; theme?: "light" | "dark" };
+type Icon = {
+  src: string;
+  mimeType?: string;
+  sizes?: string[];
+  theme?: "light" | "dark";
+};
 
-const SUPPORTED_MIME = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+const SUPPORTED_MIME = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+]);
 // Cambia a true solo cuando hayas implementado la ruta de sanitizar-antes-de-renderizar de abajo.
 const SUPPORTS_SANITIZED_SVG = false;
 
 function selectIcon(
   icons: Icon[] | undefined,
-  opts: { uiTheme: "light" | "dark"; targetPx: number; serverAuthority: string },
+  opts: {
+    uiTheme: "light" | "dark";
+    targetPx: number;
+    serverAuthority: string;
+  },
 ): Icon | undefined {
   if (!icons?.length) return undefined;
 
@@ -929,7 +943,9 @@ function selectIcon(
       if (!uri) return false;
       if (uri.scheme === "data") return true;
       if (uri.scheme === "https" || uri.scheme === "http") {
-        return uri.authority.toLowerCase() === opts.serverAuthority.toLowerCase();
+        return (
+          uri.authority.toLowerCase() === opts.serverAuthority.toLowerCase()
+        );
       }
       return false;
     })
@@ -943,7 +959,9 @@ function selectIcon(
   if (!candidates.length) return undefined;
 
   // 3. tema: coincidencia exacta O agnóstico al tema (sin campo `theme`)
-  const themed = candidates.filter((i) => i.theme === undefined || i.theme === opts.uiTheme);
+  const themed = candidates.filter(
+    (i) => i.theme === undefined || i.theme === opts.uiTheme,
+  );
   const pool = themed.length ? themed : candidates;
 
   // 4. tamaño: prefiere escalable ("any"), si no el rasterizado más pequeño >= objetivo, si no el mayor disponible

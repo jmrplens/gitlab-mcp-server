@@ -1,0 +1,210 @@
+---
+/**
+ * Landing-page body.
+ *
+ * Replaces the feature table, comparison table and link-card grid the splash
+ * page used to carry with four blocks that each answer one question a
+ * first-time visitor actually has: what is this, what does it look like in
+ * use, how is it shaped, and where do I start. "Who it is for" and "What it
+ * is not" sit inside the first block as a pair, because a claim about an
+ * audience means little without the matching claim about the boundary.
+ *
+ * All the text comes from src/data/home.ts, one object per locale, so the
+ * English and Spanish landings cannot drift apart structurally. Every number
+ * comes from src/data/stats.json — the file `make gen-site-stats` derives
+ * from the live catalog — and is read here, never typed, so a catalog change
+ * updates the landing by itself.
+ */
+import { Code } from "@astrojs/starlight/components";
+import type { HomeContent } from "../../data/home";
+import stats from "../../data/stats.json";
+
+interface Props {
+	content: HomeContent;
+	lang: "en" | "es";
+}
+
+const { content } = Astro.props;
+
+// Read, not typed. The readout states the extremes: the two-tool default and
+// the widest projection the catalog reaches.
+const readout = [
+	{
+		value: String(stats.dynamic),
+		label: content.statLabels.dynamic,
+		href: content.statHrefs.dynamic,
+	},
+	{
+		value: String(stats.tools.gitlab_com),
+		label: content.statLabels.tools,
+		href: content.statHrefs.tools,
+	},
+	{
+		value: String(stats.prompts),
+		label: content.statLabels.prompts,
+		href: content.statHrefs.prompts,
+	},
+	{
+		value: String(stats.resources),
+		label: content.statLabels.resources,
+		href: content.statHrefs.resources,
+	},
+];
+
+// Per-surface tool counts, as a Free/CE → widest-tier range where the tier
+// moves the number.
+const surfaceCounts: Record<string, string> = {
+	dynamic: String(stats.dynamic),
+	meta: `${stats.meta.base}–${stats.meta.gitlab_com}`,
+	individual: `${stats.tools.free}–${stats.tools.gitlab_com}`,
+};
+---
+
+<div class="home">
+	<section class="readout" aria-label={content.statsLabel}>
+		{
+			readout.map((s) => (
+				<div class="readout-cell">
+					<span class="readout-value">{s.value}</span>
+					<span class="readout-label">
+						<a href={s.href}>{s.label}</a>
+					</span>
+				</div>
+			))
+		}
+	</section>
+
+	<section class="block">
+		<span class="block-n" aria-hidden="true"></span>
+		<div class="block-body">
+			<h2>{content.what.title}</h2>
+			<div class="prose">
+				{content.what.body.map((p) => <p set:html={p} />)}
+			</div>
+
+			<div class="two-up">
+				<div class="panel">
+					<h3>{content.who.title}</h3>
+					<ul class="tick">
+						{content.who.items.map((i) => <li>{i}</li>)}
+					</ul>
+				</div>
+				<div class="panel panel-quiet">
+					<h3>{content.honest.title}</h3>
+					<ul class="tick tick-minus">
+						{content.honest.items.map((i) => <li>{i}</li>)}
+					</ul>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<section class="block">
+		<span class="block-n" aria-hidden="true"></span>
+		<div class="block-body">
+			<h2>{content.proof.title}</h2>
+			<p class="lead">{content.proof.lead}</p>
+
+			<div class="demo">
+				<h3>{content.proof.installTitle}</h3>
+				<p class="note">{content.proof.installNote}</p>
+				<Code code={content.proof.install} lang="sh" />
+			</div>
+
+			<div class="demo">
+				<h3>{content.proof.promptsTitle}</h3>
+				<p class="note">{content.proof.promptsNote}</p>
+				{/*
+					The explicit roles are the ones these elements already have
+					implicitly, restated for the stacked layout below 45rem:
+					`display: block` on a table element drops its role, so a narrow
+					reader would otherwise lose the link between a request and what
+					the server does with it, exactly where the column headers are
+					hidden too.
+				*/}
+				<table class="prompts" role="table">
+					<thead role="rowgroup">
+						<tr role="row">
+							<th scope="col" role="columnheader">{content.proof.promptHeaders[0]}</th>
+							<th scope="col" role="columnheader">{content.proof.promptHeaders[1]}</th>
+						</tr>
+					</thead>
+					<tbody role="rowgroup">
+						{
+							content.proof.prompts.map(([ask, does]) => (
+								<tr role="row">
+									<th scope="row" role="rowheader" set:html={ask} />
+									<td role="cell" set:html={does} />
+								</tr>
+							))
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	</section>
+
+	<section class="block">
+		<span class="block-n" aria-hidden="true"></span>
+		<div class="block-body">
+			<h2>{content.surfaces.title}</h2>
+			<p class="lead">{content.surfaces.lead}</p>
+			<table class="surfaces" role="table">
+				<thead role="rowgroup">
+					<tr role="row">
+						<th scope="col" role="columnheader">{content.surfaces.headers[0]}</th>
+						<th scope="col" role="columnheader">{content.surfaces.headers[1]}</th>
+						<th scope="col" role="columnheader">{content.surfaces.headers[2]}</th>
+					</tr>
+				</thead>
+				<tbody role="rowgroup">
+					{
+						content.surfaces.rows.map((row) => (
+							<tr role="row">
+								<th scope="row" role="rowheader">
+									{row.name}
+									<span class="stage-summary">{row.summary}</span>
+								</th>
+								<td role="cell" class="count-cell">
+									{surfaceCounts[row.id]}
+								</td>
+								<td role="cell">{row.when}</td>
+							</tr>
+						))
+					}
+				</tbody>
+			</table>
+			<p class="legend">
+				<span class="chips tier-chips" aria-hidden="true">
+					{content.surfaces.tierNames.map((t) => <span class="chip chip-tier">{t}</span>)}
+				</span>
+				{content.surfaces.legend}
+			</p>
+		</div>
+	</section>
+
+	<section class="block">
+		<span class="block-n" aria-hidden="true"></span>
+		<div class="block-body">
+			<h2>{content.start.title}</h2>
+			<p class="lead">{content.start.lead}</p>
+			<ol class="steps">
+				{
+					content.start.steps.map((s, i) => (
+						<li>
+							<span class="step-n" aria-hidden="true">
+								{String(i + 1).padStart(2, "0")}
+							</span>
+							<h3>{s.title}</h3>
+							<p>{s.body}</p>
+							{s.code && <Code code={s.code} lang="bash" frame="none" />}
+							<a class="step-link" href={s.href}>
+								{s.linkText}
+							</a>
+						</li>
+					))
+				}
+			</ol>
+		</div>
+	</section>
+</div>

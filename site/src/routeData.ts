@@ -17,9 +17,26 @@ export const onRequest = defineRouteMiddleware((context) => {
 	// Starlight augments App.Locals with `starlightRoute` at runtime; the ambient
 	// type is not visible from a standalone module, so narrow it here.
 	const route = (
-		context.locals as { starlightRoute?: { siteTitleHref?: string } }
+		context.locals as {
+			starlightRoute?: {
+				siteTitleHref?: string;
+				hasSidebar?: boolean;
+				entry?: { data?: { template?: string } };
+			};
+		}
 	).starlightRoute;
-	if (!route?.siteTitleHref) return;
+	if (!route) return;
+
+	// Starlight builds a `splash` page with `hasSidebar: false` and renders the
+	// mobile menu button only when the route has a sidebar — so on a phone the
+	// landing would be the only page with no way to reach the navigation. Only
+	// the flag is touched: the tree is already computed, and the desktop column
+	// is collapsed in splash-menu.css instead, so the drawer stays populated.
+	if (route.entry?.data?.template === "splash") {
+		route.hasSidebar = true;
+	}
+
+	if (!route.siteTitleHref) return;
 	if (!route.siteTitleHref.endsWith("/")) {
 		route.siteTitleHref = `${route.siteTitleHref}/`;
 	}
