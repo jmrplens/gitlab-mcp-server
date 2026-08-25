@@ -18,10 +18,10 @@ import FAQ from "../../../../components/FAQ.astro";
 
 gitlab-mcp-server puede ejecutarse dentro de jobs CI/CD como cualquier otra herramienta CLI. Hay dos modos de uso disponibles:
 
-| Modo                               | LLM Necesario | Caso de uso                                                                 |       Determinismo        |
-| ---------------------------------- | :-----------: | --------------------------------------------------------------------------- | :-----------------------: |
-| **Determinista** (JSON-RPC)        |      No       | Operaciones scriptadas: listar issues, publicar comentarios, crear releases | ✅ Totalmente determinista |
-| **Con LLM** (cliente MCP headless) |      Sí       | Flujos inteligentes: revisión de código, triaje de issues, análisis de MRs  |     ❌ No determinista     |
+| Modo                               | LLM Necesario | Caso de uso                                                                 |   Determinismo    |
+| ---------------------------------- | :-----------: | --------------------------------------------------------------------------- | :---------------: |
+| **Determinista** (JSON-RPC)        |      No       | Operaciones scriptadas: listar issues, publicar comentarios, crear releases |  ✅ Determinista   |
+| **Con LLM** (cliente MCP headless) |      Sí       | Flujos inteligentes: revisión de código, triaje de issues, análisis de MRs  | ❌ No determinista |
 
 Ambos modos se autentican con un **Personal Access Token** (PAT) o **Project Access Token**. Los despliegues Enterprise/Premium con un token de scope `api` tienen acceso a toda la superficie de herramientas. Los despliegues GitLab.com tienen acceso al conjunto principal de herramientas más las herramientas adicionales específicas de Orbit.
 

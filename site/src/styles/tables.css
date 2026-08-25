@@ -1,0 +1,199 @@
+/* ------------------------------------------------------------------ *
+ * Reference tables on a narrow screen.
+ *
+ * Below the `md` breakpoint a qualifying table stops being a table and becomes
+ * a stack of records: the row's first cell is its heading, and every other cell
+ * prints its column's label above its value. src/lib/wide-tables.mjs decides
+ * which tables qualify and supplies the labels and the ARIA roles.
+ *
+ * Why stack rather than scroll. Measured at 390px before this rule, the browser
+ * shrank the text column of these tables to 95–231px — twelve to twenty-eight
+ * characters a line. The alternative Starlight offers is a horizontal swipe,
+ * which is a poor way to read a reference you are consulting one row at a time.
+ * These rows are records, not comparisons — one variable, one source, one
+ * prompt each — and a record reads perfectly well stacked. It also gives the
+ * whole site one idiom: the same label-above-value treatment the source spec
+ * sheets and the tool parameter lists already use.
+ *
+ * The breakpoint is 65.75rem, not the `md` 50rem it started as, and the reason
+ * is measured. The reading column is min(45rem, viewport − 332px), because
+ * Starlight's 300px sidebar appears at exactly 50rem — so the column does not
+ * widen as the viewport crosses that line, it DROPS, from 720px at a 799px
+ * viewport to 469px at 801px, and does not recover to 720px until 1052px. A
+ * breakpoint at 50rem therefore switched stacking off precisely where the
+ * column was narrowest.
+ *
+ * The cost, stated plainly: eight marked tables that would have fitted in the
+ * 801–1051px band now stack there. That is the right trade — two of them fit
+ * only exactly at 801px, i.e. already at min-content, and the tables it fixes
+ * are 21- and 44-row references that were losing up to a quarter of their
+ * width off-screen.
+ * ------------------------------------------------------------------ */
+/* A table whose estimated minimum exceeds the reading column can never fit, so
+   it stacks at every width rather than only on a phone. configuration.mdx's
+   variable table is the case that forced this: measured at 1440px it still
+   overflowed its container by 255px, which is a reference page nobody could
+   read without swiping, on any screen they own. */
+.sl-markdown-content table[data-stacks="always"] {
+	display: block;
+}
+.sl-markdown-content table[data-stacks="always"] thead {
+	display: none;
+}
+.sl-markdown-content table[data-stacks="always"] :is(tbody, tr, td, th) {
+	display: block;
+}
+
+@media (max-width: 65.75rem) {
+	.sl-markdown-content table[data-stacks] {
+		display: block;
+		border-collapse: collapse;
+	}
+	.sl-markdown-content table[data-stacks] tbody,
+	.sl-markdown-content table[data-stacks] tr {
+		display: block;
+	}
+
+	/* The header row has nothing to say once every cell carries its own label. */
+	.sl-markdown-content table[data-stacks] thead {
+		display: none;
+	}
+
+	/* One record per block, separated by the same hairline the spec sheets use. */
+	.sl-markdown-content table[data-stacks] :is(tbody, tr, td, th) {
+		display: block;
+	}
+}
+
+/* ---- Presentation of a stacked row ---- *
+ *
+ * These rules must apply ONLY where a table is actually stacked, and "actually
+ * stacked" is two different conditions: below the breakpoint for an ordinary
+ * marked table, and at every width for one that can never fit. A single
+ * unguarded copy — which is what shipped first — reaches a `data-stacks=""`
+ * table on a wide screen too, where it strips the cell padding and prints every
+ * column label a second time underneath a header row that is still visible.
+ *
+ * CSS cannot express "inside this media query OR matching this attribute" as
+ * one selector, so the block is stated twice against the two conditions. The
+ * duplication is deliberate and is the reason this comment exists.
+ */
+
+/* (1) Any marked table, below the breakpoint. */
+@media (max-width: 65.75rem) {
+	.sl-markdown-content table[data-stacks] tr {
+		padding: 0.85rem 0;
+		border-block-start: 1px solid var(--sl-color-hairline-light);
+	}
+	.sl-markdown-content table[data-stacks] tr:last-child {
+		border-block-end: 1px solid var(--sl-color-hairline-light);
+	}
+	.sl-markdown-content table[data-stacks] :is(td, th) {
+		border: 0;
+		padding: 0;
+		text-align: start;
+	}
+	.sl-markdown-content table[data-stacks] :is(td, th) + :is(td, th) {
+		margin-top: 0.55rem;
+	}
+
+	/* The label the hidden header row used to carry. Same treatment as a spec
+	   sheet's gutter, so the two read as one system. */
+	.sl-markdown-content table[data-stacks] :is(td, th)[data-label]::before {
+		content: attr(data-label);
+		display: block;
+		font-family: var(--gm-mono);
+		font-size: var(--sl-text-2xs);
+		text-transform: uppercase;
+		letter-spacing: 0.07em;
+		line-height: 1.6;
+		color: var(--sl-color-gray-3);
+		margin-bottom: 0.1rem;
+	}
+
+	/* The first cell is what the record is about, so it reads as the heading of its
+	   block and does not repeat a label above itself. */
+	.sl-markdown-content table[data-stacks] tr > :is(td, th):first-child {
+		font-weight: 600;
+		color: var(--sl-color-white);
+	}
+	.sl-markdown-content table[data-stacks] tr > :is(td, th):first-child::before {
+		content: none;
+	}
+}
+
+/* (2) A table that can never fit, at every width. */
+.sl-markdown-content table[data-stacks="always"] tr {
+	padding: 0.85rem 0;
+	border-block-start: 1px solid var(--sl-color-hairline-light);
+}
+.sl-markdown-content table[data-stacks="always"] tr:last-child {
+	border-block-end: 1px solid var(--sl-color-hairline-light);
+}
+.sl-markdown-content table[data-stacks="always"] :is(td, th) {
+	border: 0;
+	padding: 0;
+	text-align: start;
+}
+.sl-markdown-content table[data-stacks="always"] :is(td, th) + :is(td, th) {
+	margin-top: 0.55rem;
+}
+
+/* The label the hidden header row used to carry. Same treatment as a spec
+   sheet's gutter, so the two read as one system. */
+.sl-markdown-content
+	table[data-stacks="always"]
+	:is(td, th)[data-label]::before {
+	content: attr(data-label);
+	display: block;
+	font-family: var(--gm-mono);
+	font-size: var(--sl-text-2xs);
+	text-transform: uppercase;
+	letter-spacing: 0.07em;
+	line-height: 1.6;
+	color: var(--sl-color-gray-3);
+	margin-bottom: 0.1rem;
+}
+
+/* The first cell is what the record is about, so it reads as the heading of its
+   block and does not repeat a label above itself. */
+.sl-markdown-content table[data-stacks="always"] tr > :is(td, th):first-child {
+	font-weight: 600;
+	color: var(--sl-color-white);
+}
+.sl-markdown-content
+	table[data-stacks="always"]
+	tr
+	> :is(td, th):first-child::before {
+	content: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * Cell padding on a phone.
+ *
+ * The tables that are NOT stacked — the comparisons, where reading across the
+ * row is the point — are squeezed by chrome rather than by prose. Starlight's
+ * 1rem horizontal cell padding accounts for 128px of the icon table's 432px
+ * minimum and 96px of the chain table's 371px, on a 390px screen. Reclaiming it
+ * is what actually makes them fit, and it costs nothing a reader values.
+ *
+ * Measured at 390px: the chain table goes 371px → 358px (overflow gone) and the
+ * icon table 432px → 368px. `:not([data-stacks])` excludes the stacked tables,
+ * which zero their own padding above; the spec sheets are <dl>, so no th/td
+ * rule reaches them.
+ * ------------------------------------------------------------------ */
+@media (max-width: 30rem) {
+	.sl-markdown-content table:not([data-stacks]) :is(th, td) {
+		padding-inline: 0.5rem;
+	}
+	.sl-markdown-content
+		table:not([data-stacks])
+		:is(th:first-child, td:first-child) {
+		padding-inline-start: 0;
+	}
+	.sl-markdown-content
+		table:not([data-stacks])
+		:is(th:last-child, td:last-child) {
+		padding-inline-end: 0;
+	}
+}
