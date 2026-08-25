@@ -378,9 +378,13 @@ func (m *Manager[S]) start(ctx context.Context, w *watcher[S]) error {
 	w.leaseAt = time.Now().Add(m.opts.Lease)
 	w.interval = first
 	close(w.ready)
+	// Registered on the WaitGroup inside the same critical section that
+	// proved the manager open: with the Add after the unlock, Close could
+	// slip through wg.Wait on a zero counter and return while this watcher
+	// was still about to launch.
+	m.wg.Add(1)
 	m.mu.Unlock()
 
-	m.wg.Add(1)
 	go m.watch(watchCtx, w, first)
 
 	m.opts.Logger.Debug("subscription started",

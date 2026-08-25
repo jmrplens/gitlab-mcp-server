@@ -1019,14 +1019,26 @@ func TestGetOrCreate_DifferentURLsSameToken(t *testing.T) {
 	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
-	srv1, err := pool.GetOrCreate("glpat-same-token", "http://gitlab-a.example.com")
+	// Two live stubs rather than example.com hosts: GetOrCreate probes the
+	// URL it is given, so a made-up host would mean real DNS traffic from a
+	// unit test — passing only because the probe fails open.
+	stubA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer stubA.Close()
+	stubB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("{}"))
+	}))
+	defer stubB.Close()
+
+	srv1, err := pool.GetOrCreate("glpat-same-token", stubA.URL)
 	if err != nil {
-		t.Fatalf("GetOrCreate(gitlab-a) error: %v", err)
+		t.Fatalf("GetOrCreate(stub A) error: %v", err)
 	}
 
-	srv2, err := pool.GetOrCreate("glpat-same-token", "http://gitlab-b.example.com")
+	srv2, err := pool.GetOrCreate("glpat-same-token", stubB.URL)
 	if err != nil {
-		t.Fatalf("GetOrCreate(gitlab-b) error: %v", err)
+		t.Fatalf("GetOrCreate(stub B) error: %v", err)
 	}
 
 	if srv1 == srv2 {

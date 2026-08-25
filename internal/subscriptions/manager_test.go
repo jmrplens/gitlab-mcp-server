@@ -785,6 +785,42 @@ func TestOnStop_ClientAskedForIt_IsSilent(t *testing.T) {
 	})
 }
 
+// TestClose_RacesSubscribe_NeverOrphansAWatcher hammers the window where
+// a Subscribe's first read finishes while Close is shutting the manager
+// down.
+//
+// The invariant under test is Close's contract: when it returns, no
+// watcher polls again. It once held only by luck — the WaitGroup Add sat
+// outside the critical section that checks closed, so Close could pass
+// wg.Wait on a zero counter while a fully-validated watcher was still
+// about to launch. Real time rather than synctest on purpose: the bug is
+// an interleaving between goroutines mid-call, exactly what -race plus
+// repetition explores and a fake clock serializes away.
+func TestClose_RacesSubscribe_NeverOrphansAWatcher(t *testing.T) {
+	for range 100 {
+		r, n := newFakeReader(), &fakeNotifier{}
+		m := New[string](r, n, quietOptions(Options{
+			BaseInterval: time.Millisecond,
+			MinInterval:  time.Millisecond,
+		}))
+
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			_ = m.Subscribe(context.Background(), subA, testURI)
+		})
+		m.Close()
+		wg.Wait()
+
+		// Close has returned: however the race fell, nothing may read
+		// again. Two poll periods of quiet is proof at this cadence.
+		settled := r.readCount(testURI)
+		time.Sleep(5 * time.Millisecond)
+		if got := r.readCount(testURI); got != settled {
+			t.Fatalf("reads went %d -> %d after Close returned; a watcher outlived shutdown", settled, got)
+		}
+	}
+}
+
 // waitForNoWatchers blocks until every watcher goroutine has wound down.
 func waitForNoWatchers(t *testing.T, m *Manager[string]) {
 	t.Helper()

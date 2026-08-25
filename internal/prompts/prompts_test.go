@@ -220,6 +220,8 @@ func TestSummarizePipelineStatusPrompt_SubscriptionHint(t *testing.T) {
 		{"waiting_for_resource", true},
 		{"success", false},
 		{"failed", false},
+		{"canceled", false},
+		{"skipped", false},
 		{"manual", false},
 		{"scheduled", false},
 	}
