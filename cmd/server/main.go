@@ -1179,14 +1179,29 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	// The card build is bounded by the server's lifecycle context, not by
 	// any single request's: a canceled first request must not poison the
 	// once-cached card for everyone after it, while a server shutdown
-	// should cancel the build rather than wait behind it.
-	serverCard := sync.OnceValues(func() ([]byte, error) {
-		cardJSON, err := buildServerCard(ctx, cfg)
-		if err != nil {
-			slog.Warn("failed to build server-card.json, endpoint returns 503", "error", err)
-		}
-		return cardJSON, err
-	})
+	// should cancel the build rather than wait behind it. One background
+	// goroutine does the building, started by the first request; handlers
+	// only select on its completion channel. Per-request waiter goroutines
+	// would let anyone hammering this public route accumulate goroutines
+	// for the whole duration of the first build.
+	var (
+		serverCardOnce sync.Once
+		serverCardDone = make(chan struct{})
+		serverCardJSON []byte
+	)
+	startServerCardBuild := func() {
+		serverCardOnce.Do(func() {
+			go func() {
+				defer close(serverCardDone)
+				cardJSON, err := buildServerCardFn(ctx, cfg)
+				if err != nil {
+					slog.Warn("failed to build server-card.json, endpoint returns 503", "error", err)
+					return
+				}
+				serverCardJSON = cardJSON
+			}()
+		})
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler)
@@ -1197,15 +1212,11 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// hold graceful shutdown hostage for however long the build took.
 		// This way a request caught by shutdown returns 503 immediately,
 		// Shutdown drains, and a build that does finish stays cached for
-		// the next request.
-		done := make(chan struct{})
-		var serverCardJSON []byte
-		go func() {
-			defer close(done)
-			serverCardJSON, _ = serverCard()
-		}()
+		// the next request. serverCardJSON is safe to read after the
+		// channel closes: the write happens before close(serverCardDone).
+		startServerCardBuild()
 		select {
-		case <-done:
+		case <-serverCardDone:
 		case <-r.Context().Done():
 			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
 			return
@@ -1563,6 +1574,12 @@ func newHealthResponse(startedAt, now time.Time) healthResponse {
 // The card includes per-tool OutputSchema, Annotations, and Title so external
 // scanners (Smithery, Glama, MCP Hive) get the full metadata without needing
 // to authenticate against the live MCP endpoint.
+// buildServerCardFn is the card builder serveHTTPOn uses; a variable so a
+// test can substitute a builder it controls and drive the
+// shutdown-during-build path deterministically instead of racing a sleep
+// against the real build.
+var buildServerCardFn = buildServerCard //nolint:gochecknoglobals // test seam
+
 func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 	// Use configured URL or a placeholder — the dummy client only needs a
 	// parseable URL to register tools; it never makes real API calls.

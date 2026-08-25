@@ -4170,22 +4170,37 @@ func TestBuildServerCard_IndividualMode(t *testing.T) {
 
 // TestServeHTTP_ShutdownDuringServerCardBuild_DrainsCleanly verifies a
 // shutdown that begins while the server card is still being built neither
-// waits behind the build nor reports an error.
+// waits behind the build nor reports an error, and that the caught request
+// is answered with 503 rather than left hanging.
 //
 // The card's catalog registration is CPU work no context can interrupt, so
 // the guarantee has to come from the handler: the in-flight card request
 // is released with a 503 the moment shutdown starts, letting Shutdown
 // drain inside its budget while the detached build finishes on its own.
+//
+// The builder is substituted through the buildServerCardFn seam with one
+// the test gates, so cancellation provably lands mid-build instead of
+// racing a sleep against the real build. Deliberately not parallel: the
+// seam is a package global, and the sequential pass runs alone.
 func TestServeHTTP_ShutdownDuringServerCardBuild_DrainsCleanly(t *testing.T) {
 	srv := newMockGitLabServer(t)
 	cfg := &config.Config{
 		GitLabURL:      srv.URL,
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
-		// The individual surface on purpose: the slowest possible card
-		// build, so shutdown reliably lands while it is in flight.
-		MetaTools: false,
+		MetaTools:      false,
+		ToolSurface:    config.ToolSurfaceDynamic, // the gated fake builds the card; the surface no longer matters
 	}
+
+	buildStarted := make(chan struct{})
+	releaseBuild := make(chan struct{})
+	origBuild := buildServerCardFn
+	buildServerCardFn = func(context.Context, *config.Config) ([]byte, error) {
+		close(buildStarted)
+		<-releaseBuild
+		return []byte(`{}`), nil
+	}
+	t.Cleanup(func() { buildServerCardFn = origBuild })
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -4213,11 +4228,22 @@ func TestServeHTTP_ShutdownDuringServerCardBuild_DrainsCleanly(t *testing.T) {
 			return
 		}
 		resp, doErr := testHTTPClient.Do(req)
-		if doErr == nil {
-			resp.Body.Close()
+		if doErr != nil {
+			t.Errorf("card request during shutdown: %v, want a 503 response", doErr)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusServiceUnavailable {
+			t.Errorf("card request during shutdown = %d, want %d", resp.StatusCode, http.StatusServiceUnavailable)
 		}
 	}()
-	time.Sleep(50 * time.Millisecond) // let the request reach the handler
+
+	// Only cancel once the builder is provably in flight.
+	select {
+	case <-buildStarted:
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("card build never started")
+	}
 	cancel()
 
 	select {
@@ -4229,6 +4255,9 @@ func TestServeHTTP_ShutdownDuringServerCardBuild_DrainsCleanly(t *testing.T) {
 		t.Fatal("shutdown did not complete while the server card was building")
 	}
 	<-cardDone
+	// Release the gated builder only after the assertions: its goroutine
+	// outlives serveHTTPOn by design, and must not touch the restored seam.
+	close(releaseBuild)
 }
 
 // TestBuildServerCard_MinimalCapabilitySurface verifies that server-card

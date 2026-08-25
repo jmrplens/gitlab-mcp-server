@@ -127,8 +127,15 @@ test-integration:
 # unstated assumption of the developer machine before this — the first run
 # on a clean Linux box provisioned an entire GitLab stack and then died on
 # "gotestsum: command not found" after several minutes.
+# GOTESTSUM resolves to the PATH binary when present, else to the location
+# go install writes to (GOBIN, falling back to GOPATH/bin). Recursive (=) on
+# purpose: the fallback must be re-evaluated after ensure-gotestsum runs,
+# because a prerequisite shell cannot extend the PATH of later recipes.
+GOTESTSUM_INSTALL_DIR = $(or $(shell go env GOBIN),$(shell go env GOPATH)/bin)
+GOTESTSUM = $(or $(shell command -v gotestsum 2>/dev/null),$(GOTESTSUM_INSTALL_DIR)/gotestsum)
+
 ensure-gotestsum:
-	@command -v gotestsum >/dev/null 2>&1 || { \
+	@command -v gotestsum >/dev/null 2>&1 || test -x "$(GOTESTSUM_INSTALL_DIR)/gotestsum" || { \
 		echo "gotestsum not found; installing with go install..."; \
 		go install gotest.tools/gotestsum@latest; \
 	}
@@ -138,7 +145,7 @@ test-e2e: ensure-gotestsum
 	@echo "         Tests create and delete projects, groups, users, and other resources."
 	@read -p "Are you sure you want to continue? [y/N] " confirm && [ "$$confirm" = "y" ] || { echo "Aborted."; exit 1; }
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c 'gotestsum \
+	bash -o pipefail -c '$(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-log.json \
@@ -181,7 +188,7 @@ test-e2e-docker: ensure-gotestsum
 	@echo "=== Running E2E tests ==="
 	$(call MKDIR_P,$(E2E_REPORT_DIR))
 	@set +e; \
-	  bash -o pipefail -c 'set -a && . test/e2e/.env.docker && set +a && E2E_MODE=docker gotestsum \
+	  bash -o pipefail -c 'set -a && . test/e2e/.env.docker && set +a && E2E_MODE=docker $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-docker-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-docker-log.json \
@@ -227,7 +234,7 @@ test-e2e-docker-enterprise: ensure-gotestsum
 	@set +e; \
 	  bash -o pipefail -c 'set -a && . test/e2e/.env.docker && set +a && \
 	  echo "Enterprise E2E suite: build tags e2e,enterprise"; \
-	  E2E_MODE=docker gotestsum \
+	  E2E_MODE=docker $(GOTESTSUM) \
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-docker-enterprise-junit.xml \
 	  --jsonfile $(E2E_REPORT_DIR)/e2e-docker-enterprise-log.json \

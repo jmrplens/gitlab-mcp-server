@@ -416,10 +416,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       989 |     200,161 |
-| Unit tests (`_test.go`)  |       545 |     309,989 |
+| Source (`.go`, non-test) |       989 |     200,178 |
+| Unit tests (`_test.go`)  |       545 |     310,018 |
 | End-to-end tests         |       174 |      45,163 |
-| **Total**                | **1,708** | **555,313** |
+| **Total**                | **1,708** | **555,359** |
 
 ### Functions
 
@@ -439,7 +439,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~202 lines |
 | Average test file length           |                 ~568 lines |
-| Comment lines in source            |  22,765 (~11.4% of source) |
+| Comment lines in source            |  22,774 (~11.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
@@ -447,9 +447,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
 | `if err != nil` checks             | 6,677 |
-| `defer` statements                 |   905 |
+| `defer` statements                 |   906 |
 | `struct` types defined             | 2,725 |
-| `//nolint` suppressions            |   254 |
+| `//nolint` suppressions            |   255 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
