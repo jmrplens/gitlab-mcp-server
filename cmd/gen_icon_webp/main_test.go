@@ -341,10 +341,10 @@ func TestCheckAll_PropagatesRasterizerError(t *testing.T) {
 func TestRunIn_GenerateThenCheckRoundTrips(t *testing.T) {
 	root := writeFixture(t, "icons.go", fixtureIconsGo)
 
-	if err := runIn(root, "icons.go", "webp", false, fakeRasterizer); err != nil {
+	if err := runIn(root, []string{"icons.go"}, "webp", false, fakeRasterizer); err != nil {
 		t.Fatalf("runIn(generate) error: %v", err)
 	}
-	if err := runIn(root, "icons.go", "webp", true, fakeRasterizer); err != nil {
+	if err := runIn(root, []string{"icons.go"}, "webp", true, fakeRasterizer); err != nil {
 		t.Fatalf("runIn(check) error = %v, want nil right after generating", err)
 	}
 }
@@ -352,7 +352,7 @@ func TestRunIn_GenerateThenCheckRoundTrips(t *testing.T) {
 func TestRunIn_PropagatesExtractIconsError(t *testing.T) {
 	root := writeFixture(t, "icons.go", "package toolutil\n\nconst svgBroken = `<svg>\n")
 
-	if err := runIn(root, "icons.go", "webp", true, fakeRasterizer); err == nil {
+	if err := runIn(root, []string{"icons.go"}, "webp", true, fakeRasterizer); err == nil {
 		t.Fatal("runIn() error = nil, want extractIcons()'s parse error propagated")
 	}
 }
@@ -360,7 +360,7 @@ func TestRunIn_PropagatesExtractIconsError(t *testing.T) {
 func TestRunIn_NoIconsFoundIsAnError(t *testing.T) {
 	root := writeFixture(t, "icons.go", fixtureEmptyIconsGo)
 
-	err := runIn(root, "icons.go", "webp", true, fakeRasterizer)
+	err := runIn(root, []string{"icons.go"}, "webp", true, fakeRasterizer)
 	if err == nil {
 		t.Fatal("runIn() error = nil, want an error when icons.go declares no svg<Name> constants")
 	}
@@ -372,7 +372,7 @@ func TestRunIn_NoIconsFoundIsAnError(t *testing.T) {
 func TestRunIn_CheckFailsBeforeGenerate(t *testing.T) {
 	root := writeFixture(t, "icons.go", fixtureIconsGo)
 
-	if err := runIn(root, "icons.go", "webp", true, fakeRasterizer); err == nil {
+	if err := runIn(root, []string{"icons.go"}, "webp", true, fakeRasterizer); err == nil {
 		t.Fatal("runIn(check) error = nil, want an error when no assets have been generated yet")
 	}
 }
@@ -380,7 +380,7 @@ func TestRunIn_CheckFailsBeforeGenerate(t *testing.T) {
 func TestRunIn_GeneratePropagatesRasterizerError(t *testing.T) {
 	root := writeFixture(t, "icons.go", fixtureIconsGo)
 
-	if err := runIn(root, "icons.go", "webp", false, failingRasterizer); err == nil {
+	if err := runIn(root, []string{"icons.go"}, "webp", false, failingRasterizer); err == nil {
 		t.Fatal("runIn(generate) error = nil, want the rasterizer's error propagated")
 	}
 }

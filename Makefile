@@ -1,5 +1,5 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-	run test test-short test-race test-pkg test-integration test-e2e ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
+	run brand brand-check test test-short test-race test-pkg test-integration test-e2e ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
 	validate-http-stateless validate-http-stateless-docker \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
 	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
@@ -670,6 +670,14 @@ check-lhm-manifest:
 ## never invoke this. Run it after adding or editing an icon.
 gen-icon-webp:
 	go run ./cmd/gen_icon_webp/
+
+## brand: regenerate every vector brand asset (mark, favicon, in-binary MCP brand mark) from cmd/gen_brand's parametric geometry.
+brand:
+	go run ./cmd/gen_brand/
+
+## brand-check: verify the committed brand assets match the geometry.
+brand-check:
+	go run ./cmd/gen_brand/ --check
 
 ## check-icon-webp: verify the committed WebP icon assets match icons.go.
 ## Same external-tool requirement as gen-icon-webp.
