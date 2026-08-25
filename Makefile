@@ -736,6 +736,11 @@ mcpb:
 ## plugin update", which is what this target runs. Requires a one-time
 ## interactive `lhm login` + `lhm github connect` on the machine — LobeHub has
 ## no CI path. See the release process in CLAUDE.md.
+# Pinned: the CLI has already changed its verb contract under this target
+# once (publish -> update, a new positional gitUrl); bump deliberately after
+# verifying `plugin update --dir` still holds.
+LOBEHUB_MARKET_CLI_VERSION := 0.0.41
+
 publish-lobehub: check-lhm-manifest
 	@command -v node >/dev/null || { echo "ERROR: Node.js >= 22 is required"; exit 1; }
 	@NODE_MAJOR=$$(node -v | sed 's/^v\([0-9]*\).*/\1/'); \
@@ -747,7 +752,7 @@ publish-lobehub: check-lhm-manifest
 		echo "ERROR: VERSION ($$VER) != lhm.plugin.json version ($$MVER); run a release stamp first"; exit 1; \
 	fi; \
 	echo "Updating jmrplens-gitlab-mcp-server to v$$VER on LobeHub..."; \
-	npx -y @lobehub/market-cli plugin update --dir "$(CURDIR)"
+	npx -y @lobehub/market-cli@$(LOBEHUB_MARKET_CLI_VERSION) plugin update --dir "$(CURDIR)"
 
 ## gen-readme: regenerate all managed README.md sections (token footprint + stats).
 gen-readme: gen-footprint gen-stats
