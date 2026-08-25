@@ -13,11 +13,12 @@ faq:
     a: "Elicitation is supported by **Claude Desktop** and **Claude Code**. **VS Code Copilot** and **Cursor** do not yet support it, so on those clients GitLab MCP Server falls back to standard parameterized creation tools. Because client capability support changes frequently, confirm the current state against the specific client's documentation."
 ---
 
+import stats from "../../../data/stats.json";
 import FAQ from "../../../components/FAQ.astro";
 
-GitLab MCP Server implements **four MCP protocol capabilities** — progress, elicitation, completions, and resource subscriptions — that go beyond basic tool calling to make AI assistants more accurate and interactive when working with GitLab. It also attaches **icon metadata** to every tool, resource, and prompt. Together these features let assistants report progress, ask the user for input through structured forms, autocomplete argument values, watch GitLab resources for change, and present recognizable per-domain icons.
+GitLab MCP Server implements **{stats.capabilities} MCP protocol capabilities** — progress, elicitation, completions, and resource subscriptions — that go beyond basic tool calling to make AI assistants more accurate and interactive when working with GitLab. It also attaches **icon metadata** to every tool, resource, and prompt. Together these features let assistants report progress, ask the user for input through structured forms, autocomplete argument values, watch GitLab resources for change, and present recognizable per-domain icons.
 
-The four capabilities are negotiated during the MCP initialization handshake, while icons are presentation metadata that clients render or ignore. None of them is required for core tool calls to work: when a client lacks support, the server degrades gracefully and the underlying GitLab operation still completes.
+The {stats.capabilities} capabilities are negotiated during the MCP initialization handshake, while icons are presentation metadata that clients render or ignore. None of them is required for core tool calls to work: when a client lacks support, the server degrades gracefully and the underlying GitLab operation still completes.
 
 ## What capabilities does GitLab MCP Server provide?
 

@@ -25,5 +25,6 @@
   "resources": 45,
   "prompts": 37,
   "completions": 17,
+  "capabilities": 4,
   "tool_packages": 176
 }

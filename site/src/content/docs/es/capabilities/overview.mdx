@@ -13,11 +13,12 @@ faq:
     a: "La elicitación la admiten **Claude Desktop** y **Claude Code**. **VS Code Copilot** y **Cursor** aún no la admiten, por lo que en esos clientes GitLab MCP Server recurre a las herramientas de creación parametrizadas estándar. Como el soporte de capacidades de los clientes cambia con frecuencia, confirma el estado actual en la documentación del cliente específico."
 ---
 
+import stats from "../../../../data/stats.json";
 import FAQ from "../../../../components/FAQ.astro";
 
-GitLab MCP Server implementa **cuatro capacidades del protocolo MCP** —progreso, elicitación, autocompletado y suscripciones a recursos— que van más allá de la llamada básica a herramientas para que los asistentes de IA sean más precisos e interactivos al trabajar con GitLab. Además adjunta **metadatos de iconos** a cada herramienta, recurso y prompt. En conjunto, estas funciones permiten a los asistentes informar del progreso, pedir información al usuario mediante formularios estructurados, autocompletar valores de argumentos, vigilar recursos de GitLab en busca de cambios y mostrar iconos reconocibles por dominio.
+GitLab MCP Server implementa **{stats.capabilities} capacidades del protocolo MCP** —progreso, elicitación, autocompletado y suscripciones a recursos— que van más allá de la llamada básica a herramientas para que los asistentes de IA sean más precisos e interactivos al trabajar con GitLab. Además adjunta **metadatos de iconos** a cada herramienta, recurso y prompt. En conjunto, estas funciones permiten a los asistentes informar del progreso, pedir información al usuario mediante formularios estructurados, autocompletar valores de argumentos, vigilar recursos de GitLab en busca de cambios y mostrar iconos reconocibles por dominio.
 
-Las cuatro capacidades se negocian durante el handshake de inicialización MCP, mientras que los iconos son metadatos de presentación que los clientes renderizan o ignoran. Ninguno es obligatorio para que funcionen las llamadas básicas a herramientas: cuando un cliente carece de soporte, el servidor degrada de forma elegante y la operación de GitLab subyacente se completa igualmente.
+Las {stats.capabilities} capacidades se negocian durante el handshake de inicialización MCP, mientras que los iconos son metadatos de presentación que los clientes renderizan o ignoran. Ninguno es obligatorio para que funcionen las llamadas básicas a herramientas: cuando un cliente carece de soporte, el servidor degrada de forma elegante y la operación de GitLab subyacente se completa igualmente.
 
 ## ¿Qué capacidades proporciona GitLab MCP Server?
 

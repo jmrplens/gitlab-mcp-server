@@ -16,8 +16,12 @@ package subscriptions
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -677,5 +681,63 @@ func TestClassify_AgreesWithResourceRouter(t *testing.T) {
 					"so the router could not resolve the URI (read error: %v)", uri, kind, err)
 			}
 		})
+	}
+}
+
+// TestKindCount_MatchesEveryDocumentThatCitesIt derives the subscribable
+// kind count from the whitelist and asserts every document that states the
+// number still states this one.
+//
+// The count appears in prose no generator owns — the capability reference,
+// the front-door README, and the site page in both languages. When the
+// whitelist grows, this is the test that turns a silently stale "26" into a
+// failing build with the list of files to touch. ADRs are deliberately not
+// checked: they record the number as it was when the decision was made.
+func TestKindCount_MatchesEveryDocumentThatCitesIt(t *testing.T) {
+	count := len(Templates())
+
+	root := filepath.Join("..", "..")
+	tests := []struct {
+		file   string
+		phrase string
+	}{
+		{"docs/reference/capabilities/subscriptions.md", fmt.Sprintf("%d kinds of resource", count)},
+		{"README.md", fmt.Sprintf("%d single-object kinds", count)},
+		{"site/src/content/docs/capabilities/subscriptions.mdx", fmt.Sprintf("%d single-object resource kinds", count)},
+		{"site/src/content/docs/es/capabilities/subscriptions.mdx", fmt.Sprintf("%d tipos de recurso de objeto único", count)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.file, func(t *testing.T) {
+			data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(tt.file))) //#nosec G304 -- fixed in-repo path
+			if err != nil {
+				t.Fatalf("read %s: %v", tt.file, err)
+			}
+			if !strings.Contains(string(data), tt.phrase) {
+				t.Errorf("%s does not contain %q; the whitelist now has %d kinds — update the document",
+					tt.file, tt.phrase, count)
+			}
+		})
+	}
+}
+
+// TestTemplates_MatchesWhitelistExactly verifies the exported template list
+// — the one gitlab://tools advertises — is the whitelist, whole and sorted,
+// with nothing added and nothing missing.
+func TestTemplates_MatchesWhitelistExactly(t *testing.T) {
+	got := Templates()
+	if len(got) != len(kindTemplates) {
+		t.Fatalf("Templates() returned %d entries, whitelist has %d", len(got), len(kindTemplates))
+	}
+	if !slices.IsSorted(got) {
+		t.Error("Templates() is not sorted; the advertisement should be stable across runs")
+	}
+	want := make(map[string]bool, len(kindTemplates))
+	for _, template := range kindTemplates {
+		want[template] = true
+	}
+	for _, template := range got {
+		if !want[template] {
+			t.Errorf("Templates() advertises %q, which the whitelist does not contain", template)
+		}
 	}
 }

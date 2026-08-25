@@ -97,6 +97,25 @@ func TestSiteStatsMatchesCommittedFile(t *testing.T) {
 	}
 }
 
+// TestSiteStatsCapabilitiesMatchesDocs pins siteCapabilities to the count
+// documented in docs/reference/capabilities/README.md, so the published
+// number cannot silently drift from the canonical capability reference.
+//
+// This is the guard the fourth capability shipped without: the site's
+// overview pages said "three MCP protocol capabilities" for as long as the
+// count lived only in hand-written prose, and nothing failed.
+func TestSiteStatsCapabilitiesMatchesDocs(t *testing.T) {
+	path := filepath.Join(repositoryRoot(), "docs", "reference", "capabilities", "README.md")
+	data, err := os.ReadFile(path) //#nosec G304 -- fixed in-repo path
+	if err != nil {
+		t.Fatalf("read capabilities README: %v", err)
+	}
+	want := "the **" + strconv.Itoa(siteCapabilities) + " MCP capabilities**"
+	if !strings.Contains(string(data), want) {
+		t.Errorf("docs do not contain %q; update siteCapabilities or the docs", want)
+	}
+}
+
 // TestSiteStatsCompletionsMatchesDocs pins siteCompletionArgTypes to the count
 // documented in docs/reference/capabilities/completions.md so the published
 // number cannot silently drift from the canonical capability reference.

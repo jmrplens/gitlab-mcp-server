@@ -31,6 +31,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
+// siteCapabilities is the number of MCP protocol capabilities this server
+// implements: completions, progress, elicitation, and resource
+// subscriptions. Capabilities are wired individually in cmd/server rather
+// than through an enumerable registry, so this value mirrors the canonical
+// count documented in docs/reference/capabilities/README.md ("the 4 MCP
+// capabilities"). It is pinned by TestSiteStatsCapabilitiesMatchesDocs so
+// it cannot silently drift — which is exactly how the site's capability
+// count went stale when the fourth capability shipped.
+const siteCapabilities = 4
+
 // siteCompletionArgTypes is the number of distinct completion argument types
 // the server supports. The completion handler dispatches argument types through
 // a switch in internal/completions rather than an enumerable registry, so this
@@ -51,6 +61,7 @@ type siteStats struct {
 	Resources      int                `json:"resources"`
 	Prompts        int                `json:"prompts"`
 	Completions    int                `json:"completions"`
+	Capabilities   int                `json:"capabilities"`
 	ToolPackages   int                `json:"tool_packages"`
 }
 
@@ -115,6 +126,7 @@ func generateSiteStats(client, gitLabComClient *gitlabclient.Client) siteStats {
 		Resources:    sumResources(client),
 		Prompts:      countPrompts(client),
 		Completions:  siteCompletionArgTypes,
+		Capabilities: siteCapabilities,
 		ToolPackages: countToolPackages(),
 	}
 }
