@@ -25,7 +25,6 @@
     "analyze": "pnpm run build && pnpm run lint",
     "prebuild": "node scripts/copy-llms.mjs",
     "i18n:check": "node scripts/check-i18n-parity.mjs",
-    "og-image": "node scripts/render-og-image.mjs",
     "a11y:check": "node scripts/check-headings-labels.mjs"
   },
   "type": "module",

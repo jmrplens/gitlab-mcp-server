@@ -5,13 +5,18 @@
   "start_url": "/gitlab-mcp-server/",
   "scope": "/gitlab-mcp-server/",
   "display": "standalone",
-  "background_color": "#0B0618",
+  "background_color": "#0d1117",
   "theme_color": "#A78BFA",
   "icons": [
     {
       "src": "/gitlab-mcp-server/favicon.svg",
       "type": "image/svg+xml",
       "sizes": "any"
+    },
+    {
+      "src": "/gitlab-mcp-server/favicon.png",
+      "type": "image/png",
+      "sizes": "256x256"
     }
   ],
   "categories": ["developer tools", "utilities"]

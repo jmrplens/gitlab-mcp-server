@@ -164,6 +164,55 @@ const svgBrand = `+"`%s`"+`
 `, brandMark24())
 }
 
+// bannerSVG is the repository banner: 1280x400, self-grounding on the dark
+// plate (phonometry's one-card rule — the art brings its own ground, so it
+// reads identically under GitHub's light and dark themes). The wordmark is
+// set in DejaVu Sans Mono — the project's name is an identifier, and the
+// identity sets identifiers in mono — and the raster is produced from this
+// file by `make brand-rasters` (rsvg-convert + cwebp, the same maintainer
+// tooling cmd/gen_icon_webp already requires). No counts appear here on
+// purpose: a figure would go stale between releases; figures live on
+// surfaces the generators re-stamp.
+func bannerSVG() string {
+	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" role="img" aria-label="gitlab-mcp-server — GitLab for your AI assistant">
+  <rect width="1280" height="400" fill="%s"/>
+  <rect x="0.5" y="0.5" width="1279" height="399" fill="none" stroke="#21262d"/>
+  <g transform="translate(96,56) scale(4.5)">
+%s  </g>
+  <text x="500" y="196" font-family="DejaVu Sans Mono, monospace" font-weight="bold" font-size="58" fill="#e6edf3">gitlab-mcp-server</text>
+  <text x="502" y="248" font-family="DejaVu Sans, sans-serif" font-size="26" fill="#8b949e">GitLab for your AI assistant — one action catalog,</text>
+  <text x="502" y="284" font-family="DejaVu Sans, sans-serif" font-size="26" fill="#8b949e">three MCP tool surfaces, REST + GraphQL.</text>
+  <text x="502" y="336" font-family="DejaVu Sans Mono, monospace" font-size="20" fill="%s">dynamic · meta · individual</text>
+</svg>
+`, darkGround,
+		markBody(
+			fmt.Sprintf("fill=%q", darkNode),
+			fmt.Sprintf("stroke=%q", darkBranch),
+			fmt.Sprintf("fill=%q", darkTip)),
+		darkBranch)
+}
+
+// ogSVG is the Open Graph / social card: 1200x630, the same composition
+// stacked and centered. Rendered to site/public/og-image.png by
+// `make brand-rasters`.
+func ogSVG() string {
+	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="gitlab-mcp-server — GitLab for your AI assistant">
+  <rect width="1200" height="630" fill="%s"/>
+  <rect x="0.5" y="0.5" width="1199" height="629" fill="none" stroke="#21262d"/>
+  <g transform="translate(444,88) scale(4.875)">
+%s  </g>
+  <text x="600" y="470" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-weight="bold" font-size="64" fill="#e6edf3">gitlab-mcp-server</text>
+  <text x="600" y="524" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="27" fill="#8b949e">GitLab for your AI assistant — one catalog, three MCP surfaces</text>
+  <text x="600" y="574" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-size="21" fill="%s">jmrplens.github.io/gitlab-mcp-server</text>
+</svg>
+`, darkGround,
+		markBody(
+			fmt.Sprintf("fill=%q", darkNode),
+			fmt.Sprintf("stroke=%q", darkBranch),
+			fmt.Sprintf("fill=%q", darkTip)),
+		darkBranch)
+}
+
 type asset struct {
 	path    string
 	content string
@@ -175,6 +224,8 @@ func assets() []asset {
 		{filepath.Join(".github", "brand", "logo-mono.svg"), monoSVG()},
 		{filepath.Join("site", "public", "favicon.svg"), faviconSVG()},
 		{filepath.Join("internal", "toolutil", "brandmark_gen.go"), brandMarkGo()},
+		{filepath.Join(".github", "brand", "banner.svg"), bannerSVG()},
+		{filepath.Join(".github", "brand", "og.svg"), ogSVG()},
 	}
 }
 

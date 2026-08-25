@@ -85,7 +85,7 @@ const sourceCodeId = `${repositoryUrl}#source-code`;
 const siteDescription =
 	"Open source Model Context Protocol server for GitLab, with dynamic, meta-tool, and individual tool surfaces for AI assistants.";
 const socialImageAlt =
-	"GitLab MCP Server Dynamic Toolset reduces MCP startup context from 964K to 2.2K tokens";
+	"gitlab-mcp-server — GitLab for your AI assistant: one action catalog, three MCP tool surfaces";
 const socialImage = {
 	"@type": "ImageObject",
 	url: socialImageUrl,

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" role="img" aria-label="gitlab-mcp-server — GitLab for your AI assistant">
+  <rect width="1280" height="400" fill="#0d1117"/>
+  <rect x="0.5" y="0.5" width="1279" height="399" fill="none" stroke="#21262d"/>
+  <g transform="translate(96,56) scale(4.5)">
+  <path d="M 18 32 C 32 32, 32 14, 46 14" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="#a78bfa"/>
+  <path d="M 18 32 H 46" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="#a78bfa"/>
+  <path d="M 18 32 C 32 32, 32 50, 46 50" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="#a78bfa"/>
+  <circle cx="49.5" cy="14" r="3.5" fill="#fc8a3d"/>
+  <circle cx="49.5" cy="32" r="3.5" fill="#fc8a3d"/>
+  <circle cx="49.5" cy="50" r="3.5" fill="#fc8a3d"/>
+  <circle cx="14" cy="32" r="5" fill="#d6c9ff"/>
+  </g>
+  <text x="500" y="196" font-family="DejaVu Sans Mono, monospace" font-weight="bold" font-size="58" fill="#e6edf3">gitlab-mcp-server</text>
+  <text x="502" y="248" font-family="DejaVu Sans, sans-serif" font-size="26" fill="#8b949e">GitLab for your AI assistant — one action catalog,</text>
+  <text x="502" y="284" font-family="DejaVu Sans, sans-serif" font-size="26" fill="#8b949e">three MCP tool surfaces, REST + GraphQL.</text>
+  <text x="502" y="336" font-family="DejaVu Sans Mono, monospace" font-size="20" fill="#a78bfa">dynamic · meta · individual</text>
+</svg>

@@ -1,5 +1,5 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-	run brand brand-check test test-short test-race test-pkg test-integration test-e2e ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
+	run brand brand-check brand-rasters test test-short test-race test-pkg test-integration test-e2e ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
 	validate-http-stateless validate-http-stateless-docker \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
 	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
@@ -678,6 +678,18 @@ brand:
 ## brand-check: verify the committed brand assets match the geometry.
 brand-check:
 	go run ./cmd/gen_brand/ --check
+
+## brand-rasters: render the committed raster brand assets from the gen_brand vectors.
+## Maintainer-only (requires rsvg-convert + cwebp, like gen-icon-webp): banner
+## WebP for the README, the OG card, and the marketplace icons.
+brand-rasters: brand
+	rsvg-convert -w 1280 -h 400 .github/brand/banner.svg -o /tmp/gen-brand-banner.png
+	cwebp -quiet -lossless /tmp/gen-brand-banner.png -o .github/brand/banner.webp
+	rm -f /tmp/gen-brand-banner.png
+	rsvg-convert -w 1200 -h 630 .github/brand/og.svg -o site/public/og-image.png
+	rsvg-convert -w 512 -h 512 site/public/favicon.svg -o mcpb/icon.png
+	rsvg-convert -w 400 -h 400 site/public/favicon.svg -o site/public/logo-400.png
+	rsvg-convert -w 256 -h 256 site/public/favicon.svg -o site/public/favicon.png
 
 ## check-icon-webp: verify the committed WebP icon assets match icons.go.
 ## Same external-tool requirement as gen-icon-webp.

@@ -26,14 +26,11 @@ faq:
     a: "Sí. GitLab MCP Server es gratuito y de código abierto bajo la licencia MIT, con todo el código fuente en GitHub. No existe una versión de pago del servidor; las funciones de GitLab Premium o Ultimate dependen únicamente de la licencia de tu propia instancia de GitLab, no del servidor MCP."
   - q: "¿Funciona con GitLab autoalojado y Community Edition?"
     a: "Sí. Funciona con GitLab.com y con instancias autoalojadas, y tanto con Community Edition como con Enterprise Edition. Apúntalo a cualquier URL de GitLab con un token de acceso personal. Las herramientas Premium y Ultimate se registran solo cuando la instancia conectada tiene la licencia correspondiente."
+# La landing es una splash de producto renderizada desde datos: estructura
+# en src/components/home/Home.astro, texto en src/data/home.ts (un objeto
+# tipado por locale), números desde src/data/stats.json. En el cuerpo no se
+# escribe ninguna cifra a mano.
 ---
-
-{/_
-La landing es una splash de producto renderizada desde datos: estructura
-en src/components/home/Home.astro, texto en src/data/home.ts (un objeto
-tipado por locale), números desde src/data/stats.json. Aquí no se escribe
-ninguna cifra a mano — véase el plan del rediseño.
-_/}
 
 import FAQ from "../../../components/FAQ.astro";
 import Home from "../../../components/home/Home.astro";
