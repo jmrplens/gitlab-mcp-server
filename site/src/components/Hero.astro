@@ -19,7 +19,7 @@ import mark from "../assets/logo.svg?raw";
 
 const hero = Astro.locals.starlightRoute.entry.data.hero;
 if (hero && !hero.image) {
-	hero.image = { html: `<span class="gm-mark gm-hero-mark">${mark}</span>` };
+	hero.image = { html: `<span class="gm-mark gm-hero-mark" aria-hidden="true">${mark}</span>` };
 }
 ---
 

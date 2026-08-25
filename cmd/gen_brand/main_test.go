@@ -4,7 +4,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/xml"
+	"image/jpeg"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,10 +39,10 @@ func TestAssets_EverySVGIsWellFormedXML(t *testing.T) {
 
 // TestAssets_SharedGeometryReachesEveryEmitter verifies each variant
 // renders the full fan-out: three branches, three tips, one source node.
-// The banner and OG card additionally echo the branch trio as their
-// backdrop, so their path count is a larger multiple of three; every
-// asset keeps exactly four circles, because the echoes deliberately
-// carry no nodes.
+// The multiple-of-three form is kept so a backdrop that re-emits the
+// branch trio (as the retired procedural echoes did, and a future one
+// may again) stays legal; the circle count stays pinned at four
+// because no backdrop carries nodes.
 func TestAssets_SharedGeometryReachesEveryEmitter(t *testing.T) {
 	for _, a := range assets() {
 		t.Run(a.path, func(t *testing.T) {
@@ -88,6 +90,26 @@ func TestRun_WriteThenCheck_RoundTrips(t *testing.T) {
 	}
 	if err := run(root, true); err == nil {
 		t.Fatal("run(check) after an edit = nil, want a staleness error")
+	}
+}
+
+// TestEmbeddedBackgrounds_AreValidJPEGs verifies the frozen card
+// backgrounds decode as JPEG data and actually reach the emitted cards:
+// a corrupted embed would otherwise ship as a broken base64 payload that
+// every renderer fails on silently.
+func TestEmbeddedBackgrounds_AreValidJPEGs(t *testing.T) {
+	for name, art := range map[string][]byte{"bg-wide": bgWide, "bg-tall": bgTall} {
+		if len(art) < 4 || art[0] != 0xff || art[1] != 0xd8 {
+			t.Errorf("%s does not start with the JPEG SOI marker", name)
+		}
+		if _, err := jpeg.DecodeConfig(bytes.NewReader(art)); err != nil {
+			t.Errorf("%s does not decode as JPEG: %v", name, err)
+		}
+	}
+	for _, card := range []string{bannerSVG(), ogSVG(), socialSVG()} {
+		if !strings.Contains(card, "data:image/jpeg;base64,") {
+			t.Error("a card is missing its embedded background layer")
+		}
 	}
 }
 

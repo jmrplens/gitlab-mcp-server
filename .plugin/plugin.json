@@ -10,7 +10,7 @@
   "homepage": "https://jmrp.io/docs/gitlab-mcp-server",
   "repository": "https://github.com/jmrplens/gitlab-mcp-server",
   "license": "MIT",
-  "logo": "https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/site/src/assets/logo-light.svg",
+  "logo": "https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/site/public/favicon.svg",
   "keywords": [
     "mcp",
     "gitlab",

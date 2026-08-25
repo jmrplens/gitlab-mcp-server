@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="GitLab MCP Server — GitLab for your AI assistant: one action catalog, three MCP tool surfaces" src=".github/brand/banner.webp" width="100%">
+  <img alt="GitLab MCP Server — GitLab for your AI assistant: one action catalog, three MCP tool surfaces" src="https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/.github/brand/banner.webp" width="100%">
 </p>
 
 # GitLab MCP Server
@@ -28,7 +28,7 @@
 [![MCP Badge](https://lobehub.com/badge/mcp/jmrplens-gitlab-mcp-server)](https://lobehub.com/mcp/jmrplens-gitlab-mcp-server)
 [![MCP Toplist](https://mcptoplist.com/badge/io.github.jmrplens%2Fgitlab-mcp-server.svg)](https://mcptoplist.com/server/io.github.jmrplens%2Fgitlab-mcp-server)
 [![Cursor Directory](https://img.shields.io/badge/Cursor-Directory-000000?logo=cursor&logoColor=white)](https://cursor.directory/plugins/gitlab-mcp-server)
-[![Hosted endpoint](https://img.shields.io/badge/Hosted-mcp.jmrp.io%2Fgitlab-7c3aed?style=flat&logo=icloud&logoColor=white)](https://mcp.jmrp.io/)
+[![Hosted endpoint](https://img.shields.io/badge/Hosted-mcp.jmrp.io%2Fgitlab-6d28d9?style=flat&logo=icloud&logoColor=white)](https://mcp.jmrp.io/)
 
 </p>
 
@@ -423,19 +423,19 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       992 |     200,570 |
-| Unit tests (`_test.go`)  |       547 |     310,236 |
+| Source (`.go`, non-test) |       992 |     200,597 |
+| Unit tests (`_test.go`)  |       547 |     310,258 |
 | End-to-end tests         |       174 |      45,163 |
-| **Total**                | **1,713** | **555,969** |
+| **Total**                | **1,713** | **556,018** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,492 |
+| Source functions                |  7,493 |
 | — exported (public)             |  2,614 |
-| — unexported (private)          |  4,878 |
-| Unit test functions (`TestXxx`) | 11,662 |
+| — unexported (private)          |  4,879 |
+| Unit test functions (`TestXxx`) | 11,663 |
 | Subtests (`t.Run(...)`)         |  2,919 |
 | End-to-end test functions       |    381 |
 
@@ -446,14 +446,14 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~202 lines |
 | Average test file length           |                 ~567 lines |
-| Comment lines in source            |  22,868 (~11.4% of source) |
+| Comment lines in source            |  22,872 (~11.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,682 |
+| `if err != nil` checks             | 6,684 |
 | `defer` statements                 |   906 |
 | `struct` types defined             | 2,726 |
 | `//nolint` suppressions            |   256 |
@@ -478,7 +478,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,646 pages of A4                                                                                   |
+| Source code printed at 55 lines/page | ~3,647 pages of A4                                                                                   |
 | Source lines mentioning `"gitlab"`   | 12,573 (impossible to avoid)                                                                         |
 | Longest function name in source      | `baseDestructiveEarlySinglePromptTemplateAndFixtures` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |

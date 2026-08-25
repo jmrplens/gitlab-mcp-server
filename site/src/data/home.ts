@@ -85,8 +85,8 @@ export const en: HomeContent = {
 	statHrefs: {
 		dynamic: "/gitlab-mcp-server/tools/dynamic-tools/",
 		tools: "/gitlab-mcp-server/tools/overview/",
-		prompts: "/gitlab-mcp-server/capabilities/prompts/",
-		resources: "/gitlab-mcp-server/capabilities/resources/",
+		prompts: "/gitlab-mcp-server/tools/resources-prompts/",
+		resources: "/gitlab-mcp-server/tools/resources-prompts/",
 	},
 	what: {
 		title: "What it is",
@@ -211,8 +211,8 @@ export const es: HomeContent = {
 	statHrefs: {
 		dynamic: "/gitlab-mcp-server/es/tools/dynamic-tools/",
 		tools: "/gitlab-mcp-server/es/tools/overview/",
-		prompts: "/gitlab-mcp-server/es/capabilities/prompts/",
-		resources: "/gitlab-mcp-server/es/capabilities/resources/",
+		prompts: "/gitlab-mcp-server/es/tools/resources-prompts/",
+		resources: "/gitlab-mcp-server/es/tools/resources-prompts/",
 	},
 	what: {
 		title: "Qué es",

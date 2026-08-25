@@ -8,9 +8,11 @@
 //     pointing at the same target modulo the /es/ locale segment. A chip
 //     added to one locale alone is exactly the structural drift the
 //     data-driven landing was built to remove.
-//   - EXISTENCE: every chip href resolves to a content page. The links
-//     validator only sees the content AST, and a frontmatter href is
-//     invisible to it.
+//   - EXISTENCE: every chip href resolves to a content page, and so does
+//     every absolute href the landing data module (home.ts) declares. The
+//     links validator only sees the content AST; frontmatter and data-module
+//     hrefs are invisible to it. ES-only pages are swept too, so a chip
+//     cannot escape by living outside the EN-driven pair walk.
 //
 // Run: node scripts/check-chips.mjs
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
@@ -64,6 +66,38 @@ const fail = (msg) => {
 	failures++;
 	console.error(`  FAIL ${msg}`);
 };
+
+// The landing's data module carries hrefs of its own (readout labels, start
+// steps) that the links validator never sees either — audit every absolute
+// site href it declares, both locales, against the content tree.
+const homeTs = readFileSync(
+	new URL("../src/data/home.ts", import.meta.url).pathname,
+	"utf8",
+);
+let homeHrefs = 0;
+for (const [, href] of homeTs.matchAll(/"(\/gitlab-mcp-server\/[^"\s]*)"/g)) {
+	homeHrefs++;
+	if (!hrefExists(href.replace(`${BASE}/es/`, `${BASE}/`))) {
+		fail(`home.ts: href ${href} resolves to no page`);
+	}
+}
+
+// ES-only pages never appear in the EN-driven pair walk below, so their
+// chips would escape both checks; sweep them for href existence here (and
+// flag them — a Spanish page with no English twin is itself parity drift).
+for (const esPage of pages(join(ROOT, "es"))) {
+	const rel = esPage.slice(join(ROOT, "es").length + 1);
+	if (
+		existsSync(join(ROOT, rel)) ||
+		existsSync(join(ROOT, rel.replace(/\.md$/, ".mdx"))) ||
+		existsSync(join(ROOT, rel.replace(/\.mdx$/, ".md")))
+	)
+		continue;
+	const orphanChips = chipsOf(esPage);
+	if (orphanChips.length) {
+		fail(`es/${rel}: carries chips but has no English twin`);
+	}
+}
 
 const en = pages(ROOT).filter((p) => !p.includes("/es/"));
 let withChips = 0;

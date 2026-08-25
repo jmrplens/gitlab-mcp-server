@@ -85,7 +85,7 @@ const sourceCodeId = `${repositoryUrl}#source-code`;
 const siteDescription =
 	"Open source Model Context Protocol server for GitLab, with dynamic, meta-tool, and individual tool surfaces for AI assistants.";
 const socialImageAlt =
-	"GitLab MCP Server — GitLab for your AI assistant: one action catalog, three MCP tool surfaces";
+	"GitLab MCP Server card: the fan-out mark over quiet circuit traces, with the tagline GitLab for your AI assistant — one catalog, three MCP surfaces";
 const socialImage = {
 	"@type": "ImageObject",
 	url: socialImageUrl,
@@ -306,7 +306,6 @@ const jsonLd = JSON.stringify({
 			// Same three agents jmrp.io/projects/ emits for this @id, so the merged
 			// node states one consistent set instead of a partial one per document.
 			creator: { "@id": authorId },
-			maintainer: { "@id": authorId },
 			// Deliberately no aggregateRating: GitHub stars are not user reviews,
 			// and Google's structured-data policy treats synthesised ratings as a
 			// manual-action risk.

@@ -44,6 +44,8 @@ jobs:
         run: make check-footprint
       - name: Check site stats
         run: make check-site-stats
+      - name: Check brand assets
+        run: make brand-check
       - name: Check action catalog manifest
         run: make check-action-catalog-manifest
       - name: Run tests with coverage

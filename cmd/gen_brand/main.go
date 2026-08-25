@@ -302,11 +302,38 @@ func run(root string, check bool) error {
 	return nil
 }
 
+// repoRoot walks up from the working directory to the go.mod that marks
+// the repository root, so the generator writes the same tree wherever it
+// is invoked from — without it, a run from a subdirectory would silently
+// create a duplicate site/, .github/ and internal/ tree there.
+func repoRoot() (string, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	dir := wd
+	for {
+		if _, statErr := os.Stat(filepath.Join(dir, "go.mod")); statErr == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("no go.mod found above %s; run inside the repository", wd)
+		}
+		dir = parent
+	}
+}
+
 func main() {
 	check := flag.Bool("check", false, "verify committed assets match the geometry instead of writing")
 	flag.Parse()
-	if err := run("", *check); err != nil {
+	root, err := repoRoot()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if runErr := run(root, *check); runErr != nil {
+		fmt.Fprintln(os.Stderr, runErr)
 		os.Exit(1)
 	}
 }
