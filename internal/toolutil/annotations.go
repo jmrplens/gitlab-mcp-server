@@ -117,4 +117,22 @@ var (
 		Audience: []mcp.Role{"user", "assistant"},
 		Priority: 0.6,
 	}
+
+	// ResourceMachineList and ResourceMachineDetail are for machine-facing
+	// resources — call shapes, entry IDs, input schemas. Their intended
+	// customer is the assistant deciding what to call (and programmatic
+	// clients); the raw JSON has near-zero display value for a person, so
+	// this is the one resource family that drops the "user" role. Every
+	// other resource keeps both roles per the rationale above — and keeping
+	// the split real is what makes the audience field carry information at
+	// all: a value uniform across every resource tells a consumer nothing.
+	ResourceMachineList = &mcp.Annotations{
+		Audience: []mcp.Role{"assistant"},
+		Priority: 0.4,
+	}
+
+	ResourceMachineDetail = &mcp.Annotations{
+		Audience: []mcp.Role{"assistant"},
+		Priority: 0.6,
+	}
 )

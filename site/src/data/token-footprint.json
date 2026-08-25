@@ -1,8 +1,8 @@
 {
   "tokenizer": "cl100k_base",
   "shared": {
-    "full": 7700,
-    "minimal": 174
+    "full": 8330,
+    "minimal": 170
   },
   "dynamic": {
     "visible_tools": 2,

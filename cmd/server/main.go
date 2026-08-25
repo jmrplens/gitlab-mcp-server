@@ -1742,8 +1742,17 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 	// cannot advertise less than the server does: it previously hardcoded name
 	// and version and silently dropped Title, Description, WebsiteURL and
 	// Icons — exactly the fields a registry listing renders.
+	//
+	// capabilities comes from the same handshake, for the same reason: a
+	// directory reading the card could not learn that this server supports
+	// resource subscriptions except by grepping English prose. The card
+	// follows the original SEP-1649 shape (which required this key); its
+	// successor SEP-2127 deliberately carries no capabilities and no
+	// primitives, but this card already enumerates tools and resources, so
+	// it is a SEP-1649-lineage document and states capabilities structurally.
 	card := map[string]any{
-		"serverInfo": session.InitializeResult().ServerInfo,
+		"serverInfo":   session.InitializeResult().ServerInfo,
+		"capabilities": session.InitializeResult().Capabilities,
 		"authentication": map[string]any{
 			"required": true,
 			"schemes":  []string{"header-token"},
@@ -1752,6 +1761,28 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 		"resources":         cardResources,
 		"resourceTemplates": cardTemplates,
 		"prompts":           cardPrompts,
+	}
+
+	// The subscription surface, machine-readable: the same whitelist the
+	// gitlab://tools manifest advertises and the SubscribeHandler enforces,
+	// plus the method split a consumer needs to call it correctly — the
+	// legacy resources/subscribe verb is refused on stateless HTTP (each
+	// POST's session closes with its response, so an accepted subscription
+	// could never notify), where subscriptions/listen is the working form.
+	if config.EffectiveCapabilitySurface(cfg.CapabilitySurface) == config.CapabilitySurfaceFull {
+		legacy := "supported (stateful sessions)"
+		if cfg.Stateless {
+			legacy = "refused on this deployment (stateless HTTP); available with --stateless=false"
+		}
+		card["subscriptions"] = map[string]any{
+			"supported": true,
+			"methods": map[string]string{
+				"subscriptions/listen": "protocol 2026-07-28 and later; works on every transport, including stateless HTTP",
+				"resources/subscribe":  legacy,
+			},
+			"subscribable_uri_templates": subscriptions.Templates(),
+			"notification":               "notifications/resources/updated, sent when the watched content changes (server polls GitLab)",
+		}
 	}
 
 	return json.Marshal(card)

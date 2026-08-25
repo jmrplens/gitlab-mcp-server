@@ -841,7 +841,6 @@
       "mimeType": "application/json",
       "annotations": {
         "audience": [
-          "user",
           "assistant"
         ],
         "priority": 0.4
