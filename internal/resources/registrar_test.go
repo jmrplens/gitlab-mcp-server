@@ -188,14 +188,17 @@ func TestAddResourceTemplate_SubscribableMarkerParity(t *testing.T) {
 
 	seen := 0
 	for _, tmpl := range result.ResourceTemplates {
-		marked := strings.HasSuffix(tmpl.Description, subscribableMarker)
-		if subscribable[tmpl.URITemplate] {
+		want := subscribable[tmpl.URITemplate]
+		if want {
 			seen++
-			if !marked {
-				t.Errorf("%s is subscribable but its description carries no marker", tmpl.URITemplate)
-			}
-		} else if marked {
-			t.Errorf("%s is not subscribable but its description claims it is", tmpl.URITemplate)
+		}
+		marked := strings.HasSuffix(tmpl.Description, subscribableMarker)
+		metaMarked, _ := tmpl.Meta[subscribableMetaKey].(bool)
+		if marked != want {
+			t.Errorf("%s: description marker = %t, want %t", tmpl.URITemplate, marked, want)
+		}
+		if metaMarked != want {
+			t.Errorf("%s: %s meta key = %t, want %t", tmpl.URITemplate, subscribableMetaKey, metaMarked, want)
 		}
 	}
 	if seen != len(subscribable) {

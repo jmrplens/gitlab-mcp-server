@@ -14,8 +14,9 @@ Collections are deliberately not subscribable — see
 [Resource subscriptions](capabilities/subscriptions.md). Every subscribable
 template's description ends with a machine-appended marker sentence
 (`Subscribable: subscriptions/listen (protocol 2026-07-28); resources/subscribe
-on stateful sessions.`), and the full machine-readable list ships in two
-structured places: `subscriptions.subscribable_uri_templates` inside the
+on stateful sessions.`) plus the vendor-namespaced `_meta` key
+`io.github.jmrplens/subscribable: true`, and the full machine-readable list
+ships in two structured places: `subscriptions.subscribable_uri_templates` inside the
 `gitlab://tools` manifest, and the `subscriptions` block of the HTTP
 `/.well-known/mcp/server-card.json` (alongside a `capabilities` object
 mirroring the handshake).

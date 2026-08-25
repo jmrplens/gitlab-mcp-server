@@ -45,6 +45,12 @@ can drift from the others:
   sentence `Subscribable: subscriptions/listen (protocol 2026-07-28);
   resources/subscribe on stateful sessions.` — appended mechanically at
   registration, never hand-written;
+- every subscribable template also carries the vendor-namespaced
+  **`_meta` key** `io.github.jmrplens/subscribable: true` — the spec's
+  sanctioned per-object extension point, for generic clients that want to
+  filter without knowing this server's manifest (the standard surface has
+  no per-resource subscribable field, only the server-wide
+  `resources.subscribe` capability);
 - the **`gitlab://tools` manifest** carries the full list under
   `subscriptions.subscribable_uri_templates`;
 - in HTTP mode, the **Server Card** at `/.well-known/mcp/server-card.json`

@@ -1681,6 +1681,10 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 		Description string           `json:"description,omitempty"`
 		MIMEType    string           `json:"mimeType,omitempty"`
 		Annotations *mcp.Annotations `json:"annotations,omitempty"`
+		// Carries the vendor-namespaced subscribable key, so a card
+		// consumer can filter subscribable templates per object as well
+		// as read the aggregate subscriptions block.
+		Meta mcp.Meta `json:"_meta,omitempty"`
 	}
 
 	templatesResult, err := session.ListResourceTemplates(ctx, nil)
@@ -1696,6 +1700,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 			Description: rt.Description,
 			MIMEType:    rt.MIMEType,
 			Annotations: rt.Annotations,
+			Meta:        rt.Meta,
 		})
 	}
 

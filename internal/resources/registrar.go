@@ -3,6 +3,7 @@ package resources
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -48,12 +49,25 @@ func (r *recorder) AddResource(resource *mcp.Resource, handler mcp.ResourceHandl
 // legacy method, which the default stateless HTTP deployment refuses.
 const subscribableMarker = "Subscribable: subscriptions/listen (protocol 2026-07-28); resources/subscribe on stateful sessions."
 
+// subscribableMetaKey is the vendor-namespaced `_meta` key stating the same
+// fact for machines. The description marker serves the model (models read
+// descriptions); this serves generic clients, which can filter subscribable
+// templates without knowing this server's manifest. `_meta` with a
+// reverse-DNS key is the spec's sanctioned per-object extension point —
+// the standard surface itself has no per-resource subscribable field, only
+// the server-wide resources.subscribe capability.
+const subscribableMetaKey = "io.github.jmrplens/subscribable"
+
 func (r *recorder) AddResourceTemplate(template *mcp.ResourceTemplate, handler mcp.ResourceHandler) {
 	if slices.Contains(subscriptions.Templates(), template.URITemplate) {
 		// Copy before annotating: the registration literals are shared
 		// package state, and Register can run once per pooled server.
 		annotated := *template
 		annotated.Description = template.Description + " " + subscribableMarker
+		meta := make(mcp.Meta, len(template.Meta)+1)
+		maps.Copy(meta, template.Meta)
+		meta[subscribableMetaKey] = true
+		annotated.Meta = meta
 		template = &annotated
 	}
 	r.server.AddResourceTemplate(template, handler)

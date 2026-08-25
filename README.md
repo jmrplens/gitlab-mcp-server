@@ -243,11 +243,11 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ----------------------------------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              1,504 |         8,330 |        9,834 |
+| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              1,504 |         8,720 |       10,224 |
 | `dynamic` / `minimal`                                 | Free/CE  |             2 |               851 | n/a                 |              1,504 |           170 |        1,674 |
-| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              1,504 |         8,330 |        9,834 |
+| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              1,504 |         8,720 |       10,224 |
 | `dynamic` / `minimal`                                 | Premium  |             2 |             1,003 | n/a                 |              1,504 |           170 |        1,674 |
-| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              1,504 |         8,330 |        9,834 |
+| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              1,504 |         8,720 |       10,224 |
 | `dynamic` / `minimal`                                 | Ultimate |             2 |             1,069 | n/a                 |              1,504 |           170 |        1,674 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
@@ -423,10 +423,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       992 |     200,672 |
-| Unit tests (`_test.go`)  |       547 |     310,302 |
+| Source (`.go`, non-test) |       992 |     200,691 |
+| Unit tests (`_test.go`)  |       547 |     310,305 |
 | End-to-end tests         |       174 |      45,163 |
-| **Total**                | **1,713** | **556,137** |
+| **Total**                | **1,713** | **556,159** |
 
 ### Functions
 
@@ -446,7 +446,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~202 lines |
 | Average test file length           |                 ~567 lines |
-| Comment lines in source            |  22,907 (~11.4% of source) |
+| Comment lines in source            |  22,917 (~11.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
