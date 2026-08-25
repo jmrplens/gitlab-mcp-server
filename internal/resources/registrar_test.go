@@ -161,14 +161,15 @@ func TestRecorder_RegistersAndIndexesTogether(t *testing.T) {
 	}
 }
 
-// TestAddResourceTemplate_SubscribableMarkerParity verifies the recorder
-// annotates exactly the subscribable templates: every template in the
-// subscription whitelist ends with the marker sentence, and no other
-// template carries it. The marker is appended mechanically from
-// subscriptions.Templates(), so this is the drift guard between the prose a
-// client reads and the whitelist the SubscribeHandler enforces — the
-// hand-written predecessor of this sentence covered 3 of 26 templates.
-func TestAddResourceTemplate_SubscribableMarkerParity(t *testing.T) {
+// TestAddResourceTemplate_SubscribableTemplates_MatchWhitelistExactly
+// verifies the recorder annotates exactly the subscribable templates: every
+// template in the subscription whitelist ends with the marker sentence and
+// carries the vendor _meta key, and no other template does. Both markers
+// are appended mechanically from subscriptions.Templates(), so this is the
+// drift guard between what a client reads and the whitelist the
+// SubscribeHandler enforces — the hand-written predecessor of the sentence
+// covered 3 of 26 templates.
+func TestAddResourceTemplate_SubscribableTemplates_MatchWhitelistExactly(t *testing.T) {
 	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -192,14 +193,14 @@ func TestAddResourceTemplate_SubscribableMarkerParity(t *testing.T) {
 		if want {
 			seen++
 		}
-		marked := strings.HasSuffix(tmpl.Description, subscribableMarker)
-		metaMarked, _ := tmpl.Meta[subscribableMetaKey].(bool)
-		if marked != want {
-			t.Errorf("%s: description marker = %t, want %t", tmpl.URITemplate, marked, want)
-		}
-		if metaMarked != want {
-			t.Errorf("%s: %s meta key = %t, want %t", tmpl.URITemplate, subscribableMetaKey, metaMarked, want)
-		}
+		t.Run(tmpl.URITemplate, func(t *testing.T) {
+			if marked := strings.HasSuffix(tmpl.Description, subscribableMarker); marked != want {
+				t.Errorf("description marker = %t, want %t", marked, want)
+			}
+			if metaMarked, _ := tmpl.Meta[subscribableMetaKey].(bool); metaMarked != want {
+				t.Errorf("%s meta key = %t, want %t", subscribableMetaKey, metaMarked, want)
+			}
+		})
 	}
 	if seen != len(subscribable) {
 		t.Errorf("registered %d subscribable templates, whitelist has %d", seen, len(subscribable))

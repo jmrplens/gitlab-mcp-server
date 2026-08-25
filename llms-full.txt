@@ -28746,7 +28746,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Resources
 
-45 resources providing read-only access to GitLab data. 26 single-object kinds (pipelines, jobs, issues, merge requests, releases, files, wikis, and more) also accept resources/subscribe: the server polls them and sends notifications/resources/updated on change.
+45 resources providing read-only access to GitLab data. 26 resource kinds (pipelines, jobs, issues, merge requests, releases, files, wikis, single-parent lists, and more) are subscribable — subscriptions/listen on protocol 2026-07-28, resources/subscribe on stateful sessions: the server polls them and sends notifications/resources/updated on change.
 
 ### groups
 
