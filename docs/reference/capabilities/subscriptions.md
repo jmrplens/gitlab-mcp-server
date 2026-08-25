@@ -49,8 +49,10 @@ can drift from the others:
   `subscriptions.subscribable_uri_templates`;
 - in HTTP mode, the **Server Card** at `/.well-known/mcp/server-card.json`
   carries a top-level `subscriptions` block with the same list plus a
-  per-method note (which of `subscriptions/listen` and
-  `resources/subscribe` the deployment answers), and a `capabilities`
+  per-method `available` boolean (on stateless HTTP,
+  `resources/subscribe` is listed with `available: false` and a
+  `requires` note, while `subscriptions/listen` stays true), and a
+  `capabilities`
   object mirroring the handshake — so a directory can learn
   `resources.subscribe` without connecting.
 

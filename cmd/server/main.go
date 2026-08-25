@@ -1765,20 +1765,25 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 
 	// The subscription surface, machine-readable: the same whitelist the
 	// gitlab://tools manifest advertises and the SubscribeHandler enforces,
-	// plus the method split a consumer needs to call it correctly — the
-	// legacy resources/subscribe verb is refused on stateless HTTP (each
-	// POST's session closes with its response, so an accepted subscription
-	// could never notify), where subscriptions/listen is the working form.
+	// plus per-method availability a consumer can branch on without parsing
+	// prose. Both methods are always listed — the block describes the
+	// binary's capability surface — but "available" states what THIS
+	// deployment answers: the legacy resources/subscribe verb is refused on
+	// stateless HTTP (each POST's session closes with its response, so an
+	// accepted subscription could never notify), where subscriptions/listen
+	// is the working form.
 	if config.EffectiveCapabilitySurface(cfg.CapabilitySurface) == config.CapabilitySurfaceFull {
-		legacy := "supported (stateful sessions)"
-		if cfg.Stateless {
-			legacy = "refused on this deployment (stateless HTTP); available with --stateless=false"
-		}
 		card["subscriptions"] = map[string]any{
 			"supported": true,
-			"methods": map[string]string{
-				"subscriptions/listen": "protocol 2026-07-28 and later; works on every transport, including stateless HTTP",
-				"resources/subscribe":  legacy,
+			"methods": map[string]any{
+				"subscriptions/listen": map[string]any{
+					"available":      true,
+					"since_protocol": "2026-07-28",
+				},
+				"resources/subscribe": map[string]any{
+					"available": !cfg.Stateless,
+					"requires":  "stateful sessions (--stateless=false)",
+				},
 			},
 			"subscribable_uri_templates": subscriptions.Templates(),
 			"notification":               "notifications/resources/updated, sent when the watched content changes (server polls GitLab)",
