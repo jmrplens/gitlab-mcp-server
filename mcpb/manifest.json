@@ -3,7 +3,7 @@
   "manifest_version": "0.3",
   "name": "gitlab-mcp-server",
   "display_name": "GitLab MCP Server",
-  "version": "2.6.6",
+  "version": "2.7.0",
   "description": "Manage GitLab projects, issues, merge requests, pipelines, repositories, and admin workflows from Claude.",
   "long_description": "Comprehensive GitLab MCP server covering the full REST API v4 and GraphQL with automatic edition gating — ~847 tools on Free/CE, ~999 on Premium, up to ~1071 on Ultimate.\n\nBy default it exposes a low-token dynamic surface (two find/execute tools) so it never crowds your context window; a consolidated meta-tool mode (~32 domain tools) and a one-tool-per-action individual mode are selectable in the extension settings. Bundles 45 MCP resources, 37 prompts, argument completions, progress notifications, elicitation, and resource subscriptions (live change notifications for 26 resource kinds, honored by polling).\n\nWorks with GitLab.com and self-managed instances. Read-only and safe (mutation-preview) modes are available for cautious use.",
   "author": {
