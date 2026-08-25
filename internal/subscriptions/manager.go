@@ -337,11 +337,13 @@ func (m *Manager[S]) start(ctx context.Context, w *watcher[S]) error {
 
 	// The deadline is the absolute cap, not the lease: reaching the lease
 	// slows a watcher down, and only [Options.MaxLifetime] ends it. The
-	// context roots at Background rather than anything request-scoped —
-	// the whole point of a subscription is to outlive the request that
-	// created it — and Close stops the watcher through its cancel func,
-	// which the registry holds for exactly that purpose.
-	watchCtx, cancel := context.WithTimeout(context.Background(), m.opts.MaxLifetime)
+	// watcher detaches from the subscribe request's cancellation — the
+	// whole point of a subscription is to outlive the request that created
+	// it — while WithoutCancel keeps that request's values, so anything
+	// tracing carried in stays attached to the polls it caused. Close
+	// stops the watcher through its cancel func, which the registry holds
+	// for exactly that purpose.
+	watchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.opts.MaxLifetime)
 
 	m.mu.Lock()
 	switch {
@@ -379,11 +381,7 @@ func (m *Manager[S]) start(ctx context.Context, w *watcher[S]) error {
 	m.mu.Unlock()
 
 	m.wg.Add(1)
-	// The watcher deliberately does not inherit the caller's context. That
-	// context ends when the subscribe request returns, whereas the whole
-	// point of a subscription is to outlive it; the watcher's lifetime is
-	// bounded by the absolute cap instead.
-	go m.watch(watchCtx, w, first) //nolint:contextcheck // see above
+	go m.watch(watchCtx, w, first)
 
 	m.opts.Logger.Debug("subscription started",
 		"uri", w.uri, "kind", w.kind.String(), "lease", m.opts.Lease)
