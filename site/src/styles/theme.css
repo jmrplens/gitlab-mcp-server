@@ -1,0 +1,255 @@
+/* ------------------------------------------------------------------ *
+ * Site palette: "circuit violet".
+ *
+ * A neutral GitHub-derived ramp, the violet the project already ships
+ * everywhere (theme-color, PWA manifest, badges), and one saturated
+ * GitLab-orange indicator reserved for the mark's terminals and the
+ * edition chips — the server's subject referenced as a category, never
+ * as a second accent.
+ *
+ * Two constraints shaped it, and neither is taste.
+ *
+ *   - The neutral ramp is GitHub's because the Mermaid diagrams already
+ *     are. custom.css repaints every build-time diagram in GitHub's
+ *     colours, so making the page ground #0d1117 is what lets a
+ *     diagram's label and cluster backing match the page EXACTLY rather
+ *     than approximately. The sibling sites derive their ramps from
+ *     their own constraints (libgen-mcp from the same Mermaid argument,
+ *     phonometry from hiding the seams of 1220 figure plates); same
+ *     method, different input, so the three read as siblings, not twins.
+ *   - The violet stays because nothing forces it out: unlike the teal
+ *     it replaced on the sibling site, #a78bfa clears every measured
+ *     pair below, and changing hue would orphan the deployed
+ *     theme-color/PWA/badge footprint for taste alone.
+ *
+ * The orange sits at HSL hue ~24, close to Starlight's stock `caution`
+ * hue, so the aside hues are retuned at the bottom of this file rather
+ * than left to collide with the brand.
+ *
+ * Unlayered on purpose: Starlight's own tokens live in
+ * `@layer starlight.base`, and an unlayered rule beats a layered one
+ * whatever the specificity. Loaded FIRST in the customCss array so every
+ * later sheet can reference these names.
+ * ------------------------------------------------------------------ */
+
+/* -------------------------------------------------------------- *
+ * Dark theme — the Starlight root scope.
+ *
+ * The `::backdrop` half of the selector is Starlight's own and is kept:
+ * the search dialog paints its backdrop from these variables, and a
+ * `:root`-only rule never reaches it.
+ * -------------------------------------------------------------- */
+:root,
+::backdrop {
+	color-scheme: dark;
+
+	--sl-color-white: #ffffff;
+	--sl-color-gray-1: #e6edf3;
+	--sl-color-gray-2: #c9d1d9;
+	--sl-color-gray-3: #8b949e;
+	--sl-color-gray-4: #6e7681;
+	--sl-color-gray-5: #30363d;
+	--sl-color-gray-6: #161b22;
+	--sl-color-black: #0d1117;
+
+	/* Measured on #0d1117: accent-high 12.31:1 (links), accent 6.95:1
+	   (the mark and focus rings, floor 3.0), accent-high on accent-low
+	   9.40:1 (a primary button's label). check-contrast.mjs enforces
+	   every pair. */
+	--sl-color-accent-low: #2b2059;
+	--sl-color-accent: #a78bfa;
+	--sl-color-accent-high: #d6c9ff;
+
+	--sl-color-bg: var(--sl-color-black);
+	--sl-color-bg-nav: var(--sl-color-gray-6);
+	--sl-color-bg-sidebar: var(--sl-color-gray-6);
+	--sl-color-bg-inline-code: var(--sl-color-gray-5);
+	--sl-color-hairline-light: var(--sl-color-gray-5);
+	/* The faintest rule in the palette: it separates panels without
+	   drawing a line the eye stops at. The light theme states its own
+	   counterpart at the same weight rather than inheriting this one,
+	   which — this sheet being unlayered — would otherwise paint a
+	   near-black rule on white. */
+	--sl-color-hairline: #21262d;
+	--sl-color-hairline-shade: var(--sl-color-black);
+
+	/* Project tokens: the surfaces, rules and accent tints the landing
+	   page and the documentation components are built from. One set per
+	   theme, so a component never has to know which theme it is in. */
+	--gm-surface: #161b22;
+	--gm-surface-raised: #1c222b;
+	--gm-border: #30363d;
+	--gm-border-strong: #444c56;
+	--gm-accent-soft: #2b2059;
+	--gm-accent-ink: #d6c9ff;
+	--gm-mark: #a78bfa;
+
+	/* The three parts of the brand mark. The branches are the violet the
+	   eye lands on; the source node is the lightest of the three; the
+	   terminals carry the GitLab-orange counterpoint. Measured against
+	   the nav ground the mark actually sits on (#161b22): node 11.25,
+	   branch 6.36, tip 7.28 — all clear of the 3:1 that WCAG 1.4.11 asks
+	   of a meaningful graphic. */
+	--gm-mark-node: #d6c9ff;
+	--gm-mark-branch: #a78bfa;
+	--gm-mark-tip: #fc8a3d;
+
+	/* Edition chips (Free/Premium/Ultimate markers). The tier family is
+	   the orange counterpoint dimmed to text weight; the plain chip stays
+	   in the neutral ramp. The border carries the state, so it is held to
+	   the 3:1 of WCAG 1.4.11 rather than to a decorative threshold. */
+	--gm-chip-ink: var(--sl-color-gray-2);
+	--gm-chip-line: var(--sl-color-gray-4);
+	--gm-tier-ink: #f6c390;
+	--gm-tier-line: #9a6a2e;
+	--gm-tier-fill: #3a2710;
+}
+
+/* -------------------------------------------------------------- *
+ * Light theme.
+ * -------------------------------------------------------------- */
+:root[data-theme="light"],
+[data-theme="light"] ::backdrop {
+	color-scheme: light;
+
+	--sl-color-white: #1f2328;
+	--sl-color-gray-1: #24292f;
+	--sl-color-gray-2: #3d444d;
+	--sl-color-gray-3: #59636e;
+	--sl-color-gray-4: #818b98;
+	--sl-color-gray-5: #d1d9e0;
+	--sl-color-gray-6: #eff2f5;
+	--sl-color-gray-7: #f6f8fa;
+	--sl-color-black: #ffffff;
+
+	/* Measured on #ffffff: accent 7.10:1 (links), and 6.67:1 on the
+	   #f6f8fa surface, the tightest enforced pair in the palette. */
+	--sl-color-accent-low: #ede9fe;
+	--sl-color-accent: #6d28d9;
+	--sl-color-accent-high: #4c1d95;
+
+	--sl-color-bg: var(--sl-color-black);
+	--sl-color-bg-nav: var(--sl-color-gray-7);
+	--sl-color-bg-sidebar: var(--sl-color-bg);
+	--sl-color-bg-inline-code: var(--sl-color-gray-6);
+	--sl-color-hairline-light: var(--sl-color-gray-6);
+	--sl-color-hairline: var(--gm-border);
+	--sl-color-hairline-shade: var(--sl-color-gray-6);
+
+	--gm-surface: #f6f8fa;
+	--gm-surface-raised: #ffffff;
+	--gm-border: #d1d9e0;
+	--gm-border-strong: #b4bdc6;
+	--gm-accent-soft: #ede9fe;
+	--gm-accent-ink: #4c1d95;
+	--gm-mark: #6d28d9;
+
+	/* Same reading order as dark: branch violet first, node darkest, tip
+	   the orange counterpoint — deepened to clear 3:1 on the light nav
+	   ground while staying unmistakably GitLab's family. */
+	--gm-mark-node: #4c1d95;
+	--gm-mark-branch: #6d28d9;
+	--gm-mark-tip: #c2410c;
+
+	--gm-chip-ink: var(--sl-color-gray-2);
+	--gm-chip-line: var(--sl-color-gray-4);
+	--gm-tier-ink: #8a4d10;
+	--gm-tier-line: #bd7c32;
+	--gm-tier-fill: #faeedd;
+}
+
+/* ------------------------------------------------------------------ *
+ * Aside hues.
+ *
+ * Starlight derives each callout family from a single hue number with
+ * fixed saturation and lightness, so retuning the hue alone keeps every
+ * lightness relationship it already tested.
+ *
+ * Two stock hues collide with this brand and both move. Stock `tip`
+ * purple (266) sits on the brand violet — a tip box would read as a
+ * branded panel — so it becomes a deep teal (190; 180 itself fails AA in the light theme at Starlight's fixed saturation and lightness). Stock `caution` (41) sits
+ * seventeen degrees from the mark's orange terminals; at 45 it reads as
+ * gold, twenty-one degrees clear, and keeps the yellow-means-caution
+ * convention. check-contrast.mjs measures title-on-ground and
+ * body-on-ground for all five families in both themes.
+ * ------------------------------------------------------------------ */
+:root {
+	--sl-hue-blue: 220; /* note    — blue, thirty degrees off the tip teal */
+	--sl-hue-purple: 190; /* tip     — deep teal, off the brand violet; 180
+	                         fails AA in light at Starlight's fixed S/L */
+	--sl-hue-green: 142; /* success — GitHub green territory */
+	--sl-hue-orange: 45; /* caution — gold, clears the mark's orange */
+	--sl-hue-red: 355; /* danger  — red, clears the gold and the orange */
+}
+
+/* ------------------------------------------------------------------ *
+ * Shared identity.
+ *
+ * The subject is an instrument panel over a very large API surface, so
+ * the chrome stays quiet: hairlines rather than drop shadows,
+ * squared-off corners, and a monospaced treatment wherever an
+ * identifier, a count or a tier appears.
+ * ------------------------------------------------------------------ */
+:root {
+	--gm-radius: 4px;
+	--gm-mono: var(--__sl-font-mono);
+}
+
+/* ------------------------------------------------------------------ *
+ * The brand mark, wherever it is inlined.
+ *
+ * The asset carries no fill of its own — three classes and nothing else
+ * (cmd/gen_brand emits it that way) — so the palette paints it and the
+ * two can never drift. That is the whole reason it is inlined by
+ * SiteTitle.astro rather than handed to Starlight's `logo` option,
+ * which renders an <img>: an <img> cannot follow the theme toggle, so
+ * the old arrangement needed logo-dark.svg and logo-light.svg with
+ * hardcoded colours that had to be recoloured in step.
+ * ------------------------------------------------------------------ */
+.gm-mark .m-node {
+	fill: var(--gm-mark-node);
+}
+.gm-mark .m-branch {
+	stroke: var(--gm-mark-branch);
+}
+.gm-mark .m-tip {
+	fill: var(--gm-mark-tip);
+}
+
+/* The mark as the landing hero's figure. Starlight gives the hero a
+   two-column grid on a wide screen and the figure fills the second
+   column; on a phone that column becomes a band above the title, and
+   there the mark is deliberately small — the first screen belongs to
+   the sentence saying what the server does. */
+.hero .hero-html {
+	width: min(38%, 7rem);
+}
+.gm-hero-mark svg {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+@media (min-width: 50rem) {
+	.hero .hero-html {
+		width: min(100%, 13rem);
+	}
+}
+
+/* ------------------------------------------------------------------ *
+ * Asides, brought into the panel idiom.
+ *
+ * Retuning the hue fixes WHICH colour a callout is; it does not fix how
+ * loud it is. Stock Starlight washes the whole box in a saturated tint,
+ * which is out of character on a site whose every other panel is a flat
+ * surface inside a hairline. So the ground becomes the ordinary panel
+ * surface and the colour retreats to the two places that carry meaning:
+ * the rule and the title (with its icon). One ink per family, used for
+ * both — Starlight's stock mid-step rule measures under the 3:1 that
+ * WCAG 1.4.11 requires of an information-carrying graphic, and the high
+ * step clears it in every family in both themes.
+ * ------------------------------------------------------------------ */
+.sl-markdown-content .starlight-aside {
+	--sl-color-asides-border: var(--sl-color-asides-text-accent);
+	background-color: var(--gm-surface);
+	border-radius: var(--gm-radius);
+}

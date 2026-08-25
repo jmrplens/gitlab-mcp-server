@@ -379,12 +379,14 @@ export default defineConfig({
 				// Keeps the EN/ES language select visible in the header below the
 				// `md` breakpoint, where Starlight hides the header right-group.
 				Header: "./src/components/Header.astro",
-			},
-			logo: {
-				dark: "./src/assets/logo-dark.svg",
-				light: "./src/assets/logo-light.svg",
-				alt: "GitLab MCP Server",
-				replacesTitle: false,
+				// Inlines the brand mark so the palette can paint it (the `logo`
+				// option renders an <img>, which cannot follow the theme toggle
+				// and forced one hardcoded file per theme).
+				SiteTitle: "./src/components/SiteTitle.astro",
+				// Supplies the landing hero's figure as inline markup, so the
+				// palette paints the mark and the brand SVG has one copy rather
+				// than one per locale.
+				Hero: "./src/components/Hero.astro",
 			},
 			social: [
 				{
@@ -769,7 +771,13 @@ export default defineConfig({
 					],
 				},
 			],
-			customCss: ["./src/styles/custom.css"],
+			customCss: [
+				// theme.css first: it is unlayered so it beats Starlight's
+				// layered defaults, and every later sheet reads its tokens.
+				"./src/styles/theme.css",
+				"./src/styles/typography.css",
+				"./src/styles/custom.css",
+			],
 		}),
 	],
 	markdown: {
