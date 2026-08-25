@@ -39,7 +39,7 @@ const (
 	darkGround = "#0d1117" // GitHub dark black: the mark's own ground
 	darkNode   = "#d6c9ff" // accent-ink: the source node
 	darkBranch = "#a78bfa" // accent: the three branch arcs
-	darkTip    = "#f6c390" // secondary (GitLab-counterpart amber): terminal nodes
+	darkTip    = "#fc8a3d" // secondary (GitLab-orange family, saturated): terminal nodes
 )
 
 // Geometry of the fan-out at the canonical 64×64 viewBox. The three arcs

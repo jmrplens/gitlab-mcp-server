@@ -3,8 +3,8 @@
   <path d="M 18 32 C 32 32, 32 14, 46 14" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="#a78bfa"/>
   <path d="M 18 32 H 46" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="#a78bfa"/>
   <path d="M 18 32 C 32 32, 32 50, 46 50" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="#a78bfa"/>
-  <circle cx="49.5" cy="14" r="3.5" fill="#f6c390"/>
-  <circle cx="49.5" cy="32" r="3.5" fill="#f6c390"/>
-  <circle cx="49.5" cy="50" r="3.5" fill="#f6c390"/>
+  <circle cx="49.5" cy="14" r="3.5" fill="#fc8a3d"/>
+  <circle cx="49.5" cy="32" r="3.5" fill="#fc8a3d"/>
+  <circle cx="49.5" cy="50" r="3.5" fill="#fc8a3d"/>
   <circle cx="14" cy="32" r="5" fill="#d6c9ff"/>
 </svg>
