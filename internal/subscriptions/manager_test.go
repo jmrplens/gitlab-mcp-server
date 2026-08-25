@@ -822,6 +822,174 @@ func TestClose_RacesSubscribe_NeverOrphansAWatcher(t *testing.T) {
 	}
 }
 
+// TestSnapshot_UnsetInterval_FallsBackToBase covers the defensive floor in
+// the _meta snapshot: a watcher whose cadence was never recorded must
+// still report a truthful positive interval, not zero.
+//
+// In the shipped flow start always records the first cadence before the
+// watcher can notify, so this branch only fires if that ordering ever
+// regresses — which is exactly when a client would otherwise be told its
+// resource is polled every zero milliseconds.
+func TestSnapshot_UnsetInterval_FallsBackToBase(t *testing.T) {
+	m, _, _ := newTestManager(t, Options{})
+
+	got := m.snapshot(&watcher[string]{uri: testURI, kind: KindPipeline})
+	if got.Interval != DefaultBaseInterval {
+		t.Errorf("snapshot Interval = %v with no recorded cadence, want the %v base", got.Interval, DefaultBaseInterval)
+	}
+
+	demoted := m.snapshot(&watcher[string]{uri: testURI, kind: KindPipeline, demoted: true})
+	if demoted.Interval != DefaultSlowInterval {
+		t.Errorf("snapshot Interval = %v for a demoted watch, want %v", demoted.Interval, DefaultSlowInterval)
+	}
+}
+
+// TestResumeInterval_UnsetCadence_FallsBackToBase covers the matching
+// floor on the renewal path: reviving a watcher with no recorded cadence
+// resumes at the base interval rather than a zero timer.
+func TestResumeInterval_UnsetCadence_FallsBackToBase(t *testing.T) {
+	m, _, _ := newTestManager(t, Options{})
+	if got := m.resumeInterval(&watcher[string]{uri: testURI}); got != DefaultBaseInterval {
+		t.Errorf("resumeInterval = %v with no recorded cadence, want %v", got, DefaultBaseInterval)
+	}
+	if got := m.resumeInterval(&watcher[string]{uri: testURI, interval: time.Minute}); got != time.Minute {
+		t.Errorf("resumeInterval = %v, want the recorded minute", got)
+	}
+}
+
+// TestWake_PendingNudge_DoesNotBlock verifies a second renewal never blocks
+// on a watcher that has not consumed the first nudge yet — a pending nudge
+// is as good as two.
+func TestWake_PendingNudge_DoesNotBlock(t *testing.T) {
+	w := &watcher[string]{renew: make(chan struct{}, 1)}
+	wake(w)
+	wake(w) // must return immediately via the default branch
+	if len(w.renew) != 1 {
+		t.Errorf("renew queue length = %d after two wakes, want the single pending nudge", len(w.renew))
+	}
+}
+
+// gatedReader blocks every read until released, so a test can hold a
+// subscription's first read open while something else races it.
+type gatedReader struct {
+	entered chan struct{} // one tick per read that has started
+	release chan struct{} // closed to let blocked reads finish
+	inner   *fakeReader
+}
+
+func newGatedReader() *gatedReader {
+	return &gatedReader{
+		entered: make(chan struct{}, 16),
+		release: make(chan struct{}),
+		inner:   newFakeReader(),
+	}
+}
+
+func (g *gatedReader) Read(ctx context.Context, uri string) ([]byte, error) {
+	g.entered <- struct{}{}
+	select {
+	case <-g.release:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return g.inner.Read(ctx, uri)
+}
+
+// TestSubscribe_AllSubscribersWithdrawMidRead_AbandonsTheLaunch verifies a
+// watcher whose every subscriber left during the first read never starts.
+//
+// The read is the acceptance gate, and it runs unlocked; if the launch did
+// not re-check the registry afterwards, the watcher it started would be
+// unreachable by Unsubscribe forever — nothing would hold a reference to
+// it any more.
+func TestSubscribe_AllSubscribersWithdrawMidRead_AbandonsTheLaunch(t *testing.T) {
+	g := newGatedReader()
+	m := New[string](g, &fakeNotifier{}, quietOptions(Options{
+		BaseInterval: time.Millisecond,
+		MinInterval:  time.Millisecond,
+	}))
+	t.Cleanup(m.Close)
+
+	var wg sync.WaitGroup
+	var subErr error
+	wg.Go(func() {
+		subErr = m.Subscribe(context.Background(), subA, testURI)
+	})
+
+	<-g.entered // the first read is in flight
+	if err := m.Unsubscribe(subA, testURI); err != nil {
+		t.Fatalf("Unsubscribe mid-read: %v", err)
+	}
+	close(g.release)
+	wg.Wait()
+
+	if subErr != nil {
+		t.Errorf("Subscribe() = %v after withdrawal; a withdrawn subscribe is a no-op, not an error", subErr)
+	}
+	if m.Len() != 0 {
+		t.Fatalf("Len() = %d, want 0 — the abandoned launch left a watcher behind", m.Len())
+	}
+	before := g.inner.readCount(testURI)
+	time.Sleep(10 * time.Millisecond)
+	if got := g.inner.readCount(testURI); got != before {
+		t.Errorf("reads went %d -> %d; an orphan watcher is polling", before, got)
+	}
+}
+
+// TestSubscribe_JoinerContextCancelled_ReleasesItsHold verifies a joiner
+// that gives up while the first read is in flight takes its interest with
+// it.
+//
+// Without the release, the founder could unsubscribe cleanly and the
+// watcher would keep running for a subscriber that already stopped
+// waiting for the answer.
+func TestSubscribe_JoinerContextCancelled_ReleasesItsHold(t *testing.T) {
+	g := newGatedReader()
+	m := New[string](g, &fakeNotifier{}, quietOptions(Options{
+		BaseInterval: time.Millisecond,
+		MinInterval:  time.Millisecond,
+	}))
+	t.Cleanup(m.Close)
+
+	var wg sync.WaitGroup
+	wg.Go(func() {
+		_ = m.Subscribe(context.Background(), subA, testURI)
+	})
+	<-g.entered // founder's read is in flight
+
+	joinCtx, cancelJoin := context.WithCancel(context.Background())
+	var joinErr error
+	wg.Go(func() {
+		joinErr = m.Subscribe(joinCtx, subB, testURI)
+	})
+	// Wait until the joiner has claimed its hold — only then is it parked
+	// (or about to park) on the founder's still-open ready channel, so the
+	// cancellation deterministically takes the give-up branch instead of
+	// racing the founder's completion.
+	for {
+		m.mu.Lock()
+		w := m.watchers[testURI]
+		joined := w != nil && func() bool { _, ok := w.subscribers[subB]; return ok }()
+		m.mu.Unlock()
+		if joined {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	cancelJoin()
+	close(g.release)
+	wg.Wait()
+
+	if !errors.Is(joinErr, context.Canceled) {
+		t.Errorf("joiner Subscribe() = %v, want context.Canceled", joinErr)
+	}
+	// Only the founder holds the watch now: one unsubscribe must stop it.
+	if err := m.Unsubscribe(subA, testURI); err != nil {
+		t.Fatalf("founder Unsubscribe: %v", err)
+	}
+	waitForNoWatchers(t, m)
+}
+
 // waitForNoWatchers blocks until every watcher goroutine has wound down.
 func waitForNoWatchers(t *testing.T, m *Manager[string]) {
 	t.Helper()

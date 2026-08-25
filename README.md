@@ -416,10 +416,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       989 |     200,119 |
-| Unit tests (`_test.go`)  |       544 |     309,527 |
+| Source (`.go`, non-test) |       989 |     200,095 |
+| Unit tests (`_test.go`)  |       545 |     309,851 |
 | End-to-end tests         |       174 |      45,157 |
-| **Total**                | **1,707** | **554,803** |
+| **Total**                | **1,708** | **555,103** |
 
 ### Functions
 
@@ -428,8 +428,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  7,474 |
 | — exported (public)             |  2,612 |
 | — unexported (private)          |  4,862 |
-| Unit test functions (`TestXxx`) | 11,643 |
-| Subtests (`t.Run(...)`)         |  2,913 |
+| Unit test functions (`TestXxx`) | 11,652 |
+| Subtests (`t.Run(...)`)         |  2,914 |
 | End-to-end test functions       |    381 |
 
 ### Ratios worth noting
@@ -439,17 +439,17 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~202 lines |
 | Average test file length           |                 ~568 lines |
-| Comment lines in source            |  22,726 (~11.4% of source) |
+| Comment lines in source            |  22,728 (~11.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,672 |
+| `if err != nil` checks             | 6,675 |
 | `defer` statements                 |   902 |
 | `struct` types defined             | 2,725 |
-| `//nolint` suppressions            |   253 |
+| `//nolint` suppressions            |   254 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project

@@ -340,8 +340,9 @@ func TestClassify_FreeFormIdentifier_AcceptsNonNumeric(t *testing.T) {
 // distinct, non-empty name, since these strings appear in logs and
 // rejection messages where "unknown" for a real kind would mislead.
 func TestKindString_EveryKind_HasADistinctName(t *testing.T) {
-	seen := make(map[string]Kind, len(kindNames))
-	for k, name := range kindNames {
+	seen := make(map[string]Kind, len(kindMeta))
+	for k, meta := range kindMeta {
+		name := meta.name
 		if name == "" || name == "unknown" {
 			t.Errorf("Kind(%d).String() = %q, want a distinct name", k, name)
 			continue
@@ -631,7 +632,7 @@ func TestClassify_MatchesRegisteredResourceTemplates(t *testing.T) {
 // kind is missing from the template map, which a watcher would only
 // discover at poll time as an unreadable resource.
 func TestKindTemplate_CoversEverySubscribableKind(t *testing.T) {
-	for kind := range kindNames {
+	for kind := range kindMeta {
 		if kind.Template() == "" {
 			t.Errorf("%v is a named kind with no URI template", kind)
 		}
@@ -728,15 +729,15 @@ func TestKindCount_MatchesEveryDocumentThatCitesIt(t *testing.T) {
 // with nothing added and nothing missing.
 func TestTemplates_MatchesWhitelistExactly(t *testing.T) {
 	got := Templates()
-	if len(got) != len(kindTemplates) {
-		t.Fatalf("Templates() returned %d entries, whitelist has %d", len(got), len(kindTemplates))
+	if len(got) != len(kindMeta) {
+		t.Fatalf("Templates() returned %d entries, whitelist has %d", len(got), len(kindMeta))
 	}
 	if !slices.IsSorted(got) {
 		t.Error("Templates() is not sorted; the advertisement should be stable across runs")
 	}
-	want := make(map[string]bool, len(kindTemplates))
-	for _, template := range kindTemplates {
-		want[template] = true
+	want := make(map[string]bool, len(kindMeta))
+	for _, meta := range kindMeta {
+		want[meta.template] = true
 	}
 	for _, template := range got {
 		if !want[template] {

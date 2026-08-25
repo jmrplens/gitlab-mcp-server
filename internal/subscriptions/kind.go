@@ -70,82 +70,58 @@ const (
 	KindSnippet // gitlab://snippet/{id}
 )
 
-// kindNames maps each kind to the name used in logs and rejection messages.
-var kindNames = map[Kind]string{
-	KindProject:                 "project",
-	KindPipeline:                "pipeline",
-	KindPipelineJobs:            "pipeline_jobs",
-	KindPipelineLatest:          "pipeline_latest",
-	KindJob:                     "job",
-	KindMergeRequest:            "merge_request",
-	KindMergeRequestDiscussions: "merge_request_discussions",
-	KindMergeRequestNotes:       "merge_request_notes",
-	KindIssue:                   "issue",
-	KindDeployment:              "deployment",
-	KindEnvironment:             "environment",
-	KindFeatureFlag:             "feature_flag",
-	KindRelease:                 "release",
-	KindTag:                     "tag",
-	KindBranch:                  "branch",
-	KindMilestone:               "milestone",
-	KindLabel:                   "label",
-	KindBoard:                   "board",
-	KindDeployKey:               "deploy_key",
-	KindProjectSnippet:          "project_snippet",
-	KindWiki:                    "wiki",
-	KindFile:                    "file",
-	KindGroup:                   "group",
-	KindGroupLabel:              "group_label",
-	KindGroupMilestone:          "group_milestone",
-	KindSnippet:                 "snippet",
+// kindMeta is the one authoritative row per subscribable kind: the name
+// used in logs and rejection messages, and the URI template
+// internal/resources registered the kind's resource under.
+//
+// One table rather than parallel name and template maps, so a kind cannot
+// exist with one attribute and silently miss the other. The template is
+// the bridge a watcher needs: the SDK keeps its URI-to-handler lookup
+// unexported, so re-reading a subscribed URI means resolving it to the
+// template whose handler the router would have dispatched to.
+// TestClassify_MatchesRegisteredResourceTemplates checks these strings
+// against the live registry, so a renamed template cannot leave a stale
+// entry here.
+var kindMeta = map[Kind]struct {
+	name     string
+	template string
+}{
+	KindProject:                 {"project", "gitlab://project/{project_id}"},
+	KindPipeline:                {"pipeline", "gitlab://project/{project_id}/pipeline/{pipeline_id}"},
+	KindPipelineJobs:            {"pipeline_jobs", "gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs"},
+	KindPipelineLatest:          {"pipeline_latest", "gitlab://project/{project_id}/pipelines/latest"},
+	KindJob:                     {"job", "gitlab://project/{project_id}/job/{job_id}"},
+	KindMergeRequest:            {"merge_request", "gitlab://project/{project_id}/mr/{merge_request_iid}"},
+	KindMergeRequestDiscussions: {"merge_request_discussions", "gitlab://project/{project_id}/mr/{merge_request_iid}/discussions"},
+	KindMergeRequestNotes:       {"merge_request_notes", "gitlab://project/{project_id}/mr/{merge_request_iid}/notes"},
+	KindIssue:                   {"issue", "gitlab://project/{project_id}/issue/{issue_iid}"},
+	KindDeployment:              {"deployment", "gitlab://project/{project_id}/deployment/{deployment_id}"},
+	KindEnvironment:             {"environment", "gitlab://project/{project_id}/environment/{environment_id}"},
+	KindFeatureFlag:             {"feature_flag", "gitlab://project/{project_id}/feature_flag/{name}"},
+	KindRelease:                 {"release", "gitlab://project/{project_id}/release/{tag_name}"},
+	KindTag:                     {"tag", "gitlab://project/{project_id}/tag/{tag_name}"},
+	KindBranch:                  {"branch", "gitlab://project/{project_id}/branch/{branch}"},
+	KindMilestone:               {"milestone", "gitlab://project/{project_id}/milestone/{milestone_iid}"},
+	KindLabel:                   {"label", "gitlab://project/{project_id}/label/{label_id}"},
+	KindBoard:                   {"board", "gitlab://project/{project_id}/board/{board_id}"},
+	KindDeployKey:               {"deploy_key", "gitlab://project/{project_id}/deploy_key/{deploy_key_id}"},
+	KindProjectSnippet:          {"project_snippet", "gitlab://project/{project_id}/snippet/{snippet_id}"},
+	KindWiki:                    {"wiki", "gitlab://project/{project_id}/wiki/{slug}"},
+	KindFile:                    {"file", "gitlab://project/{project_id}/file/{ref}/{+path}"},
+	KindGroup:                   {"group", "gitlab://group/{group_id}"},
+	KindGroupLabel:              {"group_label", "gitlab://group/{group_id}/label/{label_id}"},
+	KindGroupMilestone:          {"group_milestone", "gitlab://group/{group_id}/milestone/{milestone_iid}"},
+	KindSnippet:                 {"snippet", "gitlab://snippet/{snippet_id}"},
 }
 
 // String returns the kind's name, for logs and error messages. Unmapped
 // values render "unknown" rather than an empty string so a log line never
 // silently loses the field.
 func (k Kind) String() string {
-	if name, ok := kindNames[k]; ok {
-		return name
+	if meta, ok := kindMeta[k]; ok {
+		return meta.name
 	}
 	return "unknown"
-}
-
-// kindTemplates maps each subscribable kind to the URI template
-// internal/resources registered it under.
-//
-// This is the bridge a watcher needs: the SDK keeps its URI-to-handler
-// lookup unexported, so re-reading a subscribed URI means resolving it to
-// the template whose handler the router would have dispatched to.
-// TestClassify_MatchesRegisteredResourceTemplates checks these strings
-// against the live registry, so a renamed template cannot leave a stale
-// entry here.
-var kindTemplates = map[Kind]string{
-	KindProject:                 "gitlab://project/{project_id}",
-	KindPipeline:                "gitlab://project/{project_id}/pipeline/{pipeline_id}",
-	KindPipelineJobs:            "gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs",
-	KindPipelineLatest:          "gitlab://project/{project_id}/pipelines/latest",
-	KindJob:                     "gitlab://project/{project_id}/job/{job_id}",
-	KindMergeRequest:            "gitlab://project/{project_id}/mr/{merge_request_iid}",
-	KindMergeRequestDiscussions: "gitlab://project/{project_id}/mr/{merge_request_iid}/discussions",
-	KindMergeRequestNotes:       "gitlab://project/{project_id}/mr/{merge_request_iid}/notes",
-	KindIssue:                   "gitlab://project/{project_id}/issue/{issue_iid}",
-	KindDeployment:              "gitlab://project/{project_id}/deployment/{deployment_id}",
-	KindEnvironment:             "gitlab://project/{project_id}/environment/{environment_id}",
-	KindFeatureFlag:             "gitlab://project/{project_id}/feature_flag/{name}",
-	KindRelease:                 "gitlab://project/{project_id}/release/{tag_name}",
-	KindTag:                     "gitlab://project/{project_id}/tag/{tag_name}",
-	KindBranch:                  "gitlab://project/{project_id}/branch/{branch}",
-	KindMilestone:               "gitlab://project/{project_id}/milestone/{milestone_iid}",
-	KindLabel:                   "gitlab://project/{project_id}/label/{label_id}",
-	KindBoard:                   "gitlab://project/{project_id}/board/{board_id}",
-	KindDeployKey:               "gitlab://project/{project_id}/deploy_key/{deploy_key_id}",
-	KindProjectSnippet:          "gitlab://project/{project_id}/snippet/{snippet_id}",
-	KindWiki:                    "gitlab://project/{project_id}/wiki/{slug}",
-	KindFile:                    "gitlab://project/{project_id}/file/{ref}/{+path}",
-	KindGroup:                   "gitlab://group/{group_id}",
-	KindGroupLabel:              "gitlab://group/{group_id}/label/{label_id}",
-	KindGroupMilestone:          "gitlab://group/{group_id}/milestone/{milestone_iid}",
-	KindSnippet:                 "gitlab://snippet/{snippet_id}",
 }
 
 // Template returns the URI template this kind's resource is registered
@@ -155,16 +131,16 @@ var kindTemplates = map[Kind]string{
 // manifest). Deriving the list here rather than copying it means the
 // advertisement can never drift from the whitelist that enforces it.
 func Templates() []string {
-	templates := make([]string, 0, len(kindTemplates))
-	for _, template := range kindTemplates {
-		templates = append(templates, template)
+	templates := make([]string, 0, len(kindMeta))
+	for _, meta := range kindMeta {
+		templates = append(templates, meta.template)
 	}
 	slices.Sort(templates)
 	return templates
 }
 
 func (k Kind) Template() string {
-	return kindTemplates[k]
+	return kindMeta[k].template
 }
 
 // The root prefixes every resource URI starts with. These mirror
