@@ -28,9 +28,15 @@ func mrDepsCreateMR(ctx context.Context, t *testing.T, proj ProjectFixture, bran
 	branch := uniqueName(branchPrefix)
 	createBranchMeta(ctx, t, sess.meta, proj, branch)
 	commitFileMeta(ctx, t, sess.meta, proj, branch, branch+".txt", "blocking dependency fixture", title)
-	mr := createMRMeta(ctx, t, sess.meta, proj, branch, defaultBranch, title)
-	waitForMRReady(ctx, t, sess.glClient, proj.ID, mr.IID)
-	return mr
+	// Deliberately no waitForMRReady here. A dependency links two MR
+	// records; none of the endpoints under test read DetailedMergeStatus,
+	// so waiting for GitLab to compute it buys nothing — and two
+	// sequential readiness waits, each capped at the 300-second
+	// enterprise budget, cannot fit inside this test's 420 seconds on a
+	// loaded parallel run. That arithmetic is exactly how this test once
+	// burned its whole deadline inside a best-effort helper and then
+	// failed on the next call with a bare "context deadline exceeded".
+	return createMRMeta(ctx, t, sess.meta, proj, branch, defaultBranch, title)
 }
 
 // mrDepsGlobalID resolves the instance-global merge request ID for an IID,

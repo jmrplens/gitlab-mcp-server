@@ -332,7 +332,7 @@
 | cmd/internal/apidocs                           |    87.3% |
 | cmd/internal/docgen                            |    99.6% |
 | cmd/internal/mcpsurface                        |    85.0% |
-| cmd/server                                     |    85.3% |
+| cmd/server                                     |    85.4% |
 
 ### Core Packages
 
@@ -565,7 +565,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_doc_coverage** (81.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **elicitation** (84.9%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/internal/mcpsurface** (85.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/server** (85.3%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
+- **cmd/server** (85.4%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_1to1/internal/merge** (86.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **edition** (87.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/internal/apidocs** (87.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

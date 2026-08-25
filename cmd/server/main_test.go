@@ -52,7 +52,12 @@ const (
 
 // testHTTPClient avoids http.DefaultClient in tests so that stalled mock
 // servers cannot hang the entire test suite indefinitely.
-var testHTTPClient = &http.Client{Timeout: 10 * time.Second} //nolint:gochecknoglobals // test-only
+// The 30-second timeout matches testHTTPLivenessTimeout's reasoning: a
+// healthy server answers in milliseconds, and the budget only matters on
+// the first request of a process under the race detector, where building
+// the pool entry's full catalog alone can exceed ten seconds. A passing
+// test is never slowed by the larger value.
+var testHTTPClient = &http.Client{Timeout: 30 * time.Second} //nolint:gochecknoglobals // test-only
 
 // closeMCPSession sends an HTTP DELETE to properly terminate an MCP session
 // on the server side, preventing goroutine leaks from StreamableHTTPHandler.
@@ -637,6 +642,11 @@ func TestServeHTTP_GracefulShutdown(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface: config.ToolSurfaceDynamic,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -690,6 +700,11 @@ func TestServeHTTP_PortConflict(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface: config.ToolSurfaceDynamic,
 	}
 
 	ctx := t.Context()
@@ -2186,6 +2201,11 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface: config.ToolSurfaceDynamic,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2197,11 +2217,10 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 		t.Fatalf("listen: %v", err)
 	}
 	addr := listener.Addr().String()
-	listener.Close()
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -2245,6 +2264,11 @@ func TestServeHTTP_CrossOriginProtection_RejectsCrossSitePost(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface: config.ToolSurfaceDynamic,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2255,11 +2279,10 @@ func TestServeHTTP_CrossOriginProtection_RejectsCrossSitePost(t *testing.T) {
 		t.Fatalf("listen: %v", err)
 	}
 	addr := listener.Addr().String()
-	listener.Close()
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -2303,6 +2326,11 @@ func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface: config.ToolSurfaceDynamic,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2313,11 +2341,10 @@ func TestServeHTTP_RequestWithTokenAndGitLabURLHeader(t *testing.T) {
 		t.Fatalf("listen: %v", err)
 	}
 	addr := listener.Addr().String()
-	listener.Close()
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -2365,9 +2392,14 @@ func TestServeHTTP_MissingGitLabURLDefaultsToPublic(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
-		Tier:           edition.Free,
-		TierExplicit:   true,
-		IgnoreScopes:   true,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface:  config.ToolSurfaceDynamic,
+		Tier:         edition.Free,
+		TierExplicit: true,
+		IgnoreScopes: true,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2378,11 +2410,10 @@ func TestServeHTTP_MissingGitLabURLDefaultsToPublic(t *testing.T) {
 		t.Fatalf("listen: %v", err)
 	}
 	addr := listener.Addr().String()
-	listener.Close()
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -2440,6 +2471,11 @@ func TestServeHTTP_InvalidGitLabURLHeader(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface: config.ToolSurfaceDynamic,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2450,11 +2486,10 @@ func TestServeHTTP_InvalidGitLabURLHeader(t *testing.T) {
 		t.Fatalf("listen: %v", err)
 	}
 	addr := listener.Addr().String()
-	listener.Close()
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -2529,6 +2564,11 @@ func TestServeHTTP_MissingToken(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface: config.ToolSurfaceDynamic,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -2539,11 +2579,10 @@ func TestServeHTTP_MissingToken(t *testing.T) {
 		t.Fatalf("listen: %v", err)
 	}
 	addr := listener.Addr().String()
-	listener.Close()
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -3043,11 +3082,10 @@ func oauthAddr(t *testing.T, ctx context.Context, cfg *config.Config) (string, <
 		t.Fatalf("listen: %v", err)
 	}
 	addr := listener.Addr().String()
-	listener.Close()
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
 	}()
 	waitForHTTPServerReady(t, addr, errCh) //nolint:contextcheck // test helper: uses its own probe deadline
 	return addr, errCh
@@ -3148,8 +3186,13 @@ func TestServeHTTP_OAuthMode_MetadataEndpoint(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
-		AuthMode:       "oauth",
-		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface:   config.ToolSurfaceDynamic,
+		AuthMode:      "oauth",
+		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -3204,8 +3247,13 @@ func TestServeHTTP_OAuthMode_RejectsUnauthenticated(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
-		AuthMode:       "oauth",
-		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface:   config.ToolSurfaceDynamic,
+		AuthMode:      "oauth",
+		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -3249,8 +3297,13 @@ func TestServeHTTP_OAuthMode_AcceptsValidBearer(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
-		AuthMode:       "oauth",
-		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface:   config.ToolSurfaceDynamic,
+		AuthMode:      "oauth",
+		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -3312,8 +3365,13 @@ func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
-		AuthMode:       "oauth",
-		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface:   config.ToolSurfaceDynamic,
+		AuthMode:      "oauth",
+		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -3359,8 +3417,13 @@ func TestServeHTTP_OAuthMode_InvalidTokenReturns401(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
-		AuthMode:       "oauth",
-		OAuthCacheTTL:  config.DefaultOAuthCacheTTL,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface:   config.ToolSurfaceDynamic,
+		AuthMode:      "oauth",
+		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -3405,6 +3468,11 @@ func TestServeHTTP_LegacyMode_NoMetadataEndpoint(t *testing.T) {
 		MaxHTTPClients: config.DefaultMaxHTTPClients,
 		SessionTimeout: config.DefaultSessionTimeout,
 		MetaTools:      false,
+		// The dynamic surface, explicitly: these are transport, auth and
+		// routing tests, and none of them needs the pool's first request
+		// to build the full individual catalog — which, under the race
+		// detector, costs longer than any sane client timeout.
+		ToolSurface: config.ToolSurfaceDynamic,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -3560,7 +3628,11 @@ func TestRunHTTP_MissingGitLabURL(t *testing.T) {
 	}()
 
 	err := runHTTP(ctx, &httpConfig{
-		gitlabURL:      "",
+		gitlabURL: "",
+		// An explicit ephemeral port: with addr empty, net/http listens on
+		// ":http" — real port 80 — and the test's outcome then depends on
+		// whether anything on the machine already owns it.
+		addr:           "127.0.0.1:0",
 		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
@@ -3975,7 +4047,7 @@ func TestBuildServerCard_ReturnsValidJSON(t *testing.T) {
 		MetaTools:     true,
 	}
 
-	data, err := buildServerCard(cfg)
+	data, err := buildServerCard(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("buildServerCard() returned error: %v", err)
 	}
@@ -4074,7 +4146,7 @@ func TestBuildServerCard_IndividualMode(t *testing.T) {
 		MetaTools:     false,
 	}
 
-	data, err := buildServerCard(cfg)
+	data, err := buildServerCard(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("buildServerCard() returned error: %v", err)
 	}
@@ -4096,6 +4168,98 @@ func TestBuildServerCard_IndividualMode(t *testing.T) {
 	}
 }
 
+// TestServeHTTP_ShutdownDuringServerCardBuild_DrainsCleanly verifies a
+// shutdown that begins while the server card is still being built neither
+// waits behind the build nor reports an error, and that the caught request
+// is answered with 503 rather than left hanging.
+//
+// The card's catalog registration is CPU work no context can interrupt, so
+// the guarantee has to come from the handler: the in-flight card request
+// is released with a 503 the moment shutdown starts, letting Shutdown
+// drain inside its budget while the detached build finishes on its own.
+//
+// The builder is substituted through the buildServerCardFn seam with one
+// the test gates, so cancellation provably lands mid-build instead of
+// racing a sleep against the real build. Deliberately not parallel: the
+// seam is a package global, and the sequential pass runs alone.
+func TestServeHTTP_ShutdownDuringServerCardBuild_DrainsCleanly(t *testing.T) {
+	srv := newMockGitLabServer(t)
+	cfg := &config.Config{
+		GitLabURL:      srv.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      false,
+		ToolSurface:    config.ToolSurfaceDynamic, // the gated fake builds the card; the surface no longer matters
+	}
+
+	buildStarted := make(chan struct{})
+	releaseBuild := make(chan struct{})
+	origBuild := buildServerCardFn
+	buildServerCardFn = func(context.Context, *config.Config) ([]byte, error) {
+		close(buildStarted)
+		<-releaseBuild
+		return []byte(`{}`), nil
+	}
+	t.Cleanup(func() { buildServerCardFn = origBuild })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
+	}()
+	waitForHTTPServerReady(t, addr, errCh)
+
+	// Fire the card request without waiting for it — it is the build we
+	// want in flight when shutdown starts.
+	cardDone := make(chan struct{})
+	go func() {
+		defer close(cardDone)
+		req, reqErr := http.NewRequestWithContext(context.Background(), http.MethodGet,
+			"http://"+addr+"/.well-known/mcp/server-card.json", nil)
+		if reqErr != nil {
+			t.Errorf("build card request: %v", reqErr)
+			return
+		}
+		resp, doErr := testHTTPClient.Do(req)
+		if doErr != nil {
+			t.Errorf("card request during shutdown: %v, want a 503 response", doErr)
+			return
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusServiceUnavailable {
+			t.Errorf("card request during shutdown = %d, want %d", resp.StatusCode, http.StatusServiceUnavailable)
+		}
+	}()
+
+	// Only cancel once the builder is provably in flight.
+	select {
+	case <-buildStarted:
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("card build never started")
+	}
+	cancel()
+
+	select {
+	case shutdownErr := <-errCh:
+		if shutdownErr != nil {
+			t.Fatalf("serveHTTPOn() = %v during card build, want a clean shutdown", shutdownErr)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("shutdown did not complete while the server card was building")
+	}
+	<-cardDone
+	// Release the gated builder only after the assertions: its goroutine
+	// outlives serveHTTPOn by design, and must not touch the restored seam.
+	close(releaseBuild)
+}
+
 // TestBuildServerCard_MinimalCapabilitySurface verifies that server-card
 // generation returns a reduced catalog instead of failing when prompts are not
 // registered.
@@ -4110,7 +4274,7 @@ func TestBuildServerCard_MinimalCapabilitySurface(t *testing.T) {
 		CapabilitySurface: config.CapabilitySurfaceMinimal,
 	}
 
-	data, err := buildServerCard(cfg)
+	data, err := buildServerCard(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("buildServerCard() returned error: %v", err)
 	}
@@ -4156,11 +4320,10 @@ func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
 		t.Fatalf("listen: %v", err)
 	}
 	addr := listener.Addr().String()
-	listener.Close()
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
 	}()
 
 	waitForHTTPServerReady(t, addr, errCh)
@@ -4413,11 +4576,10 @@ func startStatelessServeHTTP(t *testing.T, cfg *config.Config) (string, func()) 
 		t.Fatalf("listen: %v", err)
 	}
 	addr := listener.Addr().String()
-	listener.Close()
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- serveHTTP(ctx, cfg, addr, defaultHTTPIdleTimeout)
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
 	}()
 	waitForHTTPServerReady(t, addr, errCh)
 
