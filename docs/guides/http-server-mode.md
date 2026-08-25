@@ -107,6 +107,15 @@ introduced by [SEP-2567](https://github.com/modelcontextprotocol/modelcontextpro
   token and GitLab URL reuse a cached `*mcp.Server`, so stateless mode does
   not pay client-rebuild costs per request.
 
+One capability changes shape here: the legacy `resources/subscribe` request
+is **refused** in stateless mode with an explanatory error, because each
+stateless POST gets its own session that closes with the response — a
+subscription it accepted could never be notified. Clients on protocol
+2026-07-28 are unaffected (`subscriptions/listen` holds the request open,
+which is exactly what stateless mode still supports); legacy subscribers
+need `--stateless=false`. See the
+[subscriptions reference](../reference/capabilities/subscriptions.md).
+
 Stateless mode suits load-balanced deployments where requests from one client
 may land on different replicas. Combine with `--json-response` for clients or
 gateways that prefer plain JSON bodies over SSE:

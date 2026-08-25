@@ -330,6 +330,17 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 	if len(other) > 0 {
 		fmt.Fprintf(&b, "## Other Jobs (%d)\n%s\n\n", len(other), strings.Join(other, "\n"))
 	}
+	switch pipeline.Status {
+	case "success", "failed", "canceled", "skipped", "manual":
+		// Settled: nothing to wait for.
+	default:
+		// Still moving. Pointing at the subscription beats teaching the
+		// model to re-invoke this prompt on a timer, which is the pattern
+		// resource subscriptions exist to replace.
+		fmt.Fprintf(&b, "This pipeline is still in progress — if your client supports MCP resource "+
+			"subscriptions, subscribe to gitlab://project/%s/pipelines/latest to be notified when it "+
+			"changes instead of re-invoking this prompt.\n", projectID)
+	}
 
 	return promptResult(b.String()), nil
 }

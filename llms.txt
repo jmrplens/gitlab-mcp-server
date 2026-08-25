@@ -4,7 +4,7 @@
 
 gitlab-mcp-server v2.6.7 is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.
 It provides up to 1071 individual MCP tools across 96 GitLab API domains, 32 base meta-tools, 49 self-managed enterprise meta-tools, 50 GitLab.com Enterprise meta-tools,
-a default 2-tool dynamic find/execute surface, 45 resources, 37 prompts, and 3 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).
+a default 2-tool dynamic find/execute surface, 45 resources, 37 prompts, and 4 MCP capabilities (completions, progress, elicitation, resource subscriptions). Cross-platform: Windows, Linux, macOS (amd64 + arm64).
 
 Quick start:
 
@@ -50,7 +50,7 @@ Configuration (environment variables, stdio mode):
 - GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)
 - TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic
 - META_TOOLS: Deprecated compatibility selector; prefer TOOL_SURFACE for new configs
-- CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny
+- CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny (minimal also drops resource subscriptions)
 - GITLAB_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools
 
 Tool domains:
@@ -106,7 +106,7 @@ tool with an "action" parameter. Key meta-tools:
 
 Resources:
 
-45 read-only resources:
+45 read-only resources (26 single-object kinds also accept resources/subscribe for change notifications, honored by polling):
 
 - gitlab://groups: groups
 - gitlab://guides/code-review: code_review
@@ -204,6 +204,7 @@ Prompts:
 - [Environment variables](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/env.md): Environment variable reference
 - [HTTP server mode](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/http-server-mode.md): Remote MCP transport setup
 - [Security model](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/security.md): Authentication, read-only mode, safe mode, and security controls
+- [Resource subscriptions](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/capabilities/subscriptions.md): resources/subscribe by polling: 26 subscribable kinds, cadence, lifetime, limits
 - [Privacy policy](https://github.com/jmrplens/gitlab-mcp-server/blob/main/PRIVACY.md): No telemetry; data flows only to the configured GitLab instance
 
 ## Tool References

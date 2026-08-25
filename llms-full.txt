@@ -28745,7 +28745,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 ## Resources
 
-45 resources providing read-only access to GitLab data.
+45 resources providing read-only access to GitLab data. 26 single-object kinds (pipelines, jobs, issues, merge requests, releases, files, wikis, and more) also accept resources/subscribe: the server polls them and sends notifications/resources/updated on change.
 
 ### groups
 
@@ -28937,7 +28937,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 - **URI Template**: `gitlab://project/{project_id}/mr/{merge_request_iid}`
 - **MIME**: application/json
-- **Description**: Get details of a specific merge request by its IID (project-scoped ID). Returns title, state, source/target branches, author, merge status, and web URL.
+- **Description**: Get details of a specific merge request by its IID (project-scoped ID). Returns title, state, source/target branches, author, merge status, and web URL. Supports resources/subscribe.
 
 ### merge_request_discussions
 
@@ -28955,7 +28955,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 - **URI Template**: `gitlab://project/{project_id}/pipeline/{pipeline_id}`
 - **MIME**: application/json
-- **Description**: Get details of a specific CI/CD pipeline by its numeric ID. Returns pipeline status, ref, SHA, source, and web URL.
+- **Description**: Get details of a specific CI/CD pipeline by its numeric ID. Returns pipeline status, ref, SHA, source, and web URL. Supports resources/subscribe.
 
 ### pipeline_jobs
 
@@ -28967,7 +28967,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 - **URI Template**: `gitlab://project/{project_id}/pipelines/latest`
 - **MIME**: application/json
-- **Description**: Get the most recent CI/CD pipeline for a GitLab project. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL.
+- **Description**: Get the most recent CI/CD pipeline for a GitLab project. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL. Supports resources/subscribe.
 
 ### release
 

@@ -1,0 +1,81 @@
+---
+title: Resource Subscriptions
+description: MCP resource subscriptions that deliver live change notifications for 26 GitLab resource kinds — pipelines, issues, merge requests, files, and more — honored by polling.
+datePublished: "2026-08-25"
+faq:
+  - q: "What are MCP resource subscriptions?"
+    a: "A client asks the server to watch a resource with `resources/subscribe`, and the server sends `notifications/resources/updated` when its content changes. GitLab MCP Server honors this by **polling**: a watcher re-reads the subscribed URI through the same handler `resources/read` uses and notifies only when the content actually changed. GitLab offers no push channel a local server could consume, so polling under explicit bounds is the honest implementation."
+  - q: "Which resources can be subscribed to?"
+    a: "26 single-object resource kinds: a project or group; a pipeline, its job list, the latest pipeline, a single job; a merge request with its discussions and notes; an issue; a deployment, environment, or feature flag; a release, tag, or branch; a milestone or label (project or group); a board; a deploy key; a snippet; a wiki page; and a repository file. **Collections are refused** — subscribing to an issue list would notify on changes the subscriber never asked about."
+  - q: "How fast do notifications arrive?"
+    a: "Latency is the polling cadence: **5 seconds** while the resource is busy (a running pipeline, an open merge request), **15 seconds** by default, **60 seconds** once settled, and **10 minutes** after a watch lease-demotes from 30 minutes of session inactivity. Any request on the session restores full speed. The `_meta` on each notification reports the watch state and its current cadence."
+  - q: "What does watching cost against my GitLab rate limit?"
+    a: "Watchers use the subscriber's own token, capped at **10 watchers per server**. Worst case — all ten at the 5-second floor — is 120 requests per minute, 6% of GitLab.com's per-user limit. Ten demoted watches cost one request per minute. One 429 from GitLab pauses every watcher with exponential back-off."
+---
+
+import FAQ from "../../../components/FAQ.astro";
+
+Resource subscriptions let a client say **"tell me when this changes"** instead of re-reading a resource on a hunch. The client sends `resources/subscribe` for a URI such as `gitlab://project/42/pipelines/latest`, and GitLab MCP Server sends `notifications/resources/updated` whenever that resource's content changes.
+
+The server honors subscriptions by **polling**: a watcher re-reads the subscribed URI through the very handler `resources/read` dispatches to, compares a SHA-256 of the content, and notifies only on a real change. "The content changed" therefore means exactly "what you would read changed" — never a guess. The decision and its bounds are recorded in [ADR-0015](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/development/adr/adr-0015-polled-resource-subscriptions.md).
+
+Subscriptions are advertised on `CAPABILITY_SURFACE=full` (the default). The `minimal` surface does not register the GitLab data resources a subscription applies to, so it does not advertise the capability either.
+
+## What can be watched?
+
+26 single-object resource kinds — objects with a lifecycle worth following:
+
+| Group             | Subscribable resources                                                            |
+| ----------------- | --------------------------------------------------------------------------------- |
+| CI/CD             | Pipeline, pipeline job list, latest pipeline, single job, deployment, environment |
+| Collaboration     | Merge request (plus its discussions and notes), issue                             |
+| Releases and refs | Release, tag, branch, feature flag                                                |
+| Planning          | Milestone and label (project or group), board                                     |
+| Content           | Wiki page, repository file, snippet (project or personal)                         |
+| Containers        | Project, group, deploy key                                                        |
+
+**Collections are deliberately excluded.** Subscribing to `gitlab://project/42/issues` would fire on every change to any issue in the project and cost a full page read per poll — a subscription to a collection is refused. The full machine-readable list ships in the `gitlab://tools` manifest under `subscriptions.subscribable_uri_templates`.
+
+## How fast, and at what cost?
+
+The polling cadence adapts to the resource:
+
+| Resource state     | Interval   | Example                                         |
+| ------------------ | ---------- | ----------------------------------------------- |
+| Work in flight     | 5s (floor) | a `running` pipeline, an `opened` merge request |
+| Settled            | 60s        | a `success` pipeline, a `closed` issue          |
+| No lifecycle field | 15s        | a wiki page, a file, a label                    |
+| Lease-demoted      | 10min      | 30 minutes without any request on the session   |
+
+Watchers use the subscriber's own GitLab token, capped at **10 watchers per server** (one server per token+URL in HTTP mode). The worst case — ten watchers at the 5s floor — is 120 requests/minute; ten demoted watches cost one. A 429 from GitLab pauses every watcher with exponential back-off (30s doubling to 5 minutes).
+
+Nothing retires itself for being "finished": GitLab has no terminal state — a retried pipeline reuses its ID and runs again, a closed issue reopens — so a watch only ends when the client unsubscribes, its session disconnects, the resource returns 401/403/404, the 24-hour lifetime cap is reached, or it is evicted to make room at the watcher cap.
+
+## Lifetime and renewal
+
+A watch that goes unrenewed does not silently die — it slows down. After 30 minutes without traffic on the subscribing session, the watch drops to a 10-minute poll; any tool call or resource read on that session restores full speed automatically. Every notification carries the watch state in `_meta` under `io.github.jmrplens/watch`:
+
+```json
+{
+  "method": "notifications/resources/updated",
+  "params": {
+    "uri": "gitlab://project/42/pipeline/99",
+    "_meta": {
+      "io.github.jmrplens/watch": {
+        "state": "active",
+        "renewBy": "2026-08-25T19:30:00Z",
+        "pollIntervalMs": 5000,
+        "renewedByActivity": true
+      }
+    }
+  }
+}
+```
+
+## Transport notes
+
+- **stdio**: works as-is on both protocol generations.
+- **HTTP, stateless mode (the default)**: the legacy `resources/subscribe` request is refused with an explanatory error — each stateless POST gets its own session that closes with the response, so a subscription it accepted could never be notified. Clients on protocol 2026-07-28 are unaffected: `subscriptions/listen` holds the request open, which stateless mode supports. Legacy subscribers need `--stateless=false`.
+- **Client quirks**: VS Code subscribes to every resource it reads and routes updates into its file-change pipeline; Cursor sends `resources/subscribe` even to servers that advertise `subscribe: false`; the Go SDK client fires `subscriptions/listen` without awaiting the response, so a refusal may never surface client-side.
+
+<FAQ />

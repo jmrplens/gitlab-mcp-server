@@ -1,10 +1,10 @@
 ---
 title: Capacidades MCP
-description: Las tres capacidades MCP de GitLab MCP Server — progreso, elicitación y autocompletado — más metadatos de iconos en herramientas, recursos y prompts.
+description: Las cuatro capacidades MCP de GitLab MCP Server — progreso, elicitación, autocompletado y suscripciones a recursos — más metadatos de iconos en herramientas, recursos y prompts.
 datePublished: "2026-04-21"
 faq:
   - q: "¿Qué capacidades MCP implementa GitLab MCP Server?"
-    a: "GitLab MCP Server implementa **tres capacidades del protocolo MCP** —progreso, elicitación y autocompletado— más **metadatos de iconos** en cada herramienta, recurso y prompt. El progreso envía actualizaciones en tiempo real durante operaciones de larga duración, la elicitación permite al servidor pedir información al usuario mediante formularios estructurados y el autocompletado completa valores de argumentos como nombres de proyectos, ramas, usuarios y etiquetas. Los iconos son metadatos de presentación, no una capacidad de protocolo negociada. Las tres capacidades se negocian durante el handshake de inicialización MCP."
+    a: "GitLab MCP Server implementa **cuatro capacidades del protocolo MCP** —progreso, elicitación, autocompletado y suscripciones a recursos— más **metadatos de iconos** en cada herramienta, recurso y prompt. El progreso envía actualizaciones en tiempo real durante operaciones de larga duración, la elicitación permite al servidor pedir información al usuario mediante formularios estructurados, el autocompletado completa valores de argumentos como nombres de proyectos, ramas, usuarios y etiquetas, y las suscripciones a recursos entregan notificaciones de cambio en vivo para 26 tipos de recurso de GitLab, atendidas mediante sondeo. Los iconos son metadatos de presentación, no una capacidad de protocolo negociada. Las cuatro capacidades se negocian durante el handshake de inicialización MCP."
   - q: "¿Cuál es la diferencia entre capacidades declaradas por el servidor y dependientes del cliente?"
     a: "Las capacidades declaradas por el servidor, como el **autocompletado**, GitLab MCP Server las anuncia de forma incondicional y están disponibles para cualquier cliente que las invoque. Las capacidades dependientes del cliente, como la **elicitación**, requieren que el cliente MCP declare soporte durante la inicialización. El servidor comprueba ese soporte antes de usar la capacidad y degrada de forma elegante cuando falta — en el caso de la elicitación, recurre a las herramientas parametrizadas estándar, por lo que se preserva la funcionalidad y solo se reduce la experiencia interactiva."
   - q: "¿Qué ocurre si mi cliente MCP no admite una capacidad?"
@@ -15,20 +15,21 @@ faq:
 
 import FAQ from "../../../../components/FAQ.astro";
 
-GitLab MCP Server implementa **tres capacidades del protocolo MCP** —progreso, elicitación y autocompletado— que van más allá de la llamada básica a herramientas para que los asistentes de IA sean más precisos e interactivos al trabajar con GitLab. Además adjunta **metadatos de iconos** a cada herramienta, recurso y prompt. En conjunto, estas funciones permiten a los asistentes informar del progreso, pedir información al usuario mediante formularios estructurados, autocompletar valores de argumentos y mostrar iconos reconocibles por dominio.
+GitLab MCP Server implementa **cuatro capacidades del protocolo MCP** —progreso, elicitación, autocompletado y suscripciones a recursos— que van más allá de la llamada básica a herramientas para que los asistentes de IA sean más precisos e interactivos al trabajar con GitLab. Además adjunta **metadatos de iconos** a cada herramienta, recurso y prompt. En conjunto, estas funciones permiten a los asistentes informar del progreso, pedir información al usuario mediante formularios estructurados, autocompletar valores de argumentos, vigilar recursos de GitLab en busca de cambios y mostrar iconos reconocibles por dominio.
 
-Las tres capacidades se negocian durante el handshake de inicialización MCP, mientras que los iconos son metadatos de presentación que los clientes renderizan o ignoran. Ninguno es obligatorio para que funcionen las llamadas básicas a herramientas: cuando un cliente carece de soporte, el servidor degrada de forma elegante y la operación de GitLab subyacente se completa igualmente.
+Las cuatro capacidades se negocian durante el handshake de inicialización MCP, mientras que los iconos son metadatos de presentación que los clientes renderizan o ignoran. Ninguno es obligatorio para que funcionen las llamadas básicas a herramientas: cuando un cliente carece de soporte, el servidor degrada de forma elegante y la operación de GitLab subyacente se completa igualmente.
 
 ## ¿Qué capacidades proporciona GitLab MCP Server?
 
-GitLab MCP Server proporciona cuatro funciones diferenciadas, resumidas a continuación. El progreso y la elicitación envían información del servidor al cliente, el autocompletado obtiene sugerencias del servidor bajo demanda y los iconos son metadatos estáticos adjuntos a cada superficie.
+GitLab MCP Server proporciona cinco funciones diferenciadas, resumidas a continuación. El progreso y la elicitación envían información del servidor al cliente, el autocompletado obtiene sugerencias del servidor bajo demanda, las suscripciones notifican al cliente cuando un recurso vigilado cambia y los iconos son metadatos estáticos adjuntos a cada superficie.
 
-| Capacidad                                                        | Dirección          | Qué Habilita                                                                         |
-| ---------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------------------------ |
-| [Progress](/gitlab-mcp-server/es/capabilities/progress/)         | Servidor → Cliente | Actualizaciones de progreso en tiempo real para operaciones de larga duración        |
-| [Elicitation](/gitlab-mcp-server/es/capabilities/elicitation/)   | Servidor → Cliente | Asistentes interactivos — formularios paso a paso para crear recursos complejos      |
-| [Completions](/gitlab-mcp-server/es/capabilities/completions/)   | Cliente → Servidor | Autocompletado de argumentos para nombres de proyectos, ramas, usuarios y más        |
-| [Icons](/gitlab-mcp-server/es/capabilities/icons/) _(metadatos)_ | Servidor → Cliente | Iconos para cada herramienta, recurso y prompt — SVG más variantes WebP clara/oscura |
+| Capacidad                                                          | Dirección                                               | Qué Habilita                                                                                                                    |
+| ------------------------------------------------------------------ | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| [Progress](/gitlab-mcp-server/es/capabilities/progress/)           | Servidor → Cliente                                      | Actualizaciones de progreso en tiempo real para operaciones de larga duración                                                   |
+| [Elicitation](/gitlab-mcp-server/es/capabilities/elicitation/)     | Servidor → Cliente                                      | Asistentes interactivos — formularios paso a paso para crear recursos complejos                                                 |
+| [Completions](/gitlab-mcp-server/es/capabilities/completions/)     | Cliente → Servidor                                      | Autocompletado de argumentos para nombres de proyectos, ramas, usuarios y más                                                   |
+| [Subscriptions](/gitlab-mcp-server/es/capabilities/subscriptions/) | Cliente → Servidor (actualizaciones Servidor → Cliente) | Notificaciones de cambio en vivo para 26 tipos de recurso de GitLab, atendidas mediante sondeo (solo `CAPABILITY_SURFACE=full`) |
+| [Icons](/gitlab-mcp-server/es/capabilities/icons/) _(metadatos)_   | Servidor → Cliente                                      | Iconos para cada herramienta, recurso y prompt — SVG más variantes WebP clara/oscura                                            |
 
 ## ¿Cómo se negocian las capacidades MCP?
 

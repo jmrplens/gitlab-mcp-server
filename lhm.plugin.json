@@ -2,7 +2,7 @@
   "identifier": "jmrplens-gitlab-mcp-server",
   "name": "GitLab MCP Server",
   "version": "2.6.6",
-  "description": "Model Context Protocol server exposing 1000+ GitLab REST + GraphQL operations as AI tools — merge requests, pipelines, issues, releases, milestones, and more. One static Go binary; stdio or HTTP transport, with dynamic/meta/individual tool surfaces.",
+  "description": "Model Context Protocol server exposing 1000+ GitLab REST + GraphQL operations as AI tools — merge requests, pipelines, issues, releases, milestones, and more. One static Go binary; stdio or HTTP transport, with dynamic/meta/individual tool surfaces, plus resource subscriptions (live change notifications by polling).",
   "author": "José M. Requena Plens",
   "authorUrl": "https://github.com/jmrplens",
   "cloudEndpoint": "https://mcp.jmrp.io/gitlab",

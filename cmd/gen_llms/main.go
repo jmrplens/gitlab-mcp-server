@@ -256,7 +256,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	fmt.Fprintf(&b, "gitlab-mcp-server v%s is a single static binary (Go) that runs locally via stdio or remotely via HTTP transport.\n", version)
 	fmt.Fprintf(&b, "It provides up to %d individual MCP tools across %d GitLab API domains, %d base meta-tools, %d self-managed enterprise meta-tools, %d GitLab.com Enterprise meta-tools,\n",
 		len(catalog.Individual), countDomains(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise))
-	fmt.Fprintf(&b, "a default %d-tool dynamic find/execute surface, %d resources, %d prompts, and 3 MCP capabilities. Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
+	fmt.Fprintf(&b, "a default %d-tool dynamic find/execute surface, %d resources, %d prompts, and 4 MCP capabilities (completions, progress, elicitation, resource subscriptions). Cross-platform: Windows, Linux, macOS (amd64 + arm64).\n\n",
 		len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
 
 	b.WriteString("Quick start:\n\n")
@@ -295,7 +295,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString("- GITLAB_SKIP_TLS_VERIFY: Skip TLS verification for self-signed certs (default: false)\n")
 	b.WriteString("- TOOL_SURFACE: Canonical catalog selector: meta, individual, dynamic\n")
 	b.WriteString("- META_TOOLS: Deprecated compatibility selector; prefer TOOL_SURFACE for new configs\n")
-	b.WriteString("- CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny\n")
+	b.WriteString("- CAPABILITY_SURFACE: Use minimal with dynamic mode when startup context must be tiny (minimal also drops resource subscriptions)\n")
 	b.WriteString("- GITLAB_TIER: Licensing tier (free/ce, premium, ultimate); unset detects from the instance license (fallback free). Premium/Ultimate enable enterprise tools; GitLab.com Enterprise also exposes Orbit Knowledge Graph tools\n\n")
 
 	b.WriteString("Tool domains:\n\n")
@@ -324,7 +324,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString("\n")
 
 	b.WriteString("Resources:\n\n")
-	fmt.Fprintf(&b, "%d read-only resources:\n\n", resourceCount)
+	fmt.Fprintf(&b, "%d read-only resources (26 single-object kinds also accept resources/subscribe for change notifications, honored by polling):\n\n", resourceCount)
 	for _, r := range catalog.Resources {
 		fmt.Fprintf(&b, llmsSummaryItemFormat, r.URI, r.Name)
 	}
@@ -349,6 +349,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	writeLLMSLink(&b, "Environment variables", "docs/reference/env.md", "Environment variable reference")
 	writeLLMSLink(&b, "HTTP server mode", "docs/guides/http-server-mode.md", "Remote MCP transport setup")
 	writeLLMSLink(&b, "Security model", "docs/concepts/security.md", "Authentication, read-only mode, safe mode, and security controls")
+	writeLLMSLink(&b, "Resource subscriptions", "docs/reference/capabilities/subscriptions.md", "resources/subscribe by polling: 26 subscribable kinds, cadence, lifetime, limits")
 	writeLLMSLink(&b, "Privacy policy", "PRIVACY.md", "No telemetry; data flows only to the configured GitLab instance")
 
 	b.WriteString("\n## Tool References\n\n")
@@ -746,7 +747,7 @@ func writeLLMSFullDynamicTools(b *strings.Builder, dynamicTools []*mcp.Tool) {
 
 func writeLLMSFullResources(b *strings.Builder, catalog llmsCatalog, resourceCount int) {
 	b.WriteString("## Resources\n\n")
-	fmt.Fprintf(b, "%d resources providing read-only access to GitLab data.\n\n", resourceCount)
+	fmt.Fprintf(b, "%d resources providing read-only access to GitLab data. 26 single-object kinds (pipelines, jobs, issues, merge requests, releases, files, wikis, and more) also accept resources/subscribe: the server polls them and sends notifications/resources/updated on change.\n\n", resourceCount)
 	for _, resource := range catalog.Resources {
 		writeLLMSResource(b, resource.Name, resource.URI, "URI", resource.MIMEType, resource.Description)
 	}

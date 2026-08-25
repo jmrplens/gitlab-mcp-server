@@ -63,6 +63,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -832,7 +833,7 @@ func createServer(
 		// Named tools differ per surface, so the guidance is built for the
 		// surface this server actually registers: a dynamic-mode model can
 		// only see gitlab_find_action and gitlab_execute_action.
-		Instructions: buildInstructions(toolSurface),
+		Instructions: buildInstructions(toolSurface, capabilitySurface),
 		Logger:       slog.Default(),
 		Capabilities: serverCapabilities,
 		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
@@ -926,12 +927,16 @@ func createServer(
 	if manifestTools, listErr := listRegisteredToolsForInspection(server, "tool-manifest"); listErr != nil {
 		slog.Warn("failed to build tool manifest resource", "error", listErr)
 	} else {
-		resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
+		manifestOpts := resources.ToolSurfaceResourceOptions{
 			Surface:    toolSurface,
 			Tools:      manifestTools,
 			Catalog:    surfaceCatalog,
 			MetaRoutes: metaSchemaRoutes,
-		})
+		}
+		if subs != nil {
+			manifestOpts.SubscribableURITemplates = subscriptions.Templates()
+		}
+		resources.RegisterToolSurfaceResources(server, manifestOpts)
 	}
 
 	// Optional per-server tools/call rate limit. In HTTP mode each pooled

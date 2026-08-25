@@ -150,6 +150,19 @@ var kindTemplates = map[Kind]string{
 
 // Template returns the URI template this kind's resource is registered
 // under, or "" for [KindUnknown].
+// Templates returns the URI template of every subscribable kind, sorted,
+// for surfaces that advertise what can be watched (the gitlab://tools
+// manifest). Deriving the list here rather than copying it means the
+// advertisement can never drift from the whitelist that enforces it.
+func Templates() []string {
+	templates := make([]string, 0, len(kindTemplates))
+	for _, template := range kindTemplates {
+		templates = append(templates, template)
+	}
+	slices.Sort(templates)
+	return templates
+}
+
 func (k Kind) Template() string {
 	return kindTemplates[k]
 }

@@ -184,6 +184,12 @@ All Go test files live in the `suite/` subdirectory (package `suite`):
 | `elicitation`      | Elicitation tools with mock user handler  |
 | `safeMode`         | Mutating tools wrapped to return previews |
 
+Resource subscriptions (`resources/subscribe`) are deliberately not part of
+this suite: the e2e client drives tools through one-shot calls, while a
+subscription needs a client that holds one open and waits for
+notifications. They are covered by unit tests instead
+(`internal/subscriptions/`, `cmd/server/subscriptions_test.go`).
+
 ### Safety Guardrails
 
 - **Snapshot-based cleanup**: `TestMain` captures pre-test project/group/label/variable state and restores it on exit

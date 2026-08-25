@@ -635,7 +635,7 @@ func registerLatestPipelineResource(server registrar, client *gitlabclient.Clien
 		Name:        "latest_pipeline",
 		Title:       "Latest Pipeline",
 		MIMEType:    mimeJSON,
-		Description: "Get the most recent CI/CD pipeline for a GitLab project. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL.",
+		Description: "Get the most recent CI/CD pipeline for a GitLab project. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL. Supports resources/subscribe.",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconPipeline,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -661,7 +661,7 @@ func registerPipelineResource(server registrar, client *gitlabclient.Client) {
 		Name:        "pipeline",
 		Title:       "Pipeline Details",
 		MIMEType:    mimeJSON,
-		Description: "Get details of a specific CI/CD pipeline by its numeric ID. Returns pipeline status, ref, SHA, source, and web URL.",
+		Description: "Get details of a specific CI/CD pipeline by its numeric ID. Returns pipeline status, ref, SHA, source, and web URL. Supports resources/subscribe.",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconPipeline,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -804,7 +804,7 @@ func registerMergeRequestResource(server registrar, client *gitlabclient.Client)
 		Name:        "merge_request",
 		Title:       "Merge Request Details",
 		MIMEType:    mimeJSON,
-		Description: "Get details of a specific merge request by its IID (project-scoped ID). Returns title, state, source/target branches, author, merge status, and web URL.",
+		Description: "Get details of a specific merge request by its IID (project-scoped ID). Returns title, state, source/target branches, author, merge status, and web URL. Supports resources/subscribe.",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {

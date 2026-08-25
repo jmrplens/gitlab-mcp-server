@@ -15,9 +15,9 @@ Declared by the server and consumed by connected MCP clients.
 
 | # | Capability | Package | Purpose |
 | --: | ---------- | ------- | ------- |
-| 2 | [Progress](progress.md) | `internal/progress/` | Step-by-step progress notifications |
-| 3 | [Completions](completions.md) | `internal/completions/` | Autocomplete for prompt arguments and resource URIs |
-| 4 | [Subscriptions](subscriptions.md) | `internal/subscriptions/` | Polled `resources/updated` notifications for 26 kinds of resource |
+| 1 | [Progress](progress.md) | `internal/progress/` | Step-by-step progress notifications |
+| 2 | [Completions](completions.md) | `internal/completions/` | Autocomplete for prompt arguments and resource URIs |
+| 3 | [Subscriptions](subscriptions.md) | `internal/subscriptions/` | Polled `resources/updated` notifications for 26 kinds of resource |
 
 ## Client Capabilities
 
@@ -25,7 +25,7 @@ Provided by the MCP client and consumed by the server at tool execution time.
 
 | # | Capability | Package | Purpose |
 | --: | ---------- | ------- | ------- |
-| 6 | [Elicitation](elicitation.md) | `internal/elicitation/` | Interactive user input forms (4 tools) |
+| 4 | [Elicitation](elicitation.md) | `internal/elicitation/` | Interactive user input forms (4 tools) |
 
 ## Capability Declaration
 

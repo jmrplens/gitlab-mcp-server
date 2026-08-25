@@ -40,6 +40,17 @@ These are client-side constraints, not server behavior. The default `dynamic` su
 | Gemini CLI                                                                  | Tool names over 63 characters truncated; Gemini API rejects `$ref`/`$defs` in input schemas                                                                                                                                                                                                        |
 | JetBrains AI Assistant                                                      | Rejects the whole `tools/list` if any tool's `outputSchema` root type is not `object` ([LLM-30555](https://youtrack.jetbrains.com/issue/LLM-30555))                                                                                                                                                |
 
+## Subscription behavior per client
+
+Client handling of `resources/subscribe` varies more than any other
+capability: VS Code subscribes to every resource it reads and routes
+`resources/updated` into its file-change pipeline (not into chat); Cursor
+sends `resources/subscribe` even to servers advertising `subscribe: false`;
+and the Go SDK's client fires `subscriptions/listen` without awaiting the
+response, so a server-side refusal never surfaces. Details and the
+notification `_meta` contract:
+[subscriptions reference](../reference/capabilities/subscriptions.md).
+
 ## See Also
 
 - [IDE Configuration](ide-configuration.md) — per-client setup, including the OpenAI Codex section
