@@ -58,6 +58,11 @@ const subscribableMarker = "Subscribable: subscriptions/listen (protocol 2026-07
 // the server-wide resources.subscribe capability.
 const subscribableMetaKey = "io.github.jmrplens/subscribable"
 
+// AddResourceTemplate registers a resource template on the server and
+// records its handler in the index. Templates on the subscriptions
+// whitelist are annotated first — the subscribable marker is appended to
+// the description and the reverse-DNS _meta key is set — on a copy, so
+// the shared registration literals are never mutated.
 func (r *recorder) AddResourceTemplate(template *mcp.ResourceTemplate, handler mcp.ResourceHandler) {
 	if slices.Contains(subscriptions.Templates(), template.URITemplate) {
 		// Copy before annotating: the registration literals are shared

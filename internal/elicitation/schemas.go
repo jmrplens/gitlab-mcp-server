@@ -198,12 +198,18 @@ func parseSelectOneIntContent(content map[string]any, options []int) (int, error
 	case string:
 		parsed, err := strconv.Atoi(v)
 		if err != nil {
-			return 0, fmt.Errorf("elicitation: response value %q is not an integer", v)
+			return 0, fmt.Errorf("elicitation: response value %q is not an integer: %w", v, err)
 		}
 		selected = parsed
 	case float64:
 		if math.IsNaN(v) || math.IsInf(v, 0) || v != math.Trunc(v) {
 			return 0, fmt.Errorf("elicitation: response value %g is not an integer", v)
+		}
+		// Both bounds are exact float64 comparisons: MinInt is a power of
+		// two and MaxInt rounds up to one, so >= rejects every value whose
+		// int conversion would be implementation-defined.
+		if v < math.MinInt || v >= math.MaxInt {
+			return 0, fmt.Errorf("elicitation: response value %g overflows int", v)
 		}
 		selected = int(v)
 	default:

@@ -5,7 +5,9 @@ package elicitation
 
 import (
 	"errors"
+	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -115,6 +117,32 @@ func TestSelectSchemas_ValidateOptions(t *testing.T) {
 			}
 			return err
 		}, false},
+		{"select int accepts decimal string", func() error {
+			got, err := parseSelectOneIntContent(map[string]any{"selection": "30"}, []int{10, 30})
+			if err == nil && got != 30 {
+				return errors.New("wrong value")
+			}
+			return err
+		}, false},
+		{"select int wraps strconv error", func() error {
+			_, err := parseSelectOneIntContent(map[string]any{"selection": "thirty"}, []int{30})
+			if !errors.Is(err, strconv.ErrSyntax) {
+				return fmt.Errorf("error does not wrap strconv.ErrSyntax: %w", err)
+			}
+			return nil
+		}, false},
+		{"select int rejects float beyond int range", func() error {
+			_, err := parseSelectOneIntContent(map[string]any{"selection": 1e300}, []int{1})
+			return err
+		}, true},
+		{"select int rejects negative overflow", func() error {
+			_, err := parseSelectOneIntContent(map[string]any{"selection": -1e300}, []int{1})
+			return err
+		}, true},
+		{"select int rejects non-string non-number", func() error {
+			_, err := parseSelectOneIntContent(map[string]any{"selection": true}, []int{1})
+			return err
+		}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

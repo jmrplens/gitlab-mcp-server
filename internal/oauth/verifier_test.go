@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 	"time"
 
@@ -494,89 +495,95 @@ func isErrInvalidToken(err error) bool {
 	return errors.Is(err, auth.ErrInvalidToken)
 }
 
-// TestNewGitLabVerifier_PATScopes_AreIntrospected verifies a personal access
-// token's real scopes come from /personal_access_tokens/self instead of the
-// historical api assumption — a read_user token must not be stamped
-// api-scoped.
-func TestNewGitLabVerifier_PATScopes_AreIntrospected(t *testing.T) {
+// TestNewGitLabVerifier_ScopeIntrospection verifies granted scopes come
+// from real introspection — /personal_access_tokens/self for PATs,
+// /oauth/token/info for OAuth tokens — with the historical api assumption
+// kept only when neither endpoint answers usably, so restricted instances
+// keep working while a read_user token is never stamped api-scoped.
+func TestNewGitLabVerifier_ScopeIntrospection(t *testing.T) {
 	t.Parallel()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/api/v4/user":
-			json.NewEncoder(w).Encode(gitlabUserResponse{ID: 7, Username: "pat"})
-		case "/api/v4/personal_access_tokens/self":
-			json.NewEncoder(w).Encode(map[string]any{"scopes": []string{"read_user"}})
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer srv.Close()
-
-	verifier := NewGitLabVerifier(srv.URL, false, time.Minute, nil)
-	info, err := verifier(context.Background(), "glpat-x", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
-	if err != nil {
-		t.Fatalf("verifier: %v", err)
+	tests := []struct {
+		name       string
+		patStatus  int
+		patBody    string
+		infoStatus int
+		infoBody   string
+		want       []string
+	}{
+		{
+			name:      "PAT scopes are introspected",
+			patStatus: http.StatusOK, patBody: `{"scopes":["read_user"]}`,
+			infoStatus: http.StatusNotFound, infoBody: `{}`,
+			want: []string{"read_user"},
+		},
+		{
+			name:      "OAuth scopes come from token info",
+			patStatus: http.StatusNotFound, patBody: `{}`,
+			infoStatus: http.StatusOK, infoBody: `{"scope":["api"]}`,
+			want: []string{"api"},
+		},
+		{
+			name:      "introspection unavailable assumes api",
+			patStatus: http.StatusNotFound, patBody: `{}`,
+			infoStatus: http.StatusNotFound, infoBody: `{}`,
+			want: []string{"api"},
+		},
+		{
+			name:      "non-200 introspection falls back",
+			patStatus: http.StatusInternalServerError, patBody: `boom`,
+			infoStatus: http.StatusServiceUnavailable, infoBody: `down`,
+			want: []string{"api"},
+		},
+		{
+			name:      "malformed introspection JSON falls back",
+			patStatus: http.StatusOK, patBody: `{not json`,
+			infoStatus: http.StatusOK, infoBody: `also{bad`,
+			want: []string{"api"},
+		},
+		{
+			name:      "empty scope lists fall back",
+			patStatus: http.StatusOK, patBody: `{"scopes":[]}`,
+			infoStatus: http.StatusOK, infoBody: `{"scope":[]}`,
+			want: []string{"api"},
+		},
+		{
+			name:      "non-string scope entries are ignored",
+			patStatus: http.StatusOK, patBody: `{"scopes":[7]}`,
+			infoStatus: http.StatusOK, infoBody: `{"scope":["read_api"]}`,
+			want: []string{"read_api"},
+		},
 	}
-	if len(info.Scopes) != 1 || info.Scopes[0] != "read_user" {
-		t.Errorf("Scopes = %v, want [read_user] from introspection", info.Scopes)
-	}
-}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-// TestNewGitLabVerifier_OAuthScopes_AreIntrospected verifies an OAuth access
-// token's scopes come from /oauth/token/info when the PAT endpoint does not
-// answer for it.
-func TestNewGitLabVerifier_OAuthScopes_AreIntrospected(t *testing.T) {
-	t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api/v4/user":
+					json.NewEncoder(w).Encode(gitlabUserResponse{ID: 7, Username: "scoped"})
+				case "/api/v4/personal_access_tokens/self":
+					w.WriteHeader(tt.patStatus)
+					fmt.Fprint(w, tt.patBody)
+				case "/oauth/token/info":
+					w.WriteHeader(tt.infoStatus)
+					fmt.Fprint(w, tt.infoBody)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer srv.Close()
 
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		switch r.URL.Path {
-		case "/api/v4/user":
-			json.NewEncoder(w).Encode(gitlabUserResponse{ID: 8, Username: "oauth"})
-		case "/oauth/token/info":
-			json.NewEncoder(w).Encode(map[string]any{"scope": []string{"api"}})
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer srv.Close()
-
-	verifier := NewGitLabVerifier(srv.URL, false, time.Minute, nil)
-	info, err := verifier(context.Background(), "oauth-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
-	if err != nil {
-		t.Fatalf("verifier: %v", err)
-	}
-	if len(info.Scopes) != 1 || info.Scopes[0] != "api" {
-		t.Errorf("Scopes = %v, want [api] from token info", info.Scopes)
-	}
-}
-
-// TestNewGitLabVerifier_IntrospectionUnavailable_AssumesAPI verifies the
-// documented compatibility fallback: when neither introspection endpoint
-// answers, the historical api assumption is kept so restricted instances
-// keep working.
-func TestNewGitLabVerifier_IntrospectionUnavailable_AssumesAPI(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v4/user" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(gitlabUserResponse{ID: 9, Username: "old"})
-	}))
-	defer srv.Close()
-
-	verifier := NewGitLabVerifier(srv.URL, false, time.Minute, nil)
-	info, err := verifier(context.Background(), "tok", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
-	if err != nil {
-		t.Fatalf("verifier: %v", err)
-	}
-	if len(info.Scopes) != 1 || info.Scopes[0] != "api" {
-		t.Errorf("Scopes = %v, want the [api] fallback", info.Scopes)
+			verifier := NewGitLabVerifier(srv.URL, false, time.Minute, nil)
+			info, err := verifier(context.Background(), "tok", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
+			if err != nil {
+				t.Fatalf("verifier: %v", err)
+			}
+			if !slices.Equal(info.Scopes, tt.want) {
+				t.Errorf("Scopes = %v, want %v", info.Scopes, tt.want)
+			}
+		})
 	}
 }
 

@@ -4805,6 +4805,38 @@ func TestValidateHTTPRuntimeConfig_NegativeBodyLimit_Rejected(t *testing.T) {
 	}
 }
 
+// TestValidateHTTPAuthConfig_OAuthPublicURL verifies the flag path enforces
+// the RFC 9728 constraints on --public-url: without it (or with an invalid
+// value) an oauth server would advertise a broken protected-resource
+// identifier, so startup must refuse instead.
+func TestValidateHTTPAuthConfig_OAuthPublicURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		publicURL string
+		wantErr   bool
+	}{
+		{"missing", "", true},
+		{"relative", "gitlab", true},
+		{"trailing slash", "https://mcp.example.com/gitlab/", true},
+		{"http non-loopback", "http://mcp.example.com", true},
+		{"valid https path", "https://mcp.example.com/gitlab", false},
+		{"valid http loopback", "http://localhost:8080", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{
+				AuthMode:  "oauth",
+				GitLabURL: "https://gitlab.example.com",
+				PublicURL: tt.publicURL,
+			}
+			err := validateHTTPAuthConfig(cfg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateHTTPAuthConfig(public-url=%q) error = %v, wantErr %v", tt.publicURL, err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // TestServeHTTP_Stateless_BodyLimitReturns413 verifies that
 // --max-request-body-bytes is enforced by the streamable HTTP transport: a
 // JSON-RPC POST larger than the configured limit is rejected with 413 instead

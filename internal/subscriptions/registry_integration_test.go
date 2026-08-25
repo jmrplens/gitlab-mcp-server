@@ -141,20 +141,22 @@ func TestClassify_MatchesRegisteredResourceTemplates(t *testing.T) {
 
 	for _, tmpl := range registered {
 		seen[tmpl] = true
-		expected, decided := wantSubscribable[tmpl]
-		if !decided {
-			t.Errorf("resource template %q has no subscribability decision — add it to wantSubscribable "+
-				"and, if subscribable, to the tail table in kind.go", tmpl)
-			continue
-		}
-		uri := concreteURI(tmpl)
-		got, ok := subscriptions.Classify(uri)
-		if got != expected {
-			t.Errorf("template %q -> subscriptions.Classify(%q) = %v, want %v", tmpl, uri, got, expected)
-		}
-		if ok != (expected != subscriptions.KindUnknown) {
-			t.Errorf("template %q -> subscriptions.Classify(%q) subscribable = %v, want %v", tmpl, uri, ok, expected != subscriptions.KindUnknown)
-		}
+		t.Run(tmpl, func(t *testing.T) {
+			expected, decided := wantSubscribable[tmpl]
+			if !decided {
+				t.Errorf("resource template %q has no subscribability decision — add it to wantSubscribable "+
+					"and, if subscribable, to the tail table in kind.go", tmpl)
+				return
+			}
+			uri := concreteURI(tmpl)
+			got, ok := subscriptions.Classify(uri)
+			if got != expected {
+				t.Errorf("subscriptions.Classify(%q) = %v, want %v", uri, got, expected)
+			}
+			if ok != (expected != subscriptions.KindUnknown) {
+				t.Errorf("subscriptions.Classify(%q) subscribable = %v, want %v", uri, ok, expected != subscriptions.KindUnknown)
+			}
+		})
 	}
 
 	for tmpl := range wantSubscribable {

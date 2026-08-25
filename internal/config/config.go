@@ -927,6 +927,13 @@ func ParseCSV(s string) []string {
 	return result
 }
 
+// ValidatePublicURL enforces the RFC 9728 constraints on the advertised
+// protected-resource identifier. Exported for the HTTP flag path, which
+// assembles its Config directly instead of going through Load.
+func ValidatePublicURL(raw string) error {
+	return validatePublicURL(raw)
+}
+
 // validatePublicURL enforces the RFC 9728 constraints on the advertised
 // protected-resource identifier: present, absolute, https (http only for
 // loopback development hosts), no fragment, no trailing slash.

@@ -136,7 +136,7 @@ When running with `--auth-mode=oauth`, the server validates every request's Bear
 
 - **Token verification** — Each token is validated by calling GitLab's user API. Invalid or expired tokens receive HTTP 401
 - **Identity caching** — Verified token identities are cached in-memory using SHA-256 hashed keys (raw tokens are never stored). Cache TTL is configurable via `--oauth-cache-ttl` (default 15m, range 1m–2h)
-- **Header normalization** — `PRIVATE-TOKEN` headers are automatically converted to `Authorization: Bearer` for backward compatibility with existing clients
+- **Bearer only** — only the standard `Authorization: Bearer` scheme is accepted; the legacy `PRIVATE-TOKEN` header is rejected with HTTP 401 in this mode (it remains accepted in legacy mode)
 - **[RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata** — The `/.well-known/oauth-protected-resource` endpoint advertises the GitLab authorization server URL, enabling compliant OAuth clients to discover the token issuer
 - **PKCE** — The OAuth 2.1 flow uses Proof Key for Code Exchange (PKCE) to protect against authorization code interception attacks. MCP clients generate a code verifier/challenge pair for each authorization request
 - **Cache eviction** — A background goroutine runs every 30 seconds to clean up expired entries. The cache is bounded by TTL, not by size

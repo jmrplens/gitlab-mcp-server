@@ -316,7 +316,7 @@ HTTP mode supports two authentication modes controlled by `--auth-mode`:
 
 | Feature                    | Legacy (`--auth-mode=legacy`)                       | OAuth (`--auth-mode=oauth`)                                      |
 | -------------------------- | --------------------------------------------------- | ---------------------------------------------------------------- |
-| Token headers              | `PRIVATE-TOKEN` or `Authorization: Bearer`          | `Authorization: Bearer` (auto-converted from `PRIVATE-TOKEN`)    |
+| Token headers              | `PRIVATE-TOKEN` or `Authorization: Bearer`          | `Authorization: Bearer` only — `PRIVATE-TOKEN` is rejected (401) |
 | Server-side validation     | None — token passed directly to GitLab API          | Verified via `GET /api/v4/user` before MCP handler               |
 | Token caching              | No caching — every API call uses the token directly | SHA-256 hashed cache with configurable TTL (default 15m)         |
 | Invalid token handling     | Errors appear at GitLab API call time               | Rejected immediately with HTTP 401                               |
@@ -336,6 +336,7 @@ The default `--auth-mode=legacy` accepts tokens via `PRIVATE-TOKEN` or `Authoriz
 gitlab-mcp-server --http \
   --gitlab-url=https://gitlab.com \
   --auth-mode=oauth \
+  --public-url=https://mcp.example.com/gitlab \
   --oauth-cache-ttl=15m
 ```
 
@@ -344,15 +345,12 @@ gitlab-mcp-server --http \
 ```mermaid
 sequenceDiagram
     participant Client as MCP Client
-    participant MW as NormalizeAuthHeader
     participant Auth as RequireBearerToken
     participant Cache as Token Cache
     participant GL as GitLab API
     participant MCP as MCP Handler
 
-    Client->>MW: POST /mcp<br/>PRIVATE-TOKEN: glpat-xxx
-    MW->>MW: Convert to Authorization: Bearer
-    MW->>Auth: Forward request
+    Client->>Auth: POST /mcp<br/>Authorization: Bearer glpat-xxx
     Auth->>Cache: Lookup SHA-256(token)
 
     alt Cache hit (not expired)
@@ -367,7 +365,7 @@ sequenceDiagram
     MCP-->>Client: MCP response
 ```
 
-1. Client sends a request with `Authorization: Bearer <token>` (or `PRIVATE-TOKEN`, which is auto-converted)
+1. Client sends a request with `Authorization: Bearer <token>` — the legacy `PRIVATE-TOKEN` header is rejected with 401 in this mode
 2. The server calls `GET /api/v4/user` on GitLab with the token
 3. If GitLab returns a valid user, the token is cached for `--oauth-cache-ttl` (default 15 minutes)
 4. Subsequent requests with the same token skip the GitLab call until the cache expires
