@@ -46,10 +46,12 @@ jobs:
         run: make check-site-stats
       - name: Check brand assets
         run: make brand-check
-      - name: Check WebP icon fallbacks
-        run: |
-          sudo apt-get update -q && sudo apt-get install -y -q librsvg2-bin webp
-          make check-icon-webp
+      # check-icon-webp is deliberately NOT run here: it is a byte-level
+      # comparison whose output depends on the librsvg/cwebp versions doing
+      # the rendering — CI's Ubuntu toolchain produces different (equally
+      # valid) bytes than the maintainer machine for a handful of icons, so
+      # the gate only holds on the machine that committed the assets. It
+      # stays maintainer tooling, run with gen-icon-webp after icon edits.
       - name: Check action catalog manifest
         run: make check-action-catalog-manifest
       - name: Run tests with coverage
