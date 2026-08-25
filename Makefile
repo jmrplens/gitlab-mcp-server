@@ -687,6 +687,7 @@ brand-rasters: brand
 	cwebp -quiet -lossless /tmp/gen-brand-banner.png -o .github/brand/banner.webp
 	rm -f /tmp/gen-brand-banner.png
 	rsvg-convert -w 1200 -h 630 .github/brand/og.svg -o site/public/og-image.png
+	rsvg-convert -w 2560 -h 1280 .github/brand/social.svg -o .github/brand/social.png
 	rsvg-convert -w 512 -h 512 site/public/favicon.svg -o mcpb/icon.png
 	rsvg-convert -w 400 -h 400 site/public/favicon.svg -o site/public/logo-400.png
 	rsvg-convert -w 256 -h 256 site/public/favicon.svg -o site/public/favicon.png

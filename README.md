@@ -423,18 +423,18 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       992 |     200,560 |
+| Source (`.go`, non-test) |       992 |     200,570 |
 | Unit tests (`_test.go`)  |       547 |     310,236 |
 | End-to-end tests         |       174 |      45,163 |
-| **Total**                | **1,713** | **555,959** |
+| **Total**                | **1,713** | **555,969** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,491 |
+| Source functions                |  7,492 |
 | — exported (public)             |  2,614 |
-| — unexported (private)          |  4,877 |
+| — unexported (private)          |  4,878 |
 | Unit test functions (`TestXxx`) | 11,662 |
 | Subtests (`t.Run(...)`)         |  2,919 |
 | End-to-end test functions       |    381 |
@@ -446,7 +446,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~202 lines |
 | Average test file length           |                 ~567 lines |
-| Comment lines in source            |  22,863 (~11.4% of source) |
+| Comment lines in source            |  22,868 (~11.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
@@ -479,7 +479,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | Source code printed at 55 lines/page | ~3,646 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,572 (impossible to avoid)                                                                         |
+| Source lines mentioning `"gitlab"`   | 12,573 (impossible to avoid)                                                                         |
 | Longest function name in source      | `baseDestructiveEarlySinglePromptTemplateAndFixtures` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

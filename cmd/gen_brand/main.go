@@ -23,10 +23,11 @@
 package main
 
 import (
+	_ "embed"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -165,38 +166,25 @@ const svgBrand = `+"`%s`"+`
 `, brandMark24())
 }
 
-// backdrop renders the shared banner/OG background: a violet radial glow
-// behind the mark and the fan-out's own branch arcs echoing outward at
-// growing scales and fading opacity — the mark propagating, phonometry's
-// point-source wave restated in this project's geometry. Purely
-// procedural, so the texture regenerates with the same run that draws the
-// mark and can never drift from it. cx,cy is the mark's source point in
-// the target canvas; unit is the scale of the mark itself.
-func backdrop(w, h, cx, cy, unit float64) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, `  <defs>
-    <radialGradient id="glow" cx="%g" cy="%g" r="%g" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#221b46"/>
-      <stop offset="0.55" stop-color="#161327"/>
-      <stop offset="1" stop-color="%s"/>
-    </radialGradient>
-  </defs>
-`, cx, cy, math.Max(w, h)*0.85, darkGround)
-	fmt.Fprintf(&b, "  <rect width=\"%g\" height=\"%g\" fill=\"url(#glow)\"/>\n", w, h)
-	// Echoes: the three branch curves, re-emitted at growing scales around
-	// the same source, thin and fading. The last ring leaves the canvas on
-	// purpose — a wave passing through the frame, not a figure inside it.
-	for i, scale := range []float64{1.9, 2.9, 4.1, 5.6} {
-		opacity := []float64{0.11, 0.075, 0.05, 0.032}[i]
-		fmt.Fprintf(&b, "  <g transform=\"translate(%g,%g) scale(%g)\" opacity=\"%g\">\n",
-			cx-srcX*unit*scale, cy-srcY*unit*scale, unit*scale, opacity)
-		for _, dy := range []float64{-tipSpan, 0, tipSpan} {
-			fmt.Fprintf(&b, "    <path d=%q fill=\"none\" stroke=\"%s\" stroke-width=\"%g\" stroke-linecap=\"round\"/>\n",
-				arcPath(dy), darkBranch, branchWidth*0.32)
-		}
-		fmt.Fprintf(&b, "  </g>\n")
-	}
-	return b.String()
+// The card backgrounds are commissioned artwork in the brand's own
+// vocabulary: quiet circuit traces and git-graph branches with node dots,
+// generated once with gpt-image-2 from this project's monochrome banner and
+// palette (see plan/2026-08-brand-redesign.md), then frozen here. They are
+// embedded so every emitted SVG stays self-contained and `--check` stays a
+// pure byte comparison; the vector layer on top — frame, mark, wordmark —
+// remains fully parametric, so the text and the mark never rasterize.
+//
+//go:embed assets/bg-wide.jpg
+var bgWide []byte
+
+//go:embed assets/bg-tall.jpg
+var bgTall []byte
+
+// bgImage inlines one embedded background as a full-bleed, center-sliced
+// image layer.
+func bgImage(art []byte, w, h float64) string {
+	return fmt.Sprintf("  <image href=\"data:image/jpeg;base64,%s\" width=\"%g\" height=\"%g\" preserveAspectRatio=\"xMidYMid slice\"/>\n",
+		base64.StdEncoding.EncodeToString(art), w, h)
 }
 
 // bannerSVG is the repository banner: 1280x400, self-grounding on the dark
@@ -218,7 +206,7 @@ func bannerSVG() string {
   <text x="502" y="284" font-family="DejaVu Sans, sans-serif" font-size="26" fill="#8b949e">three MCP tool surfaces, REST + GraphQL.</text>
   <text x="502" y="336" font-family="DejaVu Sans Mono, monospace" font-size="20" fill="%s">dynamic · meta · individual</text>
 </svg>
-`, backdrop(1280, 400, 96+srcX*4.5, 56+srcY*4.5, 4.5),
+`, bgImage(bgWide, 1280, 400),
 		markBody(
 			fmt.Sprintf("fill=%q", darkNode),
 			fmt.Sprintf("stroke=%q", darkBranch),
@@ -239,7 +227,28 @@ func ogSVG() string {
   <text x="600" y="524" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="27" fill="#8b949e">GitLab for your AI assistant — one catalog, three MCP surfaces</text>
   <text x="600" y="574" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-size="21" fill="%s">jmrplens.github.io/gitlab-mcp-server</text>
 </svg>
-`, backdrop(1200, 630, 444+srcX*4.875, 88+srcY*4.875, 4.875),
+`, bgImage(bgTall, 1200, 630),
+		markBody(
+			fmt.Sprintf("fill=%q", darkNode),
+			fmt.Sprintf("stroke=%q", darkBranch),
+			fmt.Sprintf("fill=%q", darkTip),
+		),
+		darkBranch)
+}
+
+// socialSVG is the GitHub repository social preview: the 2:1 canvas GitHub
+// recommends (1280x640, rendered at 2x by make brand-rasters), same centered
+// composition as the OG card with the extra width spent on quiet ground.
+func socialSVG() string {
+	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" role="img" aria-label="GitLab MCP Server — GitLab for your AI assistant">
+%s  <rect x="0.5" y="0.5" width="1279" height="639" fill="none" stroke="#21262d"/>
+  <g transform="translate(484,96) scale(4.875)">
+%s  </g>
+  <text x="640" y="478" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-weight="bold" font-size="64" fill="#e6edf3">GitLab MCP Server</text>
+  <text x="640" y="532" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="27" fill="#8b949e">GitLab for your AI assistant — one catalog, three MCP surfaces</text>
+  <text x="640" y="582" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-size="21" fill="%s">jmrplens.github.io/gitlab-mcp-server</text>
+</svg>
+`, bgImage(bgTall, 1280, 640),
 		markBody(
 			fmt.Sprintf("fill=%q", darkNode),
 			fmt.Sprintf("stroke=%q", darkBranch),
@@ -261,6 +270,7 @@ func assets() []asset {
 		{filepath.Join("internal", "toolutil", "brandmark_gen.go"), brandMarkGo()},
 		{filepath.Join(".github", "brand", "banner.svg"), bannerSVG()},
 		{filepath.Join(".github", "brand", "og.svg"), ogSVG()},
+		{filepath.Join(".github", "brand", "social.svg"), socialSVG()},
 	}
 }
 
