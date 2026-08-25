@@ -797,7 +797,7 @@ func TestOnStop_ClientAskedForIt_IsSilent(t *testing.T) {
 // an interleaving between goroutines mid-call, exactly what -race plus
 // repetition explores and a fake clock serializes away.
 func TestClose_RacesSubscribe_NeverOrphansAWatcher(t *testing.T) {
-	for range 100 {
+	for i := range 100 {
 		r, n := newFakeReader(), &fakeNotifier{}
 		m := New[string](r, n, quietOptions(Options{
 			BaseInterval: time.Millisecond,
@@ -816,7 +816,8 @@ func TestClose_RacesSubscribe_NeverOrphansAWatcher(t *testing.T) {
 		settled := r.readCount(testURI)
 		time.Sleep(5 * time.Millisecond)
 		if got := r.readCount(testURI); got != settled {
-			t.Fatalf("reads went %d -> %d after Close returned; a watcher outlived shutdown", settled, got)
+			t.Fatalf("iteration %d: reads went %d -> %d after Close returned; a watcher outlived shutdown",
+				i, settled, got)
 		}
 	}
 }

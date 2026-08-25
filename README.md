@@ -417,9 +417,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |       989 |     200,119 |
-| Unit tests (`_test.go`)  |       544 |     309,526 |
+| Unit tests (`_test.go`)  |       544 |     309,527 |
 | End-to-end tests         |       174 |      45,157 |
-| **Total**                | **1,707** | **554,802** |
+| **Total**                | **1,707** | **554,803** |
 
 ### Functions
 
