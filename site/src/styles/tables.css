@@ -37,8 +37,16 @@
 .sl-markdown-content table[data-stacks="always"] {
 	display: block;
 }
+/* Visually hidden, never display:none: the explicit columnheader roles the
+   build adds must stay in the accessibility tree, or the stacked cells lose
+   their column association exactly where the visible headers disappear. */
 .sl-markdown-content table[data-stacks="always"] thead {
-	display: none;
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
 .sl-markdown-content table[data-stacks="always"] :is(tbody, tr, td, th) {
 	display: block;
@@ -56,7 +64,12 @@
 
 	/* The header row has nothing to say once every cell carries its own label. */
 	.sl-markdown-content table[data-stacks] thead {
-		display: none;
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 
 	/* One record per block, separated by the same hairline the spec sheets use. */
@@ -101,6 +114,12 @@
 	   sheet's gutter, so the two read as one system. */
 	.sl-markdown-content table[data-stacks] :is(td, th)[data-label]::before {
 		content: attr(data-label);
+		/* The label is visual reinforcement for sighted users; assistive
+	   technology gets the real column association from the (visually hidden)
+	   header row, so the generated text is given empty alternative text.
+	   Browsers without the syntax ignore this declaration and keep the plain
+	   one above. */
+		content: attr(data-label) / "";
 		display: block;
 		font-family: var(--gm-mono);
 		font-size: var(--sl-text-2xs);
@@ -145,6 +164,12 @@
 	table[data-stacks="always"]
 	:is(td, th)[data-label]::before {
 	content: attr(data-label);
+	/* The label is visual reinforcement for sighted users; assistive
+	   technology gets the real column association from the (visually hidden)
+	   header row, so the generated text is given empty alternative text.
+	   Browsers without the syntax ignore this declaration and keep the plain
+	   one above. */
+	content: attr(data-label) / "";
 	display: block;
 	font-family: var(--gm-mono);
 	font-size: var(--sl-text-2xs);

@@ -174,6 +174,32 @@ for (const enPath of walk(docsDir)) {
 	});
 }
 
+// Spanish-only pages never enter the EN-driven walk above, so a sheet added
+// there would escape both parity and census; sweep them.
+function walkEs(dir) {
+	const out = [];
+	for (const entry of readdirSync(dir)) {
+		const p = join(dir, entry);
+		if (statSync(p).isDirectory()) out.push(...walkEs(p));
+		else if (/\.mdx?$/.test(entry)) out.push(p);
+	}
+	return out;
+}
+for (const esPath of walkEs(esDir)) {
+	const rel = relative(esDir, esPath);
+	let hasTwin = true;
+	try {
+		statSync(join(docsDir, rel));
+	} catch {
+		hasTwin = false;
+	}
+	if (!hasTwin && sheets(esPath).length > 0) {
+		problems.push(
+			`es/${rel}: carries spec sheets but has no English counterpart`,
+		);
+	}
+}
+
 // Table-layout locale agreement, via the build's own classifier.
 for (const enPath of walk(docsDir)) {
 	const rel = relative(docsDir, enPath);

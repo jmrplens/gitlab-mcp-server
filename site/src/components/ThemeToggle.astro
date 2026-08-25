@@ -8,13 +8,15 @@
 // *target* mode: a sun while dark (tap → light), a moon while light
 // (tap → dark).
 import { Icon } from "@astrojs/starlight/components";
+
+const label = Astro.locals.t("themeSelect.accessibleLabel");
 ---
 
 <gm-theme-toggle>
 	<button
 		type="button"
 		class="gm-theme-toggle"
-		aria-label="Toggle between light and dark theme"
+		aria-label={label}
 	>
 		<Icon name="sun" class="gm-icon gm-icon-sun" />
 		<Icon name="moon" class="gm-icon gm-icon-moon" />

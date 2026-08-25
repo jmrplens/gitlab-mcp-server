@@ -80,6 +80,15 @@ import ThemeToggle from "./ThemeToggle.astro";
 	.gm-lang :global(label):hover {
 		color: var(--sl-color-white);
 	}
+	/* The overlaid native select is transparent, which also hides its focus
+	   ring — restate it on the visible label so keyboard users can see where
+	   they are. */
+	.gm-lang :global(label):focus-within {
+		color: var(--sl-color-white);
+		outline: 2px solid var(--sl-color-accent);
+		outline-offset: 2px;
+		border-radius: 0.25rem;
+	}
 	.gm-lang :global(.label-icon) {
 		position: static;
 		transform: none;
