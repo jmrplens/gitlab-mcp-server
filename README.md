@@ -197,7 +197,7 @@ It is the fastest way to try the server, and the right way to keep using it is s
 
 The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport, `GET` on it answers `405` by design, and `https://mcp.jmrp.io/gitlab/health` answers `ok`. It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers I maintain, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
 
-**Then just ask:** open your AI client and try _"List my GitLab projects."_ See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/getting-started/) for per-client details and [more example prompts](docs/guides/examples/usage-examples.md).
+**Then just ask:** open your AI client and try _"List my GitLab projects."_ See the [Getting Started guide](https://jmrp.io/docs/gitlab-mcp-server/getting-started/) for per-client details and [more example prompts](docs/guides/examples/usage-examples.md).
 
 ---
 
@@ -267,7 +267,7 @@ Rows use the base Community Edition catalog unless the Tier column says otherwis
 | **Elicitation**   | 4 interactive creation wizards                    |
 | **Subscriptions** | `resources/updated` by polling, 26 resource kinds |
 
-Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline. See the full [Compatibility Matrix](https://jmrplens.github.io/gitlab-mcp-server/compatibility/).
+Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline. See the full [Compatibility Matrix](https://jmrp.io/docs/gitlab-mcp-server/compatibility/).
 
 ## AI Model Tool-Use Evaluation
 

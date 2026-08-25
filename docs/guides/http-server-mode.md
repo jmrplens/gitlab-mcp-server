@@ -5,7 +5,7 @@ This document describes how gitlab-mcp-server operates in HTTP server mode, wher
 > **Diátaxis type**: Explanation
 > **Audience**: ⚙️ Server administrators
 > **Prerequisites**: [Configuration](../reference/configuration.md), [Architecture](../concepts/architecture.md)
-> 📖 **User documentation**: See the [HTTP Server Mode](https://jmrplens.github.io/gitlab-mcp-server/operations/http-server/) on the documentation site for a user-friendly version.
+> 📖 **User documentation**: See the [HTTP Server Mode](https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/) on the documentation site for a user-friendly version.
 
 ---
 

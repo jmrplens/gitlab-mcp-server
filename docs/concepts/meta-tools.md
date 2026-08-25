@@ -15,7 +15,7 @@ Stdio mode enables the Enterprise/Premium catalog with `GITLAB_TIER=premium` or 
 `gitlab_orbit` is additionally gated to `https://gitlab.com`.
 
 > **See also**: [Tools Reference](../reference/tools/README.md) | [Configuration](../reference/configuration.md) | [ADR-0005](../development/adr/adr-0005-meta-tool-consolidation.md)
-> 📖 **User documentation**: See the [Meta-tools](https://jmrplens.github.io/gitlab-mcp-server/tools/meta-tools/) on the documentation site for a user-friendly version.
+> 📖 **User documentation**: See the [Meta-tools](https://jmrp.io/docs/gitlab-mcp-server/tools/meta-tools/) on the documentation site for a user-friendly version.
 
 ## How Meta-Tools Work
 

@@ -59,7 +59,7 @@ const (
 
 	// repoBlobBaseURL prefixes every repository-relative documentation target in
 	// llms.txt. The file is published at the docs domain
-	// (https://jmrplens.github.io/gitlab-mcp-server/llms.txt), where a relative
+	// (https://jmrp.io/docs/gitlab-mcp-server/llms.txt), where a relative
 	// path such as "docs/getting-started.md" resolves against that host and 404s
 	// because docs/** is not part of the built site. Absolute blob URLs resolve
 	// from anywhere — the docs domain, the repository, or an AI crawler that
@@ -68,7 +68,7 @@ const (
 
 	// siteBaseURL prefixes AI-facing artifacts that are published as part of the
 	// site rather than living only in the repository.
-	siteBaseURL = "https://jmrplens.github.io/gitlab-mcp-server/"
+	siteBaseURL = "https://jmrp.io/docs/gitlab-mcp-server/"
 
 	llmsSummaryItemFormat = "- %s: %s\n"
 	llmsBoldTitleFormat   = "**%s**\n\n"
