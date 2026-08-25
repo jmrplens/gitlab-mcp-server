@@ -139,6 +139,8 @@ func Templates() []string {
 	return templates
 }
 
+// Template returns the URI template this kind's resource is registered
+// under, or "" for [KindUnknown].
 func (k Kind) Template() string {
 	return kindMeta[k].template
 }

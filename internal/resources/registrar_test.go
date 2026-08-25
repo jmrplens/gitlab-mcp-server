@@ -9,6 +9,7 @@
 package resources
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -116,20 +117,24 @@ func TestHandlerIndexRead_ReturnsTextThenBlob(t *testing.T) {
 		},
 	}
 
-	text, err := index.Read(context.Background(), "tmpl/text", "gitlab://x/1")
-	if err != nil {
-		t.Fatalf("Read(text): %v", err)
+	tests := []struct {
+		name     string
+		template string
+		want     []byte
+	}{
+		{"text content", "tmpl/text", []byte(`{"ok":true}`)},
+		{"blob content", "tmpl/blob", []byte{0x1f, 0x8b}},
 	}
-	if string(text) != `{"ok":true}` {
-		t.Errorf("Read(text) = %q, want the handler's text", text)
-	}
-
-	blob, err := index.Read(context.Background(), "tmpl/blob", "gitlab://x/1")
-	if err != nil {
-		t.Fatalf("Read(blob): %v", err)
-	}
-	if len(blob) != 2 || blob[0] != 0x1f {
-		t.Errorf("Read(blob) = %v, want the handler's blob bytes", blob)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := index.Read(context.Background(), tt.template, "gitlab://x/1")
+			if err != nil {
+				t.Fatalf("Read(%s): %v", tt.template, err)
+			}
+			if !bytes.Equal(got, tt.want) {
+				t.Errorf("Read(%s) = %q, want %q", tt.template, got, tt.want)
+			}
+		})
 	}
 }
 

@@ -341,8 +341,8 @@ func TestClassify_FreeFormIdentifier_AcceptsNonNumeric(t *testing.T) {
 // rejection messages where "unknown" for a real kind would mislead.
 func TestKindString_EveryKind_HasADistinctName(t *testing.T) {
 	seen := make(map[string]Kind, len(kindMeta))
-	for k, meta := range kindMeta {
-		name := meta.name
+	for k := range kindMeta {
+		name := k.String()
 		if name == "" || name == "unknown" {
 			t.Errorf("Kind(%d).String() = %q, want a distinct name", k, name)
 			continue
