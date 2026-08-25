@@ -1,5 +1,5 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-	run test test-short test-race test-pkg test-integration test-e2e test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
+	run test test-short test-race test-pkg test-integration test-e2e ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
 	validate-http-stateless validate-http-stateless-docker \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
 	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
@@ -122,7 +122,18 @@ test-integration:
 	go test -v -tags integration -coverprofile=coverage.out $(PKGS)
 
 ## test-e2e: run end-to-end tests against a real GitLab instance (reads GITLAB_URL, GITLAB_TOKEN from .env)
-test-e2e:
+# ensure-gotestsum installs gotestsum on demand, so the e2e targets work on
+# a fresh checkout without a separate install-tools step. The tool was an
+# unstated assumption of the developer machine before this — the first run
+# on a clean Linux box provisioned an entire GitLab stack and then died on
+# "gotestsum: command not found" after several minutes.
+ensure-gotestsum:
+	@command -v gotestsum >/dev/null 2>&1 || { \
+		echo "gotestsum not found; installing with go install..."; \
+		go install gotest.tools/gotestsum@latest; \
+	}
+
+test-e2e: ensure-gotestsum
 	@echo "WARNING: This will run E2E tests against the GitLab instance configured in .env (GITLAB_URL)."
 	@echo "         Tests create and delete projects, groups, users, and other resources."
 	@read -p "Are you sure you want to continue? [y/N] " confirm && [ "$$confirm" = "y" ] || { echo "Aborted."; exit 1; }
@@ -142,7 +153,7 @@ validate-http-stateless-docker:
 	scripts/validate-http-stateless.sh docker
 
 ## test-e2e-docker: start ephemeral GitLab CE (+ Bitbucket fixture), run E2E tests, tear down
-test-e2e-docker:
+test-e2e-docker: ensure-gotestsum
 	@echo "=== Cleaning up previous containers (if any) ==="
 	docker compose -f test/e2e/docker-compose.yml --profile bitbucket down -v 2>/dev/null || true
 	@echo "=== Starting ephemeral GitLab CE and Bitbucket fixture ==="
@@ -186,7 +197,7 @@ test-e2e-docker:
 	  if [ "$$teardown_status" -ne 0 ]; then exit "$$teardown_status"; fi
 
 ## test-e2e-docker-enterprise: start ephemeral GitLab EE with cached license, ENTERPRISE_LICENSE, or GITLAB_ACTIVATION_CODE, run E2E tests, tear down
-test-e2e-docker-enterprise:
+test-e2e-docker-enterprise: ensure-gotestsum
 	@echo "=== Cleaning up previous containers (if any) ==="
 	GITLAB_IMAGE=$${GITLAB_IMAGE:-gitlab/gitlab-ee:latest} docker compose -f test/e2e/docker-compose.yml down -v 2>/dev/null || true
 	@echo "=== Starting ephemeral GitLab EE ==="
