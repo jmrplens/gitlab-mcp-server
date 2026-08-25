@@ -37,13 +37,17 @@ func TestAssets_EverySVGIsWellFormedXML(t *testing.T) {
 
 // TestAssets_SharedGeometryReachesEveryEmitter verifies each variant
 // renders the full fan-out: three branches, three tips, one source node.
+// The banner and OG card additionally echo the branch trio as their
+// backdrop, so their path count is a larger multiple of three; every
+// asset keeps exactly four circles, because the echoes deliberately
+// carry no nodes.
 func TestAssets_SharedGeometryReachesEveryEmitter(t *testing.T) {
 	for _, a := range assets() {
 		t.Run(a.path, func(t *testing.T) {
 			paths := strings.Count(a.content, "<path")
 			circles := strings.Count(a.content, "<circle")
-			if paths != 3 {
-				t.Errorf("emitted %d branch paths, want 3", paths)
+			if paths < 3 || paths%3 != 0 {
+				t.Errorf("emitted %d branch paths, want a positive multiple of 3 (branch trios)", paths)
 			}
 			if circles != 4 {
 				t.Errorf("emitted %d circles, want 4 (three tips + source node)", circles)

@@ -1,5 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" role="img" aria-label="GitLab MCP Server — GitLab for your AI assistant">
-  <rect width="1280" height="400" fill="#0d1117"/>
+  <defs>
+    <radialGradient id="glow" cx="159" cy="200" r="1088" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#221b46"/>
+      <stop offset="0.55" stop-color="#161327"/>
+      <stop offset="1" stop-color="#0d1117"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="400" fill="url(#glow)"/>
+  <g transform="translate(39.30000000000001,-73.59999999999997) scale(8.549999999999999)" opacity="0.11">
+    <path d="M 18 32 C 32 32, 32 14, 46 14" fill="none" stroke="#a78bfa" stroke-width="1.12" stroke-linecap="round"/>
+    <path d="M 18 32 H 46" fill="none" stroke="#a78bfa" stroke-width="1.12" stroke-linecap="round"/>
+    <path d="M 18 32 C 32 32, 32 50, 46 50" fill="none" stroke="#a78bfa" stroke-width="1.12" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(-23.69999999999999,-217.59999999999997) scale(13.049999999999999)" opacity="0.075">
+    <path d="M 18 32 C 32 32, 32 14, 46 14" fill="none" stroke="#a78bfa" stroke-width="1.12" stroke-linecap="round"/>
+    <path d="M 18 32 H 46" fill="none" stroke="#a78bfa" stroke-width="1.12" stroke-linecap="round"/>
+    <path d="M 18 32 C 32 32, 32 50, 46 50" fill="none" stroke="#a78bfa" stroke-width="1.12" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(-99.29999999999995,-390.4) scale(18.45)" opacity="0.05">
+    <path d="M 18 32 C 32 32, 32 14, 46 14" fill="none" stroke="#a78bfa" stroke-width="1.12" stroke-linecap="round"/>
+    <path d="M 18 32 H 46" fill="none" stroke="#a78bfa" stroke-width="1.12" stroke-linecap="round"/>
+    <path d="M 18 32 C 32 32, 32 50, 46 50" fill="none" stroke="#a78bfa" stroke-width="1.12" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(-193.79999999999995,-606.4) scale(25.2)" opacity="0.032">
+    <path d="M 18 32 C 32 32, 32 14, 46 14" fill="none" stroke="#a78bfa" stroke-width="1.12" stroke-linecap="round"/>
+    <path d="M 18 32 H 46" fill="none" stroke="#a78bfa" stroke-width="1.12" stroke-linecap="round"/>
+    <path d="M 18 32 C 32 32, 32 50, 46 50" fill="none" stroke="#a78bfa" stroke-width="1.12" stroke-linecap="round"/>
+  </g>
   <rect x="0.5" y="0.5" width="1279" height="399" fill="none" stroke="#21262d"/>
   <g transform="translate(96,56) scale(4.5)">
   <path d="M 18 32 C 32 32, 32 14, 46 14" fill="none" stroke-width="3.5" stroke-linecap="round" stroke="#a78bfa"/>
