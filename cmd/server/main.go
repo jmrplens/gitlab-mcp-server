@@ -46,6 +46,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -1069,7 +1070,13 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 
 // httpShutdownTimeout bounds graceful HTTP shutdown after the process context
 // is cancelled.
-const httpShutdownTimeout = 5 * time.Second
+// 15 seconds rather than 5: under CI load or an instrumented build, five
+// seconds of drain was routinely not enough and shutdown returned a
+// context-deadline error for perfectly healthy in-flight requests. A
+// larger budget never slows a clean shutdown — Shutdown returns as soon as
+// the connections drain — it only stops a loaded one from being reported
+// as a failure.
+const httpShutdownTimeout = 15 * time.Second
 
 // effectiveIdleTimeout maps a user-supplied value to the duration passed to
 // [http.Server.IdleTimeout]. When the caller passes 0 (meaning "disable idle
@@ -1128,6 +1135,13 @@ func newHTTPServer(addr string, handler http.Handler, httpIdleTimeout time.Durat
 // token are rejected. Sessions expire after cfg.SessionTimeout of inactivity.
 // The pool is bounded by cfg.MaxHTTPClients entries with LRU eviction.
 func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdleTimeout time.Duration) error {
+	return serveHTTPOn(ctx, cfg, httpAddr, nil, httpIdleTimeout)
+}
+
+// serveHTTPOn is serveHTTP with an optional pre-bound listener. When
+// listener is non-nil it is served directly and httpAddr is used only for
+// logging and host validation; when nil, the server binds httpAddr itself.
+func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, listener net.Listener, httpIdleTimeout time.Duration) error {
 	slog.Info(
 		"starting MCP server in HTTP mode",
 		"addr", httpAddr,
@@ -1155,16 +1169,29 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdl
 	pool.StartRevalidation(ctx)
 	pool.StartIdleEviction(ctx)
 
-	// Build server-card JSON once at startup using an ephemeral MCP server
-	// so that /.well-known/mcp/server-card.json is served without authentication.
-	serverCardJSON, serverCardErr := buildServerCard(cfg) //nolint:contextcheck // startup: ephemeral MCP server isolated from request ctx
-	if serverCardErr != nil {
-		slog.Warn("failed to build server-card.json, endpoint will return 503", "error", serverCardErr)
-	}
+	// The server card is built on first request, not at startup. Building
+	// it means standing up an ephemeral MCP server with the full catalog —
+	// tens of seconds under instrumented builds — and doing that inline
+	// held /health hostage: a deployment's readiness probe (and every HTTP
+	// test) was gated on an endpoint almost nobody fetches. sync.OnceValues
+	// keeps the once-per-process semantics; only the first card request
+	// pays.
+	// The card builder runs on the first request's goroutine but builds an
+	// ephemeral in-memory MCP server whose lifetime is its own; tying it to
+	// one request's context would poison the once-cached card for everyone
+	// after a canceled first request.
+	serverCard := sync.OnceValues(func() ([]byte, error) { //nolint:contextcheck // see above
+		cardJSON, err := buildServerCard(cfg)
+		if err != nil {
+			slog.Warn("failed to build server-card.json, endpoint returns 503", "error", err)
+		}
+		return cardJSON, err
+	})
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler)
 	mux.HandleFunc("GET /.well-known/mcp/server-card.json", func(w http.ResponseWriter, _ *http.Request) {
+		serverCardJSON, _ := serverCard()
 		if serverCardJSON == nil {
 			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
 			return
@@ -1187,7 +1214,17 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdl
 
 	serverErr := make(chan error, 1)
 	go func() {
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		// A pre-bound listener wins over the address. This is what lets a
+		// caller — the tests, above all — reserve the port and hand over
+		// the live socket, instead of closing a probe listener and racing
+		// everything else on the machine to re-bind the same address.
+		var err error
+		if listener != nil {
+			err = httpServer.Serve(listener)
+		} else {
+			err = httpServer.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
 			serverErr <- err
 		}
 		close(serverErr)
