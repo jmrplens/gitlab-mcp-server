@@ -100,6 +100,9 @@
 	   the 3:1 of WCAG 1.4.11 rather than to a decorative threshold. */
 	--gm-chip-ink: var(--sl-color-gray-2);
 	--gm-chip-line: var(--sl-color-gray-4);
+	--gm-chip-link-ink: var(--gm-accent-ink);
+	--gm-chip-link-line: var(--gm-mark);
+	--gm-chip-link-fill: var(--gm-accent-soft);
 	--gm-tier-ink: #f6c390;
 	--gm-tier-line: #9a6a2e;
 	--gm-tier-fill: #3a2710;
@@ -153,6 +156,9 @@
 
 	--gm-chip-ink: var(--sl-color-gray-2);
 	--gm-chip-line: var(--sl-color-gray-4);
+	--gm-chip-link-ink: var(--sl-color-accent);
+	--gm-chip-link-line: var(--gm-mark);
+	--gm-chip-link-fill: var(--gm-accent-soft);
 	--gm-tier-ink: #8a4d10;
 	--gm-tier-line: #bd7c32;
 	--gm-tier-fill: #faeedd;

@@ -75,7 +75,7 @@ const INSTALL = `claude mcp add gitlab --env GITLAB_URL=https://gitlab.example.c
   ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false`;
 
 export const en: HomeContent = {
-	statsLabel: "gitlab-mcp-server at a glance",
+	statsLabel: "GitLab MCP Server at a glance",
 	statLabels: {
 		dynamic: "tools in the default dynamic surface",
 		tools: "individual tools at the widest tier",
@@ -91,7 +91,7 @@ export const en: HomeContent = {
 	what: {
 		title: "What it is",
 		body: [
-			'<strong>gitlab-mcp-server</strong> is a <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server, written in Go, that lets an AI assistant work your GitLab for you: review merge requests, triage pipelines, manage issues, draft releases. It covers the REST v4 and GraphQL APIs and runs against GitLab.com or any self-hosted instance, Community or Enterprise Edition.',
+			'<strong>GitLab MCP Server</strong> is a <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server, written in Go, that lets an AI assistant work your GitLab for you: review merge requests, triage pipelines, manage issues, draft releases. It covers the REST v4 and GraphQL APIs and runs against GitLab.com or any self-hosted instance, Community or Enterprise Edition.',
 			"You talk to your assistant, not to the tools. One canonical action catalog is projected into three tool surfaces, so the same operations fit a low-token client, a domain-tool client, or one tool per operation — and the assistant picks arguments from typed schemas, not from prose.",
 			"It ships as one static binary (or a container) for Linux, macOS and Windows, speaking stdio for a local client or HTTP for a shared, multi-user deployment.",
 		],
@@ -201,7 +201,7 @@ export const en: HomeContent = {
 };
 
 export const es: HomeContent = {
-	statsLabel: "gitlab-mcp-server de un vistazo",
+	statsLabel: "GitLab MCP Server de un vistazo",
 	statLabels: {
 		dynamic: "tools en la superficie dinámica por defecto",
 		tools: "tools individuales en el tier más amplio",
@@ -217,7 +217,7 @@ export const es: HomeContent = {
 	what: {
 		title: "Qué es",
 		body: [
-			'<strong>gitlab-mcp-server</strong> es un servidor <a href="https://modelcontextprotocol.io">Model Context Protocol</a>, escrito en Go, que permite a un asistente de IA trabajar tu GitLab por ti: revisar merge requests, triar pipelines, gestionar issues, redactar releases. Cubre las APIs REST v4 y GraphQL y funciona contra GitLab.com o cualquier instancia autoalojada, Community o Enterprise Edition.',
+			'<strong>GitLab MCP Server</strong> es un servidor <a href="https://modelcontextprotocol.io">Model Context Protocol</a>, escrito en Go, que permite a un asistente de IA trabajar tu GitLab por ti: revisar merge requests, triar pipelines, gestionar issues, redactar releases. Cubre las APIs REST v4 y GraphQL y funciona contra GitLab.com o cualquier instancia autoalojada, Community o Enterprise Edition.',
 			"Tú hablas con tu asistente, no con las herramientas. Un único catálogo canónico de acciones se proyecta en tres superficies de tools, de modo que las mismas operaciones sirven a un cliente de contexto reducido, a uno de tools por dominio o a uno con una tool por operación — y el asistente toma los argumentos de esquemas tipados, no de prosa.",
 			"Se distribuye como un binario estático (o un contenedor) para Linux, macOS y Windows, hablando stdio para un cliente local o HTTP para un despliegue compartido multiusuario.",
 		],

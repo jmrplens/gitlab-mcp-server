@@ -85,7 +85,7 @@ const sourceCodeId = `${repositoryUrl}#source-code`;
 const siteDescription =
 	"Open source Model Context Protocol server for GitLab, with dynamic, meta-tool, and individual tool surfaces for AI assistants.";
 const socialImageAlt =
-	"gitlab-mcp-server — GitLab for your AI assistant: one action catalog, three MCP tool surfaces";
+	"GitLab MCP Server — GitLab for your AI assistant: one action catalog, three MCP tool surfaces";
 const socialImage = {
 	"@type": "ImageObject",
 	url: socialImageUrl,
@@ -387,6 +387,9 @@ export default defineConfig({
 				// palette paints the mark and the brand SVG has one copy rather
 				// than one per locale.
 				Hero: "./src/components/Hero.astro",
+				// Renders the frontmatter chip row under the page title, so the
+				// chips stay page metadata instead of body markdown.
+				PageTitle: "./src/components/PageTitle.astro",
 			},
 			social: [
 				{
@@ -779,6 +782,7 @@ export default defineConfig({
 				"./src/styles/sidebar.css",
 				"./src/styles/splash-menu.css",
 				"./src/styles/home.css",
+				"./src/styles/page-chips.css",
 				"./src/styles/custom.css",
 			],
 		}),

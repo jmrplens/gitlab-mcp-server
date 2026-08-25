@@ -1,0 +1,41 @@
+---
+/**
+ * The chip row under a page title: three or four short claims about what the
+ * page covers, so a reader landing from a search result can tell in one
+ * glance whether they are in the right place.
+ *
+ * CHIPS CARRY QUALITIES, NOT COUNTS. "Catalog-first" is a chip; "1065 tools"
+ * is not — a number typed here would be a second copy of something
+ * src/data/stats.json already knows, and re-creating that drift is the exact
+ * thing this redesign removes. Qualitative chips also almost never need
+ * touching.
+ *
+ * A chip with an `href` is a link and takes the accent ring; one without is
+ * a plain label. Two states, because two is what the content needs.
+ */
+interface Chip {
+	text: string;
+	href?: string;
+}
+
+const chips = (Astro.locals.starlightRoute.entry.data as { chips?: Chip[] })
+	.chips;
+---
+
+{
+	chips && chips.length > 0 && (
+		<ul class="page-chips" data-page-chips>
+			{chips.map((chip) => (
+				<li>
+					{chip.href ? (
+						<a class="page-chip page-chip-link" href={chip.href}>
+							{chip.text}
+						</a>
+					) : (
+						<span class="page-chip">{chip.text}</span>
+					)}
+				</li>
+			))}
+		</ul>
+	)
+}

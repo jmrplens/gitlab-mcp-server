@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="gitlab-mcp-server — GitLab for your AI assistant">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="GitLab MCP Server — GitLab for your AI assistant">
   <rect width="1200" height="630" fill="#0d1117"/>
   <rect x="0.5" y="0.5" width="1199" height="629" fill="none" stroke="#21262d"/>
   <g transform="translate(444,88) scale(4.875)">
@@ -10,7 +10,7 @@
   <circle cx="49.5" cy="50" r="3.5" fill="#fc8a3d"/>
   <circle cx="14" cy="32" r="5" fill="#d6c9ff"/>
   </g>
-  <text x="600" y="470" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-weight="bold" font-size="64" fill="#e6edf3">gitlab-mcp-server</text>
+  <text x="600" y="470" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-weight="bold" font-size="64" fill="#e6edf3">GitLab MCP Server</text>
   <text x="600" y="524" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="27" fill="#8b949e">GitLab for your AI assistant — one catalog, three MCP surfaces</text>
   <text x="600" y="574" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-size="21" fill="#a78bfa">jmrplens.github.io/gitlab-mcp-server</text>
 </svg>

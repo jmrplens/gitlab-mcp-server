@@ -227,6 +227,16 @@ for (const [name, p] of Object.entries(PALETTES)) {
 	// under WCAG 1.4.11 rather than decoration.
 	check(name, "plain chip text on page", p["--gm-chip-ink"], bg, 4.5);
 	check(name, "plain chip border on page", p["--gm-chip-line"], bg, 3);
+	check(name, "link chip text on page", p["--gm-chip-link-ink"], bg, 4.5);
+	check(name, "link chip border on page", p["--gm-chip-link-line"], bg, 3);
+	// Hovering fills the pill, so the text is checked against that ground too.
+	check(
+		name,
+		"link chip text on its hover fill",
+		p["--gm-chip-link-ink"],
+		p["--gm-chip-link-fill"],
+		4.5,
+	);
 	// Edition (tier) chips: the ink sits on the chip's own fill, the border
 	// on the page around it.
 	check(

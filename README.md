@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="gitlab-mcp-server — GitLab for your AI assistant: one action catalog, three MCP tool surfaces" src=".github/brand/banner.webp" width="100%">
+  <img alt="GitLab MCP Server — GitLab for your AI assistant: one action catalog, three MCP tool surfaces" src=".github/brand/banner.webp" width="100%">
 </p>
 
 # GitLab MCP Server
