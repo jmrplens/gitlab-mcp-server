@@ -202,6 +202,59 @@ func TestSummarizePipelineStatusPrompt_Success(t *testing.T) {
 	}
 }
 
+// TestSummarizePipelineStatusPrompt_SubscriptionHint verifies the prompt
+// only suggests subscribing while the pipeline can still change on its own.
+//
+// The settled statuses — including "manual" and "scheduled", which wait on
+// something outside CI — must not carry the hint: a subscription there
+// would watch a resource that cannot move until a human or a clock acts,
+// which is the judgement the polling cadence already encodes.
+func TestSummarizePipelineStatusPrompt_SubscriptionHint(t *testing.T) {
+	tests := []struct {
+		status   string
+		wantHint bool
+	}{
+		{"running", true},
+		{"pending", true},
+		{"created", true},
+		{"waiting_for_resource", true},
+		{"success", false},
+		{"failed", false},
+		{"canceled", false},
+		{"skipped", false},
+		{"manual", false},
+		{"scheduled", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.status, func(t *testing.T) {
+			session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/api/v4/projects/42/pipelines/latest":
+					respondJSON(w, http.StatusOK,
+						`{"id":100,"iid":10,"status":"`+tt.status+`","ref":"main","sha":"abc12345def","web_url":"https://gitlab.example.com/pipelines/100","source":"push"}`)
+				case "/api/v4/projects/42/pipelines/100/jobs":
+					respondJSON(w, http.StatusOK, `[{"id":201,"name":"lint","stage":"test","status":"success"}]`)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+
+			result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
+				Name:      "summarize_pipeline_status",
+				Arguments: map[string]string{"project_id": "42"},
+			})
+			if err != nil {
+				t.Fatalf(fmtUnexpectedErr, err)
+			}
+			text := result.Messages[0].Content.(*mcp.TextContent).Text
+			got := strings.Contains(text, "resource subscriptions")
+			if got != tt.wantHint {
+				t.Errorf("status %q: subscription hint present = %v, want %v", tt.status, got, tt.wantHint)
+			}
+		})
+	}
+}
+
 // TestSuggestMRReviewersPrompt_Success verifies that the suggest_mr_reviewers
 // prompt includes active members (excluding the MR author and blocked users)
 // as reviewer candidates.

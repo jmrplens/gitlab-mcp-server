@@ -217,6 +217,8 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
   --json-response
 ```
 
+En modo sin estado la petición legada `resources/subscribe` se rechaza con un error explicativo — cada POST recibe su propia sesión que se cierra con la respuesta, así que una suscripción aceptada nunca podría notificarse; los clientes con protocolo 2026-07-28 conservan las [suscripciones a recursos](/gitlab-mcp-server/es/capabilities/subscriptions/) mediante `subscriptions/listen`, que mantiene la petición abierta.
+
 ### Modo con estado heredado
 
 `--stateless=false` restaura el transporte basado en sesiones: se emite `Mcp-Session-Id` en `initialize`, GET abre el flujo SSE independiente, DELETE termina la sesión y `--session-timeout` gobierna el tiempo de vida en reposo. Es un modo de compatibilidad para clientes que aún no negocian el protocolo `2026-07-28` (negocian `2025-11-25` o anterior y usan elicitación síncrona), el servidor registra un aviso al arrancar cuando está activo, y la intención es retirarlo cuando los ecosistemas de clientes hayan migrado.

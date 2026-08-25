@@ -649,6 +649,11 @@ export default defineConfig({
 							translations: { es: "Autocompletado" },
 						},
 						{
+							slug: "capabilities/subscriptions",
+							label: "Subscriptions",
+							translations: { es: "Suscripciones" },
+						},
+						{
 							slug: "capabilities/progress",
 							label: "Progress",
 							translations: { es: "Progreso" },

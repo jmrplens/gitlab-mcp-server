@@ -113,7 +113,7 @@ graph TD
 4. **Meta-tools** group catalog actions into 32 base tools (48 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit) (via ADR-0005)
 5. **Resources** register read-only data via `AddResource()` / `AddResourceTemplate()`
 6. **Prompts** register AI-optimized interactions via `AddPrompt()`
-7. **Capabilities** provide completions, progress, and elicitation
+7. **Capabilities** provide completions, progress, elicitation, and resource subscriptions
 8. **Server** runs over stdio (default) or HTTP (`--http`)
 
 See [Architecture Overview](../concepts/architecture.md) for detailed diagrams and component descriptions.

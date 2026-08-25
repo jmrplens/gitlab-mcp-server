@@ -58,14 +58,15 @@ In HTTP mode, a single process serves all clients. The base process uses ~50 MB 
 
 ### CPU Usage
 
-CPU usage depends on request throughput, not pool size:
+CPU usage depends on request throughput and active resource
+subscriptions, not pool size:
 
-| Scenario                        | CPU Impact                                |
-| ------------------------------- | ----------------------------------------- |
-| Idle pool entries               | Zero — no goroutines, no timers           |
-| Active MCP session (per client) | ~2 goroutines (read + write on transport) |
-| Tool execution                  | 1 goroutine per concurrent tool call      |
-| GitLab API calls                | Blocked on network I/O, minimal CPU       |
+| Scenario                        | CPU Impact                                                                       |
+| ------------------------------- | -------------------------------------------------------------------------------- |
+| Idle pool entries               | Zero — unless a still-connected session holds resource subscriptions (see below) |
+| Active MCP session (per client) | ~2 goroutines (read + write on transport)                                        |
+| Tool execution                  | 1 goroutine per concurrent tool call                                             |
+| GitLab API calls                | Blocked on network I/O, minimal CPU                                              |
 
 100 active sessions ≈ 200 goroutines — negligible for the Go runtime.
 
@@ -78,19 +79,42 @@ CPU usage depends on request throughput, not pool size:
 | Per active MCP session           | ~2         |
 | Per concurrent tool call         | 1          |
 
-A server with 100 active sessions and 10 concurrent tool calls: ~220 goroutines total.
+| Per watched URI (subscriptions to the same URI share one watcher) | 1, max 10 per server |
+
+A server with 100 active sessions, 10 concurrent tool calls, and 10 watched URIs: ~230 goroutines total.
+
+### Resource Subscription Watchers
+
+On `CAPABILITY_SURFACE=full` (the default), a session that subscribes to a
+resource ([subscriptions reference](../reference/capabilities/subscriptions.md))
+starts — or joins — a watcher goroutine that polls GitLab in the background;
+subscriptions to the same URI share one watcher, so goroutines count per
+distinct watched URI — the one
+kind of work this server performs without a request in flight:
+
+- Up to **10 watchers per server** (per token+URL pool entry in HTTP mode),
+  each one GitLab read per tick at an adaptive cadence: 5s while the
+  resource is busy, 15s default, 60s settled, 10min once lease-demoted.
+- Worst case **120 requests/minute per token** (10 watchers at the 5s
+  floor), counted against that token's own GitLab rate limit.
+- Watchers never outlive their subscribers: they stop when the last
+  subscribing session disconnects, on a 401/403/404, at the 24h lifetime
+  cap, or when evicted at the 10-watcher cap. A pool entry with **zero
+  connected sessions runs zero watchers** — the non-zero idle case is a
+  connected-but-quiet session that holds subscriptions, which demote to a
+  10-minute poll after 30 minutes without traffic.
 
 ## What Counts as a "Connected Client"
 
 Understanding the terminology is important for capacity planning:
 
-| Term                  | Definition                                                           | Resource Impact                  |
-| --------------------- | -------------------------------------------------------------------- | -------------------------------- |
-| **Configured client** | User has the MCP server in their IDE config but hasn't sent requests | Zero — no session, no pool entry |
-| **Connected client**  | Client has sent a POST and received a `Mcp-Session-Id`               | 1 session (~2 goroutines)        |
-| **Active client**     | Connected client currently executing tool calls                      | Session + tool goroutines        |
-| **Idle client**       | Connected but no recent requests                                     | Session goroutines only          |
-| **Unique token**      | Distinct GitLab PAT in the pool                                      | 1 pool entry (~130 KB)           |
+| Term                  | Definition                                                           | Resource Impact                                                                |
+| --------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **Configured client** | User has the MCP server in their IDE config but hasn't sent requests | Zero — no session, no pool entry                                               |
+| **Connected client**  | Client has sent a POST and received a `Mcp-Session-Id`               | 1 session (~2 goroutines)                                                      |
+| **Active client**     | Connected client currently executing tool calls                      | Session + tool goroutines                                                      |
+| **Idle client**       | Connected but no recent requests                                     | Session goroutines, plus up to 10 watcher goroutines if it holds subscriptions |
+| **Unique token**      | Distinct GitLab PAT in the pool                                      | 1 pool entry (~130 KB)                                                         |
 
 **Key insight**: Multiple sessions from the same token share one pool entry. A user with 3 IDE windows using the same token = 3 sessions, 1 pool entry.
 

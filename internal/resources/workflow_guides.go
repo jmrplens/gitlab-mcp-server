@@ -237,6 +237,14 @@ BREAKING CHANGE: /auth/login is now /api/v2/auth/login
 4. Check variables: ` + "`gitlab_ci_variable_list`" + ` for missing configuration.
 5. Retry the job: ` + "`gitlab_job_retry`" + ` for transient failures.
 
+## Watching Instead of Polling
+If your client supports MCP resource subscriptions (resources.subscribe —
+or subscriptions/listen from protocol 2026-07-28, the only form stateless
+HTTP honors), subscribe to ` + "`gitlab://project/{project_id}/pipelines/latest`" + ` (or
+` + "`gitlab://project/{project_id}/pipeline/{pipeline_id}`" + ` for a specific
+pipeline) instead of re-checking status in a loop — the server polls GitLab
+for you and sends a resources/updated notification when the pipeline changes.
+
 ## Prevention
 - Pin dependency versions in lock files.
 - Use caching for build dependencies.

@@ -14,16 +14,16 @@ authoritative and edit the source, not the Markdown.
 
 > **Diátaxis type**: Reference · **Audience**: 👤🔧 All users & integrators
 
-| Reference                              | Covers                                                                             |
-| -------------------------------------- | ---------------------------------------------------------------------------------- |
-| [Configuration](configuration.md)      | Transport modes, `.env` setup, and how settings are loaded                         |
-| [Environment Variables](env.md)        | Every environment variable with defaults and descriptions                          |
-| [CLI Reference](cli.md)                | All command-line flags with usage examples                                         |
-| [Output Format](output-format.md)      | How responses are structured: Markdown + JSON, annotations, links, next-step hints |
-| [Tools](tools/README.md)               | Per-domain tool documentation across every catalog group                           |
-| [Resources](resources.md)              | MCP resources and URI templates, including the surface-aware tool manifest         |
-| [Prompts](prompts.md)                  | Every prompt with its arguments and output format                                  |
-| [Capabilities](capabilities/README.md) | The MCP capabilities (progress, completions, elicitation) and icons                |
+| Reference                              | Covers                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------------------------------- |
+| [Configuration](configuration.md)      | Transport modes, `.env` setup, and how settings are loaded                                  |
+| [Environment Variables](env.md)        | Every environment variable with defaults and descriptions                                   |
+| [CLI Reference](cli.md)                | All command-line flags with usage examples                                                  |
+| [Output Format](output-format.md)      | How responses are structured: Markdown + JSON, annotations, links, next-step hints          |
+| [Tools](tools/README.md)               | Per-domain tool documentation across every catalog group                                    |
+| [Resources](resources.md)              | MCP resources and URI templates, including the surface-aware tool manifest                  |
+| [Prompts](prompts.md)                  | Every prompt with its arguments and output format                                           |
+| [Capabilities](capabilities/README.md) | The MCP capabilities (progress, completions, elicitation, resource subscriptions) and icons |
 
 **Looking for something else?**
 [Guides](../guides/README.md) for step-by-step tasks ·

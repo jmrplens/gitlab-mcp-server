@@ -1,13 +1,13 @@
 # MCP Capabilities
 
-Detailed documentation for the **3 MCP capabilities** implemented by gitlab-mcp-server.
+Detailed documentation for the **4 MCP capabilities** implemented by gitlab-mcp-server.
 
 > **Diátaxis type**: Reference
 > **Audience**: MCP client developers, contributors, integrators
 
 ## What Are Capabilities?
 
-Capabilities are protocol-level features negotiated during the MCP `initialize` handshake. They determine what the server and client can do beyond basic tool calls — progress updates, autocomplete, and interactive user input.
+Capabilities are protocol-level features negotiated during the MCP `initialize` handshake. They determine what the server and client can do beyond basic tool calls — progress updates, autocomplete, resource subscriptions, and interactive user input.
 
 ## Server Capabilities
 
@@ -15,8 +15,9 @@ Declared by the server and consumed by connected MCP clients.
 
 | # | Capability | Package | Purpose |
 | --: | ---------- | ------- | ------- |
-| 2 | [Progress](progress.md) | `internal/progress/` | Step-by-step progress notifications |
-| 3 | [Completions](completions.md) | `internal/completions/` | Autocomplete for prompt arguments and resource URIs |
+| 1 | [Progress](progress.md) | `internal/progress/` | Step-by-step progress notifications |
+| 2 | [Completions](completions.md) | `internal/completions/` | Autocomplete for prompt arguments and resource URIs |
+| 3 | [Subscriptions](subscriptions.md) | `internal/subscriptions/` | Polled `resources/updated` notifications for 26 kinds of resource |
 
 ## Client Capabilities
 
@@ -24,7 +25,7 @@ Provided by the MCP client and consumed by the server at tool execution time.
 
 | # | Capability | Package | Purpose |
 | --: | ---------- | ------- | ------- |
-| 6 | [Elicitation](elicitation.md) | `internal/elicitation/` | Interactive user input forms (4 tools) |
+| 4 | [Elicitation](elicitation.md) | `internal/elicitation/` | Interactive user input forms (4 tools) |
 
 ## Capability Declaration
 
@@ -39,9 +40,15 @@ server := mcp.NewServer(
     &mcp.ServerOptions{
         CompletionHandler:           completionHandler.Complete,
         ProgressNotificationHandler: progressHandler,
+        SubscribeHandler:            subscribeHandler,
+        UnsubscribeHandler:          unsubscribeHandler,
     },
 )
 ```
+
+Setting the subscribe handlers is what turns `Resources.Subscribe` on — the
+SDK derives it. They are left nil on `CAPABILITY_SURFACE=minimal`, which
+registers no GitLab resources to subscribe to.
 
 `CAPABILITY_SURFACE=full` also advertises `Prompts` with `ListChanged: true`
 and registers the full prompt/resource catalog. `CAPABILITY_SURFACE=minimal`

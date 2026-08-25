@@ -121,6 +121,34 @@ See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode) for the fu
 - **Restart the server**: After changing configuration, restart the MCP server from the IDE. In VS Code: `Ctrl+Shift+P` → **MCP: Restart Server**
 - **Test connectivity**: If the server starts but tools fail, the GitLab URL or token may be wrong. Check the [Connection and Authentication](#connection-and-authentication) section above
 
+## Resource Subscriptions
+
+**Subscribed but no notifications arrive.** Check, in order: the server must
+run `CAPABILITY_SURFACE=full` (the default — `minimal` does not advertise
+`resources.subscribe`); the URI must be a single object, not a collection
+(`gitlab://project/42/pipeline/99` works, `gitlab://project/42/issues` is
+refused); and in HTTP mode with the default `--stateless=true`, the legacy
+`resources/subscribe` is refused outright — only `subscriptions/listen`
+(protocol 2026-07-28) works there. On protocol 2026-07-28 a refusal may
+never reach the client (the Go SDK fires the listen request without awaiting
+its response), so a subscription that "succeeded" but never fires is often
+one that was refused.
+
+**Notifications arrive slowly.** Two different slowdowns look alike from
+outside. A settled resource — a finished pipeline, a closed issue — is
+polled at 60 seconds by design, four times the 15-second base. Separately,
+the watch may have lease-demoted: 30 minutes without any request on the
+session drops it to a 10-minute poll.
+Any tool call or resource read on that session restores full speed. The
+notification's `_meta` (`io.github.jmrplens/watch`) reports the current
+state and cadence.
+
+**Watch stopped by itself.** A 401/403/404 on the resource, the 24-hour
+lifetime cap, or eviction at the 10-watcher cap all stop a watch; on
+protocol 2026-07-28 the open `subscriptions/listen` request completes when
+that happens. Re-subscribe to start fresh. Full details:
+[subscriptions reference](../reference/capabilities/subscriptions.md).
+
 ## Output Format
 
 | Symptom                                           | Cause                                                       | Solution                                                                                                                                                                                                |

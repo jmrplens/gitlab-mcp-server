@@ -416,13 +416,14 @@ See [Dynamic Toolset](dynamic-tools.md) for configuration, examples, safety beha
 
 ## Capabilities
 
-3 MCP capabilities extend the server beyond basic tool/resource/prompt handling:
+4 MCP capabilities extend the server beyond basic tool/resource/prompt handling:
 
-| Capability  | Package                | MCP Spec                | Description                                           |
-| ----------- | ---------------------- | ----------------------- | ----------------------------------------------------- |
-| Completions | `internal/completions` | Server → Client utility | Autocomplete for 17 argument types plus resource URIs |
-| Progress    | `internal/progress`    | Bidirectional utility   | Progress notifications for multi-step operations      |
-| Elicitation | `internal/elicitation` | Client → Server (User)  | Interactive user prompts and confirmation dialogs     |
+| Capability    | Package                  | MCP Spec                | Description                                                                            |
+| ------------- | ------------------------ | ----------------------- | -------------------------------------------------------------------------------------- |
+| Completions   | `internal/completions`   | Server → Client utility | Autocomplete for 17 argument types plus resource URIs                                  |
+| Progress      | `internal/progress`      | Bidirectional utility   | Progress notifications for multi-step operations                                       |
+| Elicitation   | `internal/elicitation`   | Client → Server (User)  | Interactive user prompts and confirmation dialogs                                      |
+| Subscriptions | `internal/subscriptions` | Client → Server         | `resources/updated` notifications for 26 resource kinds, honored by polling (ADR-0015) |
 
 See [Capabilities Overview](../reference/capabilities/README.md) for detailed documentation.
 
@@ -652,7 +653,7 @@ All list endpoints support pagination via `PaginationInput` (page, per_page) and
 - [Resource Consumption](resource-consumption.md) — memory, CPU, and capacity planning
 - [Configuration](../reference/configuration.md) — environment variables, CLI flags, and setup
 - [Development](../development/development.md) — building, testing, and contributing
-- [Capabilities](../reference/capabilities/README.md) — all 3 capabilities in detail
+- [Capabilities](../reference/capabilities/README.md) — all 4 capabilities in detail
 - [Tools Overview](../reference/tools/README.md) — tool registration modes and inventory
 
 ### External References

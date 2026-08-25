@@ -29,33 +29,33 @@ All measurements are against the current source tree. The catalog is built in-me
 
 | Configuration                | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ---------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default) | Free/CE  |             2 |               851 | n/a                 |              1,504 |         7,685 |        9,189 |
+| `dynamic` / `full` (default) | Free/CE  |             2 |               851 | n/a                 |              1,504 |         7,700 |        9,204 |
 | `dynamic` / `minimal`        | Free/CE  |             2 |               851 | n/a                 |              1,504 |           174 |        1,678 |
-| `meta` / `full` (opaque)     | Free/CE  |            33 |               851 | `opaque`            |            124,502 |         7,685 |      132,187 |
+| `meta` / `full` (opaque)     | Free/CE  |            33 |               851 | `opaque`            |            124,502 |         7,700 |      132,202 |
 | `meta` / `minimal` (opaque)  | Free/CE  |            33 |               851 | `opaque`            |            124,502 |           174 |      124,676 |
-| `meta` / `full` (compact)    | Free/CE  |            33 |               851 | `compact`           |            190,042 |         7,685 |      197,727 |
+| `meta` / `full` (compact)    | Free/CE  |            33 |               851 | `compact`           |            190,042 |         7,700 |      197,742 |
 | `meta` / `minimal` (compact) | Free/CE  |            33 |               851 | `compact`           |            190,042 |           174 |      190,216 |
-| `meta` / `full` (full)       | Free/CE  |            33 |               851 | `full`              |            277,574 |         7,685 |      285,259 |
+| `meta` / `full` (full)       | Free/CE  |            33 |               851 | `full`              |            277,574 |         7,700 |      285,274 |
 | `meta` / `minimal` (full)    | Free/CE  |            33 |               851 | `full`              |            277,574 |           174 |      277,748 |
-| `individual` / `full`        | Free/CE  |           847 |               847 | n/a                 |            494,154 |         7,685 |      501,839 |
-| `dynamic` / `full` (default) | Premium  |             2 |             1,003 | n/a                 |              1,504 |         7,685 |        9,189 |
+| `individual` / `full`        | Free/CE  |           847 |               847 | n/a                 |            494,154 |         7,700 |      501,854 |
+| `dynamic` / `full` (default) | Premium  |             2 |             1,003 | n/a                 |              1,504 |         7,700 |        9,204 |
 | `dynamic` / `minimal`        | Premium  |             2 |             1,003 | n/a                 |              1,504 |           174 |        1,678 |
-| `meta` / `full` (opaque)     | Premium  |            39 |             1,003 | `opaque`            |            143,747 |         7,685 |      151,432 |
+| `meta` / `full` (opaque)     | Premium  |            39 |             1,003 | `opaque`            |            143,747 |         7,700 |      151,447 |
 | `meta` / `minimal` (opaque)  | Premium  |            39 |             1,003 | `opaque`            |            143,747 |           174 |      143,921 |
-| `meta` / `full` (compact)    | Premium  |            39 |             1,003 | `compact`           |            220,699 |         7,685 |      228,384 |
+| `meta` / `full` (compact)    | Premium  |            39 |             1,003 | `compact`           |            220,699 |         7,700 |      228,399 |
 | `meta` / `minimal` (compact) | Premium  |            39 |             1,003 | `compact`           |            220,699 |           174 |      220,873 |
-| `meta` / `full` (full)       | Premium  |            39 |             1,003 | `full`              |            322,434 |         7,685 |      330,119 |
+| `meta` / `full` (full)       | Premium  |            39 |             1,003 | `full`              |            322,434 |         7,700 |      330,134 |
 | `meta` / `minimal` (full)    | Premium  |            39 |             1,003 | `full`              |            322,434 |           174 |      322,608 |
-| `individual` / `full`        | Premium  |           999 |               999 | n/a                 |            592,564 |         7,685 |      600,249 |
-| `dynamic` / `full` (default) | Ultimate |             2 |             1,069 | n/a                 |              1,504 |         7,685 |        9,189 |
+| `individual` / `full`        | Premium  |           999 |               999 | n/a                 |            592,564 |         7,700 |      600,264 |
+| `dynamic` / `full` (default) | Ultimate |             2 |             1,069 | n/a                 |              1,504 |         7,700 |        9,204 |
 | `dynamic` / `minimal`        | Ultimate |             2 |             1,069 | n/a                 |              1,504 |           174 |        1,678 |
-| `meta` / `full` (opaque)     | Ultimate |            50 |             1,069 | `opaque`            |            155,646 |         7,685 |      163,331 |
+| `meta` / `full` (opaque)     | Ultimate |            50 |             1,069 | `opaque`            |            155,646 |         7,700 |      163,346 |
 | `meta` / `minimal` (opaque)  | Ultimate |            50 |             1,069 | `opaque`            |            155,646 |           174 |      155,820 |
-| `meta` / `full` (compact)    | Ultimate |            50 |             1,069 | `compact`           |            237,019 |         7,685 |      244,704 |
+| `meta` / `full` (compact)    | Ultimate |            50 |             1,069 | `compact`           |            237,019 |         7,700 |      244,719 |
 | `meta` / `minimal` (compact) | Ultimate |            50 |             1,069 | `compact`           |            237,019 |           174 |      237,193 |
-| `meta` / `full` (full)       | Ultimate |            50 |             1,069 | `full`              |            343,578 |         7,685 |      351,263 |
+| `meta` / `full` (full)       | Ultimate |            50 |             1,069 | `full`              |            343,578 |         7,700 |      351,278 |
 | `meta` / `minimal` (full)    | Ultimate |            50 |             1,069 | `full`              |            343,578 |           174 |      343,752 |
-| `individual` / `full`        | Ultimate |         1,065 |             1,065 | n/a                 |            621,551 |         7,685 |      629,236 |
+| `individual` / `full`        | Ultimate |         1,065 |             1,065 | n/a                 |            621,551 |         7,700 |      629,251 |
 
 ## Interpretation guide
 

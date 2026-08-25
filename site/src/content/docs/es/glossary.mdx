@@ -87,7 +87,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#capability-surface",
             "name": "Superficie de capacidades",
-            "description": "Qué recursos y prompts MCP se registran, seleccionado con CAPABILITY_SURFACE. full los registra todos; minimal registra solo el manifiesto gitlab://tools, recortando el contexto compartido de arranque de unos 31.800 tokens a unos 1.100 sin perder el descubrimiento de esquemas por acción.",
+            "description": "Qué recursos y prompts MCP se registran, seleccionado con CAPABILITY_SURFACE. full los registra todos y anuncia las suscripciones a recursos; minimal registra solo el manifiesto gitlab://tools, retirando las suscripciones junto con los recursos a los que aplican, recortando el contexto compartido de arranque de unos 31.800 tokens a unos 1.100 sin perder el descubrimiento de esquemas por acción.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/es/glossary/#termset"
           },
           {
@@ -181,7 +181,7 @@ La **elicitación** es una capacidad MCP que permite al servidor pedir datos al 
 
 ## Superficie de capacidades
 
-La **superficie de capacidades** decide qué recursos y prompts MCP se registran, y se selecciona con `CAPABILITY_SURFACE`. `full` los registra todos; `minimal` registra solo el manifiesto `gitlab://tools`, recortando el contexto compartido de arranque de unos 31.800 tokens a unos 1.100 sin perder el descubrimiento de esquemas por acción.
+La **superficie de capacidades** decide qué recursos y prompts MCP se registran, y se selecciona con `CAPABILITY_SURFACE`. `full` los registra todos y anuncia las [suscripciones a recursos](/gitlab-mcp-server/es/capabilities/subscriptions/); `minimal` registra solo el manifiesto `gitlab://tools` — retirando las suscripciones junto con los recursos a los que aplican — recortando el contexto compartido de arranque de unos 31.800 tokens a unos 1.100 sin perder el descubrimiento de esquemas por acción.
 
 ## Recurso de manifiesto de herramientas
 

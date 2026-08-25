@@ -459,7 +459,17 @@ func wrapErr(msg string, err error) error {
 // Tool-manifest, workflow-guide, workspace-root, and meta/dynamic
 // schema resources are registered separately by their dedicated
 // Register* helpers (see doc.go for the full family breakdown).
-func Register(server *mcp.Server, client *gitlabclient.Client) {
+// Register also returns a [HandlerIndex] keyed by URI template, so a caller
+// can re-read a resource through the same handler the MCP router dispatches
+// to. Callers that only need registration can ignore it.
+func Register(server *mcp.Server, client *gitlabclient.Client) HandlerIndex {
+	rec := &recorder{server: server, index: make(HandlerIndex)}
+	registerAll(rec, client)
+	return rec.index
+}
+
+// registerAll performs every registration against a registrar.
+func registerAll(server registrar, client *gitlabclient.Client) {
 	registerCurrentUserResource(server, client)
 	registerGroupsResource(server, client)
 	registerGroupResource(server, client)
@@ -502,7 +512,7 @@ func Register(server *mcp.Server, client *gitlabclient.Client) {
 
 // registerCurrentUserResource registers the "gitlab://user/current" static
 // resource that returns the authenticated user's profile from the GitLab Users API.
-func registerCurrentUserResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerCurrentUserResource(server registrar, client *gitlabclient.Client) {
 	server.AddResource(&mcp.Resource{
 		URI:         "gitlab://user/current",
 		Name:        "current_user",
@@ -531,7 +541,7 @@ func registerCurrentUserResource(server *mcp.Server, client *gitlabclient.Client
 
 // registerGroupsResource registers the "gitlab://groups" static resource
 // that lists all GitLab groups accessible to the authenticated user.
-func registerGroupsResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerGroupsResource(server registrar, client *gitlabclient.Client) {
 	server.AddResource(&mcp.Resource{
 		URI:         "gitlab://groups",
 		Name:        "groups",
@@ -563,7 +573,7 @@ func registerGroupsResource(server *mcp.Server, client *gitlabclient.Client) {
 
 // registerProjectResource registers the "gitlab://project/{project_id}" template
 // resource that returns basic metadata for a GitLab project.
-func registerProjectResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerProjectResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}",
 		Name:        "project",
@@ -597,7 +607,7 @@ func registerProjectResource(server *mcp.Server, client *gitlabclient.Client) {
 // registerProjectMembersResource registers the "gitlab://project/{project_id}/members"
 // template resource that lists all members of a GitLab project, including
 // inherited members from parent groups.
-func registerProjectMembersResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerProjectMembersResource(server registrar, client *gitlabclient.Client) {
 	registerMembersResource(server, &mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/members",
 		Name:        "project_members",
@@ -619,13 +629,13 @@ func registerProjectMembersResource(server *mcp.Server, client *gitlabclient.Cli
 // registerLatestPipelineResource registers the
 // "gitlab://project/{project_id}/pipelines/latest" template resource that
 // returns the most recent CI/CD pipeline for a GitLab project.
-func registerLatestPipelineResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerLatestPipelineResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/pipelines/latest",
 		Name:        "latest_pipeline",
 		Title:       "Latest Pipeline",
 		MIMEType:    mimeJSON,
-		Description: "Get the most recent CI/CD pipeline for a GitLab project. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL.",
+		Description: "Get the most recent CI/CD pipeline for a GitLab project. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL. Supports resources/subscribe.",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconPipeline,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -645,13 +655,13 @@ func registerLatestPipelineResource(server *mcp.Server, client *gitlabclient.Cli
 // registerPipelineResource registers the
 // "gitlab://project/{project_id}/pipeline/{pipeline_id}" template resource
 // that returns details of a specific CI/CD pipeline by its numeric ID.
-func registerPipelineResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerPipelineResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/pipeline/{pipeline_id}",
 		Name:        "pipeline",
 		Title:       "Pipeline Details",
 		MIMEType:    mimeJSON,
-		Description: "Get details of a specific CI/CD pipeline by its numeric ID. Returns pipeline status, ref, SHA, source, and web URL.",
+		Description: "Get details of a specific CI/CD pipeline by its numeric ID. Returns pipeline status, ref, SHA, source, and web URL. Supports resources/subscribe.",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconPipeline,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -669,7 +679,7 @@ func registerPipelineResource(server *mcp.Server, client *gitlabclient.Client) {
 // registerPipelineJobsResource registers the
 // "gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs" template
 // resource that lists all jobs for a specific CI/CD pipeline.
-func registerPipelineJobsResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerPipelineJobsResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs",
 		Name:        "pipeline_jobs",
@@ -712,7 +722,7 @@ func registerPipelineJobsResource(server *mcp.Server, client *gitlabclient.Clien
 // registerProjectLabelsResource registers the
 // "gitlab://project/{project_id}/labels" template resource that lists all
 // labels defined in a GitLab project.
-func registerProjectLabelsResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerProjectLabelsResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/labels",
 		Name:        "project_labels",
@@ -748,7 +758,7 @@ func registerProjectLabelsResource(server *mcp.Server, client *gitlabclient.Clie
 // registerProjectMilestonesResource registers the
 // "gitlab://project/{project_id}/milestones" template resource that lists
 // all milestones in a GitLab project.
-func registerProjectMilestonesResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerProjectMilestonesResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/milestones",
 		Name:        "project_milestones",
@@ -788,13 +798,13 @@ func registerProjectMilestonesResource(server *mcp.Server, client *gitlabclient.
 // registerMergeRequestResource registers the
 // "gitlab://project/{project_id}/mr/{merge_request_iid}" template resource that
 // returns details of a specific merge request by its project-scoped IID.
-func registerMergeRequestResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerMergeRequestResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/mr/{merge_request_iid}",
 		Name:        "merge_request",
 		Title:       "Merge Request Details",
 		MIMEType:    mimeJSON,
-		Description: "Get details of a specific merge request by its IID (project-scoped ID). Returns title, state, source/target branches, author, merge status, and web URL.",
+		Description: "Get details of a specific merge request by its IID (project-scoped ID). Returns title, state, source/target branches, author, merge status, and web URL. Supports resources/subscribe.",
 		Annotations: toolutil.ResourceDetail,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -832,7 +842,7 @@ func registerMergeRequestResource(server *mcp.Server, client *gitlabclient.Clien
 // registerProjectBranchesResource registers the
 // "gitlab://project/{project_id}/branches" template resource that lists
 // all branches in a GitLab project repository.
-func registerProjectBranchesResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerProjectBranchesResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/branches",
 		Name:        "project_branches",
@@ -866,7 +876,7 @@ func registerProjectBranchesResource(server *mcp.Server, client *gitlabclient.Cl
 
 // registerGroupResource registers the "gitlab://group/{group_id}" template
 // resource that returns details for a specific GitLab group.
-func registerGroupResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerGroupResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}",
 		Name:        "group",
@@ -900,7 +910,7 @@ func registerGroupResource(server *mcp.Server, client *gitlabclient.Client) {
 // registerGroupMembersResource registers the
 // "gitlab://group/{group_id}/members" template resource that lists all
 // members of a GitLab group, including inherited members.
-func registerGroupMembersResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerGroupMembersResource(server registrar, client *gitlabclient.Client) {
 	registerMembersResource(server, &mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/members",
 		Name:        "group_members",
@@ -919,7 +929,7 @@ func registerGroupMembersResource(server *mcp.Server, client *gitlabclient.Clien
 	})
 }
 
-func registerMembersResource(server *mcp.Server, tmpl *mcp.ResourceTemplate, uriPrefix, operation string, list func(context.Context, string) ([]MemberResourceOutput, error)) {
+func registerMembersResource(server registrar, tmpl *mcp.ResourceTemplate, uriPrefix, operation string, list func(context.Context, string) ([]MemberResourceOutput, error)) {
 	tmpl.MIMEType = mimeJSON
 	tmpl.Annotations = toolutil.ResourceList
 	tmpl.Icons = toolutil.IconUser
@@ -939,7 +949,7 @@ func registerMembersResource(server *mcp.Server, tmpl *mcp.ResourceTemplate, uri
 // registerGroupProjectsResource registers the
 // "gitlab://group/{group_id}/projects" template resource that lists all
 // projects within a GitLab group.
-func registerGroupProjectsResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerGroupProjectsResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/projects",
 		Name:        "group_projects",
@@ -976,7 +986,7 @@ func registerGroupProjectsResource(server *mcp.Server, client *gitlabclient.Clie
 // registerProjectIssuesResource registers the
 // "gitlab://project/{project_id}/issues" template resource that lists
 // open issues for a GitLab project.
-func registerProjectIssuesResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerProjectIssuesResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/issues",
 		Name:        "project_issues",
@@ -1008,7 +1018,7 @@ func registerProjectIssuesResource(server *mcp.Server, client *gitlabclient.Clie
 // registerIssueResource registers the
 // "gitlab://project/{project_id}/issue/{issue_iid}" template resource that
 // returns details of a specific issue by its project-scoped IID.
-func registerIssueResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerIssueResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/issue/{issue_iid}",
 		Name:        "issue",
@@ -1032,7 +1042,7 @@ func registerIssueResource(server *mcp.Server, client *gitlabclient.Client) {
 // registerProjectReleasesResource registers the
 // "gitlab://project/{project_id}/releases" template resource that lists
 // all releases for a GitLab project.
-func registerProjectReleasesResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerProjectReleasesResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/releases",
 		Name:        "project_releases",
@@ -1073,7 +1083,7 @@ func registerProjectReleasesResource(server *mcp.Server, client *gitlabclient.Cl
 // registerProjectTagsResource registers the
 // "gitlab://project/{project_id}/tags" template resource that lists all
 // repository tags for a GitLab project.
-func registerProjectTagsResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerProjectTagsResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/tags",
 		Name:        "project_tags",
@@ -1112,7 +1122,7 @@ func registerProjectTagsResource(server *mcp.Server, client *gitlabclient.Client
 // "gitlab://project/{project_id}/commit/{sha}" template resource that returns
 // details for a single commit including message, author/committer, parents
 // and stats.
-func registerCommitResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerCommitResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/commit/{sha}",
 		Name:        "commit",
@@ -1162,7 +1172,7 @@ func registerCommitResource(server *mcp.Server, client *gitlabclient.Client) {
 // returns the textual contents of a repository file. Files larger than
 // fileBlobMaxBytes return metadata with content omitted and truncated=true.
 // Binary content is omitted (only metadata returned).
-func registerFileBlobResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerFileBlobResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/file/{ref}/{+path}",
 		Name:        "file_blob",
@@ -1206,7 +1216,7 @@ func registerFileBlobResource(server *mcp.Server, client *gitlabclient.Client) {
 // registerWikiResource registers the
 // "gitlab://project/{project_id}/wiki/{slug}" template resource that returns
 // a single wiki page by slug.
-func registerWikiResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerWikiResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/wiki/{slug}",
 		Name:        "wiki_page",
@@ -1238,7 +1248,7 @@ func registerWikiResource(server *mcp.Server, client *gitlabclient.Client) {
 // registerMergeRequestNotesResource registers the
 // "gitlab://project/{project_id}/mr/{merge_request_iid}/notes" template resource that
 // returns the flat list of notes (comments) for a merge request.
-func registerMergeRequestNotesResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerMergeRequestNotesResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/mr/{merge_request_iid}/notes",
 		Name:        "merge_request_notes",
@@ -1289,7 +1299,7 @@ func registerMergeRequestNotesResource(server *mcp.Server, client *gitlabclient.
 // "gitlab://project/{project_id}/mr/{merge_request_iid}/discussions" template resource
 // that returns the discussion threads for a merge request, each containing
 // one or more notes.
-func registerMergeRequestDiscussionsResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerMergeRequestDiscussionsResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/mr/{merge_request_iid}/discussions",
 		Name:        "merge_request_discussions",
@@ -1347,7 +1357,7 @@ func registerMergeRequestDiscussionsResource(server *mcp.Server, client *gitlabc
 // registerReleaseResource registers the
 // "gitlab://project/{project_id}/release/{tag_name}" template resource that
 // returns details for a single release identified by its Git tag.
-func registerReleaseResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerReleaseResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/release/{tag_name}",
 		Name:        "release",
@@ -1384,7 +1394,7 @@ func registerReleaseResource(server *mcp.Server, client *gitlabclient.Client) {
 // registerBranchResource registers the
 // "gitlab://project/{project_id}/branch/{branch}" template resource,
 // which returns details for a single repository branch.
-func registerBranchResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerBranchResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/branch/{branch}",
 		Name:        "branch",
@@ -1416,7 +1426,7 @@ func registerBranchResource(server *mcp.Server, client *gitlabclient.Client) {
 // registerTagResource registers the
 // "gitlab://project/{project_id}/tag/{tag_name}" template resource,
 // which returns details for a single Git tag.
-func registerTagResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerTagResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/tag/{tag_name}",
 		Name:        "tag",
@@ -1441,7 +1451,7 @@ func registerTagResource(server *mcp.Server, client *gitlabclient.Client) {
 // "gitlab://project/{project_id}/label/{label_id}" template resource,
 // which returns details for a single project label by numeric ID or
 // label name.
-func registerLabelResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerLabelResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/label/{label_id}",
 		Name:        "label",
@@ -1477,7 +1487,7 @@ func registerLabelResource(server *mcp.Server, client *gitlabclient.Client) {
 // identified by its project-scoped IID. Internally, it lists
 // milestones filtered by IID because the GitLab Milestones API
 // exposes only a list endpoint.
-func registerMilestoneResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerMilestoneResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/milestone/{milestone_iid}",
 		Name:        "milestone",
@@ -1719,7 +1729,7 @@ func extractGroupTwoParts(uri, kind string) (groupID, value string) {
 // "gitlab://project/{project_id}/deployment/{deployment_id}" template
 // resource, which returns details for a single project deployment by
 // numeric ID.
-func registerDeploymentResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerDeploymentResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/deployment/{deployment_id}",
 		Name:        "deployment",
@@ -1759,7 +1769,7 @@ func registerDeploymentResource(server *mcp.Server, client *gitlabclient.Client)
 // "gitlab://project/{project_id}/environment/{environment_id}" template
 // resource, which returns details for a single project environment by
 // numeric ID.
-func registerEnvironmentResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerEnvironmentResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/environment/{environment_id}",
 		Name:        "environment",
@@ -1795,7 +1805,7 @@ func registerEnvironmentResource(server *mcp.Server, client *gitlabclient.Client
 // registerJobResource registers the
 // "gitlab://project/{project_id}/job/{job_id}" template resource, which
 // returns details for a single CI job by numeric ID.
-func registerJobResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerJobResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/job/{job_id}",
 		Name:        "job",
@@ -1834,7 +1844,7 @@ func registerJobResource(server *mcp.Server, client *gitlabclient.Client) {
 // registerSnippetResource registers the "gitlab://snippet/{snippet_id}"
 // template resource, which returns details for a personal (global) snippet
 // by numeric ID.
-func registerSnippetResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerSnippetResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://snippet/{snippet_id}",
 		Name:        "snippet",
@@ -1872,7 +1882,7 @@ func registerSnippetResource(server *mcp.Server, client *gitlabclient.Client) {
 // "gitlab://project/{project_id}/snippet/{snippet_id}" template
 // resource, which returns details for a single project snippet by
 // numeric ID.
-func registerProjectSnippetResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerProjectSnippetResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/snippet/{snippet_id}",
 		Name:        "project_snippet",
@@ -1910,7 +1920,7 @@ func registerProjectSnippetResource(server *mcp.Server, client *gitlabclient.Cli
 // "gitlab://project/{project_id}/feature_flag/{name}" template
 // resource, which returns details for a single project feature flag
 // by name.
-func registerFeatureFlagResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerFeatureFlagResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/feature_flag/{name}",
 		Name:        "feature_flag",
@@ -1935,7 +1945,7 @@ func registerFeatureFlagResource(server *mcp.Server, client *gitlabclient.Client
 // "gitlab://project/{project_id}/deploy_key/{deploy_key_id}" template
 // resource, which returns details for a single project deploy key by
 // numeric ID.
-func registerDeployKeyResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerDeployKeyResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/deploy_key/{deploy_key_id}",
 		Name:        "deploy_key",
@@ -1971,7 +1981,7 @@ func registerDeployKeyResource(server *mcp.Server, client *gitlabclient.Client) 
 // "gitlab://project/{project_id}/board/{board_id}" template resource,
 // which returns details for a single project issue board by numeric
 // ID.
-func registerBoardResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerBoardResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://project/{project_id}/board/{board_id}",
 		Name:        "board",
@@ -2001,7 +2011,7 @@ func registerBoardResource(server *mcp.Server, client *gitlabclient.Client) {
 // registerGroupMilestoneResource registers the
 // "gitlab://group/{group_id}/milestone/{milestone_iid}" template
 // resource, which returns details for a single group milestone by IID.
-func registerGroupMilestoneResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerGroupMilestoneResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/milestone/{milestone_iid}",
 		Name:        "group_milestone",
@@ -2046,7 +2056,7 @@ func registerGroupMilestoneResource(server *mcp.Server, client *gitlabclient.Cli
 // "gitlab://group/{group_id}/label/{label_id}" template resource,
 // which returns details for a single group label by numeric ID or
 // name.
-func registerGroupLabelResource(server *mcp.Server, client *gitlabclient.Client) {
+func registerGroupLabelResource(server registrar, client *gitlabclient.Client) {
 	server.AddResourceTemplate(&mcp.ResourceTemplate{
 		URITemplate: "gitlab://group/{group_id}/label/{label_id}",
 		Name:        "group_label",

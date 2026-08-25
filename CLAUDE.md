@@ -27,11 +27,11 @@
 | MCP Resources             | 45 across dynamic/full, meta/full, and individual/full modes; `gitlab://tools` adapts to the active surface |
 | MCP Prompts               | 37 (12 core + 4 cross-project + 4 team + 5 project-reports + 4 analytics + 4 milestone-label + 2 git-workflow + 2 audit)      |
 | Completion argument types | 17                                                                                                           |
-| MCP Capabilities          | 3 (progress, elicitation, completions)                                             |
+| MCP Capabilities          | 4 (progress, elicitation, completions, resource subscriptions)                     |
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG |
 | Source files (tools)      | 756 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 362 test files under `internal/tools/`                                                                       |
-| Go packages               | 224 total; 176 under `internal/tools/...`                                                                    |
+| Go packages               | 225 total; 176 under `internal/tools/...`                                                                    |
 
 ### Orbit live tests
 
@@ -72,6 +72,7 @@ gitlab-mcp-server/
 │   ├── gitlab/                  # GitLab API client wrapper (client.GL() accessor)
 │   ├── oauth/                   # OAuth HTTP mode: token cache, GitLab verifier, header middleware, RFC 9728 metadata
 │   ├── serverpool/              # HTTP mode: bounded LRU pool of per-token+URL MCP servers (with observability metrics)
+│   ├── subscriptions/          # resources/subscribe: polled watchers, cadence, leases (ADR-0015)
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
 │   ├── tools/                   # Tool orchestration layer + 176 internal/tools packages
@@ -517,6 +518,9 @@ ADRs document key decisions in `docs/development/adr`:
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
+| ADR-0015 | Polled resource subscriptions (supersedes ADR-0010)            | Accepted (26 subscribable kinds, 10 watchers/token, lease demotes rather than stops) |
+| ADR-0016 | No webhook ingestion                                           | Accepted (`Reader` seam unchanged; no inbound HTTP surface added) |
+| ADR-0017 | Pull-safe event sources surveyed and declined                  | Accepted (Events API, ActionCable, ETag probed live; polling stays the only freshness source; revisit triggers recorded) |
 
 ### Modular tools sub-packages (ADR-0004)
 
@@ -565,6 +569,21 @@ Plus enterprise-only routes injected into 3 base meta-tools:
 - `gitlab_project` → push_rule_*, mirror_*, security_settings_*
 - `gitlab_group` → iterations, epics, wikis, protected branches/envs, releases, LDAP, SAML, SSH certs, credentials, analytics, service accounts
 - `gitlab_issue` → iterations
+
+### Resource subscriptions (ADR-0015)
+
+`resources/subscribe` is honored by polling, on `CAPABILITY_SURFACE=full` only. `internal/subscriptions/` owns the watchers and knows nothing about MCP; `cmd/server/subscriptions.go` is the bridge.
+
+- **What is subscribable** — a whitelist of 26 kinds in `kind.go` — single objects plus three single-parent lists (a pipeline's jobs, an MR's discussions and notes) — parsed segment by segment. Open-ended top-level collections are excluded on purpose. Two drift guards round-trip the real resource registry, so a new template must be classified and a renamed one cannot leave a stale decision behind.
+- **Reads go through the registered handler** — `internal/resources.HandlerIndex` captures the same handlers `resources/read` dispatches to, so "the content changed" means "what a client would read changed". `NewHandlerIndex` exists because `mcp.ServerOptions` must be built before `mcp.NewServer` returns.
+- **The session is the subscriber identity** — `Manager[S comparable]` holds a set of subscribers per watcher, not a count, so a duplicate subscribe is idempotent and one session cannot release another's watch. `sessionBridge` passes `*mcp.ServerSession` as that identity, and waits on `ServerSession.Wait()` to call `UnsubscribeAll`: the SDK drops a disconnected session from its subscriber table without ever calling `UnsubscribeHandler`.
+- **A joiner waits for the first read** — the watcher's `ready` channel carries the outcome of the initial read (which is the authorization check), so a second subscriber is never told "subscribed" while the only read anyone attempted is still in flight or has already failed.
+- **Renewal happens after the handler, not before it** — a subscribe request is itself activity, so renewing first would un-demote every watcher a moment before that same request looked for a demoted one to evict, and eviction at the cap could never fire.
+- **The lease demotes, it does not stop** — 30 minutes without traffic drops a watch to a 10-minute poll; any request that reaches the server restores it (`renewOnActivity` middleware). From protocol 2026-07-28 a client may answer `tools/list` or a repeated `resources/read` from its own cache, so those never renew. Only `MaxLifetime` (24h), a 401/403/404, or eviction at the cap stop one without the client acting; `resources/unsubscribe` and session disconnect stop one from the client side.
+- **Stateless HTTP refuses the legacy path** — each stateless POST gets its own session that closes with the response, so `resources/subscribe` is answered with an error rather than accepted and left undeliverable. The capability bit stays on because `subscriptions/listen` does work there.
+- **Ending a watch closes the client's stream** — on protocol 2026-07-28 a subscription is an open `subscriptions/listen` request. `SubscriptionsListenResult` cannot be constructed by application code, so `listenStreams` cancels the SDK handler's context, which makes the SDK emit it. A stream is only closed when every URI it carries has stopped, and never if it also carries list-changed subscriptions.
+
+Do not use `synctest` for tests that need a real HTTP backend: an `httptest` server's goroutines block on I/O, which is not a durable block, so the fake clock never advances and the test hangs until its timeout. The manager's own tests use fakes and synctest; the wiring tests use real time with short intervals injected through `withSubscriptionOptions`.
 
 ---
 

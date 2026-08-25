@@ -8,6 +8,11 @@ This document lists the MCP resources exposed by gitlab-mcp-server. With the def
 
 GitLab data resources and tool manifest resources return `application/json`. Workflow guide resources return `text/markdown`.
 
+Most single-object resources can also be **subscribed to**: the server polls
+them and sends `notifications/resources/updated` when their content changes.
+Collections are deliberately not subscribable — see
+[Resource subscriptions](capabilities/subscriptions.md).
+
 MCP separates fixed resources from URI templates. In default dynamic full mode, `resources/list` exposes 9 fixed URIs: the 4 static resources below and the 5 workflow guides. `resources/templates/list` exposes the remaining 37 URI templates. Registries that only inspect `resources/list` may therefore report 9 resources statically even though the runtime MCP resource surface contains 46 entries in total.
 
 ---

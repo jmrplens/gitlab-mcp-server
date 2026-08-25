@@ -37,6 +37,11 @@ type ToolSurfaceResourceOptions struct {
 	Tools      []*mcp.Tool
 	Catalog    *actioncatalog.Catalog
 	MetaRoutes map[string]toolutil.ActionMap
+	// SubscribableURITemplates lists the resource URI templates that accept
+	// resources/subscribe on this server. Empty means subscriptions are not
+	// offered (CAPABILITY_SURFACE=minimal), and the manifest then omits the
+	// section rather than advertising a capability the server would refuse.
+	SubscribableURITemplates []string
 }
 
 // ToolSurfaceVisibleTool summarizes one MCP tool currently advertised
@@ -74,12 +79,28 @@ type ToolSurfaceEntry struct {
 // "gitlab://tools" resource. It summarizes the active tool surface
 // and lists every executable entry the surface exposes.
 type ToolSurfaceManifest struct {
-	Surface          string                   `json:"surface"`
-	URITemplate      string                   `json:"uri_template"`
-	VisibleToolCount int                      `json:"visible_tool_count"`
-	EntryCount       int                      `json:"entry_count"`
-	VisibleTools     []ToolSurfaceVisibleTool `json:"visible_tools"`
-	Entries          []ToolSurfaceEntry       `json:"entries"`
+	Surface          string `json:"surface"`
+	URITemplate      string `json:"uri_template"`
+	VisibleToolCount int    `json:"visible_tool_count"`
+	EntryCount       int    `json:"entry_count"`
+	// Subscriptions describes the resources/subscribe support this server
+	// offers, or is omitted when it offers none. It lives in the manifest —
+	// the one resource kept even on the minimal capability surface — so a
+	// machine consumer has a single place to learn the watchable set.
+	Subscriptions *ToolSurfaceSubscriptions `json:"subscriptions,omitempty"`
+	VisibleTools  []ToolSurfaceVisibleTool  `json:"visible_tools"`
+	Entries       []ToolSurfaceEntry        `json:"entries"`
+}
+
+// ToolSurfaceSubscriptions advertises resources/subscribe support in the
+// gitlab://tools manifest.
+type ToolSurfaceSubscriptions struct {
+	Supported bool `json:"supported"`
+	// SubscribableURITemplates are the single-object resource URI templates
+	// a subscription is accepted for; anything else is refused. Sourced
+	// from the enforcement whitelist itself, never copied.
+	SubscribableURITemplates []string `json:"subscribable_uri_templates"`
+	Notification             string   `json:"notification"`
 }
 
 // ToolSurfaceCallShape describes how to invoke one manifest entry.
@@ -186,6 +207,13 @@ func newToolSurfaceSnapshot(opts ToolSurfaceResourceOptions) toolSurfaceSnapshot
 			VisibleTools:     visibleTools,
 		},
 		details: make(map[string]ToolSurfaceDetail, len(toolDetails)),
+	}
+	if len(opts.SubscribableURITemplates) > 0 {
+		snapshot.manifest.Subscriptions = &ToolSurfaceSubscriptions{
+			Supported:                true,
+			SubscribableURITemplates: opts.SubscribableURITemplates,
+			Notification:             "notifications/resources/updated, sent when the watched content changes (server polls GitLab)",
+		}
 	}
 	for _, tool := range toolDetails {
 		snapshot.addDirectToolDetail(tool, toolManifestKindVisibleTool)

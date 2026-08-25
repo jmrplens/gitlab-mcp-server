@@ -212,6 +212,11 @@ type ServerConfig struct {
 	RateLimitRPS    float64
 	RateLimitBurst  int
 	MetaParamSchema string
+	// Stateless mirrors Config.Stateless. It reaches the server because a
+	// sessionless transport cannot carry a server-initiated notification
+	// outside an open request, which decides whether the legacy
+	// resources/subscribe path can be honored at all.
+	Stateless bool
 }
 
 // ServerConfig returns the server-scoped subset of Config. Callers may enrich
@@ -234,6 +239,7 @@ func (c *Config) ServerConfig() *ServerConfig {
 		RateLimitRPS:      c.RateLimitRPS,
 		RateLimitBurst:    c.RateLimitBurst,
 		MetaParamSchema:   c.MetaParamSchema,
+		Stateless:         c.Stateless,
 	}
 }
 
