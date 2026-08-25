@@ -1,0 +1,73 @@
+---
+/**
+ * Custom Starlight <SiteTitle> override: the mark inlined beside the title,
+ * rather than handed to Starlight's `logo` option.
+ *
+ * `logo` was the other route and it cannot produce this result. It renders
+ * the file as an <img>, and an <img> cannot follow the theme toggle — which
+ * is why the site used to carry logo-light.svg and logo-dark.svg with two
+ * hardcoded palettes that had to be recoloured in step, plus a third copy in
+ * public/favicon.svg behind a `prefers-color-scheme` rule that could disagree
+ * with the site's own switch in both directions. Inlining the markup lets the
+ * palette paint the mark (see the `.gm-mark` rules in theme.css), so there is
+ * one asset — emitted by cmd/gen_brand — one set of colours, and nothing to
+ * keep in step by hand.
+ *
+ * Inlined rather than linked for a second reason: the markup arrives with
+ * the document, so the header paints once instead of reflowing when an image
+ * lands.
+ *
+ * The title stays real text: it is two ordinary words that the system stack
+ * sets perfectly well, so no wordmark font ships.
+ */
+import mark from "../assets/logo.svg?raw";
+
+const { siteTitle, siteTitleHref } = Astro.locals.starlightRoute;
+---
+
+<a href={siteTitleHref} class="site-title sl-flex">
+	<span class="gm-mark" aria-hidden="true" set:html={mark} />
+	<span class="gm-site-name">{siteTitle}</span>
+</a>
+
+<style>
+	@layer starlight.core {
+		.site-title {
+			align-items: center;
+			gap: 0.55rem;
+			color: var(--sl-color-text-accent);
+			text-decoration: none;
+			min-width: 0;
+		}
+
+		/* One number sets the mark's whole presence. At 1.5rem it reads as a
+		   favicon beside a word rather than as a picture with a caption, which
+		   is the point: the bar belongs to the search field and the controls,
+		   not to the logo. It steps up by a quarter once there is room. */
+		.gm-mark :global(svg) {
+			display: block;
+			width: 1.5rem;
+			height: 1.5rem;
+			flex: none;
+		}
+		@media (min-width: 50rem) {
+			.gm-mark :global(svg) {
+				width: 1.75rem;
+				height: 1.75rem;
+			}
+		}
+
+		/* Starlight sets the title at --sl-text-h4 and 600. Beside the mark
+		   that reads as a heading rather than as a label, so it comes down a
+		   step and takes the tighter tracking the rest of the chrome uses. */
+		.gm-site-name {
+			font-size: var(--sl-text-lg);
+			font-weight: 600;
+			letter-spacing: -0.01em;
+			line-height: 1.2;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+	}
+</style>

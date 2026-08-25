@@ -1,0 +1,88 @@
+/* ------------------------------------------------------------------ *
+ * Type scale and code typography.
+ *
+ * Starlight ships two fixed heading scales and swaps between them at
+ * 50em: 35/29/24/20/18 px below it and 42/35/29/24 px above. Two things
+ * go wrong with that on this site. The steps at the top are the loudest
+ * thing on the page and these pages are long and heavily sectioned —
+ * the tool-reference pages carry dozens of headings each — so a 35 px
+ * H2 on a phone reads as a title rather than as a divider. And the jump
+ * is a step function: at 800 px an H2 changes by 6 px between one pixel
+ * of viewport and the next, which is exactly where a heading holding a
+ * tool name decides whether to take two lines or three.
+ *
+ * So the scale is fluid and one step quieter at the top: H2 runs 23 px
+ * on a 360 px phone to 29 px on a wide screen, against 29 to 35 before.
+ * The interval between steps is preserved — near 1.2 at the bottom of
+ * the scale, near 1.3 at the top — so H2 and H3 stay as far apart as
+ * they were. Body copy and the sidebar are untouched: this sheet only
+ * moves the heading tokens, and those are the ones Starlight already
+ * reads, so the markdown content, the page title and the anchor links
+ * all follow.
+ *
+ * Two pieces of chrome read `--sl-text-h5` and come down with it, from
+ * 18 px to 16 px: an aside's title and the "On this page" heading. That
+ * is deliberate rather than incidental — the scale has to stay
+ * monotonic, so H5 has to sit below the bottom of the H4 clamp
+ * (1.05rem), and 1rem is where it lands.
+ *
+ * Unlayered, like the palette, so these values win over Starlight's own
+ * `@layer starlight.base` defaults, including its 50em block.
+ * ------------------------------------------------------------------ */
+:root {
+	--sl-text-h1: clamp(1.85rem, 1.44rem + 1.8vw, 2.4rem);
+	--sl-text-h2: clamp(1.45rem, 1.21rem + 1.05vw, 1.8rem);
+	--sl-text-h3: clamp(1.2rem, 1.06rem + 0.62vw, 1.4rem);
+	--sl-text-h4: clamp(1.05rem, 0.99rem + 0.28vw, 1.18rem);
+	--sl-text-h5: 1rem;
+}
+
+/* ------------------------------------------------------------------ *
+ * Code inside a heading.
+ *
+ * Starlight sets it to `font-size: inherit`, which is right for a
+ * proportional face and wrong for a monospaced one: at the same nominal
+ * size a monospaced glyph is visibly larger and much wider, so
+ * `gitlab_merge_request_create` in an H3 sets about 40 % wider than the
+ * same characters in the heading's own face. Add the inline-code chip,
+ * which is meant for a word inside a paragraph, and the heading turns
+ * into a row of grey blocks. This site is full of such headings: the
+ * tool references title every section with a backticked tool name.
+ *
+ * The chip goes — a heading is already emphasis and does not need a
+ * background to mark the word as code — and the size drops to 0.9em,
+ * which is where the monospaced face optically matches the heading
+ * around it.
+ * ------------------------------------------------------------------ */
+.sl-markdown-content
+	:is(h1, h2, h3, h4, h5, h6)
+	code:not(:where(.not-content *)) {
+	font-size: 0.9em;
+	background: none;
+	padding: 0;
+	margin-block: 0;
+	border-radius: 0;
+	/* Wrapping is allowed here: a long tool or environment-variable name
+	   in a heading has to break somewhere, and breaking it beats
+	   overflowing. */
+	overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ *
+ * The copy button on a code block.
+ *
+ * Expressive Code draws it at 2rem square with the icon inset by
+ * 0.475rem, which is a comfortable touch target but reads as a large
+ * panel button hovering over the sample. A quarter off both dimensions,
+ * with the icon inset scaled to match so the glyph keeps its
+ * proportion, brings it back to the weight of the frame it sits on.
+ * Two rules against public class names of the plugin's own API, not its
+ * internals.
+ * ------------------------------------------------------------------ */
+.expressive-code .copy button {
+	width: 1.6rem;
+	height: 1.6rem;
+}
+.expressive-code .copy button::after {
+	margin: 0.36rem;
+}

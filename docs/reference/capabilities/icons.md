@@ -497,32 +497,39 @@ Alphabetical listing of all 50 domain icons and every sub-package that uses each
 `Implementation.Icons` — the server's own identity in the handshake — rather
 than to any tool, resource or prompt.
 
-| Variable    | Attached to                              | Source                                           |
-| ----------- | ---------------------------------------- | ------------------------------------------------ |
-| `IconBrand` | `Implementation.Icons` in `createServer` | [Simple Icons](https://simpleicons.org), CC0 1.0 |
+| Variable    | Attached to                              | Source                                                     |
+| ----------- | ---------------------------------------- | ---------------------------------------------------------- |
+| `IconBrand` | `Implementation.Icons` in `createServer` | `cmd/gen_brand` (original artwork, generated `svgBrand`)   |
+
+The mark is **"the fan-out"**: a source node projecting three branch arcs,
+each ending in a node — a git graph, and the project's own architecture (one
+canonical action catalog reaching the dynamic, meta and individual tool
+surfaces). It is original artwork for this project; earlier versions shipped
+the GitLab tanuki, which is GitLab's trademark and carried no identity of its
+own. The canonical vector lives in `cmd/gen_brand` and is scaled to the
+24×24 `currentColor` constant in `internal/toolutil/brandmark_gen.go` by
+`make brand`, so the in-binary mark can never drift from the site logo,
+favicon and cards emitted in the same run.
 
 Three details differ from the domain icons:
 
-- **It keeps its source 24×24 viewBox** instead of the 16×16 the domain icons
-  use. The viewBox only defines a coordinate system, so nothing renders
-  differently; keeping it verbatim avoids rescaling coordinates by hand.
-- **It is a single closed path.** The full logo in `site/src/assets` cannot be
-  reduced this way: its coloured paths are open contours that close only
-  against each other, so filling any one of them alone renders a broken shape.
+- **It keeps a 24×24 viewBox** instead of the domain icons' 16×16 — it is
+  scaled from the shared 64×64 brand geometry rather than drawn at glyph
+  size, and the viewBox only defines a coordinate system.
 - **Its SVG entry uses `currentColor` and declares no `Theme`**, same as the
   domain icons — it works in themes the specification does not name. It gets
   the same `light`/`dark` WebP pair as every other icon, for the same reason:
-  a client that rejects SVG (VS Code) still needs something to render. Under
-  SEP-2575 the whole `Implementation` — all three entries — rides in the
-  `_meta` of every response, not just the handshake, which is why the SVG
-  entry alone is still worth keeping minimal: at 584 raw bytes it is the
-  largest single icon in the set, about twice the ~298-byte domain-icon
-  average, because a recognizable logo needs more path detail than a simple
-  glyph.
+  a client that rejects SVG (VS Code) still needs something to render.
+  `cmd/gen_icon_webp` scans `brandmark_gen.go` alongside `icons.go` so the
+  fallbacks regenerate with the domain icons.
+- Under SEP-2575 the whole `Implementation` — all three entries — rides in
+  the `_meta` of every response, not just the handshake, which is why the
+  mark stays a handful of primitives (three arcs, four circles) rather than
+  detailed artwork.
 
-Before this existed the server advertised `IconServer`, the same glyph as
-`gitlab_execute_action`, so a client rendering both showed one picture for the
-server and for one of its tools.
+Before a brand mark existed the server advertised `IconServer`, the same
+glyph as `gitlab_execute_action`, so a client rendering both showed one
+picture for the server and for one of its tools.
 
 ## Testing
 

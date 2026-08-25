@@ -217,11 +217,11 @@ Prompts:
 
 ## Optional
 
-- [Medium LLM reference](https://jmrplens.github.io/gitlab-mcp-server/llms-medium.txt): Every tool and action with descriptions, without per-action schemas — sized to load into a context window
-- [Full LLM reference](https://jmrplens.github.io/gitlab-mcp-server/llms-full.txt): Complete reference with every per-action JSON schema; large, best used with search or retrieval
-- [Meta-tools reference](https://jmrplens.github.io/gitlab-mcp-server/llms-full-meta-tools.txt): Full schemas for the dynamic and meta-tool surfaces only
-- [Individual tools reference](https://jmrplens.github.io/gitlab-mcp-server/llms-full-individual-tools.txt): Full schemas for the one-tool-per-operation surface only
-- [Resources and prompts reference](https://jmrplens.github.io/gitlab-mcp-server/llms-full-resources-prompts.txt): MCP resource and prompt definitions only
+- [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): Every tool and action with descriptions, without per-action schemas — sized to load into a context window
+- [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): Complete reference with every per-action JSON schema; large, best used with search or retrieval
+- [Meta-tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-meta-tools.txt): Full schemas for the dynamic and meta-tool surfaces only
+- [Individual tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-individual-tools.txt): Full schemas for the one-tool-per-operation surface only
+- [Resources and prompts reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-resources-prompts.txt): MCP resource and prompt definitions only
 - [Architecture](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/concepts/architecture.md): Internal architecture and catalog-first runtime overview
 - [Output format](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/reference/output-format.md): Markdown and structured output conventions
 - [Troubleshooting](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/troubleshooting.md): Common setup and runtime issues

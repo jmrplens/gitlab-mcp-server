@@ -4,3 +4,8 @@ pnpm-lock.yaml
 # .astro components are handled by `astro check`/eslint, not prettier
 # (no prettier-plugin-astro installed).
 *.astro
+# The documentation content is table-formatted by the repo's own
+# cmd/format_md_tables (CI-gated), whose centered-cell padding prettier
+# would flatten; markdownlint owns the rest of the markdown there. Keeping
+# both authorities on the same files made each formatter dirty the other.
+src/content/docs/**/*.mdx

@@ -1,14 +1,19 @@
 <p align="center">
-  <img alt="GitLab MCP Server — let your AI assistant drive GitLab in plain language" src="https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/site/src/assets/banner-dark.svg" width="840">
+  <img alt="GitLab MCP Server — GitLab for your AI assistant: one action catalog, three MCP tool surfaces" src="https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/.github/brand/banner.webp" width="100%">
 </p>
 
 # GitLab MCP Server
 
 <p align="center">
 
+<!-- Package -->
+
 [![GitHub Release](https://img.shields.io/github/v/release/jmrplens/gitlab-mcp-server?style=flat&logo=github&label=Release)](https://github.com/jmrplens/gitlab-mcp-server/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/Windows%20%7C%20Linux%20%7C%20macOS-amd64%20%26%20arm64-lightgrey?style=flat&logo=windows-terminal&logoColor=white)
+<!-- Quality -->
+
+[![CI](https://img.shields.io/github/actions/workflow/status/jmrplens/gitlab-mcp-server/ci.yml?branch=main&style=flat&logo=githubactions&logoColor=white&label=CI)](https://github.com/jmrplens/gitlab-mcp-server/actions/workflows/ci.yml)
 [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=alert_status)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=jmrplens_gitlab-mcp-server&metric=coverage)](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server)
 [![Go Reference](https://pkg.go.dev/badge/github.com/jmrplens/gitlab-mcp-server/v2.svg)](https://pkg.go.dev/github.com/jmrplens/gitlab-mcp-server/v2)
@@ -17,11 +22,13 @@
 
 <p align="center">
 
+<!-- Listings -->
+
 [![Glama MCP Score](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server)
 [![MCP Badge](https://lobehub.com/badge/mcp/jmrplens-gitlab-mcp-server)](https://lobehub.com/mcp/jmrplens-gitlab-mcp-server)
 [![MCP Toplist](https://mcptoplist.com/badge/io.github.jmrplens%2Fgitlab-mcp-server.svg)](https://mcptoplist.com/server/io.github.jmrplens%2Fgitlab-mcp-server)
 [![Cursor Directory](https://img.shields.io/badge/Cursor-Directory-000000?logo=cursor&logoColor=white)](https://cursor.directory/plugins/gitlab-mcp-server)
-[![Hosted endpoint](https://img.shields.io/badge/Hosted-mcp.jmrp.io%2Fgitlab-6366f1?style=flat&logo=icloud&logoColor=white)](https://mcp.jmrp.io/)
+[![Hosted endpoint](https://img.shields.io/badge/Hosted-mcp.jmrp.io%2Fgitlab-6d28d9?style=flat&logo=icloud&logoColor=white)](https://mcp.jmrp.io/)
 
 </p>
 
@@ -190,18 +197,18 @@ It is the fastest way to try the server, and the right way to keep using it is s
 
 The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport, `GET` on it answers `405` by design, and `https://mcp.jmrp.io/gitlab/health` answers `ok`. It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers I maintain, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
 
-**Then just ask:** open your AI client and try _"List my GitLab projects."_ See the [Getting Started guide](https://jmrplens.github.io/gitlab-mcp-server/getting-started/) for per-client details and [more example prompts](docs/guides/examples/usage-examples.md).
+**Then just ask:** open your AI client and try _"List my GitLab projects."_ See the [Getting Started guide](https://jmrp.io/docs/gitlab-mcp-server/getting-started/) for per-client details and [more example prompts](docs/guides/examples/usage-examples.md).
 
 ---
 
 ## Why this server
 
-- 🗣️ **Plain-language GitLab.** The AI translates "is MR !15 safe to merge?" into the right API calls. You don't touch endpoints, IDs, or JSON.
-- 🧰 **The whole platform — [1000+ tools](#tool-surfaces).** Broad GitLab REST v4 + GraphQL coverage: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security, admin, tokens, and more.
-- 🪶 **Low-token by default.** The default **dynamic** surface exposes just 2 tools (`find` + `execute`) while reaching the full catalog — so it fits any client's context window. ([Token footprint →](#token-footprint))
-- ✅ **Proven with real models.** An automated evaluator runs Anthropic, Google, OpenAI, and Qwen against live GitLab instances: **99.5% aggregate success** across thousands of operations. ([Results →](#ai-model-tool-use-evaluation))
-- 🔒 **Safe by design.** Read-only mode, safe mode (dry-run preview of every mutation), TLS options for self-hosted GitLab, and continuous [SonarCloud](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server) quality/security gates.
-- 🖥️ **Runs anywhere.** One static binary or container; Windows, Linux & macOS; amd64 & arm64; stdio (desktop) and HTTP (remote).
+- **Plain-language GitLab.** The AI translates "is MR !15 safe to merge?" into the right API calls. You don't touch endpoints, IDs, or JSON.
+- **The whole platform — [1000+ tools](#tool-surfaces).** Broad GitLab REST v4 + GraphQL coverage: projects, branches, tags, releases, merge requests, issues, pipelines, jobs, groups, users, wikis, environments, deployments, packages, container registry, runners, feature flags, CI/CD variables, security, admin, tokens, and more.
+- **Low-token by default.** The default **dynamic** surface exposes just 2 tools (`find` + `execute`) while reaching the full catalog — so it fits any client's context window. ([Token footprint →](#token-footprint))
+- **Proven with real models.** An automated evaluator runs Anthropic, Google, OpenAI, and Qwen against live GitLab instances: **99.5% aggregate success** across thousands of operations. ([Results →](#ai-model-tool-use-evaluation))
+- **Safe by design.** Read-only mode, safe mode (dry-run preview of every mutation), TLS options for self-hosted GitLab, and continuous [SonarCloud](https://sonarcloud.io/summary/overall?id=jmrplens_gitlab-mcp-server) quality/security gates.
+- **Runs anywhere.** One static binary or container; Windows, Linux & macOS; amd64 & arm64; stdio (desktop) and HTTP (remote).
 
 <details>
 <summary>More: resources, prompts, and capabilities</summary>
@@ -209,7 +216,7 @@ The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: 
 - **45 MCP resources** (read-only data: projects, issues, pipelines, MRs, branches, members, the surface-aware `gitlab://tools` manifest, and workflow best-practice guides). 26 single-object kinds are also [subscribable](docs/reference/capabilities/subscriptions.md).
 - **37 MCP prompts** (code review, pipeline status, risk assessment, release notes, standup, analytics, audit, and more).
 - **4 elicitation wizards** (interactive issue/MR/release/project creation).
-- **4 MCP capabilities** (completions, progress, elicitation, and [resource subscriptions](docs/reference/capabilities/subscriptions.md) — live `resources/updated` notifications, honored by polling) and **50 SVG tool icons** for visual identification in MCP clients.
+- **4 MCP capabilities** (completions, progress, elicitation, and [resource subscriptions](docs/reference/capabilities/subscriptions.md) — live `resources/updated` notifications, honored by polling) and **51 tool icons** (50 domain icons plus the project mark) for visual identification in MCP clients.
 - **Pagination** on every list endpoint with full metadata.
 
 </details>
@@ -260,7 +267,7 @@ Rows use the base Community Edition catalog unless the Tier column says otherwis
 | **Elicitation**   | 4 interactive creation wizards                    |
 | **Subscriptions** | `resources/updated` by polling, 26 resource kinds |
 
-Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline. See the full [Compatibility Matrix](https://jmrplens.github.io/gitlab-mcp-server/compatibility/).
+Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline. See the full [Compatibility Matrix](https://jmrp.io/docs/gitlab-mcp-server/compatibility/).
 
 ## AI Model Tool-Use Evaluation
 
@@ -312,7 +319,7 @@ The published model-evaluation set covers 124 task attempts and 808 expected MCP
 
 ## Documentation
 
-Full documentation is at **[jmrplens.github.io/gitlab-mcp-server](https://jmrplens.github.io/gitlab-mcp-server/)**. Use this map for the source-of-truth reference on a specific area:
+Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs/gitlab-mcp-server)**. Use this map for the source-of-truth reference on a specific area:
 
 | Document                                              | Description                                                                            |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
@@ -323,7 +330,7 @@ Full documentation is at **[jmrplens.github.io/gitlab-mcp-server](https://jmrple
 | [CLI Reference](docs/reference/cli.md)                | All command-line flags, exit codes, and runtime examples                               |
 | [HTTP Server Mode](docs/guides/http-server-mode.md)   | Shared HTTP deployments, authentication, server pool isolation                         |
 | [Tools Reference](docs/reference/tools/README.md)     | All individual tools with input/output schemas, including GitLab.com-only Orbit        |
-| [Meta-Tools](docs/concepts/meta-tools.md)             | 32/48/49 domain meta-tools with action dispatching                                     |
+| [Meta-Tools](docs/concepts/meta-tools.md)             | 32/49/50 domain meta-tools with action dispatching                                     |
 | [Dynamic Toolset](docs/concepts/dynamic-tools.md)     | 2-tool low-token mode with canonical action catalog, safety model, and examples        |
 | [Resources](docs/reference/resources.md)              | All 45 resources with URI templates                                                    |
 | [Prompts](docs/reference/prompts.md)                  | All 37 prompts with arguments and output format                                        |
@@ -388,7 +395,7 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 | ------------- | ------------------------------------------------ |
 | Language      | Go 1.27+                                         |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk` v1.7.0  |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.57.0 |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.59.0 |
 | Transport     | stdio (default), HTTP (Streamable HTTP)          |
 
 ## Privacy Policy
@@ -416,20 +423,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       990 |     200,248 |
-| Unit tests (`_test.go`)  |       546 |     310,136 |
+| Source (`.go`, non-test) |       992 |     200,601 |
+| Unit tests (`_test.go`)  |       547 |     310,258 |
 | End-to-end tests         |       174 |      45,163 |
-| **Total**                | **1,710** | **555,547** |
+| **Total**                | **1,713** | **556,022** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,478 |
+| Source functions                |  7,493 |
 | — exported (public)             |  2,614 |
-| — unexported (private)          |  4,864 |
-| Unit test functions (`TestXxx`) | 11,657 |
-| Subtests (`t.Run(...)`)         |  2,917 |
+| — unexported (private)          |  4,879 |
+| Unit test functions (`TestXxx`) | 11,663 |
+| Subtests (`t.Run(...)`)         |  2,919 |
 | End-to-end test functions       |    381 |
 
 ### Ratios worth noting
@@ -438,25 +445,25 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~202 lines |
-| Average test file length           |                 ~568 lines |
-| Comment lines in source            |  22,789 (~11.4% of source) |
+| Average test file length           |                 ~567 lines |
+| Comment lines in source            |  22,874 (~11.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,681 |
+| `if err != nil` checks             | 6,684 |
 | `defer` statements                 |   906 |
-| `struct` types defined             | 2,725 |
-| `//nolint` suppressions            |   255 |
+| `struct` types defined             | 2,726 |
+| `//nolint` suppressions            |   256 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   234 |
+| Go packages                    |   235 |
 | Direct dependencies (`go.mod`) |    15 |
 | Indirect dependencies          |    49 |
 
@@ -471,8 +478,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,640 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,568 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,647 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,573 (impossible to avoid)                                                                         |
 | Longest function name in source      | `baseDestructiveEarlySinglePromptTemplateAndFixtures` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

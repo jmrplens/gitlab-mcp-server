@@ -1,0 +1,17 @@
+---
+/**
+ * Custom Starlight <PageTitle> override: the default title, then the chip
+ * row.
+ *
+ * The chips sit here rather than in the markdown for the same reason the
+ * hero's mark does — they are page metadata, so they belong in the
+ * frontmatter, and a component is what turns metadata into a rendering.
+ * Putting them in the body would also place them after the `<h1>` in the
+ * content flow, where Starlight's markdown reset would style them as a list.
+ */
+import Default from "@astrojs/starlight/components/PageTitle.astro";
+import PageChips from "./docs/PageChips.astro";
+---
+
+<Default><slot /></Default>
+<PageChips />

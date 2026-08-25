@@ -39,6 +39,9 @@ import (
 
 const (
 	sourceFile = "internal/toolutil/icons.go"
+	// brandFile carries the generated project mark (cmd/gen_brand); its
+	// svgBrand constant needs the same WebP fallbacks as the domain icons.
+	brandFile  = "internal/toolutil/brandmark_gen.go"
 	outDir     = "internal/toolutil/icons/webp"
 	rasterSize = "16"
 
@@ -90,20 +93,24 @@ func run(check bool, raster rasterizer) error {
 	if err != nil {
 		return err
 	}
-	return runIn(root, sourceFile, outDir, check, raster)
+	return runIn(root, []string{sourceFile, brandFile}, outDir, check, raster)
 }
 
-// runIn is gen_icon_webp's testable core: given an explicit repo root, an
-// icons.go path and a WebP output directory (both relative to root), it
+// runIn is gen_icon_webp's testable core: given an explicit repo root, the
+// icon source paths and a WebP output directory (both relative to root), it
 // extracts every svg<Name> constant and either verifies (check) or
 // (re)writes the WebP assets for all of them using raster.
-func runIn(root, source, out string, check bool, raster rasterizer) error {
-	icons, err := extractIcons(filepath.Join(root, source))
-	if err != nil {
-		return err
-	}
-	if len(icons) == 0 {
-		return fmt.Errorf("no svg<Name> constants found in %s", source)
+func runIn(root string, sources []string, out string, check bool, raster rasterizer) error {
+	var icons []iconSource
+	for _, source := range sources {
+		found, err := extractIcons(filepath.Join(root, source))
+		if err != nil {
+			return err
+		}
+		if len(found) == 0 {
+			return fmt.Errorf("no svg<Name> constants found in %s", source)
+		}
+		icons = append(icons, found...)
 	}
 
 	dir := filepath.Join(root, out)

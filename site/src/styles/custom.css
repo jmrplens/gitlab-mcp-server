@@ -1,69 +1,11 @@
-:root {
-	--sl-color-accent-low: #4a1d96;
-	--sl-color-accent: #7c3aed;
-	--sl-color-accent-high: #c4b5fd;
-}
+/* Leftovers that belong to no dedicated sheet. The palette lives in
+ * theme.css (loaded first); this file is loaded last and must not
+ * restate tokens theme.css owns. */
 
-:root[data-theme="light"] {
-	--sl-color-accent-low: #c4b5fd;
-	--sl-color-accent: #7c3aed;
-	--sl-color-accent-high: #4a1d96;
-}
-
-/* Mermaid edge labels: WCAG AA contrast fix for both themes */
-:root[data-theme="light"] span.edgeLabel,
-:root[data-theme="light"] span.edgeLabel p {
-	background-color: #ffffff !important;
-	color: #111111 !important;
-}
-
-:root[data-theme="dark"] span.edgeLabel,
-:root[data-theme="dark"] span.edgeLabel p {
-	background-color: #1e1e1e !important;
-	color: #e8e8e8 !important;
-}
-
-/* Table row striping for readability */
-:root[data-theme="dark"] table tbody tr:nth-child(even) {
-	background-color: rgba(255, 255, 255, 0.03);
-}
-
-:root[data-theme="light"] table tbody tr:nth-child(even) {
-	background-color: rgba(0, 0, 0, 0.02);
-}
-
-/* Card hover lift effect */
-.card:hover,
-.sl-link-card:hover {
-	transform: translateY(-2px);
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.card:focus-visible,
-.sl-link-card:focus-visible {
-	transform: translateY(-2px);
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.card,
-.sl-link-card {
-	transition:
-		transform 0.2s ease,
-		box-shadow 0.2s ease;
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.card,
-	.sl-link-card {
-		transition: none;
-	}
-
-	.card:hover,
-	.sl-link-card:hover,
-	.card:focus-visible,
-	.sl-link-card:focus-visible {
-		transform: none;
-	}
+/* Table row striping for readability. Token-driven, so both themes
+ * follow without theme-scoped blocks. */
+table tbody tr:nth-child(even) {
+	background-color: var(--gm-surface);
 }
 
 /* --- Mermaid diagrams -----------------------------------------------------
@@ -71,31 +13,26 @@
  * strategy: inline-svg), so no Mermaid runtime is shipped to the browser.
  * The generated SVG carries the light palette baked in; these custom
  * properties re-colour it, so a single SVG serves both themes and toggling
- * the theme repaints rather than re-renders. Starlight sets
- * `data-theme="dark"` on :root, which is what the dark block keys off.
+ * the theme repaints rather than re-renders.
+ *
+ * The values are aliases of the site tokens rather than literals: the
+ * whole reason the palette sits on the GitHub neutral ramp is that these
+ * plates then match the page ground exactly (see theme.css), and an alias
+ * is what makes that claim structural instead of coincidental. Because the
+ * tokens themselves flip under [data-theme="light"], no second theme block
+ * is needed here.
  * Selectors need !important because Mermaid writes presentation attributes
  * and inline styles directly onto the SVG elements.
  */
 :root {
-	--mermaid-text: #000;
-	--mermaid-bg: #f6f8fa;
-	--mermaid-border: #d0d7de;
-	--mermaid-line: #000;
-	--mermaid-secondary-bg: #f6f8fa;
-	--mermaid-note-bg: #fff9c4;
-	--mermaid-note-border: #d4a72c;
-	--mermaid-note-text: #000;
-}
-
-:root[data-theme="dark"] {
-	--mermaid-text: #fff;
-	--mermaid-bg: #161b22;
-	--mermaid-border: #30363d;
-	--mermaid-line: #fff;
-	--mermaid-secondary-bg: #0d1117;
-	--mermaid-note-bg: #2d2606;
-	--mermaid-note-border: #d4a72c;
-	--mermaid-note-text: #fff;
+	--mermaid-text: var(--sl-color-white);
+	--mermaid-bg: var(--gm-surface);
+	--mermaid-border: var(--gm-border);
+	--mermaid-line: var(--sl-color-white);
+	--mermaid-secondary-bg: var(--sl-color-bg);
+	--mermaid-note-bg: var(--gm-accent-soft);
+	--mermaid-note-border: var(--gm-mark);
+	--mermaid-note-text: var(--sl-color-white);
 }
 
 .sl-markdown-content svg[id^="mermaid"] {
@@ -136,9 +73,16 @@
 	stroke: var(--mermaid-line) !important;
 }
 
-/* Edge-label backing plate. Mermaid puts it on the div.labelBkg wrapper inside
-   the foreignObject, so the SVG rect selector that works elsewhere does not
-   apply here. Without this the label text sits directly on the connector line. */
+/* Edge labels sit on their backing plate; the plate takes the panel
+   surface and the text takes the page ink, in both themes, from the same
+   tokens as everything else. Mermaid puts the plate on the div.labelBkg
+   wrapper inside the foreignObject, so the SVG rect selector that works
+   elsewhere does not apply here. */
+.sl-markdown-content svg[id^="mermaid"] span.edgeLabel,
+.sl-markdown-content svg[id^="mermaid"] span.edgeLabel p {
+	background-color: var(--mermaid-bg) !important;
+	color: var(--mermaid-text) !important;
+}
 .sl-markdown-content svg[id^="mermaid"] .labelBkg,
 .sl-markdown-content svg[id^="mermaid"] .edgeLabel rect {
 	background-color: var(--mermaid-bg) !important;

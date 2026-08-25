@@ -5,6 +5,16 @@ import { z } from "astro/zod";
 import { docsLoader, i18nLoader } from "@astrojs/starlight/loaders";
 import { docsSchema, i18nSchema } from "@astrojs/starlight/schema";
 
+// The page-title chip contract, exported so the renderer
+// (src/components/docs/PageChips.astro) derives its type from this schema
+// instead of redeclaring the shape — a schema change is then a type error
+// in the renderer, not a silent drift.
+export const chipSchema = z.object({
+	text: z.string(),
+	href: z.string().optional(),
+});
+export type Chip = z.infer<typeof chipSchema>;
+
 export const collections = {
 	docs: defineCollection({
 		loader: docsLoader(),
@@ -22,6 +32,13 @@ export const collections = {
 				// page-level entity competing with the TechArticle. It also removes
 				// the de-facto 4-question ceiling those copied blocks settled into.
 				faq: z.array(z.object({ q: z.string(), a: z.string() })).optional(),
+				// Page-title chips: at most four short QUALITIES of the page —
+				// "Catalog-first", never "1065 tools". A number typed here would
+				// be a second copy of something stats.json already knows, and a
+				// fifth pill under the largest type on the page turns a
+				// qualifier into a paragraph. A chip with an href is a link and
+				// takes the accent ring; one without is a plain label.
+				chips: z.array(chipSchema).max(4).optional(),
 			}),
 		}),
 	}),

@@ -18,12 +18,12 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,257 |
-| Unit test functions                                   | 11,880 |
+| Total test functions                                  | 12,264 |
+| Unit test functions                                   | 11,887 |
 | E2E test functions                                    |    377 |
-| cmd test functions                                    |  1,053 |
+| cmd test functions                                    |  1,058 |
 | Test files (internal/)                                |    470 |
-| Test files (cmd/)                                     |     76 |
+| Test files (cmd/)                                     |     77 |
 | Test files (test/e2e/suite/)                          |    171 |
 | Tool sub-packages tested                              |    175 |
 | Core packages tested                                  |     19 |
@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,661 | 87.0% |
+| `TestFunc_Scenario` (2-part)           | 10,662 | 86.9% |
 | `TestFunc` (no underscore)             |    965 |  7.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |    631 |  5.1% |
+| `TestFunc_Scenario_Expected` (3+ part) |    637 |  5.2% |
 
 ## Test Distribution
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,190 |        111 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,192 |        111 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            285 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (175) |          8,352 |        345 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            377 |        171 | build-tagged real GitLab integration suite                                                      |
-| cmd packages            |          1,053 |         76 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,257** |    **717** |                                                                                                 |
+| cmd packages            |          1,058 |         77 | server entry point and developer command utilities                                              |
+| **Total**               |     **12,264** |    **718** |                                                                                                 |
 
 ### Core Packages
 
@@ -73,9 +73,9 @@
 | serverpool    |        54 |    98.9% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
 | subscriptions |        85 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                          |
 | testutil      |        34 |    88.2% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
-| toolutil      |       710 |    98.4% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
+| toolutil      |       712 |    98.3% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard        |       327 |    99.9% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal**  | **2,190** |          |                                                                                                                                                                                                                   |
+| **Subtotal**  | **2,192** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -322,8 +322,9 @@
 | cmd/eval_mcp_surfaces/internal/termio          |    45.7% |
 | cmd/format_md_tables                           |    92.5% |
 | cmd/gen_action_catalog_manifest                |    35.6% |
+| cmd/gen_brand                                  |    86.3% |
 | cmd/gen_docker_tools                           |    88.3% |
-| cmd/gen_icon_webp                              |    76.4% |
+| cmd/gen_icon_webp                              |    90.2% |
 | cmd/gen_lhm_manifest                           |    78.5% |
 | cmd/gen_llms                                   |    13.0% |
 | cmd/gen_stats                                  |    33.9% |
@@ -355,7 +356,7 @@
 | serverpool    |    98.9% |
 | subscriptions |   100.0% |
 | testutil      |    88.2% |
-| toolutil      |    98.4% |
+| toolutil      |    98.3% |
 | wizard        |    99.9% |
 
 ### Tool Sub-Packages
@@ -556,7 +557,6 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_surface_quality** (63.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_test_goroutines** (65.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_1to1/internal/metadata** (70.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/gen_icon_webp** (76.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_discovery_completeness** (77.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_lhm_manifest** (78.5%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_catalog_first** (80.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
@@ -566,6 +566,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **elicitation** (84.9%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/internal/mcpsurface** (85.0%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (85.4%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
+- **cmd/gen_brand** (86.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_1to1/internal/merge** (86.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **edition** (87.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/internal/apidocs** (87.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

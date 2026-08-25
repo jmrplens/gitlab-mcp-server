@@ -1,0 +1,39 @@
+/* ------------------------------------------------------------------ *
+ * The chip row under a page title (src/components/docs/PageChips.astro).
+ *
+ * Outlined pills, not filled ones: the row sits directly under the largest
+ * type on the page and a run of filled shapes there competes with the title it
+ * is supposed to qualify. The border carries the state, the fill arrives only
+ * on hover, and both are palette tokens so the row follows the theme.
+ * ------------------------------------------------------------------ */
+.page-chips {
+	list-style: none;
+	margin: 0.75rem 0 0;
+	padding: 0;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+}
+
+.page-chip {
+	display: inline-block;
+	font-size: var(--sl-text-2xs);
+	line-height: 1.6;
+	padding: 0.12em 0.65em;
+	border: 1px solid var(--gm-chip-line);
+	border-radius: 999px;
+	color: var(--gm-chip-ink);
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+/* A chip that goes somewhere takes the accent ring, so the row reads as
+   "these three are facts, that one is a door". */
+a.page-chip-link {
+	border-color: var(--gm-chip-link-line);
+	color: var(--gm-chip-link-ink);
+}
+a.page-chip-link:hover,
+a.page-chip-link:focus-visible {
+	background: var(--gm-chip-link-fill);
+}

@@ -1,0 +1,67 @@
+/* Visual hierarchy for the stock Starlight sidebar.
+ *
+ * The tree is Starlight's own: every group is a `<details>` with a `<summary>`
+ * label and a caret, and Starlight forces open the chain holding the current
+ * page. This file adds no behaviour at all. It restores the depth cue the tree
+ * needs, because Starlight styles every group label with the same `.large`
+ * token regardless of depth, so a group heading and the page links under it
+ * read as one undifferentiated column of eleven rows.
+ *
+ * Two changes, both borrowed from how large documentation sites handle long
+ * navigation lists:
+ *
+ *   - the three top-level groups become small uppercase "eyebrow" rows, with a
+ *     hairline and breathing room above each, so the eye can find the section
+ *     boundaries without reading the words;
+ *   - rows below the top level share one type treatment, so pages at the same
+ *     depth read as one list.
+ *
+ * Only Starlight custom properties are used for colour, so both themes are
+ * covered, and nothing here touches focus styles or `[aria-current]`: the
+ * current page keeps the accent pill Starlight paints, which is the only strong
+ * colour left in the tree. The top-level rule excludes it by hand for the same
+ * reason — this file's selectors carry an id, so they would otherwise beat
+ * Starlight's own rule and repaint the current row's ink over its pill.
+ */
+
+/* Top-level group labels: uppercase eyebrow headers. */
+#starlight__sidebar .top-level > li > details > summary .large,
+#starlight__sidebar .top-level > li > a:not([aria-current="page"]) {
+	font-size: var(--sl-text-xs);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	/* gray-2 rather than gray-1: at this size the dimmer ink still measures
+	   9.85:1 light and 12.26:1 dark on the sidebar ground, and the brighter one
+	   would make the eyebrow compete with the page links it introduces. */
+	color: var(--sl-color-gray-2);
+}
+
+/* A hairline plus breathing room between the top-level groups. */
+#starlight__sidebar .top-level > li + li {
+	margin-top: 1rem;
+	border-top: 1px solid var(--sl-color-hairline-light);
+	padding-top: 0.75rem;
+}
+
+/* Second level and below, groups and pages alike: one type treatment. Stock
+   Starlight only bolds the `<summary>` label (`.large` carries weight 600 and
+   the white ink) and leaves a leaf `<a>` at 400 in gray-2, and below 50rem it
+   sizes the link from the body (16px) while the label is 14px — so a nested
+   group reads bigger, bolder and brighter than the page beside it, and the
+   difference passes for a different typeface. Both now share weight, size and
+   ink; the caret and the indent are what tell a group from a page. */
+#starlight__sidebar ul ul summary .large,
+#starlight__sidebar ul ul a {
+	font-size: var(--sl-text-sm);
+	font-weight: 600;
+}
+#starlight__sidebar ul ul summary .large {
+	color: var(--sl-color-gray-2);
+}
+
+/* The whole summary row is the toggle, so give it the hover and focus feedback
+   the links already have (Starlight lifts a link to white). */
+#starlight__sidebar summary:hover .large,
+#starlight__sidebar summary:focus-visible .large {
+	color: var(--sl-color-white);
+}

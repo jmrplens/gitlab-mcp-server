@@ -1,0 +1,26 @@
+---
+/**
+ * Custom Starlight <Hero> override.
+ *
+ * The only thing it changes is where the hero's figure comes from. The mark
+ * is painted by CSS classes and carries no fill of its own (see theme.css),
+ * so it has to reach the page as inline markup: Starlight's
+ * `hero.image.file` and `.dark`/`.light` forms both render an <img>, and an
+ * external stylesheet cannot reach inside one — the mark would paint black.
+ *
+ * Supplying it here rather than as `hero.image.html` in the two index files
+ * keeps one copy of the brand markup. Two copies of an SVG, one per locale,
+ * is the exact drift this redesign removes.
+ *
+ * A page that declares its own hero image keeps it; this only fills the gap.
+ */
+import Default from "@astrojs/starlight/components/Hero.astro";
+import mark from "../assets/logo.svg?raw";
+
+const hero = Astro.locals.starlightRoute.entry.data.hero;
+if (hero && !hero.image) {
+	hero.image = { html: `<span class="gm-mark gm-hero-mark" aria-hidden="true">${mark}</span>` };
+}
+---
+
+<Default><slot /></Default>

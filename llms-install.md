@@ -102,7 +102,7 @@ Add these to the `env` block (and, for Docker, a matching `-e NAME` in
 | `GITLAB_SKIP_TLS_VERIFY` | `false`   | Allow self-signed certificates on self-managed instances                                          |
 | `LOG_LEVEL`              | `info`    | `debug`, `info`, `warn`, `error`                                                                  |
 
-Full reference: <https://jmrplens.github.io/gitlab-mcp-server/configuration/>
+Full reference: <https://jmrp.io/docs/gitlab-mcp-server/configuration/>
 
 ## Step 4 — Verify the installation
 
@@ -131,5 +131,5 @@ Full reference: <https://jmrplens.github.io/gitlab-mcp-server/configuration/>
 ## More documentation
 
 - Project README: <https://github.com/jmrplens/gitlab-mcp-server>
-- Docs site: <https://jmrplens.github.io/gitlab-mcp-server/>
-- Tool reference: <https://jmrplens.github.io/gitlab-mcp-server/tools/overview/>
+- Docs site: <https://jmrp.io/docs/gitlab-mcp-server/>
+- Tool reference: <https://jmrp.io/docs/gitlab-mcp-server/tools/overview/>

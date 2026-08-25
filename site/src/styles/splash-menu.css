@@ -1,0 +1,25 @@
+/* The splash pages and their navigation column.
+ *
+ * src/routeData.ts turns the sidebar on for a `splash` route so the mobile menu
+ * button exists there at all — Starlight renders that button only when the route
+ * has a sidebar, so without it the landings would be the only pages on the site
+ * a phone cannot navigate away from, and the 404 would be a dead end. The tree
+ * itself is Starlight's own and fully populated.
+ *
+ * Above the `md` breakpoint the pane becomes a real 300px grid column,
+ * which on the landing is 300px of nothing pushing the hero off centre.
+ * `--sl-content-inline-start` is the variable Starlight derives that column
+ * from — including in Header.astro's own grid — so it is reset here rather
+ * than the pane being hidden alone, or the header would keep aligning its
+ * search field to a column that is no longer there.
+ *
+ * Below the breakpoint nothing is hidden: the pane is the drawer the menu
+ * button opens, and that is the reason it exists on this page. */
+@media (min-width: 50rem) {
+	:root[data-has-hero] .sidebar-pane {
+		display: none;
+	}
+	:root[data-has-hero] {
+		--sl-content-inline-start: 0rem;
+	}
+}
