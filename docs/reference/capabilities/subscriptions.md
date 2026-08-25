@@ -30,18 +30,23 @@ unaffected, because there the subscription *is* an open request. Run with
 
 ## What can be subscribed to
 
-26 kinds of resource, all of them single objects with a lifecycle worth
-watching: a project or group; a pipeline, its job list, the latest pipeline
-on a project, and a single job; a merge request with its discussions and
-notes; an issue; a deployment, an environment, a feature flag; a release, a
-tag, a branch; a milestone (project or group), a label (project or group), a
-board; a deploy key; a snippet (project or personal); a wiki page; and a
-repository file.
+26 kinds of resource: a project or group; a pipeline, its job list, the
+latest pipeline on a project, and a single job; a merge request with its
+discussions and notes; an issue; a deployment, an environment, a feature
+flag; a release, a tag, a branch; a milestone (project or group), a label
+(project or group), a board; a deploy key; a snippet (project or personal);
+a wiki page; and a repository file.
 
-**Collections are deliberately excluded.** Subscribing to
-`gitlab://project/42/issues` would notify on every change to any issue in
-the project — most of them nothing the subscriber asked about — and cost a
-full page read on every poll. A subscription to a collection is refused.
+Three of those — a pipeline's job list, and a merge request's discussions
+and notes — are lists, and subscribable on purpose: each is bounded by one
+parent object whose lifecycle the subscriber is already following, so "did
+this change?" is exactly the question a watch on the parent's activity
+answers. What stays excluded is the open-ended, top-level collection:
+
+Subscribing to `gitlab://project/42/issues` would notify on every change
+to any issue in the project — most of them nothing the subscriber asked
+about — and cost a full page read on every poll. A subscription to a
+top-level collection is refused.
 
 A refused subscription starts no watcher and costs no API call. On protocol
 2026-07-28 the refusal may not reach the client: the Go SDK's client fires

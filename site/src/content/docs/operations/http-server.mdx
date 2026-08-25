@@ -217,9 +217,9 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.example.com \
   --json-response
 ```
 
-### Legacy stateful mode
-
 In stateless mode the legacy `resources/subscribe` request is refused with an explanatory error — each POST gets its own session that closes with the response, so a subscription it accepted could never be notified; clients on protocol 2026-07-28 keep [resource subscriptions](/gitlab-mcp-server/capabilities/subscriptions/) through `subscriptions/listen`, which holds the request open.
+
+### Legacy stateful mode
 
 `--stateless=false` restores the session-based transport: `Mcp-Session-Id` is issued on `initialize`, GET opens the standalone SSE stream, DELETE terminates the session, and `--session-timeout` governs idle lifetime. It is a compatibility mode for clients that cannot negotiate protocol `2026-07-28` (they negotiate `2025-11-25` or older and use synchronous elicitation), the server logs a warning at startup when it is enabled, and it is intended to be removed once client ecosystems have migrated.
 

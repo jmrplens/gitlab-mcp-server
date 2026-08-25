@@ -286,8 +286,17 @@ func Classify(uri string) (Kind, bool) {
 
 	// The namespace reference is one segment. A path-style reference
 	// reaches us percent-encoded, so it has no slash to split on here.
-	ref, tailPath, _ := strings.Cut(rest, "/")
+	ref, tailPath, hasSeparator := strings.Cut(rest, "/")
 	if ref == "" {
+		return KindUnknown, false
+	}
+	// A separator with nothing after it — "gitlab://project/42/" — is not
+	// the bare-object form: the resource router expands {project_id} as an
+	// RFC 6570 simple string, so the concrete URI it resolves carries no
+	// trailing slash. Accepting one here would classify a URI the router
+	// cannot read, breaking the invariant that this whitelist mirrors what
+	// resources/read can actually resolve.
+	if hasSeparator && tailPath == "" {
 		return KindUnknown, false
 	}
 	// Snippets are addressed by a numeric ID; projects and groups accept

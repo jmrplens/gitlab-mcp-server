@@ -43,7 +43,7 @@ These are client-side constraints, not server behavior. The default `dynamic` su
 ## Subscription behavior per client
 
 Client handling of `resources/subscribe` varies more than any other
-capability: VS Code subscribes to every resource it reads and routes
+capability: VS Code attempts to subscribe to every resource it reads (this server accepts only the 26 subscribable kinds and refuses the rest) and routes
 `resources/updated` into its file-change pipeline (not into chat); Cursor
 sends `resources/subscribe` even to servers advertising `subscribe: false`;
 and the Go SDK's client fires `subscriptions/listen` without awaiting the

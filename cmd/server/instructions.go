@@ -111,8 +111,11 @@ var (
 // capabilitySurface. The tool advice is identical across tool surfaces —
 // only the tool and action names change — while the watching section exists
 // only where subscriptions are actually offered, so the model is never told
-// about a capability this server would refuse.
-func buildInstructions(toolSurface, capabilitySurface string) string {
+// about a capability this server would refuse. statelessHTTP further shapes
+// that section: on a sessionless transport the legacy resources/subscribe
+// request is refused, so the instructions name subscriptions/listen there
+// instead of teaching the model a method that cannot work.
+func buildInstructions(toolSurface, capabilitySurface string, statelessHTTP bool) string {
 	var b strings.Builder
 
 	b.WriteString("gitlab-mcp-server exposes GitLab projects, merge requests, issues, branches, " +
@@ -164,12 +167,19 @@ func buildInstructions(toolSurface, capabilitySurface string) string {
 		refIssueGetByID.render(toolSurface))
 
 	if capabilitySurface == config.CapabilitySurfaceFull {
-		b.WriteString("\n\nWATCHING RESOURCES — Instead of re-reading a resource in a loop to detect change:\n" +
-			"1. Single-object resources (a pipeline, an issue, a merge request, a file, a wiki page, ...) can be " +
-			"watched for change notifications via MCP resources/subscribe; collections (issue lists, branch lists) cannot.\n" +
-			"2. Example: subscribe to gitlab://project/{project_id}/pipelines/latest to be notified when a pipeline's " +
-			"state changes, instead of polling it yourself — the server watches GitLab and sends " +
-			"notifications/resources/updated only when the content actually changed.")
+		subscribeMethod := "MCP resources/subscribe"
+		if statelessHTTP {
+			// Each stateless POST's session closes with the response, so the
+			// legacy request is refused there; only the long-lived
+			// subscriptions/listen form can be honored.
+			subscribeMethod = "MCP subscriptions/listen (protocol 2026-07-28; the legacy resources/subscribe is refused on this transport)"
+		}
+		fmt.Fprintf(&b, "\n\nWATCHING RESOURCES — Instead of re-reading a resource in a loop to detect change:\n"+
+			"1. Single-object resources (a pipeline, an issue, a merge request, a file, a wiki page, ...) can be "+
+			"watched for change notifications via %s; collections (issue lists, branch lists) cannot.\n"+
+			"2. Example: subscribe to gitlab://project/{project_id}/pipelines/latest to be notified when a pipeline's "+
+			"state changes, instead of polling it yourself — the server watches GitLab and sends "+
+			"notifications/resources/updated only when the content actually changed.", subscribeMethod)
 	}
 
 	return b.String()

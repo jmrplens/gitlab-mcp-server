@@ -156,7 +156,7 @@ func TestBuildInstructions_SurfacesDifferInNamesNotAdvice(t *testing.T) {
 
 	rendered := make(map[string]string, len(instructionSurfaces))
 	for _, surface := range instructionSurfaces {
-		text := buildInstructions(surface, config.CapabilitySurfaceFull)
+		text := buildInstructions(surface, config.CapabilitySurfaceFull, false)
 		rendered[surface] = text
 		for _, section := range sections {
 			if !strings.Contains(text, section) {
@@ -177,7 +177,7 @@ func TestBuildInstructions_SurfacesDifferInNamesNotAdvice(t *testing.T) {
 // surface tells the model how to reach the catalog. Dynamic mode exposes only
 // find and execute, so without this a model sees action IDs and no way in.
 func TestBuildInstructions_DynamicExplainsTheTwoToolWorkflow(t *testing.T) {
-	dynamic := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull)
+	dynamic := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, false)
 	for _, want := range []string{"gitlab_find_action", "gitlab_execute_action", "FINDING TOOLS"} {
 		if !strings.Contains(dynamic, want) {
 			t.Errorf("dynamic instructions missing %q", want)
@@ -186,7 +186,7 @@ func TestBuildInstructions_DynamicExplainsTheTwoToolWorkflow(t *testing.T) {
 
 	// The other surfaces must not advertise a workflow they cannot run.
 	for _, surface := range []string{config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
-		if strings.Contains(buildInstructions(surface, config.CapabilitySurfaceFull), "gitlab_find_action") {
+		if strings.Contains(buildInstructions(surface, config.CapabilitySurfaceFull, false), "gitlab_find_action") {
 			t.Errorf("surface %q instructions mention gitlab_find_action, which only dynamic mode exposes", surface)
 		}
 	}
@@ -251,16 +251,36 @@ func TestSurfaceToolRef_Render_PerSurfaceShapes(t *testing.T) {
 // instructions mentioning it there would teach the model to make requests
 // this server refuses — advice worse than silence.
 func TestBuildInstructions_WatchingSection_FollowsCapabilitySurface(t *testing.T) {
-	full := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull)
+	full := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, false)
 	if !strings.Contains(full, "WATCHING RESOURCES") {
 		t.Error("full capability surface instructions omit the watching section; the feature is invisible to the model")
 	}
-	if !strings.Contains(full, "resources/subscribe") {
+	if !strings.Contains(full, "via MCP resources/subscribe") {
 		t.Error("the watching section never names resources/subscribe, so the model cannot map it to the protocol")
 	}
 
-	minimal := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceMinimal)
+	minimal := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceMinimal, false)
 	if strings.Contains(minimal, "WATCHING RESOURCES") {
 		t.Error("minimal surface instructions advertise subscriptions the server refuses there")
+	}
+}
+
+// TestBuildInstructions_StatelessHTTP_NamesTheWorkingMethod verifies the
+// instructions never teach a stateless-HTTP model the request that
+// transport refuses.
+//
+// On stateless HTTP the legacy resources/subscribe is answered with an
+// error, while subscriptions/listen works; instructions that named only the
+// former would send the model straight into a refusal.
+func TestBuildInstructions_StatelessHTTP_NamesTheWorkingMethod(t *testing.T) {
+	stateless := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, true)
+	if !strings.Contains(stateless, "WATCHING RESOURCES") {
+		t.Fatal("stateless instructions dropped the watching section entirely; subscriptions/listen does work there")
+	}
+	if !strings.Contains(stateless, "subscriptions/listen") {
+		t.Error("stateless instructions do not name subscriptions/listen, the one method that transport honors")
+	}
+	if strings.Contains(stateless, "via MCP resources/subscribe") {
+		t.Error("stateless instructions teach resources/subscribe, which that transport refuses")
 	}
 }

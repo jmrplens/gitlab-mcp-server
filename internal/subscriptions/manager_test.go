@@ -424,7 +424,7 @@ func TestWatcher_SettledResourceKeepsPolling(t *testing.T) {
 		time.Sleep(DefaultBaseInterval * settledFactor * 2)
 		synctest.Wait()
 
-		if got := n.count(); got == 0 {
+		if n.count() == 0 {
 			t.Fatal("a retried pipeline produced no notification — the watcher treated a finished state as terminal")
 		}
 	})
@@ -543,7 +543,7 @@ func TestWatcher_RateLimitClears_ResumesPolling(t *testing.T) {
 		time.Sleep(DefaultMinInterval * 4)
 		synctest.Wait()
 
-		if after := r.readCount(testURI); after <= before {
+		if r.readCount(testURI) <= before {
 			t.Errorf("reads stayed at %d after the pause cleared; the watcher never resumed", before)
 		}
 	})
@@ -1398,7 +1398,7 @@ func TestClearRateLimit_DuringActivePause_IsIgnored(t *testing.T) {
 	// A concurrent watcher's read succeeds while the pause is in force.
 	m.clearRateLimit()
 
-	if got := m.remainingPause(); got <= 0 {
+	if m.remainingPause() <= 0 {
 		t.Fatal("the pause was cleared by a concurrent success; it must stay in force for every watcher")
 	}
 	if second := m.recordRateLimit(); second <= first {

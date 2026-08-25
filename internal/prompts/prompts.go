@@ -331,8 +331,10 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 		fmt.Fprintf(&b, "## Other Jobs (%d)\n%s\n\n", len(other), strings.Join(other, "\n"))
 	}
 	switch pipeline.Status {
-	case "success", "failed", "canceled", "skipped", "manual":
-		// Settled: nothing to wait for.
+	case "success", "failed", "canceled", "skipped", "manual", "scheduled":
+		// Settled: nothing this watch could usefully wait on. "manual" and
+		// "scheduled" sit here for the same reason the subscription cadence
+		// treats them as settled — both wait on something outside CI.
 	default:
 		// Still moving. Pointing at the subscription beats teaching the
 		// model to re-invoke this prompt on a timer, which is the pattern

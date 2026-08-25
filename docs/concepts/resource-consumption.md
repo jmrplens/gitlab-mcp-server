@@ -79,15 +79,17 @@ subscriptions, not pool size:
 | Per active MCP session           | ~2         |
 | Per concurrent tool call         | 1          |
 
-| Per active resource subscription | 1         |
+| Per watched URI (subscriptions to the same URI share one watcher) | 1, max 10 per server |
 
-A server with 100 active sessions and 10 concurrent tool calls: ~220 goroutines total.
+A server with 100 active sessions, 10 concurrent tool calls, and 10 watched URIs: ~230 goroutines total.
 
 ### Resource Subscription Watchers
 
 On `CAPABILITY_SURFACE=full` (the default), a session that subscribes to a
 resource ([subscriptions reference](../reference/capabilities/subscriptions.md))
-starts a watcher goroutine that polls GitLab in the background — the one
+starts — or joins — a watcher goroutine that polls GitLab in the background;
+subscriptions to the same URI share one watcher, so goroutines count per
+distinct watched URI — the one
 kind of work this server performs without a request in flight:
 
 - Up to **10 watchers per server** (per token+URL pool entry in HTTP mode),

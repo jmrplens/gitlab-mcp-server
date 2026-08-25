@@ -2,6 +2,7 @@ package subscriptions
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -29,14 +30,18 @@ func TranslateReadError(err error) error {
 	if err == nil {
 		return nil
 	}
+	// The sentinel wraps the original rather than replacing it: the
+	// manager branches with errors.Is, which still matches, while the log
+	// line a stopped watcher leaves behind keeps saying which status or
+	// message actually ended it.
 	switch {
 	case toolutil.IsHTTPStatus(err, http.StatusTooManyRequests):
-		return ErrRateLimited
+		return fmt.Errorf("%w: %w", ErrRateLimited, err)
 	case toolutil.IsHTTPStatus(err, http.StatusUnauthorized),
 		toolutil.IsHTTPStatus(err, http.StatusForbidden),
 		toolutil.IsNotFound(err),
 		isResourceNotFound(err):
-		return ErrInaccessible
+		return fmt.Errorf("%w: %w", ErrInaccessible, err)
 	default:
 		return err
 	}

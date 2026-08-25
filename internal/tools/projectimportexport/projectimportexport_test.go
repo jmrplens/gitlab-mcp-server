@@ -377,9 +377,20 @@ func TestImportFromFile_FilePath_NonExistent_Error(t *testing.T) {
 
 // TestImportFromFile_FilePathOpenError verifies that ImportFromFile reports an
 // open error after a file path passes canonical archive validation.
+//
+// Skipped as root, and necessarily so rather than as a shortcut: the
+// validation chain (EvalSymlinks, stat, regular-file and permission
+// checks) already rejects every structurally unreachable path with its own
+// earlier error, so the only way to make os.Open itself fail on a path
+// that passed validation is a permission the process lacks — and root,
+// holding CAP_DAC_OVERRIDE, lacks none. Under uid 0 this branch is
+// unreachable by construction, not merely awkward to reach.
 func TestImportFromFile_FilePathOpenError(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("chmod-based unreadable file test is Unix-specific")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses file permissions (CAP_DAC_OVERRIDE); the open-error branch cannot be reached")
 	}
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
 

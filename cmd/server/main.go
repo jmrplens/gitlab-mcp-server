@@ -833,7 +833,7 @@ func createServer(
 		// Named tools differ per surface, so the guidance is built for the
 		// surface this server actually registers: a dynamic-mode model can
 		// only see gitlab_find_action and gitlab_execute_action.
-		Instructions: buildInstructions(toolSurface, capabilitySurface),
+		Instructions: buildInstructions(toolSurface, capabilitySurface, cfg.Stateless),
 		Logger:       slog.Default(),
 		Capabilities: serverCapabilities,
 		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {

@@ -816,6 +816,18 @@ func TestWatchMeta_DescribesTheWatch(t *testing.T) {
 			},
 		},
 		{
+			// Settled is not demoted: a finished pipeline polls at the 60s
+			// settled cadence while its lease is intact, and the _meta must
+			// let a client tell that apart from the 10-minute lease
+			// slowdown.
+			name:   "settled watch",
+			update: subscriptions.Update{URI: "u", RenewBy: renewBy, Interval: 60 * time.Second},
+			wantKeys: map[string]any{
+				"state":          "active",
+				"pollIntervalMs": int64(60000),
+			},
+		},
+		{
 			name:   "demoted watch",
 			update: subscriptions.Update{URI: "u", Slow: true, RenewBy: renewBy, Interval: 10 * time.Minute},
 			wantKeys: map[string]any{

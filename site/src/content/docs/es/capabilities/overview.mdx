@@ -56,12 +56,21 @@ sequenceDiagram
 
 El soporte de capacidades varía según el cliente MCP, y GitLab MCP Server se adapta automáticamente a lo que anuncie el cliente conectado. La tabla siguiente refleja clientes habituales en el momento de redactar esta página; como el soporte de los clientes evoluciona rápidamente, confirma el estado actual en la documentación de cada cliente.
 
-| Capacidad   | Claude Desktop | VS Code Copilot | Cursor | Claude Code |
-| ----------- | -------------- | --------------- | ------ | ----------- |
-| Progress    | ✅              | ✅               | ✅      | ✅           |
-| Completions | ✅              | ✅               | ❓      | ✅           |
-| Elicitation | ✅              | ❌               | ❌      | ✅           |
-| Icons¹      | ❌              | ✅               | ❓      | ❌           |
+| Capacidad      | Claude Desktop | VS Code Copilot | Cursor | Claude Code |
+| -------------- | -------------- | --------------- | ------ | ----------- |
+| Progress       | ✅              | ✅               | ✅      | ✅           |
+| Completions    | ✅              | ✅               | ❓      | ✅           |
+| Elicitation    | ✅              | ❌               | ❌      | ✅           |
+| Subscriptions² | ❓              | ✅               | ❓      | ❓           |
+| Icons¹         | ❌              | ✅               | ❓      | ❌           |
+
+² VS Code se suscribe automáticamente a cada recurso que lee y encamina
+`resources/updated` a su pipeline de cambios de archivo. Cursor envía
+peticiones `resources/subscribe` (incluso a servidores que no anuncian la
+capacidad), pero no está verificado si muestra las notificaciones
+resultantes — como tampoco lo está el manejo de suscripciones en Claude
+Desktop y Claude Code. Los clientes que nunca se suscriben no pierden nada:
+los recursos siguen siendo legibles bajo demanda.
 
 ¹ Los iconos no son una capacidad negociada: el servidor los adjunta siempre y
 un cliente que no puede renderizar ninguno de ellos simplemente los ignora,

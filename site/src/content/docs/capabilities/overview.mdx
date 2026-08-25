@@ -56,12 +56,21 @@ sequenceDiagram
 
 Capability support varies by MCP client, and GitLab MCP Server adapts automatically to whatever the connected client advertises. The table below reflects common clients at the time of writing; because client support evolves quickly, confirm the current state against each client's own documentation.
 
-| Capability  | Claude Desktop | VS Code Copilot | Cursor | Claude Code |
-| ----------- | -------------- | --------------- | ------ | ----------- |
-| Progress    | ✅              | ✅               | ✅      | ✅           |
-| Completions | ✅              | ✅               | ❓      | ✅           |
-| Elicitation | ✅              | ❌               | ❌      | ✅           |
-| Icons¹      | ❌              | ✅               | ❓      | ❌           |
+| Capability     | Claude Desktop | VS Code Copilot | Cursor | Claude Code |
+| -------------- | -------------- | --------------- | ------ | ----------- |
+| Progress       | ✅              | ✅               | ✅      | ✅           |
+| Completions    | ✅              | ✅               | ❓      | ✅           |
+| Elicitation    | ✅              | ❌               | ❌      | ✅           |
+| Subscriptions² | ❓              | ✅               | ❓      | ❓           |
+| Icons¹         | ❌              | ✅               | ❓      | ❌           |
+
+² VS Code subscribes automatically to every resource it reads and routes
+`resources/updated` into its file-change pipeline. Cursor sends
+`resources/subscribe` requests (even to servers that do not advertise the
+capability), but whether it surfaces the resulting notifications is
+unverified — as is subscription handling in Claude Desktop and Claude Code.
+Clients that never subscribe lose nothing: resources remain readable on
+demand.
 
 ¹ Icons are not a negotiated capability: the server always attaches them and a
 client that cannot render any of them simply ignores them, losing nothing

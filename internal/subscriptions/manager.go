@@ -214,10 +214,7 @@ type Manager[S comparable] struct {
 	reader   Reader
 	notifier Notifier
 	opts     Options
-
-	baseCtx context.Context
-	cancel  context.CancelFunc
-	wg      sync.WaitGroup
+	wg       sync.WaitGroup
 
 	mu          sync.Mutex
 	watchers    map[string]*watcher[S]
@@ -267,15 +264,10 @@ type watcher[S comparable] struct {
 // New creates a manager. Call [Manager.Close] to stop every watcher; the
 // manager is unusable afterwards.
 func New[S comparable](reader Reader, notifier Notifier, opts Options) *Manager[S] {
-	// The cancel func outlives this call by design: it is the manager's
-	// shutdown switch, invoked by Close.
-	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // G118: cancel is stored and called by Close
 	return &Manager[S]{
 		reader:   reader,
 		notifier: notifier,
 		opts:     opts.withDefaults(),
-		baseCtx:  ctx,
-		cancel:   cancel,
 		watchers: make(map[string]*watcher[S]),
 	}
 }
@@ -344,8 +336,12 @@ func (m *Manager[S]) start(ctx context.Context, w *watcher[S]) error {
 	content, err := m.reader.Read(ctx, w.uri)
 
 	// The deadline is the absolute cap, not the lease: reaching the lease
-	// slows a watcher down, and only [Options.MaxLifetime] ends it.
-	watchCtx, cancel := context.WithTimeout(m.baseCtx, m.opts.MaxLifetime)
+	// slows a watcher down, and only [Options.MaxLifetime] ends it. The
+	// context roots at Background rather than anything request-scoped —
+	// the whole point of a subscription is to outlive the request that
+	// created it — and Close stops the watcher through its cancel func,
+	// which the registry holds for exactly that purpose.
+	watchCtx, cancel := context.WithTimeout(context.Background(), m.opts.MaxLifetime)
 
 	m.mu.Lock()
 	switch {
@@ -512,10 +508,22 @@ func (m *Manager[S]) Close() {
 		return
 	}
 	m.closed = true
+	// Collect every running watcher's cancel under the lock. A watcher
+	// whose first read is still in flight has no cancel yet, and needs
+	// none: start re-checks closed under this same lock and abandons the
+	// launch.
+	cancels := make([]context.CancelFunc, 0, len(m.watchers))
+	for _, w := range m.watchers {
+		if w.cancel != nil {
+			cancels = append(cancels, w.cancel)
+		}
+	}
 	m.watchers = make(map[string]*watcher[S])
 	m.mu.Unlock()
 
-	m.cancel()
+	for _, cancel := range cancels {
+		cancel()
+	}
 	m.wg.Wait()
 }
 
@@ -753,13 +761,13 @@ func (m *Manager[S]) poll(ctx context.Context, w *watcher[S]) (next time.Duratio
 
 	case errors.Is(err, ErrInaccessible):
 		m.opts.Logger.Info("watcher stopping: resource is gone or access was revoked",
-			"uri", w.uri, "kind", w.kind.String())
-		return 0, ErrInaccessible
+			"uri", w.uri, "kind", w.kind.String(), "error", err)
+		return 0, err
 
 	case errors.Is(err, ErrRateLimited):
 		wait := m.recordRateLimit()
 		m.opts.Logger.Warn("rate limited by GitLab, pausing every watcher",
-			"uri", w.uri, "pause", wait)
+			"uri", w.uri, "pause", wait, "error", err)
 		// Deliberately not recorded as this watcher's cadence: a back-off
 		// is how long to wait before trying again, not how often this
 		// resource is being watched, and a subscriber told the latter

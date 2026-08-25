@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -48,13 +49,35 @@ func testConfig(baseURL string) *config.Config {
 	}
 }
 
+// stubGitLabBase points every pool test at a loopback GitLab stub instead
+// of the literal http://localhost these tests used to carry.
+//
+// The literal was a hidden dependency on the machine: it only worked while
+// nothing answered on port 80. On a host running a web server there, Go's
+// dialer may prefer ::1, and a vhost that answers 401/403 to the
+// credential probe makes every GetOrCreate fail with ErrInvalidCredential
+// before the code under test runs. The stub answers 200 to everything, so
+// the probe passes verdict-free the way an unreachable port used to.
+var stubGitLabBase string
+
+func TestMain(m *testing.M) {
+	stub := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte("{}"))
+	}))
+	stubGitLabBase = stub.URL
+	code := m.Run()
+	stub.Close()
+	os.Exit(code)
+}
+
 // TestGetOrCreate_EmptyToken verifies that GetOrCreate rejects empty tokens
 // to prevent all unauthenticated callers from sharing a single server entry.
 func TestGetOrCreate_EmptyToken(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
-	srv, err := pool.GetOrCreate("", "http://localhost")
+	srv, err := pool.GetOrCreate("", stubGitLabBase)
 	if err == nil {
 		t.Fatal("expected error for empty token, got nil")
 	}
@@ -65,10 +88,10 @@ func TestGetOrCreate_EmptyToken(t *testing.T) {
 
 // TestGetOrCreate_NewToken verifies GetOrCreate when new token.
 func TestGetOrCreate_NewToken(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
-	srv, err := pool.GetOrCreate("glpat-token1", "http://localhost")
+	srv, err := pool.GetOrCreate("glpat-token1", stubGitLabBase)
 	if err != nil {
 		t.Fatalf("GetOrCreate() unexpected error: %v", err)
 	}
@@ -254,15 +277,15 @@ func TestGetOrCreate_TierConfigOverridesDetection(t *testing.T) {
 
 // TestGetOrCreate_SameToken verifies GetOrCreate when same token.
 func TestGetOrCreate_SameToken(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
-	srv1, err := pool.GetOrCreate("glpat-same", "http://localhost")
+	srv1, err := pool.GetOrCreate("glpat-same", stubGitLabBase)
 	if err != nil {
 		t.Fatalf("first GetOrCreate() error: %v", err)
 	}
 
-	srv2, err := pool.GetOrCreate("glpat-same", "http://localhost")
+	srv2, err := pool.GetOrCreate("glpat-same", stubGitLabBase)
 	if err != nil {
 		t.Fatalf("second GetOrCreate() error: %v", err)
 	}
@@ -277,15 +300,15 @@ func TestGetOrCreate_SameToken(t *testing.T) {
 
 // TestGetOrCreate_DifferentTokens verifies GetOrCreate when different tokens.
 func TestGetOrCreate_DifferentTokens(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
-	srv1, err := pool.GetOrCreate("glpat-token-a", "http://localhost")
+	srv1, err := pool.GetOrCreate("glpat-token-a", stubGitLabBase)
 	if err != nil {
 		t.Fatalf("GetOrCreate(token-a) error: %v", err)
 	}
 
-	srv2, err := pool.GetOrCreate("glpat-token-b", "http://localhost")
+	srv2, err := pool.GetOrCreate("glpat-token-b", stubGitLabBase)
 	if err != nil {
 		t.Fatalf("GetOrCreate(token-b) error: %v", err)
 	}
@@ -300,21 +323,21 @@ func TestGetOrCreate_DifferentTokens(t *testing.T) {
 
 // TestGetOrCreate_LRUEviction verifies GetOrCreate when lru eviction.
 func TestGetOrCreate_LRUEviction(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithMaxSize(2))
 
 	// fill the pool
-	_, err := pool.GetOrCreate("token-1", "http://localhost")
+	_, err := pool.GetOrCreate("token-1", stubGitLabBase)
 	if err != nil {
 		t.Fatalf("GetOrCreate(token-1) error: %v", err)
 	}
-	_, err = pool.GetOrCreate("token-2", "http://localhost")
+	_, err = pool.GetOrCreate("token-2", stubGitLabBase)
 	if err != nil {
 		t.Fatalf("GetOrCreate(token-2) error: %v", err)
 	}
 
 	// this should evict token-1 (LRU)
-	_, err = pool.GetOrCreate("token-3", "http://localhost")
+	_, err = pool.GetOrCreate("token-3", stubGitLabBase)
 	if err != nil {
 		t.Fatalf("GetOrCreate(token-3) error: %v", err)
 	}
@@ -324,7 +347,7 @@ func TestGetOrCreate_LRUEviction(t *testing.T) {
 	}
 
 	// token-1 should have been evicted — re-requesting creates a new entry
-	srv1, err := pool.GetOrCreate("token-1", "http://localhost")
+	srv1, err := pool.GetOrCreate("token-1", stubGitLabBase)
 	if err != nil {
 		t.Fatalf("GetOrCreate(token-1) re-create error: %v", err)
 	}
@@ -339,25 +362,25 @@ func TestGetOrCreate_LRUEviction(t *testing.T) {
 
 // TestGetOrCreate_LRUPromotes verifies GetOrCreate when lru promotes.
 func TestGetOrCreate_LRUPromotes(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithMaxSize(2))
 
-	_, _ = pool.GetOrCreate("token-a", "http://localhost")
-	_, _ = pool.GetOrCreate("token-b", "http://localhost")
+	_, _ = pool.GetOrCreate("token-a", stubGitLabBase)
+	_, _ = pool.GetOrCreate("token-b", stubGitLabBase)
 
 	// Re-access token-a to promote it in LRU
-	_, _ = pool.GetOrCreate("token-a", "http://localhost")
+	_, _ = pool.GetOrCreate("token-a", stubGitLabBase)
 
 	// Adding token-c should evict token-b (now LRU), not token-a
-	_, _ = pool.GetOrCreate("token-c", "http://localhost")
+	_, _ = pool.GetOrCreate("token-c", stubGitLabBase)
 
 	if pool.Size() != 2 {
 		t.Fatalf("pool.Size() = %d, want 2", pool.Size())
 	}
 
 	// Verify token-a still returns the same cached entry (not evicted)
-	srvA1, _ := pool.GetOrCreate("token-a", "http://localhost")
-	srvA2, _ := pool.GetOrCreate("token-a", "http://localhost")
+	srvA1, _ := pool.GetOrCreate("token-a", stubGitLabBase)
+	srvA2, _ := pool.GetOrCreate("token-a", stubGitLabBase)
 	if srvA1 != srvA2 {
 		t.Error("token-a should still be in pool after LRU promotion")
 	}
@@ -365,7 +388,7 @@ func TestGetOrCreate_LRUPromotes(t *testing.T) {
 
 // TestGetOrCreate_Concurrent verifies GetOrCreate when concurrent.
 func TestGetOrCreate_Concurrent(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithMaxSize(20))
 
 	tokens := []string{
@@ -379,7 +402,7 @@ func TestGetOrCreate_Concurrent(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			token := tokens[idx%len(tokens)]
-			srv, err := pool.GetOrCreate(token, "http://localhost")
+			srv, err := pool.GetOrCreate(token, stubGitLabBase)
 			if err != nil {
 				t.Errorf("concurrent GetOrCreate() error: %v", err)
 				return
@@ -398,11 +421,11 @@ func TestGetOrCreate_Concurrent(t *testing.T) {
 
 // TestClose verifies Close.
 func TestClose(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
-	_, _ = pool.GetOrCreate("token-1", "http://localhost")
-	_, _ = pool.GetOrCreate("token-2", "http://localhost")
+	_, _ = pool.GetOrCreate("token-1", stubGitLabBase)
+	_, _ = pool.GetOrCreate("token-2", stubGitLabBase)
 
 	pool.Close()
 
@@ -454,7 +477,7 @@ func TestTokenSuffix(t *testing.T) {
 
 // TestWithMaxSize verifies WithMaxSize.
 func TestWithMaxSize(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 
 	pool := New(cfg, testFactory(), WithMaxSize(5))
 	if pool.maxSize != 5 {
@@ -476,7 +499,7 @@ func TestWithMaxSize(t *testing.T) {
 // TestWithRevalidateInterval verifies that the revalidation interval can be
 // configured via the option.
 func TestWithRevalidateInterval(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 
 	pool := New(cfg, testFactory(), WithRevalidateInterval(5*time.Minute))
 	if pool.revalidateInterval != 5*time.Minute {
@@ -493,17 +516,17 @@ func TestWithRevalidateInterval(t *testing.T) {
 // TestPoolEntry_TimestampFields verifies that new pool entries have
 // createdAt and lastValidated set to a recent time.
 func TestPoolEntry_TimestampFields(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
 	before := time.Now()
-	_, err := pool.GetOrCreate("token-time", "http://localhost")
+	_, err := pool.GetOrCreate("token-time", stubGitLabBase)
 	if err != nil {
 		t.Fatalf("GetOrCreate() error: %v", err)
 	}
 	after := time.Now()
 
-	key := sessionKey("token-time", "http://localhost")
+	key := sessionKey("token-time", stubGitLabBase)
 	pool.mu.RLock()
 	entry := pool.entries[key]
 	pool.mu.RUnlock()
@@ -519,7 +542,7 @@ func TestPoolEntry_TimestampFields(t *testing.T) {
 // TestStartRevalidation_NilContext verifies that StartRevalidation
 // handles nil context gracefully by substituting context.Background().
 func TestStartRevalidation_NilContext(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithRevalidateInterval(0))
 
 	// Should not panic — nil ctx is replaced with context.Background()
@@ -530,7 +553,7 @@ func TestStartRevalidation_NilContext(t *testing.T) {
 // TestStartRevalidation_DisabledWithZeroInterval verifies that
 // StartRevalidation returns immediately when interval is zero.
 func TestStartRevalidation_DisabledWithZeroInterval(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithRevalidateInterval(0))
 
 	ctx := t.Context()
@@ -542,7 +565,7 @@ func TestStartRevalidation_DisabledWithZeroInterval(t *testing.T) {
 // TestStartRevalidation_CancelledContext verifies that the revalidation
 // goroutine stops when the context is cancelled.
 func TestStartRevalidation_CancelledContext(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithRevalidateInterval(50*time.Millisecond))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -608,16 +631,16 @@ func TestGetOrCreate_NilFactory_ReturnsError(t *testing.T) {
 // TestEvictByKey verifies that evictByKey removes the specified entry
 // and not others.
 func TestEvictByKey(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
-	_, _ = pool.GetOrCreate("token-keep", "http://localhost")
-	_, _ = pool.GetOrCreate("token-evict", "http://localhost")
+	_, _ = pool.GetOrCreate("token-keep", stubGitLabBase)
+	_, _ = pool.GetOrCreate("token-evict", stubGitLabBase)
 
 	if pool.Size() != 2 {
 		t.Fatalf("pool.Size() = %d, want 2", pool.Size())
 	}
-	key := sessionKey("token-evict", "http://localhost")
+	key := sessionKey("token-evict", stubGitLabBase)
 	pool.evictByKey(key)
 
 	if pool.Size() != 1 {
@@ -636,7 +659,7 @@ func TestEvictByKey(t *testing.T) {
 // already present, insertEntry returns the stored server (discarding the freshly
 // built one), records a cache hit, and moves the existing entry to the LRU front.
 func TestInsertEntry_ExistingEntry(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithMaxSize(20))
 
 	existingKey := "existing"
@@ -680,7 +703,7 @@ func TestInsertEntry_ExistingEntry(t *testing.T) {
 // TestDefaultRevalidateInterval verifies that the default revalidation
 // interval is 15 minutes.
 func TestDefaultRevalidateInterval(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 	if pool.revalidateInterval != DefaultRevalidateInterval {
 		t.Errorf("default revalidateInterval = %v, want %v", pool.revalidateInterval, DefaultRevalidateInterval)
@@ -689,11 +712,11 @@ func TestDefaultRevalidateInterval(t *testing.T) {
 
 // TestStats_HitsAndMisses verifies that Stats tracks cache hits and misses.
 func TestStats_HitsAndMisses(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
 	// First call → miss
-	_, _ = pool.GetOrCreate("token-a", "http://localhost")
+	_, _ = pool.GetOrCreate("token-a", stubGitLabBase)
 	s := pool.Stats()
 	if s.Misses != 1 {
 		t.Errorf("Misses = %d after first GetOrCreate, want 1", s.Misses)
@@ -703,7 +726,7 @@ func TestStats_HitsAndMisses(t *testing.T) {
 	}
 
 	// Second call with same token → hit
-	_, _ = pool.GetOrCreate("token-a", "http://localhost")
+	_, _ = pool.GetOrCreate("token-a", stubGitLabBase)
 	s = pool.Stats()
 	if s.Hits != 1 {
 		t.Errorf("Hits = %d after second GetOrCreate, want 1", s.Hits)
@@ -713,7 +736,7 @@ func TestStats_HitsAndMisses(t *testing.T) {
 	}
 
 	// Third call with different token → another miss
-	_, _ = pool.GetOrCreate("token-b", "http://localhost")
+	_, _ = pool.GetOrCreate("token-b", stubGitLabBase)
 	s = pool.Stats()
 	if s.Hits != 1 {
 		t.Errorf("Hits = %d, want 1", s.Hits)
@@ -725,19 +748,19 @@ func TestStats_HitsAndMisses(t *testing.T) {
 
 // TestStats_Evictions verifies that LRU evictions are counted.
 func TestStats_Evictions(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithMaxSize(2))
 
-	_, _ = pool.GetOrCreate("tok-1", "http://localhost")
-	_, _ = pool.GetOrCreate("tok-2", "http://localhost")
-	_, _ = pool.GetOrCreate("tok-3", "http://localhost") // evicts tok-1
+	_, _ = pool.GetOrCreate("tok-1", stubGitLabBase)
+	_, _ = pool.GetOrCreate("tok-2", stubGitLabBase)
+	_, _ = pool.GetOrCreate("tok-3", stubGitLabBase) // evicts tok-1
 
 	s := pool.Stats()
 	if s.Evictions != 1 {
 		t.Errorf("Evictions = %d after 1 LRU eviction, want 1", s.Evictions)
 	}
 
-	_, _ = pool.GetOrCreate("tok-4", "http://localhost") // evicts tok-2
+	_, _ = pool.GetOrCreate("tok-4", stubGitLabBase) // evicts tok-2
 	s = pool.Stats()
 	if s.Evictions != 2 {
 		t.Errorf("Evictions = %d after 2 LRU evictions, want 2", s.Evictions)
@@ -746,11 +769,11 @@ func TestStats_Evictions(t *testing.T) {
 
 // TestStats_EvictByKey verifies that explicit key eviction is counted.
 func TestStats_EvictByKey(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
-	_, _ = pool.GetOrCreate("tok-evict", "http://localhost")
-	key := sessionKey("tok-evict", "http://localhost")
+	_, _ = pool.GetOrCreate("tok-evict", stubGitLabBase)
+	key := sessionKey("tok-evict", stubGitLabBase)
 	pool.evictByKey(key)
 
 	s := pool.Stats()
@@ -768,12 +791,12 @@ func TestStats_EvictByKey(t *testing.T) {
 
 // TestStats_SnapshotFields verifies that Stats returns correct pool state.
 func TestStats_SnapshotFields(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	before := time.Now()
 	pool := New(cfg, testFactory(), WithMaxSize(50))
 
-	_, _ = pool.GetOrCreate("tok-1", "http://localhost")
-	_, _ = pool.GetOrCreate("tok-2", "http://localhost")
+	_, _ = pool.GetOrCreate("tok-1", stubGitLabBase)
+	_, _ = pool.GetOrCreate("tok-2", stubGitLabBase)
 
 	s := pool.Stats()
 	if s.CurrentSize != 2 {
@@ -863,10 +886,10 @@ func TestRevalidateAll_EvictsInvalidTokens(t *testing.T) {
 // TestRevalidateAll_CancelledContext verifies that revalidateAll stops
 // processing entries when the context is cancelled.
 func TestRevalidateAll_CancelledContext(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
-	_, _ = pool.GetOrCreate("tok-1", "http://localhost")
+	_, _ = pool.GetOrCreate("tok-1", stubGitLabBase)
 
 	ctx := testutil.CancelledCtx(t)
 
@@ -919,7 +942,7 @@ func TestStartRevalidation_TriggersRevalidation(t *testing.T) {
 
 // TestStats_ConcurrentAccess verifies that metrics are safe under concurrent use.
 func TestStats_ConcurrentAccess(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithMaxSize(20))
 
 	var wg sync.WaitGroup
@@ -928,7 +951,7 @@ func TestStats_ConcurrentAccess(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			token := "tok-" + string(rune('a'+idx%5))
-			_, _ = pool.GetOrCreate(token, "http://localhost")
+			_, _ = pool.GetOrCreate(token, stubGitLabBase)
 			_ = pool.Stats()
 		}(i)
 	}
@@ -944,7 +967,7 @@ func TestStats_ConcurrentAccess(t *testing.T) {
 // TestGetOrCreate_InvalidGitLabURL verifies that GetOrCreate returns an error
 // when the GitLab URL is invalid and NewClientWithToken fails to create a client.
 func TestGetOrCreate_InvalidGitLabURL(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
 	srv, err := pool.GetOrCreate("glpat-token1", "://invalid")
@@ -962,7 +985,7 @@ func TestGetOrCreate_InvalidGitLabURL(t *testing.T) {
 // TestEvictLRU_EmptyList verifies that evictLRU handles the case where the
 // LRU list is empty without panicking (back == nil guard).
 func TestEvictLRU_EmptyList(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithMaxSize(5))
 
 	// Directly call evictLRU with an empty pool — should not panic.
@@ -978,7 +1001,7 @@ func TestEvictLRU_EmptyList(t *testing.T) {
 // TestGetOrCreate_EmptyGitLabURL verifies that GetOrCreate rejects an empty
 // GitLab URL to prevent sessions without a target instance.
 func TestGetOrCreate_EmptyGitLabURL(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
 	srv, err := pool.GetOrCreate("glpat-token1", "")
@@ -993,7 +1016,7 @@ func TestGetOrCreate_EmptyGitLabURL(t *testing.T) {
 // TestGetOrCreate_DifferentURLsSameToken verifies that the same token
 // against different GitLab instances gets separate pool entries.
 func TestGetOrCreate_DifferentURLsSameToken(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory())
 
 	srv1, err := pool.GetOrCreate("glpat-same-token", "http://gitlab-a.example.com")
@@ -1141,18 +1164,18 @@ func TestGetOrCreate_AdmitsWhenNoVerdictIsAvailable(t *testing.T) {
 // of the LRU, holding a registered server and drawing a revalidation ping at
 // every interval on behalf of a client that is gone.
 func TestEvictIdle_ReclaimsOnlyStaleEntries(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithIdleTimeout(30*time.Minute))
 
 	for _, token := range []string{"stale-token", "fresh-token"} {
-		if _, err := pool.GetOrCreate(token, "http://localhost"); err != nil {
+		if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
 			t.Fatalf("GetOrCreate(%s) error: %v", token, err)
 		}
 	}
 
 	// Age one entry past the timeout without waiting for wall-clock time.
 	pool.mu.Lock()
-	pool.entries[sessionKey("stale-token", "http://localhost")].lastUsed = time.Now().Add(-time.Hour)
+	pool.entries[sessionKey("stale-token", stubGitLabBase)].lastUsed = time.Now().Add(-time.Hour)
 	pool.mu.Unlock()
 
 	pool.evictIdle()
@@ -1160,7 +1183,7 @@ func TestEvictIdle_ReclaimsOnlyStaleEntries(t *testing.T) {
 	if pool.Size() != 1 {
 		t.Fatalf("pool.Size() = %d, want 1 after the idle sweep", pool.Size())
 	}
-	if _, ok := pool.entries[sessionKey("fresh-token", "http://localhost")]; !ok {
+	if _, ok := pool.entries[sessionKey("fresh-token", stubGitLabBase)]; !ok {
 		t.Error("the recently used entry was evicted")
 	}
 	if got := pool.Stats().IdleEvictions; got != 1 {
@@ -1178,20 +1201,20 @@ func TestEvictIdle_ReclaimsOnlyStaleEntries(t *testing.T) {
 // bypasses existingServerLocked, so that path has to refresh lastUsed itself;
 // if it does not, the sweep reclaims servers that are actively in use.
 func TestEvictIdle_HitRefreshesLastUsed(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithIdleTimeout(30*time.Minute))
 
-	if _, err := pool.GetOrCreate("token", "http://localhost"); err != nil {
+	if _, err := pool.GetOrCreate("token", stubGitLabBase); err != nil {
 		t.Fatalf("GetOrCreate error: %v", err)
 	}
-	key := sessionKey("token", "http://localhost")
+	key := sessionKey("token", stubGitLabBase)
 
 	pool.mu.Lock()
 	pool.entries[key].lastUsed = time.Now().Add(-time.Hour)
 	pool.mu.Unlock()
 
 	// A hit through the public API must reset the clock.
-	if _, err := pool.GetOrCreate("token", "http://localhost"); err != nil {
+	if _, err := pool.GetOrCreate("token", stubGitLabBase); err != nil {
 		t.Fatalf("GetOrCreate (hit) error: %v", err)
 	}
 
@@ -1205,14 +1228,14 @@ func TestEvictIdle_HitRefreshesLastUsed(t *testing.T) {
 // TestEvictIdle_DisabledKeepsEverything verifies that a zero timeout turns the
 // sweep off, leaving the LRU bound as the only reclamation path.
 func TestEvictIdle_DisabledKeepsEverything(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 	pool := New(cfg, testFactory(), WithIdleTimeout(0))
 
-	if _, err := pool.GetOrCreate("token", "http://localhost"); err != nil {
+	if _, err := pool.GetOrCreate("token", stubGitLabBase); err != nil {
 		t.Fatalf("GetOrCreate error: %v", err)
 	}
 	pool.mu.Lock()
-	pool.entries[sessionKey("token", "http://localhost")].lastUsed = time.Time{}
+	pool.entries[sessionKey("token", stubGitLabBase)].lastUsed = time.Time{}
 	pool.mu.Unlock()
 
 	pool.evictIdle()
@@ -1226,7 +1249,7 @@ func TestEvictIdle_DisabledKeepsEverything(t *testing.T) {
 // helper is a no-op when the timeout is non-positive, and that a cancelled
 // context stops a running sweeper.
 func TestStartIdleEviction_DisabledReturnsWithoutGoroutine(t *testing.T) {
-	cfg := testConfig("http://localhost")
+	cfg := testConfig(stubGitLabBase)
 
 	New(cfg, testFactory(), WithIdleTimeout(0)).StartIdleEviction(t.Context())
 

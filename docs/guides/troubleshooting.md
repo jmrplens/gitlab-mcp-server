@@ -134,8 +134,11 @@ never reach the client (the Go SDK fires the listen request without awaiting
 its response), so a subscription that "succeeded" but never fires is often
 one that was refused.
 
-**Notifications arrive slowly.** The watch may have lease-demoted: 30
-minutes without any request on the session drops it to a 10-minute poll.
+**Notifications arrive slowly.** Two different slowdowns look alike from
+outside. A settled resource — a finished pipeline, a closed issue — is
+polled at 60 seconds by design, four times the 15-second base. Separately,
+the watch may have lease-demoted: 30 minutes without any request on the
+session drops it to a 10-minute poll.
 Any tool call or resource read on that session restores full speed. The
 notification's `_meta` (`io.github.jmrplens/watch`) reports the current
 state and cadence.
