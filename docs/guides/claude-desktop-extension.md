@@ -46,12 +46,12 @@ asset. The manifest version is stamped from the git tag by
 
 ## Files
 
-| Path                    | Purpose                                                      |
-| ----------------------- | ------------------------------------------------------------ |
-| `mcpb/manifest.json`    | MCPB manifest (source of truth; version stamped per release) |
+| Path                    | Purpose                                                                      |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `mcpb/manifest.json`    | MCPB manifest (source of truth; version stamped per release)                 |
 | `mcpb/icon.png`         | 512×512 icon rendered from `site/public/favicon.svg` by `make brand-rasters` |
-| `scripts/build-mcpb.sh` | Bundle assembly + `mcpb pack`                                |
-| `PRIVACY.md`            | Privacy policy referenced by the manifest                    |
+| `scripts/build-mcpb.sh` | Bundle assembly + `mcpb pack`                                                |
+| `PRIVACY.md`            | Privacy policy referenced by the manifest                                    |
 
 ## Privacy and directory submission
 

@@ -497,9 +497,9 @@ Alphabetical listing of all 50 domain icons and every sub-package that uses each
 `Implementation.Icons` — the server's own identity in the handshake — rather
 than to any tool, resource or prompt.
 
-| Variable    | Attached to                              | Source                                                     |
-| ----------- | ---------------------------------------- | ---------------------------------------------------------- |
-| `IconBrand` | `Implementation.Icons` in `createServer` | `cmd/gen_brand` (original artwork, generated `svgBrand`)   |
+| Variable    | Attached to                              | Source                                                   |
+| ----------- | ---------------------------------------- | -------------------------------------------------------- |
+| `IconBrand` | `Implementation.Icons` in `createServer` | `cmd/gen_brand` (original artwork, generated `svgBrand`) |
 
 The mark is **"the fan-out"**: a source node projecting three branch arcs,
 each ending in a node — a git graph, and the project's own architecture (one

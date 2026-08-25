@@ -1,0 +1,35 @@
+---
+/**
+ * The spec sheet that holds a subject's declarations. Its children are
+ * <Fact> elements and nothing else.
+ *
+ * The section HEADING stays in the markdown above this element, and so does
+ * any sentence that introduces the subject. Two reasons, and the second is
+ * the important one:
+ *
+ *  - a heading emitted by a component is invisible to Starlight's table of
+ *    contents, which is built from the markdown AST, so moving the heading in
+ *    here would drop the subjects from "On this page" and lose their anchors;
+ *  - it makes the contract exact: EVERYTHING INSIDE THIS ELEMENT IS A
+ *    DECLARATION ABOUT THE SUBJECT, AND NOTHING ELSE IS. That is what makes
+ *    the declarations countable.
+ *
+ * Machine-readability is a contract, not a side effect. The rendered markup
+ * is a <dl data-facts> whose every row carries `data-fact="<kind>"` in
+ * document order. A `data-fact="not-covered"` row is a promise about a
+ * boundary, and the set of them across a page is the honest answer to "what
+ * will this surface or mode not do?" — which is exactly the half a reader
+ * skips and the half that matters. Neither the attribute name nor its values
+ * may change without changing whatever reads them (scripts/check-facts.mjs).
+ */
+interface Props {
+	/** Optional id, for linking at the sheet rather than the heading. */
+	id?: string;
+}
+
+const { id } = Astro.props;
+---
+
+<dl class="facts" data-facts id={id}>
+	<slot />
+</dl>

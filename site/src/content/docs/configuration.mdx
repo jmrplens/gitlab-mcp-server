@@ -22,6 +22,8 @@ faq:
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 import FAQ from "../../components/FAQ.astro";
+import Facts from "../../components/docs/Facts.astro";
+import Fact from "../../components/docs/Fact.astro";
 
 :::tip[At a glance]
 
@@ -385,6 +387,20 @@ Enable `GITLAB_READ_ONLY=true` to restrict the server to read-only operations. A
 - Shared servers where users should only query data
 - Tokens with `read_api` scope
 
+<Facts>
+	<Fact kind="exposes">
+		every read operation, on every surface: list, get and search keep
+		working exactly as before.
+	</Fact>
+	<Fact kind="requires">`GITLAB_READ_ONLY=true` in stdio mode, `--read-only` in HTTP mode.</Fact>
+	<Fact kind="notCovered">
+		anything that writes: create, update and delete actions are removed
+		from the catalog per action, so on the dynamic and meta surfaces they
+		stop being reachable rather than merely erroring. When safe mode is
+		also set, read-only wins — mutations disappear instead of previewing.
+	</Fact>
+</Facts>
+
 ## Safe mode
 
 Enable `GITLAB_SAFE_MODE=true` to intercept mutating tools and return a structured JSON preview of what would be executed, without actually performing the operation. Read-only tools work normally. This is useful for:
@@ -392,6 +408,21 @@ Enable `GITLAB_SAFE_MODE=true` to intercept mutating tools and return a structur
 - Reviewing operations before execution (dry-run)
 - Training environments where you want to see tool behavior
 - Debugging tool parameters without side effects
+
+<Facts>
+	<Fact kind="exposes">
+		every operation's shape: mutating actions stay callable and return a
+		structured JSON preview naming the canonical action (for example
+		`issue.create`) and the parameters it would send; reads execute
+		normally.
+	</Fact>
+	<Fact kind="requires">`GITLAB_SAFE_MODE=true` in stdio mode, `--safe-mode` in HTTP mode.</Fact>
+	<Fact kind="notCovered">
+		actual writes: nothing mutating reaches GitLab. The preview is not a
+		validation either — GitLab-side errors (permissions, conflicts) only
+		surface on a real execution.
+	</Fact>
+</Facts>
 
 Both safe mode and read-only act **per action**, not per tool. On the dynamic and meta surfaces a single tool serves many actions — `gitlab_execute_action` routes everything, and `gitlab_issue` covers `list` and `create` alike — so the policy is applied to the underlying action catalog. Reads keep working on every surface, and safe-mode previews name the canonical action (for example `issue.create`) rather than the dispatcher tool.
 

@@ -42,5 +42,21 @@ export const collections = {
 			}),
 		}),
 	}),
-	i18n: defineCollection({ loader: i18nLoader(), schema: i18nSchema() }),
+	// The UI strings the documentation components supply for themselves: the
+	// fact labels a <Fact kind> prints. One decision covers both locales
+	// instead of a label typed per sheet per language.
+	i18n: defineCollection({
+		loader: i18nLoader(),
+		schema: i18nSchema({
+			extend: z.object({
+				"gm.fact.exposes": z.string().optional(),
+				"gm.fact.requires": z.string().optional(),
+				"gm.fact.tier": z.string().optional(),
+				"gm.fact.notCovered": z.string().optional(),
+				"gm.fact.symptom": z.string().optional(),
+				"gm.fact.meaning": z.string().optional(),
+				"gm.fact.fixes": z.string().optional(),
+			}),
+		}),
+	}),
 };
