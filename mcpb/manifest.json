@@ -15,8 +15,8 @@
     "type": "git",
     "url": "https://github.com/jmrplens/gitlab-mcp-server"
   },
-  "homepage": "https://jmrplens.github.io/gitlab-mcp-server/",
-  "documentation": "https://jmrplens.github.io/gitlab-mcp-server/",
+  "homepage": "https://jmrp.io/docs/gitlab-mcp-server",
+  "documentation": "https://jmrp.io/docs/gitlab-mcp-server",
   "support": "https://github.com/jmrplens/gitlab-mcp-server/issues",
   "icon": "icon.png",
   "server": {

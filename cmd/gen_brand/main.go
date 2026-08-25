@@ -225,7 +225,7 @@ func ogSVG() string {
 %s  </g>
   <text x="600" y="470" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-weight="bold" font-size="64" fill="#e6edf3">GitLab MCP Server</text>
   <text x="600" y="524" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="27" fill="#8b949e">GitLab for your AI assistant — one catalog, three MCP surfaces</text>
-  <text x="600" y="574" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-size="21" fill="%s">jmrplens.github.io/gitlab-mcp-server</text>
+  <text x="600" y="574" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-size="21" fill="%s">jmrp.io/docs/gitlab-mcp-server</text>
 </svg>
 `, bgImage(bgTall, 1200, 630),
 		markBody(
@@ -246,7 +246,7 @@ func socialSVG() string {
 %s  </g>
   <text x="640" y="478" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-weight="bold" font-size="64" fill="#e6edf3">GitLab MCP Server</text>
   <text x="640" y="532" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-size="27" fill="#8b949e">GitLab for your AI assistant — one catalog, three MCP surfaces</text>
-  <text x="640" y="582" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-size="21" fill="%s">jmrplens.github.io/gitlab-mcp-server</text>
+  <text x="640" y="582" text-anchor="middle" font-family="DejaVu Sans Mono, monospace" font-size="21" fill="%s">jmrp.io/docs/gitlab-mcp-server</text>
 </svg>
 `, bgImage(bgTall, 1280, 640),
 		markBody(

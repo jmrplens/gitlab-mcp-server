@@ -319,7 +319,7 @@ The published model-evaluation set covers 124 task attempts and 808 expected MCP
 
 ## Documentation
 
-Full documentation is at **[jmrplens.github.io/gitlab-mcp-server](https://jmrplens.github.io/gitlab-mcp-server/)**. Use this map for the source-of-truth reference on a specific area:
+Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs/gitlab-mcp-server)**. Use this map for the source-of-truth reference on a specific area:
 
 | Document                                              | Description                                                                            |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
