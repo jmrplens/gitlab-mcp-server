@@ -78,7 +78,7 @@ func NewGitLabComClient() (*gitlabclient.Client, error) {
 // server, and returns the connected client session together with a cleanup
 // function the caller must invoke.
 func Session(setup func(*mcp.Server) error) (session *mcp.ClientSession, cleanup func(), err error) {
-	opts := &mcp.ServerOptions{PageSize: listPageSize}
+	opts := &mcp.ServerOptions{PageSize: listPageSize, Capabilities: &mcp.ServerCapabilities{}}
 	server := mcp.NewServer(&mcp.Implementation{Name: "mcpsurface", Version: "0.0.1"}, opts)
 	if setupErr := setup(server); setupErr != nil {
 		return nil, nil, fmt.Errorf("set up MCP server: %w", setupErr)

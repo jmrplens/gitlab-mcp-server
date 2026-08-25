@@ -629,7 +629,7 @@ func TestSelectOneInt_Accept(t *testing.T) {
 	_, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
 		return &mcp.ElicitResult{
 			Action:  "accept",
-			Content: map[string]any{"selection": float64(30)},
+			Content: map[string]any{"selection": "30"},
 		}, nil
 	})
 	defer cleanup()
@@ -651,7 +651,7 @@ func TestSelectOneInt_InvalidValue(t *testing.T) {
 	_, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, req *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
 		return &mcp.ElicitResult{
 			Action:  "accept",
-			Content: map[string]any{"selection": float64(99)},
+			Content: map[string]any{"selection": "99"},
 		}, nil
 	})
 	defer cleanup()
@@ -995,7 +995,7 @@ func TestSelectOneInt_NotInOptions(t *testing.T) {
 	_, ss, cleanup := setupElicitSession(t, ctx, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
 		return &mcp.ElicitResult{
 			Action:  "accept",
-			Content: map[string]any{"selection": float64(99)},
+			Content: map[string]any{"selection": "99"},
 		}, nil
 	})
 	defer cleanup()

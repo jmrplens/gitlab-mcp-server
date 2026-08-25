@@ -46,6 +46,26 @@ Most MCP clients (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, OpenCo
 - Rotate `GITLAB_TOKEN` immediately if the snippet is exposed (commit, backup, screen share, etc.).
 - Prefer a client that supports `envFile` or system environment variables whenever possible.
 
+### OAuth mode and audience binding (documented deviation)
+
+The MCP auth specification says a resource server MUST validate that access
+tokens were issued for it as the intended audience (RFC 8707 resource
+indicators) and MUST NOT transit other tokens. This server cannot satisfy
+that literally: GitLab's authorization server does not support resource
+indicators, so every token it issues is a GitLab-audience token by design —
+the server is a thin resource proxy that forwards the presented credential
+to the one upstream it fronts (the same shape GitHub's remote MCP server
+uses). What IS enforced in oauth mode: the token is verified against the
+configured GitLab instance before any use, its **real granted scopes are
+introspected** (`/personal_access_tokens/self` for PATs,
+`/oauth/token/info` for OAuth tokens) rather than assumed, only the
+standard `Authorization: Bearer` scheme is accepted (the legacy
+`PRIVATE-TOKEN` alias is not rewritten in this mode), and the RFC 9728
+protected-resource metadata is served from the identifier derived from
+`--public-url`. Deployers should treat the token as what it is: a GitLab
+credential entrusted to this proxy, scoped as narrowly as the workload
+allows.
+
 ## TLS
 
 - All GitLab API communication uses HTTPS by default

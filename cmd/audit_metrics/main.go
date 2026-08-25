@@ -399,7 +399,7 @@ func dynamicActionCatalog(client *gitlabclient.Client, enterprise bool) *actionc
 // listDynamicTools registers the low-token dynamic public toolset backed by
 // catalog action routes and returns the advertised tool definitions.
 func listDynamicTools(catalog *actioncatalog.Catalog) []*mcp.Tool {
-	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{PageSize: 2000})
+	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
 	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
 	return listToolsFromServer(server)
 }
@@ -443,7 +443,7 @@ func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
 // the full tool list. When meta is true, meta-tools are registered.
 // Enterprise controls whether Enterprise/Premium meta-tools are included.
 func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
-	opts := &mcp.ServerOptions{PageSize: 2000}
+	opts := &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}}
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, opts)
 
 	if meta {

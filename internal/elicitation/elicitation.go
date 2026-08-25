@@ -233,9 +233,16 @@ func (c Client) ElicitURL(ctx context.Context, gitlabBaseURL, targetURL, message
 		return err
 	}
 
-	elicitationID, err := newElicitationID()
-	if err != nil {
-		return fmt.Errorf("elicitation: failed to generate elicitationId: %w", err)
+	// elicitationId was mandatory in the 2025-11-25 revision and removed
+	// from the 2026-07-28 schema (ElicitRequestURLParams is mode/message/url
+	// only), so it is generated only for sessions negotiated below that.
+	var elicitationID string
+	if params := c.session.InitializeParams(); params == nil || params.ProtocolVersion < "2026-07-28" {
+		id, err := newElicitationID()
+		if err != nil {
+			return fmt.Errorf("elicitation: failed to generate elicitationId: %w", err)
+		}
+		elicitationID = id
 	}
 
 	slog.Debug("sending URL elicitation", "url", targetURL, "elicitationId", elicitationID)

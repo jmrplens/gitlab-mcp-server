@@ -167,6 +167,12 @@ type Config struct {
 
 	AuthMode      string        // Auth mode for HTTP: "legacy" (default) or "oauth"
 	OAuthCacheTTL time.Duration // OAuth token cache TTL (HTTP mode, oauth auth mode)
+	// PublicURL is the externally reachable origin of this deployment
+	// (scheme://host[:port][/path], no trailing slash). Required in oauth
+	// mode: RFC 9728 defines the protected-resource identifier as an https
+	// URL, and deriving it from the bind address produces host-less or
+	// wrong-origin identifiers behind any TLS-terminating proxy.
+	PublicURL string
 
 	TrustedProxyHeader string   // HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
 	ExcludeTools       []string // Tool names to exclude from registration (comma-separated via EXCLUDE_TOOLS)
@@ -342,6 +348,7 @@ func Load() (*Config, error) {
 		AutoUpdateInterval: updates.interval,
 		AutoUpdateTimeout:  updates.timeout,
 		AuthMode:           auth.mode,
+		PublicURL:          auth.publicURL,
 		OAuthCacheTTL:      auth.oauthCacheTTL,
 		ExcludeTools:       ParseCSV(os.Getenv("EXCLUDE_TOOLS")),
 		IgnoreScopes:       bools.ignoreScopes,
@@ -383,6 +390,7 @@ type autoUpdateEnv struct {
 type authEnv struct {
 	mode          string
 	oauthCacheTTL time.Duration
+	publicURL     string
 }
 
 func loadBooleanEnv() (booleanEnv, error) {
@@ -543,7 +551,7 @@ func loadAuthEnv() (authEnv, error) {
 	if err != nil {
 		return authEnv{}, fmt.Errorf("invalid OAUTH_CACHE_TTL value: %w", err)
 	}
-	return authEnv{mode: mode, oauthCacheTTL: oauthCacheTTL}, nil
+	return authEnv{mode: mode, oauthCacheTTL: oauthCacheTTL, publicURL: strings.TrimSpace(os.Getenv("PUBLIC_URL"))}, nil
 }
 
 func gitLabURLFromEnv() string {
@@ -604,6 +612,11 @@ func (c *Config) validateLimits() error {
 func (c *Config) validateModeEnums() error {
 	if c.AuthMode != "" && c.AuthMode != "legacy" && c.AuthMode != "oauth" {
 		return fmt.Errorf("AUTH_MODE must be 'legacy' or 'oauth' (got %q)", c.AuthMode)
+	}
+	if c.AuthMode == "oauth" {
+		if err := validatePublicURL(c.PublicURL); err != nil {
+			return err
+		}
 	}
 	if err := validateToolSurface(c.ToolSurface); err != nil {
 		return err
@@ -912,4 +925,29 @@ func ParseCSV(s string) []string {
 		}
 	}
 	return result
+}
+
+// validatePublicURL enforces the RFC 9728 constraints on the advertised
+// protected-resource identifier: present, absolute, https (http only for
+// loopback development hosts), no fragment, no trailing slash.
+func validatePublicURL(raw string) error {
+	if raw == "" {
+		return errors.New("oauth mode requires --public-url: the RFC 9728 resource identifier must be the externally reachable https origin, which cannot be derived from the bind address")
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return fmt.Errorf("--public-url %q is not an absolute URL", raw)
+	}
+	if u.Fragment != "" {
+		return fmt.Errorf("--public-url %q must not carry a fragment (RFC 9728 §1.2)", raw)
+	}
+	if strings.HasSuffix(u.Path, "/") {
+		return fmt.Errorf("--public-url %q must not end in a slash", raw)
+	}
+	host := u.Hostname()
+	loopback := host == "localhost" || host == "127.0.0.1" || host == "::1"
+	if u.Scheme != "https" && (u.Scheme != "http" || !loopback) {
+		return fmt.Errorf("--public-url %q must use https (RFC 9728 §1.2; http is allowed only for loopback development)", raw)
+	}
+	return nil
 }

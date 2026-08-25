@@ -177,6 +177,7 @@ type httpConfig struct {
 	revalidateInterval  time.Duration
 	poolIdleTimeout     time.Duration
 	authMode            string
+	publicURL           string
 	oauthCacheTTL       time.Duration
 	trustedProxyHeader  string
 	rateLimitRPS        float64
@@ -261,6 +262,7 @@ func main() {
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval (0 to disable)")
 	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token-and-URL server entry after this long unused (0 to disable)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
+	flag.StringVar(&hcfg.publicURL, "public-url", "", "Externally reachable origin of this deployment (https). Required with --auth-mode=oauth: it is the RFC 9728 protected-resource identifier")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
 	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", 0, "Per-server tools/call rate limit in requests/second (0 = disabled)")
@@ -598,6 +600,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		AutoUpdateInterval:  hcfg.autoUpdateInterval,
 		AutoUpdateTimeout:   hcfg.autoUpdateTimeout,
 		AuthMode:            hcfg.authMode,
+		PublicURL:           hcfg.publicURL,
 		OAuthCacheTTL:       hcfg.oauthCacheTTL,
 		TrustedProxyHeader:  hcfg.trustedProxyHeader,
 		RateLimitRPS:        hcfg.rateLimitRPS,
@@ -790,6 +793,17 @@ var sharedSchemaCache = mcp.NewSchemaCache()
 // resources, and prompts registered for the given GitLab client.
 // Used both by stdio mode (single call) and by the HTTP server pool factory.
 // If updater is non-nil, server update MCP tools are registered.
+// keepAliveFor returns the server keepalive interval for the configured
+// transport: zero (disabled) on stateless HTTP, where a server-initiated
+// ping is forbidden and the SDK closes the session when the ping cannot be
+// written; 30s everywhere else.
+func keepAliveFor(cfg *config.ServerConfig) time.Duration {
+	if cfg.Stateless {
+		return 0
+	}
+	return 30 * time.Second
+}
+
 func createServer(
 	client *gitlabclient.Client,
 	cfg *config.ServerConfig,
@@ -852,7 +866,16 @@ func createServer(
 		// surface that registers no subscribable resources.
 		SubscribeHandler:   subscribeHandler,
 		UnsubscribeHandler: unsubscribeHandler,
-		KeepAlive:          30 * time.Second,
+		// Keepalive is a server-initiated ping request — a session-era
+		// mechanism the 2026-07-28 streamable-HTTP transport forbids on a
+		// stateless stream ("the server MUST NOT send independent JSON-RPC
+		// requests on this stream"). The SDK enforces that by failing the
+		// write and closing the session on the first failed ping, so a 30s
+		// keepalive on a stateless server kills every long-lived stream —
+		// including subscriptions/listen — at the 30-second mark. Stateless
+		// servers therefore run with keepalive off; stdio and legacy
+		// stateful HTTP keep the ping, where it is protocol-legal.
+		KeepAlive: keepAliveFor(cfg),
 		// One page must fit the whole catalog: OpenAI Codex ignores
 		// tools/list nextCursor in its default protocol mode, so any second
 		// page would be silently lost. The largest surface (individual mode,
@@ -1108,6 +1131,11 @@ func sseWriteDeadlineMiddleware(next http.Handler) http.Handler {
 			// Zero time clears the deadline. Best-effort: ignore on transports
 			// that do not support it (e.g. HTTP/2 manages deadlines itself).
 			_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+			// The transport spec says SSE responses SHOULD carry
+			// X-Accel-Buffering: no, or nginx-class proxies may buffer
+			// events instead of streaming them. Harmless when the response
+			// negotiates down to application/json.
+			w.Header().Set("X-Accel-Buffering", "no")
 		}
 		next.ServeHTTP(w, r)
 	})
@@ -1205,7 +1233,16 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler)
+	mux.HandleFunc("OPTIONS /.well-known/mcp/server-card.json", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("GET /.well-known/mcp/server-card.json", func(w http.ResponseWriter, r *http.Request) {
+		// The card's audience is browser-based registry scanners; without
+		// CORS they cannot fetch it cross-origin (the SDK's OAuth metadata
+		// handler on this same server already sends the header).
+		w.Header().Set("Access-Control-Allow-Origin", "*")
 		// The build runs detached and the handler only waits on it: the
 		// catalog registration inside is CPU work no context can
 		// interrupt, so a handler that called the builder inline would
@@ -1301,8 +1338,17 @@ func streamableHTTPOptions(cfg *config.Config) *mcp.StreamableHTTPOptions {
 	}
 }
 
-func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, mux *http.ServeMux) {
-	resourceMetadataURL := "http://" + httpAddr + "/.well-known/oauth-protected-resource"
+func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string, pool *serverpool.ServerPool, mux *http.ServeMux) {
+	// The protected-resource identifier is the advertised public origin
+	// (validated at config load: https, no fragment, no trailing slash) —
+	// RFC 9728 §1.2. Deriving it from the bind address produced host-less
+	// http:// identifiers, and behind any TLS-terminating proxy the wrong
+	// origin. The metadata URL is derived per RFC 9728 §3: the well-known
+	// segment is inserted between host and path, so a resource with a path
+	// (https://mcp.example.com/gitlab) serves metadata at
+	// /.well-known/oauth-protected-resource/gitlab.
+	resourceID := cfg.PublicURL
+	resourceMetadataURL := oauth.MetadataURLFor(resourceID)
 	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))
 
 	// No rate limiter: the SDK's bearer middleware rejects unauthenticated
@@ -1318,10 +1364,18 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr 
 	tokenCache := oauth.NewTokenCache()
 	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cfg.OAuthCacheTTL, tokenCache)
 	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{"api"}})
-	mux.Handle("GET /.well-known/oauth-protected-resource", oauth.NewProtectedResourceHandler("http://"+httpAddr+"/mcp", cfg.GitLabURL))
-	mux.Handle("/", oauth.NormalizeAuthHeader(authMiddleware(gate.middleware(mcpHandler))))
+	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.GitLabURL)
+	// Both derivations of RFC 9728 §3 resolve: the path-less form and the
+	// path-inserted form a client computes from a resource identifier that
+	// carries a path.
+	mux.Handle("GET /.well-known/oauth-protected-resource", prm)
+	mux.Handle("GET /.well-known/oauth-protected-resource/{rest...}", prm)
+	// Bearer only: oauth mode advertises the RFC 6750 scheme, so the legacy
+	// PRIVATE-TOKEN header alias is not silently rewritten into it here —
+	// what the challenge advertises is exactly what is accepted.
+	mux.Handle("/", authMiddleware(gate.middleware(mcpHandler)))
 	startPeriodicCleanup(ctx, tokenCache.Cleanup)
-	slog.Info("oauth mode enabled", "cache_ttl", cfg.OAuthCacheTTL, "metadata_endpoint", "/.well-known/oauth-protected-resource")
+	slog.Info("oauth mode enabled", "cache_ttl", cfg.OAuthCacheTTL, "resource", resourceID, "metadata_url", resourceMetadataURL)
 }
 
 func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, mux *http.ServeMux) {
@@ -2147,7 +2201,7 @@ func doToolSearch(query, toolSurface string, tier edition.Tier) error {
 		return nil
 	}
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "search", Version: version}, &mcp.ServerOptions{PageSize: 2000})
+	server := mcp.NewServer(&mcp.Implementation{Name: "search", Version: version}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
 
 	switch config.EffectiveToolSurface(true, toolSurface) {
 	case config.ToolSurfaceMeta:

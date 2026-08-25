@@ -61,6 +61,7 @@ gitlab-mcp-server --http \
 | `--max-http-clients`       | `100`          | Maximum unique token+URL entries in the server pool                                                                                                                                                                                            |
 | `--session-timeout`        | `30m`          | Idle MCP session timeout                                                                                                                                                                                                                       |
 | `--auth-mode`              | `legacy`       | Authentication mode: `legacy` (PRIVATE-TOKEN) or `oauth` (Bearer token verified via GitLab API)                                                                                                                                                |
+| `--public-url`             | _(empty)_      | Externally reachable https origin of this deployment. **Required with `--auth-mode=oauth`**: it is the RFC 9728 protected-resource identifier, and the metadata URL is derived from it (well-known segment inserted between host and path)     |
 | `--oauth-cache-ttl`        | `15m`          | How long verified OAuth tokens are cached before re-validation (1m–2h)                                                                                                                                                                         |
 | `--pool-idle-timeout`      | `1h`           | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h)                                                                                             |
 | `--revalidate-interval`    | `15m`          | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                                                                |
@@ -382,7 +383,7 @@ curl http://localhost:8080/.well-known/oauth-protected-resource
 
 ```json
 {
-  "resource": "http://localhost:8080",
+  "resource": "https://mcp.example.com",
   "authorization_servers": ["https://gitlab.example.com"],
   "bearer_methods_supported": ["header"],
   "scopes_supported": ["api", "read_api"]

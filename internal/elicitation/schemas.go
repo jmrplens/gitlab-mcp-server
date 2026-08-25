@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"slices"
+	"strconv"
 )
 
 // contentForAction maps an elicitation action to its content or the
@@ -164,15 +165,20 @@ func parseSelectMultiContent(content map[string]any, options []string, minItems,
 
 // selectOneIntSchema builds the schema for a single-choice integer selection.
 func selectOneIntSchema(message string, options []int) map[string]any {
+	// The 2026-07-28 elicitation schema subset admits no integer enum:
+	// PrimitiveSchemaDefinition is String | Number | Boolean | Enum, the
+	// number variant carries no enum member, and every enum variant is
+	// string-typed. So the options are offered as their decimal strings and
+	// parsed back to integers on the way in.
 	enumValues := make([]any, len(options))
 	for i, o := range options {
-		enumValues[i] = o
+		enumValues[i] = strconv.Itoa(o)
 	}
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
 			"selection": map[string]any{
-				"type":        "integer",
+				"type":        "string",
 				"title":       "Selection",
 				"description": message,
 				"enum":        enumValues,
@@ -182,20 +188,27 @@ func selectOneIntSchema(message string, options []int) map[string]any {
 	}
 }
 
-// parseSelectOneIntContent extracts and validates the selected integer.
+// parseSelectOneIntContent extracts and validates the selected integer. The
+// schema offers the options as decimal strings (the elicitation subset has
+// no integer enum), so the accepted value arrives as a string and is parsed
+// back; a numeric answer from a lenient client is tolerated too.
 func parseSelectOneIntContent(content map[string]any, options []int) (int, error) {
-	// JSON numbers are float64 by default
-	f, ok := content["selection"].(float64)
-	if !ok {
-		return 0, errors.New("elicitation: response field 'selection' is not a number")
+	var selected int
+	switch v := content["selection"].(type) {
+	case string:
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			return 0, fmt.Errorf("elicitation: response value %q is not an integer", v)
+		}
+		selected = parsed
+	case float64:
+		if math.IsNaN(v) || math.IsInf(v, 0) || v != math.Trunc(v) {
+			return 0, fmt.Errorf("elicitation: response value %g is not an integer", v)
+		}
+		selected = int(v)
+	default:
+		return 0, errors.New("elicitation: response field 'selection' is not a string or number")
 	}
-	if math.IsNaN(f) || math.IsInf(f, 0) {
-		return 0, errors.New("elicitation: response field 'selection' is not a finite number")
-	}
-	if f != math.Trunc(f) {
-		return 0, fmt.Errorf("elicitation: response value %g is not an integer", f)
-	}
-	selected := int(f)
 	if !slices.Contains(options, selected) {
 		return 0, fmt.Errorf("elicitation: selected value %d is not in the allowed options", selected)
 	}

@@ -85,7 +85,7 @@ func run(args []string, stdout io.Writer) error {
 	}
 	defer closeStub()
 
-	opts := &mcp.ServerOptions{PageSize: 2000}
+	opts := &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}}
 	server := mcp.NewServer(&mcp.Implementation{Name: "gen-docker-tools", Version: "0.0.1"}, opts)
 
 	switch {

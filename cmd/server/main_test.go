@@ -3192,6 +3192,7 @@ func TestServeHTTP_OAuthMode_MetadataEndpoint(t *testing.T) {
 		// detector, costs longer than any sane client timeout.
 		ToolSurface:   config.ToolSurfaceDynamic,
 		AuthMode:      "oauth",
+		PublicURL:     "http://localhost:8080",
 		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
@@ -3253,6 +3254,7 @@ func TestServeHTTP_OAuthMode_RejectsUnauthenticated(t *testing.T) {
 		// detector, costs longer than any sane client timeout.
 		ToolSurface:   config.ToolSurfaceDynamic,
 		AuthMode:      "oauth",
+		PublicURL:     "http://localhost:8080",
 		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
@@ -3303,6 +3305,7 @@ func TestServeHTTP_OAuthMode_AcceptsValidBearer(t *testing.T) {
 		// detector, costs longer than any sane client timeout.
 		ToolSurface:   config.ToolSurfaceDynamic,
 		AuthMode:      "oauth",
+		PublicURL:     "http://localhost:8080",
 		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
@@ -3356,9 +3359,11 @@ func TestServeHTTP_OAuthMode_AcceptsValidBearer(t *testing.T) {
 	}
 }
 
-// TestServeHTTP_OAuthMode_PrivateTokenConverted verifies that NormalizeAuthHeader
-// converts PRIVATE-TOKEN to Bearer, allowing the OAuth verifier to validate it.
-func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
+// TestServeHTTP_OAuthMode_PrivateTokenRejected verifies oauth mode accepts
+// only the RFC 6750 Bearer scheme its challenge advertises: the legacy
+// PRIVATE-TOKEN alias is no longer silently rewritten into it, so a request
+// carrying only that header is answered 401 with the Bearer challenge.
+func TestServeHTTP_OAuthMode_PrivateTokenRejected(t *testing.T) {
 	mockGL := newMockGitLabServerWithUser(t)
 	cfg := &config.Config{
 		GitLabURL:      mockGL.URL,
@@ -3371,6 +3376,7 @@ func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
 		// detector, costs longer than any sane client timeout.
 		ToolSurface:   config.ToolSurfaceDynamic,
 		AuthMode:      "oauth",
+		PublicURL:     "http://localhost:8080",
 		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
@@ -3392,11 +3398,12 @@ func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
 	}
 	respBody := readAndCloseBody(t, resp)
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK (PRIVATE-TOKEN converted to Bearer), got %d: %s", resp.StatusCode, respBody)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 (PRIVATE-TOKEN is not the advertised Bearer scheme), got %d: %s", resp.StatusCode, respBody)
 	}
-
-	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
+	if challenge := resp.Header.Get("WWW-Authenticate"); !strings.Contains(challenge, "Bearer") {
+		t.Errorf("WWW-Authenticate = %q, want a Bearer challenge", challenge)
+	}
 	cancel()
 	select {
 	case srvErr := <-errCh:
@@ -3423,6 +3430,7 @@ func TestServeHTTP_OAuthMode_InvalidTokenReturns401(t *testing.T) {
 		// detector, costs longer than any sane client timeout.
 		ToolSurface:   config.ToolSurfaceDynamic,
 		AuthMode:      "oauth",
+		PublicURL:     "http://localhost:8080",
 		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 

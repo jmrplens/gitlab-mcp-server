@@ -256,16 +256,16 @@ Rows use the base Community Edition catalog unless the Tier column says otherwis
 
 ## Compatibility
 
-| MCP Capability    | Support                                           |
-| ----------------- | ------------------------------------------------- |
-| **Tools**         | Up to 1071 individual / 32–50 meta                |
-| **Resources**     | 45 (static + templates)                           |
-| **Prompts**       | 37 templates                                      |
-| **Completions**   | Project, user, group, branch, tag                 |
-| **Logging**       | Structured (text/JSON) to stderr                  |
-| **Progress**      | Tool execution progress reporting                 |
-| **Elicitation**   | 4 interactive creation wizards                    |
-| **Subscriptions** | `resources/updated` by polling, 26 resource kinds |
+| MCP Capability    | Support                                                                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Tools**         | Up to 1071 individual / 32–50 meta                                                                                                  |
+| **Resources**     | 45 (static + templates)                                                                                                             |
+| **Prompts**       | 37 templates                                                                                                                        |
+| **Completions**   | Project, user, group, branch, tag                                                                                                   |
+| **Server logs**   | Structured (text/JSON) to stderr — not the MCP `logging` capability, which is deprecated (SEP-2577) and deliberately not advertised |
+| **Progress**      | Tool execution progress reporting                                                                                                   |
+| **Elicitation**   | 4 interactive creation wizards                                                                                                      |
+| **Subscriptions** | `resources/updated` by polling, 26 resource kinds                                                                                   |
 
 Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline. See the full [Compatibility Matrix](https://jmrp.io/docs/gitlab-mcp-server/compatibility/).
 
@@ -423,20 +423,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       992 |     200,691 |
-| Unit tests (`_test.go`)  |       548 |     310,318 |
+| Source (`.go`, non-test) |       992 |     200,883 |
+| Unit tests (`_test.go`)  |       548 |     310,481 |
 | End-to-end tests         |       174 |      45,163 |
-| **Total**                | **1,714** | **556,172** |
+| **Total**                | **1,714** | **556,527** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,493 |
-| — exported (public)             |  2,614 |
-| — unexported (private)          |  4,879 |
-| Unit test functions (`TestXxx`) | 11,664 |
-| Subtests (`t.Run(...)`)         |  2,920 |
+| Source functions                |  7,498 |
+| — exported (public)             |  2,615 |
+| — unexported (private)          |  4,883 |
+| Unit test functions (`TestXxx`) | 11,669 |
+| Subtests (`t.Run(...)`)         |  2,922 |
 | End-to-end test functions       |    381 |
 
 ### Ratios worth noting
@@ -446,15 +446,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~202 lines |
 | Average test file length           |                 ~566 lines |
-| Comment lines in source            |  22,917 (~11.4% of source) |
+| Comment lines in source            |  22,997 (~11.4% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,685 |
-| `defer` statements                 |   906 |
+| `if err != nil` checks             | 6,692 |
+| `defer` statements                 |   910 |
 | `struct` types defined             | 2,726 |
 | `//nolint` suppressions            |   256 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
@@ -478,8 +478,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,648 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,576 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,652 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,585 (impossible to avoid)                                                                         |
 | Longest function name in source      | `baseDestructiveEarlySinglePromptTemplateAndFixtures` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
