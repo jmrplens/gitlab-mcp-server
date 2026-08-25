@@ -1,1 +1,9 @@
-{}
+{
+  "gm.fact.exposes": "What it exposes",
+  "gm.fact.requires": "Requires",
+  "gm.fact.tier": "Tier effect",
+  "gm.fact.notCovered": "What it does not do",
+  "gm.fact.symptom": "Symptom",
+  "gm.fact.meaning": "Meaning",
+  "gm.fact.fixes": "Fixes"
+}

@@ -1,0 +1,91 @@
+/* ------------------------------------------------------------------ *
+ * The spec sheet (src/components/docs/Facts.astro).
+ *
+ * Several subjects per page — a tool surface, a protection mode — each
+ * declaring the same handful of things.
+ * As a bulleted list with the label bolded inline, that is 142 bullets whose
+ * labels and prose run together, and a reader looking for one specific answer
+ * — "what does this one NOT cover?" — has to read every line to find it.
+ *
+ * So the label becomes a gutter: small, uppercase, monospaced, in its own
+ * column on a wide screen, and the eye can run down it. The prose keeps the
+ * full measure. Below 45rem the label sits above its paragraph instead, which
+ * is the only arrangement that works when the column would be 8 characters
+ * wide.
+ * ------------------------------------------------------------------ */
+.sl-markdown-content .facts {
+	margin: 1rem 0 1.75rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+
+.sl-markdown-content .fact {
+	display: grid;
+	gap: 0.15rem 1.25rem;
+	padding: 0.7rem 0;
+	border-block-start: 1px solid var(--sl-color-hairline-light);
+}
+.sl-markdown-content .fact:last-child {
+	border-block-end: 1px solid var(--sl-color-hairline-light);
+}
+
+.sl-markdown-content .facts dt {
+	font-family: var(--gm-mono);
+	font-size: var(--sl-text-2xs);
+	text-transform: uppercase;
+	letter-spacing: 0.07em;
+	line-height: 1.6;
+	color: var(--sl-color-gray-3);
+	/* The label is a heading for its row, so it should not wrap mid-word into a
+	   narrow gutter; it wraps between words or takes two lines. */
+	overflow-wrap: break-word;
+}
+
+.sl-markdown-content .facts dd {
+	margin: 0;
+	min-width: 0;
+}
+/* Starlight's markdown reset spaces paragraphs generously, which inside a
+   dense row reads as a gap rather than as a rhythm. The last paragraph loses
+   its trailing margin so the row's padding is the only space below it. */
+.sl-markdown-content .facts dd > :first-child {
+	margin-top: 0;
+}
+.sl-markdown-content .facts dd > :last-child {
+	margin-bottom: 0;
+}
+
+@media (min-width: 45rem) {
+	.sl-markdown-content .fact {
+		grid-template-columns: 9.5rem minmax(0, 1fr);
+	}
+	.sl-markdown-content .facts dt {
+		/* Optical alignment: the uppercase label's cap height sits a touch below
+		   the x-height of the prose beside it without this nudge. */
+		padding-top: 0.2rem;
+	}
+}
+
+/* ------------------------------------------------------------------ *
+ * The boundary rows.
+ *
+ * `data-fact="not-covered"` is the half of the sheet a reader skips and the
+ * half that decides whether this source can answer their question, so it is the
+ * one row given a colour. A dashed rule rather than a solid one, and the label
+ * in the palette's own ink: the same distinction the landing page draws between
+ * "who it is for" and "what it is not", so the two pages say "boundary" in one
+ * visual language.
+ * ------------------------------------------------------------------ */
+.sl-markdown-content .fact[data-fact="not-covered"] {
+	border-block-start-style: dashed;
+	border-block-start-color: var(--gm-border-strong);
+}
+.sl-markdown-content .fact[data-fact="not-covered"] dt {
+	color: var(--gm-accent-ink);
+}
+
+/* What a surface or mode needs to be on is the other row a reader scans for. */
+.sl-markdown-content .fact[data-fact="requires"] dt {
+	color: var(--sl-color-gray-2);
+}

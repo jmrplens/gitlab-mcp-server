@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { rehypeWideTables } from "./src/lib/wide-tables.mjs";
 import { readFileSync } from "node:fs";
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
@@ -782,6 +783,8 @@ export default defineConfig({
 				"./src/styles/splash-menu.css",
 				"./src/styles/home.css",
 				"./src/styles/page-chips.css",
+				"./src/styles/facts.css",
+				"./src/styles/tables.css",
 				"./src/styles/custom.css",
 			],
 		}),
@@ -790,6 +793,11 @@ export default defineConfig({
 		remarkPlugins: [remarkLocaleLinks],
 		rehypePlugins: [
 			rehypeTableAlign,
+			// Classifies wide record tables at build time and marks them to stack
+			// into label-above-value blocks on narrow viewports (tables.css) —
+			// per-cell data-label plus explicit ARIA roles, because display:block
+			// drops a table's implicit role. See src/lib/wide-tables.mjs.
+			rehypeWideTables,
 			[
 				// Renders every ```mermaid block to inline SVG at build time with a
 				// headless Chromium, replacing the previous client-side runtime.

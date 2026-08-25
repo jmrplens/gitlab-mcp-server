@@ -1,48 +1,110 @@
 ---
 // Custom Starlight <Header> override.
-// Renders Starlight's default header, then a compact LanguageSelect that is
-// shown only below the `md` (50rem) breakpoint. Starlight hides the whole
-// header right-group (social icons + theme select + language select) on
-// narrow viewports, leaving the language switcher reachable only at the
-// bottom of the hamburger drawer — below the fold on most phones. This keeps
-// EN/ES switching one tap away in the header at every viewport width, in both
-// locales and both themes, without touching the desktop layout (where the
-// default right-group already includes the switcher).
+//
+// Replaces the header's theme + language controls with compact ones that stay
+// visible at every viewport width (Starlight otherwise hides the whole header
+// right-group — social icons, theme select, language select — below the `md`
+// (50rem) breakpoint, leaving those controls reachable only at the bottom of
+// the hamburger drawer):
+//   - a two-state light/dark toggle button (no "auto"), and
+//   - an icon-only language dropdown (the stock control spends ~8em on the
+//     full locale name; here only the globe icon shows, and a transparent
+//     native <select> stretched over it keeps the browser's own dropdown).
+// The default header (site title, search, social icons) is preserved; only
+// its built-in ThemeSelect + LanguageSelect are hidden, and the compact pair
+// is rendered in their place.
 import Default from "@astrojs/starlight/components/Header.astro";
 import LanguageSelect from "@astrojs/starlight/components/LanguageSelect.astro";
+import ThemeToggle from "./ThemeToggle.astro";
 ---
 
-<div class="gmcp-header">
-	<div class="gmcp-default-header"><Default><slot /></Default></div>
-	<div class="gmcp-mobile-lang"><LanguageSelect /></div>
+<div class="gm-header">
+	<div class="gm-default-header"><Default><slot /></Default></div>
+	<div class="gm-controls">
+		<ThemeToggle />
+		<div class="gm-lang"><LanguageSelect /></div>
+	</div>
 </div>
 
 <style>
-	.gmcp-header {
+	.gm-header {
 		display: flex;
 		gap: var(--sl-nav-gap);
 		align-items: center;
 		height: 100%;
 	}
-	.gmcp-default-header {
+	.gm-default-header {
 		flex: 1;
 		min-width: 0;
 		height: 100%;
 	}
-	.gmcp-mobile-lang {
+	/* Hide the default header's own theme + language controls (they only
+	   render in the desktop right-group). Scoped to the header, so the mobile
+	   menu drawer keeps its full preferences footer untouched. */
+	.gm-default-header :global(starlight-theme-select),
+	.gm-default-header :global(starlight-lang-select) {
+		display: none !important;
+	}
+	.gm-controls {
 		display: flex;
 		align-items: center;
-	}
-	/* Desktop (≥ md): the default header right-group already renders the
-	   language select, so hide the mobile duplicate. */
-	@media (min-width: 50rem) {
-		.gmcp-mobile-lang {
-			display: none;
-		}
+		gap: 0.5rem;
 	}
 	@media print {
-		.gmcp-mobile-lang {
+		.gm-controls {
 			display: none;
 		}
+	}
+	/* Pages with a sidebar show a fixed mobile menu button pinned to the
+	   top-right corner below `md`; offset the controls so they sit to the left
+	   of it instead of underneath. */
+	@media (max-width: 50rem) {
+		:global(:root[data-has-sidebar]) .gm-controls {
+			margin-inline-end: calc(var(--sl-menu-button-size, 2.5rem) + 0.5rem);
+		}
+	}
+
+	/* Compact, icon-only language dropdown: keep the globe icon and overlay a
+	   transparent native <select> so the browser's own dropdown still opens on
+	   tap. The visually-hidden label text keeps it accessible. */
+	.gm-lang :global(label) {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		margin: 0;
+		color: var(--sl-color-gray-2);
+	}
+	.gm-lang :global(label):hover {
+		color: var(--sl-color-white);
+	}
+	/* The overlaid native select is transparent, which also hides its focus
+	   ring — restate it on the visible label so keyboard users can see where
+	   they are. */
+	.gm-lang :global(label):focus-within {
+		color: var(--sl-color-white);
+		outline: 2px solid var(--sl-color-accent);
+		outline-offset: 2px;
+		border-radius: 0.25rem;
+	}
+	.gm-lang :global(.label-icon) {
+		position: static;
+		transform: none;
+		font-size: 1.15rem;
+	}
+	.gm-lang :global(.caret) {
+		display: none;
+	}
+	.gm-lang :global(select) {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		padding: 0;
+		margin: 0;
+		opacity: 0;
+		cursor: pointer;
 	}
 </style>

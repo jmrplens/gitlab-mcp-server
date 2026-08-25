@@ -1,0 +1,80 @@
+---
+// Compact two-state light/dark theme toggle (no "auto") for the header.
+// Integrates with Starlight's own theme system: it writes the same
+// `starlight-theme` localStorage key and `documentElement.dataset.theme` that
+// Starlight's built-in ThemeSelect uses, and calls
+// `StarlightThemeProvider.updatePickers()` so any other theme picker on the
+// page (e.g. the mobile menu drawer) stays in sync. The icon shown is the
+// *target* mode: a sun while dark (tap → light), a moon while light
+// (tap → dark).
+import { Icon } from "@astrojs/starlight/components";
+
+const label = Astro.locals.t("themeSelect.accessibleLabel");
+---
+
+<gm-theme-toggle>
+	<button
+		type="button"
+		class="gm-theme-toggle"
+		aria-label={label}
+	>
+		<Icon name="sun" class="gm-icon gm-icon-sun" />
+		<Icon name="moon" class="gm-icon gm-icon-moon" />
+	</button>
+</gm-theme-toggle>
+
+<script>
+	class GmThemeToggle extends HTMLElement {
+		constructor() {
+			super();
+			const btn = this.querySelector("button");
+			btn?.addEventListener("click", () => {
+				const current =
+					document.documentElement.dataset.theme === "light" ? "light" : "dark";
+				const next = current === "light" ? "dark" : "light";
+				document.documentElement.dataset.theme = next;
+				try {
+					localStorage.setItem("starlight-theme", next);
+				} catch {
+					/* localStorage unavailable (private mode): theme still applies for this page */
+				}
+				const provider = (
+					window as unknown as {
+						StarlightThemeProvider?: { updatePickers(theme: string): void };
+					}
+				).StarlightThemeProvider;
+				provider?.updatePickers(next);
+			});
+		}
+	}
+	customElements.define("gm-theme-toggle", GmThemeToggle);
+</script>
+
+<style>
+	.gm-theme-toggle {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		padding: 0;
+		border: 0;
+		border-radius: 0.25rem;
+		background: transparent;
+		color: var(--sl-color-gray-2);
+		cursor: pointer;
+	}
+	.gm-theme-toggle:hover {
+		color: var(--sl-color-white);
+	}
+	.gm-icon {
+		font-size: 1.25rem;
+	}
+	/* Show only the target-mode icon: sun while dark, moon while light. */
+	:global([data-theme="light"]) .gm-icon-sun {
+		display: none;
+	}
+	:global([data-theme="dark"]) .gm-icon-moon {
+		display: none;
+	}
+</style>

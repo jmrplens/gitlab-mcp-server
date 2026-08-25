@@ -187,6 +187,7 @@ jobs:
           pnpm run check
           pnpm run contrast:check
           pnpm run chips:check
+          pnpm run facts:check
           pnpm run i18n:check
           pnpm run eslint
           pnpm run format:check

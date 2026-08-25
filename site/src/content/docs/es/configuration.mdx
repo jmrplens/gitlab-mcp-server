@@ -20,6 +20,8 @@ faq:
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 import FAQ from "../../../components/FAQ.astro";
+import Facts from "../../../components/docs/Facts.astro";
+import Fact from "../../../components/docs/Fact.astro";
 
 :::tip[De un vistazo]
 
@@ -383,6 +385,21 @@ Habilita `GITLAB_READ_ONLY=true` para restringir el servidor a operaciones de so
 - Servidores compartidos donde los usuarios solo deben consultar datos
 - Tokens con scope `read_api`
 
+<Facts>
+	<Fact kind="exposes">
+		todas las operaciones de lectura, en todas las superficies: list, get y
+		search siguen funcionando exactamente igual.
+	</Fact>
+	<Fact kind="requires">`GITLAB_READ_ONLY=true` en modo stdio, `--read-only` en modo HTTP.</Fact>
+	<Fact kind="notCovered">
+		todo lo que escribe: las acciones de crear, actualizar y borrar se
+		eliminan del catálogo por acción, así que en las superficies dinámica y
+		meta dejan de ser alcanzables en lugar de simplemente fallar. Si el
+		modo seguro también está activo, solo lectura gana — las mutaciones
+		desaparecen en vez de previsualizarse.
+	</Fact>
+</Facts>
+
 ## Modo seguro
 
 Habilita `GITLAB_SAFE_MODE=true` para interceptar las herramientas de escritura y devolver una vista previa JSON estructurada de lo que se ejecutaría, sin realizar la operación. Las herramientas de solo lectura funcionan normalmente. Esto es útil para:
@@ -390,6 +407,21 @@ Habilita `GITLAB_SAFE_MODE=true` para interceptar las herramientas de escritura 
 - Revisar operaciones antes de ejecutarlas (dry-run)
 - Entornos de formación donde se quiere ver el comportamiento de las herramientas
 - Depurar parámetros de herramientas sin efectos secundarios
+
+<Facts>
+	<Fact kind="exposes">
+		la forma de cada operación: las acciones de escritura siguen siendo
+		invocables y devuelven una vista previa JSON estructurada que nombra la
+		acción canónica (por ejemplo `issue.create`) y los parámetros que
+		enviaría; las lecturas se ejecutan con normalidad.
+	</Fact>
+	<Fact kind="requires">`GITLAB_SAFE_MODE=true` en modo stdio, `--safe-mode` en modo HTTP.</Fact>
+	<Fact kind="notCovered">
+		escrituras reales: nada mutador llega a GitLab. La vista previa tampoco
+		es una validación — los errores del lado de GitLab (permisos,
+		conflictos) solo aparecen en una ejecución real.
+	</Fact>
+</Facts>
 
 Tanto el modo seguro como el de solo lectura actúan **por acción**, no por herramienta. En las superficies dinámica y meta una sola herramienta sirve muchas acciones —`gitlab_execute_action` enruta todo y `gitlab_issue` cubre por igual `list` y `create`—, así que la política se aplica sobre el catálogo de acciones subyacente. Las lecturas siguen funcionando en todas las superficies, y las vistas previas del modo seguro nombran la acción canónica (por ejemplo `issue.create`) en lugar de la herramienta despachadora.
 

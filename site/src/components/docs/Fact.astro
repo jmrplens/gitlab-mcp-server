@@ -1,0 +1,84 @@
+---
+/**
+ * One declaration inside a <Facts> sheet: a label and the prose that argues
+ * it.
+ *
+ * The prose is the point. These entries do not list values, they reason — a
+ * boundary says why it is a boundary and names what enforces it — so the body
+ * is passed as markdown children, links, code spans and all, and nothing
+ * about it is reformatted.
+ *
+ * Two ways to label a row, and they do different jobs:
+ *
+ *  - `kind` is the MACHINE contract and the shared vocabulary. It is emitted
+ *    verbatim as `data-fact`, and the visible label comes from the i18n
+ *    collection, so "What it does not do" and "Qué no hace" are one decision
+ *    made once instead of a label typed per sheet per locale.
+ *  - `label` is for the one-off observations a single sheet needs, which are
+ *    not a vocabulary and should not pretend to be one. Such a row still gets
+ *    `data-fact="note"` so the sheet parses uniformly.
+ *
+ * Exactly one of the two is required, and that is validated rather than
+ * trusted: a typo in `kind` would otherwise render an empty label and drop
+ * the row out of any census, silently.
+ *
+ * The vocabulary is this project's own (the sibling site describes download
+ * sources; this one describes tool surfaces and protection modes):
+ * exposes/requires/tier/notCovered are the spec-sheet four, and
+ * symptom/meaning/fixes is the shared troubleshooting triple.
+ */
+const KINDS = [
+	"exposes",
+	"requires",
+	"tier",
+	"notCovered",
+	"symptom",
+	"meaning",
+	"fixes",
+] as const;
+
+type Kind = (typeof KINDS)[number];
+
+interface Props {
+	/** A member of the shared vocabulary. Emitted as `data-fact`. */
+	kind?: Kind;
+	/** A one-off label, already in the page's language. */
+	label?: string;
+}
+
+const { kind, label } = Astro.props;
+
+if (kind && label) {
+	throw new Error(
+		`Fact takes kind or label, not both (kind=${kind}, label=${JSON.stringify(label)})`,
+	);
+}
+if (!kind && !label) {
+	throw new Error("Fact needs either a kind or a label");
+}
+if (kind && !KINDS.includes(kind)) {
+	throw new Error(
+		`Fact kind must be one of ${KINDS.join(", ")}, got ${JSON.stringify(kind)}`,
+	);
+}
+
+// `data-fact` is language-independent by construction, which is what lets an
+// English page and its Spanish twin be counted as the same declaration.
+const DATA: Record<Kind, string> = {
+	exposes: "exposes",
+	requires: "requires",
+	tier: "tier",
+	notCovered: "not-covered",
+	symptom: "symptom",
+	meaning: "meaning",
+	fixes: "fixes",
+};
+
+const t = Astro.locals.t;
+const text = kind ? t(`gm.fact.${kind}` as Parameters<typeof t>[0]) : label;
+---
+
+<div class="fact" data-fact={kind ? DATA[kind] : "note"}>
+	<dt>{text}</dt>
+	<dd><slot /></dd>
+</div>
