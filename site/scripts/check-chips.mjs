@@ -36,6 +36,16 @@ function chipsOf(path) {
 	const fm = /^---\n([\s\S]*?)\n---/.exec(src);
 	if (!fm) return [];
 	const lines = fm[1].split("\n");
+	// The schema accepts any YAML form, but this parser reads only the
+	// block style with `- text:` opening each entry. Every other accepted
+	// form (flow style, href-first entries) would silently parse as
+	// chip-free and escape the audit — refuse it loudly instead.
+	const flow = lines.find((l) => /^chips:\s*\S/.test(l));
+	if (flow) {
+		throw new Error(
+			`${path}: chips uses a form this audit cannot read (${flow.trim()}); use block style with "- text:" first`,
+		);
+	}
 	const start = lines.findIndex((l) => /^chips:\s*$/.test(l));
 	if (start < 0) return [];
 	const chips = [];
@@ -44,13 +54,21 @@ function chipsOf(path) {
 		if (/^\S/.test(line)) break; // frontmatter key at top level ends the block
 		const text = /^\s+-\s+text:\s*(.+)$/.exec(line);
 		const href = /^\s+href:\s*(\S+)$/.exec(line);
+		const otherEntry = /^\s+-\s+(?!text:)\S/.exec(line);
+		if (otherEntry) {
+			throw new Error(
+				`${path}: a chip entry does not open with "- text:" (${line.trim()}); this audit cannot read it`,
+			);
+		}
 		if (text) chips.push({ text: text[1].trim(), href: null });
 		else if (href && chips.length) chips[chips.length - 1].href = href[1];
 	}
 	return chips;
 }
 
-/** Resolve a site href to the content file that renders it. */
+/** Resolve a site href to the content file that renders it, at its own
+ * declared path — a Spanish href is checked against the Spanish tree, so a
+ * missing translation cannot hide behind its English twin. */
 function hrefExists(href) {
 	if (!href.startsWith(BASE + "/")) return false;
 	const rel = href.slice(BASE.length + 1).replace(/\/$/, "");
@@ -77,7 +95,7 @@ const homeTs = readFileSync(
 let homeHrefs = 0;
 for (const [, href] of homeTs.matchAll(/"(\/gitlab-mcp-server\/[^"\s]*)"/g)) {
 	homeHrefs++;
-	if (!hrefExists(href.replace(`${BASE}/es/`, `${BASE}/`))) {
+	if (!hrefExists(href)) {
 		fail(`home.ts: href ${href} resolves to no page`);
 	}
 }
@@ -132,7 +150,7 @@ for (const page of en) {
 			["EN", ha],
 			["ES", hb],
 		]) {
-			if (href && !hrefExists(href.replace(`${BASE}/es/`, `${BASE}/`))) {
+			if (href && !hrefExists(href)) {
 				fail(
 					`${rel}: ${locale} chip ${i + 1} href ${href} resolves to no page`,
 				);

@@ -683,10 +683,10 @@ brand-check:
 ## Maintainer-only (requires rsvg-convert + cwebp, like gen-icon-webp): banner
 ## WebP for the README, the OG card, and the marketplace icons.
 brand-rasters: brand
-	tmp=$$(mktemp --suffix=.png); \
-	rsvg-convert -w 1280 -h 400 .github/brand/banner.svg -o $$tmp; \
-	cwebp -quiet -lossless $$tmp -o .github/brand/banner.webp; \
-	rm -f $$tmp
+	tmp=$$(mktemp) && \
+	{ rsvg-convert -w 1280 -h 400 .github/brand/banner.svg -o $$tmp && \
+	  cwebp -quiet -lossless $$tmp -o .github/brand/banner.webp; }; \
+	status=$$?; rm -f $$tmp; exit $$status
 	rsvg-convert -w 1200 -h 630 .github/brand/og.svg -o site/public/og-image.png
 	rsvg-convert -w 2560 -h 1280 .github/brand/social.svg -o .github/brand/social.png
 	rsvg-convert -w 512 -h 512 site/public/favicon.svg -o mcpb/icon.png

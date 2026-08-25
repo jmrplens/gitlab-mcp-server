@@ -23,7 +23,7 @@
 package main
 
 import (
-	_ "embed"
+	_ "embed" // enables the //go:embed directives that freeze the card backgrounds
 	"encoding/base64"
 	"errors"
 	"flag"
@@ -262,15 +262,19 @@ type asset struct {
 	content string
 }
 
+// brandDir is where the repository-facing brand assets live (the banner the
+// README embeds, the cards, the mono mark).
+var brandDir = filepath.Join(".github", "brand")
+
 func assets() []asset {
 	return []asset{
 		{filepath.Join("site", "src", "assets", "logo.svg"), canonicalSVG()},
-		{filepath.Join(".github", "brand", "logo-mono.svg"), monoSVG()},
+		{filepath.Join(brandDir, "logo-mono.svg"), monoSVG()},
 		{filepath.Join("site", "public", "favicon.svg"), faviconSVG()},
 		{filepath.Join("internal", "toolutil", "brandmark_gen.go"), brandMarkGo()},
-		{filepath.Join(".github", "brand", "banner.svg"), bannerSVG()},
-		{filepath.Join(".github", "brand", "og.svg"), ogSVG()},
-		{filepath.Join(".github", "brand", "social.svg"), socialSVG()},
+		{filepath.Join(brandDir, "banner.svg"), bannerSVG()},
+		{filepath.Join(brandDir, "og.svg"), ogSVG()},
+		{filepath.Join(brandDir, "social.svg"), socialSVG()},
 	}
 }
 
@@ -309,7 +313,7 @@ func run(root string, check bool) error {
 func repoRoot() (string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("get working directory: %w", err)
 	}
 	dir := wd
 	for {

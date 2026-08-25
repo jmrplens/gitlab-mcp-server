@@ -11,7 +11,7 @@
 | ------------- | --------------------------------------------------- |
 | Language      | Go 1.27.0                                           |
 | MCP SDK       | `github.com/modelcontextprotocol/go-sdk/mcp` v1.7.0 |
-| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.58.1       |
+| GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.59.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
 | Version       | 2.6.7                                               |
@@ -31,7 +31,7 @@
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
 | Source files (tools)      | 756 non-test Go files under `internal/tools/`                                                                |
 | Test files (tools)        | 362 test files under `internal/tools/`                                                                       |
-| Go packages               | 225 total; 176 under `internal/tools/...`                                                                    |
+| Go packages               | 234 total; 176 under `internal/tools/...`                                                                    |
 
 ### Orbit live tests
 

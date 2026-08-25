@@ -256,6 +256,7 @@
  * ------------------------------------------------------------------ */
 .sl-markdown-content .starlight-aside {
 	--sl-color-asides-border: var(--sl-color-asides-text-accent);
+
 	background-color: var(--gm-surface);
 	border-radius: var(--gm-radius);
 }

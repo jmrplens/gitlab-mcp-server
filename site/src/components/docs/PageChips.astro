@@ -13,10 +13,7 @@
  * A chip with an `href` is a link and takes the accent ring; one without is
  * a plain label. Two states, because two is what the content needs.
  */
-interface Chip {
-	text: string;
-	href?: string;
-}
+import type { Chip } from "../../content.config";
 
 const chips = (Astro.locals.starlightRoute.entry.data as { chips?: Chip[] })
 	.chips;

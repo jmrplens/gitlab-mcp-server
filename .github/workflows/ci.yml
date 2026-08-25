@@ -46,6 +46,10 @@ jobs:
         run: make check-site-stats
       - name: Check brand assets
         run: make brand-check
+      - name: Check WebP icon fallbacks
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q librsvg2-bin webp
+          make check-icon-webp
       - name: Check action catalog manifest
         run: make check-action-catalog-manifest
       - name: Run tests with coverage
@@ -155,6 +159,36 @@ jobs:
         run: make check-doc-links
       - name: Check Claude Desktop extension manifest
         run: make check-mcpb
+
+  site-lint:
+    name: Site static lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24.18.0"
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      # The build-independent half of `pnpm run lint`: type check, palette
+      # contrast, chip parity, i18n parity, eslint, prettier. The
+      # dist-dependent gates (html-validate, htmlhint, pa11y) stay in the
+      # Pages workflow, which is the one that builds the site.
+      - name: Install site dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: site
+      - name: Static site gates
+        run: |
+          pnpm run check
+          pnpm run contrast:check
+          pnpm run chips:check
+          pnpm run i18n:check
+          pnpm run eslint
+          pnpm run format:check
+        working-directory: site
 
   hadolint:
     name: hadolint
