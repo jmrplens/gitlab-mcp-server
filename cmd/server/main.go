@@ -1176,12 +1176,12 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	// test) was gated on an endpoint almost nobody fetches. sync.OnceValues
 	// keeps the once-per-process semantics; only the first card request
 	// pays.
-	// The card builder runs on the first request's goroutine but builds an
-	// ephemeral in-memory MCP server whose lifetime is its own; tying it to
-	// one request's context would poison the once-cached card for everyone
-	// after a canceled first request.
-	serverCard := sync.OnceValues(func() ([]byte, error) { //nolint:contextcheck // see above
-		cardJSON, err := buildServerCard(cfg)
+	// The card build is bounded by the server's lifecycle context, not by
+	// any single request's: a canceled first request must not poison the
+	// once-cached card for everyone after it, while a server shutdown
+	// should cancel the build rather than wait behind it.
+	serverCard := sync.OnceValues(func() ([]byte, error) {
+		cardJSON, err := buildServerCard(ctx, cfg)
 		if err != nil {
 			slog.Warn("failed to build server-card.json, endpoint returns 503", "error", err)
 		}
@@ -1190,8 +1190,29 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler)
-	mux.HandleFunc("GET /.well-known/mcp/server-card.json", func(w http.ResponseWriter, _ *http.Request) {
-		serverCardJSON, _ := serverCard()
+	mux.HandleFunc("GET /.well-known/mcp/server-card.json", func(w http.ResponseWriter, r *http.Request) {
+		// The build runs detached and the handler only waits on it: the
+		// catalog registration inside is CPU work no context can
+		// interrupt, so a handler that called the builder inline would
+		// hold graceful shutdown hostage for however long the build took.
+		// This way a request caught by shutdown returns 503 immediately,
+		// Shutdown drains, and a build that does finish stays cached for
+		// the next request.
+		done := make(chan struct{})
+		var serverCardJSON []byte
+		go func() {
+			defer close(done)
+			serverCardJSON, _ = serverCard()
+		}()
+		select {
+		case <-done:
+		case <-r.Context().Done():
+			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
+			return
+		case <-ctx.Done():
+			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
+			return
+		}
 		if serverCardJSON == nil {
 			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
 			return
@@ -1542,7 +1563,7 @@ func newHealthResponse(startedAt, now time.Time) healthResponse {
 // The card includes per-tool OutputSchema, Annotations, and Title so external
 // scanners (Smithery, Glama, MCP Hive) get the full metadata without needing
 // to authenticate against the live MCP endpoint.
-func buildServerCard(cfg *config.Config) ([]byte, error) {
+func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 	// Use configured URL or a placeholder — the dummy client only needs a
 	// parseable URL to register tools; it never makes real API calls.
 	gitlabURL := cfg.GitLabURL
@@ -1555,13 +1576,19 @@ func buildServerCard(cfg *config.Config) ([]byte, error) {
 		return nil, fmt.Errorf("creating dummy client: %w", err)
 	}
 
-	srv, err := createServer(dummyClient, cfg.ServerConfig(), nil)
+	// createServer's internal tool-exclusion pass runs an ephemeral
+	// in-memory session of its own; the caller's context governs the card
+	// session below, not that registration detail.
+	srv, err := createServer(dummyClient, cfg.ServerConfig(), nil) //nolint:contextcheck // see above
 	if err != nil {
 		return nil, fmt.Errorf("creating server-card MCP server: %w", err)
 	}
 
 	st, ct := mcp.NewInMemoryTransports()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// The 30-second ceiling derives from the server's lifecycle context, so
+	// a shutdown that begins while the card is still being built cancels
+	// the build instead of waiting behind it.
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	serverSession, err := srv.Connect(ctx, st, nil)
