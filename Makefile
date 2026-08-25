@@ -728,11 +728,14 @@ mcpb:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_windows_amd64/gitlab-mcp-server.exe ./cmd/server; \
 	bash scripts/build-mcpb.sh "$$VER"
 
-## publish-lobehub: publish the current version to the LobeHub Marketplace.
+## publish-lobehub: push the current version of the existing LobeHub listing.
 ## Reads lhm.plugin.json (version kept in sync by scripts/update-server-json-sha.sh
-## on each release) and posts it via the @lobehub/market-cli. Requires a one-time
-## interactive `lhm login` + `lhm github connect` first — LobeHub has no
-## non-interactive publish path, so this cannot run in CI. See the release process in CLAUDE.md.
+## on each release) and posts it via the @lobehub/market-cli. The CLI split its
+## verbs: `plugin publish <gitUrl>` is for FIRST-TIME listings only and now
+## requires the git URL; an already-published plugin is refused with "use lhm
+## plugin update", which is what this target runs. Requires a one-time
+## interactive `lhm login` + `lhm github connect` on the machine — LobeHub has
+## no CI path. See the release process in CLAUDE.md.
 publish-lobehub: check-lhm-manifest
 	@command -v node >/dev/null || { echo "ERROR: Node.js >= 22 is required"; exit 1; }
 	@NODE_MAJOR=$$(node -v | sed 's/^v\([0-9]*\).*/\1/'); \
@@ -743,8 +746,8 @@ publish-lobehub: check-lhm-manifest
 	if [ "$$VER" != "$$MVER" ]; then \
 		echo "ERROR: VERSION ($$VER) != lhm.plugin.json version ($$MVER); run a release stamp first"; exit 1; \
 	fi; \
-	echo "Publishing jmrplens-gitlab-mcp-server v$$VER to LobeHub..."; \
-	npx -y @lobehub/market-cli plugin publish --dir "$(CURDIR)"
+	echo "Updating jmrplens-gitlab-mcp-server to v$$VER on LobeHub..."; \
+	npx -y @lobehub/market-cli plugin update --dir "$(CURDIR)"
 
 ## gen-readme: regenerate all managed README.md sections (token footprint + stats).
 gen-readme: gen-footprint gen-stats
