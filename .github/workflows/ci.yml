@@ -6,8 +6,10 @@
 name: CI
 
 on:
+  # No branches filter on pull_request: a stacked PR whose base is another
+  # feature branch must run the same suite as one targeting main, or a
+  # green check mark means "CI did not run here" instead of "CI passed".
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
