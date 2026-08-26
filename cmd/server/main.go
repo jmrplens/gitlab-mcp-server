@@ -1717,6 +1717,10 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 		InputSchema  any                  `json:"inputSchema,omitempty"`
 		OutputSchema any                  `json:"outputSchema,omitempty"`
 		Annotations  *mcp.ToolAnnotations `json:"annotations,omitempty"`
+		// Icons travel in the card exactly as tools/list publishes them
+		// (SVG plus light/dark WebP): a directory renders from the card
+		// alone, and a card without them shows less than the live surface.
+		Icons []mcp.Icon `json:"icons,omitempty"`
 	}
 
 	cardTools := make([]serverCardTool, 0, len(toolsResult.Tools))
@@ -1728,6 +1732,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 			InputSchema:  t.InputSchema,
 			OutputSchema: t.OutputSchema,
 			Annotations:  t.Annotations,
+			Icons:        t.Icons,
 		})
 	}
 
@@ -1739,6 +1744,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 		MIMEType    string           `json:"mimeType,omitempty"`
 		Size        int64            `json:"size,omitempty"`
 		Annotations *mcp.Annotations `json:"annotations,omitempty"`
+		Icons       []mcp.Icon       `json:"icons,omitempty"`
 	}
 
 	resourcesResult, err := session.ListResources(ctx, nil)
@@ -1755,6 +1761,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 			MIMEType:    r.MIMEType,
 			Size:        r.Size,
 			Annotations: r.Annotations,
+			Icons:       r.Icons,
 		})
 	}
 
@@ -1765,6 +1772,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 		Description string           `json:"description,omitempty"`
 		MIMEType    string           `json:"mimeType,omitempty"`
 		Annotations *mcp.Annotations `json:"annotations,omitempty"`
+		Icons       []mcp.Icon       `json:"icons,omitempty"`
 		// Carries the vendor-namespaced subscribable key, so a card
 		// consumer can filter subscribable templates per object as well
 		// as read the aggregate subscriptions block.
@@ -1784,6 +1792,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 			Description: rt.Description,
 			MIMEType:    rt.MIMEType,
 			Annotations: rt.Annotations,
+			Icons:       rt.Icons,
 			Meta:        rt.Meta,
 		})
 	}
@@ -1799,6 +1808,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 		Title       string                     `json:"title,omitempty"`
 		Description string                     `json:"description,omitempty"`
 		Arguments   []serverCardPromptArgument `json:"arguments,omitempty"`
+		Icons       []mcp.Icon                 `json:"icons,omitempty"`
 	}
 
 	cardPrompts := []serverCardPrompt{}
@@ -1823,6 +1833,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 				Title:       p.Title,
 				Description: p.Description,
 				Arguments:   args,
+				Icons:       p.Icons,
 			})
 		}
 	}

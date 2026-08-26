@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Meta-Tools Reference
 
-> Version 2.7.1 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 2.7.2 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -81,19 +81,19 @@ Action guidance:
 - token_group_list: Use for GitLab group access tokens; this action lists group-scoped API tokens.
 - token_group_revoke: Use for GitLab group access tokens; this action revokes a group-scoped API token.
 - token_group_rotate: Use for GitLab group access tokens; this action rotates a group-scoped API token.
-- token_group_rotate_self: Use for GitLab group access tokens; this action rotates a group-scoped API token.
+- token_group_rotate_self: Use for GitLab group access tokens; this action rotates the group-scoped token that authenticates this request itself — no token_id parameter.
 - token_personal_get: Use for GitLab personal access tokens; this action gets a personal-scoped API token.
 - token_personal_list: Use for GitLab personal access tokens; this action lists personal-scoped API tokens.
 - token_personal_revoke: Use for GitLab personal access tokens; this action revokes a personal-scoped API token.
-- token_personal_revoke_self: Use for GitLab personal access tokens; this action revokes a personal-scoped API token.
+- token_personal_revoke_self: Use for GitLab personal access tokens; this action revokes the personal-scoped token that authenticates this request itself — no token_id parameter.
 - token_personal_rotate: Use for GitLab personal access tokens; this action rotates a personal-scoped API token.
-- token_personal_rotate_self: Use for GitLab personal access tokens; this action rotates a personal-scoped API token.
+- token_personal_rotate_self: Use for GitLab personal access tokens; this action rotates the personal-scoped token that authenticates this request itself — no token_id parameter.
 - token_project_create: Use for GitLab project access tokens; this action creates a project-scoped API token.
 - token_project_get: Use for GitLab project access tokens; this action gets a project-scoped API token.
 - token_project_list: Use for GitLab project access tokens; this action lists project-scoped API tokens.
 - token_project_revoke: Use for GitLab project access tokens; this action revokes a project-scoped API token.
 - token_project_rotate: Use for GitLab project access tokens; this action rotates a project-scoped API token.
-- token_project_rotate_self: Use for GitLab project access tokens; this action rotates a project-scoped API token.
+- token_project_rotate_self: Use for GitLab project access tokens; this action rotates the project-scoped token that authenticates this request itself — no token_id parameter.
 Parameter guidance:
 - approve_group.group_id: scope_group; source: Group ID or URL-encoded path (e.g. "my-group" or "my-group/sub").
 - approve_group.user_id: user_id; source: User ID from request_list_group output.
@@ -2109,7 +2109,7 @@ IMPORTANT: pass the complete URL exactly as it appears — do NOT strip the git@
 
 Returns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. Errors: 404 not found (hint: project may be private — verify token permissions), 403 forbidden (hint: token lacks read_api scope).
 
-See also: gitlab_project (full project CRUD/settings once id is known), gitlab_server (connectivity and version checks), gitlab_search (find projects by query).
+See also: gitlab_project_get (full project CRUD/settings once id is known), gitlab_server (connectivity and version checks), gitlab_search (find projects by query).
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -2129,11 +2129,11 @@ Action guidance:
 - deployment_list: Lists deployments in a project with filters and pagination. Use this to audit deployment history and locate deployment IDs for follow-up actions.
 - deployment_merge_requests: List the merge requests associated with a specific deployment in a project environment. Use this when the prompt asks which MRs were included, shipped, or rolled out by a known deployment_id, not to list deployments or to list merge requests directly.
 - deployment_update: Update an existing deployment's status (created, running, success, failed, or canceled) by deployment_id. Use to transition a deployment after a CI/CD job or manual step completes.
-- freeze_create: Create a deploy freeze period for a project.
-- freeze_delete: Delete a deploy freeze period.
-- freeze_get: Get a specific deploy freeze period.
-- freeze_list: List deploy freeze periods for a project.
-- freeze_update: Update an existing deploy freeze period.
+- freeze_create: Create a deploy freeze period for a project. Returns: the created freeze period with id, freeze_start/freeze_end cron expressions, and cron_timezone.
+- freeze_delete: Delete a deploy freeze period. Returns: no content on success (HTTP 204).
+- freeze_get: Get a specific deploy freeze period. Returns: the freeze period's id, freeze_start/freeze_end cron expressions, cron_timezone, and created/updated timestamps.
+- freeze_list: List deploy freeze periods for a project. Returns: each freeze period's id, freeze_start/freeze_end cron expressions, cron_timezone, and created/updated timestamps.
+- freeze_update: Update an existing deploy freeze period. Returns: the updated freeze period with id, freeze_start/freeze_end cron expressions, and cron_timezone.
 - get: Get one environment by environment_id. Use when inspecting state, tier, external URL, and stop behavior of a specific environment.
 - list: List environments in one project with filters and pagination. Use this to discover environment IDs before get/update/stop/delete operations.
 - stop: Stop an active environment. This is modeled as a delete-style action but intentionally marked non-destructive because it changes runtime state without deleting the environment resource.
@@ -2606,14 +2606,14 @@ Action guidance:
 - release_list: List releases across all projects in a group. Use this when the task asks for group-wide release history or the latest releases of every project in a group.
 - restore: Restore a group that was marked for deletion (within the retention window, before permanent removal). Use after an accidental delete to recover the group.
 - search: Search for groups by name or path keywords. Use when the user wants to find groups matching a term without already knowing an ID or path.
-- service_account_create: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions. Omit email unless the task gives an explicit valid email address.
-- service_account_delete: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.
-- service_account_list: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.
-- service_account_pat_create: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions. Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime.
-- service_account_pat_list: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.
-- service_account_pat_revoke: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.
-- service_account_pat_rotate: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions. Rotating revokes the supplied token_id and returns a brand-new token value; capture the returned token immediately. Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime.
-- service_account_update: Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions. Omit email unless the task gives an explicit valid email address.
+- service_account_create: Create a service account user in a group. Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions. Omit email unless the task gives an explicit valid email address.
+- service_account_delete: Delete a group service account user, optionally hard-deleting owned resources. Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.
+- service_account_list: List a group's service account users. Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.
+- service_account_pat_create: Create a personal access token for a group service account. Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions. Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime.
+- service_account_pat_list: List the personal access tokens of one group service account. Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.
+- service_account_pat_revoke: Revoke one of a group service account's personal access tokens. Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.
+- service_account_pat_rotate: Rotate a group service account's personal access token. Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions. Rotating revokes the supplied token_id and returns a brand-new token value; capture the returned token immediately. Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime.
+- service_account_update: Update a group service account's name or username. Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions. Omit email unless the task gives an explicit valid email address.
 - share_with_group: Share this group with another group via the Groups API, granting that group's members access at a chosen access level. Send group_id, shared_group_id, and group_access. Requires Owner role. (gitlab_group_share is the GroupMembers-API equivalent.)
 - shared_projects: List the projects shared *into* this group from elsewhere (not the group's own projects). Use when the user asks which external projects a group can access via sharing.
 - shared_with: List the groups that have been shared with this group (group-to-group shares granting members access). Use when the user asks which groups can access a group via sharing, not its members or subgroups.
@@ -4191,7 +4191,7 @@ Requires the MCP client to support the elicitation capability. If unsupported, r
 
 Returns: JSON with the created issue (id, issue_iid, web_url, title, state); issue_iid corresponds to GitLab's iid field.
 
-See also: gitlab_issue.
+See also: gitlab_issue_create, gitlab_issue_get.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -4221,7 +4221,7 @@ Requires the MCP client to support the elicitation capability. If unsupported, r
 
 Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state); merge_request_iid corresponds to GitLab's iid field.
 
-See also: gitlab_merge_request, gitlab_branch.
+See also: gitlab_mr_create, gitlab_branch_create.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -4249,7 +4249,7 @@ Requires the MCP client to support the elicitation capability. If unsupported, r
 
 Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).
 
-See also: gitlab_project, gitlab_group.
+See also: gitlab_project_get, gitlab_group_get.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -4275,7 +4275,7 @@ Behavior: each successful invocation publishes ONE new release after explicit us
 
 Returns: JSON with the created release (tag_name, name, description, web_url).
 
-See also: gitlab_release, gitlab_tag.
+See also: gitlab_release_create, gitlab_tag_create.
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -6114,7 +6114,7 @@ Parameter guidance:
 - diff_versions_list.project_id: scope_project; source: Project ID or full namespace path that owns the merge request.; avoid: Use the MR's parent project here, not a group path or the MR's global ID.
 - discussion_create.body: comment_body; source: Markdown text for the first note of the new thread.
 - discussion_create.merge_request_iid: merge_request_iid; source: Merge request number visible in the project, usually from the URL or prior MR list output.; avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.
-- discussion_create.position: diff_position; source: Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_mr_changes; omit for a general discussion.; avoid: Inline comments require the full SHA triple plus a valid path/line from the MR diff; omit position entirely for a thread that is not tied to a line.
+- discussion_create.position: diff_position; source: Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_mr_changes_get; omit for a general discussion.; avoid: Inline comments require the full SHA triple plus a valid path/line from the MR diff; omit position entirely for a thread that is not tied to a line.
 - discussion_create.project_id: scope_project; source: Project ID or full namespace path that owns the merge request.; avoid: Use the MR's parent project here, not a group path or global MR ID.
 - discussion_get.discussion_id: discussion_id; source: Discussion thread id from a prior gitlab_mr_discussion_list response.; avoid: The discussion_id is the thread hash, not a note id; pass note_id separately for note actions.
 - discussion_get.merge_request_iid: merge_request_iid; source: Merge request number visible in the project, usually from the URL or prior MR list output.; avoid: Use merge_request_iid for the project-scoped MR number, not the global merge_request_id.

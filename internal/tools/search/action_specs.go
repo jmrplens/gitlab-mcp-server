@@ -41,7 +41,7 @@ func searchCodeSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Aliases = []string{"code search", "file content search", "find code", "search repository files"}
 	options.Tags = append(options.Tags, "code", "blob", "file_content")
 	options.RelatedActions = []string{actionSearchProjects, "repository.file_get", "repository.tree"}
-	options.IndividualTool.Description = "Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, starting line, the surrounding snippet, project ID, and pagination metadata. See also: gitlab_search_projects, gitlab_get_repository_file, gitlab_list_repository_tree."
+	options.IndividualTool.Description = "Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, starting line, the surrounding snippet, project ID, and pagination metadata. See also: gitlab_search_projects, gitlab_file_get, gitlab_repository_tree."
 	return toolutil.NewReadActionSpec("code", searchRoute(client, Code), options)
 }
 
@@ -51,7 +51,7 @@ func searchProjectsSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options.Aliases = []string{"project search", "repository search", "find projects", "find repositories"}
 	options.Tags = append(options.Tags, "project", "repository", "namespace")
 	options.RelatedActions = []string{"project.get", "project.list", actionSearchCode}
-	options.IndividualTool.Description = "Search projects globally or within a group by name, path, or description. Returns: matching projects with namespace, visibility, default branch, and web URL plus pagination metadata. See also: gitlab_get_project, gitlab_list_projects, gitlab_search_code."
+	options.IndividualTool.Description = "Search projects globally or within a group by name, path, or description. Returns: matching projects with namespace, visibility, default branch, and web URL plus pagination metadata. See also: gitlab_project_get, gitlab_project_list, gitlab_search_code."
 	return toolutil.NewReadActionSpec("projects", searchRoute(client, Projects), options)
 }
 
@@ -107,35 +107,35 @@ var searchActionMeta = map[string]searchActionMetaEntry{
 		aliases:     []string{"search merge requests", "search MRs", "full-text MR search", "find MRs by content"},
 		tags:        []string{"merge_request"},
 		related:     []string{actionSearchIssues, "merge_request.list", "merge_request.get"},
-		description: "Search merge requests across global, group, or project scope. Returns: matching merge requests with title, state, author, source and target branches, and web URL plus pagination metadata. See also: gitlab_search_issues, gitlab_list_merge_requests, gitlab_get_merge_request.",
+		description: "Search merge requests across global, group, or project scope. Returns: matching merge requests with title, state, author, source and target branches, and web URL plus pagination metadata. See also: gitlab_search_issues, gitlab_mr_list, gitlab_mr_get.",
 	},
 	"gitlab_search_issues": {
 		usage:       "Search issues by title and description across global, group (group_id), or project (project_id) scope. Use when the prompt gives keywords; if it already names a project plus an issue number, use issue.get instead.",
 		aliases:     []string{"search issues", "search tickets", "full-text issue search", "find issues by content"},
 		tags:        []string{"issue"},
 		related:     []string{actionSearchMergeRequests, "issue.list", "issue.get"},
-		description: "Search issues across global, group, or project scope. Returns: matching issues with title, state, labels, assignees, author, and web URL plus pagination metadata. See also: gitlab_search_merge_requests, gitlab_list_issues, gitlab_get_issue.",
+		description: "Search issues across global, group, or project scope. Returns: matching issues with title, state, labels, assignees, author, and web URL plus pagination metadata. See also: gitlab_search_merge_requests, gitlab_issue_list, gitlab_issue_get.",
 	},
 	"gitlab_search_commits": {
 		usage:       "Search commit messages across global, group (group_id), or project (project_id) scope. Use to find commits by message keywords; use repository.commit_get when the SHA is already known.",
 		aliases:     []string{"search commits", "search commit messages", "find commit by message", "full-text commit search"},
 		tags:        []string{"commit"},
 		related:     []string{actionSearchCode, "repository.commit_get", "repository.commit_list"},
-		description: "Search commit messages across global, group, or project scope. Returns: matching commits with short and full SHA, title, message, author, and committed date plus pagination metadata. See also: gitlab_search_code, gitlab_get_commit, gitlab_list_commits.",
+		description: "Search commit messages across global, group, or project scope. Returns: matching commits with short and full SHA, title, message, author, and committed date plus pagination metadata. See also: gitlab_search_code, gitlab_commit_get, gitlab_commit_list.",
 	},
 	"gitlab_search_milestones": {
 		usage:       "Search milestones by title and description across global, group (group_id), or project (project_id) scope. Use to locate a milestone by name when its ID is unknown.",
 		aliases:     []string{"search milestones", "find milestone by name", "full-text milestone search"},
 		tags:        []string{"milestone"},
 		related:     []string{"milestone.list", "milestone.get", actionSearchIssues},
-		description: "Search milestones across global, group, or project scope. Returns: matching milestones with title, description, state, start and due dates, and web URL plus pagination metadata. See also: gitlab_list_milestones, gitlab_get_milestone, gitlab_search_issues.",
+		description: "Search milestones across global, group, or project scope. Returns: matching milestones with title, description, state, start and due dates, and web URL plus pagination metadata. See also: gitlab_milestone_list, gitlab_milestone_get, gitlab_search_issues.",
 	},
 	"gitlab_search_notes": {
 		usage:       "Search note bodies within a single project (project_id is required). Use to find comments on issues, merge requests, or commits that mention given keywords.",
 		aliases:     []string{"search notes", "search comments", "find notes by content", "full-text note search"},
 		tags:        []string{"note", "comment"},
 		related:     []string{actionSearchIssues, actionSearchMergeRequests, "issue.notes_list"},
-		description: "Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system flag, and timestamps plus pagination metadata. See also: gitlab_search_issues, gitlab_search_merge_requests, gitlab_list_issue_notes.",
+		description: "Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system flag, and timestamps plus pagination metadata. See also: gitlab_search_issues, gitlab_search_merge_requests, gitlab_issue_note_list.",
 	},
 	"gitlab_search_snippets": {
 		usage:       "Search snippet titles globally (no group or project scope). Use to locate a snippet by its title keywords across the instance.",
@@ -149,14 +149,14 @@ var searchActionMeta = map[string]searchActionMetaEntry{
 		aliases:     []string{"global user search", "find people by name", "look up user account", "full-text user search"},
 		tags:        []string{"user"},
 		related:     []string{"user.get", "user.list", "project.members_list"},
-		description: "Search users across global, group, or project scope. Returns: matching users with ID, username, name, state, avatar URL, and web URL plus pagination metadata. See also: gitlab_get_user, gitlab_list_users, gitlab_list_project_members.",
+		description: "Search users across global, group, or project scope. Returns: matching users with ID, username, name, state, avatar URL, and web URL plus pagination metadata. See also: gitlab_get_user, gitlab_list_users, gitlab_project_members_list.",
 	},
 	"gitlab_search_wiki": {
 		usage:       "Search wiki page contents across global, group (group_id), or project (project_id) scope. Use to find wiki pages by their body or title keywords.",
 		aliases:     []string{"search wiki", "search wiki content", "find wiki by content", "full-text wiki search"},
 		tags:        []string{"wiki", "blob"},
 		related:     []string{actionSearchCode, "wiki.list", "wiki.get"},
-		description: "Search wiki blobs across global, group, or project scope. Returns: matching wiki pages with slug, title, content snippet, and format plus pagination metadata. See also: gitlab_search_code, gitlab_list_wikis, gitlab_get_wiki.",
+		description: "Search wiki blobs across global, group, or project scope. Returns: matching wiki pages with slug, title, content snippet, and format plus pagination metadata. See also: gitlab_search_code, gitlab_wiki_list, gitlab_wiki_get.",
 	},
 }
 

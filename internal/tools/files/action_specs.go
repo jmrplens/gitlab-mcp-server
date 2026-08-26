@@ -114,7 +114,7 @@ var fileActionMeta = map[string]struct {
 	"gitlab_file_blame": {
 		aliases:     []string{"file blame", "git blame", "who changed this file", "line authorship"},
 		usage:       "Get per-line blame for a file, optionally restricted to a line range with range_start and range_end. Use to find which commit and author last touched each line.",
-		description: "Get blame information for a file, optionally for a line range. Returns: file_path and blame ranges, each with commit id, message, author name/email, authored and committed dates, and the covered lines. See also: gitlab_file_get, gitlab_repository_commit_list.",
+		description: "Get blame information for a file, optionally for a line range. Returns: file_path and blame ranges, each with commit id, message, author name/email, authored and committed dates, and the covered lines. See also: gitlab_file_get, gitlab_commit_list.",
 	},
 	"gitlab_file_metadata": {
 		aliases:     []string{"file metadata", "file info", "file stat", "check file exists"},

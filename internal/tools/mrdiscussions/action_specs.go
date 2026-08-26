@@ -117,11 +117,11 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 		}
 		options.ParameterGuidance["position"] = toolutil.ParameterGuidance{
 			SemanticRole:     "diff_position",
-			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_mr_changes; omit for a general discussion.",
+			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_mr_changes_get; omit for a general discussion.",
 			ExampleBinding:   `params.position:{"base_sha":"abc","head_sha":"def","start_sha":"abc","new_path":"main.go","new_line":12}`,
 			CommonConfusions: []string{"Inline comments require the full SHA triple plus a valid path/line from the MR diff; omit position entirely for a thread that is not tied to a line."},
 		}
-		options.IndividualTool.Description = "Create a new discussion thread on a merge request, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: gitlab_mr_discussion_reply, gitlab_mr_discussion_list, gitlab_mr_changes."
+		options.IndividualTool.Description = "Create a new discussion thread on a merge request, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: gitlab_mr_discussion_reply, gitlab_mr_discussion_list, gitlab_mr_changes_get."
 	case "gitlab_mr_discussion_list":
 		options.Usage = "List all discussion threads on one merge request, including inline diff comments, system notes, and threaded replies. Use this when the prompt asks for an MR's review conversation, or before replying to or resolving a thread. Supports order_by, sort, and keyset pagination."
 		options.Aliases = []string{"gitlab_mr_discussion_list", "list merge request discussions", "show MR review threads", "get merge request conversation"}
@@ -133,7 +133,7 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 			ExampleBinding:   `params.order_by:"created_at"`,
 			CommonConfusions: []string{"Combine order_by with sort; do not pass natural-language phrases as the field value."},
 		}
-		options.IndividualTool.Description = "List discussion threads on a merge request with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_mr_discussion_get, gitlab_mr_discussion_create, gitlab_mr_get, gitlab_mr_note_list."
+		options.IndividualTool.Description = "List discussion threads on a merge request with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_mr_discussion_get, gitlab_mr_discussion_create, gitlab_mr_get, gitlab_mr_notes_list."
 	case "gitlab_mr_discussion_get":
 		options.Usage = "Fetch one discussion thread on a merge request by its discussion_id, returning every note in the thread. Use this after gitlab_mr_discussion_list when the target thread is already known."
 		options.Aliases = []string{"gitlab_mr_discussion_get", "get merge request discussion", "show MR discussion thread", "fetch merge request discussion"}

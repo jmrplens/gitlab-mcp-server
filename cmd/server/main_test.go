@@ -4371,6 +4371,22 @@ func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
 	if !toolsOK || len(toolsRaw) == 0 {
 		t.Fatal("server card 'tools' array missing or empty")
 	}
+	// The live surface publishes three icons (SVG + light/dark WebP) on
+	// every icon-bearing entry; the card must not show less on any of the
+	// four collections that carry them.
+	for _, collection := range []string{"tools", "prompts", "resources", "resourceTemplates"} {
+		entries, _ := card[collection].([]any)
+		if len(entries) == 0 {
+			t.Errorf("card %s array missing or empty", collection)
+			continue
+		}
+		for i, raw := range entries {
+			entry, _ := raw.(map[string]any)
+			if icons, _ := entry["icons"].([]any); len(icons) != 3 {
+				t.Errorf("card %s[%d] icons = %d entries, want 3", collection, i, len(icons))
+			}
+		}
+	}
 
 	// Verify serverInfo presence
 	if _, siOK := card["serverInfo"].(map[string]any); !siOK {

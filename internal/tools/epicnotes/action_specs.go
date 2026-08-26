@@ -163,7 +163,7 @@ func decorateEpicNoteMeta(options *toolutil.ActionSpecOptions, individualTool st
 				CommonConfusions: []string{"body is the comment content, not a description update; updating the epic body is group.epic_update."},
 			},
 		}
-		options.IndividualTool.Description = "Add a comment (note) to an epic. Returns: the created note with id, author, body, and timestamps. See also: gitlab_epic_note_list, gitlab_get_epic, gitlab_create_epic_discussion."
+		options.IndividualTool.Description = "Add a comment (note) to an epic. Returns: the created note with id, author, body, and timestamps. See also: gitlab_epic_note_list, gitlab_epic_get, gitlab_create_epic_discussion."
 	case "gitlab_epic_note_update":
 		options.Usage = "Replace the body of an existing epic note. Only the original author or a Maintainer/Owner can edit a note; system notes cannot be edited. Use when the task asks to edit, fix, or amend a comment."
 		options.Aliases = []string{"edit epic comment", "update epic note", "amend epic comment"}

@@ -148,7 +148,7 @@ func milestoneOptionsForAction(actionName, individualTool string) toolutil.Actio
 		options.Usage = "List the merge requests assigned to a milestone by milestone_iid, with ordering and pagination."
 		options.Aliases = []string{"list milestone merge requests", "MRs in milestone", "show milestone merge requests"}
 		options.RelatedActions = []string{actionMilestoneGet, actionMilestoneIssues, "merge_request.list"}
-		options.IndividualTool.Description = "List merge requests assigned to a single milestone with ordering and pagination. Returns: assigned merge requests with IID, title, state, source/target branches, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_merge_request_list."
+		options.IndividualTool.Description = "List merge requests assigned to a single milestone with ordering and pagination. Returns: assigned merge requests with IID, title, state, source/target branches, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_mr_list."
 	}
 
 	return options

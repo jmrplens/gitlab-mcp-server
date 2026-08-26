@@ -93,6 +93,12 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		return options
 	}
 	options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action %s a %s-scoped API token.", scope, accessTokenOperationPhrase(operation), scope)
+	if strings.HasSuffix(operation, "_self") {
+		// The self variants act on the token that authenticates the request
+		// itself; without this sentence they read identically to their
+		// token_id-taking siblings and a model has no signal to pick one.
+		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action %s the %s-scoped token that authenticates this request itself — no token_id parameter.", scope, accessTokenOperationPhrase(operation), scope)
+	}
 	options.Aliases = accessTokenAliases(scope, operation)
 	if operation == "list" {
 		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action lists %s-scoped API tokens.", scope, scope)

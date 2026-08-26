@@ -33,7 +33,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 				IndividualTool: toolutil.IndividualToolSpec{
 					Name:        "gitlab_list_branch_rules",
 					Title:       toolutil.TitleFromName("gitlab_list_branch_rules"),
-					Description: "List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its matched pattern, default and protected flags, matching branch count, branch protection settings (allow force push, code-owner approval required), approval rules, external status checks, and keyset pagination metadata. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_get_project.",
+					Description: "List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its matched pattern, default and protected flags, matching branch count, branch protection settings (allow force push, code-owner approval required), approval rules, external status checks, and keyset pagination metadata. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_project_get.",
 				},
 			}),
 	}

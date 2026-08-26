@@ -6,9 +6,9 @@ import (
 )
 
 const (
-	descriptionCreateSecurityCategory = "Create a GitLab security category in a namespace via GraphQL. Requires Premium or Ultimate. Returns: created security category. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorycreate"
-	descriptionUpdateSecurityCategory = "Update a GitLab security category name or description via GraphQL. Requires Premium or Ultimate. Returns: updated security category. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate"
-	descriptionDeleteSecurityCategory = "Delete a GitLab security category and its associated security attributes via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy"
+	descriptionCreateSecurityCategory = "Create a GitLab security category in a namespace via GraphQL. Requires Premium or Ultimate. Returns: created security category. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorycreate"
+	descriptionUpdateSecurityCategory = "Update a GitLab security category name or description via GraphQL. Requires Premium or Ultimate. Returns: updated security category. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate"
+	descriptionDeleteSecurityCategory = "Delete a GitLab security category and its associated security attributes via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy"
 	actionGroupGet                    = "group.get"
 )
 

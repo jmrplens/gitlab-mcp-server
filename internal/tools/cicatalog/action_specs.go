@@ -85,7 +85,7 @@ var catalogActionMeta = map[string]catalogActionMetaEntry{
 		related: []string{actionCatalogGet, actionTemplateLint, "pipeline.create"},
 		description: "List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. " +
 			"Returns: catalog resources with name, full path, description, latest version, star and fork counts, open issue and MR counts, web URL, and keyset pagination metadata. " +
-			"See also: gitlab_get_catalog_resource, gitlab_ci_lint, gitlab_create_pipeline.",
+			"See also: gitlab_get_catalog_resource, gitlab_ci_lint, gitlab_pipeline_create.",
 	},
 	"gitlab_get_catalog_resource": {
 		usage:   "Fetch one CI/CD Catalog resource by its GID or by the full_path of the hosting project. Use after browsing the catalog when the prompt names a specific component project and you need its components, input parameters, README, and released versions to wire an include into a pipeline.",
@@ -93,6 +93,6 @@ var catalogActionMeta = map[string]catalogActionMetaEntry{
 		related: []string{actionCatalogList, actionTemplateLint, "project.get"},
 		description: "Get a single CI/CD Catalog resource by GID or full path. " +
 			"Returns: the resource with description, README HTML, latest-version components and their typed inputs, version history, star and fork counts, and web URL. " +
-			"See also: gitlab_list_catalog_resources, gitlab_ci_lint, gitlab_get_project.",
+			"See also: gitlab_list_catalog_resources, gitlab_ci_lint, gitlab_project_get.",
 	},
 }
