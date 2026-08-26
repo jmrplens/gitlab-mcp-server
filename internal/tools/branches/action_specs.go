@@ -97,7 +97,7 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 		options.Usage = "Create a branch from a source ref (branch/tag/commit). Use when preparing feature branches or release branches."
 		options.Aliases = []string{"create branch", "new branch", "branch from ref"}
 		options.RelatedActions = []string{actionBranchList, "merge_request.create", "repository.compare"}
-		options.IndividualTool.Description = "Create a branch from a source ref (branch, tag, or commit SHA). Returns: the created branch with its head commit object, protection and default flags, and web URL. See also: gitlab_branch_list, gitlab_merge_request_create, gitlab_repository_compare."
+		options.IndividualTool.Description = "Create a branch from a source ref (branch, tag, or commit SHA). Returns: the created branch with its head commit object, protection and default flags, and web URL. See also: gitlab_branch_list, gitlab_mr_create, gitlab_repository_compare."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramBranchName: {
 				SemanticRole:   "git_branch",
@@ -119,7 +119,7 @@ func branchSpec(name string, route toolutil.ActionRoute, individualTool string, 
 		options.Usage = "Delete merged branches in a project. Use with caution for branch hygiene after confirming merge status requirements."
 		options.Aliases = []string{"delete merged branches", "cleanup merged branches", "prune merged branches"}
 		options.RelatedActions = []string{actionBranchList, "merge_request.list"}
-		options.IndividualTool.Description = "Delete all branches merged into the default branch. Returns: a success confirmation. Protected and default branches are skipped. See also: gitlab_branch_list, gitlab_merge_request_list."
+		options.IndividualTool.Description = "Delete all branches merged into the default branch. Returns: a success confirmation. Protected and default branches are skipped. See also: gitlab_branch_list, gitlab_mr_list."
 	case "unprotect":
 		options.Usage = "Remove protection from a branch by project_id and branch_name. Use before deleting a protected branch or when relaxing branch protection rules. Idempotent: succeeds when the branch is already unprotected."
 		options.Aliases = []string{"unprotect branch", "remove branch protection", "unlock branch"}

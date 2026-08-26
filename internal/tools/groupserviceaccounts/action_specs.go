@@ -36,10 +36,23 @@ func groupServiceAccountDeleteSpec(name string, route toolutil.ActionRoute, indi
 }
 
 func groupServiceAccountOptions(actionName, individualTool string) toolutil.ActionSpecOptions {
+	// Each action leads with its own sentence: the disambiguation text that
+	// follows is shared by the whole family, and an identical description on
+	// several actions gives a model no signal to choose between them.
+	leads := map[string]string{
+		"service_account_list":       "List a group's service account users.",
+		"service_account_create":     "Create a service account user in a group.",
+		"service_account_update":     "Update a group service account's name or username.",
+		"service_account_delete":     "Delete a group service account user, optionally hard-deleting owned resources.",
+		"service_account_pat_list":   "List the personal access tokens of one group service account.",
+		"service_account_pat_create": "Create a personal access token for a group service account.",
+		"service_account_pat_revoke": "Revoke one of a group service account's personal access tokens.",
+		"service_account_pat_rotate": "Rotate a group service account's personal access token.",
+	}
 	options := toolutil.ActionSpecOptions{
 		Aliases:        groupServiceAccountAliases(actionName),
 		Tags:           groupServiceAccountTags(actionName),
-		Usage:          "Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.",
+		Usage:          leads[actionName] + " Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.",
 		RelatedActions: []string{"group.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "groupserviceaccounts",

@@ -164,7 +164,7 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 				CommonConfusions: []string{"Use issue_iid for project-scoped issue numbers; issue_id is only for the global issue ID action."},
 			},
 		}
-		options.IndividualTool.Description = "Get a single issue from a project by issue IID. Returns: issue metadata, state, labels, assignees, author, due date, task completion, and web URL. See also: gitlab_issue_list, gitlab_issue_update, gitlab_issue_delete, gitlab_issue_notes_list."
+		options.IndividualTool.Description = "Get a single issue from a project by issue IID. Returns: issue metadata, state, labels, assignees, author, due date, task completion, and web URL. See also: gitlab_issue_list, gitlab_issue_update, gitlab_issue_delete, gitlab_issue_note_list."
 	case "gitlab_issue_list":
 		options.Usage = "List issues in one project. Use filters such as state, labels, search, assignee_username, milestone, order_by, sort, and pagination when the prompt asks for matching or recent issues in a known project."
 		options.Aliases = []string{"list project issues", "find issues in project", "show project issues"}
@@ -325,7 +325,7 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 		usage:       "List the users participating in an issue (author, assignees, commenters, and subscribers).",
 		aliases:     []string{"list issue participants", "who is on this issue", "show issue participants", "issue participant list"},
 		related:     []string{actionIssueGet, "issue.notes_list"},
-		description: "List an issue's participants. Returns: participating users with username and name. See also: gitlab_issue_get, gitlab_issue_notes_list.",
+		description: "List an issue's participants. Returns: participating users with username and name. See also: gitlab_issue_get, gitlab_issue_note_list.",
 	},
 	"gitlab_issue_mrs_closing": {
 		usage:       "List merge requests that will close this issue when merged (those referencing it with a closing keyword).",

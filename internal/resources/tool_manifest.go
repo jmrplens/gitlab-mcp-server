@@ -2,6 +2,7 @@ package resources
 
 import (
 	"context"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -60,15 +61,21 @@ type ToolSurfaceVisibleTool struct {
 // surface), meta actions (gitlab_<tool>.<action> surface), or
 // individual tools (one MCP tool per GitLab action).
 type ToolSurfaceEntry struct {
-	ID             string   `json:"id"`
-	Kind           string   `json:"kind"`
-	Tool           string   `json:"tool"`
-	Action         string   `json:"action,omitempty"`
-	Domain         string   `json:"domain,omitempty"`
-	BackingTool    string   `json:"backing_tool,omitempty"`
-	BackingAction  string   `json:"backing_action,omitempty"`
-	Title          string   `json:"title,omitempty"`
-	Description    string   `json:"description,omitempty"`
+	ID            string `json:"id"`
+	Kind          string `json:"kind"`
+	Tool          string `json:"tool"`
+	Action        string `json:"action,omitempty"`
+	Domain        string `json:"domain,omitempty"`
+	BackingTool   string `json:"backing_tool,omitempty"`
+	BackingAction string `json:"backing_action,omitempty"`
+	Title         string `json:"title,omitempty"`
+	Description   string `json:"description,omitempty"`
+	// AliasOf names the primary entry when this action is a deliberate
+	// alias: a second canonical ID projected from the same route and the
+	// same individual tool, kept for discovery (user.me for user.current,
+	// repository.file_history for repository.commit_list). Clients that
+	// dedupe should keep the primary and treat this entry as a pointer.
+	AliasOf        string   `json:"alias_of,omitempty"`
 	DetailURI      string   `json:"detail_uri"`
 	Destructive    bool     `json:"destructive"`
 	ReadOnly       bool     `json:"read_only"`
@@ -284,6 +291,8 @@ func (snapshot *toolSurfaceSnapshot) addDynamicActions(catalog *actioncatalog.Ca
 	if catalog == nil || !snapshot.hasVisibleTool("gitlab_execute_action") {
 		return
 	}
+	resolve := dynamicSeeAlso(newSeeAlsoIndex(catalog))
+	aliases := aliasPrimaries(catalog)
 	for _, action := range catalog.Actions() {
 		entry := ToolSurfaceEntry{
 			ID:             string(action.ID),
@@ -294,10 +303,13 @@ func (snapshot *toolSurfaceSnapshot) addDynamicActions(catalog *actioncatalog.Ca
 			BackingTool:    action.ToolName,
 			BackingAction:  action.Name,
 			Title:          actionTitle(action),
-			Description:    actionDescription(action),
+			Description:    actionDescription(action, resolve),
 			Destructive:    action.Route.Destructive,
 			ReadOnly:       action.ReadOnly,
 			RequiredParams: dynamicRequiredParams(action.Route.InputSchema),
+		}
+		if primary, ok := aliases[string(action.ID)]; ok {
+			entry.AliasOf = string(primary.ID)
 		}
 		call := ToolSurfaceCallShape{
 			Tool:           "gitlab_execute_action",
@@ -325,11 +337,13 @@ func (snapshot *toolSurfaceSnapshot) addMetaActions(catalog *actioncatalog.Catal
 	routeSnapshot := cloneMetaSchemaRoutes(routes)
 	seen := make(map[string]struct{})
 	if catalog != nil {
+		resolve := metaSeeAlso(newSeeAlsoIndex(catalog))
+		aliases := aliasPrimaries(catalog)
 		for _, action := range catalog.Actions() {
 			if !metaRouteVisible(routeSnapshot, action.ToolName, action.Name) {
 				continue
 			}
-			snapshot.addMetaAction(action, routeSnapshot)
+			snapshot.addMetaAction(action, routeSnapshot, resolve, aliases)
 			seen[metaManifestID(action.ToolName, action.Name)] = struct{}{}
 		}
 	}
@@ -354,7 +368,7 @@ func (snapshot *toolSurfaceSnapshot) addMetaActions(catalog *actioncatalog.Catal
 	}
 }
 
-func (snapshot *toolSurfaceSnapshot) addMetaAction(action actioncatalog.Action, routes map[string]toolutil.ActionMap) {
+func (snapshot *toolSurfaceSnapshot) addMetaAction(action actioncatalog.Action, routes map[string]toolutil.ActionMap, resolve seeAlsoResolver, aliases map[string]actioncatalog.Action) {
 	entry := ToolSurfaceEntry{
 		ID:             metaManifestID(action.ToolName, action.Name),
 		Kind:           toolManifestKindMetaAction,
@@ -362,10 +376,13 @@ func (snapshot *toolSurfaceSnapshot) addMetaAction(action actioncatalog.Action, 
 		Action:         action.Name,
 		Domain:         action.Domain,
 		Title:          actionTitle(action),
-		Description:    actionDescription(action),
+		Description:    actionDescription(action, resolve),
 		Destructive:    action.Route.Destructive,
 		ReadOnly:       action.ReadOnly,
 		RequiredParams: dynamicRequiredParams(action.Route.InputSchema),
+	}
+	if primary, ok := aliases[string(action.ID)]; ok {
+		entry.AliasOf = metaManifestID(primary.ToolName, primary.Name)
 	}
 	snapshot.addMetaEntry(entry, routes)
 }
@@ -478,11 +495,123 @@ func actionTitle(action actioncatalog.Action) string {
 	return ""
 }
 
-func actionDescription(action actioncatalog.Action) string {
-	if action.IndividualTool.Description != "" {
-		return action.IndividualTool.Description
+func actionDescription(action actioncatalog.Action, resolve seeAlsoResolver) string {
+	description := action.IndividualTool.Description
+	if description == "" {
+		return action.Usage
 	}
-	return action.Usage
+	return rewriteSeeAlso(description, resolve)
+}
+
+// seeAlsoResolver maps an individual-surface tool name to the identifier
+// the active surface's entries are invoked by, reporting whether the name
+// is known. A nil resolver leaves descriptions untouched (the individual
+// surface, whose namespace the hand-written clauses already use).
+type seeAlsoResolver func(individualName string) (string, bool)
+
+// seeAlsoClause matches the trailing cross-reference sentence the action
+// specs write for the individual surface — "See also: gitlab_a, gitlab_b."
+// — and, because the character class admits dots, also a clause already
+// projected into entry IDs ("See also: widget.create, gitlab_widget.get."),
+// which is what lets the guard test parse the rewritten output with the
+// same pattern. The terminating literal dot still matches: the greedy
+// class backtracks one character off the final name.
+var seeAlsoClause = regexp.MustCompile(`See also: ([a-z0-9_.]+(?:, [a-z0-9_.]+)*)\.`)
+
+// rewriteSeeAlso projects the "See also:" clause of an individual-surface
+// description into the active surface's identifier namespace.
+//
+// The specs hand-write these clauses once, in individual-tool names; on the
+// dynamic and meta surfaces those names are not invocable, and the manifest
+// instructions tell the model to pass entry IDs — so emitting the
+// individual names there contradicts the same document two lines later.
+//
+// A name the resolver does not know is dropped, not passed through: on this
+// instance the catalog is tier-filtered, so a Free-tier server legitimately
+// cannot resolve a reference to a Premium action — and a name that resolves
+// to nothing on the whole instance is not a reference, it is noise. Stale
+// names cannot hide behind this: the guard test checks the hand-written
+// clauses against the full unfiltered catalog, where only a genuinely wrong
+// name fails. A clause left empty is removed whole.
+func rewriteSeeAlso(description string, resolve seeAlsoResolver) string {
+	if resolve == nil {
+		return description
+	}
+	rewritten := seeAlsoClause.ReplaceAllStringFunc(description, func(clause string) string {
+		names := strings.Split(strings.TrimSuffix(strings.TrimPrefix(clause, "See also: "), "."), ", ")
+		kept := names[:0]
+		for _, name := range names {
+			if id, ok := resolve(name); ok {
+				kept = append(kept, id)
+			}
+		}
+		if len(kept) == 0 {
+			return ""
+		}
+		return "See also: " + strings.Join(kept, ", ") + "."
+	})
+	return strings.TrimRight(rewritten, " \n")
+}
+
+// aliasPrimaries maps each action that shares its individual tool with an
+// earlier catalog action to that earlier (primary) action. Sharing the
+// individual name is what makes a pair a deliberate alias: both project to
+// one tool on the individual surface, so on the other surfaces the second
+// canonical ID is a discovery pointer, not a distinct operation.
+func aliasPrimaries(catalog *actioncatalog.Catalog) map[string]actioncatalog.Action {
+	first := make(map[string]actioncatalog.Action)
+	aliases := make(map[string]actioncatalog.Action)
+	for _, action := range catalog.Actions() {
+		name := action.IndividualTool.Name
+		if name == "" {
+			continue
+		}
+		if primary, ok := first[name]; ok {
+			aliases[string(action.ID)] = primary
+		} else {
+			first[name] = action
+		}
+	}
+	return aliases
+}
+
+// newSeeAlsoIndex indexes a catalog's actions by their individual-surface
+// tool name, the namespace the hand-written clauses are addressed in.
+func newSeeAlsoIndex(catalog *actioncatalog.Catalog) map[string]actioncatalog.Action {
+	if catalog == nil {
+		return nil
+	}
+	index := make(map[string]actioncatalog.Action)
+	for _, action := range catalog.Actions() {
+		if action.IndividualTool.Name != "" {
+			index[action.IndividualTool.Name] = action
+		}
+	}
+	return index
+}
+
+// dynamicSeeAlso resolves to canonical action IDs — the only identifier
+// gitlab_execute_action accepts.
+func dynamicSeeAlso(index map[string]actioncatalog.Action) seeAlsoResolver {
+	return func(name string) (string, bool) {
+		action, ok := index[name]
+		if !ok {
+			return "", false
+		}
+		return string(action.ID), true
+	}
+}
+
+// metaSeeAlso resolves to the meta surface's entry IDs
+// (gitlab_<tool>.<action>), matching the manifest's own ID scheme there.
+func metaSeeAlso(index map[string]actioncatalog.Action) seeAlsoResolver {
+	return func(name string) (string, bool) {
+		action, ok := index[name]
+		if !ok {
+			return "", false
+		}
+		return metaManifestID(action.ToolName, action.Name), true
+	}
 }
 
 func metaRouteVisible(routes map[string]toolutil.ActionMap, toolName, actionName string) bool {

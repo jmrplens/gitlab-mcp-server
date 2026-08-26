@@ -106,7 +106,7 @@ func issueCreateDescription() string {
 		"When to use: human-in-the-loop issue creation. " +
 		"NOT for: scripted/programmatic creation — use gitlab_issue (action='create') with all fields pre-supplied.\n\n" +
 		descElicitRequired + " If unsupported, returns a structured error naming gitlab_issue (action='create') as the alternative.\n\n" +
-		"Returns: JSON with the created issue (id, issue_iid, web_url, title, state); issue_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_issue."
+		"Returns: JSON with the created issue (id, issue_iid, web_url, title, state); issue_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_issue_create, gitlab_issue_get."
 }
 
 func mrCreateDescription() string {
@@ -128,7 +128,7 @@ func mrCreateDescription() string {
 		"When to use: human-in-the-loop MR creation. " +
 		"NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied.\n\n" +
 		descElicitRequired + " If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.\n\n" +
-		"Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state); merge_request_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_merge_request, gitlab_branch."
+		"Returns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state); merge_request_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_mr_create, gitlab_branch_create."
 }
 
 func releaseCreateDescription() string {
@@ -143,7 +143,7 @@ func releaseCreateDescription() string {
 		"NOT for: CI/automated release creation — use gitlab_release (action='create') with all fields pre-supplied.\n\n" +
 		descElicitRequired + " If unsupported, returns a structured error naming gitlab_release (action='create') as the alternative.\n\n" +
 		"Behavior: each successful invocation publishes ONE new release after explicit user confirmation. NON-idempotent — re-running with the same tag returns 409 (release already exists). Cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Side effects on success: GitLab fires release-created webhooks and may notify release subscribers.\n\n" +
-		"Returns: JSON with the created release (tag_name, name, description, web_url).\n\nSee also: gitlab_release, gitlab_tag."
+		"Returns: JSON with the created release (tag_name, name, description, web_url).\n\nSee also: gitlab_release_create, gitlab_tag_create."
 }
 
 func projectCreateDescription() string {
@@ -159,5 +159,5 @@ func projectCreateDescription() string {
 		"When to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation — use gitlab_project (action='create') with all fields pre-supplied.\n\n" +
 		"Behavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline at any prompt aborts with no GitLab API call and no side effects, except initialize_with_readme where no/decline/cancel is accepted as initialize_with_readme=false. Side effects on success: GitLab may initialize a repository and notify project members.\n\n" +
 		descElicitRequired + " If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.\n\n" +
-		"Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: gitlab_project, gitlab_group."
+		"Returns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: gitlab_project_get, gitlab_group_get."
 }

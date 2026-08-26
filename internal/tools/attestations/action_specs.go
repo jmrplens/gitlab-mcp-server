@@ -77,7 +77,7 @@ var attestationActionMeta = map[string]attestationActionMetaEntry{
 				CommonConfusions: []string{"Use the artifact's content digest (for example sha256:...), not a Git commit SHA, package version, or attestation IID."},
 			},
 		},
-		description: "List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps. See also: gitlab_download_attestation, gitlab_list_packages, gitlab_get_project.",
+		description: "List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps. See also: gitlab_download_attestation, gitlab_package_list, gitlab_project_get.",
 	},
 	"gitlab_download_attestation": {
 		usage: "Download the raw in-toto attestation bundle for a single attestation by its project-scoped IID. Use this after gitlab_list_attestations identifies the attestation you want to verify; the response carries the base64-encoded bundle content and its byte size. Requires an Ultimate license.",
@@ -103,6 +103,6 @@ var attestationActionMeta = map[string]attestationActionMetaEntry{
 				CommonConfusions: []string{"attestation_iid is the per-project IID from the list action, not the global id field and not the artifact subject digest."},
 			},
 		},
-		description: "Download the raw in-toto attestation bundle for one attestation by IID (Ultimate). Returns: the attestation_iid, the bundle size in bytes, and the base64-encoded content_base64 bundle payload. See also: gitlab_list_attestations, gitlab_list_packages, gitlab_get_project.",
+		description: "Download the raw in-toto attestation bundle for one attestation by IID (Ultimate). Returns: the attestation_iid, the bundle size in bytes, and the base64-encoded content_base64 bundle payload. See also: gitlab_list_attestations, gitlab_package_list, gitlab_project_get.",
 	},
 }

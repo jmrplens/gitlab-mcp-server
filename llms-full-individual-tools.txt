@@ -11,7 +11,7 @@ Grouped by domain:
 
 #### gitlab_access_request_approve_group
 
-Approve a pending group access request, granting the user membership. Returns: the approved access request with id, username, name, granted access level, and approved state. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_member_list.
+Approve a pending group access request, granting the user membership. Returns: the approved access request with id, username, name, granted access level, and approved state. See also: gitlab_access_request_list_group, gitlab_access_request_deny_group, gitlab_group_members_list.
 
 **Parameters:**
 
@@ -23,7 +23,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_access_request_approve_project
 
-Approve a pending project access request, granting the user membership. Returns: the approved access request with id, username, name, granted access level, and approved state. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_member_list.
+Approve a pending project access request, granting the user membership. Returns: the approved access request with id, username, name, granted access level, and approved state. See also: gitlab_access_request_list_project, gitlab_access_request_deny_project, gitlab_project_members_list.
 
 **Parameters:**
 
@@ -35,7 +35,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_access_request_deny_group
 
-Deny a pending group access request, removing it without granting membership. Returns: a success status and confirmation message. See also: gitlab_access_request_list_group, gitlab_access_request_approve_group, gitlab_group_member_list.
+Deny a pending group access request, removing it without granting membership. Returns: a success status and confirmation message. See also: gitlab_access_request_list_group, gitlab_access_request_approve_group, gitlab_group_members_list.
 
 **Parameters:**
 
@@ -47,7 +47,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_access_request_deny_project
 
-Deny a pending project access request, removing it without granting membership. Returns: a success status and confirmation message. See also: gitlab_access_request_list_project, gitlab_access_request_approve_project, gitlab_project_member_list.
+Deny a pending project access request, removing it without granting membership. Returns: a success status and confirmation message. See also: gitlab_access_request_list_project, gitlab_access_request_approve_project, gitlab_project_members_list.
 
 **Parameters:**
 
@@ -59,7 +59,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_access_request_list_group
 
-List pending access requests for a group. Returns: access requests with id, username, name, state, access level, requested/created timestamps, and pagination metadata. See also: gitlab_access_request_approve_group, gitlab_access_request_deny_group, gitlab_group_member_list.
+List pending access requests for a group. Returns: access requests with id, username, name, state, access level, requested/created timestamps, and pagination metadata. See also: gitlab_access_request_approve_group, gitlab_access_request_deny_group, gitlab_group_members_list.
 
 **Parameters:**
 
@@ -75,7 +75,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_access_request_list_project
 
-List pending access requests for a project. Returns: access requests with id, username, name, state, access level, requested/created timestamps, and pagination metadata. See also: gitlab_access_request_approve_project, gitlab_access_request_deny_project, gitlab_project_member_list.
+List pending access requests for a project. Returns: access requests with id, username, name, state, access level, requested/created timestamps, and pagination metadata. See also: gitlab_access_request_approve_project, gitlab_access_request_deny_project, gitlab_project_members_list.
 
 **Parameters:**
 
@@ -376,7 +376,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_attach_security_scan_profile
 
-Attach a GitLab security scan profile to one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: attach confirmation with the resolved profile and targets. See also: gitlab_detach_security_scan_profile, gitlab_list_project_scan_profile_statuses, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach
+Attach a GitLab security scan profile to one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: attach confirmation with the resolved profile and targets. See also: gitlab_detach_security_scan_profile, gitlab_list_project_scan_profile_statuses, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofileattach
 
 **Parameters:**
 
@@ -556,7 +556,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_branch_create
 
-Create a branch from a source ref (branch, tag, or commit SHA). Returns: the created branch with its head commit object, protection and default flags, and web URL. See also: gitlab_branch_list, gitlab_merge_request_create, gitlab_repository_compare.
+Create a branch from a source ref (branch, tag, or commit SHA). Returns: the created branch with its head commit object, protection and default flags, and web URL. See also: gitlab_branch_list, gitlab_mr_create, gitlab_repository_compare.
 
 **Parameters:**
 
@@ -580,7 +580,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_branch_delete_merged
 
-Delete all branches merged into the default branch. Returns: a success confirmation. Protected and default branches are skipped. See also: gitlab_branch_list, gitlab_merge_request_list.
+Delete all branches merged into the default branch. Returns: a success confirmation. Protected and default branches are skipped. See also: gitlab_branch_list, gitlab_mr_list.
 
 **Parameters:**
 
@@ -653,7 +653,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_bulk_update_security_attributes
 
-Add, remove, or replace GitLab security attributes on multiple groups and projects via GraphQL. Requires Premium or Ultimate. Returns: bulk update status, execution mode, and selected target/attribute IDs. See also: gitlab_security_attribute, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationbulkupdatesecurityattributes
+Add, remove, or replace GitLab security attributes on multiple groups and projects via GraphQL. Requires Premium or Ultimate. Returns: bulk update status, execution mode, and selected target/attribute IDs. See also: gitlab_create_security_attribute, gitlab_project_get, gitlab_group_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationbulkupdatesecurityattributes
 
 **Parameters:**
 
@@ -1384,7 +1384,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_security_attribute
 
-Create one or more GitLab security attributes under a security category via GraphQL. Requires Premium or Ultimate. Returns: created security attributes and their categories. See also: gitlab_security_category, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributecreate
+Create one or more GitLab security attributes under a security category via GraphQL. Requires Premium or Ultimate. Returns: created security attributes and their categories. See also: gitlab_create_security_category, gitlab_project_get, gitlab_group_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributecreate
 
 **Parameters:**
 
@@ -1396,7 +1396,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_create_security_category
 
-Create a GitLab security category in a namespace via GraphQL. Requires Premium or Ultimate. Returns: created security category. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorycreate
+Create a GitLab security category in a namespace via GraphQL. Requires Premium or Ultimate. Returns: created security category. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorycreate
 
 **Parameters:**
 
@@ -1988,7 +1988,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_delete_security_attribute
 
-Delete a GitLab security attribute via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_security_category, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributedestroy
+Delete a GitLab security attribute via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_create_security_category, gitlab_project_get, gitlab_group_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributedestroy
 
 **Parameters:**
 
@@ -1999,7 +1999,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_delete_security_category
 
-Delete a GitLab security category and its associated security attributes via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy
+Delete a GitLab security category and its associated security attributes via GraphQL. Requires Premium or Ultimate. Returns: deletion confirmation. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy
 
 **Parameters:**
 
@@ -2466,7 +2466,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_detach_security_scan_profile
 
-Detach a GitLab security scan profile from one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: detach confirmation with the resolved profile and targets. See also: gitlab_attach_security_scan_profile, gitlab_list_project_scan_profile_statuses, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach
+Detach a GitLab security scan profile from one or more projects and/or groups via GraphQL. Requires Ultimate. Returns: detach confirmation with the resolved profile and targets. See also: gitlab_attach_security_scan_profile, gitlab_list_project_scan_profile_statuses, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityscanprofiledetach
 
 **Parameters:**
 
@@ -2532,7 +2532,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_download_attestation
 
-Download the raw in-toto attestation bundle for one attestation by IID (Ultimate). Returns: the attestation_iid, the bundle size in bytes, and the base64-encoded content_base64 bundle payload. See also: gitlab_list_attestations, gitlab_list_packages, gitlab_get_project.
+Download the raw in-toto attestation bundle for one attestation by IID (Ultimate). Returns: the attestation_iid, the bundle size in bytes, and the base64-encoded content_base64 bundle payload. See also: gitlab_list_attestations, gitlab_package_list, gitlab_project_get.
 
 **Parameters:**
 
@@ -2941,7 +2941,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_note_create
 
-Add a comment (note) to an epic. Returns: the created note with id, author, body, and timestamps. See also: gitlab_epic_note_list, gitlab_get_epic, gitlab_create_epic_discussion.
+Add a comment (note) to an epic. Returns: the created note with id, author, body, and timestamps. See also: gitlab_epic_note_list, gitlab_epic_get, gitlab_create_epic_discussion.
 
 **Parameters:**
 
@@ -3171,7 +3171,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_file_blame
 
-Get blame information for a file, optionally for a line range. Returns: file_path and blame ranges, each with commit id, message, author name/email, authored and committed dates, and the covered lines. See also: gitlab_file_get, gitlab_repository_commit_list.
+Get blame information for a file, optionally for a line range. Returns: file_path and blame ranges, each with commit id, message, author name/email, authored and committed dates, and the covered lines. See also: gitlab_file_get, gitlab_commit_list.
 
 **Parameters:**
 
@@ -3362,7 +3362,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_catalog_resource
 
-Get a single CI/CD Catalog resource by GID or full path. Returns: the resource with description, README HTML, latest-version components and their typed inputs, version history, star and fork counts, and web URL. See also: gitlab_list_catalog_resources, gitlab_ci_lint, gitlab_get_project.
+Get a single CI/CD Catalog resource by GID or full path. Returns: the resource with description, README HTML, latest-version components and their typed inputs, version history, star and fork counts, and web URL. See also: gitlab_list_catalog_resources, gitlab_ci_lint, gitlab_project_get.
 
 **Parameters:**
 
@@ -3793,7 +3793,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_license_template
 
-Get a single license template by key, optionally substituting project and fullname placeholders. Returns: the license's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and rendered content. See also: gitlab_list_license_templates, gitlab_create_file.
+Get a single license template by key, optionally substituting project and fullname placeholders. Returns: the license's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and rendered content. See also: gitlab_list_license_templates, gitlab_file_create.
 
 **Parameters:**
 
@@ -4009,7 +4009,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_get_project_template
 
-Returns: one project template's full content by template_type and key. See also: gitlab_list_project_templates, gitlab_create_project.
+Returns: one project template's full content by template_type and key. See also: gitlab_list_project_templates, gitlab_project_create.
 
 **Parameters:**
 
@@ -4630,7 +4630,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_epic_board_get
 
-Get a single group epic board by ID (Premium/Ultimate). Returns: the epic board with its group, hide_*_list flags, scope labels, and lists (columns) with their label scope. See also: gitlab_group_epic_board_list, gitlab_group_epic_list.
+Get a single group epic board by ID (Premium/Ultimate). Returns: the epic board with its group, hide_*_list flags, scope labels, and lists (columns) with their label scope. See also: gitlab_group_epic_board_list, gitlab_epic_list.
 
 **Parameters:**
 
@@ -4641,7 +4641,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_epic_board_list
 
-List all epic boards in a group with pagination (Premium/Ultimate). Returns: each epic board with its group, hide_*_list flags, scope labels, and lists (columns) with their label scope, plus pagination metadata. See also: gitlab_group_epic_board_get, gitlab_group_epic_list.
+List all epic boards in a group with pagination (Premium/Ultimate). Returns: each epic board with its group, hide_*_list flags, scope labels, and lists (columns) with their label scope, plus pagination metadata. See also: gitlab_group_epic_board_get, gitlab_epic_list.
 
 **Parameters:**
 
@@ -6431,7 +6431,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_get
 
-Get a single issue from a project by issue IID. Returns: issue metadata, state, labels, assignees, author, due date, task completion, and web URL. See also: gitlab_issue_list, gitlab_issue_update, gitlab_issue_delete, gitlab_issue_notes_list.
+Get a single issue from a project by issue IID. Returns: issue metadata, state, labels, assignees, author, due date, task completion, and web URL. See also: gitlab_issue_list, gitlab_issue_update, gitlab_issue_delete, gitlab_issue_note_list.
 
 **Parameters:**
 
@@ -6898,7 +6898,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_issue_participants
 
-List an issue's participants. Returns: participating users with username and name. See also: gitlab_issue_get, gitlab_issue_notes_list.
+List an issue's participants. Returns: participating users with username and name. See also: gitlab_issue_get, gitlab_issue_note_list.
 
 **Parameters:**
 
@@ -7443,7 +7443,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_attestations
 
-List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps. See also: gitlab_download_attestation, gitlab_list_packages, gitlab_get_project.
+List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps. See also: gitlab_download_attestation, gitlab_package_list, gitlab_project_get.
 
 **Parameters:**
 
@@ -7488,7 +7488,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_branch_rules
 
-List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its matched pattern, default and protected flags, matching branch count, branch protection settings (allow force push, code-owner approval required), approval rules, external status checks, and keyset pagination metadata. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_get_project.
+List a project's aggregated branch protection rules by full project path. Returns: each branch rule with its matched pattern, default and protected flags, matching branch count, branch protection settings (allow force push, code-owner approval required), approval rules, external status checks, and keyset pagination metadata. See also: gitlab_protected_branches_list, gitlab_protected_branch_get, gitlab_project_get.
 
 **Parameters:**
 
@@ -7561,7 +7561,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_catalog_resources
 
-List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. Returns: catalog resources with name, full path, description, latest version, star and fork counts, open issue and MR counts, web URL, and keyset pagination metadata. See also: gitlab_get_catalog_resource, gitlab_ci_lint, gitlab_create_pipeline.
+List published CI/CD Catalog resources (component projects) with optional search, scope, and sort. Returns: catalog resources with name, full path, description, latest version, star and fork counts, open issue and MR counts, web URL, and keyset pagination metadata. See also: gitlab_get_catalog_resource, gitlab_ci_lint, gitlab_pipeline_create.
 
 **Parameters:**
 
@@ -8182,7 +8182,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_license_templates
 
-List available license templates with an optional popular filter, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and content, with pagination metadata. See also: gitlab_get_license_template, gitlab_create_file.
+List available license templates with an optional popular filter, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and content, with pagination metadata. See also: gitlab_get_license_template, gitlab_file_create.
 
 **Parameters:**
 
@@ -8378,7 +8378,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_project_scan_profile_statuses
 
-List the security scan profile statuses for a GitLab project via GraphQL. Requires Ultimate. Returns: per-scan-type profile status (NOT_CONFIGURED, PENDING, ACTIVE, WARNING, FAILED, or STALE). See also: gitlab_attach_security_scan_profile, gitlab_detach_security_scan_profile, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#project-scanprofilestatuses
+List the security scan profile statuses for a GitLab project via GraphQL. Requires Ultimate. Returns: per-scan-type profile status (NOT_CONFIGURED, PENDING, ACTIVE, WARNING, FAILED, or STALE). See also: gitlab_attach_security_scan_profile, gitlab_detach_security_scan_profile, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#project-scanprofilestatuses
 
 **Parameters:**
 
@@ -8404,7 +8404,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_project_templates
 
-List project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, popularity, and source/HTML URLs. See also: gitlab_get_project_template, gitlab_create_project.
+List project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, popularity, and source/HTML URLs. See also: gitlab_get_project_template, gitlab_project_create.
 
 **Parameters:**
 
@@ -8820,7 +8820,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_milestone_merge_requests
 
-List merge requests assigned to a single milestone with ordering and pagination. Returns: assigned merge requests with IID, title, state, source/target branches, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_merge_request_list.
+List merge requests assigned to a single milestone with ordering and pagination. Returns: assigned merge requests with IID, title, state, source/target branches, web URL, creation time, and pagination metadata. See also: gitlab_milestone_get, gitlab_milestone_issues, gitlab_mr_list.
 
 **Parameters:**
 
@@ -9182,7 +9182,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_discussion_create
 
-Create a new discussion thread on a merge request, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: gitlab_mr_discussion_reply, gitlab_mr_discussion_list, gitlab_mr_changes.
+Create a new discussion thread on a merge request, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: gitlab_mr_discussion_reply, gitlab_mr_discussion_list, gitlab_mr_changes_get.
 
 **Parameters:**
 
@@ -9209,7 +9209,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_mr_discussion_list
 
-List discussion threads on a merge request with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_mr_discussion_get, gitlab_mr_discussion_create, gitlab_mr_get, gitlab_mr_note_list.
+List discussion threads on a merge request with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_mr_discussion_get, gitlab_mr_discussion_create, gitlab_mr_get, gitlab_mr_notes_list.
 
 **Parameters:**
 
@@ -12136,7 +12136,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_list_users
 
-List a project's users. Returns: users with id, username, name, and state, plus pagination metadata. See also: gitlab_project_get, gitlab_member_list.
+List a project's users. Returns: users with id, username, name, and state, plus pagination metadata. See also: gitlab_project_get, gitlab_project_members_list.
 
 **Parameters:**
 
@@ -12309,7 +12309,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_project_service_account_list
 
-List GitLab project service accounts. Returns: paginated project service account records. See also: gitlab_get_project, gitlab_project_service_account_create, gitlab_project_service_account_pat_list.
+List GitLab project service accounts. Returns: paginated project service account records. See also: gitlab_project_get, gitlab_project_service_account_create, gitlab_project_service_account_pat_list.
 
 **Parameters:**
 
@@ -14239,7 +14239,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_search_code
 
-Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, starting line, the surrounding snippet, project ID, and pagination metadata. See also: gitlab_search_projects, gitlab_get_repository_file, gitlab_list_repository_tree.
+Search code blobs across global, group, or project scope. Returns: matching blobs with file path, basename, ref, starting line, the surrounding snippet, project ID, and pagination metadata. See also: gitlab_search_projects, gitlab_file_get, gitlab_repository_tree.
 
 **Parameters:**
 
@@ -14255,7 +14255,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_search_commits
 
-Search commit messages across global, group, or project scope. Returns: matching commits with short and full SHA, title, message, author, and committed date plus pagination metadata. See also: gitlab_search_code, gitlab_get_commit, gitlab_list_commits.
+Search commit messages across global, group, or project scope. Returns: matching commits with short and full SHA, title, message, author, and committed date plus pagination metadata. See also: gitlab_search_code, gitlab_commit_get, gitlab_commit_list.
 
 **Parameters:**
 
@@ -14270,7 +14270,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_search_issues
 
-Search issues across global, group, or project scope. Returns: matching issues with title, state, labels, assignees, author, and web URL plus pagination metadata. See also: gitlab_search_merge_requests, gitlab_list_issues, gitlab_get_issue.
+Search issues across global, group, or project scope. Returns: matching issues with title, state, labels, assignees, author, and web URL plus pagination metadata. See also: gitlab_search_merge_requests, gitlab_issue_list, gitlab_issue_get.
 
 **Parameters:**
 
@@ -14285,7 +14285,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_search_merge_requests
 
-Search merge requests across global, group, or project scope. Returns: matching merge requests with title, state, author, source and target branches, and web URL plus pagination metadata. See also: gitlab_search_issues, gitlab_list_merge_requests, gitlab_get_merge_request.
+Search merge requests across global, group, or project scope. Returns: matching merge requests with title, state, author, source and target branches, and web URL plus pagination metadata. See also: gitlab_search_issues, gitlab_mr_list, gitlab_mr_get.
 
 **Parameters:**
 
@@ -14300,7 +14300,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_search_milestones
 
-Search milestones across global, group, or project scope. Returns: matching milestones with title, description, state, start and due dates, and web URL plus pagination metadata. See also: gitlab_list_milestones, gitlab_get_milestone, gitlab_search_issues.
+Search milestones across global, group, or project scope. Returns: matching milestones with title, description, state, start and due dates, and web URL plus pagination metadata. See also: gitlab_milestone_list, gitlab_milestone_get, gitlab_search_issues.
 
 **Parameters:**
 
@@ -14315,7 +14315,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_search_notes
 
-Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system flag, and timestamps plus pagination metadata. See also: gitlab_search_issues, gitlab_search_merge_requests, gitlab_list_issue_notes.
+Search note bodies within one project. Returns: matching notes with body, author, noteable type and ID, system flag, and timestamps plus pagination metadata. See also: gitlab_search_issues, gitlab_search_merge_requests, gitlab_issue_note_list.
 
 **Parameters:**
 
@@ -14329,7 +14329,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_search_projects
 
-Search projects globally or within a group by name, path, or description. Returns: matching projects with namespace, visibility, default branch, and web URL plus pagination metadata. See also: gitlab_get_project, gitlab_list_projects, gitlab_search_code.
+Search projects globally or within a group by name, path, or description. Returns: matching projects with namespace, visibility, default branch, and web URL plus pagination metadata. See also: gitlab_project_get, gitlab_project_list, gitlab_search_code.
 
 **Parameters:**
 
@@ -14356,7 +14356,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_search_users
 
-Search users across global, group, or project scope. Returns: matching users with ID, username, name, state, avatar URL, and web URL plus pagination metadata. See also: gitlab_get_user, gitlab_list_users, gitlab_list_project_members.
+Search users across global, group, or project scope. Returns: matching users with ID, username, name, state, avatar URL, and web URL plus pagination metadata. See also: gitlab_get_user, gitlab_list_users, gitlab_project_members_list.
 
 **Parameters:**
 
@@ -14371,7 +14371,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_search_wiki
 
-Search wiki blobs across global, group, or project scope. Returns: matching wiki pages with slug, title, content snippet, and format plus pagination metadata. See also: gitlab_search_code, gitlab_list_wikis, gitlab_get_wiki.
+Search wiki blobs across global, group, or project scope. Returns: matching wiki pages with slug, title, content snippet, and format plus pagination metadata. See also: gitlab_search_code, gitlab_wiki_list, gitlab_wiki_get.
 
 **Parameters:**
 
@@ -15378,7 +15378,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_update_project_security_attributes
 
-Add or remove GitLab security attributes on a project via GraphQL. Requires Premium or Ultimate. Returns: project security attribute assignments. See also: gitlab_security_attribute, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeprojectupdate
+Add or remove GitLab security attributes on a project via GraphQL. Requires Premium or Ultimate. Returns: project security attribute assignments. See also: gitlab_create_security_attribute, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeprojectupdate
 
 **Parameters:**
 
@@ -15405,7 +15405,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_update_security_attribute
 
-Update a GitLab security attribute name, description, or color via GraphQL. Requires Premium or Ultimate. Returns: updated security attribute metadata. See also: gitlab_security_category, gitlab_project, gitlab_group. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeupdate
+Update a GitLab security attribute name, description, or color via GraphQL. Requires Premium or Ultimate. Returns: updated security attribute metadata. See also: gitlab_create_security_category, gitlab_project_get, gitlab_group_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecurityattributeupdate
 
 **Parameters:**
 
@@ -15418,7 +15418,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_update_security_category
 
-Update a GitLab security category name or description via GraphQL. Requires Premium or Ultimate. Returns: updated security category. See also: gitlab_security_attribute, gitlab_group, gitlab_project. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate
+Update a GitLab security category name or description via GraphQL. Requires Premium or Ultimate. Returns: updated security category. See also: gitlab_create_security_attribute, gitlab_group_get, gitlab_project_get. API docs: https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate
 
 **Parameters:**
 
@@ -15529,7 +15529,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_user_contribution_event_list
 
-List the current user's contribution events. Returns: each event with action_name, target type and IID, push_data, embedded note, author object, created timestamp, and pagination metadata. See also: gitlab_project_event_list, gitlab_user_get.
+List the current user's contribution events. Returns: each event with action_name, target type and IID, push_data, embedded note, author object, created timestamp, and pagination metadata. See also: gitlab_project_event_list, gitlab_get_user.
 
 **Parameters:**
 

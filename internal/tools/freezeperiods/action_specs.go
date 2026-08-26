@@ -47,19 +47,19 @@ func freezePeriodOptions(actionName, individualTool string) toolutil.ActionSpecO
 	switch actionName {
 	case "freeze_list":
 		aliases = []string{"list deploy freezes", "freeze window list", "deployment freeze list"}
-		usage = "List deploy freeze periods for a project."
+		usage = "List deploy freeze periods for a project. Returns: each freeze period's id, freeze_start/freeze_end cron expressions, cron_timezone, and created/updated timestamps."
 	case "freeze_get":
 		aliases = []string{"get deploy freeze", "freeze window details", "deployment freeze get"}
-		usage = "Get a specific deploy freeze period."
+		usage = "Get a specific deploy freeze period. Returns: the freeze period's id, freeze_start/freeze_end cron expressions, cron_timezone, and created/updated timestamps."
 	case "freeze_create":
 		aliases = []string{"create deploy freeze", "add freeze window", "deployment freeze create"}
-		usage = "Create a deploy freeze period for a project."
+		usage = "Create a deploy freeze period for a project. Returns: the created freeze period with id, freeze_start/freeze_end cron expressions, and cron_timezone."
 	case "freeze_update":
 		aliases = []string{"update deploy freeze", "edit freeze window", "deployment freeze update"}
-		usage = "Update an existing deploy freeze period."
+		usage = "Update an existing deploy freeze period. Returns: the updated freeze period with id, freeze_start/freeze_end cron expressions, and cron_timezone."
 	case "freeze_delete":
 		aliases = []string{"delete deploy freeze", "remove freeze window", "deployment freeze delete"}
-		usage = "Delete a deploy freeze period."
+		usage = "Delete a deploy freeze period. Returns: no content on success (HTTP 204)."
 	}
 
 	if actionName != "freeze_list" && actionName != "freeze_create" {

@@ -42,7 +42,7 @@ func licenseTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 		opts.Usage = "Get one license template by key for project README/LICENSE scaffolding."
 		opts.Aliases = []string{individualTool, "get license template by key", "render LICENSE file for a project", "fetch MIT/Apache license text"}
 		opts.RelatedActions = []string{"licensetemplates.license_list", "repository.file_create", "project.create"}
-		opts.IndividualTool.Description = "Get a single license template by key, optionally substituting project and fullname placeholders. Returns: the license's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and rendered content. See also: gitlab_list_license_templates, gitlab_create_file."
+		opts.IndividualTool.Description = "Get a single license template by key, optionally substituting project and fullname placeholders. Returns: the license's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and rendered content. See also: gitlab_list_license_templates, gitlab_file_create."
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"key":      {SemanticRole: "template_key", ValueSource: "License key returned by license template list output.", ExampleBinding: `params.key:"mit"`},
 			"project":  {SemanticRole: "placeholder_project", ValueSource: "Project name substituted into the rendered license content placeholder.", ExampleBinding: `params.project:"my-project"`},
@@ -50,7 +50,7 @@ func licenseTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 		}
 		return opts
 	}
-	opts.IndividualTool.Description = "List available license templates with an optional popular filter, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and content, with pagination metadata. See also: gitlab_get_license_template, gitlab_create_file."
+	opts.IndividualTool.Description = "List available license templates with an optional popular filter, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, featured flag, source/HTML URLs, description, conditions, permissions, limitations, and content, with pagination metadata. See also: gitlab_get_license_template, gitlab_file_create."
 	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		"popular":  {SemanticRole: "popular_filter", ValueSource: "Set true to restrict the listing to popular/featured license templates.", ExampleBinding: `params.popular:true`},
 		"order_by": {SemanticRole: "order_by", ValueSource: "Column by which to order keyset-paginated results.", ExampleBinding: `params.order_by:"name"`},

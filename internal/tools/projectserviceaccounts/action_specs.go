@@ -66,7 +66,7 @@ func projectServiceAccountOptions(actionName, individualTool string) toolutil.Ac
 func projectServiceAccountDescription(actionName string) string {
 	switch actionName {
 	case "service_account_list":
-		return "List GitLab project service accounts. Returns: paginated project service account records. See also: gitlab_get_project, gitlab_project_service_account_create, gitlab_project_service_account_pat_list."
+		return "List GitLab project service accounts. Returns: paginated project service account records. See also: gitlab_project_get, gitlab_project_service_account_create, gitlab_project_service_account_pat_list."
 	case "service_account_create":
 		return "Create a GitLab project service account. Returns: the created project service account object. See also: gitlab_project_service_account_list, gitlab_project_service_account_update, gitlab_project_service_account_pat_create."
 	case "service_account_update":
@@ -82,7 +82,7 @@ func projectServiceAccountDescription(actionName string) string {
 	case "service_account_pat_revoke":
 		return "Revoke a personal access token for a GitLab project service account. Returns: a success status confirming revocation. See also: gitlab_project_service_account_pat_list, gitlab_project_service_account_pat_create."
 	default:
-		return "Manage GitLab project service accounts. Returns: project service account data or operation status. See also: gitlab_get_project."
+		return "Manage GitLab project service accounts. Returns: project service account data or operation status. See also: gitlab_project_get."
 	}
 }
 

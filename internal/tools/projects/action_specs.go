@@ -451,7 +451,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		usage:       "List the users who are members of a project. Send project_id and optionally search by name or username.",
 		aliases:     []string{"list project users", "project user accounts", "enumerate project users"},
 		related:     []string{actionProjectGet, "member.list", "project.list_groups"},
-		description: "List a project's users. Returns: users with id, username, name, and state, plus pagination metadata. See also: gitlab_project_get, gitlab_member_list.",
+		description: "List a project's users. Returns: users with id, username, name, and state, plus pagination metadata. See also: gitlab_project_get, gitlab_project_members_list.",
 	},
 	"gitlab_project_list_groups": {
 		usage:       "List the ancestor and shared groups associated with a project. Send project_id; optionally filter by search, shared visibility, or minimum access level.",
