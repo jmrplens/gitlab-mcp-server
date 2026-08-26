@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Medium Reference
 
-> Version 2.7.2 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 2.7.3 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 Every tool and action with its description, without the per-action JSON schemas.
 Fetch the exact schema for one action from `gitlab://tools/{id}`, or read llms-full.txt for the complete schemas.

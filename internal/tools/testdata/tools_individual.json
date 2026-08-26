@@ -16972,7 +16972,7 @@
   },
   {
     "name": "gitlab_delete_group_datadog_integration",
-    "description": "Remove the Datadog integration from a group. The stored api_key is cleared; deletion is irreversible. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com).\n\nReturns: confirmation message.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_set_group_datadog_integration",
+    "description": "Remove the Datadog integration from a group. The stored api_key is cleared; deletion is irreversible. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com).\n\nReturns: confirmation message.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_set_group_datadog_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -17025,7 +17025,7 @@
   },
   {
     "name": "gitlab_delete_group_integration",
-    "description": "Delete (disable) a group integration by slug. Requires Owner role on the group.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_group_integrations, gitlab_get_group_integration, gitlab_set_group_integration",
+    "description": "Delete (disable) a group integration by slug. Requires Owner role on the group.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_group_integrations, gitlab_get_group_integration, gitlab_set_group_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -17489,7 +17489,7 @@
   },
   {
     "name": "gitlab_delete_integration",
-    "description": "Delete (disable) a project integration by slug. Supports the same slugs as get, plus 'slack-application' for disabling the GitLab for Slack app.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_integrations, gitlab_get_integration",
+    "description": "Delete (disable) a project integration by slug. Supports the same slugs as get, plus 'slack-application' for disabling the GitLab for Slack app.\n\nReturns: confirmation message.\n\nSee also: gitlab_list_integrations, gitlab_get_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -22623,7 +22623,7 @@
   },
   {
     "name": "gitlab_discover_project",
-    "description": "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only; performs a lookup against the GitLab Projects API; no side effects.\n\nWhen to use: only when the user or workspace provides a complete git remote URL from .git/config ([remote \"origin\"] url = ...) or from 'git remote -v'. If the prompt already provides a project path such as group/project or a numeric project ID, pass that value directly as params.project_id to the requested GitLab tool instead of calling discovery. Do not synthesize, guess, or add .git to a project path to create a remote URL.\nNOT for: searching projects by name (use gitlab_search action=projects), listing a user's projects (use gitlab_project action=list_user_projects), verifying GitLab connectivity or authentication (use gitlab_server action=health_check), or pre-checking workflows where project_id is already known.\n\nIMPORTANT: pass the complete URL exactly as it appears — do NOT strip the git@ prefix from SSH URLs. Supported formats (a URL scheme or git@ user prefix is required):\n- HTTPS: https://gitlab.example.com/group/project.git\n- SSH shorthand: git@gitlab.example.com:group/project.git\n- SSH protocol: ssh://git@gitlab.example.com/group/project.git\n\nReturns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. Errors: 404 not found (hint: project may be private — verify token permissions), 403 forbidden (hint: token lacks read_api scope).\n\nSee also: gitlab_project_get (full project CRUD/settings once id is known), gitlab_server (connectivity and version checks), gitlab_search (find projects by query).",
+    "description": "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only; performs a lookup against the GitLab Projects API; no side effects.\n\nWhen to use: only when the user or workspace provides a complete git remote URL from .git/config ([remote \"origin\"] url = ...) or from 'git remote -v'. If the prompt already provides a project path such as group/project or a numeric project ID, pass that value directly as params.project_id to the requested GitLab tool instead of calling discovery. Do not synthesize, guess, or add .git to a project path to create a remote URL.\nNOT for: searching projects by name (use gitlab_search action=projects), listing a user's projects (use gitlab_project action=list_user_projects), verifying GitLab connectivity or authentication (use gitlab_server action=health_check), or pre-checking workflows where project_id is already known.\n\nIMPORTANT: pass the complete URL exactly as it appears — do NOT strip the git@ prefix from SSH URLs. Supported formats (a URL scheme or git@ user prefix is required):\n- HTTPS: https://gitlab.example.com/group/project.git\n- SSH shorthand: git@gitlab.example.com:group/project.git\n- SSH protocol: ssh://git@gitlab.example.com/group/project.git\n\nReturns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. Errors: 404 not found (hint: project may be private — verify token permissions), 403 forbidden (hint: token lacks read_api scope).\n\nSee also: gitlab_project_get, gitlab_server_status, gitlab_search_projects.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -34004,7 +34004,7 @@
   },
   {
     "name": "gitlab_get_group_datadog_integration",
-    "description": "Read the Datadog integration configured on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The api_key is never returned.\n\nReturns: JSON with the group's Datadog integration details. The canonical configuration is the nested properties object (api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events); the flat top-level copies of those fields are deprecated and will be removed — prefer properties.*.\n\nSee also: gitlab_set_group_datadog_integration, gitlab_delete_group_datadog_integration",
+    "description": "Read the Datadog integration configured on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The api_key is never returned.\n\nReturns: JSON with the group's Datadog integration details. The canonical configuration is the nested properties object (api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events); the flat top-level copies of those fields are deprecated and will be removed — prefer properties.*.\n\nSee also: gitlab_set_group_datadog_integration, gitlab_delete_group_datadog_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -34459,7 +34459,7 @@
   },
   {
     "name": "gitlab_get_group_integration",
-    "description": "Get details of a specific group integration by slug. Requires Owner role on the group.\n\nReturns: JSON with the group integration details.\n\nSee also: gitlab_list_group_integrations, gitlab_set_group_integration, gitlab_delete_group_integration",
+    "description": "Get details of a specific group integration by slug. Requires Owner role on the group.\n\nReturns: JSON with the group integration details.\n\nSee also: gitlab_list_group_integrations, gitlab_set_group_integration, gitlab_delete_group_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -35423,7 +35423,7 @@
   },
   {
     "name": "gitlab_get_integration",
-    "description": "Get details of a specific project integration by slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, drone-ci, github, harbor, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands).\n\nReturns: JSON with integration details.\n\nSee also: gitlab_list_integrations, gitlab_delete_integration",
+    "description": "Get details of a specific project integration by slug (e.g. jira, slack, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, drone-ci, github, harbor, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands).\n\nReturns: JSON with integration details.\n\nSee also: gitlab_list_integrations, gitlab_delete_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -99837,7 +99837,7 @@
   },
   {
     "name": "gitlab_list_group_integrations",
-    "description": "List all active integrations configured on a group. Requires Owner role (some integrations require GitLab Premium/Ultimate).\n\nReturns: JSON array of group integration items with id, title, slug, and active flag.\n\nSee also: gitlab_get_group_integration, gitlab_set_group_integration, gitlab_delete_group_integration",
+    "description": "List all active integrations configured on a group. Requires Owner role (some integrations require GitLab Premium/Ultimate).\n\nReturns: JSON array of group integration items with id, title, slug, and active flag.\n\nSee also: gitlab_get_group_integration, gitlab_set_group_integration, gitlab_delete_group_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -102235,7 +102235,7 @@
   },
   {
     "name": "gitlab_list_integrations",
-    "description": "List all integrations (services) configured for a project, including their active status.\n\nReturns: JSON array of integration items with id, title, slug, and active flag.\n\nSee also: gitlab_get_integration, gitlab_set_jira_integration, gitlab_delete_integration",
+    "description": "List all integrations (services) configured for a project, including their active status.\n\nReturns: JSON array of integration items with id, title, slug, and active flag.\n\nSee also: gitlab_get_integration, gitlab_set_jira_integration, gitlab_delete_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -194328,7 +194328,7 @@
   },
   {
     "name": "gitlab_set_group_datadog_integration",
-    "description": "Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, or use_inherited_settings=true must be supplied.\n\nReturns: JSON with the updated Datadog integration details (canonical values in the nested properties object; flat copies are deprecated — prefer properties.*).\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration",
+    "description": "Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, or use_inherited_settings=true must be supplied.\n\nReturns: JSON with the updated Datadog integration details (canonical values in the nested properties object; flat copies are deprecated — prefer properties.*).\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -194587,7 +194587,7 @@
   },
   {
     "name": "gitlab_set_group_integration",
-    "description": "Configure (create or update) any group integration by slug, passing the integration's documented parameters in a free-form `config` object. Requires Owner role on the group (some integrations require GitLab Premium/Ultimate).\n\nThe `config` object is sent verbatim as the request body; see doc/api/group_integrations.md and doc/api/integrations.md for the per-integration fields.\n\nReturns: JSON with the resulting group integration details.\n\nSee also: gitlab_get_group_integration, gitlab_list_group_integrations, gitlab_delete_group_integration",
+    "description": "Configure (create or update) any group integration by slug, passing the integration's documented parameters in a free-form `config` object. Requires Owner role on the group (some integrations require GitLab Premium/Ultimate).\n\nThe `config` object is sent verbatim as the request body; see doc/api/group_integrations.md and doc/api/integrations.md for the per-integration fields.\n\nReturns: JSON with the resulting group integration details.\n\nSee also: gitlab_get_group_integration, gitlab_list_group_integrations, gitlab_delete_group_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -194745,7 +194745,7 @@
   },
   {
     "name": "gitlab_set_integration",
-    "description": "Configure (create or update) any project integration by slug, passing the integration's documented parameters in a free-form `config` object. Use this generic action for integrations without a dedicated tool (e.g. slack, harbor, jenkins, google-play, apple-app-store, prometheus, microsoft-teams, mattermost, discord).\n\nCommon slugs: slack, jira, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, harbor, drone-ci, github, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands, google-play, apple-app-store, prometheus, bamboo, buildkite, campfire, confluence, packagist, pivotaltracker, pumble, pushover, teamcity, unify-circuit, webex-teams, zentao, gitlab-slack-application.\n\nThe `config` object is sent verbatim as the request body; see doc/api/integrations.md for the exact fields each integration accepts (for example slack expects `webhook`; harbor expects `url`, `project_name`, `username`, `password`).\n\nReturns: JSON with the resulting integration details.\n\nSee also: gitlab_get_integration, gitlab_list_integrations, gitlab_delete_integration, gitlab_set_jira_integration",
+    "description": "Configure (create or update) any project integration by slug, passing the integration's documented parameters in a free-form `config` object. Use this generic action for integrations without a dedicated tool (e.g. slack, harbor, jenkins, google-play, apple-app-store, prometheus, microsoft-teams, mattermost, discord).\n\nCommon slugs: slack, jira, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, harbor, drone-ci, github, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands, google-play, apple-app-store, prometheus, bamboo, buildkite, campfire, confluence, packagist, pivotaltracker, pumble, pushover, teamcity, unify-circuit, webex-teams, zentao, gitlab-slack-application.\n\nThe `config` object is sent verbatim as the request body; see doc/api/integrations.md for the exact fields each integration accepts (for example slack expects `webhook`; harbor expects `url`, `project_name`, `username`, `password`).\n\nReturns: JSON with the resulting integration details.\n\nSee also: gitlab_get_integration, gitlab_list_integrations, gitlab_delete_integration, gitlab_set_jira_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -194903,7 +194903,7 @@
   },
   {
     "name": "gitlab_set_jira_integration",
-    "description": "Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers.\n\nReturns: JSON with the configured Jira integration details.\n\nSee also: gitlab_list_integrations, gitlab_get_integration",
+    "description": "Configure the Jira integration for a project. Sets up the connection to a Jira instance with URL, credentials, and event triggers.\n\nReturns: JSON with the configured Jira integration details.\n\nSee also: gitlab_list_integrations, gitlab_get_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
