@@ -35,9 +35,9 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,668 | 86.9% |
+| `TestFunc_Scenario` (2-part)           | 10,667 | 86.9% |
 | `TestFunc` (no underscore)             |    965 |  7.9% |
-| `TestFunc_Scenario_Expected` (3+ part) |    640 |  5.2% |
+| `TestFunc_Scenario_Expected` (3+ part) |    641 |  5.2% |
 
 ## Test Distribution
 
@@ -73,7 +73,7 @@
 | resources     |       187 |    99.9% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
 | serverpool    |        54 |    98.9% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
 | subscriptions |        85 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                          |
-| testutil      |        34 |    88.2% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
+| testutil      |        34 |    88.7% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
 | toolutil      |       712 |    98.3% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard        |       327 |    99.9% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
 | **Subtotal**  | **2,197** |          |                                                                                                                                                                                                                   |
@@ -357,7 +357,7 @@
 | resources     |    99.9% |
 | serverpool    |    98.9% |
 | subscriptions |   100.0% |
-| testutil      |    88.2% |
+| testutil      |    88.7% |
 | toolutil      |    98.3% |
 | wizard        |    99.9% |
 
@@ -573,8 +573,8 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **edition** (87.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/internal/apidocs** (87.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_1to1/internal/actions** (87.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **testutil** (88.2%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **cmd/gen_docker_tools** (88.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **testutil** (88.7%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 
 <!-- END TESTING STATS -->

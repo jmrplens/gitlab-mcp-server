@@ -16,10 +16,10 @@ import (
 // handler to prove the middleware returns inner errors unchanged.
 var errInner = errors.New("inner handler failed")
 
-// TestUndeclared_GatedAndPassthrough verifies gated methods answer -32601
+// TestUndeclared_GatedAndUngatedMethods_RefusesOnlyGated verifies gated methods answer -32601
 // without reaching the next handler, and ungated methods pass through with
 // the inner handler's result — or its error — intact.
-func TestUndeclared_GatedAndPassthrough(t *testing.T) {
+func TestUndeclared_GatedAndUngatedMethods_RefusesOnlyGated(t *testing.T) {
 	var reached []string
 	inner := func(_ context.Context, method string, _ mcp.Request) (mcp.Result, error) {
 		reached = append(reached, method)
