@@ -110,6 +110,10 @@ func TestSelectSchemas_ValidateOptions(t *testing.T) {
 			_, err := parseSelectOneIntContent(map[string]any{"selection": math.NaN()}, []int{1})
 			return err
 		}, true},
+		{"select int rejects infinity", func() error {
+			_, err := parseSelectOneIntContent(map[string]any{"selection": math.Inf(1)}, []int{1})
+			return err
+		}, true},
 		{"select int accepts allowed value", func() error {
 			got, err := parseSelectOneIntContent(map[string]any{"selection": float64(2)}, []int{1, 2})
 			if err == nil && got != 2 {

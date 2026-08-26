@@ -495,12 +495,12 @@ func isErrInvalidToken(err error) bool {
 	return errors.Is(err, auth.ErrInvalidToken)
 }
 
-// TestNewGitLabVerifier_ScopeIntrospection verifies granted scopes come
+// TestNewGitLabVerifier_ScopeIntrospection_ResolvesGrantedScopes verifies granted scopes come
 // from real introspection — /personal_access_tokens/self for PATs,
 // /oauth/token/info for OAuth tokens — with the historical api assumption
 // kept only when neither endpoint answers usably, so restricted instances
 // keep working while a read_user token is never stamped api-scoped.
-func TestNewGitLabVerifier_ScopeIntrospection(t *testing.T) {
+func TestNewGitLabVerifier_ScopeIntrospection_ResolvesGrantedScopes(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
