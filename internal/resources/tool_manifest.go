@@ -75,11 +75,65 @@ type ToolSurfaceEntry struct {
 	// same individual tool, kept for discovery (user.me for user.current,
 	// repository.file_history for repository.commit_list). Clients that
 	// dedupe should keep the primary and treat this entry as a pointer.
-	AliasOf        string   `json:"alias_of,omitempty"`
-	DetailURI      string   `json:"detail_uri"`
-	Destructive    bool     `json:"destructive"`
-	ReadOnly       bool     `json:"read_only"`
-	RequiredParams []string `json:"required_params,omitempty"`
+	AliasOf        string                     `json:"alias_of,omitempty"`
+	DetailURI      string                     `json:"detail_uri"`
+	Destructive    bool                       `json:"destructive"`
+	ReadOnly       bool                       `json:"read_only"`
+	RequiredParams []ToolSurfaceRequiredParam `json:"required_params,omitempty"`
+}
+
+// ToolSurfaceRequiredParam names one required parameter of a manifest
+// entry together with its flat JSON-Schema type ("integer", "string",
+// "boolean", "array", …; a multi-typed parameter joins them as
+// "integer|string"). Only the name and the plain type live here — a
+// static consumer of the aggregate manifest should not need 851 detail
+// reads to label a parameter — while descriptions, enums, and optional
+// parameters stay in the per-entry input schema at gitlab://tools/{id}.
+type ToolSurfaceRequiredParam struct {
+	Name string `json:"name"`
+	Type string `json:"type,omitempty"`
+}
+
+// manifestRequiredParams pairs a schema's required parameter names with
+// their flat types.
+func manifestRequiredParams(schema map[string]any) []ToolSurfaceRequiredParam {
+	names := dynamicRequiredParams(schema)
+	if len(names) == 0 {
+		return nil
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	params := make([]ToolSurfaceRequiredParam, 0, len(names))
+	for _, name := range names {
+		params = append(params, ToolSurfaceRequiredParam{
+			Name: name,
+			Type: flatSchemaType(properties, name),
+		})
+	}
+	return params
+}
+
+// flatSchemaType reads the plain "type" of one property, joining a
+// multi-type list ("project_id accepts integer or string") with "|".
+// "null" is dropped from multi-type lists — the SDK types nullable Go
+// slices as ["null","array"], and for a required parameter the nullable
+// half is schema plumbing, not something a reader passes. Properties
+// without a stated type — $ref, oneOf-only, absent — return "" and the
+// field is omitted rather than guessed.
+func flatSchemaType(properties map[string]any, name string) string {
+	property, _ := properties[name].(map[string]any)
+	switch value := property["type"].(type) {
+	case string:
+		return value
+	case []any:
+		parts := make([]string, 0, len(value))
+		for _, entry := range value {
+			if part, ok := entry.(string); ok && part != "" && part != "null" {
+				parts = append(parts, part)
+			}
+		}
+		return strings.Join(parts, "|")
+	}
+	return ""
 }
 
 // ToolSurfaceManifest is the JSON payload returned by the
@@ -306,7 +360,7 @@ func (snapshot *toolSurfaceSnapshot) addDynamicActions(catalog *actioncatalog.Ca
 			Description:    actionDescription(action, resolve),
 			Destructive:    action.Route.Destructive,
 			ReadOnly:       action.ReadOnly,
-			RequiredParams: dynamicRequiredParams(action.Route.InputSchema),
+			RequiredParams: manifestRequiredParams(action.Route.InputSchema),
 		}
 		if primary, ok := aliases[string(action.ID)]; ok {
 			entry.AliasOf = string(primary.ID)
@@ -361,7 +415,7 @@ func (snapshot *toolSurfaceSnapshot) addMetaActions(catalog *actioncatalog.Catal
 				Action:         actionName,
 				DetailURI:      toolManifestDetailURI(id),
 				Destructive:    route.Destructive,
-				RequiredParams: dynamicRequiredParams(route.InputSchema),
+				RequiredParams: manifestRequiredParams(route.InputSchema),
 			}
 			snapshot.addMetaEntry(entry, routeSnapshot)
 		}
@@ -379,7 +433,7 @@ func (snapshot *toolSurfaceSnapshot) addMetaAction(action actioncatalog.Action, 
 		Description:    actionDescription(action, resolve),
 		Destructive:    action.Route.Destructive,
 		ReadOnly:       action.ReadOnly,
-		RequiredParams: dynamicRequiredParams(action.Route.InputSchema),
+		RequiredParams: manifestRequiredParams(action.Route.InputSchema),
 	}
 	if primary, ok := aliases[string(action.ID)]; ok {
 		entry.AliasOf = metaManifestID(primary.ToolName, primary.Name)
@@ -477,12 +531,12 @@ func directToolDetail(entry ToolSurfaceEntry, tool toolSnapshot) ToolSurfaceDeta
 	}
 }
 
-func requiredParamsFromInputSchema(inputSchema any) []string {
+func requiredParamsFromInputSchema(inputSchema any) []ToolSurfaceRequiredParam {
 	schema, ok := inputSchema.(map[string]any)
 	if !ok {
 		return nil
 	}
-	return dynamicRequiredParams(schema)
+	return manifestRequiredParams(schema)
 }
 
 func actionTitle(action actioncatalog.Action) string {

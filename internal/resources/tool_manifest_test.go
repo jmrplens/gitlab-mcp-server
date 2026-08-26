@@ -198,8 +198,9 @@ func TestToolManifest_MetaSurfaceIncludesRouteOnlyActions(t *testing.T) {
 	catalog := widgetCatalog(t)
 	routes := catalog.ActionMaps()
 	routes["gitlab_widget"]["archive"] = toolutil.ActionRoute{InputSchema: map[string]any{
-		"type":     "object",
-		"required": []string{"project_id"},
+		"type":       "object",
+		"required":   []string{"project_id"},
+		"properties": map[string]any{"project_id": map[string]any{"type": "integer"}},
 	}}
 	session := toolManifestSession(t, ToolSurfaceResourceOptions{
 		Surface:    toolSurfaceMeta,
@@ -212,8 +213,11 @@ func TestToolManifest_MetaSurfaceIncludesRouteOnlyActions(t *testing.T) {
 	if detail.Kind != toolManifestKindMetaAction || detail.Tool != "gitlab_widget" || detail.Action != "archive" {
 		t.Fatalf("detail = %+v, want route-only meta action", detail)
 	}
-	if len(detail.RequiredParams) != 1 || detail.RequiredParams[0] != "project_id" {
+	if len(detail.RequiredParams) != 1 || detail.RequiredParams[0].Name != "project_id" {
 		t.Fatalf("required params = %v, want project_id", detail.RequiredParams)
+	}
+	if detail.RequiredParams[0].Type != "integer" {
+		t.Fatalf("required param type = %q, want integer; the manifest must not be type-blind", detail.RequiredParams[0].Type)
 	}
 }
 
@@ -282,7 +286,7 @@ func TestToolManifest_IndividualSurfaceUsesDirectToolIDs(t *testing.T) {
 	if detail.Kind != toolManifestKindIndividualTool || detail.Tool != "gitlab_get_project" || !detail.ReadOnly {
 		t.Fatalf("detail = %+v, want read-only individual tool", detail)
 	}
-	if detail.Call.ParamsLocation != "arguments" || len(detail.RequiredParams) != 1 || detail.RequiredParams[0] != "project_id" {
+	if detail.Call.ParamsLocation != "arguments" || len(detail.RequiredParams) != 1 || detail.RequiredParams[0].Name != "project_id" {
 		t.Fatalf("detail call/required params = %+v, want direct arguments project_id", detail)
 	}
 }
