@@ -80,6 +80,12 @@ type ToolSurfaceEntry struct {
 	Destructive    bool                       `json:"destructive"`
 	ReadOnly       bool                       `json:"read_only"`
 	RequiredParams []ToolSurfaceRequiredParam `json:"required_params,omitempty"`
+	// RequiredParamsAnyOf lists alternative requirement groups: the schema
+	// accepts a call satisfying at least one group ("name, description or
+	// color", "file_name+content or files"). These names are NOT in
+	// RequiredParams — publishing an alternative as unconditionally
+	// required invites clients to send every branch at once.
+	RequiredParamsAnyOf [][]ToolSurfaceRequiredParam `json:"required_params_any_of,omitempty"`
 }
 
 // ToolSurfaceRequiredParam names one required parameter of a manifest
@@ -94,13 +100,62 @@ type ToolSurfaceRequiredParam struct {
 	Type string `json:"type,omitempty"`
 }
 
-// manifestRequiredParams pairs a schema's required parameter names with
-// their flat types.
+// manifestRequiredParams pairs a schema's unconditionally required
+// parameter names — the top-level "required" list only — with their flat
+// types. Alternative-branch requirements (anyOf/oneOf) are published
+// separately by [manifestAlternativeRequiredParams]: a branch name is not
+// unconditionally required, and declaring it so invites a client to send
+// every branch at once.
 func manifestRequiredParams(schema map[string]any) []ToolSurfaceRequiredParam {
-	names := dynamicRequiredParams(schema)
+	if schema == nil {
+		return nil
+	}
+	names := dedupeDynamicStrings(sortedStrings(appendDynamicRequiredParamNames(nil, schema["required"])))
 	if len(names) == 0 {
 		return nil
 	}
+	return typedParams(schema, names)
+}
+
+// manifestAlternativeRequiredParams extracts the anyOf/oneOf requirement
+// groups: each group is one branch's "required" list, minus names already
+// unconditionally required at the top level. A call must satisfy at least
+// one group.
+func manifestAlternativeRequiredParams(schema map[string]any) [][]ToolSurfaceRequiredParam {
+	if schema == nil {
+		return nil
+	}
+	top := make(map[string]bool)
+	for _, name := range appendDynamicRequiredParamNames(nil, schema["required"]) {
+		top[name] = true
+	}
+	var groups [][]ToolSurfaceRequiredParam
+	for _, keyword := range []string{"anyOf", "oneOf"} {
+		alternatives, ok := schema[keyword].([]any)
+		if !ok {
+			continue
+		}
+		for _, alternative := range alternatives {
+			branch, isObject := alternative.(map[string]any)
+			if !isObject {
+				continue
+			}
+			var names []string
+			for _, name := range appendDynamicRequiredParamNames(nil, branch["required"]) {
+				if !top[name] {
+					names = append(names, name)
+				}
+			}
+			if len(names) > 0 {
+				groups = append(groups, typedParams(schema, names))
+			}
+		}
+	}
+	return groups
+}
+
+// typedParams pairs parameter names with their flat schema types.
+func typedParams(schema map[string]any, names []string) []ToolSurfaceRequiredParam {
 	properties, _ := schema["properties"].(map[string]any)
 	params := make([]ToolSurfaceRequiredParam, 0, len(names))
 	for _, name := range names {
@@ -110,6 +165,13 @@ func manifestRequiredParams(schema map[string]any) []ToolSurfaceRequiredParam {
 		})
 	}
 	return params
+}
+
+// sortedStrings sorts a copy-in-place and returns it, for deterministic
+// manifest output.
+func sortedStrings(values []string) []string {
+	sort.Strings(values)
+	return values
 }
 
 // flatSchemaType reads the plain "type" of one property, joining a
@@ -349,18 +411,19 @@ func (snapshot *toolSurfaceSnapshot) addDynamicActions(catalog *actioncatalog.Ca
 	aliases := aliasPrimaries(catalog)
 	for _, action := range catalog.Actions() {
 		entry := ToolSurfaceEntry{
-			ID:             string(action.ID),
-			Kind:           toolManifestKindDynamicAction,
-			Tool:           "gitlab_execute_action",
-			Action:         string(action.ID),
-			Domain:         action.Domain,
-			BackingTool:    action.ToolName,
-			BackingAction:  action.Name,
-			Title:          actionTitle(action),
-			Description:    actionDescription(action, resolve),
-			Destructive:    action.Route.Destructive,
-			ReadOnly:       action.ReadOnly,
-			RequiredParams: manifestRequiredParams(action.Route.InputSchema),
+			ID:                  string(action.ID),
+			Kind:                toolManifestKindDynamicAction,
+			Tool:                "gitlab_execute_action",
+			Action:              string(action.ID),
+			Domain:              action.Domain,
+			BackingTool:         action.ToolName,
+			BackingAction:       action.Name,
+			Title:               actionTitle(action),
+			Description:         actionDescription(action, resolve),
+			Destructive:         action.Route.Destructive,
+			ReadOnly:            action.ReadOnly,
+			RequiredParams:      manifestRequiredParams(action.Route.InputSchema),
+			RequiredParamsAnyOf: manifestAlternativeRequiredParams(action.Route.InputSchema),
 		}
 		if primary, ok := aliases[string(action.ID)]; ok {
 			entry.AliasOf = string(primary.ID)
@@ -409,13 +472,14 @@ func (snapshot *toolSurfaceSnapshot) addMetaActions(catalog *actioncatalog.Catal
 			}
 			route := routeSnapshot[toolName][actionName]
 			entry := ToolSurfaceEntry{
-				ID:             id,
-				Kind:           toolManifestKindMetaAction,
-				Tool:           toolName,
-				Action:         actionName,
-				DetailURI:      toolManifestDetailURI(id),
-				Destructive:    route.Destructive,
-				RequiredParams: manifestRequiredParams(route.InputSchema),
+				ID:                  id,
+				Kind:                toolManifestKindMetaAction,
+				Tool:                toolName,
+				Action:              actionName,
+				DetailURI:           toolManifestDetailURI(id),
+				Destructive:         route.Destructive,
+				RequiredParams:      manifestRequiredParams(route.InputSchema),
+				RequiredParamsAnyOf: manifestAlternativeRequiredParams(route.InputSchema),
 			}
 			snapshot.addMetaEntry(entry, routeSnapshot)
 		}
@@ -424,16 +488,17 @@ func (snapshot *toolSurfaceSnapshot) addMetaActions(catalog *actioncatalog.Catal
 
 func (snapshot *toolSurfaceSnapshot) addMetaAction(action actioncatalog.Action, routes map[string]toolutil.ActionMap, resolve seeAlsoResolver, aliases map[string]actioncatalog.Action) {
 	entry := ToolSurfaceEntry{
-		ID:             metaManifestID(action.ToolName, action.Name),
-		Kind:           toolManifestKindMetaAction,
-		Tool:           action.ToolName,
-		Action:         action.Name,
-		Domain:         action.Domain,
-		Title:          actionTitle(action),
-		Description:    actionDescription(action, resolve),
-		Destructive:    action.Route.Destructive,
-		ReadOnly:       action.ReadOnly,
-		RequiredParams: manifestRequiredParams(action.Route.InputSchema),
+		ID:                  metaManifestID(action.ToolName, action.Name),
+		Kind:                toolManifestKindMetaAction,
+		Tool:                action.ToolName,
+		Action:              action.Name,
+		Domain:              action.Domain,
+		Title:               actionTitle(action),
+		Description:         actionDescription(action, resolve),
+		Destructive:         action.Route.Destructive,
+		ReadOnly:            action.ReadOnly,
+		RequiredParams:      manifestRequiredParams(action.Route.InputSchema),
+		RequiredParamsAnyOf: manifestAlternativeRequiredParams(action.Route.InputSchema),
 	}
 	if primary, ok := aliases[string(action.ID)]; ok {
 		entry.AliasOf = metaManifestID(primary.ToolName, primary.Name)
@@ -504,15 +569,16 @@ func (snapshot *toolSurfaceSnapshot) addEntry(entry ToolSurfaceEntry, call ToolS
 
 func directToolEntry(tool toolSnapshot, kind string) ToolSurfaceEntry {
 	return ToolSurfaceEntry{
-		ID:             tool.Name,
-		Kind:           kind,
-		Tool:           tool.Name,
-		Title:          tool.Title,
-		Description:    tool.Description,
-		DetailURI:      toolManifestDetailURI(tool.Name),
-		Destructive:    tool.Destructive,
-		ReadOnly:       tool.ReadOnly,
-		RequiredParams: requiredParamsFromInputSchema(tool.InputSchema),
+		ID:                  tool.Name,
+		Kind:                kind,
+		Tool:                tool.Name,
+		Title:               tool.Title,
+		Description:         tool.Description,
+		DetailURI:           toolManifestDetailURI(tool.Name),
+		Destructive:         tool.Destructive,
+		ReadOnly:            tool.ReadOnly,
+		RequiredParams:      requiredParamsFromInputSchema(tool.InputSchema),
+		RequiredParamsAnyOf: alternativeRequiredParamsFromInputSchema(tool.InputSchema),
 	}
 }
 
@@ -537,6 +603,14 @@ func requiredParamsFromInputSchema(inputSchema any) []ToolSurfaceRequiredParam {
 		return nil
 	}
 	return manifestRequiredParams(schema)
+}
+
+func alternativeRequiredParamsFromInputSchema(inputSchema any) [][]ToolSurfaceRequiredParam {
+	schema, ok := inputSchema.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return manifestAlternativeRequiredParams(schema)
 }
 
 func actionTitle(action actioncatalog.Action) string {
@@ -716,21 +790,6 @@ func parseToolManifestURI(uri string) string {
 	return strings.ToLower(strings.TrimSpace(rest))
 }
 
-// dynamicRequiredParams extracts and deduplicates the list of required
-// parameter names from a JSON Schema. It supports both a top-level
-// "required" array and alternative-required branches in "anyOf"/"oneOf".
-// Returns nil when schema is nil or has no required parameters.
-func dynamicRequiredParams(schema map[string]any) []string {
-	if schema == nil {
-		return nil
-	}
-	var names []string
-	names = appendDynamicRequiredParamNames(names, schema["required"])
-	names = appendDynamicAlternativeRequiredParams(names, schema)
-	sort.Strings(names)
-	return dedupeDynamicStrings(names)
-}
-
 // appendDynamicRequiredParamNames appends each non-empty string in raw
 // to names. raw is expected to be either a []any or []string (the two
 // shapes the JSON parser can return for a JSON array); any other type
@@ -745,26 +804,6 @@ func appendDynamicRequiredParamNames(names []string, raw any) []string {
 		}
 	case []string:
 		names = append(names, values...)
-	}
-	return names
-}
-
-// appendDynamicAlternativeRequiredParams walks any "anyOf" or "oneOf"
-// branches in schema and merges their "required" lists into names.
-// Non-object alternatives are ignored.
-func appendDynamicAlternativeRequiredParams(names []string, schema map[string]any) []string {
-	for _, keyword := range []string{"anyOf", "oneOf"} {
-		alternatives, ok := schema[keyword].([]any)
-		if !ok || len(alternatives) == 0 {
-			continue
-		}
-		for _, raw := range alternatives {
-			alternative, isObject := raw.(map[string]any)
-			if !isObject {
-				continue
-			}
-			names = appendDynamicRequiredParamNames(names, alternative["required"])
-		}
 	}
 	return names
 }
