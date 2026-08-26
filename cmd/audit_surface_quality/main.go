@@ -69,7 +69,7 @@ func main() {
 // individual tools. LockdownInputSchemas is applied so the audit reflects
 // the schemas clients actually see.
 func listTools(client *gitlabclient.Client, meta bool) []*mcp.Tool {
-	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	if meta {
 		if err := tools.RegisterAllMeta(server, client, edition.Ultimate); err != nil {
 			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)

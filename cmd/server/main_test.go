@@ -3561,6 +3561,7 @@ func TestRunHTTP_OAuthCacheTTL_BelowMin(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "oauth",
+		publicURL:      "http://localhost:8080",
 		oauthCacheTTL:  10 * time.Second,
 		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
@@ -3579,6 +3580,7 @@ func TestRunHTTP_OAuthCacheTTL_AboveMax(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "oauth",
+		publicURL:      "http://localhost:8080",
 		oauthCacheTTL:  5 * time.Hour,
 		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
@@ -4383,6 +4385,118 @@ func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
 		}
 	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("serveHTTP did not shut down in time")
+	}
+}
+
+// TestServeHTTP_ServerCardEndpoint_CORSAndCapabilities pins the card
+// behaviors added for the 2026-07-28 conformance pass: cross-origin reads
+// (GET Allow-Origin, OPTIONS preflight with the Allow-Headers echo) and the
+// capabilities key sourced from the live handshake, which must not carry
+// the SEP-2577-deprecated logging capability. Deleting any of them must
+// fail here, not only in a manual wire check.
+func TestServeHTTP_ServerCardEndpoint_CORSAndCapabilities(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      true,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
+	}()
+	waitForHTTPServerReady(t, addr, errCh)
+
+	cardURL := "http://" + addr + "/.well-known/mcp/server-card.json"
+
+	t.Run("GET carries Allow-Origin and handshake capabilities without logging", func(t *testing.T) {
+		assertCardGETCORSAndCapabilities(t, cardURL)
+	})
+	t.Run("OPTIONS preflight answers CORS and echoes requested headers", func(t *testing.T) {
+		assertCardPreflight(t, cardURL)
+	})
+
+	cancel()
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("serveHTTP error: %v", err)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("serveHTTP did not shut down in time")
+	}
+}
+
+// assertCardGETCORSAndCapabilities fetches the card and checks the CORS
+// header, the capabilities key sourced from the live handshake, and the
+// absence of the SEP-2577-deprecated logging capability.
+func assertCardGETCORSAndCapabilities(t *testing.T, cardURL string) {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, cardURL, nil)
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("GET Access-Control-Allow-Origin = %q, want *", got)
+	}
+	var card map[string]any
+	body, _ := io.ReadAll(resp.Body)
+	if unmarshalErr := json.Unmarshal(body, &card); unmarshalErr != nil {
+		t.Fatalf("invalid JSON response: %v", unmarshalErr)
+	}
+	caps, ok := card["capabilities"].(map[string]any)
+	if !ok {
+		t.Fatal("server card missing 'capabilities'")
+	}
+	if _, hasTools := caps["tools"]; !hasTools {
+		t.Error("card capabilities missing 'tools' — not sourced from the live handshake?")
+	}
+	if _, hasLogging := caps["logging"]; hasLogging {
+		t.Error("card capabilities carry 'logging', deprecated by SEP-2577 — the empty-capabilities pin regressed")
+	}
+}
+
+// assertCardPreflight sends the one preflight the card route can receive —
+// a fetch stamped with a custom header — and checks the response names the
+// header back, without which the browser refuses the actual GET.
+func assertCardPreflight(t *testing.T, cardURL string) {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodOptions, cardURL, nil)
+	req.Header.Set("Origin", "https://scanner.example")
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	req.Header.Set("Access-Control-Request-Headers", "x-scanner-id")
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("OPTIONS Access-Control-Allow-Origin = %q, want *", got)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Methods"); !strings.Contains(got, http.MethodGet) {
+		t.Errorf("OPTIONS Access-Control-Allow-Methods = %q, want to contain GET", got)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Headers"); got != "x-scanner-id" {
+		t.Errorf("OPTIONS Access-Control-Allow-Headers = %q, want the echoed x-scanner-id", got)
 	}
 }
 

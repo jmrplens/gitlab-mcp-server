@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
@@ -740,6 +741,10 @@ func TestSubscribe_StatelessHTTP_LegacyPathIsRefused(t *testing.T) {
 	if err == nil {
 		t.Fatal("legacy subscribe was accepted in stateless mode, where no notification could ever reach the client")
 	}
+	var rpcErr *jsonrpc.Error
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidRequest {
+		t.Errorf("refusal error = %v, want *jsonrpc.Error with code %d — a plain error reaches the wire as code 0", err, jsonrpc.CodeInvalidRequest)
+	}
 	if runtime.manager.Len() != 0 {
 		t.Errorf("watchers = %d after a refused subscribe, want 0", runtime.manager.Len())
 	}
@@ -1136,4 +1141,54 @@ func connectInMemory(t *testing.T, server *mcp.Server) *mcp.ClientSession {
 	}
 	t.Cleanup(func() { _ = session.Close() })
 	return session
+}
+
+// TestCreateServer_UndeclaredMethodsRefused verifies the capability guard:
+// methods whose capability the handshake withholds answer -32601 instead of
+// a hollow success. logging/setLevel is gated on every surface (the server
+// never declares logging), and the prompts methods are gated exactly when
+// the minimal capability surface withholds the prompts capability.
+func TestCreateServer_UndeclaredMethodsRefused(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+
+	tests := []struct {
+		name        string
+		surface     string
+		call        func(ctx context.Context, s *mcp.ClientSession) error
+		wantRefused bool
+	}{
+		{"logging/setLevel refused on full", config.CapabilitySurfaceFull, setLoggingLevel, true},
+		{"logging/setLevel refused on minimal", config.CapabilitySurfaceMinimal, setLoggingLevel, true},
+		{"prompts/list served on full", config.CapabilitySurfaceFull, listPrompts, false},
+		{"prompts/list refused on minimal", config.CapabilitySurfaceMinimal, listPrompts, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := subscriptionTestServer(t, gitlab.URL, tt.surface)
+			session := connectInMemory(t, server)
+
+			err := tt.call(context.Background(), session)
+			if !tt.wantRefused {
+				if err != nil {
+					t.Fatalf("call error = %v, want success: the capability is declared on this surface", err)
+				}
+				return
+			}
+			var rpcErr *jsonrpc.Error
+			if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeMethodNotFound {
+				t.Errorf("call error = %v, want *jsonrpc.Error with code %d for a method whose capability is undeclared", err, jsonrpc.CodeMethodNotFound)
+			}
+		})
+	}
+}
+
+func setLoggingLevel(ctx context.Context, s *mcp.ClientSession) error {
+	// The deprecated method is called on purpose: the test proves this
+	// server refuses it instead of answering a hollow success.
+	return s.SetLoggingLevel(ctx, &mcp.SetLoggingLevelParams{Level: "info"}) //nolint:staticcheck // SEP-2577 deprecation is the point under test
+}
+
+func listPrompts(ctx context.Context, s *mcp.ClientSession) error {
+	_, err := s.ListPrompts(ctx, nil)
+	return err
 }

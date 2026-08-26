@@ -395,7 +395,7 @@ func measureResources(client *gitlabclient.Client, metaRoutes map[string]tooluti
 }
 
 func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) int {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	if opts.Core {
 		resources.Register(server, client)
 	}
@@ -477,7 +477,7 @@ func countActions(routes map[string]toolutil.ActionMap) int {
 // measurePrompts registers MCP prompts and estimates the token cost of their
 // advertised definitions.
 func measurePrompts(client *gitlabclient.Client) int {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	prompts.Register(server, client)
 
 	st, ct := mcp.NewInMemoryTransports()
@@ -1316,7 +1316,7 @@ func measureSharedTokens(client *gitlabclient.Client, opts sharedTokenMeasureOpt
 // [measureResourcesWithOptions]: it returns an error instead of calling
 // os.Exit so measurement failures propagate to the footprint runner.
 func fpMeasureResourcesWithOptions(client *gitlabclient.Client, routes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) (int, error) {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	if opts.Core {
 		resources.Register(server, client)
 	}
@@ -1364,7 +1364,7 @@ func fpMeasureResourcesWithOptions(client *gitlabclient.Client, routes map[strin
 // fpMeasurePrompts is the footprint variant of [measurePrompts]: it returns an
 // error instead of calling os.Exit.
 func fpMeasurePrompts(client *gitlabclient.Client) (int, error) {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	prompts.Register(server, client)
 
 	return withFootprintSession(server, "prompts", func(ctx context.Context, session *mcp.ClientSession) (int, error) {

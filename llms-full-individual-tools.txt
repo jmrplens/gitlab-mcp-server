@@ -6221,7 +6221,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_instance_variable_create
 
-Create an instance-level CI/CD variable with type and protected/masked/raw flags (admin-only). Returns: the created variable's key, value (redacted when masked), type, flags, and description. See also: gitlab_instance_variable_list, gitlab_instance_variable_get, gitlab_instance_variable_update.
+Create an instance-level CI/CD variable with type and protected/masked/raw flags (admin-only). Returns: the created variable's key, value (raw even when masked — masking redacts CI job logs, not this API), type, flags, and description. See also: gitlab_instance_variable_list, gitlab_instance_variable_get, gitlab_instance_variable_update.
 
 **Parameters:**
 
@@ -6248,7 +6248,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_instance_variable_get
 
-Get a single instance-level CI/CD variable by key (admin-only). Returns: the variable's key, value (redacted when masked), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_list, gitlab_instance_variable_update, gitlab_instance_variable_delete.
+Get a single instance-level CI/CD variable by key (admin-only). Returns: the variable's key, value (raw even when masked — masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_list, gitlab_instance_variable_update, gitlab_instance_variable_delete.
 
 **Parameters:**
 
@@ -6258,7 +6258,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_instance_variable_list
 
-List instance-level CI/CD variables with order_by, sort, and offset or keyset pagination (admin-only). Returns: each variable's key, value (redacted when masked), type, protected/masked/raw flags, description, and pagination metadata. See also: gitlab_instance_variable_get, gitlab_instance_variable_create, gitlab_instance_variable_update, gitlab_instance_variable_delete.
+List instance-level CI/CD variables with order_by, sort, and offset or keyset pagination (admin-only). Returns: each variable's key, value (raw even when masked — masking redacts CI job logs, not this API), type, protected/masked/raw flags, description, and pagination metadata. See also: gitlab_instance_variable_get, gitlab_instance_variable_create, gitlab_instance_variable_update, gitlab_instance_variable_delete.
 
 **Parameters:**
 
@@ -6273,7 +6273,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_instance_variable_update
 
-Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only). Returns: the updated variable's key, value (redacted when masked), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_get, gitlab_instance_variable_list, gitlab_instance_variable_delete.
+Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only). Returns: the updated variable's key, value (raw even when masked — masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_get, gitlab_instance_variable_list, gitlab_instance_variable_delete.
 
 **Parameters:**
 

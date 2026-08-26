@@ -55,6 +55,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cachehints"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/capguard"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/clientcompat"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/completions"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
@@ -908,6 +909,19 @@ func createServer(
 		server.AddReceivingMiddleware(clientcompat.Middleware())
 	}
 
+	// Capability/method consistency: the SDK dispatches logging/setLevel
+	// unconditionally although this server never declares the logging
+	// capability, and on the minimal capability surface prompts/list would
+	// answer a successful empty page while the handshake declares no
+	// prompts capability. Refusing with -32601 keeps the wire surface in
+	// step with the handshake (the same line the sibling libgen-mcp's
+	// capguard draws for its resource methods).
+	gatedMethods := []string{"logging/setLevel"}
+	if capabilitySurface != config.CapabilitySurfaceFull {
+		gatedMethods = append(gatedMethods, "prompts/list", "prompts/get")
+	}
+	server.AddReceivingMiddleware(capguard.Undeclared(gatedMethods...))
+
 	var metaSchemaRoutes map[string]toolutil.ActionMap
 	var surfaceCatalog *actioncatalog.Catalog
 	if toolSurface != config.ToolSurfaceIndividual {
@@ -1236,9 +1250,18 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler)
-	mux.HandleFunc("OPTIONS /.well-known/mcp/server-card.json", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("OPTIONS /.well-known/mcp/server-card.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		// A plain fetch of the card is a simple request and never
+		// preflights; this branch exists for the caller that adds a header
+		// of its own (a scanner stamping a request id, say), whose request
+		// the browser refuses unless the preflight names that header back.
+		// Echoing allows exactly what was asked for and nothing else.
+		if want := r.Header.Get("Access-Control-Request-Headers"); want != "" {
+			w.Header().Set("Access-Control-Allow-Headers", want)
+			w.Header().Set("Vary", "Access-Control-Request-Headers")
+		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /.well-known/mcp/server-card.json", func(w http.ResponseWriter, r *http.Request) {

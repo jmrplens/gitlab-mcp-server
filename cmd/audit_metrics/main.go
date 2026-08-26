@@ -462,7 +462,7 @@ func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.
 // This includes resources from Register(), schema resources, and RegisterWorkflowGuides().
 // Workspace roots (+1) are counted separately because they need a roots.Manager.
 func countResources(client *gitlabclient.Client) (static, templates int) {
-	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	metaCatalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{IncludeMCP: true})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "build meta action catalog: %v\n", err)
@@ -509,7 +509,7 @@ func countResources(client *gitlabclient.Client) (static, templates int) {
 
 // countPrompts registers all MCP prompts and returns the count.
 func countPrompts(client *gitlabclient.Client) int {
-	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	prompts.Register(server, client)
 
 	st, ct := mcp.NewInMemoryTransports()
