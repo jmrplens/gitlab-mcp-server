@@ -87,6 +87,10 @@ const initCooldown = 30 * time.Second
 // used during initialization (bypasses the SDK transport chain).
 const healthTimeout = 10 * time.Second
 
+// versionAPIPath is the GitLab Version API endpoint used for health and
+// edition probes.
+const versionAPIPath = "/api/v4/version"
+
 // GitLabDotComHost is the canonical host for GitLab SaaS-only features.
 const GitLabDotComHost = "gitlab.com"
 
@@ -137,7 +141,7 @@ func NewClient(cfg *config.Config) (*Client, error) {
 
 	c := &Client{
 		baseURL:      cfg.GitLabURL,
-		healthURL:    strings.TrimRight(cfg.GitLabURL, "/") + "/api/v4/version",
+		healthURL:    strings.TrimRight(cfg.GitLabURL, "/") + versionAPIPath,
 		token:        cfg.GitLabToken,
 		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
 	}
@@ -180,7 +184,7 @@ func NewClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client, err
 
 	c := &Client{
 		baseURL:      baseURL,
-		healthURL:    strings.TrimRight(baseURL, "/") + "/api/v4/version",
+		healthURL:    strings.TrimRight(baseURL, "/") + versionAPIPath,
 		token:        token,
 		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
 	}
@@ -216,7 +220,7 @@ func NewOAuthClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client
 
 	c := &Client{
 		baseURL:      baseURL,
-		healthURL:    strings.TrimRight(baseURL, "/") + "/api/v4/version",
+		healthURL:    strings.TrimRight(baseURL, "/") + versionAPIPath,
 		token:        token,
 		bearerAuth:   true,
 		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
