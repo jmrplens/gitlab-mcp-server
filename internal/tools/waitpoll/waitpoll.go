@@ -68,11 +68,15 @@ func Poll[T any](ctx context.Context, opts Options[T]) (Result[T], error) {
 	var lastStatus string
 
 	for {
-		if time.Until(deadlineAt) <= 0 {
-			return timedOutPollResult(lastItem, startTime, pollCount, lastStatus), nil
-		}
+		// Cancellation wins over the deadline, deterministically: a caller
+		// that gave up no longer wants a result, timed-out or otherwise. The
+		// order matters — under load both can be true at once, and a select
+		// picks randomly among ready cases.
 		if err := ctx.Err(); err != nil {
 			return Result[T]{}, err
+		}
+		if time.Until(deadlineAt) <= 0 {
+			return timedOutPollResult(lastItem, startTime, pollCount, lastStatus), nil
 		}
 
 		pollCount++
@@ -95,6 +99,12 @@ func Poll[T any](ctx context.Context, opts Options[T]) (Result[T], error) {
 			return terminalPollResult(item, startTime, pollCount, status, failOnError, opts.FailureError)
 		}
 
+		// Same precedence before blocking: if the context is already
+		// canceled, do not let a simultaneously-expired deadline win the
+		// select by coin toss.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return Result[T]{}, ctxErr
+		}
 		select {
 		case <-ctx.Done():
 			return Result[T]{}, ctx.Err()
