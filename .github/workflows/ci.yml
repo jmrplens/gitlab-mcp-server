@@ -6,10 +6,18 @@
 name: CI
 
 on:
+  # No branches filter on pull_request: a stacked PR whose base is another
+  # feature branch must run the same suite as one targeting main, or a
+  # green check mark means "CI did not run here" instead of "CI passed".
   pull_request:
-    branches: [main]
   push:
     branches: [main]
+
+# One in-flight run per ref: with pull_request no longer filtered by base
+# branch, a stacked PR's pushes would otherwise pile up obsolete runs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

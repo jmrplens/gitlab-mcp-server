@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
@@ -1009,5 +1010,82 @@ func TestPingDirect_NilContext(t *testing.T) {
 	pingErr := client.pingDirect(nil) //lint:ignore SA1012 intentionally passing nil context to trigger error path
 	if pingErr == nil {
 		t.Fatal("expected error for nil context, got nil")
+	}
+}
+
+// TestPoolClientConstructors_UseTheirAuthScheme verifies each pool client
+// constructor authenticates every request path — the raw credential probe,
+// the raw version probe, and SDK API calls — with its own scheme: the
+// oauth constructor with "Authorization: Bearer" and never PRIVATE-TOKEN,
+// the legacy constructor the other way round. A gloas- OAuth access token
+// is only valid as Bearer; the PRIVATE-TOKEN header GitLab rejects for it
+// is exactly how oauth mode silently failed for real OAuth tokens before
+// the oauth constructor existed.
+func TestPoolClientConstructors_UseTheirAuthScheme(t *testing.T) {
+	const oauthToken = "gloas-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
+
+	tests := []struct {
+		name        string
+		newClient   func(string, string, bool) (*Client, error)
+		token       string
+		wantBearer  bool
+		wantPrivate bool
+	}{
+		{"oauth client sends Bearer on every path", NewOAuthClientWithToken, oauthToken, true, false},
+		{"legacy client keeps PRIVATE-TOKEN", NewClientWithToken, testValidToken, false, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			type seen struct{ path, bearer, private string }
+			var requests []seen
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests = append(requests, seen{r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("PRIVATE-TOKEN")})
+				w.Header().Set("Content-Type", "application/json")
+				switch {
+				case strings.HasSuffix(r.URL.Path, "/version"):
+					fmt.Fprint(w, `{"version":"18.0.0","revision":"abc"}`)
+				case strings.HasSuffix(r.URL.Path, "/user"):
+					fmt.Fprint(w, `{"id":7,"username":"probe-user"}`)
+				default:
+					fmt.Fprint(w, `{}`)
+				}
+			}))
+			defer srv.Close()
+
+			client, err := tt.newClient(srv.URL, tt.token, false)
+			if err != nil {
+				t.Fatalf("constructor error: %v", err)
+			}
+
+			ctx := context.Background()
+			if client.CredentialRejected(ctx) {
+				t.Error("CredentialRejected() = true against a 200 backend")
+			}
+			if _, verErr := client.versionDirect(ctx); verErr != nil {
+				t.Errorf("versionDirect() error: %v", verErr)
+			}
+			if _, _, sdkErr := client.GL().Users.CurrentUser(); sdkErr != nil {
+				t.Errorf("SDK CurrentUser() error: %v", sdkErr)
+			}
+
+			if len(requests) == 0 {
+				t.Fatal("no requests reached the backend")
+			}
+			for _, req := range requests {
+				assertAuthScheme(t, req.path, req.bearer, req.private, tt.token, tt.wantBearer, tt.wantPrivate)
+			}
+		})
+	}
+}
+
+// assertAuthScheme checks one probed request carried exactly the expected
+// authentication scheme and nothing else.
+func assertAuthScheme(t *testing.T, path, bearer, private, token string, wantBearer, wantPrivate bool) {
+	t.Helper()
+	if got := bearer == "Bearer "+token; got != wantBearer {
+		t.Errorf("%s: Authorization = %q, want bearer=%v", path, bearer, wantBearer)
+	}
+	if got := private == token; got != wantPrivate {
+		t.Errorf("%s: PRIVATE-TOKEN = %q, want private=%v", path, private, wantPrivate)
 	}
 }

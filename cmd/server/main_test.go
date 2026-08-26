@@ -5407,3 +5407,35 @@ func TestCreateServer_ReadOnly_TakesPrecedenceOverSafeMode(t *testing.T) {
 		t.Errorf("reads must keep working with read-only + safe mode: %s", read)
 	}
 }
+
+// TestValidateHTTPAuthConfig_OAuthRequiresHTTPSGitLabURL verifies oauth mode
+// refuses a cleartext instance URL: bearer tokens are forwarded upstream on
+// every call, so http would put a live credential on the wire (CWE-319).
+// Loopback stays exempt for local development, matching --public-url.
+func TestValidateHTTPAuthConfig_OAuthRequiresHTTPSGitLabURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		gitlabURL string
+		wantErr   bool
+	}{
+		{"https accepted", "https://gitlab.com", false},
+		{"https self-managed accepted", "https://gitlab.internal.example", false},
+		{"http loopback accepted", "http://localhost:8929", false},
+		{"http 127.0.0.1 accepted", "http://127.0.0.1:8929", false},
+		{"http public host rejected", "http://gitlab.example.com", true},
+		{"not a URL rejected", "gitlab.example.com", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{
+				AuthMode:  "oauth",
+				GitLabURL: tt.gitlabURL,
+				PublicURL: "https://mcp.example.com",
+			}
+			err := validateHTTPAuthConfig(cfg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateHTTPAuthConfig(gitlab-url=%q) error = %v, wantErr %v", tt.gitlabURL, err, tt.wantErr)
+			}
+		})
+	}
+}
