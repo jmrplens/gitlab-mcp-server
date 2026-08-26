@@ -165,7 +165,7 @@ func registerToolManifestIndex(server *mcp.Server, snapshot toolSurfaceSnapshot)
 		Title:       "Tool Manifest",
 		MIMEType:    mimeJSON,
 		Description: "Surface-aware manifest of the tools and executable actions available in this server instance. Use gitlab://tools/{id} to fetch one entry's accepted call shape and input schema.",
-		Annotations: toolutil.ResourceList,
+		Annotations: toolutil.ResourceMachineList,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		return marshalResourceJSON(snapshot.manifest)
@@ -182,7 +182,7 @@ func registerToolManifestTemplate(server *mcp.Server, snapshot toolSurfaceSnapsh
 		Title:       "Tool Detail",
 		MIMEType:    mimeJSON,
 		Description: "Accepted call shape and input schema for one entry from gitlab://tools. Replace {id} with an entry ID from the active surface, such as project.get in dynamic mode, gitlab_project.get in meta mode, or gitlab_get_project in individual mode.",
-		Annotations: toolutil.ResourceDetail,
+		Annotations: toolutil.ResourceMachineDetail,
 		Icons:       toolutil.IconConfig,
 	}, func(_ context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
 		id := parseToolManifestURI(req.Params.URI)

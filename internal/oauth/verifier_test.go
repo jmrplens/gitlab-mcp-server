@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 	"time"
 
@@ -159,7 +160,14 @@ func TestNewGitLabVerifier_CacheHit(t *testing.T) {
 	t.Parallel()
 
 	var apiCalls int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Scope introspection probes other paths; the cache assertion is
+		// about identity verification, so only /api/v4/user is counted and
+		// the probes answer 404 (introspection unavailable).
+		if r.URL.Path != "/api/v4/user" {
+			http.NotFound(w, r)
+			return
+		}
 		apiCalls++
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(gitlabUserResponse{ID: 1, Username: "cached"})
@@ -196,7 +204,11 @@ func TestNewGitLabVerifier_CacheExpiry(t *testing.T) {
 	t.Parallel()
 
 	var apiCalls int
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/user" {
+			http.NotFound(w, r)
+			return
+		}
 		apiCalls++
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(gitlabUserResponse{ID: 2, Username: "expiry"})
@@ -272,6 +284,10 @@ func TestNewGitLabVerifier_CacheDifferentTokens(t *testing.T) {
 
 	var apiCalls int
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/user" {
+			http.NotFound(w, r)
+			return
+		}
 		apiCalls++
 		id := apiCalls
 		w.Header().Set("Content-Type", "application/json")
@@ -477,4 +493,120 @@ func TestNewGitLabVerifier_UnexpectedStatusCode(t *testing.T) {
 // isErrInvalidToken checks if an error wraps auth.ErrInvalidToken.
 func isErrInvalidToken(err error) bool {
 	return errors.Is(err, auth.ErrInvalidToken)
+}
+
+// TestNewGitLabVerifier_ScopeIntrospection_ResolvesGrantedScopes verifies granted scopes come
+// from real introspection — /personal_access_tokens/self for PATs,
+// /oauth/token/info for OAuth tokens — with the historical api assumption
+// kept only when neither endpoint answers usably, so restricted instances
+// keep working while a read_user token is never stamped api-scoped.
+func TestNewGitLabVerifier_ScopeIntrospection_ResolvesGrantedScopes(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		patStatus  int
+		patBody    string
+		infoStatus int
+		infoBody   string
+		want       []string
+	}{
+		{
+			name:      "PAT scopes are introspected",
+			patStatus: http.StatusOK, patBody: `{"scopes":["read_user"]}`,
+			infoStatus: http.StatusNotFound, infoBody: `{}`,
+			want: []string{"read_user"},
+		},
+		{
+			name:      "OAuth scopes come from token info",
+			patStatus: http.StatusNotFound, patBody: `{}`,
+			infoStatus: http.StatusOK, infoBody: `{"scope":["api"]}`,
+			want: []string{"api"},
+		},
+		{
+			name:      "introspection unavailable assumes api",
+			patStatus: http.StatusNotFound, patBody: `{}`,
+			infoStatus: http.StatusNotFound, infoBody: `{}`,
+			want: []string{"api"},
+		},
+		{
+			name:      "non-200 introspection falls back",
+			patStatus: http.StatusInternalServerError, patBody: `boom`,
+			infoStatus: http.StatusServiceUnavailable, infoBody: `down`,
+			want: []string{"api"},
+		},
+		{
+			name:      "malformed introspection JSON falls back",
+			patStatus: http.StatusOK, patBody: `{not json`,
+			infoStatus: http.StatusOK, infoBody: `also{bad`,
+			want: []string{"api"},
+		},
+		{
+			name:      "empty scope lists fall back",
+			patStatus: http.StatusOK, patBody: `{"scopes":[]}`,
+			infoStatus: http.StatusOK, infoBody: `{"scope":[]}`,
+			want: []string{"api"},
+		},
+		{
+			name:      "non-string scope entries are ignored",
+			patStatus: http.StatusOK, patBody: `{"scopes":[7]}`,
+			infoStatus: http.StatusOK, infoBody: `{"scope":["read_api"]}`,
+			want: []string{"read_api"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				switch r.URL.Path {
+				case "/api/v4/user":
+					json.NewEncoder(w).Encode(gitlabUserResponse{ID: 7, Username: "scoped"})
+				case "/api/v4/personal_access_tokens/self":
+					w.WriteHeader(tt.patStatus)
+					fmt.Fprint(w, tt.patBody)
+				case "/oauth/token/info":
+					w.WriteHeader(tt.infoStatus)
+					fmt.Fprint(w, tt.infoBody)
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer srv.Close()
+
+			verifier := NewGitLabVerifier(srv.URL, false, time.Minute, nil)
+			info, err := verifier(context.Background(), "tok", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
+			if err != nil {
+				t.Fatalf("verifier: %v", err)
+			}
+			if !slices.Equal(info.Scopes, tt.want) {
+				t.Errorf("Scopes = %v, want %v", info.Scopes, tt.want)
+			}
+		})
+	}
+}
+
+// TestMetadataURLFor_InsertsWellKnownBetweenHostAndPath verifies the RFC
+// 9728 §3 derivation for both path-carrying and path-less resource
+// identifiers.
+func TestMetadataURLFor_InsertsWellKnownBetweenHostAndPath(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		resource string
+		want     string
+	}{
+		{"https://mcp.example.com/gitlab", "https://mcp.example.com/.well-known/oauth-protected-resource/gitlab"},
+		{"https://mcp.example.com", "https://mcp.example.com/.well-known/oauth-protected-resource"},
+		{"http://localhost:8080", "http://localhost:8080/.well-known/oauth-protected-resource"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.resource, func(t *testing.T) {
+			t.Parallel()
+			if got := MetadataURLFor(tt.resource); got != tt.want {
+				t.Errorf("MetadataURLFor(%q) = %q, want %q", tt.resource, got, tt.want)
+			}
+		})
+	}
 }

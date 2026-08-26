@@ -286,7 +286,7 @@ func main() {
 // listTools registers either individual tools or meta-tools on an in-memory MCP
 // server and returns the published tool definitions for measurement.
 func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool) []*mcp.Tool {
-	opts := &mcp.ServerOptions{PageSize: 2000}
+	opts := &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}}
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, opts)
 
 	switch toolSurface {
@@ -308,7 +308,7 @@ func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool)
 // listDynamicTools registers the low-token dynamic public toolset backed by
 // action routes and returns the advertised tool definitions.
 func listDynamicTools(catalog *actioncatalog.Catalog) []*mcp.Tool {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000})
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
 	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
 	return listToolsFromServer(server)
 }
@@ -395,7 +395,7 @@ func measureResources(client *gitlabclient.Client, metaRoutes map[string]tooluti
 }
 
 func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) int {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	if opts.Core {
 		resources.Register(server, client)
 	}
@@ -477,7 +477,7 @@ func countActions(routes map[string]toolutil.ActionMap) int {
 // measurePrompts registers MCP prompts and estimates the token cost of their
 // advertised definitions.
 func measurePrompts(client *gitlabclient.Client) int {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	prompts.Register(server, client)
 
 	st, ct := mcp.NewInMemoryTransports()
@@ -625,7 +625,7 @@ func runMetaSchemaSizing() error {
 	}
 	defer cleanup()
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "spike", Version: "0"}, &mcp.ServerOptions{PageSize: 2000})
+	server := mcp.NewServer(&mcp.Implementation{Name: "spike", Version: "0"}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true})
 	if err != nil {
 		return fmt.Errorf("build meta action catalog: %w", err)
@@ -1267,7 +1267,7 @@ func fpListDynamicTools(catalog *actioncatalog.Catalog) ([]*mcp.Tool, error) {
 }
 
 func newFootprintServer() *mcp.Server {
-	return mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000})
+	return mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
 }
 
 // fpListToolsFromServer is the footprint variant of [listToolsFromServer]: it
@@ -1316,7 +1316,7 @@ func measureSharedTokens(client *gitlabclient.Client, opts sharedTokenMeasureOpt
 // [measureResourcesWithOptions]: it returns an error instead of calling
 // os.Exit so measurement failures propagate to the footprint runner.
 func fpMeasureResourcesWithOptions(client *gitlabclient.Client, routes map[string]toolutil.ActionMap, opts resourceRegistrationOptions) (int, error) {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	if opts.Core {
 		resources.Register(server, client)
 	}
@@ -1364,7 +1364,7 @@ func fpMeasureResourcesWithOptions(client *gitlabclient.Client, routes map[strin
 // fpMeasurePrompts is the footprint variant of [measurePrompts]: it returns an
 // error instead of calling os.Exit.
 func fpMeasurePrompts(client *gitlabclient.Client) (int, error) {
-	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	prompts.Register(server, client)
 
 	return withFootprintSession(server, "prompts", func(ctx context.Context, session *mcp.ClientSession) (int, error) {

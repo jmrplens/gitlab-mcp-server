@@ -3192,6 +3192,7 @@ func TestServeHTTP_OAuthMode_MetadataEndpoint(t *testing.T) {
 		// detector, costs longer than any sane client timeout.
 		ToolSurface:   config.ToolSurfaceDynamic,
 		AuthMode:      "oauth",
+		PublicURL:     "http://localhost:8080",
 		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
@@ -3253,6 +3254,7 @@ func TestServeHTTP_OAuthMode_RejectsUnauthenticated(t *testing.T) {
 		// detector, costs longer than any sane client timeout.
 		ToolSurface:   config.ToolSurfaceDynamic,
 		AuthMode:      "oauth",
+		PublicURL:     "http://localhost:8080",
 		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
@@ -3303,6 +3305,7 @@ func TestServeHTTP_OAuthMode_AcceptsValidBearer(t *testing.T) {
 		// detector, costs longer than any sane client timeout.
 		ToolSurface:   config.ToolSurfaceDynamic,
 		AuthMode:      "oauth",
+		PublicURL:     "http://localhost:8080",
 		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
@@ -3356,9 +3359,11 @@ func TestServeHTTP_OAuthMode_AcceptsValidBearer(t *testing.T) {
 	}
 }
 
-// TestServeHTTP_OAuthMode_PrivateTokenConverted verifies that NormalizeAuthHeader
-// converts PRIVATE-TOKEN to Bearer, allowing the OAuth verifier to validate it.
-func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
+// TestServeHTTP_OAuthMode_PrivateTokenRejected verifies oauth mode accepts
+// only the RFC 6750 Bearer scheme its challenge advertises: the legacy
+// PRIVATE-TOKEN alias is no longer silently rewritten into it, so a request
+// carrying only that header is answered 401 with the Bearer challenge.
+func TestServeHTTP_OAuthMode_PrivateTokenRejected(t *testing.T) {
 	mockGL := newMockGitLabServerWithUser(t)
 	cfg := &config.Config{
 		GitLabURL:      mockGL.URL,
@@ -3371,6 +3376,7 @@ func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
 		// detector, costs longer than any sane client timeout.
 		ToolSurface:   config.ToolSurfaceDynamic,
 		AuthMode:      "oauth",
+		PublicURL:     "http://localhost:8080",
 		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
@@ -3392,11 +3398,12 @@ func TestServeHTTP_OAuthMode_PrivateTokenConverted(t *testing.T) {
 	}
 	respBody := readAndCloseBody(t, resp)
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 OK (PRIVATE-TOKEN converted to Bearer), got %d: %s", resp.StatusCode, respBody)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 (PRIVATE-TOKEN is not the advertised Bearer scheme), got %d: %s", resp.StatusCode, respBody)
 	}
-
-	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
+	if challenge := resp.Header.Get("WWW-Authenticate"); !strings.Contains(challenge, "Bearer") {
+		t.Errorf("WWW-Authenticate = %q, want a Bearer challenge", challenge)
+	}
 	cancel()
 	select {
 	case srvErr := <-errCh:
@@ -3423,6 +3430,7 @@ func TestServeHTTP_OAuthMode_InvalidTokenReturns401(t *testing.T) {
 		// detector, costs longer than any sane client timeout.
 		ToolSurface:   config.ToolSurfaceDynamic,
 		AuthMode:      "oauth",
+		PublicURL:     "http://localhost:8080",
 		OAuthCacheTTL: config.DefaultOAuthCacheTTL,
 	}
 
@@ -3553,6 +3561,7 @@ func TestRunHTTP_OAuthCacheTTL_BelowMin(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "oauth",
+		publicURL:      "http://localhost:8080",
 		oauthCacheTTL:  10 * time.Second,
 		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
@@ -3571,6 +3580,7 @@ func TestRunHTTP_OAuthCacheTTL_AboveMax(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "oauth",
+		publicURL:      "http://localhost:8080",
 		oauthCacheTTL:  5 * time.Hour,
 		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
 		sessionTimeout: config.DefaultSessionTimeout,
@@ -4378,6 +4388,121 @@ func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
 	}
 }
 
+// TestServeHTTP_ServerCardEndpoint_CORSAndCapabilities pins the card
+// behaviors added for the 2026-07-28 conformance pass: cross-origin reads
+// (GET Allow-Origin, OPTIONS preflight with the Allow-Headers echo) and the
+// capabilities key sourced from the live handshake, which must not carry
+// the SEP-2577-deprecated logging capability. Deleting any of them must
+// fail here, not only in a manual wire check.
+func TestServeHTTP_ServerCardEndpoint_CORSAndCapabilities(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		MetaTools:      true,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
+	}()
+	waitForHTTPServerReady(t, addr, errCh)
+
+	cardURL := "http://" + addr + "/.well-known/mcp/server-card.json"
+
+	t.Run("GET carries Allow-Origin and handshake capabilities without logging", func(t *testing.T) {
+		assertCardGETCORSAndCapabilities(t, cardURL)
+	})
+	t.Run("OPTIONS preflight answers CORS and echoes requested headers", func(t *testing.T) {
+		assertCardPreflight(t, cardURL)
+	})
+
+	cancel()
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("serveHTTP error: %v", err)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("serveHTTP did not shut down in time")
+	}
+}
+
+// assertCardGETCORSAndCapabilities fetches the card and checks the CORS
+// header, the capabilities key sourced from the live handshake, and the
+// absence of the SEP-2577-deprecated logging capability.
+func assertCardGETCORSAndCapabilities(t *testing.T, cardURL string) {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, cardURL, nil)
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("GET Access-Control-Allow-Origin = %q, want *", got)
+	}
+	var card map[string]any
+	body, _ := io.ReadAll(resp.Body)
+	if unmarshalErr := json.Unmarshal(body, &card); unmarshalErr != nil {
+		t.Fatalf("invalid JSON response: %v", unmarshalErr)
+	}
+	caps, ok := card["capabilities"].(map[string]any)
+	if !ok {
+		t.Fatal("server card missing 'capabilities'")
+	}
+	if _, hasTools := caps["tools"]; !hasTools {
+		t.Error("card capabilities missing 'tools' — not sourced from the live handshake?")
+	}
+	if _, hasLogging := caps["logging"]; hasLogging {
+		t.Error("card capabilities carry 'logging', deprecated by SEP-2577 — the empty-capabilities pin regressed")
+	}
+}
+
+// assertCardPreflight sends the one preflight the card route can receive —
+// a fetch stamped with a custom header — and checks the response names the
+// header back, without which the browser refuses the actual GET.
+func assertCardPreflight(t *testing.T, cardURL string) {
+	t.Helper()
+	req, _ := http.NewRequestWithContext(t.Context(), http.MethodOptions, cardURL, nil)
+	req.Header.Set("Origin", "https://scanner.example")
+	req.Header.Set("Access-Control-Request-Method", http.MethodGet)
+	req.Header.Set("Access-Control-Request-Headers", "x-scanner-id")
+	resp, reqErr := testHTTPClient.Do(req)
+	if reqErr != nil {
+		t.Fatalf("request failed: %v", reqErr)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected 204 No Content, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Errorf("OPTIONS Access-Control-Allow-Origin = %q, want *", got)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Methods"); !strings.Contains(got, http.MethodGet) {
+		t.Errorf("OPTIONS Access-Control-Allow-Methods = %q, want to contain GET", got)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Headers"); got != "x-scanner-id" {
+		t.Errorf("OPTIONS Access-Control-Allow-Headers = %q, want the echoed x-scanner-id", got)
+	}
+	if got := resp.Header.Get("Access-Control-Max-Age"); got != "3600" {
+		t.Errorf("OPTIONS Access-Control-Max-Age = %q, want 3600 so the preflight is not repeated per fetch", got)
+	}
+}
+
 // TestEffectiveIdleTimeout verifies the mapping from the raw --http-idle-timeout
 // value to the duration applied to http.Server.IdleTimeout. The key case is 0,
 // which must map to the disabled sentinel (not Go's ReadTimeout fallback) so that
@@ -4794,6 +4919,38 @@ func TestValidateHTTPRuntimeConfig_NegativeBodyLimit_Rejected(t *testing.T) {
 	cfg := &config.Config{MaxRequestBodyBytes: -1}
 	if err := validateHTTPRuntimeConfig(cfg); err == nil {
 		t.Fatal("expected error for negative --max-request-body-bytes")
+	}
+}
+
+// TestValidateHTTPAuthConfig_OAuthPublicURL verifies the flag path enforces
+// the RFC 9728 constraints on --public-url: without it (or with an invalid
+// value) an oauth server would advertise a broken protected-resource
+// identifier, so startup must refuse instead.
+func TestValidateHTTPAuthConfig_OAuthPublicURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		publicURL string
+		wantErr   bool
+	}{
+		{"missing", "", true},
+		{"relative", "gitlab", true},
+		{"trailing slash", "https://mcp.example.com/gitlab/", true},
+		{"http non-loopback", "http://mcp.example.com", true},
+		{"valid https path", "https://mcp.example.com/gitlab", false},
+		{"valid http loopback", "http://localhost:8080", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Config{
+				AuthMode:  "oauth",
+				GitLabURL: "https://gitlab.example.com",
+				PublicURL: tt.publicURL,
+			}
+			err := validateHTTPAuthConfig(cfg)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateHTTPAuthConfig(public-url=%q) error = %v, wantErr %v", tt.publicURL, err, tt.wantErr)
+			}
+		})
 	}
 }
 

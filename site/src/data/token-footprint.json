@@ -1,8 +1,8 @@
 {
   "tokenizer": "cl100k_base",
   "shared": {
-    "full": 7700,
-    "minimal": 174
+    "full": 8720,
+    "minimal": 170
   },
   "dynamic": {
     "visible_tools": 2,
@@ -11,17 +11,17 @@
   "individual": {
     "free": {
       "visible_tools": 847,
-      "tool_schema_tokens": 494258,
+      "tool_schema_tokens": 494302,
       "reduction_factor_vs_dynamic": 329
     },
     "premium": {
       "visible_tools": 999,
-      "tool_schema_tokens": 592668,
+      "tool_schema_tokens": 592712,
       "reduction_factor_vs_dynamic": 394
     },
     "ultimate": {
       "visible_tools": 1065,
-      "tool_schema_tokens": 621655,
+      "tool_schema_tokens": 621699,
       "reduction_factor_vs_dynamic": 413
     }
   }

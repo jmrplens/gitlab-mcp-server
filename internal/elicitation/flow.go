@@ -277,18 +277,16 @@ func (f *Flow) ElicitURL(ctx context.Context, id, gitlabBaseURL, targetURL, mess
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	elicitationID, err := newElicitationID()
-	if err != nil {
-		return fmt.Errorf("elicitation: failed to generate elicitationId: %w", err)
-	}
 	if f.pending == nil {
 		f.pending = mcp.InputRequestMap{}
 	}
+	// No elicitationId: the MRTR path only exists on protocol 2026-07-28
+	// and later, whose schema removed the field (ElicitRequestURLParams is
+	// mode/message/url only).
 	f.pending[id] = &mcp.ElicitParams{
-		Mode:          "url",
-		Message:       message,
-		URL:           targetURL,
-		ElicitationID: elicitationID,
+		Mode:    "url",
+		Message: message,
+		URL:     targetURL,
 	}
 	return ErrInputPending
 }

@@ -54,7 +54,7 @@ func WeakIndividualDescription(spec toolutil.ActionSpec, projected map[string]st
 // in-memory MCP server and returns the projected description per tool name —
 // the exact text the model consumes.
 func ProjectIndividualDescriptions(client *gitlabclient.Client) (map[string]string, error) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	tools.RegisterAll(server, client, edition.Ultimate)
 	toolutil.LockdownInputSchemas(server)
 

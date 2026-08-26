@@ -135,7 +135,7 @@ func generateSiteStats(client, gitLabComClient *gitlabclient.Client) siteStats {
 // returns the number of advertised tools, mirroring how the text report
 // derives its per-surface individual-tool numbers.
 func countIndividualTools(client *gitlabclient.Client, tier edition.Tier) int {
-	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{PageSize: 4000})
+	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{PageSize: 4000, Capabilities: &mcp.ServerCapabilities{}})
 	tools.RegisterAll(server, client, tier)
 	return len(listToolsFromServer(server))
 }

@@ -11,13 +11,21 @@ GitLab data resources and tool manifest resources return `application/json`. Wor
 Most single-object resources can also be **subscribed to**: the server polls
 them and sends `notifications/resources/updated` when their content changes.
 Collections are deliberately not subscribable — see
-[Resource subscriptions](capabilities/subscriptions.md).
+[Resource subscriptions](capabilities/subscriptions.md). Every subscribable
+template's description ends with a machine-appended marker sentence
+(`Subscribable: subscriptions/listen (protocol 2026-07-28); resources/subscribe
+on stateful sessions.`) plus the vendor-namespaced `_meta` key
+`io.github.jmrplens/subscribable: true`, and the full machine-readable list
+ships in two structured places: `subscriptions.subscribable_uri_templates` inside the
+`gitlab://tools` manifest, and the `subscriptions` block of the HTTP
+`/.well-known/mcp/server-card.json` (alongside a `capabilities` object
+mirroring the handshake).
 
-MCP separates fixed resources from URI templates. In default dynamic full mode, `resources/list` exposes 9 fixed URIs: the 4 static resources below and the 5 workflow guides. `resources/templates/list` exposes the remaining 37 URI templates. Registries that only inspect `resources/list` may therefore report 9 resources statically even though the runtime MCP resource surface contains 46 entries in total.
+MCP separates fixed resources from URI templates. In default dynamic full mode, `resources/list` exposes 8 fixed URIs: the 3 static resources below and the 5 workflow guides. `resources/templates/list` exposes the remaining 37 URI templates. Registries that only inspect `resources/list` may therefore report 8 resources statically even though the runtime MCP resource surface contains 45 entries in total.
 
 ---
 
-## Static Resources (4 core)
+## Static Resources (3 core)
 
 Static resources have a fixed URI and require no parameters.
 
@@ -25,7 +33,7 @@ Static resources have a fixed URI and require no parameters.
 | --- | --------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | `current_user`  | `gitlab://user/current` | Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL.                                     |
 | 2   | `groups`        | `gitlab://groups`       | List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.                                 |
-| 4   | `tool_manifest` | `gitlab://tools`        | Surface-aware manifest of the tools and executable actions available in this server instance. Use `gitlab://tools/{id}` to fetch one entry's accepted call shape and input schema. |
+| 3   | `tool_manifest` | `gitlab://tools`        | Surface-aware manifest of the tools and executable actions available in this server instance. Use `gitlab://tools/{id}` to fetch one entry's accepted call shape and input schema. |
 
 ## Resource Templates (37 core)
 

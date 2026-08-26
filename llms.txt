@@ -106,7 +106,7 @@ tool with an "action" parameter. Key meta-tools:
 
 Resources:
 
-45 read-only resources (26 single-object kinds also accept resources/subscribe for change notifications, honored by polling):
+45 read-only resources (26 resource kinds are subscribable — subscriptions/listen on protocol 2026-07-28, resources/subscribe on stateful sessions; change detection honored by polling):
 
 - gitlab://groups: groups
 - gitlab://guides/code-review: code_review

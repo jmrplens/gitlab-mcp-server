@@ -243,12 +243,12 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ----------------------------------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              1,504 |         7,700 |        9,204 |
-| `dynamic` / `minimal`                                 | Free/CE  |             2 |               851 | n/a                 |              1,504 |           174 |        1,678 |
-| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              1,504 |         7,700 |        9,204 |
-| `dynamic` / `minimal`                                 | Premium  |             2 |             1,003 | n/a                 |              1,504 |           174 |        1,678 |
-| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              1,504 |         7,700 |        9,204 |
-| `dynamic` / `minimal`                                 | Ultimate |             2 |             1,069 | n/a                 |              1,504 |           174 |        1,678 |
+| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              1,504 |         8,720 |       10,224 |
+| `dynamic` / `minimal`                                 | Free/CE  |             2 |               851 | n/a                 |              1,504 |           170 |        1,674 |
+| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              1,504 |         8,720 |       10,224 |
+| `dynamic` / `minimal`                                 | Premium  |             2 |             1,003 | n/a                 |              1,504 |           170 |        1,674 |
+| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              1,504 |         8,720 |       10,224 |
+| `dynamic` / `minimal`                                 | Ultimate |             2 |             1,069 | n/a                 |              1,504 |           170 |        1,674 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
 
@@ -256,16 +256,16 @@ Rows use the base Community Edition catalog unless the Tier column says otherwis
 
 ## Compatibility
 
-| MCP Capability    | Support                                           |
-| ----------------- | ------------------------------------------------- |
-| **Tools**         | Up to 1071 individual / 32–50 meta                |
-| **Resources**     | 45 (static + templates)                           |
-| **Prompts**       | 37 templates                                      |
-| **Completions**   | Project, user, group, branch, tag                 |
-| **Logging**       | Structured (text/JSON) to stderr                  |
-| **Progress**      | Tool execution progress reporting                 |
-| **Elicitation**   | 4 interactive creation wizards                    |
-| **Subscriptions** | `resources/updated` by polling, 26 resource kinds |
+| MCP Capability    | Support                                                                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **Tools**         | Up to 1071 individual / 32–50 meta                                                                                                  |
+| **Resources**     | 45 (static + templates)                                                                                                             |
+| **Prompts**       | 37 templates                                                                                                                        |
+| **Completions**   | Project, user, group, branch, tag                                                                                                   |
+| **Server logs**   | Structured (text/JSON) to stderr — not the MCP `logging` capability, which is deprecated (SEP-2577) and deliberately not advertised |
+| **Progress**      | Tool execution progress reporting                                                                                                   |
+| **Elicitation**   | 4 interactive creation wizards                                                                                                      |
+| **Subscriptions** | `resources/updated` by polling, 26 resource kinds                                                                                   |
 
 Tested with: VS Code + GitHub Copilot, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains IDEs, Zed, Kiro, Cline. See the full [Compatibility Matrix](https://jmrp.io/docs/gitlab-mcp-server/compatibility/).
 
@@ -423,20 +423,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       992 |     200,601 |
-| Unit tests (`_test.go`)  |       547 |     310,258 |
+| Source (`.go`, non-test) |       993 |     200,987 |
+| Unit tests (`_test.go`)  |       549 |     310,815 |
 | End-to-end tests         |       174 |      45,163 |
-| **Total**                | **1,713** | **556,022** |
+| **Total**                | **1,716** | **556,965** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,493 |
-| — exported (public)             |  2,614 |
-| — unexported (private)          |  4,879 |
-| Unit test functions (`TestXxx`) | 11,663 |
-| Subtests (`t.Run(...)`)         |  2,919 |
+| Source functions                |  7,500 |
+| — exported (public)             |  2,617 |
+| — unexported (private)          |  4,883 |
+| Unit test functions (`TestXxx`) | 11,671 |
+| Subtests (`t.Run(...)`)         |  2,929 |
 | End-to-end test functions       |    381 |
 
 ### Ratios worth noting
@@ -445,25 +445,25 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~202 lines |
-| Average test file length           |                 ~567 lines |
-| Comment lines in source            |  22,874 (~11.4% of source) |
+| Average test file length           |                 ~566 lines |
+| Comment lines in source            |  23,055 (~11.5% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,684 |
-| `defer` statements                 |   906 |
+| `if err != nil` checks             | 6,694 |
+| `defer` statements                 |   911 |
 | `struct` types defined             | 2,726 |
-| `//nolint` suppressions            |   256 |
+| `//nolint` suppressions            |   257 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   235 |
+| Go packages                    |   236 |
 | Direct dependencies (`go.mod`) |    15 |
 | Indirect dependencies          |    49 |
 
@@ -478,8 +478,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,647 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,573 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,654 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,586 (impossible to avoid)                                                                         |
 | Longest function name in source      | `baseDestructiveEarlySinglePromptTemplateAndFixtures` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

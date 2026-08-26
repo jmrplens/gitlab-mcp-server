@@ -324,7 +324,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString("\n")
 
 	b.WriteString("Resources:\n\n")
-	fmt.Fprintf(&b, "%d read-only resources (26 single-object kinds also accept resources/subscribe for change notifications, honored by polling):\n\n", resourceCount)
+	fmt.Fprintf(&b, "%d read-only resources (26 resource kinds are subscribable — subscriptions/listen on protocol 2026-07-28, resources/subscribe on stateful sessions; change detection honored by polling):\n\n", resourceCount)
 	for _, r := range catalog.Resources {
 		fmt.Fprintf(&b, llmsSummaryItemFormat, r.URI, r.Name)
 	}
@@ -747,7 +747,7 @@ func writeLLMSFullDynamicTools(b *strings.Builder, dynamicTools []*mcp.Tool) {
 
 func writeLLMSFullResources(b *strings.Builder, catalog llmsCatalog, resourceCount int) {
 	b.WriteString("## Resources\n\n")
-	fmt.Fprintf(b, "%d resources providing read-only access to GitLab data. 26 single-object kinds (pipelines, jobs, issues, merge requests, releases, files, wikis, and more) also accept resources/subscribe: the server polls them and sends notifications/resources/updated on change.\n\n", resourceCount)
+	fmt.Fprintf(b, "%d resources: read-only GitLab data (projects, pipelines, issues, merge requests, files, and more), five static workflow guides, and server metadata (the gitlab://tools manifest). 26 resource kinds are subscribable — subscriptions/listen on protocol 2026-07-28, resources/subscribe on stateful sessions: the server polls them and sends notifications/resources/updated on change.\n\n", resourceCount)
 	for _, resource := range catalog.Resources {
 		writeLLMSResource(b, resource.Name, resource.URI, "URI", resource.MIMEType, resource.Description)
 	}

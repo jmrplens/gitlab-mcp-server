@@ -36,7 +36,12 @@ interface Icon {
 gitlab-mcp-server ships every icon as **three entries**: one `image/svg+xml`
 entry plus two `image/webp` fallbacks, so a client that rejects the SVG
 entry (an allowed choice — SVG is only **SHOULD**-level per the table above)
-still renders an icon instead of none. Clients that support neither format
+still renders an icon instead of none. The entry **order is a stable
+contract**: `icons[0]` is always the canonical SVG (`sizes: ["any"]`, no
+`theme`), `icons[1]` the light-theme 16×16 WebP, `icons[2]` the dark-theme
+16×16 WebP. Consumers should still select by `mimeType` and `theme`, but a
+positional reader can rely on the SVG staying first — the order is pinned by
+unit tests and will not change without a documented break. Clients that support neither format
 (PNG/JPEG-only, MUST-level clients) will not render these icons.
 
 ### Client Compatibility

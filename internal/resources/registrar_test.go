@@ -12,6 +12,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -19,6 +20,7 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions"
 )
 
 // registrarTestClient builds a GitLab client for registration alone; no
@@ -156,5 +158,51 @@ func TestRecorder_RegistersAndIndexesTogether(t *testing.T) {
 	}
 	if rec.index["gitlab://tmpl/{id}"] == nil {
 		t.Error("AddResourceTemplate registered on the server but not in the index")
+	}
+}
+
+// TestAddResourceTemplate_SubscribableTemplates_MatchWhitelistExactly
+// verifies the recorder annotates exactly the subscribable templates: every
+// template in the subscription whitelist ends with the marker sentence and
+// carries the vendor _meta key, and no other template does. Both markers
+// are appended mechanically from subscriptions.Templates(), so this is the
+// drift guard between what a client reads and the whitelist the
+// SubscribeHandler enforces — the hand-written predecessor of the sentence
+// covered 3 of 26 templates.
+func TestAddResourceTemplate_SubscribableTemplates_MatchWhitelistExactly(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	result, err := session.ListResourceTemplates(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListResourceTemplates: %v", err)
+	}
+	if len(result.ResourceTemplates) == 0 {
+		t.Fatal("no resource templates registered")
+	}
+
+	subscribable := make(map[string]bool)
+	for _, tmpl := range subscriptions.Templates() {
+		subscribable[tmpl] = true
+	}
+
+	seen := 0
+	for _, tmpl := range result.ResourceTemplates {
+		want := subscribable[tmpl.URITemplate]
+		if want {
+			seen++
+		}
+		t.Run(tmpl.URITemplate, func(t *testing.T) {
+			if marked := strings.HasSuffix(tmpl.Description, subscribableMarker); marked != want {
+				t.Errorf("description marker = %t, want %t", marked, want)
+			}
+			if metaMarked, _ := tmpl.Meta[subscribableMetaKey].(bool); metaMarked != want {
+				t.Errorf("%s meta key = %t, want %t", subscribableMetaKey, metaMarked, want)
+			}
+		})
+	}
+	if seen != len(subscribable) {
+		t.Errorf("registered %d subscribable templates, whitelist has %d", seen, len(subscribable))
 	}
 }

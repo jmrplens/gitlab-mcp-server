@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
@@ -348,12 +348,18 @@ func (r *subscriptionRuntime) handlers() (
 }
 
 // ErrStatelessSubscribe explains why a legacy subscription cannot be
-// honored on a sessionless transport.
-var errStatelessSubscribe = errors.New(
-	"resources/subscribe cannot be honored in stateless HTTP mode, because the session ends " +
+// honored on a sessionless transport. It is a *jsonrpc.Error so the wire
+// carries a deliberate code: a plain error would reach the client as code
+// 0, which generic clients render as "unknown error". -32601 would be
+// wrong — the server does support subscriptions, just not via the
+// session-era method on this transport — so the refusal is classified as
+// an invalid request for the session state it arrived in.
+var errStatelessSubscribe = &jsonrpc.Error{
+	Code: jsonrpc.CodeInvalidRequest,
+	Message: "resources/subscribe cannot be honored in stateless HTTP mode, because the session ends " +
 		"with the request that created it and there is no stream left to notify on; " +
 		"use protocol 2026-07-28 (subscriptions/listen), or run the server with --stateless=false",
-)
+}
 
 // subscribeUnlessStateless refuses a legacy subscribe that this transport
 // could never deliver on.

@@ -37,6 +37,31 @@ flag; a release, a tag, a branch; a milestone (project or group), a label
 (project or group), a board; a deploy key; a snippet (project or personal);
 a wiki page; and a repository file.
 
+The list is machine-readable in three places, all derived from the same
+whitelist that enforces it (`internal/subscriptions.Templates()`), so none
+can drift from the others:
+
+- every subscribable template's **description** ends with the marker
+  sentence `Subscribable: subscriptions/listen (protocol 2026-07-28);
+  resources/subscribe on stateful sessions.` — appended mechanically at
+  registration, never hand-written;
+- every subscribable template also carries the vendor-namespaced
+  **`_meta` key** `io.github.jmrplens/subscribable: true` — the spec's
+  sanctioned per-object extension point, for generic clients that want to
+  filter without knowing this server's manifest (the standard surface has
+  no per-resource subscribable field, only the server-wide
+  `resources.subscribe` capability);
+- the **`gitlab://tools` manifest** carries the full list under
+  `subscriptions.subscribable_uri_templates`;
+- in HTTP mode, the **Server Card** at `/.well-known/mcp/server-card.json`
+  carries a top-level `subscriptions` block with the same list plus a
+  per-method `available` boolean (on stateless HTTP,
+  `resources/subscribe` is listed with `available: false` and a
+  `requires` note, while `subscriptions/listen` stays true), and a
+  `capabilities`
+  object mirroring the handshake — so a directory can learn
+  `resources.subscribe` without connecting.
+
 Three of those — a pipeline's job list, and a merge request's discussions
 and notes — are lists, and subscribable on purpose: each is bounded by one
 parent object whose lifecycle the subscriber is already following, so "did

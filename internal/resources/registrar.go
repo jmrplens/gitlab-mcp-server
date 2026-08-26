@@ -3,10 +3,13 @@ package resources
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions"
 )
 
 // registrar is the subset of *mcp.Server that resource registration uses.
@@ -38,7 +41,40 @@ func (r *recorder) AddResource(resource *mcp.Resource, handler mcp.ResourceHandl
 	r.index[resource.URI] = handler
 }
 
+// subscribableMarker is the sentence every subscribable template's
+// description ends with. Appended mechanically from the subscription
+// whitelist rather than written into the 26 literals, so the prose can
+// never disagree with the table that enforces it — the hand-written
+// variant of this sentence covered 3 of 26 templates and named only the
+// legacy method, which the default stateless HTTP deployment refuses.
+const subscribableMarker = "Subscribable: subscriptions/listen (protocol 2026-07-28); resources/subscribe on stateful sessions."
+
+// subscribableMetaKey is the vendor-namespaced `_meta` key stating the same
+// fact for machines. The description marker serves the model (models read
+// descriptions); this serves generic clients, which can filter subscribable
+// templates without knowing this server's manifest. `_meta` with a
+// reverse-DNS key is the spec's sanctioned per-object extension point —
+// the standard surface itself has no per-resource subscribable field, only
+// the server-wide resources.subscribe capability.
+const subscribableMetaKey = "io.github.jmrplens/subscribable"
+
+// AddResourceTemplate registers a resource template on the server and
+// records its handler in the index. Templates on the subscriptions
+// whitelist are annotated first — the subscribable marker is appended to
+// the description and the reverse-DNS _meta key is set — on a copy, so
+// the shared registration literals are never mutated.
 func (r *recorder) AddResourceTemplate(template *mcp.ResourceTemplate, handler mcp.ResourceHandler) {
+	if slices.Contains(subscriptions.Templates(), template.URITemplate) {
+		// Copy before annotating: the registration literals are shared
+		// package state, and Register can run once per pooled server.
+		annotated := *template
+		annotated.Description = template.Description + " " + subscribableMarker
+		meta := make(mcp.Meta, len(template.Meta)+1)
+		maps.Copy(meta, template.Meta)
+		meta[subscribableMetaKey] = true
+		annotated.Meta = meta
+		template = &annotated
+	}
 	r.server.AddResourceTemplate(template, handler)
 	r.index[template.URITemplate] = handler
 }

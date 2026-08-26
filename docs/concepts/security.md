@@ -46,6 +46,26 @@ Most MCP clients (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, OpenCo
 - Rotate `GITLAB_TOKEN` immediately if the snippet is exposed (commit, backup, screen share, etc.).
 - Prefer a client that supports `envFile` or system environment variables whenever possible.
 
+### OAuth mode and audience binding (documented deviation)
+
+The MCP auth specification says a resource server MUST validate that access
+tokens were issued for it as the intended audience (RFC 8707 resource
+indicators) and MUST NOT transit other tokens. This server cannot satisfy
+that literally: GitLab's authorization server does not support resource
+indicators, so every token it issues is a GitLab-audience token by design —
+the server is a thin resource proxy that forwards the presented credential
+to the one upstream it fronts (the same shape GitHub's remote MCP server
+uses). What IS enforced in oauth mode: the token is verified against the
+configured GitLab instance before any use, its **real granted scopes are
+introspected** (`/personal_access_tokens/self` for PATs,
+`/oauth/token/info` for OAuth tokens) rather than assumed, only the
+standard `Authorization: Bearer` scheme is accepted (the legacy
+`PRIVATE-TOKEN` alias is not rewritten in this mode), and the RFC 9728
+protected-resource metadata is served from the identifier derived from
+`--public-url`. Deployers should treat the token as what it is: a GitLab
+credential entrusted to this proxy, scoped as narrowly as the workload
+allows.
+
 ## TLS
 
 - All GitLab API communication uses HTTPS by default
@@ -116,7 +136,7 @@ When running with `--auth-mode=oauth`, the server validates every request's Bear
 
 - **Token verification** — Each token is validated by calling GitLab's user API. Invalid or expired tokens receive HTTP 401
 - **Identity caching** — Verified token identities are cached in-memory using SHA-256 hashed keys (raw tokens are never stored). Cache TTL is configurable via `--oauth-cache-ttl` (default 15m, range 1m–2h)
-- **Header normalization** — `PRIVATE-TOKEN` headers are automatically converted to `Authorization: Bearer` for backward compatibility with existing clients
+- **Bearer only** — only the standard `Authorization: Bearer` scheme is accepted; the legacy `PRIVATE-TOKEN` header is rejected with HTTP 401 in this mode (it remains accepted in legacy mode)
 - **[RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata** — The `/.well-known/oauth-protected-resource` endpoint advertises the GitLab authorization server URL, enabling compliant OAuth clients to discover the token issuer
 - **PKCE** — The OAuth 2.1 flow uses Proof Key for Code Exchange (PKCE) to protect against authorization code interception attacks. MCP clients generate a code verifier/challenge pair for each authorization request
 - **Cache eviction** — A background goroutine runs every 30 seconds to clean up expired entries. The cache is bounded by TTL, not by size

@@ -1206,6 +1206,8 @@ func TestValidate_AuthMode(t *testing.T) {
 				GitLabToken:    "test-token",
 				MaxHTTPClients: 1,
 				AuthMode:       tt.mode,
+				// oauth mode requires the RFC 9728 resource identifier.
+				PublicURL: "https://mcp.example.com",
 			}
 			err := cfg.validate()
 			if tt.wantErr && err == nil {
@@ -1306,6 +1308,7 @@ func TestLoad_AuthMode(t *testing.T) {
 
 	t.Run("explicit oauth", func(t *testing.T) {
 		t.Setenv("AUTH_MODE", "oauth")
+		t.Setenv("PUBLIC_URL", "https://mcp.example.com")
 		cfg, err := Load()
 		if err != nil {
 			t.Fatalf(fmtLoadErr, err)
@@ -1828,4 +1831,31 @@ func TestLoad_DisableableDurations_AcceptZero(t *testing.T) {
 			t.Error("Load() error = nil, want an error for SESSION_TIMEOUT=0")
 		}
 	})
+}
+
+// TestValidate_OAuthRequiresPublicURL verifies oauth mode refuses to start
+// without a public URL, and enforces the RFC 9728 identifier constraints on
+// the one given.
+func TestValidate_OAuthRequiresPublicURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		publicURL string
+		wantErr   bool
+	}{
+		{"missing", "", true},
+		{"http non-loopback", "http://mcp.example.com", true},
+		{"trailing slash", "https://mcp.example.com/", true},
+		{"fragment", "https://mcp.example.com#frag", true},
+		{"https origin", "https://mcp.example.com", false},
+		{"https with path", "https://mcp.example.com/gitlab", false},
+		{"loopback http", "http://localhost:8080", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validatePublicURL(tt.publicURL)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validatePublicURL(%q) error = %v, wantErr %t", tt.publicURL, err, tt.wantErr)
+			}
+		})
+	}
 }
