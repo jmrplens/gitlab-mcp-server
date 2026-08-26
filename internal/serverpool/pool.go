@@ -205,7 +205,15 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 		return nil, errors.New("creating MCP server for pool: server factory is nil")
 	}
 
-	client, err := gitlabclient.NewClientWithToken(
+	// In oauth mode every credential arrives as Authorization: Bearer, and
+	// the pool must forward it the same way: an OAuth access token is only
+	// valid as Bearer (GitLab rejects gloas- tokens in PRIVATE-TOKEN, which
+	// is what NewClientWithToken sends), while PATs work in both schemes.
+	newClient := gitlabclient.NewClientWithToken
+	if p.cfg.AuthMode == "oauth" {
+		newClient = gitlabclient.NewOAuthClientWithToken
+	}
+	client, err := newClient(
 		gitlabURL, token, p.cfg.SkipTLSVerify,
 	)
 	if err != nil {

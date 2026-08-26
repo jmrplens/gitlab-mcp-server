@@ -1269,3 +1269,46 @@ func TestStartIdleEviction_DisabledReturnsWithoutGoroutine(t *testing.T) {
 	New(cfg, testFactory(), WithIdleTimeout(time.Hour)).StartIdleEviction(ctx)
 	cancel()
 }
+
+// TestGetOrCreate_OAuthMode_BuildsBearerClient verifies the pool selects the
+// Bearer-authenticated client constructor when the server runs in oauth
+// mode: the entry's credential probe must arrive as "Authorization: Bearer"
+// and never as PRIVATE-TOKEN, which GitLab rejects for gloas- OAuth access
+// tokens. In legacy mode the probe stays PRIVATE-TOKEN.
+func TestGetOrCreate_OAuthMode_BuildsBearerClient(t *testing.T) {
+	tests := []struct {
+		name       string
+		authMode   string
+		wantBearer bool
+	}{
+		{"oauth mode sends Bearer", "oauth", true},
+		{"legacy mode keeps PRIVATE-TOKEN", "legacy", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var bearer, private string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if bearer == "" && private == "" {
+					bearer, private = r.Header.Get("Authorization"), r.Header.Get("PRIVATE-TOKEN")
+				}
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte("{}"))
+			}))
+			defer srv.Close()
+
+			cfg := testConfig(srv.URL)
+			cfg.AuthMode = tt.authMode
+			pool := New(cfg, testFactory())
+			if _, err := pool.GetOrCreate("gloas-sometoken", srv.URL); err != nil {
+				t.Fatalf("GetOrCreate() error: %v", err)
+			}
+			gotBearer := bearer != ""
+			if gotBearer != tt.wantBearer {
+				t.Errorf("probe auth: Authorization=%q PRIVATE-TOKEN set=%v, want bearer=%v", bearer, private != "", tt.wantBearer)
+			}
+			if tt.wantBearer && private != "" {
+				t.Errorf("oauth-mode probe also sent PRIVATE-TOKEN %q", private)
+			}
+		})
+	}
+}

@@ -36,6 +36,7 @@ import (
 	"time"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
+	"golang.org/x/oauth2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
@@ -54,6 +55,12 @@ type Client struct {
 	// EE-specific API queries (e.g. GraphQL branch rules with approval rules,
 	// code owner approval, external status checks).
 	tier atomic.Int32
+
+	// bearerAuth selects the auth scheme for the raw probes this client
+	// makes outside the SDK (health/version, credential check): true sends
+	// "Authorization: Bearer" (oauth HTTP mode, where gloas- tokens are
+	// only valid as Bearer), false sends PRIVATE-TOKEN (PAT clients).
+	bearerAuth bool
 
 	// Connection resilience: lazy initialization with rate-limited recovery.
 	healthURL    string       // Direct API URL for health checks (bypasses SDK)
@@ -191,6 +198,43 @@ func NewClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client, err
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating gitlab client: %w", err)
+	}
+
+	c.inner = inner
+	return c, nil
+}
+
+// NewOAuthClientWithToken creates a GitLab client that authenticates with
+// "Authorization: Bearer" instead of the PRIVATE-TOKEN header. The server
+// pool uses it in oauth HTTP mode, where every credential arrives as a
+// Bearer token: an OAuth access token (gloas-...) is ONLY valid as Bearer —
+// GitLab rejects it in PRIVATE-TOKEN — while personal access tokens are
+// valid in both schemes, so forwarding exactly as received is correct for
+// every token kind the mode admits.
+func NewOAuthClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client, error) {
+	base := buildBaseTransport(skipTLSVerify)
+
+	c := &Client{
+		baseURL:      baseURL,
+		healthURL:    strings.TrimRight(baseURL, "/") + "/api/v4/version",
+		token:        token,
+		bearerAuth:   true,
+		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
+	}
+
+	sdkHTTPClient := &http.Client{
+		Transport: &dotUnescapeTransport{
+			base: &resilienceTransport{base: base, client: c},
+		},
+	}
+
+	inner, err := gl.NewAuthSourceClient(
+		gl.OAuthTokenSource{TokenSource: oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})},
+		gl.WithBaseURL(baseURL),
+		gl.WithHTTPClient(sdkHTTPClient),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("creating gitlab oauth client: %w", err)
 	}
 
 	c.inner = inner
@@ -384,6 +428,15 @@ type gitLabVersionInfo struct {
 	Enterprise *bool  `json:"enterprise"`
 }
 
+// setAuthHeader applies this client's auth scheme to a raw request.
+func (c *Client) setAuthHeader(req *http.Request) {
+	if c.bearerAuth {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+		return
+	}
+	req.Header.Set("PRIVATE-TOKEN", c.token)
+}
+
 // versionDirect queries the GitLab Version API through the raw health client.
 // It bypasses the resilient SDK wrapper so edition detection can run during
 // client initialization and degraded-mode recovery.
@@ -392,7 +445,7 @@ func (c *Client) versionDirect(ctx context.Context) (*gitLabVersionInfo, error) 
 	if err != nil {
 		return nil, fmt.Errorf("creating health request: %w", err)
 	}
-	req.Header.Set("PRIVATE-TOKEN", c.token)
+	c.setAuthHeader(req)
 
 	resp, err := c.healthClient.Do(req) //#nosec G704 -- request URL derived from normalized GitLab config
 	if err != nil {
@@ -433,7 +486,7 @@ func (c *Client) CredentialRejected(ctx context.Context) bool {
 	if err != nil {
 		return false
 	}
-	req.Header.Set("PRIVATE-TOKEN", c.token)
+	c.setAuthHeader(req)
 
 	resp, err := c.healthClient.Do(req) //#nosec G704 -- request URL derived from normalized GitLab config
 	if err != nil {

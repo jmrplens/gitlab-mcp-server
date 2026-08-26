@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
@@ -1009,5 +1010,88 @@ func TestPingDirect_NilContext(t *testing.T) {
 	pingErr := client.pingDirect(nil) //lint:ignore SA1012 intentionally passing nil context to trigger error path
 	if pingErr == nil {
 		t.Fatal("expected error for nil context, got nil")
+	}
+}
+
+// TestNewOAuthClientWithToken_SendsBearerEverywhere verifies the oauth-mode
+// pool client authenticates every request path — the raw credential probe,
+// the raw version probe, and SDK API calls — with "Authorization: Bearer"
+// and never with PRIVATE-TOKEN. A gloas- OAuth access token is only valid
+// as Bearer; the PRIVATE-TOKEN header GitLab rejects for it is exactly how
+// oauth mode silently failed for real OAuth tokens before this constructor
+// existed.
+func TestNewOAuthClientWithToken_SendsBearerEverywhere(t *testing.T) {
+	const token = "gloas-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
+	type seen struct {
+		path    string
+		bearer  string
+		private string
+	}
+	var requests []seen
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, seen{r.URL.Path, r.Header.Get("Authorization"), r.Header.Get("PRIVATE-TOKEN")})
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/version"):
+			fmt.Fprint(w, `{"version":"18.0.0","revision":"abc"}`)
+		case strings.HasSuffix(r.URL.Path, "/user"):
+			fmt.Fprint(w, `{"id":7,"username":"oauth-user"}`)
+		default:
+			fmt.Fprint(w, `{}`)
+		}
+	}))
+	defer srv.Close()
+
+	client, err := NewOAuthClientWithToken(srv.URL, token, false)
+	if err != nil {
+		t.Fatalf("NewOAuthClientWithToken() error: %v", err)
+	}
+
+	ctx := context.Background()
+	if client.CredentialRejected(ctx) {
+		t.Error("CredentialRejected() = true against a 200 backend")
+	}
+	if _, verErr := client.versionDirect(ctx); verErr != nil {
+		t.Errorf("versionDirect() error: %v", verErr)
+	}
+	if _, _, sdkErr := client.GL().Users.CurrentUser(); sdkErr != nil {
+		t.Errorf("SDK CurrentUser() error: %v", sdkErr)
+	}
+
+	if len(requests) == 0 {
+		t.Fatal("no requests reached the backend")
+	}
+	for _, req := range requests {
+		if req.bearer != "Bearer "+token {
+			t.Errorf("%s: Authorization = %q, want Bearer token", req.path, req.bearer)
+		}
+		if req.private != "" {
+			t.Errorf("%s: PRIVATE-TOKEN sent (%q) — an OAuth token is only valid as Bearer", req.path, req.private)
+		}
+	}
+}
+
+// TestNewClientWithToken_KeepsPrivateTokenScheme pins the other direction:
+// the legacy-mode pool client still authenticates its raw probes with
+// PRIVATE-TOKEN, unchanged by the oauth constructor's introduction.
+func TestNewClientWithToken_KeepsPrivateTokenScheme(t *testing.T) {
+	var gotPrivate, gotBearer string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPrivate, gotBearer = r.Header.Get("PRIVATE-TOKEN"), r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"id":7}`)
+	}))
+	defer srv.Close()
+
+	client, err := NewClientWithToken(srv.URL, testValidToken, false)
+	if err != nil {
+		t.Fatalf("NewClientWithToken() error: %v", err)
+	}
+	client.CredentialRejected(context.Background())
+	if gotPrivate != testValidToken {
+		t.Errorf("PRIVATE-TOKEN = %q, want the token", gotPrivate)
+	}
+	if gotBearer != "" {
+		t.Errorf("Authorization = %q, want empty for the PAT client probe", gotBearer)
 	}
 }
