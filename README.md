@@ -423,20 +423,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       993 |     200,987 |
-| Unit tests (`_test.go`)  |       549 |     310,815 |
+| Source (`.go`, non-test) |       993 |     201,032 |
+| Unit tests (`_test.go`)  |       549 |     310,887 |
 | End-to-end tests         |       174 |      45,163 |
-| **Total**                | **1,716** | **556,965** |
+| **Total**                | **1,716** | **557,082** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,500 |
+| Source functions                |  7,501 |
 | — exported (public)             |  2,617 |
-| — unexported (private)          |  4,883 |
-| Unit test functions (`TestXxx`) | 11,671 |
-| Subtests (`t.Run(...)`)         |  2,929 |
+| — unexported (private)          |  4,884 |
+| Unit test functions (`TestXxx`) | 11,673 |
+| Subtests (`t.Run(...)`)         |  2,932 |
 | End-to-end test functions       |    381 |
 
 ### Ratios worth noting
@@ -446,7 +446,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~202 lines |
 | Average test file length           |                 ~566 lines |
-| Comment lines in source            |  23,055 (~11.5% of source) |
+| Comment lines in source            |  23,076 (~11.5% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
@@ -456,7 +456,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | `if err != nil` checks             | 6,694 |
 | `defer` statements                 |   911 |
 | `struct` types defined             | 2,726 |
-| `//nolint` suppressions            |   257 |
+| `//nolint` suppressions            |   258 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
@@ -478,8 +478,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,654 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,586 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,655 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,587 (impossible to avoid)                                                                         |
 | Longest function name in source      | `baseDestructiveEarlySinglePromptTemplateAndFixtures` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
