@@ -660,7 +660,7 @@ func DownloadSingleArtifact(ctx context.Context, client *gitlabclient.Client, in
 	reader, _, err := client.GL().Jobs.DownloadSingleArtifactsFile(string(input.ProjectID), input.JobID, input.ArtifactPath, gl.WithContext(ctx))
 	if err != nil {
 		return SingleArtifactOutput{}, toolutil.WrapErrWithStatusHint("jobDownloadSingleArtifact", err, http.StatusNotFound,
-			"artifact_path not found within the job artifact archive, or job artifacts have expired \u2014 use gitlab_job_get_artifacts to list available paths")
+			"artifact_path not found within the job artifact archive, or job artifacts have expired \u2014 use gitlab_job_artifacts to list available paths")
 	}
 	return readSingleArtifactContent(reader, input.JobID, input.ArtifactPath)
 }

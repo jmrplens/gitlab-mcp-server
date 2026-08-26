@@ -43,7 +43,7 @@ func FormatMarkdownString(out Output) string {
 		b.WriteString(eventLine("Reopen MR", out.Events.ReopenMergeRequest))
 		b.WriteString(eventLine("Success Pipeline", out.Events.SuccessPipeline))
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_update_notification_settings` to change notification preferences")
+	toolutil.WriteHints(&b, "Use `gitlab_notification_global_update` (or the project/group variants) to change notification preferences")
 	return b.String()
 }
 

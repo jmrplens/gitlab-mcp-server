@@ -30,7 +30,7 @@ func FormatMarkdownString(out Output) string {
 		fmt.Fprintf(&b, toolutil.FmtMdCreated, toolutil.FormatTime(out.CreatedAt))
 	}
 	fmt.Fprintf(&b, "- **User**: %s (ID: %d, @%s)\n", out.User.Name, out.User.ID, out.User.Username)
-	toolutil.WriteHints(&b, "Use `gitlab_list_keys` to search for other SSH keys")
+	toolutil.WriteHints(&b, "Use `gitlab_get_key_by_fingerprint` to look up a key by its fingerprint")
 	return b.String()
 }
 

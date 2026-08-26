@@ -95,6 +95,11 @@ type ToolSurfaceEntry struct {
 // static consumer of the aggregate manifest should not need 851 detail
 // reads to label a parameter — while descriptions, enums, and optional
 // parameters stay in the per-entry input schema at gitlab://tools/{id}.
+//
+// An absent type is deliberate, not an omission bug: the schema states no
+// single plain type for that parameter (admin.feature_set's value accepts
+// boolean, string, or integer). Consumers should read it as "any" and
+// consult the entry's input schema for the full shape.
 type ToolSurfaceRequiredParam struct {
 	Name string `json:"name"`
 	Type string `json:"type,omitempty"`

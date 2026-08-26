@@ -133,6 +133,16 @@ Find returns a ranked shortlist of catalog actions with exact schemas inline. Th
 }
 ```
 
+> The aggregate `gitlab://tools` manifest types its `required_params`
+> (`[{"name": "project_id", "type": "integer"}]`; multi-typed parameters
+> join as `"integer|string"`) and lists alternative requirement groups in
+> `required_params_any_of` — a call must satisfy at least one group. An
+> entry without a `type` means the schema states no single plain type
+> (for example `admin.feature_set`'s `value`, which accepts boolean,
+> string, or integer): read it as "any" and consult `gitlab://tools/{id}`
+> for the full schema. The `gitlab_find_action` results shown here keep
+> bare names by design.
+
 Pass `explain: true` to include deterministic scoring reasons in each result. The default omits explanations to keep responses compact. Enabling `explain` does not alter ranking; it only adds reasoning metadata.
 
 Find accepts `limit`; the default is 20 results and the server caps it at 50. The limit only controls how many ranked actions are returned. It does not shrink the catalog searched by the server.

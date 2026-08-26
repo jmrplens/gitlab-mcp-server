@@ -67,7 +67,7 @@ func GetSSHKey(ctx context.Context, client *gitlabclient.Client, input GetSSHKey
 	k, _, err := client.GL().Users.GetSSHKey(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return SSHKeyOutput{}, toolutil.WrapErrWithStatusHint("get_ssh_key", err, http.StatusNotFound,
-			"verify key_id with gitlab_user_ssh_keys_list; the key may have been deleted")
+			"verify key_id with gitlab_list_ssh_keys; the key may have been deleted")
 	}
 	return toSSHKeyOutput(k), nil
 }
@@ -190,7 +190,7 @@ func DeleteSSHKey(ctx context.Context, client *gitlabclient.Client, input Delete
 	_, err := client.GL().Users.DeleteSSHKey(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return DeleteSSHKeyOutput{}, toolutil.WrapErrWithStatusHint("delete_ssh_key", err, http.StatusNotFound,
-			"verify key_id with gitlab_user_ssh_keys_list; the key may already have been deleted")
+			"verify key_id with gitlab_list_ssh_keys; the key may already have been deleted")
 	}
 	return DeleteSSHKeyOutput{KeyID: input.KeyID, Deleted: true}, nil
 }

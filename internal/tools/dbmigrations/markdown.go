@@ -11,7 +11,7 @@ import (
 func FormatMarkMarkdown(out MarkOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Mark Migration\n\n**Status**: %s | **Version**: %d\n", out.Status, out.Version)
-	toolutil.WriteHints(&b, "Use `gitlab_list_db_migrations` to verify migration state")
+	toolutil.WriteHints(&b, "Verify overall migration state in the GitLab admin area (no list action is exposed here)")
 	return b.String()
 }
 

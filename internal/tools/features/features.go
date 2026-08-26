@@ -213,7 +213,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().Features.DeleteFeatureFlag(input.Name, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("feature_delete", err, http.StatusForbidden,
-			"requires administrator access; verify name with gitlab_feature_list; deletion resets the feature flag to its default state")
+			"requires administrator access; verify name with gitlab_list_features; deletion resets the feature flag to its default state")
 	}
 	return nil
 }

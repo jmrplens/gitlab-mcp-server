@@ -113,6 +113,7 @@ func TestToolManifest_SeeAlsoReferencesResolve_OnEverySurface(t *testing.T) {
 			}
 		}
 		for _, action := range catalog.Actions() {
+			assertSeeAlsoFormat(t, string(action.ID), action.IndividualTool.Description)
 			for _, name := range seeAlsoNames(action.IndividualTool.Description) {
 				if !valid[name] {
 					t.Errorf("action %s references %q in its See-also clause, but no individual tool has that name — fix the spec", action.ID, name)
@@ -134,6 +135,7 @@ func withoutRoute(routes map[string]toolutil.ActionMap, toolName string) map[str
 func assertSeeAlsoResolves(t *testing.T, snapshot toolSurfaceSnapshot, valid map[string]bool) {
 	t.Helper()
 	for _, entry := range snapshot.manifest.Entries {
+		assertSeeAlsoFormat(t, entry.ID, entry.Description)
 		for _, name := range seeAlsoNames(entry.Description) {
 			if !valid[name] {
 				t.Errorf("entry %s references %q in its See-also clause, which is not an entry of this surface", entry.ID, name)
@@ -151,6 +153,70 @@ func seeAlsoNames(description string) []string {
 		names = append(names, strings.Split(match[1], ", ")...)
 	}
 	return names
+}
+
+// assertSeeAlsoFormat requires every "See also:" occurrence to match the
+// canonical clause pattern at that exact position. A clause the pattern
+// cannot consume — no trailing period, parenthetical annotations, odd
+// separators — is invisible to the projection AND to the resolution legs
+// of this guard: it is neither rewritten nor dropped nor checked, which
+// is exactly how 13 entries shipped unprojected in v2.7.2.
+func assertSeeAlsoFormat(t *testing.T, owner, description string) {
+	t.Helper()
+	if violation, ok := seeAlsoFormatViolation(description); !ok {
+		t.Errorf("%s has a See-also clause outside the canonical format (comma-separated names, trailing period): %.120q", owner, violation)
+	}
+}
+
+// seeAlsoFormatViolation reports the first "See also:" occurrence the
+// canonical clause pattern cannot consume, or ok=true when every clause
+// conforms. Pure, so the format rules are testable independently of the
+// current catalog's metadata.
+func seeAlsoFormatViolation(description string) (string, bool) {
+	for idx := strings.Index(description, "See also:"); idx >= 0; {
+		loc := seeAlsoClause.FindStringIndex(description[idx:])
+		if loc == nil || loc[0] != 0 {
+			return description[idx:], false
+		}
+		rest := description[idx+loc[1]:]
+		next := strings.Index(rest, "See also:")
+		if next < 0 {
+			return "", true
+		}
+		idx = idx + loc[1] + next
+	}
+	return "", true
+}
+
+// TestSeeAlsoFormatViolation_RecognizesClauseShapes pins the format rules
+// themselves, independent of what the catalog currently contains: the
+// shapes that shipped unprojected in v2.7.2 (missing period,
+// parenthetical annotations) must be violations, and canonical shapes
+// must pass.
+func TestSeeAlsoFormatViolation_RecognizesClauseShapes(t *testing.T) {
+	tests := []struct {
+		name        string
+		description string
+		wantOK      bool
+	}{
+		{"no clause at all", "List things. Returns: items.", true},
+		{"single canonical clause", "Get a thing. See also: gitlab_thing_list, gitlab_thing_delete.", true},
+		{"canonical clause with dotted IDs", "Rewritten form. See also: widget.create, gitlab_widget.get.", true},
+		{"multiple canonical clauses", "A. See also: gitlab_a. B. See also: gitlab_b, gitlab_c.", true},
+		{"missing trailing period", "Get a thing.\n\nSee also: gitlab_thing_list, gitlab_thing_delete", false},
+		{"parenthetical annotation", "Resolve. See also: gitlab_thing_get (full CRUD), gitlab_other (checks).", false},
+		{"and separator", "Compare. See also: gitlab_a and gitlab_b.", false},
+		{"semicolon separator", "Compare. See also: gitlab_a; gitlab_b.", false},
+		{"second clause malformed", "A. See also: gitlab_a. B. See also: gitlab_b, gitlab_c", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			violation, ok := seeAlsoFormatViolation(tt.description)
+			if ok != tt.wantOK {
+				t.Errorf("seeAlsoFormatViolation(%q) ok = %v (violation %q), want %v", tt.description, ok, violation, tt.wantOK)
+			}
+		})
+	}
 }
 
 // TestToolManifest_AliasEntriesDeclareAliasOf verifies the three deliberate

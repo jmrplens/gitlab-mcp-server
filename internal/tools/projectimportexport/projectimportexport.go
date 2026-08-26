@@ -78,7 +78,7 @@ func ScheduleExport(ctx context.Context, client *gitlabclient.Client, input Sche
 	_, err := client.GL().ProjectImportExport.ScheduleExport(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ScheduleExportOutput{}, toolutil.WrapErrWithStatusHint("schedule_export", err, http.StatusForbidden,
-			"requires Owner role on the project; only one export at a time per project \u2014 wait for the previous to finish or use gitlab_export_status to check")
+			"requires Owner role on the project; only one export at a time per project \u2014 wait for the previous to finish or use gitlab_get_project_export_status to check")
 	}
 	return ScheduleExportOutput{Message: "Export scheduled successfully"}, nil
 }
@@ -113,7 +113,7 @@ func GetExportStatus(ctx context.Context, client *gitlabclient.Client, input Exp
 	status, _, err := client.GL().ProjectImportExport.ExportStatus(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return ExportStatusOutput{}, toolutil.WrapErrWithStatusHint("export_status", err, http.StatusNotFound,
-			"verify project_id with gitlab_project_get; export must be scheduled first via gitlab_schedule_export; status values: none, started, finished, after_export_action_failed")
+			"verify project_id with gitlab_project_get; export must be scheduled first via gitlab_schedule_project_export; status values: none, started, finished, after_export_action_failed")
 	}
 
 	out := ExportStatusOutput{
@@ -159,7 +159,7 @@ func ExportDownload(ctx context.Context, client *gitlabclient.Client, input Expo
 	data, _, err := client.GL().ProjectImportExport.ExportDownload(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return ExportDownloadOutput{}, toolutil.WrapErrWithStatusHint("export_download", err, http.StatusNotFound,
-			"export must be in 'finished' state \u2014 check gitlab_export_status first; archives are kept for 24 hours after generation")
+			"export must be in 'finished' state \u2014 check gitlab_get_project_export_status first; archives are kept for 24 hours after generation")
 	}
 	return ExportDownloadOutput{
 		ContentBase64: base64.StdEncoding.EncodeToString(data),
@@ -364,7 +364,7 @@ func ImportFromFile(ctx context.Context, client *gitlabclient.Client, input Impo
 	status, err := rawImportFromFile(ctx, client, archiveReader, opts)
 	if err != nil {
 		return ImportStatusOutput{}, toolutil.WrapErrWithStatusHint("import_from_file", err, http.StatusBadRequest,
-			"archive must be a valid GitLab project export (.tar.gz from gitlab_export_download); namespace must exist and you need create-project permission there; path must be unique unless overwrite=true")
+			"archive must be a valid GitLab project export (.tar.gz from gitlab_download_project_export); namespace must exist and you need create-project permission there; path must be unique unless overwrite=true")
 	}
 	return rawImportStatusToOutput(status), nil
 }

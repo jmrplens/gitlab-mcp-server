@@ -27,7 +27,7 @@ func FormatListMarkdown(out ListOutput) string {
 func FormatGroupMarkdown(g ResourceGroupItem) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Resource Group\n\n- **ID**: %d\n- **Key**: %s\n- **Process Mode**: %s\n", g.ID, g.Key, g.ProcessMode)
-	toolutil.WriteHints(&b, "Use `gitlab_list_resource_group_jobs` to see upcoming jobs for this group")
+	toolutil.WriteHints(&b, "Use `gitlab_list_resource_group_upcoming_jobs` to see upcoming jobs for this group")
 	return b.String()
 }
 

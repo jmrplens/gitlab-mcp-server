@@ -1,6 +1,6 @@
 # gitlab-mcp-server — Full Reference
 
-> Version 2.7.2 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
+> Version 2.7.3 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Dynamic Toolset
 
@@ -2109,7 +2109,7 @@ IMPORTANT: pass the complete URL exactly as it appears — do NOT strip the git@
 
 Returns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. Errors: 404 not found (hint: project may be private — verify token permissions), 403 forbidden (hint: token lacks read_api scope).
 
-See also: gitlab_project_get (full project CRUD/settings once id is known), gitlab_server (connectivity and version checks), gitlab_search (find projects by query).
+See also: gitlab_project_get, gitlab_server_status, gitlab_search_projects.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -17495,7 +17495,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_group_archive
 
-Archive a GitLab group (read-only). Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update.
+Archive a GitLab group, making it and its projects read-only in GitLab. Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update.
 
 **Parameters:**
 
@@ -24341,7 +24341,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_archive
 
-Archive a project (read-only). Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.
+Archive a project, making it read-only in GitLab. Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.
 
 **Parameters:**
 

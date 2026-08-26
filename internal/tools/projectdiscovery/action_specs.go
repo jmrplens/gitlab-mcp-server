@@ -19,7 +19,7 @@ const discoverProjectDescription = "Resolve a full git remote URL to a GitLab pr
 	"- SSH protocol: ssh://git@gitlab.example.com/group/project.git\n\n" +
 	"Returns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. " +
 	"Errors: 404 not found (hint: project may be private — verify token permissions), 403 forbidden (hint: token lacks read_api scope).\n\n" +
-	"See also: gitlab_project_get (full project CRUD/settings once id is known), gitlab_server (connectivity and version checks), gitlab_search (find projects by query)."
+	"See also: gitlab_project_get, gitlab_server_status, gitlab_search_projects."
 
 // ActionSpecs returns canonical specs for standalone project discovery actions.
 func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {

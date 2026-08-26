@@ -96,7 +96,7 @@ type StrategyInput struct {
 	ID         int64                   `json:"id,omitempty" jsonschema:"Strategy ID (only for update operations referencing an existing strategy)"`
 	Name       string                  `json:"name,omitempty" jsonschema:"Strategy name (e.g. default, gradualRolloutUserId, userWithId, flexibleRollout). Required except when removing a strategy with _destroy"`
 	Parameters *StrategyParameterInput `json:"parameters,omitempty" jsonschema:"Strategy-specific parameters (group_id, user_ids, percentage, rollout, stickiness)"`
-	UserListID *int64                  `json:"user_list_id,omitempty" jsonschema:"ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_feature_flag_user_list_list to find it"`
+	UserListID *int64                  `json:"user_list_id,omitempty" jsonschema:"ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_ff_user_list_list to find it"`
 	Destroy    *bool                   `json:"_destroy,omitempty" jsonschema:"Set true together with id (and no name) to delete this strategy from the flag during an update"`
 	Scopes     []ScopeInput            `json:"scopes,omitempty" jsonschema:"Environment scopes to which this strategy applies"`
 }

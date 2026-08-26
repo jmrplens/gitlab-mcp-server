@@ -192,7 +192,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().Topics.DeleteTopic(input.TopicID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete_topic", err, http.StatusForbidden,
-			"requires administrator access; deletion is irreversible and removes the topic from all associated projects; consider gitlab_topic_merge instead to consolidate duplicate topics")
+			"requires administrator access; deletion is irreversible and removes the topic from all associated projects; consider merging topics first via the GitLab UI or Topics API (merge is not exposed here) instead to consolidate duplicate topics")
 	}
 	return nil
 }

@@ -31,7 +31,7 @@ func FormatLabelEventMarkdown(out LabelEventOutput) string {
 	fmt.Fprintf(&sb, fmtUserRow, eventUsername(out.User))
 	fmt.Fprintf(&sb, fmtResourceRow, out.ResourceType, out.ResourceID)
 	fmt.Fprintf(&sb, fmtCreatedRow, toolutil.FormatTime(out.CreatedAt))
-	toolutil.WriteHints(&sb, "Use `gitlab_list_label_events` to see all label changes")
+	toolutil.WriteHints(&sb, "Use `gitlab_issue_label_event_list` or `gitlab_mr_label_event_list` to see all label changes")
 	return sb.String()
 }
 
@@ -59,7 +59,7 @@ func FormatMilestoneEventMarkdown(out MilestoneEventOutput) string {
 	fmt.Fprintf(&sb, fmtUserRow, eventUsername(out.User))
 	fmt.Fprintf(&sb, fmtResourceRow, out.ResourceType, out.ResourceID)
 	fmt.Fprintf(&sb, fmtCreatedRow, toolutil.FormatTime(out.CreatedAt))
-	toolutil.WriteHints(&sb, "Use `gitlab_list_milestone_events` to see all milestone changes")
+	toolutil.WriteHints(&sb, "Use `gitlab_issue_milestone_event_list` or `gitlab_mr_milestone_event_list` to see all milestone changes")
 	return sb.String()
 }
 
@@ -86,7 +86,7 @@ func FormatStateEventMarkdown(out StateEventOutput) string {
 	fmt.Fprintf(&sb, fmtUserRow, eventUsername(out.User))
 	fmt.Fprintf(&sb, fmtResourceRow, out.ResourceType, out.ResourceID)
 	fmt.Fprintf(&sb, fmtCreatedRow, toolutil.FormatTime(out.CreatedAt))
-	toolutil.WriteHints(&sb, "Use `gitlab_list_state_events` to see all state changes")
+	toolutil.WriteHints(&sb, "Use `gitlab_issue_state_event_list` or `gitlab_mr_state_event_list` to see all state changes")
 	return sb.String()
 }
 

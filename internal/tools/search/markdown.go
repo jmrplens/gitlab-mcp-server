@@ -33,7 +33,7 @@ func FormatCodeMarkdown(out CodeOutput) string {
 			bl.Startline)
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Use gitlab_file action 'get' with path to read a found file")
+	toolutil.WriteHints(&b, "Use gitlab_repository action 'file_get' with path to read a found file")
 	return b.String()
 }
 
@@ -115,7 +115,7 @@ func FormatCommitsMarkdown(out CommitsOutput) string {
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_commit action 'get' with short_id to see full commit details")
+		"Use gitlab_repository action 'commit_get' with short_id to see full commit details")
 	return b.String()
 }
 
@@ -144,7 +144,7 @@ func FormatMilestonesMarkdown(out MilestonesOutput) string {
 	toolutil.WritePagination(&b, out.Pagination)
 	toolutil.WriteHints(&b,
 		toolutil.HintPreserveLinks,
-		"Use gitlab_milestone action 'get' with project_id and milestone_id to see full details")
+		"Use gitlab_project action 'milestone_get' with project_id and milestone_id to see full details")
 	return b.String()
 }
 
@@ -168,7 +168,7 @@ func FormatNotesMarkdown(out NotesOutput) string {
 			toolutil.EscapeMdTableCell(truncateBody(n.Body, 80)))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(&b, "Use the note's parent tool (gitlab_issue_note or gitlab_mr_note) to see full note")
+	toolutil.WriteHints(&b, "Use the note's parent tool (gitlab_issue note actions or gitlab_mr_review note actions) to see full note")
 	return b.String()
 }
 

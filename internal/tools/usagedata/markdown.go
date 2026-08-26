@@ -104,7 +104,7 @@ func FormatMetricDefinitionsMarkdown(out MetricDefinitionsOutput) string {
 func FormatTrackEventMarkdown(out TrackEventOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Track Event\n\n**Status**: %s\n", out.Status)
-	toolutil.WriteHints(&b, "Use `gitlab_list_usage_data_metrics` to review available metrics")
+	toolutil.WriteHints(&b, "Use `gitlab_get_metric_definitions` to review available metrics")
 	return b.String()
 }
 
@@ -112,7 +112,7 @@ func FormatTrackEventMarkdown(out TrackEventOutput) string {
 func FormatTrackEventsMarkdown(out TrackEventsOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Track Events\n\n**Status**: %s | **Events**: %d\n", out.Status, out.Count)
-	toolutil.WriteHints(&b, "Use `gitlab_list_usage_data_metrics` to review available metrics")
+	toolutil.WriteHints(&b, "Use `gitlab_get_metric_definitions` to review available metrics")
 	return b.String()
 }
 

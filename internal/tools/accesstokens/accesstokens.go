@@ -199,7 +199,7 @@ func ProjectGet(ctx context.Context, client *gitlabclient.Client, input ProjectG
 	t, _, err := client.GL().ProjectAccessTokens.GetProjectAccessToken(string(input.ProjectID), input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get project access token", err, http.StatusNotFound,
-			"token_id not found on this project (already revoked or never existed) - use gitlab_access_token_project_list to discover current token IDs")
+			"token_id not found on this project (already revoked or never existed) - use gitlab_project_access_token_list to discover current token IDs")
 	}
 	return fromProjectToken(t), nil
 }
@@ -324,7 +324,7 @@ func ProjectRotate(ctx context.Context, client *gitlabclient.Client, input Proje
 		requiredField:  "project_id",
 		operation:      "rotate project access token",
 		validationHint: "token may already be revoked/expired; expires_at must be YYYY-MM-DD and within instance maximum lifetime",
-		notFoundHint:   "token_id not found - use gitlab_access_token_project_list to verify",
+		notFoundHint:   "token_id not found - use gitlab_project_access_token_list to verify",
 		rotate: func(scopeID string, tokenID int64, expiresAt *gl.ISOTime) (Output, error) {
 			opts := &gl.RotateProjectAccessTokenOptions{ExpiresAt: expiresAt}
 			token, _, err := client.GL().ProjectAccessTokens.RotateProjectAccessToken(scopeID, tokenID, opts, gl.WithContext(ctx))
@@ -523,7 +523,7 @@ func GroupGet(ctx context.Context, client *gitlabclient.Client, input GroupGetIn
 	t, _, err := client.GL().GroupAccessTokens.GetGroupAccessToken(string(input.GroupID), input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get group access token", err, http.StatusNotFound,
-			"token_id not found on this group \u2014 use gitlab_access_token_group_list to discover current token IDs")
+			"token_id not found on this group \u2014 use gitlab_group_access_token_list to discover current token IDs")
 	}
 	return fromGroupToken(t), nil
 }
@@ -599,7 +599,7 @@ func GroupRotate(ctx context.Context, client *gitlabclient.Client, input GroupRo
 				"token may already be revoked/expired; expires_at must be YYYY-MM-DD")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("rotate group access token", err, http.StatusNotFound,
-			"token_id not found \u2014 use gitlab_access_token_group_list to verify")
+			"token_id not found \u2014 use gitlab_group_access_token_list to verify")
 	}
 	return fromGroupToken(token), nil
 }
@@ -923,7 +923,7 @@ func PersonalRotate(ctx context.Context, client *gitlabclient.Client, input Pers
 				"token may already be revoked/expired; expires_at must be YYYY-MM-DD")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("rotate personal access token", err, http.StatusNotFound,
-			"token_id not found \u2014 use gitlab_access_token_personal_list to verify")
+			"token_id not found \u2014 use gitlab_personal_access_token_list to verify")
 	}
 	return fromPersonalToken(token), nil
 }
