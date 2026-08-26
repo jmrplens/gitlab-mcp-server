@@ -156,7 +156,8 @@ const codeServerBusy = -32000
 // resources/read with, server-state refusals get
 // the implementation-defined busy code, and anything else — a transient
 // GitLab failure on the first read — is an internal error. Messages pass
-// through untouched; they already say what happened and what to do.
+// through untouched — they preserve the upstream failure detail — and the
+// code alone carries the retry semantics.
 func wireSubscribeError(err error) error {
 	if err == nil {
 		return nil

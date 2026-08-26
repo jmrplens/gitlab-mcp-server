@@ -164,7 +164,8 @@ error would marshal as:
 | Transient GitLab failure on the first read                                 | `-32603` (internal error)                                                   | Yes                              |
 | `resources/subscribe` on stateless HTTP                                    | `-32600` (invalid request for this session state)                           | No — use `subscriptions/listen`  |
 
-The message beside the code always says what happened and what to do. On
+The message beside the code preserves the upstream failure detail
+verbatim; the retry behavior is defined by the code, per the table. On
 protocol 2026-07-28 a `subscriptions/listen` refusal is delivered by the
 stream closing instead; the SDK's client discards the response of the
 listen call it fires, so the codes above are observable on the legacy

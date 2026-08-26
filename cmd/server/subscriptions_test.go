@@ -1205,7 +1205,7 @@ func TestWireSubscribeError_MapsSentinelsToCodes(t *testing.T) {
 		want int64
 	}{
 		{"not subscribable is invalid params", fmt.Errorf("%w: gitlab://project/1/issues", subscriptions.ErrNotSubscribable), jsonrpc.CodeInvalidParams},
-		{"inaccessible is resource not found", fmt.Errorf("%w: 404", subscriptions.ErrInaccessible), jsonrpc.CodeInvalidParams},
+		{"inaccessible is invalid params", fmt.Errorf("%w: 404", subscriptions.ErrInaccessible), jsonrpc.CodeInvalidParams},
 		{"rate limited is server busy", subscriptions.ErrRateLimited, codeServerBusy},
 		{"watcher cap is server busy", subscriptions.ErrTooManySubscriptions, codeServerBusy},
 		{"manager closed is server busy", subscriptions.ErrClosed, codeServerBusy},
@@ -1239,11 +1239,12 @@ func TestWireSubscribeError_MapsSentinelsToCodes(t *testing.T) {
 	})
 }
 
-// TestSubscribe_MissingResource_RefusedWithResourceNotFoundCode verifies
+// TestSubscribe_MissingResource_RefusedWithInvalidParamsCode verifies
 // the boundary end to end: a stateful subscribe whose authorization read
-// finds the resource gone reaches the SDK as the resource-not-found code,
-// not as a plain error the wire would carry as code 0.
-func TestSubscribe_MissingResource_RefusedWithResourceNotFoundCode(t *testing.T) {
+// finds the resource gone reaches the SDK as invalid params — the code the
+// SDK itself answers an unknown resources/read with — not as a plain error
+// the wire would carry as code 0.
+func TestSubscribe_MissingResource_RefusedWithInvalidParamsCode(t *testing.T) {
 	backend, gitlab := newPipelineBackend(t, "running")
 	backend.setMissing()
 	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),

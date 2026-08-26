@@ -82,12 +82,12 @@ Un vigilante sin renovar no muere en silencio — se ralentiza. Tras 30 minutos 
 
 Un `resources/subscribe` heredado rechazado lleva un código JSON-RPC deliberado — nunca el `code: 0` accidental con el que se serializaría un error plano:
 
-| Rechazo                                                             | Código                                                                                |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| URI deliberadamente no suscribible                                  | `-32602` (parámetros inválidos)                                                       |
-| Recurso ilegible en la lectura de autorización (401/403/404)        | `-32602` — el mismo código con el que el SDK responde un `resources/read` desconocido |
-| Límite de peticiones, cupo de watchers lleno, o servidor apagándose | `-32000` (servidor ocupado — transitorio, reintente más tarde)                        |
-| Fallo transitorio de GitLab en la primera lectura                   | `-32603` (error interno)                                                              |
-| `resources/subscribe` en HTTP sin estado                            | `-32600` — use `subscriptions/listen` en su lugar                                     |
+| Rechazo                                                                                    | Código                                                                                |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| URI deliberadamente no suscribible                                                         | `-32602` (parámetros inválidos)                                                       |
+| Recurso ilegible en la lectura de autorización (401/403/404)                               | `-32602` — el mismo código con el que el SDK responde un `resources/read` desconocido |
+| Límite de peticiones, cupo de watchers sin ningún watch desalojable, o servidor apagándose | `-32000` (servidor ocupado — transitorio, reintente más tarde)                        |
+| Fallo transitorio de GitLab en la primera lectura                                          | `-32603` (error interno)                                                              |
+| `resources/subscribe` en HTTP sin estado                                                   | `-32600` — use `subscriptions/listen` en su lugar                                     |
 
 <FAQ />
