@@ -927,6 +927,24 @@ func ParseCSV(s string) []string {
 	return result
 }
 
+// ValidateOAuthGitLabURL requires the GitLab instance URL to use https in
+// oauth mode. Bearer tokens are forwarded upstream on every call, so a
+// cleartext instance URL would put a live credential on the wire
+// (CWE-319). http is tolerated only for loopback hosts, matching the
+// exemption ValidatePublicURL makes for local development.
+func ValidateOAuthGitLabURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return fmt.Errorf("--gitlab-url %q is not an absolute URL", raw)
+	}
+	host := u.Hostname()
+	loopback := host == "localhost" || host == "127.0.0.1" || host == "::1"
+	if u.Scheme != "https" && (u.Scheme != "http" || !loopback) {
+		return fmt.Errorf("--auth-mode=oauth requires an https --gitlab-url (got %q): bearer tokens are forwarded to the instance on every call, and http would transmit them in cleartext. http is allowed only for loopback development", raw)
+	}
+	return nil
+}
+
 // ValidatePublicURL enforces the RFC 9728 constraints on the advertised
 // protected-resource identifier. Exported for the HTTP flag path, which
 // assembles its Config directly instead of going through Load.

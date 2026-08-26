@@ -642,6 +642,9 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 	if cfg.GitLabURL == "" {
 		return errors.New("--auth-mode=oauth requires --gitlab-url")
 	}
+	if err := config.ValidateOAuthGitLabURL(cfg.GitLabURL); err != nil {
+		return err
+	}
 	if err := config.ValidatePublicURL(cfg.PublicURL); err != nil {
 		return err
 	}

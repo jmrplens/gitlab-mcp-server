@@ -4,7 +4,7 @@ How to create a GitLab OAuth Application for use with gitlab-mcp-server in OAuth
 
 > **Diátaxis type**: How-to
 > **Audience**: 🔧 Server administrators, team leads
-> **Prerequisites**: GitLab admin or group owner access; server running with `--auth-mode=oauth`
+> **Prerequisites**: GitLab admin or group owner access; server running with `--auth-mode=oauth` over an **https** GitLab URL (bearer tokens are forwarded upstream on every call, so cleartext is refused; `http` is allowed only for loopback development)
 
 ---
 

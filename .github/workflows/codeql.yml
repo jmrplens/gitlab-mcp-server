@@ -17,6 +17,12 @@ on:
   schedule:
     - cron: "26 14 * * 2"
 
+# Separate group from ci.yml so a cancelled CI run never cancels an
+# in-flight security analysis (and vice versa).
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

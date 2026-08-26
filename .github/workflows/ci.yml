@@ -13,6 +13,12 @@ on:
   push:
     branches: [main]
 
+# One in-flight run per ref: with pull_request no longer filtered by base
+# branch, a stacked PR's pushes would otherwise pile up obsolete runs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
