@@ -4498,6 +4498,9 @@ func assertCardPreflight(t *testing.T, cardURL string) {
 	if got := resp.Header.Get("Access-Control-Allow-Headers"); got != "x-scanner-id" {
 		t.Errorf("OPTIONS Access-Control-Allow-Headers = %q, want the echoed x-scanner-id", got)
 	}
+	if got := resp.Header.Get("Access-Control-Max-Age"); got != "3600" {
+		t.Errorf("OPTIONS Access-Control-Max-Age = %q, want 3600 so the preflight is not repeated per fetch", got)
+	}
 }
 
 // TestEffectiveIdleTimeout verifies the mapping from the raw --http-idle-timeout

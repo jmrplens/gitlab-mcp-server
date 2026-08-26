@@ -1262,6 +1262,10 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 			w.Header().Set("Access-Control-Allow-Headers", want)
 			w.Header().Set("Vary", "Access-Control-Request-Headers")
 		}
+		// Without a lifetime the browser preflights again on every fetch,
+		// which for a document that only changes with a release is two
+		// round-trips where one would do.
+		w.Header().Set("Access-Control-Max-Age", "3600")
 		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("GET /.well-known/mcp/server-card.json", func(w http.ResponseWriter, r *http.Request) {
