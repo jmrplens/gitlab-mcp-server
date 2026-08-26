@@ -391,7 +391,7 @@ func (snapshot *toolSurfaceSnapshot) addMetaActions(catalog *actioncatalog.Catal
 	routeSnapshot := cloneMetaSchemaRoutes(routes)
 	seen := make(map[string]struct{})
 	if catalog != nil {
-		resolve := metaSeeAlso(newSeeAlsoIndex(catalog))
+		resolve := metaSeeAlso(newSeeAlsoIndex(catalog), routeSnapshot)
 		aliases := aliasPrimaries(catalog)
 		for _, action := range catalog.Actions() {
 			if !metaRouteVisible(routeSnapshot, action.ToolName, action.Name) {
@@ -658,10 +658,15 @@ func dynamicSeeAlso(index map[string]actioncatalog.Action) seeAlsoResolver {
 
 // metaSeeAlso resolves to the meta surface's entry IDs
 // (gitlab_<tool>.<action>), matching the manifest's own ID scheme there.
-func metaSeeAlso(index map[string]actioncatalog.Action) seeAlsoResolver {
+// Resolution is scoped to the routes the surface actually emits: a
+// restricted meta surface (excluded tools, read-only filtering) has no
+// entry for a hidden action, and rewriting a reference to an ID with no
+// entry would reintroduce exactly the non-invocable reference this
+// projection removes.
+func metaSeeAlso(index map[string]actioncatalog.Action, routes map[string]toolutil.ActionMap) seeAlsoResolver {
 	return func(name string) (string, bool) {
 		action, ok := index[name]
-		if !ok {
+		if !ok || !metaRouteVisible(routes, action.ToolName, action.Name) {
 			return "", false
 		}
 		return metaManifestID(action.ToolName, action.Name), true

@@ -117,7 +117,7 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 		}
 		options.ParameterGuidance["position"] = toolutil.ParameterGuidance{
 			SemanticRole:     "diff_position",
-			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_mr_changes; omit for a general discussion.",
+			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_mr_changes_get; omit for a general discussion.",
 			ExampleBinding:   `params.position:{"base_sha":"abc","head_sha":"def","start_sha":"abc","new_path":"main.go","new_line":12}`,
 			CommonConfusions: []string{"Inline comments require the full SHA triple plus a valid path/line from the MR diff; omit position entirely for a thread that is not tied to a line."},
 		}

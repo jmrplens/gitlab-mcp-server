@@ -154,7 +154,7 @@ func GetNote(ctx context.Context, client *gitlabclient.Client, input GetInput) (
 	n, _, err := client.GL().Notes.GetIssueNote(string(input.ProjectID), input.IssueIID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("issueNoteGet", err, http.StatusNotFound,
-			"verify note_id with gitlab_issue_notes_list")
+			"verify note_id with gitlab_issue_note_list")
 	}
 	return ToOutput(n), nil
 }

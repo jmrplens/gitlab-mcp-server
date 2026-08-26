@@ -7,6 +7,7 @@
 package resources
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -15,6 +16,7 @@ import (
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // fullSurfaceCatalog builds the Ultimate-tier catalog the way the dynamic
@@ -69,6 +71,19 @@ func TestToolManifest_SeeAlsoReferencesResolve_OnEverySurface(t *testing.T) {
 				MetaRoutes: catalog.ActionMaps(),
 			},
 		},
+		{
+			// A restricted meta surface (excluded tools, read-only
+			// filtering) emits a subset of routes; a reference rewritten
+			// to a hidden action's ID would name an entry that does not
+			// exist. Dropping gitlab_project — the most referenced tool —
+			// exercises exactly that path.
+			name: toolSurfaceMeta + " restricted",
+			opts: ToolSurfaceResourceOptions{
+				Surface:    toolSurfaceMeta,
+				Catalog:    catalog,
+				MetaRoutes: withoutRoute(catalog.ActionMaps(), "gitlab_project"),
+			},
+		},
 	}
 
 	for _, surface := range surfaces {
@@ -105,6 +120,13 @@ func TestToolManifest_SeeAlsoReferencesResolve_OnEverySurface(t *testing.T) {
 			}
 		}
 	})
+}
+
+// withoutRoute returns routes with one tool's action map removed,
+// modeling a restricted meta surface.
+func withoutRoute(routes map[string]toolutil.ActionMap, toolName string) map[string]toolutil.ActionMap {
+	delete(routes, toolName)
+	return routes
 }
 
 // assertSeeAlsoResolves walks every emitted description and requires each
@@ -147,21 +169,15 @@ func TestToolManifest_AliasEntriesDeclareAliasOf(t *testing.T) {
 			aliasOf[entry.ID] = entry.AliasOf
 		}
 	}
+	// Exact-set comparison: a new shared individual name would add an
+	// unintended alias pair, and a primary declaring alias_of would show
+	// up as an extra key — both must fail here, not slip through.
 	want := map[string]string{
 		"user.me":                 "user.current",
 		"repository.file_history": "repository.commit_list",
 		"issue.list_group":        "group.issues",
 	}
-	for id, primary := range want {
-		if got := aliasOf[id]; got != primary {
-			t.Errorf("entry %s alias_of = %q, want %q", id, got, primary)
-		}
-	}
-	// An alias must never point at another alias, and a primary never
-	// declares one.
-	for id, primary := range aliasOf {
-		if _, chained := aliasOf[primary]; chained {
-			t.Errorf("entry %s alias_of %q points at another alias", id, primary)
-		}
+	if !maps.Equal(aliasOf, want) {
+		t.Errorf("alias_of map = %v, want exactly %v", aliasOf, want)
 	}
 }

@@ -4371,16 +4371,20 @@ func TestServeHTTP_ServerCardEndpoint_ReturnsToolList(t *testing.T) {
 	if !toolsOK || len(toolsRaw) == 0 {
 		t.Fatal("server card 'tools' array missing or empty")
 	}
-	// tools/list publishes three icons per tool (SVG + light/dark WebP);
-	// the card must not show less than the live surface.
-	firstTool, _ := toolsRaw[0].(map[string]any)
-	if icons, _ := firstTool["icons"].([]any); len(icons) != 3 {
-		t.Errorf("card tools[0] icons = %d entries, want the 3 tools/list publishes", len(icons))
-	}
-	if prompts, _ := card["prompts"].([]any); len(prompts) > 0 {
-		firstPrompt, _ := prompts[0].(map[string]any)
-		if icons, _ := firstPrompt["icons"].([]any); len(icons) != 3 {
-			t.Errorf("card prompts[0] icons = %d entries, want 3", len(icons))
+	// The live surface publishes three icons (SVG + light/dark WebP) on
+	// every icon-bearing entry; the card must not show less on any of the
+	// four collections that carry them.
+	for _, collection := range []string{"tools", "prompts", "resources", "resourceTemplates"} {
+		entries, _ := card[collection].([]any)
+		if len(entries) == 0 {
+			t.Errorf("card %s array missing or empty", collection)
+			continue
+		}
+		for i, raw := range entries {
+			entry, _ := raw.(map[string]any)
+			if icons, _ := entry["icons"].([]any); len(icons) != 3 {
+				t.Errorf("card %s[%d] icons = %d entries, want 3", collection, i, len(icons))
+			}
 		}
 	}
 

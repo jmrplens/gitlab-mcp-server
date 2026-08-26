@@ -70,7 +70,7 @@
 | oauth         |        37 |    97.4% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                           |
 | progress      |        17 |   100.0% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                     |
 | prompts       |       262 |   100.0% | Package prompts registers MCP prompt templates that generate AI-optimized summaries, reviews, reports, and assessments from GitLab project, group, and cross-project data.                                        |
-| resources     |       189 |    99.4% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
+| resources     |       189 |    99.5% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
 | serverpool    |        54 |    98.9% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
 | subscriptions |        85 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                          |
 | testutil      |        34 |    88.2% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
@@ -354,7 +354,7 @@
 | oauth         |    97.4% |
 | progress      |   100.0% |
 | prompts       |   100.0% |
-| resources     |    99.4% |
+| resources     |    99.5% |
 | serverpool    |    98.9% |
 | subscriptions |   100.0% |
 | testutil      |    88.2% |
