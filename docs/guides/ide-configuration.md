@@ -10,20 +10,27 @@ Per-IDE MCP client configuration examples for gitlab-mcp-server, covering both s
 
 ## OAuth Support Matrix
 
-| IDE / Client             | Stdio | HTTP Legacy | HTTP OAuth | Official MCP Docs                                                               |
-| ------------------------ | :---: | :---------: | :--------: | ------------------------------------------------------------------------------- |
-| VS Code (GitHub Copilot) |   ✅   |      ✅      |     ✅      | [VS Code MCP docs](https://code.visualstudio.com/docs/copilot/chat/mcp-servers) |
-| Claude Desktop           |   ✅   |      ✅      |     —      | [Claude Desktop MCP docs](https://modelcontextprotocol.io/quickstart/user)      |
-| Claude Code              |   ✅   |      ✅      |     ✅      | [Claude Code MCP docs](https://docs.anthropic.com/en/docs/claude-code/mcp)      |
-| Cursor                   |   ✅   |      ✅      |     ✅      | [Cursor MCP docs](https://docs.cursor.com/context/model-context-protocol)       |
-| Windsurf                 |   ✅   |      ✅      |     —      | [Windsurf MCP docs](https://docs.windsurf.com/windsurf/cascade/mcp)             |
-| JetBrains IDEs           |   ✅   |      ✅      |     —      | [JetBrains MCP docs](https://www.jetbrains.com/help/ai-assistant/mcp.html)      |
-| Zed                      |   ✅   |      ✅      |     —      | [Zed MCP docs](https://zed.dev/docs/ai/mcp)                                     |
-| Kiro                     |   ✅   |      ✅      |     —      | [Kiro MCP docs](https://kiro.dev/docs/mcp/)                                     |
-| OpenCode                 |   ✅   |      ✅      |     —      | [OpenCode GitHub](https://github.com/anomalyco/opencode)                        |
-| Cline                    |   ✅   |      ✅      |     —      | [Cline MCP docs](https://docs.cline.bot/mcp-servers/overview)                   |
+| IDE / Client               | Stdio | HTTP Legacy | HTTP OAuth | Official MCP Docs                                                                                 |
+| -------------------------- | :---: | :---------: | :--------: | ------------------------------------------------------------------------------------------------- |
+| VS Code (GitHub Copilot)   |   ✅   |      ✅      |     ✅      | [VS Code MCP docs](https://code.visualstudio.com/docs/copilot/chat/mcp-servers)                   |
+| Claude Code                |   ✅   |      ✅      |     ✅      | [Claude Code MCP docs](https://docs.anthropic.com/en/docs/claude-code/mcp)                        |
+| Claude Desktop / claude.ai |   ✅   |      ✅      |     ✅      | [Claude Desktop MCP docs](https://modelcontextprotocol.io/quickstart/user)                        |
+| Cursor                     |   ✅   |      ✅      |     ✅      | [Cursor MCP docs](https://docs.cursor.com/context/model-context-protocol)                         |
+| OpenAI Codex CLI           |   ✅   |      ✅      |     ✅      | [Codex MCP docs](https://developers.openai.com/codex/mcp)                                         |
+| Gemini CLI                 |   ✅   |      ✅      |     ✅      | [Gemini CLI MCP docs](https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html)      |
+| LM Studio                  |   ✅   |      ✅      |     ✅      | [LM Studio MCP docs](https://lmstudio.ai/docs/app/plugins/mcp)                                    |
+| mcp-remote (proxy)         |   ✅   |      ✅      |     ✅      | [mcp-remote](https://github.com/geelen/mcp-remote)                                                |
+| GitLab Duo Agent Platform  |   —   |      ✅      |     —      | [GitLab MCP clients](https://docs.gitlab.com/user/gitlab_duo/model_context_protocol/mcp_clients/) |
+| Windsurf                   |   ✅   |      ✅      |     —      | [Windsurf MCP docs](https://docs.windsurf.com/windsurf/cascade/mcp)                               |
+| JetBrains IDEs             |   ✅   |      ✅      |     —      | [JetBrains MCP docs](https://www.jetbrains.com/help/ai-assistant/mcp.html)                        |
+| Zed                        |   ✅   |      ✅      |     —      | [Zed MCP docs](https://zed.dev/docs/ai/mcp)                                                       |
+| Kiro                       |   ✅   |      ✅      |     —      | [Kiro MCP docs](https://kiro.dev/docs/mcp/)                                                       |
+| OpenCode                   |   ✅   |      ✅      |     —      | [OpenCode GitHub](https://github.com/anomalyco/opencode)                                          |
+| Cline                      |   ✅   |      ✅      |     —      | [Cline MCP docs](https://docs.cline.bot/mcp-servers/overview)                                     |
 
-> **Note**: "—" indicates the client does not support `clientId` configuration for OAuth. These clients rely on Dynamic Client Registration (DCR), which GitLab assigns the `mcp` scope instead of `api`, making most server operations non-functional. Use stdio or HTTP legacy with `PRIVATE-TOKEN` header for those clients.
+> **Note**: "—" in the OAuth column means the client cannot present a **pre-registered client ID**. Those clients fall back to Dynamic Client Registration, which GitLab restricts to the `mcp` scope — a credential that cannot drive this server's REST-backed actions (see [OAuth App Setup — DCR and the `mcp` scope](oauth-app-setup.md#dynamic-client-registration-and-the-mcp-scope)). They are not locked out: HTTP OAuth mode also accepts a personal access token sent as `Authorization: Bearer <glpat-...>`, and HTTP legacy accepts `PRIVATE-TOKEN`.
+>
+> Verified as of 2026-08-27.
 
 ---
 
@@ -193,9 +200,12 @@ Edit `claude_desktop_config.json`:
 Claude Desktop supports remote MCP servers with OAuth via the **Custom Connectors** UI:
 
 1. Go to [claude.ai/settings/connectors](https://claude.ai/settings/connectors)
-2. Click **Add Connector** and enter the server URL: `http://your-server:8080/mcp`
-3. Claude handles OAuth discovery and authorization through the browser
+2. Click **Add Connector** and enter the server URL: `https://mcp.example.com/mcp` (the same origin as `--public-url`)
+3. Under **Advanced settings**, set the **Client ID** to your GitLab Application ID — without it Claude falls back to Dynamic Client Registration, which on GitLab yields an `mcp`-scoped token this server cannot use
+4. Claude handles OAuth discovery and authorization through the browser
 
+> **HTTPS required**: hosted Claude surfaces reach the server from Anthropic's infrastructure, so a plain `http://` or loopback URL cannot work. The callback to register in GitLab is `https://claude.ai/api/mcp/auth_callback`.
+>
 > **Note**: Claude Desktop does not support JSON-based OAuth configuration for remote MCP servers. Use the Custom Connectors UI for OAuth, or use stdio mode with a local binary.
 
 ---
@@ -535,6 +545,44 @@ Open the Cline sidebar in VS Code → click the MCP servers icon → **Edit Glob
 
 ---
 
+## Gemini CLI
+
+Add the server to `~/.gemini/settings.json`. Either authentication path works:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "httpUrl": "https://mcp.example.com/mcp",
+      "oauth": {
+        "enabled": true,
+        "clientId": "YOUR_GITLAB_APPLICATION_ID",
+        "redirectUri": "http://localhost:7777/oauth/callback"
+      }
+    }
+  }
+}
+```
+
+Register the exact `redirectUri` you pin in the GitLab application. For a token-based setup instead, drop the `oauth` block and use `"headers": { "Authorization": "Bearer glpat-..." }`.
+
+## GitLab Duo Agent Platform
+
+Duo's MCP client (VS Code, VSCodium, JetBrains via the GitLab Language Server) reads the shared `mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "gitlab-extended": {
+      "url": "https://mcp.example.com/mcp",
+      "headers": { "Authorization": "Bearer glpat-xxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+Header authentication is the reliable path here; Duo does not drive a browser OAuth flow against a third-party authorization server. Pointing Duo at this server is not redundant with its built-in GitLab tools — it adds the full action catalog on top of them.
+
 ## OpenAI Codex
 
 ### Stdio Mode
@@ -552,6 +600,24 @@ default_tools_approval_mode = "approve"
 GITLAB_URL = "https://gitlab.example.com"
 GITLAB_TOKEN = "glpat-xxxxxxxxxxxxxxxxxxxx"
 ```
+
+### HTTP Mode (Streamable HTTP)
+
+Codex reaches a remote server over Streamable HTTP with either a bearer token or a full OAuth flow:
+
+```toml
+# Bearer token — the simplest path, no redirect URI to register
+[mcp_servers.gitlab]
+url = "https://mcp.example.com/mcp"
+bearer_token_env_var = "GITLAB_TOKEN"      # a glpat-... personal access token
+default_tools_approval_mode = "approve"
+
+# OAuth with a pre-registered GitLab application (Codex CLI 2026-05-22+)
+[mcp_servers.gitlab.oauth]
+client_id = "YOUR_GITLAB_APPLICATION_ID"
+```
+
+Without `client_id`, `codex mcp login` falls back to Dynamic Client Registration, which GitLab restricts to the `mcp` scope — see [OAuth App Setup](oauth-app-setup.md#dynamic-client-registration-and-the-mcp-scope).
 
 Codex-specific notes:
 

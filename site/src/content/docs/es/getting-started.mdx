@@ -508,7 +508,7 @@ Cada cliente se conecta vía HTTP y proporciona su propio token de GitLab. Consu
 Para gestión de tokens sin configuración manual, usa el modo OAuth. Los usuarios autorizan a través del navegador — no se requiere copiar ni distribuir tokens:
 
 ```bash
-./gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth
+./gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --public-url=https://mcp.example.com
 ```
 
 Los clientes MCP que soportan OAuth 2.1 (VS Code, Claude Code) descubren el servidor de autorización automáticamente vía `/.well-known/oauth-protected-resource`. Consulta [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) para crear la Aplicación OAuth de GitLab requerida.

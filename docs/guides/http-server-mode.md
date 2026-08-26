@@ -262,7 +262,7 @@ Standard OAuth2-style bearer token, supported for compatibility.
 
 #### Precedence
 
-If both headers are present, `PRIVATE-TOKEN` wins.
+If both headers are present in legacy mode, `PRIVATE-TOKEN` wins. In OAuth mode only the Bearer token is read — the credential the server verified is the one it acts as, so a `PRIVATE-TOKEN` sent alongside it is ignored rather than silently taking over.
 
 #### Missing Token
 
@@ -384,7 +384,9 @@ curl http://localhost:8080/.well-known/oauth-protected-resource
   "resource": "https://mcp.example.com",
   "authorization_servers": ["https://gitlab.example.com"],
   "bearer_methods_supported": ["header"],
-  "scopes_supported": ["api", "read_api"]
+  "scopes_supported": ["api"],
+  "resource_name": "GitLab MCP Server",
+  "resource_documentation": "https://jmrp.io/docs/gitlab-mcp-server/guides/oauth-app-setup/"
 }
 ```
 

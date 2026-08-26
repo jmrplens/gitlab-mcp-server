@@ -66,6 +66,48 @@ protected-resource metadata is served from the identifier derived from
 credential entrusted to this proxy, scoped as narrowly as the workload
 allows.
 
+## Cross-Origin Protection
+
+Every non-safe request (`POST`, `DELETE`) that a **browser** makes from another origin is rejected with `403` before authentication or MCP dispatch:
+
+```text
+HTTP/1.1 403 Forbidden
+Content-Type: text/plain; charset=utf-8
+
+cross-origin request detected from Sec-Fetch-Site header
+```
+
+Non-browser clients are unaffected: a request carrying neither `Origin` nor `Sec-Fetch-Site` — every CLI, IDE and SDK client — always passes. Safe methods (`GET`, `HEAD`) are exempt too, so the server card, `/health` and the OAuth metadata endpoint are readable cross-origin.
+
+| Request                                                           | Result                             |
+| ----------------------------------------------------------------- | ---------------------------------- |
+| No `Origin` and no `Sec-Fetch-Site` (non-browser client)          | Allowed                            |
+| `Sec-Fetch-Site: none` or `same-origin`                           | Allowed                            |
+| `Sec-Fetch-Site: same-site` or `cross-site`                       | `403` unless the origin is trusted |
+| `Origin` present, no `Sec-Fetch-Site`, origin equals `Host`       | Allowed                            |
+| `Origin` present, no `Sec-Fetch-Site`, origin differs from `Host` | `403` unless the origin is trusted |
+
+### Allowing specific origins
+
+`--trusted-origins` takes a comma-separated list of absolute origins (`scheme://host[:port]`). A listed origin may make cross-origin browser requests; every other origin is still refused, so the DNS-rebinding requirement remains satisfied — an explicit allowlist **is** validation.
+
+```bash
+# Browser clients served from the site itself
+gitlab-mcp-server --http --trusted-origins=https://mcp.example.com
+
+# A local deployment reached by IP
+gitlab-mcp-server --http --trusted-origins=http://192.168.1.50:8080
+
+# Accept any origin (disables the protection) — only on a trusted network or
+# behind a same-origin proxy that is the sole ingress
+gitlab-mcp-server --http --trusted-origins='*'
+```
+
+Two behaviors are worth knowing:
+
+- **`--public-url` seeds its own origin.** The flag already declares the externally reachable origin of the deployment, so that origin is trusted automatically. In OAuth mode `--public-url` is required, which means the origin RFC 9728 discovery points at is trusted without extra configuration.
+- **A malformed origin fails startup.** A deployment that believes an origin is trusted when it is not is worse than one that refuses to start, so entries are validated before the server is built.
+
 ## TLS
 
 - All GitLab API communication uses HTTPS by default
@@ -125,7 +167,7 @@ When running with `--http`:
 - Binds to `localhost` by default — not exposed to the network
 - No built-in authentication on the HTTP endpoint
 - For production use, place behind a reverse proxy with proper TLS and auth
-- **Cross-origin request protection** — HTTP mode applies middleware created with the Go standard library `net/http` function `http.NewCrossOriginProtection().Handler`. Browser-originated non-safe cross-site requests are rejected before MCP dispatch, while non-browser MCP clients without `Origin` or `Sec-Fetch-Site` headers continue to work
+- **Cross-origin request protection** — HTTP mode applies middleware created with the Go standard library `net/http` function `http.NewCrossOriginProtection().Handler`. Browser-originated non-safe cross-site requests are rejected before MCP dispatch, while non-browser MCP clients without `Origin` or `Sec-Fetch-Site` headers continue to work. This satisfies the 2026-07-28 streamable-HTTP requirement that servers validate the `Origin` header against DNS rebinding. Use `--trusted-origins` to allow specific browser origins — see below
 - **Host validation** — When listening on a specific local host, requests with unexpected `Host` headers are rejected to mitigate DNS rebinding attacks. Binding to all interfaces (`0.0.0.0` or `::`) leaves Host validation to the reverse proxy deployment
 - **`GITLAB-URL` header validation** — In multi-instance mode, the server validates client-provided `GITLAB-URL` values and rejects malformed URLs with HTTP 400. When `--gitlab-url` is configured, it is authoritative and any client-provided `GITLAB-URL` value is ignored and logged
 - **Rate limiting** — A per-IP authentication failure rate limiter (10 failures/min) protects against brute-force token guessing. When running behind a reverse proxy, configure `--trusted-proxy-header` (e.g. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) so the rate limiter sees real client IPs. Only enable this flag when the server is reachable exclusively through a trusted proxy that overwrites or strips incoming copies of the header — otherwise clients can spoof it and bypass per-IP rate limiting. For multi-value headers like `X-Forwarded-For` the server uses the rightmost entry (the hop appended by the trusted proxy) to avoid trusting client-supplied values

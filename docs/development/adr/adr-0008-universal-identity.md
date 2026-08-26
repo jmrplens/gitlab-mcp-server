@@ -66,6 +66,8 @@ Implement Option 4 with the following architecture:
 - `auth.RequireBearerToken(verifier)` applied to all HTTP modes.
 - `oauth.NormalizeAuthHeader` middleware wraps only non-OAuth mode, converting `PRIVATE-TOKEN` header to `Authorization: Bearer`.
 
+> **Superseded (2026-08)**: the normalization adapter is no longer mounted. OAuth mode is Bearer-only — what the `WWW-Authenticate` challenge advertises is exactly what is accepted — and legacy mode reads both headers directly. A personal access token sent as `Authorization: Bearer` works in either mode, so nothing is lost.
+
 ### Stdio Mode (`cmd/server/main.go`)
 
 - After `client.Initialize(ctx)`, call `client.CurrentUser(ctx)` to resolve `{UserID, Username}`.
