@@ -287,6 +287,7 @@ To enable server-side token verification, set `--auth-mode=oauth`:
 gitlab-mcp-server --http \
   --gitlab-url=https://gitlab.com \
   --auth-mode=oauth \
+  --public-url=https://mcp.example.com \
   --oauth-cache-ttl=15m
 ```
 

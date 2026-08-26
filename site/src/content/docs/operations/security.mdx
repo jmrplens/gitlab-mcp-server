@@ -201,10 +201,23 @@ For production HTTP deployments, consider using OAuth mode (`--auth-mode=oauth`)
 
 - Users authorize through the browser — no manual token distribution
 - OAuth 2.1 with PKCE protects against authorization code interception
-- Token identity is cached for `--oauth-cache-ttl` (default: 15 minutes, range: 1m–2h)
-- The `PRIVATE-TOKEN` header remains supported for backward compatibility
+- Token identity is cached for `--oauth-cache-ttl` (default: 15 minutes, range: 1m–2h), keyed by a SHA-256 hash — raw tokens are never stored
+- Granted scopes are introspected from GitLab rather than assumed
+- OAuth mode is **Bearer-only**: `PRIVATE-TOKEN` is rejected with `401`. Clients without OAuth support send a personal access token as `Authorization: Bearer <glpat-...>`, which is verified the same way
 
 See [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) for creating the required GitLab OAuth Application, and [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for full configuration details.
+
+### Cross-origin protection
+
+Non-safe requests (`POST`, `DELETE`) made by a **browser** from another origin are refused with `403` before authentication, satisfying the 2026-07-28 transport requirement to validate `Origin` against DNS rebinding. Non-browser clients — every CLI, IDE and SDK — send neither `Origin` nor `Sec-Fetch-Site` and are unaffected, and safe methods (server card, `/health`, OAuth metadata) are exempt.
+
+To allow browser clients from specific origins, list them explicitly:
+
+```bash
+gitlab-mcp-server --http --trusted-origins=https://mcp.example.com
+```
+
+An allowlist **is** validation: every origin not on it is still refused. A bare IP works for local deployments, `*` accepts any origin (disabling the protection — only sensible on a trusted network or behind a same-origin proxy), and the `--public-url` origin is trusted automatically. A malformed entry fails startup.
 
 ## Verifying release integrity
 

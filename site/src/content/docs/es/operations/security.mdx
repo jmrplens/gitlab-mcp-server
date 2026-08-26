@@ -201,10 +201,23 @@ Para despliegues HTTP en producción, considera usar el modo OAuth (`--auth-mode
 
 - Los usuarios autorizan a través del navegador — no es necesario distribuir tokens manualmente
 - OAuth 2.1 con PKCE protege contra la interceptación del código de autorización
-- La identidad del token se cachea durante `--oauth-cache-ttl` (por defecto: 15 minutos, rango: 1m–2h)
-- La cabecera `PRIVATE-TOKEN` sigue siendo compatible para retrocompatibilidad
+- La identidad del token se cachea durante `--oauth-cache-ttl` (por defecto: 15 minutos, rango: 1m–2h), con clave hash SHA-256 — los tokens en claro nunca se almacenan
+- Los scopes concedidos se introspeccionan desde GitLab en lugar de asumirse
+- El modo OAuth es **solo Bearer**: `PRIVATE-TOKEN` se rechaza con `401`. Los clientes sin soporte OAuth envían un token de acceso personal como `Authorization: Bearer <glpat-...>`, que se verifica igual
 
 Consulta [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) para crear la Aplicación OAuth de GitLab requerida, y [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para los detalles completos de configuración.
+
+### Protección cross-origin
+
+Las peticiones no seguras (`POST`, `DELETE`) que un **navegador** hace desde otro origen se rechazan con `403` antes de la autenticación, cumpliendo el requisito del transporte 2026-07-28 de validar `Origin` frente a DNS rebinding. Los clientes que no son navegador —CLIs, IDEs y SDKs— no envían `Origin` ni `Sec-Fetch-Site` y no se ven afectados, y los métodos seguros (server card, `/health`, metadatos OAuth) están exentos.
+
+Para permitir clientes de navegador desde orígenes concretos, decláralos explícitamente:
+
+```bash
+gitlab-mcp-server --http --trusted-origins=https://mcp.example.com
+```
+
+Una lista blanca **es** validación: todo origen que no esté en ella se sigue rechazando. Una IP a secas sirve para despliegues locales, `*` acepta cualquier origen (desactivando la protección — solo razonable en una red de confianza o tras un proxy del mismo origen), y el origen de `--public-url` es de confianza automáticamente. Una entrada malformada impide arrancar.
 
 ## Verificación de la integridad del release
 

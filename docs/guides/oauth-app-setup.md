@@ -80,7 +80,23 @@ sequenceDiagram
 1. Go to **User Settings → Applications** (`/-/user_settings/applications`)
 2. Follow the same steps as above
 
-> **Scope recommendation**: The `api` scope is required for full tool functionality. If you only need read operations, `read_api` is sufficient but many tools will fail.
+### Which one to create
+
+The three types differ only in who owns and can revoke the application — the OAuth flow is identical:
+
+| Type     | Create it when                                                                  | Notes                                        |
+| -------- | ------------------------------------------------------------------------------- | -------------------------------------------- |
+| Instance | You administer a self-managed GitLab and the endpoint serves the whole instance | Not available to regular users on GitLab.com |
+| Group    | A team shares the endpoint and should keep owning the app                       | Survives any single member leaving           |
+| User     | You run the endpoint yourself, or you are on GitLab.com without group ownership | Tied to your account; revoked with it        |
+
+### Scopes: pick `api`, avoid `mcp`
+
+- **`api`** — what this server needs. Every action it exposes is a REST v4 or GraphQL call made with the user's token.
+- **`read_api`** — enough for a read-only deployment (`--read-only`), but tools that write will fail.
+- **`mcp`** — do **not** pick this one. Despite the name it is scoped to *GitLab's own built-in MCP server*, and a credential minted for it grants no general REST or GraphQL access, so every action here would fail. See [Dynamic Client Registration and the `mcp` scope](#dynamic-client-registration-and-the-mcp-scope).
+
+> **Device authorization grant**: leave the checkbox unchecked. No MCP client uses RFC 8628 — the MCP authorization flow is authorization code + PKCE with a browser redirect — and enabling an unused grant only adds device-code phishing surface. It can be enabled later without recreating the app.
 
 ---
 
@@ -90,13 +106,20 @@ Each MCP client has its own redirect URI scheme. Configure **all** redirect URIs
 
 ### Redirect URIs per IDE
 
-| IDE / Client                  | Redirect URI                           | Notes                                                                            |
-| ----------------------------- | -------------------------------------- | -------------------------------------------------------------------------------- |
-| VS Code / GitHub Copilot      | `http://localhost`                     | VS Code opens a local HTTP server on a random port; GitLab matches the host only |
-| VS Code (Codespaces / Remote) | `https://insiders.vscode.dev/redirect` | For remote development environments                                              |
-| Cursor                        | `http://localhost`                     | VS Code fork — same redirect URI scheme                                          |
-| Claude Code (CLI)             | `http://localhost`                     | CLI-based OAuth callback (default port configurable via `--callback-port`)       |
+| IDE / Client                  | Redirect URI                                       | Notes                                                                                   |
+| ----------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| VS Code / GitHub Copilot      | `http://127.0.0.1:33418`                           | Loopback IP literals match on host only, so the port is not significant                 |
+| VS Code (Remote / vscode.dev) | `https://vscode.dev/redirect`                      | For remote development environments                                                     |
+| Cursor (desktop)              | `http://localhost:8787/callback`                   | Fixed callback — the exact path is required                                             |
+| Cursor (web / Cloud Agents)   | `https://www.cursor.com/agents/mcp/oauth/callback` | Only needed for Cursor's hosted surfaces                                                |
+| Claude Code (CLI)             | `http://localhost`                                 | Random ephemeral port by default; pin with `--callback-port` and register the exact URI |
+| Claude Desktop / claude.ai    | `https://claude.ai/api/mcp/auth_callback`          | All hosted Claude surfaces share this callback                                          |
+| OpenAI Codex CLI              | `http://localhost:1455/auth/callback`              | Only when using `--oauth-client-id`; the bearer-token path needs no redirect URI        |
+| Gemini CLI                    | Pinned in `settings.json` (`oauth.redirectUri`)    | Register whatever you pin                                                               |
+| LM Studio                     | `http://localhost:33389/callback`                  | Fixed callback                                                                          |
 
+> **`localhost` vs `127.0.0.1`**: GitLab (Doorkeeper) ignores the port only for **loopback IP literals**. A `http://localhost` entry is matched exactly, port included — which is why Claude Code with a random port registers the bare `http://localhost` form, and why pinning `--callback-port` means registering that exact URI.
+>
 > **Multiple URIs**: GitLab allows multiple redirect URIs separated by newlines in the application form. Add all URIs your team needs.
 
 ### Example: Combined Redirect URIs
@@ -119,6 +142,7 @@ http://localhost:8090/callback
 gitlab-mcp-server --http \
   --gitlab-url=https://gitlab.example.com \
   --auth-mode=oauth \
+  --public-url=https://mcp.example.com \
   --oauth-cache-ttl=15m
 ```
 
@@ -138,6 +162,42 @@ Expected output:
   "scopes_supported": ["api"]
 }
 ```
+
+---
+
+## Behind a reverse proxy
+
+The metadata URL follows RFC 9728 §3: the well-known segment is inserted **between the host and the resource path**, not appended to it. With `--public-url=https://mcp.example.com/gitlab`, clients look for:
+
+```text
+https://mcp.example.com/.well-known/oauth-protected-resource/gitlab
+```
+
+That path lives at the **root of the host**, so a proxy that only forwards `/gitlab/` will not serve it. Add a route without rewriting:
+
+```nginx
+location /.well-known/oauth-protected-resource {
+    proxy_pass http://gitlab-mcp:8080;   # no path rewrite
+}
+```
+
+The server answers both the bare and the path-suffixed form, so no rewriting is needed — and the suffix keeps multiple MCP servers on one host distinguishable.
+
+Two more things the deployment must get right:
+
+- **`Host` must reach the server as the public host.** The cross-origin check compares a browser's `Origin` against the request `Host` when `Sec-Fetch-Site` is absent, so forwarding an internal host name breaks legitimate same-origin browser calls. `proxy_set_header Host $host;` is the correct form.
+- **Browser clients need `--trusted-origins`.** Cross-origin browser `POST`s are refused before authentication; list the origins that should be allowed (the `--public-url` origin is trusted automatically). See [Security — Cross-Origin Protection](../concepts/security.md#cross-origin-protection).
+
+### The 401 challenge
+
+An unauthenticated request receives the challenge that starts client discovery:
+
+```text
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/gitlab", scope="api"
+```
+
+The `scope` hint tells well-behaved clients which scope to request — clients that instead ask for every scope the authorization server advertises get rejected by GitLab with `invalid_scope`.
 
 ---
 
@@ -172,11 +232,52 @@ claude mcp add gitlab \
   http://your-server:8080/mcp
 ```
 
-> **Important**: Without `clientId`, these clients fall back to OAuth Dynamic Client Registration (DCR). GitLab's DCR assigns the `mcp` scope instead of `api`, which causes most server operations to fail. Always configure `clientId` explicitly.
+> **Important**: always configure the client ID explicitly. Without it these clients fall back to Dynamic Client Registration, which on GitLab yields a token this server cannot use — see the next section.
+
+### Other clients
+
+| Client                    | OAuth against GitLab  | How                                                                                                                      |
+| ------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| OpenAI Codex CLI          | Yes, since 2026-05-22 | `codex mcp add --oauth-client-id <APP_ID>`, or skip OAuth entirely with `bearer_token_env_var` in `~/.codex/config.toml` |
+| Gemini CLI                | Yes                   | `mcpServers.<name>.oauth`: `clientId` plus a pinned `redirectUri`                                                        |
+| LM Studio                 | Yes, since 0.4.10     | `auth` block with `CLIENT_ID`                                                                                            |
+| mcp-remote (stdio proxy)  | Yes                   | `--static-oauth-client-info`                                                                                             |
+| MCP Inspector             | Yes                   | Static credentials in the auth panel                                                                                     |
+| GitLab Duo Agent Platform | Header only           | `headers: { "Authorization": "Bearer glpat-..." }` in the shared `mcp.json`                                              |
+| Zed                       | **No**                | Supports only CIMD/DCR, neither of which yields an `api`-scoped GitLab token — use a personal access token as Bearer     |
+| JetBrains AI Assistant    | **No**                | Runs no OAuth flow — use a personal access token as Bearer                                                               |
+
+Every client in the "No" rows still works: OAuth mode accepts a personal access token sent as `Authorization: Bearer <glpat-...>`, verified against GitLab exactly like an OAuth access token.
+
+---
+
+## Dynamic Client Registration and the `mcp` scope
+
+GitLab.com's authorization server does advertise an RFC 7591 registration endpoint (`/oauth/register`), so a client that supports Dynamic Client Registration will happily register itself without you creating anything. That path does not work here, and the reason is worth understanding rather than memorizing:
+
+**GitLab built DCR for its own built-in MCP server.** Dynamically registered clients are forced to the `mcp` scope regardless of what they request. A token with that scope can call GitLab's built-in MCP endpoint — and nothing else. This server is a proxy over the full REST v4 and GraphQL API, so with an `mcp`-scoped token even the initial identity check fails, and every action after it would too.
+
+The consequence is simple: **a pre-registered application with the `api` scope is mandatory**, and its Application ID must be configured in each client. A client that cannot be given a static client ID (Zed, JetBrains today) cannot use the OAuth path against GitLab at all — it uses a personal access token as Bearer instead.
+
+GitLab does not implement Client ID Metadata Documents (CIMD) either, which is the mechanism the 2026-07-28 MCP specification now prefers over DCR; it is [tracked upstream](https://gitlab.com/gitlab-org/gitlab/-/issues/585069) but not shipped.
 
 ---
 
 ## Token Lifecycle
+
+Two different lifetimes are in play — the GitLab token's, and this server's verification cache.
+
+### GitLab access tokens
+
+GitLab.com issues OAuth access tokens that **expire after 2 hours** and returns a refresh token alongside them (self-managed instances can configure the lifetime since 19.1). What happens at expiry is entirely up to the MCP client:
+
+- Clients that implement refresh (Claude Code, VS Code) renew silently and the user notices nothing.
+- Clients that do not will show an authentication error roughly every two hours and require re-authorization.
+- The server plays no part in this: it verifies whatever token arrives and returns `401` when GitLab rejects it.
+
+A personal access token used as Bearer has none of this: it lives until its own expiry date, which is why it remains the pragmatic choice for headless and CI use.
+
+### Server-side identity cache
 
 | Event                            | Behavior                                                    |
 | -------------------------------- | ----------------------------------------------------------- |
@@ -184,7 +285,9 @@ claude mcp add gitlab \
 | Subsequent requests (within TTL) | Token served from SHA-256 hashed cache — no GitLab API call |
 | Cache TTL expires                | Token re-verified on next request                           |
 | Token revoked on GitLab          | Next request after cache expiry returns 401                 |
-| Background cleanup               | Expired cache entries evicted every 30 seconds              |
+| Background cleanup               | Expired cache entries evicted periodically                  |
+
+The cache stores only successful verifications, keyed by a SHA-256 hash — raw tokens are never stored. `--oauth-cache-ttl` (default 15m, range 1m–2h) bounds how long a revoked token keeps working.
 
 ---
 

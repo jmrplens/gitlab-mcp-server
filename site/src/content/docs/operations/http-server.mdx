@@ -6,7 +6,7 @@ faq:
   - q: "When should I use HTTP mode instead of stdio?"
     a: "Use **stdio mode** for a single developer running a local AI client, where each client spawns its own server process. Use **HTTP mode** when a team shares one server instance, for remote or headless server deployments, for CI/CD integration with MCP, and for testing with curl or HTTP clients. In HTTP mode a single server process serves multiple clients over the network, each authenticating with its own GitLab token."
   - q: "How do clients authenticate in HTTP mode?"
-    a: "Clients send their GitLab Personal Access Token on every request using the `PRIVATE-TOKEN` header (recommended) or an `Authorization: Bearer` header; if both are present, `PRIVATE-TOKEN` wins. When the server starts without `--gitlab-url`, clients also send a `GITLAB-URL` header to choose the target instance. For production, `--auth-mode=oauth` enables RFC 9728–compliant OAuth 2.1 with PKCE, so clients discover the authorization server and authorize in the browser instead of copying tokens."
+    a: "Clients send their GitLab Personal Access Token on every request using the `PRIVATE-TOKEN` header (recommended) or an `Authorization: Bearer` header; if both are present in legacy mode, `PRIVATE-TOKEN` wins (OAuth mode reads only the Bearer token). When the server starts without `--gitlab-url`, clients also send a `GITLAB-URL` header to choose the target instance. For production, `--auth-mode=oauth` enables RFC 9728–compliant OAuth 2.1 with PKCE, so clients discover the authorization server and authorize in the browser instead of copying tokens."
   - q: "Do HTTP mode clients share state or context?"
     a: "No. HTTP mode uses a **bounded LRU pool** of MCP server instances keyed by the SHA-256 hash of each client's token **and** GitLab URL. Clients with the same token and same GitLab URL share one instance, while different tokens or different URLs get completely isolated instances. Raw tokens are never stored — only the SHA-256 hashes — and when the pool reaches `--max-http-clients` the least recently used entry is evicted."
   - q: "Why do my MCP sessions drop or streams get cut off?"
@@ -137,7 +137,7 @@ If both headers are present, `PRIVATE-TOKEN` takes precedence. Requests without 
 OAuth mode (`--auth-mode=oauth`) enables RFC 9728–compliant OAuth 2.1 authentication. Instead of managing tokens manually, MCP clients discover the authorization server automatically and handle the OAuth flow:
 
 ```bash
-gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth
+gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth --public-url=https://mcp.example.com
 ```
 
 **How it works:**
@@ -146,6 +146,14 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth
 2. MCP clients (VS Code, Claude Code) discover this endpoint and initiate the OAuth 2.1 PKCE flow
 3. Users authorize in the browser — no token copying required
 4. The server validates Bearer tokens against the GitLab API and caches the identity for `--oauth-cache-ttl` (default: 15 minutes)
+
+:::caution[--public-url is required]
+`--public-url` declares the externally reachable origin and **is the RFC 9728 resource identifier**; the server refuses to start in OAuth mode without a valid one. The metadata URL is derived from it by inserting the well-known segment between host and path, so `--public-url=https://mcp.example.com/gitlab` publishes metadata at `https://mcp.example.com/.well-known/oauth-protected-resource/gitlab` — a path at the **root of the host**, which a reverse proxy must route without rewriting.
+:::
+
+:::note[Pre-registered client ID required]
+GitLab restricts dynamically-registered OAuth clients to the `mcp` scope, which grants no REST or GraphQL access — every action here would fail. Create a GitLab OAuth Application with the `api` scope and configure its Application ID in each client.
+:::
 
 **Client configuration in OAuth mode:**
 
@@ -157,7 +165,7 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auth-mode=oauth
   "servers": {
     "gitlab": {
       "type": "http",
-      "url": "http://your-server:8080/mcp",
+      "url": "https://mcp.example.com/mcp",
       "oauth": {
         "clientId": "YOUR_GITLAB_APPLICATION_ID",
         "scopes": ["api"]
@@ -197,7 +205,7 @@ OAuth mode requires a GitLab OAuth Application. See the [`docs/guides/oauth-app-
 :::
 
 :::note
-The `PRIVATE-TOKEN` header still works in OAuth mode — the middleware normalizes it to a Bearer token. This enables backward compatibility with clients that don't support OAuth yet.
+OAuth mode is **Bearer-only**: the `PRIVATE-TOKEN` header is rejected with `401`, because what the `WWW-Authenticate` challenge advertises is exactly what the server accepts. Clients without OAuth support are not locked out — a personal access token sent as `Authorization: Bearer <glpat-...>` is verified and works the same way an OAuth access token does.
 :::
 
 ## Stateless mode
@@ -339,7 +347,7 @@ Add to `.vscode/mcp.json`:
   "servers": {
     "gitlab": {
       "type": "http",
-      "url": "http://your-server:8080/mcp",
+      "url": "https://mcp.example.com/mcp",
       "headers": {
         "PRIVATE-TOKEN": "glpat-your-token"
       }
@@ -355,7 +363,7 @@ Add to `.vscode/mcp.json`:
 {
   "mcpServers": {
     "gitlab": {
-      "url": "http://your-server:8080/mcp",
+      "url": "https://mcp.example.com/mcp",
       "headers": {
         "PRIVATE-TOKEN": "glpat-your-token"
       }
