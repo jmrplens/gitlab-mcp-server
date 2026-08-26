@@ -13,6 +13,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1191,4 +1192,76 @@ func setLoggingLevel(ctx context.Context, s *mcp.ClientSession) error {
 func listPrompts(ctx context.Context, s *mcp.ClientSession) error {
 	_, err := s.ListPrompts(ctx, nil)
 	return err
+}
+
+// TestWireSubscribeError_MapsSentinelsToCodes verifies each manager
+// sentinel leaves the subscribe boundary as a *jsonrpc.Error with a
+// deliberate code instead of the accidental code 0 the SDK marshals for a
+// plain error, with the message preserved verbatim.
+func TestWireSubscribeError_MapsSentinelsToCodes(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int64
+	}{
+		{"not subscribable is invalid params", fmt.Errorf("%w: gitlab://project/1/issues", subscriptions.ErrNotSubscribable), jsonrpc.CodeInvalidParams},
+		{"inaccessible is invalid params", fmt.Errorf("%w: 404", subscriptions.ErrInaccessible), jsonrpc.CodeInvalidParams},
+		{"rate limited is server busy", subscriptions.ErrRateLimited, codeServerBusy},
+		{"watcher cap is server busy", subscriptions.ErrTooManySubscriptions, codeServerBusy},
+		{"manager closed is server busy", subscriptions.ErrClosed, codeServerBusy},
+		{"transient failure is internal", errors.New("gitlab: 500"), jsonrpc.CodeInternalError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := wireSubscribeError(tt.err)
+			var rpcErr *jsonrpc.Error
+			if !errors.As(got, &rpcErr) {
+				t.Fatalf("wireSubscribeError(%v) = %v, want *jsonrpc.Error", tt.err, got)
+			}
+			if rpcErr.Code != tt.want {
+				t.Errorf("code = %d, want %d", rpcErr.Code, tt.want)
+			}
+			if rpcErr.Message != tt.err.Error() {
+				t.Errorf("message = %q, want the original %q preserved", rpcErr.Message, tt.err.Error())
+			}
+		})
+	}
+
+	t.Run("nil stays nil", func(t *testing.T) {
+		if got := wireSubscribeError(nil); got != nil {
+			t.Errorf("wireSubscribeError(nil) = %v, want nil", got)
+		}
+	})
+	t.Run("an already-coded error passes through unchanged", func(t *testing.T) {
+		if got := wireSubscribeError(errStatelessSubscribe); got != errStatelessSubscribe { //nolint:errorlint // pointer identity is the assertion: the coded error must pass through untouched
+			t.Errorf("wireSubscribeError(coded) = %v, want the same *jsonrpc.Error untouched", got)
+		}
+	})
+}
+
+// TestSubscribe_MissingResource_RefusedWithInvalidParamsCode verifies
+// the boundary end to end: a stateful subscribe whose authorization read
+// finds the resource gone reaches the SDK as invalid params — the code the
+// SDK itself answers an unknown resources/read with — not as a plain error
+// the wire would carry as code 0.
+func TestSubscribe_MissingResource_RefusedWithInvalidParamsCode(t *testing.T) {
+	backend, gitlab := newPipelineBackend(t, "running")
+	backend.setMissing()
+	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
+	t.Cleanup(runtime.manager.Close)
+	bridge := newSessionBridge(runtime.manager)
+
+	session, _ := connectedSessions(t)
+	err := bridge.Subscribe(context.Background(), &mcp.SubscribeRequest{
+		Session: session,
+		Params:  &mcp.SubscribeParams{URI: "gitlab://project/42/pipeline/99"},
+	})
+	var rpcErr *jsonrpc.Error
+	if !errors.As(err, &rpcErr) || rpcErr.Code != jsonrpc.CodeInvalidParams {
+		t.Fatalf("Subscribe(missing) error = %v, want *jsonrpc.Error with code %d", err, jsonrpc.CodeInvalidParams)
+	}
+	if runtime.manager.Len() != 0 {
+		t.Errorf("watchers = %d after a refused subscribe, want 0", runtime.manager.Len())
+	}
 }
