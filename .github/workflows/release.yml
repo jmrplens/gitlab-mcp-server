@@ -236,6 +236,19 @@ jobs:
       # manifest (jmrplens.gitlab-mcp-server) has been merged upstream —
       # continue-on-error keeps releases green until then and if Microsoft's
       # validation service hiccups.
+      #
+      # The fork MUST be synced first: komac creates its branch on the fork,
+      # and a stale fork fails with "Ref cannot be created" — which the
+      # releaser's continue-on-error then hides. That exact combination
+      # silently skipped the 2.7.2 and 2.7.3 submissions (fork 24 days
+      # behind). This step is deliberately blocking: if the sync fails
+      # (409 divergence, 422), the releaser would fail against the stale
+      # fork anyway and hide it — a red winget job is the visibility that
+      # was missing, and nothing downstream depends on this job.
+      - name: Sync winget-pkgs fork with upstream
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: gh api -X POST repos/jmrplens/winget-pkgs/merge-upstream -f branch=master
       - uses: vedantmgoyal9/winget-releaser@v2
         continue-on-error: true
         with:
