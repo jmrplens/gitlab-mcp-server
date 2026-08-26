@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# base_branches defaults to an empty list, which means only pull requests
+# targeting the default branch are reviewed automatically. This project uses
+# stacked pull requests, where every layer above the bottom one targets the
+# branch below it, so leaving the default in place is the difference between
+# "reviewed" and "merged unseen" for most of a stack.
+language: en-US
+
+reviews:
+  auto_review:
+    enabled: true
+    # Any base branch, so a stacked pull request is reviewed on its own diff
+    # rather than skipped for not targeting main.
+    base_branches:
+      - ".*"
+    # Bot commits (version stamping, generated manifests, dependency bumps)
+    # carry no reviewable intent.
+    ignore_usernames:
+      - "github-actions[bot]"
+      - "dependabot[bot]"

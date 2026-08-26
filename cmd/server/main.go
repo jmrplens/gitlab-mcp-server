@@ -406,7 +406,9 @@ FLAGS
   -auto-update-timeout dur  Timeout for startup/background update checks (default %s)
   -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
   -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
+  -public-url string        Externally reachable https origin; required with -auth-mode=oauth (RFC 9728 resource identifier)
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
+  -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
   -rate-limit-rps float     Per-server tools/call rate limit (0 = disabled)
   -rate-limit-burst int     Token-bucket burst size when --rate-limit-rps > 0 (default %d)
 
