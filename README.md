@@ -424,9 +424,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |       991 |     201,013 |
-| Unit tests (`_test.go`)  |       549 |     310,832 |
+| Unit tests (`_test.go`)  |       549 |     310,873 |
 | End-to-end tests         |       174 |      45,163 |
-| **Total**                | **1,714** | **557,008** |
+| **Total**                | **1,714** | **557,049** |
 
 ### Functions
 
@@ -435,8 +435,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  7,498 |
 | — exported (public)             |  2,615 |
 | — unexported (private)          |  4,883 |
-| Unit test functions (`TestXxx`) | 11,661 |
-| Subtests (`t.Run(...)`)         |  2,936 |
+| Unit test functions (`TestXxx`) | 11,662 |
+| Subtests (`t.Run(...)`)         |  2,937 |
 | End-to-end test functions       |    381 |
 
 ### Ratios worth noting

@@ -163,18 +163,59 @@ func seeAlsoNames(description string) []string {
 // is exactly how 13 entries shipped unprojected in v2.7.2.
 func assertSeeAlsoFormat(t *testing.T, owner, description string) {
 	t.Helper()
+	if violation, ok := seeAlsoFormatViolation(description); !ok {
+		t.Errorf("%s has a See-also clause outside the canonical format (comma-separated names, trailing period): %.120q", owner, violation)
+	}
+}
+
+// seeAlsoFormatViolation reports the first "See also:" occurrence the
+// canonical clause pattern cannot consume, or ok=true when every clause
+// conforms. Pure, so the format rules are testable independently of the
+// current catalog's metadata.
+func seeAlsoFormatViolation(description string) (string, bool) {
 	for idx := strings.Index(description, "See also:"); idx >= 0; {
 		loc := seeAlsoClause.FindStringIndex(description[idx:])
 		if loc == nil || loc[0] != 0 {
-			t.Errorf("%s has a See-also clause outside the canonical format (comma-separated names, trailing period): %.120q", owner, description[idx:])
-			return
+			return description[idx:], false
 		}
 		rest := description[idx+loc[1]:]
 		next := strings.Index(rest, "See also:")
 		if next < 0 {
-			return
+			return "", true
 		}
 		idx = idx + loc[1] + next
+	}
+	return "", true
+}
+
+// TestSeeAlsoFormatViolation_RecognizesClauseShapes pins the format rules
+// themselves, independent of what the catalog currently contains: the
+// shapes that shipped unprojected in v2.7.2 (missing period,
+// parenthetical annotations) must be violations, and canonical shapes
+// must pass.
+func TestSeeAlsoFormatViolation_RecognizesClauseShapes(t *testing.T) {
+	tests := []struct {
+		name        string
+		description string
+		wantOK      bool
+	}{
+		{"no clause at all", "List things. Returns: items.", true},
+		{"single canonical clause", "Get a thing. See also: gitlab_thing_list, gitlab_thing_delete.", true},
+		{"canonical clause with dotted IDs", "Rewritten form. See also: widget.create, gitlab_widget.get.", true},
+		{"multiple canonical clauses", "A. See also: gitlab_a. B. See also: gitlab_b, gitlab_c.", true},
+		{"missing trailing period", "Get a thing.\n\nSee also: gitlab_thing_list, gitlab_thing_delete", false},
+		{"parenthetical annotation", "Resolve. See also: gitlab_thing_get (full CRUD), gitlab_other (checks).", false},
+		{"and separator", "Compare. See also: gitlab_a and gitlab_b.", false},
+		{"semicolon separator", "Compare. See also: gitlab_a; gitlab_b.", false},
+		{"second clause malformed", "A. See also: gitlab_a. B. See also: gitlab_b, gitlab_c", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			violation, ok := seeAlsoFormatViolation(tt.description)
+			if ok != tt.wantOK {
+				t.Errorf("seeAlsoFormatViolation(%q) ok = %v (violation %q), want %v", tt.description, ok, violation, tt.wantOK)
+			}
+		})
 	}
 }
 
