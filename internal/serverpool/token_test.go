@@ -314,3 +314,35 @@ func TestInvalidGitLabURLError_DoesNotLeakURL(t *testing.T) {
 		t.Errorf("Error() missing reason: %q", msg)
 	}
 }
+
+// TestExtractBearerToken_IgnoresPrivateToken verifies the oauth-mode
+// extractor reads only Authorization: Bearer and never PRIVATE-TOKEN — a
+// request carrying both must yield the Bearer credential, since that is the
+// one the SDK middleware verified.
+func TestExtractBearerToken_IgnoresPrivateToken(t *testing.T) {
+	tests := []struct {
+		name    string
+		bearer  string
+		private string
+		want    string
+	}{
+		{"bearer only", "gloas-abc", "", "gloas-abc"},
+		{"both present prefers bearer", "gloas-verified", "glpat-unverified", "gloas-verified"},
+		{"private only yields nothing", "", "glpat-x", ""},
+		{"neither", "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+			if tt.bearer != "" {
+				r.Header.Set("Authorization", "Bearer "+tt.bearer)
+			}
+			if tt.private != "" {
+				r.Header.Set("PRIVATE-TOKEN", tt.private)
+			}
+			if got := ExtractBearerToken(r); got != tt.want {
+				t.Errorf("ExtractBearerToken() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
