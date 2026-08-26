@@ -181,6 +181,7 @@ type httpConfig struct {
 	publicURL           string
 	oauthCacheTTL       time.Duration
 	trustedProxyHeader  string
+	trustedOrigins      string
 	rateLimitRPS        float64
 	rateLimitBurst      int
 	metaParamSchema     string
@@ -266,6 +267,7 @@ func main() {
 	flag.StringVar(&hcfg.publicURL, "public-url", "", "Externally reachable origin of this deployment (https). Required with --auth-mode=oauth: it is the RFC 9728 protected-resource identifier")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
+	flag.StringVar(&hcfg.trustedOrigins, "trusted-origins", "", "Comma-separated absolute origins (scheme://host[:port], e.g. an IP for local deploys) allowed to make cross-origin browser requests; '*' accepts any origin (disables the protection); empty rejects all. The --public-url origin is trusted automatically")
 	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", 0, "Per-server tools/call rate limit in requests/second (0 = disabled)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
@@ -604,6 +606,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		PublicURL:           hcfg.publicURL,
 		OAuthCacheTTL:       hcfg.oauthCacheTTL,
 		TrustedProxyHeader:  hcfg.trustedProxyHeader,
+		TrustedOrigins:      buildTrustedOrigins(hcfg.trustedOrigins, hcfg.publicURL),
 		RateLimitRPS:        hcfg.rateLimitRPS,
 		RateLimitBurst:      hcfg.rateLimitBurst,
 		MetaParamSchema:     hcfg.metaParamSchema,
@@ -623,6 +626,19 @@ func validateHTTPRuntimeConfig(cfg *config.Config) error {
 	if rateErr := toolutil.ValidateRateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst); rateErr != nil {
 		return fmt.Errorf("--rate-limit-rps/--rate-limit-burst: %w", rateErr)
 	}
+	// A malformed trusted origin must fail startup, not be silently dropped:
+	// a deployment believing an origin is trusted when it is not is worse
+	// than one that rejects it loudly. AddTrustedOrigin is the same check the
+	// middleware applies later, so acceptance here guarantees it there.
+	probe := http.NewCrossOriginProtection()
+	for _, origin := range cfg.TrustedOrigins {
+		if origin == "*" {
+			continue // the accept-any wildcard, handled in the middleware
+		}
+		if err := probe.AddTrustedOrigin(origin); err != nil {
+			return fmt.Errorf("--trusted-origins entry %q: %w", origin, err)
+		}
+	}
 	if cfg.MaxRequestBodyBytes < 0 {
 		return fmt.Errorf("--max-request-body-bytes must be >= 0, got %d", cfg.MaxRequestBodyBytes)
 	}
@@ -637,6 +653,13 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 		return fmt.Errorf("--auth-mode must be 'legacy' or 'oauth', got %q", cfg.AuthMode)
 	}
 	if cfg.AuthMode != "oauth" {
+		// In legacy mode --public-url is optional, but when set it now has
+		// an effect (its origin seeds the trusted-origins list), so a
+		// malformed value must still be rejected rather than silently
+		// producing no trusted origin.
+		if cfg.PublicURL != "" {
+			return config.ValidatePublicURL(cfg.PublicURL)
+		}
 		return nil
 	}
 	if cfg.GitLabURL == "" {
@@ -1306,7 +1329,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	registerHTTPMCPHandlers(ctx, cfg, httpAddr, pool, mux)
 
 	var rootHandler http.Handler = mux
-	rootHandler = crossOriginProtectionMiddleware(rootHandler)
+	rootHandler = crossOriginProtectionMiddleware(cfg.TrustedOrigins, rootHandler)
 	rootHandler = securityHeadersMiddleware(rootHandler)
 	if hosts := allowedHosts(httpAddr); len(hosts) > 0 {
 		rootHandler = hostValidationMiddleware(hosts, rootHandler)
@@ -1392,6 +1415,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		gitlabURL:          cfg.GitLabURL,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		challenge:          `Bearer resource_metadata="` + resourceMetadataURL + `"`,
+		bearerOnly:         true,
 	}
 
 	tokenCache := oauth.NewTokenCache()
@@ -1400,9 +1424,13 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.GitLabURL)
 	// Both derivations of RFC 9728 §3 resolve: the path-less form and the
 	// path-inserted form a client computes from a resource identifier that
-	// carries a path.
-	mux.Handle("GET /.well-known/oauth-protected-resource", prm)
-	mux.Handle("GET /.well-known/oauth-protected-resource/{rest...}", prm)
+	// carries a path. Mounted without a method restriction so the SDK
+	// handler answers the CORS preflight itself (OPTIONS → 204 with
+	// Access-Control-Allow-Origin: *); a "GET "-restricted pattern would
+	// send the preflight to the catch-all gate and 401 it, locking out
+	// browser-based clients that fetch PRM cross-origin (claude.ai).
+	mux.Handle("/.well-known/oauth-protected-resource", prm)
+	mux.Handle("/.well-known/oauth-protected-resource/{rest...}", prm)
 	// Bearer only: oauth mode advertises the RFC 6750 scheme, so the legacy
 	// PRIVATE-TOKEN header alias is not silently rewritten into it here —
 	// what the challenge advertises is exactly what is accepted.
@@ -1601,11 +1629,60 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// buildTrustedOrigins merges the explicit --trusted-origins list with the
+// origin of --public-url (deduplicated). Seeding the public-url origin makes
+// the deployment self-consistent: a browser client on the deployment's own
+// declared origin is exactly the same-domain case, and in oauth mode
+// public-url is mandatory, so the origin RFC 9728 discovery points at is
+// trusted without extra configuration. A public-url with no parseable
+// origin is skipped here; config validation rejects a malformed one.
+func buildTrustedOrigins(csv, publicURL string) []string {
+	seen := map[string]bool{}
+	var origins []string
+	add := func(o string) {
+		o = strings.TrimSpace(o)
+		if o == "" || seen[o] {
+			return
+		}
+		seen[o] = true
+		origins = append(origins, o)
+	}
+	for o := range strings.SplitSeq(csv, ",") {
+		add(o)
+	}
+	if publicURL != "" {
+		if u, err := url.Parse(publicURL); err == nil && u.Host != "" {
+			add(u.Scheme + "://" + u.Host)
+		}
+	}
+	return origins
+}
+
 // crossOriginProtectionMiddleware applies explicit CSRF-oriented checks for
 // browser-originated HTTP requests. The MCP SDK no longer enables this by
-// default when StreamableHTTPOptions.CrossOriginProtection is nil.
-func crossOriginProtectionMiddleware(next http.Handler) http.Handler {
-	return http.NewCrossOriginProtection().Handler(next)
+// default when StreamableHTTPOptions.CrossOriginProtection is nil. Origins
+// in cfg.TrustedOrigins are allowed to make cross-origin requests; a
+// malformed origin is fatal, since silently dropping it would leave the
+// deployment believing an origin is trusted when it is not.
+func crossOriginProtectionMiddleware(trustedOrigins []string, next http.Handler) http.Handler {
+	// "*" is an explicit opt-out: accept every origin, which disables the
+	// DNS-rebinding protection entirely. It is the right choice for a
+	// deployment reachable only over a trusted network (local dev, a stack
+	// behind a same-origin proxy that is the sole ingress), and it mirrors
+	// an Access-Control-Allow-Origin: * the operator has decided to honor.
+	if slices.Contains(trustedOrigins, "*") {
+		slog.Warn("cross-origin protection disabled: --trusted-origins contains '*' (every origin accepted)")
+		return next
+	}
+	protection := http.NewCrossOriginProtection()
+	for _, origin := range trustedOrigins {
+		// Errors are unreachable: validateHTTPRuntimeConfig has already
+		// accepted every origin with the same AddTrustedOrigin call before
+		// the server was built. The check stays so a future caller that
+		// skips validation still cannot silently trust nothing.
+		_ = protection.AddTrustedOrigin(origin)
+	}
+	return protection.Handler(next)
 }
 
 // hostValidationMiddleware rejects requests whose Host header does not match

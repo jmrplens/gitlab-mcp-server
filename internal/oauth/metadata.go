@@ -20,6 +20,11 @@ func NewProtectedResourceHandler(resourceURL, gitlabURL string) http.Handler {
 		AuthorizationServers:   []string{gitlabURL},
 		BearerMethodsSupported: []string{"header"},
 		ScopesSupported:        []string{"api"},
+		// RFC 9728 RECOMMENDED fields: a human name and a docs URL let a
+		// directory or consent screen label this resource instead of
+		// showing only its URL.
+		ResourceName:          "GitLab MCP Server",
+		ResourceDocumentation: "https://jmrp.io/docs/gitlab-mcp-server/guides/oauth-app-setup/",
 	}
 	return auth.ProtectedResourceMetadataHandler(metadata)
 }

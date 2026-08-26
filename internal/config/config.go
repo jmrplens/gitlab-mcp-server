@@ -174,9 +174,16 @@ type Config struct {
 	// wrong-origin identifiers behind any TLS-terminating proxy.
 	PublicURL string
 
-	TrustedProxyHeader string   // HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
-	ExcludeTools       []string // Tool names to exclude from registration (comma-separated via EXCLUDE_TOOLS)
-	IgnoreScopes       bool     // When true, skip PAT scope detection and register all tools
+	TrustedProxyHeader string // HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
+	// TrustedOrigins are absolute origins (scheme://host[:port]) allowed to
+	// make cross-origin browser requests. Empty by default: the server
+	// refuses every cross-origin browser POST, and only a listed origin (or
+	// the PublicURL origin, seeded automatically) is exempted. A trusted
+	// origin is validation, not a bypass — the DNS-rebinding MUST is still
+	// met for every origin not on the list.
+	TrustedOrigins []string
+	ExcludeTools   []string // Tool names to exclude from registration (comma-separated via EXCLUDE_TOOLS)
+	IgnoreScopes   bool     // When true, skip PAT scope detection and register all tools
 
 	RateLimitRPS   float64 // Per-server tools/call rate limit in requests/second (0 = disabled)
 	RateLimitBurst int     // Token-bucket burst size when RateLimitRPS > 0
