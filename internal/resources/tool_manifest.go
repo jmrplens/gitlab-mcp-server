@@ -80,6 +80,12 @@ type ToolSurfaceEntry struct {
 	Destructive    bool                       `json:"destructive"`
 	ReadOnly       bool                       `json:"read_only"`
 	RequiredParams []ToolSurfaceRequiredParam `json:"required_params,omitempty"`
+	// RequiredParamsAnyOf lists alternative requirement groups: the schema
+	// accepts a call satisfying at least one group ("name, description or
+	// color", "file_name+content or files"). These names are NOT in
+	// RequiredParams — publishing an alternative as unconditionally
+	// required invites clients to send every branch at once.
+	RequiredParamsAnyOf [][]ToolSurfaceRequiredParam `json:"required_params_any_of,omitempty"`
 }
 
 // ToolSurfaceRequiredParam names one required parameter of a manifest
@@ -94,13 +100,62 @@ type ToolSurfaceRequiredParam struct {
 	Type string `json:"type,omitempty"`
 }
 
-// manifestRequiredParams pairs a schema's required parameter names with
-// their flat types.
+// manifestRequiredParams pairs a schema's unconditionally required
+// parameter names — the top-level "required" list only — with their flat
+// types. Alternative-branch requirements (anyOf/oneOf) are published
+// separately by [manifestAlternativeRequiredParams]: a branch name is not
+// unconditionally required, and declaring it so invites a client to send
+// every branch at once.
 func manifestRequiredParams(schema map[string]any) []ToolSurfaceRequiredParam {
-	names := dynamicRequiredParams(schema)
+	if schema == nil {
+		return nil
+	}
+	names := dedupeDynamicStrings(sortedStrings(appendDynamicRequiredParamNames(nil, schema["required"])))
 	if len(names) == 0 {
 		return nil
 	}
+	return typedParams(schema, names)
+}
+
+// manifestAlternativeRequiredParams extracts the anyOf/oneOf requirement
+// groups: each group is one branch's "required" list, minus names already
+// unconditionally required at the top level. A call must satisfy at least
+// one group.
+func manifestAlternativeRequiredParams(schema map[string]any) [][]ToolSurfaceRequiredParam {
+	if schema == nil {
+		return nil
+	}
+	top := make(map[string]bool)
+	for _, name := range appendDynamicRequiredParamNames(nil, schema["required"]) {
+		top[name] = true
+	}
+	var groups [][]ToolSurfaceRequiredParam
+	for _, keyword := range []string{"anyOf", "oneOf"} {
+		alternatives, ok := schema[keyword].([]any)
+		if !ok {
+			continue
+		}
+		for _, alternative := range alternatives {
+			branch, isObject := alternative.(map[string]any)
+			if !isObject {
+				continue
+			}
+			var names []string
+			for _, name := range appendDynamicRequiredParamNames(nil, branch["required"]) {
+				if !top[name] {
+					names = append(names, name)
+				}
+			}
+			if len(names) > 0 {
+				groups = append(groups, typedParams(schema, names))
+			}
+		}
+	}
+	return groups
+}
+
+// typedParams pairs parameter names with their flat schema types.
+func typedParams(schema map[string]any, names []string) []ToolSurfaceRequiredParam {
 	properties, _ := schema["properties"].(map[string]any)
 	params := make([]ToolSurfaceRequiredParam, 0, len(names))
 	for _, name := range names {
@@ -110,6 +165,13 @@ func manifestRequiredParams(schema map[string]any) []ToolSurfaceRequiredParam {
 		})
 	}
 	return params
+}
+
+// sortedStrings sorts a copy-in-place and returns it, for deterministic
+// manifest output.
+func sortedStrings(values []string) []string {
+	sort.Strings(values)
+	return values
 }
 
 // flatSchemaType reads the plain "type" of one property, joining a
@@ -349,18 +411,19 @@ func (snapshot *toolSurfaceSnapshot) addDynamicActions(catalog *actioncatalog.Ca
 	aliases := aliasPrimaries(catalog)
 	for _, action := range catalog.Actions() {
 		entry := ToolSurfaceEntry{
-			ID:             string(action.ID),
-			Kind:           toolManifestKindDynamicAction,
-			Tool:           "gitlab_execute_action",
-			Action:         string(action.ID),
-			Domain:         action.Domain,
-			BackingTool:    action.ToolName,
-			BackingAction:  action.Name,
-			Title:          actionTitle(action),
-			Description:    actionDescription(action, resolve),
-			Destructive:    action.Route.Destructive,
-			ReadOnly:       action.ReadOnly,
-			RequiredParams: manifestRequiredParams(action.Route.InputSchema),
+			ID:                  string(action.ID),
+			Kind:                toolManifestKindDynamicAction,
+			Tool:                "gitlab_execute_action",
+			Action:              string(action.ID),
+			Domain:              action.Domain,
+			BackingTool:         action.ToolName,
+			BackingAction:       action.Name,
+			Title:               actionTitle(action),
+			Description:         actionDescription(action, resolve),
+			Destructive:         action.Route.Destructive,
+			ReadOnly:            action.ReadOnly,
+			RequiredParams:      manifestRequiredParams(action.Route.InputSchema),
+			RequiredParamsAnyOf: manifestAlternativeRequiredParams(action.Route.InputSchema),
 		}
 		if primary, ok := aliases[string(action.ID)]; ok {
 			entry.AliasOf = string(primary.ID)
@@ -409,13 +472,14 @@ func (snapshot *toolSurfaceSnapshot) addMetaActions(catalog *actioncatalog.Catal
 			}
 			route := routeSnapshot[toolName][actionName]
 			entry := ToolSurfaceEntry{
-				ID:             id,
-				Kind:           toolManifestKindMetaAction,
-				Tool:           toolName,
-				Action:         actionName,
-				DetailURI:      toolManifestDetailURI(id),
-				Destructive:    route.Destructive,
-				RequiredParams: manifestRequiredParams(route.InputSchema),
+				ID:                  id,
+				Kind:                toolManifestKindMetaAction,
+				Tool:                toolName,
+				Action:              actionName,
+				DetailURI:           toolManifestDetailURI(id),
+				Destructive:         route.Destructive,
+				RequiredParams:      manifestRequiredParams(route.InputSchema),
+				RequiredParamsAnyOf: manifestAlternativeRequiredParams(route.InputSchema),
 			}
 			snapshot.addMetaEntry(entry, routeSnapshot)
 		}
@@ -424,16 +488,17 @@ func (snapshot *toolSurfaceSnapshot) addMetaActions(catalog *actioncatalog.Catal
 
 func (snapshot *toolSurfaceSnapshot) addMetaAction(action actioncatalog.Action, routes map[string]toolutil.ActionMap, resolve seeAlsoResolver, aliases map[string]actioncatalog.Action) {
 	entry := ToolSurfaceEntry{
-		ID:             metaManifestID(action.ToolName, action.Name),
-		Kind:           toolManifestKindMetaAction,
-		Tool:           action.ToolName,
-		Action:         action.Name,
-		Domain:         action.Domain,
-		Title:          actionTitle(action),
-		Description:    actionDescription(action, resolve),
-		Destructive:    action.Route.Destructive,
-		ReadOnly:       action.ReadOnly,
-		RequiredParams: manifestRequiredParams(action.Route.InputSchema),
+		ID:                  metaManifestID(action.ToolName, action.Name),
+		Kind:                toolManifestKindMetaAction,
+		Tool:                action.ToolName,
+		Action:              action.Name,
+		Domain:              action.Domain,
+		Title:               actionTitle(action),
+		Description:         actionDescription(action, resolve),
+		Destructive:         action.Route.Destructive,
+		ReadOnly:            action.ReadOnly,
+		RequiredParams:      manifestRequiredParams(action.Route.InputSchema),
+		RequiredParamsAnyOf: manifestAlternativeRequiredParams(action.Route.InputSchema),
 	}
 	if primary, ok := aliases[string(action.ID)]; ok {
 		entry.AliasOf = metaManifestID(primary.ToolName, primary.Name)
@@ -504,15 +569,16 @@ func (snapshot *toolSurfaceSnapshot) addEntry(entry ToolSurfaceEntry, call ToolS
 
 func directToolEntry(tool toolSnapshot, kind string) ToolSurfaceEntry {
 	return ToolSurfaceEntry{
-		ID:             tool.Name,
-		Kind:           kind,
-		Tool:           tool.Name,
-		Title:          tool.Title,
-		Description:    tool.Description,
-		DetailURI:      toolManifestDetailURI(tool.Name),
-		Destructive:    tool.Destructive,
-		ReadOnly:       tool.ReadOnly,
-		RequiredParams: requiredParamsFromInputSchema(tool.InputSchema),
+		ID:                  tool.Name,
+		Kind:                kind,
+		Tool:                tool.Name,
+		Title:               tool.Title,
+		Description:         tool.Description,
+		DetailURI:           toolManifestDetailURI(tool.Name),
+		Destructive:         tool.Destructive,
+		ReadOnly:            tool.ReadOnly,
+		RequiredParams:      requiredParamsFromInputSchema(tool.InputSchema),
+		RequiredParamsAnyOf: alternativeRequiredParamsFromInputSchema(tool.InputSchema),
 	}
 }
 
@@ -537,6 +603,14 @@ func requiredParamsFromInputSchema(inputSchema any) []ToolSurfaceRequiredParam {
 		return nil
 	}
 	return manifestRequiredParams(schema)
+}
+
+func alternativeRequiredParamsFromInputSchema(inputSchema any) [][]ToolSurfaceRequiredParam {
+	schema, ok := inputSchema.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return manifestAlternativeRequiredParams(schema)
 }
 
 func actionTitle(action actioncatalog.Action) string {
@@ -714,4 +788,132 @@ func parseToolManifestURI(uri string) string {
 		return ""
 	}
 	return strings.ToLower(strings.TrimSpace(rest))
+}
+
+// appendDynamicRequiredParamNames appends each non-empty string in raw
+// to names. raw is expected to be either a []any or []string (the two
+// shapes the JSON parser can return for a JSON array); any other type
+// is ignored.
+func appendDynamicRequiredParamNames(names []string, raw any) []string {
+	switch values := raw.(type) {
+	case []any:
+		for _, value := range values {
+			if name, ok := value.(string); ok && name != "" {
+				names = append(names, name)
+			}
+		}
+	case []string:
+		names = append(names, values...)
+	}
+	return names
+}
+
+// dedupeDynamicStrings returns a slice of strings with consecutive
+// duplicates and empty values removed. The input is expected to be
+// pre-sorted by the caller (the only deduplication guarantee provided).
+func dedupeDynamicStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := values[:0]
+	var last string
+	for index, value := range values {
+		if value == "" || (index > 0 && value == last) {
+			continue
+		}
+		out = append(out, value)
+		last = value
+	}
+	return out
+}
+
+// dynamicActionSchema returns the JSON Schema (as a generic map) for
+// the params object of one dynamic action. The schema is cloned via
+// [toolutil.CloneMetaSchemaRoutes] so per-action edits do not leak
+// between sibling actions. When the action has no captured InputSchema
+// a permissive fallback object schema is returned.
+func dynamicActionSchema(action actioncatalog.Action) map[string]any {
+	route := toolutil.CloneMetaSchemaRoutes(map[string]toolutil.ActionMap{action.ToolName: {action.Name: action.Route}})[action.ToolName][action.Name]
+	if route.InputSchema == nil {
+		schema := map[string]any{
+			"type":                 "object",
+			"description":          "This dynamic action has no captured parameter schema. Send an empty params object {} unless the action description says otherwise.",
+			"additionalProperties": true,
+		}
+		return enrichDynamicSchema(schema, action)
+	}
+	return enrichDynamicSchema(route.InputSchema, action)
+}
+
+// cloneMetaSchemaRoutes creates a shallow snapshot of route maps so
+// resource handlers do not observe later registration changes from
+// other server builds. It is a thin wrapper around
+// [toolutil.CloneMetaSchemaRoutes] that exists for testability.
+func cloneMetaSchemaRoutes(routes map[string]toolutil.ActionMap) map[string]toolutil.ActionMap {
+	return toolutil.CloneMetaSchemaRoutes(routes)
+}
+
+// lookupMetaActionSchema returns the per-action params schema for the
+// given tool/action pair. It returns false when the tool or action is
+// unknown. When the route exists but has no captured InputSchema, a
+// permissive fallback object schema (with "additionalProperties: true"
+// and a guidance description) is returned along with true, so clients
+// always get a usable JSON Schema.
+func lookupMetaActionSchema(routes map[string]toolutil.ActionMap, tool, action string) (map[string]any, bool) {
+	return toolutil.LookupMetaActionSchema(routes, tool, action)
+}
+
+// enrichDynamicSchema adds x_parameter_guidance and (for destructive
+// actions) x_destructive / x_confirmation fields to schema in place.
+// The map is returned for fluent use.
+func enrichDynamicSchema(schema map[string]any, action actioncatalog.Action) map[string]any {
+	if guidance := dynamicParameterGuidance(action); len(guidance) > 0 {
+		schema["x_parameter_guidance"] = guidance
+	}
+	if action.Route.Destructive {
+		schema["x_destructive"] = true
+		schema["x_confirmation"] = map[string]any{
+			"location":    "gitlab_execute_action.confirm",
+			"description": "Set top-level confirm=true on gitlab_execute_action after explicit user approval; do not put confirm inside params.",
+		}
+	}
+	return schema
+}
+
+// dynamicParameterGuidance converts the route's
+// [toolutil.ParameterGuidance] map into the JSON shape embedded under
+// the schema's x_parameter_guidance key. Returns nil when there is no
+// guidance to embed.
+func dynamicParameterGuidance(action actioncatalog.Action) map[string]any {
+	if len(action.Route.ParameterGuidance) == 0 {
+		return nil
+	}
+	guidance := make(map[string]any, len(action.Route.ParameterGuidance))
+	for name, item := range action.Route.ParameterGuidance {
+		entry := dynamicParameterGuidanceEntry(item)
+		if len(entry) > 0 {
+			guidance[name] = entry
+		}
+	}
+	return guidance
+}
+
+// dynamicParameterGuidanceEntry renders a single guidance item as a
+// JSON map. Only the populated fields of item are included so the
+// output stays compact.
+func dynamicParameterGuidanceEntry(item toolutil.ParameterGuidance) map[string]any {
+	entry := make(map[string]any, 4)
+	if item.SemanticRole != "" {
+		entry["semantic_role"] = item.SemanticRole
+	}
+	if item.ValueSource != "" {
+		entry["value_source"] = item.ValueSource
+	}
+	if len(item.CommonConfusions) > 0 {
+		entry["common_confusions"] = append([]string(nil), item.CommonConfusions...)
+	}
+	if item.ExampleBinding != "" {
+		entry["example_binding"] = item.ExampleBinding
+	}
+	return entry
 }

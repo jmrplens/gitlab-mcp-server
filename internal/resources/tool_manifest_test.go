@@ -7,6 +7,7 @@ package resources
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -365,4 +366,287 @@ func readToolDetail(t *testing.T, session *mcp.ClientSession, uri string) ToolSu
 		t.Fatalf("unmarshal detail: %v", uErr)
 	}
 	return detail
+}
+
+// TestManifestRequiredParams_SplitsUnconditionalFromAlternatives verifies
+// the manifest's requirement semantics table-driven: the top-level
+// "required" list is published as unconditional, anyOf/oneOf branch
+// requirements become alternative groups, and names already required at
+// the top level are not repeated inside a group.
+func TestManifestRequiredParams_SplitsUnconditionalFromAlternatives(t *testing.T) {
+	tests := []struct {
+		name       string
+		schema     map[string]any
+		wantParams string
+		wantGroups string
+	}{
+		{"nil schema yields nothing", nil, "", ""},
+		{
+			"top-level required is unconditional and typed",
+			map[string]any{
+				"required":   []any{"project_id"},
+				"properties": map[string]any{"project_id": map[string]any{"type": "integer"}},
+			},
+			"project_id:integer", "",
+		},
+		{
+			"anyOf branches become groups, not requirements",
+			map[string]any{
+				"anyOf": []any{
+					"ignored",
+					map[string]any{"required": []any{"file_name", "content"}},
+					map[string]any{"required": []any{"files"}},
+				},
+				"properties": map[string]any{"files": map[string]any{"type": "array"}},
+			},
+			"", "file_name,content|files:array",
+		},
+		{
+			"oneOf branches join the groups",
+			map[string]any{"oneOf": []any{map[string]any{"required": []any{"branch"}}}},
+			"", "branch",
+		},
+		{
+			"top-level names are not repeated inside groups",
+			map[string]any{
+				"required": []any{"project_id"},
+				"anyOf":    []any{map[string]any{"required": []any{"project_id", "name"}}},
+			},
+			"project_id", "name",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := renderParams(manifestRequiredParams(tt.schema)); got != tt.wantParams {
+				t.Errorf("manifestRequiredParams() = %q, want %q", got, tt.wantParams)
+			}
+			groups := manifestAlternativeRequiredParams(tt.schema)
+			rendered := make([]string, 0, len(groups))
+			for _, group := range groups {
+				rendered = append(rendered, renderParams(group))
+			}
+			if got := strings.Join(rendered, "|"); got != tt.wantGroups {
+				t.Errorf("manifestAlternativeRequiredParams() = %q, want %q", got, tt.wantGroups)
+			}
+		})
+	}
+
+	t.Run("dedupe helper drops empties and repeats", func(t *testing.T) {
+		if got := dedupeDynamicStrings(nil); got != nil {
+			t.Fatalf("dedupeDynamicStrings(nil) = %v, want nil", got)
+		}
+		if got := dedupeDynamicStrings([]string{"", "branch", "branch"}); strings.Join(got, ",") != "branch" {
+			t.Fatalf("dedupeDynamicStrings() = %v, want branch", got)
+		}
+	})
+}
+
+// renderParams flattens typed params to "name:type" (type omitted when
+// empty), comma-joined, for compact table expectations.
+func renderParams(params []ToolSurfaceRequiredParam) string {
+	parts := make([]string, 0, len(params))
+	for _, param := range params {
+		if param.Type == "" {
+			parts = append(parts, param.Name)
+			continue
+		}
+		parts = append(parts, param.Name+":"+param.Type)
+	}
+	return strings.Join(parts, ",")
+}
+
+// TestDynamicParameterGuidanceEntry_CoversAllFields verifies the per-entry
+// projection includes every populated field of toolutil.ParameterGuidance
+// (semantic_role, value_source, common_confusions, example_binding) and
+// omits empty ones to keep the model-facing guidance compact.
+func TestDynamicParameterGuidanceEntry_CoversAllFields(t *testing.T) {
+	tests := []struct {
+		name           string
+		item           toolutil.ParameterGuidance
+		wantKeys       []string
+		wantAbsentKeys []string
+	}{
+		{
+			name: "all fields populated",
+			item: toolutil.ParameterGuidance{
+				SemanticRole:     "project_id",
+				ValueSource:      "from URL or numeric ID",
+				CommonConfusions: []string{"namespace_id", "group_id"},
+				ExampleBinding:   `params.project_id:"group/project"`,
+			},
+			wantKeys:       []string{"semantic_role", "value_source", "common_confusions", "example_binding"},
+			wantAbsentKeys: nil,
+		},
+		{
+			name: "only semantic role",
+			item: toolutil.ParameterGuidance{
+				SemanticRole: "branch_name",
+			},
+			wantKeys:       []string{"semantic_role"},
+			wantAbsentKeys: []string{"value_source", "common_confusions", "example_binding"},
+		},
+		{
+			name: "only example binding",
+			item: toolutil.ParameterGuidance{
+				ExampleBinding: `params.ref:"main"`,
+			},
+			wantKeys:       []string{"example_binding"},
+			wantAbsentKeys: []string{"semantic_role", "value_source", "common_confusions"},
+		},
+		{
+			name:           "all fields empty produces empty entry",
+			item:           toolutil.ParameterGuidance{},
+			wantKeys:       nil,
+			wantAbsentKeys: []string{"semantic_role", "value_source", "common_confusions", "example_binding"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := dynamicParameterGuidanceEntry(tt.item)
+			if tt.wantKeys == nil {
+				if len(entry) != 0 {
+					t.Fatalf("entry = %+v, want empty map for all-empty input", entry)
+				}
+				return
+			}
+			for _, key := range tt.wantKeys {
+				if _, ok := entry[key]; !ok {
+					t.Errorf("entry missing key %q: %+v", key, entry)
+				}
+			}
+			for _, key := range tt.wantAbsentKeys {
+				if _, ok := entry[key]; ok {
+					t.Errorf("entry should not include key %q: %+v", key, entry)
+				}
+			}
+		})
+	}
+}
+
+// TestDynamicParameterGuidance_ProjectsPopulatedEntries verifies the
+// guidance map table-driven: populated entries survive, all-empty entries
+// are dropped, and an action with no guidance yields nil so the schema
+// omits the block entirely.
+func TestDynamicParameterGuidance_ProjectsPopulatedEntries(t *testing.T) {
+	tests := []struct {
+		name     string
+		guidance map[string]toolutil.ParameterGuidance
+		want     []string
+		absent   []string
+		wantNil  bool
+	}{
+		{
+			name: "populated entries survive, empty entries are dropped",
+			guidance: map[string]toolutil.ParameterGuidance{
+				"project_id":   {SemanticRole: "project_id", ExampleBinding: `params.project_id:"group/project"`},
+				"unused_param": {},
+				"branch":       {SemanticRole: "branch_name"},
+			},
+			want:   []string{"project_id", "branch"},
+			absent: []string{"unused_param"},
+		},
+		{name: "no guidance yields nil", guidance: nil, wantNil: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			action := actioncatalog.Action{Name: "create", Route: toolutil.ActionRoute{ParameterGuidance: tt.guidance}}
+			got := dynamicParameterGuidance(action)
+			if tt.wantNil {
+				if got != nil {
+					t.Fatalf("dynamicParameterGuidance() = %+v, want nil", got)
+				}
+				return
+			}
+			for _, name := range tt.want {
+				if _, ok := got[name]; !ok {
+					t.Errorf("guidance missing populated entry %q: %+v", name, got)
+				}
+			}
+			for _, name := range tt.absent {
+				if _, ok := got[name]; ok {
+					t.Errorf("guidance should drop entry %q with no populated fields: %+v", name, got)
+				}
+			}
+		})
+	}
+}
+
+// TestEnrichDynamicSchema_GuidanceAndDestructive names both enrichment
+// scenarios as subtests: the guidance/destructive/confirmation markers
+// reach the served gitlab://tools/{id} detail, and an action without
+// guidance or destructiveness omits every marker.
+func TestEnrichDynamicSchema_GuidanceAndDestructive(t *testing.T) {
+	t.Run("attaches through the served detail", func(t *testing.T) {
+		catalog := actioncatalog.NewCatalog()
+		group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget", BaseDomain: "widget"})
+		group.SetAction(actioncatalog.Action{
+			Name: "remove",
+			Route: toolutil.ActionRoute{
+				Destructive: true,
+				ParameterGuidance: map[string]toolutil.ParameterGuidance{
+					"project_id": {
+						SemanticRole:   "project_id",
+						ExampleBinding: `params.project_id:"group/project"`,
+					},
+				},
+			},
+		})
+		if err := catalog.AddGroup(group); err != nil {
+			t.Fatalf("AddGroup() error = %v", err)
+		}
+
+		// Read through the served surface: the enriched schema must reach the
+		// gitlab://tools/{id} detail, not only the enrichment function.
+		session := toolManifestSession(t, ToolSurfaceResourceOptions{
+			Surface: toolSurfaceDynamic,
+			Tools:   []*mcp.Tool{{Name: "gitlab_execute_action", Title: "Execute"}},
+			Catalog: catalog,
+		})
+		detail := readToolDetail(t, session, "gitlab://tools/widget.remove")
+		schema, ok2 := detail.InputSchema.(map[string]any)
+		if !ok2 {
+			t.Fatalf("detail input_schema = %T, want an enriched schema object", detail.InputSchema)
+		}
+
+		guidance, ok := schema["x_parameter_guidance"].(map[string]any)
+		if !ok {
+			t.Fatalf("schema missing x_parameter_guidance: %+v", schema)
+		}
+		entry, ok := guidance["project_id"].(map[string]any)
+		if !ok {
+			t.Fatalf("x_parameter_guidance missing project_id: %+v", guidance)
+		}
+		if entry["semantic_role"] != "project_id" {
+			t.Errorf("semantic_role = %v, want project_id", entry["semantic_role"])
+		}
+		if entry["example_binding"] != `params.project_id:"group/project"` {
+			t.Errorf("example_binding = %v, want quoted project ID", entry["example_binding"])
+		}
+
+		if got, exists := schema["x_destructive"].(bool); !exists || !got {
+			t.Errorf("x_destructive = %v, want true", schema["x_destructive"])
+		}
+		confirmation, ok := schema["x_confirmation"].(map[string]any)
+		if !ok || confirmation["location"] != "gitlab_execute_action.confirm" {
+			t.Errorf("x_confirmation = %+v, want confirm guidance", schema["x_confirmation"])
+		}
+	})
+
+	t.Run("omits markers when absent", func(t *testing.T) {
+		action := actioncatalog.Action{
+			Name: "noop",
+			Route: toolutil.ActionRoute{
+				Destructive: false,
+			},
+		}
+		schema := map[string]any{"type": "object"}
+		enriched := enrichDynamicSchema(schema, action)
+		if _, ok := enriched["x_parameter_guidance"]; ok {
+			t.Errorf("schema should not include x_parameter_guidance when no guidance declared: %+v", enriched)
+		}
+		if _, ok := enriched["x_destructive"]; ok {
+			t.Errorf("schema should not include x_destructive for non-destructive action: %+v", enriched)
+		}
+	})
 }

@@ -12,8 +12,6 @@
 //
 //   - Project and group resources backed by GitLab REST API calls.
 //   - Tool manifest resources registered by [RegisterToolSurfaceResources].
-//   - Legacy schema compatibility helpers registered by [RegisterMetaSchemaResources]
-//     and [RegisterDynamicSchemaResources] in isolated tests and audits.
 //   - Workflow guide resources registered by [RegisterWorkflowGuides].
 //
 // The public tool manifest resources expose these URI shapes:
