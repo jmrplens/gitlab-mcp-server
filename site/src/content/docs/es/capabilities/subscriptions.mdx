@@ -78,4 +78,16 @@ Un vigilante sin renovar no muere en silencio — se ralentiza. Tras 30 minutos 
 - **HTTP, modo stateless (el predeterminado)**: la petición legada `resources/subscribe` se rechaza con un error explicativo — cada POST stateless recibe su propia sesión que se cierra con la respuesta, así que una suscripción aceptada nunca podría notificarse. Los clientes con protocolo 2026-07-28 no se ven afectados: `subscriptions/listen` mantiene la petición abierta, y eso el modo stateless sí lo soporta. Los suscriptores legados necesitan `--stateless=false`.
 - **Particularidades de clientes**: VS Code se suscribe a cada recurso que lee y encamina las actualizaciones a su pipeline de cambios de archivo; Cursor envía `resources/subscribe` incluso a servidores que anuncian `subscribe: false`; el cliente del SDK de Go dispara `subscriptions/listen` sin esperar la respuesta, así que un rechazo puede no aflorar nunca en el cliente.
 
+## Códigos de error
+
+Un `resources/subscribe` heredado rechazado lleva un código JSON-RPC deliberado — nunca el `code: 0` accidental con el que se serializaría un error plano:
+
+| Rechazo                                                             | Código                                                                                |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| URI deliberadamente no suscribible                                  | `-32602` (parámetros inválidos)                                                       |
+| Recurso ilegible en la lectura de autorización (401/403/404)        | `-32602` — el mismo código con el que el SDK responde un `resources/read` desconocido |
+| Límite de peticiones, cupo de watchers lleno, o servidor apagándose | `-32000` (servidor ocupado — transitorio, reintente más tarde)                        |
+| Fallo transitorio de GitLab en la primera lectura                   | `-32603` (error interno)                                                              |
+| `resources/subscribe` en HTTP sin estado                            | `-32600` — use `subscriptions/listen` en su lugar                                     |
+
 <FAQ />

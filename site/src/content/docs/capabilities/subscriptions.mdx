@@ -78,4 +78,16 @@ A watch that goes unrenewed does not silently die — it slows down. After 30 mi
 - **HTTP, stateless mode (the default)**: the legacy `resources/subscribe` request is refused with an explanatory error — each stateless POST gets its own session that closes with the response, so a subscription it accepted could never be notified. Clients on protocol 2026-07-28 are unaffected: `subscriptions/listen` holds the request open, which stateless mode supports. Legacy subscribers need `--stateless=false`.
 - **Client quirks**: VS Code subscribes to every resource it reads and routes updates into its file-change pipeline; Cursor sends `resources/subscribe` even to servers that advertise `subscribe: false`; the Go SDK client fires `subscriptions/listen` without awaiting the response, so a refusal may never surface client-side.
 
+## Error codes
+
+A refused legacy `resources/subscribe` carries a deliberate JSON-RPC code — never the accidental `code: 0` a plain error would marshal as:
+
+| Refusal                                                     | Code                                                                      |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------- |
+| URI deliberately not subscribable                           | `-32602` (invalid params)                                                 |
+| Resource unreadable on the authorization read (401/403/404) | `-32602` — the same code the SDK answers an unknown `resources/read` with |
+| Rate limited, watcher cap full, or server shutting down     | `-32000` (server busy — transient, retry later)                           |
+| Transient GitLab failure on the first read                  | `-32603` (internal error)                                                 |
+| `resources/subscribe` on stateless HTTP                     | `-32600` — use `subscriptions/listen` instead                             |
+
 <FAQ />

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -134,7 +135,51 @@ func (b *sessionBridge) Subscribe(ctx context.Context, req *mcp.SubscribeRequest
 	// disconnects while the first read is still in flight still has its
 	// interest released.
 	b.awaitEnd(req.Session)
-	return b.manager.Subscribe(ctx, req.Session, req.Params.URI)
+	return wireSubscribeError(b.manager.Subscribe(ctx, req.Session, req.Params.URI))
+}
+
+// codeServerBusy is the implementation-defined JSON-RPC server-error code
+// (-32000..-32099 are reserved for these) this server uses for refusals
+// that are about server state rather than the request: rate limiting, the
+// watcher cap, and shutdown. The condition is transient, so unlike the
+// invalid-params family a retry later can succeed.
+const codeServerBusy = -32000
+
+// wireSubscribeError classifies a subscription failure for the wire.
+//
+// The manager speaks in sentinels because its callers branch with
+// errors.Is; the SDK, however, marshals any error that is not a
+// *jsonrpc.Error with code 0, which generic clients render as "unknown
+// error". This boundary is where the sentinel becomes a deliberate code:
+// a URI that is deliberately not subscribable is an invalid parameter, an
+// unreadable resource gets the code the SDK itself answers an unknown
+// resources/read with, server-state refusals get
+// the implementation-defined busy code, and anything else — a transient
+// GitLab failure on the first read — is an internal error. Messages pass
+// through untouched; they already say what happened and what to do.
+func wireSubscribeError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if _, ok := errors.AsType[*jsonrpc.Error](err); ok {
+		// Already deliberate (the stateless refusal builds its own).
+		return err
+	}
+	code := int64(jsonrpc.CodeInternalError)
+	switch {
+	case errors.Is(err, subscriptions.ErrNotSubscribable):
+		code = jsonrpc.CodeInvalidParams
+	case errors.Is(err, subscriptions.ErrInaccessible):
+		// The SDK's CodeResourceNotFound is deprecated in favor of exactly
+		// this: from 1.7.0 "resource not found" IS invalid params (-32002
+		// survives only behind a compat switch this server does not honor).
+		code = jsonrpc.CodeInvalidParams
+	case errors.Is(err, subscriptions.ErrRateLimited),
+		errors.Is(err, subscriptions.ErrTooManySubscriptions),
+		errors.Is(err, subscriptions.ErrClosed):
+		code = codeServerBusy
+	}
+	return &jsonrpc.Error{Code: code, Message: err.Error()}
 }
 
 // Unsubscribe drops one session's hold on a URI.

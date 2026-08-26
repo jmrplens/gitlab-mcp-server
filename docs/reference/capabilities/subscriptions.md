@@ -150,6 +150,26 @@ the slot over one whose own inactivity already devalued it, and the watch
 that has been slow the longest is the one to go. If every watch is still
 active, the new subscription is refused with an error.
 
+## Error codes
+
+A refused legacy `resources/subscribe` carries a deliberate JSON-RPC error
+code, so a generic client never sees the accidental `code: 0` a plain
+error would marshal as:
+
+| Refusal                                                                    | Code                                                                        | Retry later?                     |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------- |
+| URI is deliberately not subscribable                                       | `-32602` (invalid params)                                                   | No — pick a subscribable URI     |
+| Resource unreadable on the authorization read (401/403/404)                | `-32602` — the code the SDK itself answers an unknown `resources/read` with | Only if the resource appears     |
+| Rate limited, watcher cap with no evictable watch, or server shutting down | `-32000` (implementation-defined server busy)                               | Yes — the condition is transient |
+| Transient GitLab failure on the first read                                 | `-32603` (internal error)                                                   | Yes                              |
+| `resources/subscribe` on stateless HTTP                                    | `-32600` (invalid request for this session state)                           | No — use `subscriptions/listen`  |
+
+The message beside the code always says what happened and what to do. On
+protocol 2026-07-28 a `subscriptions/listen` refusal is delivered by the
+stream closing instead; the SDK's client discards the response of the
+listen call it fires, so the codes above are observable on the legacy
+method and in server logs.
+
 ## Notification `_meta`
 
 Every `notifications/resources/updated` carries the state of the watch that
