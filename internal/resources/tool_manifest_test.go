@@ -7,6 +7,7 @@ package resources
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -365,4 +366,225 @@ func readToolDetail(t *testing.T, session *mcp.ClientSession, uri string) ToolSu
 		t.Fatalf("unmarshal detail: %v", uErr)
 	}
 	return detail
+}
+
+// TestDynamicRequiredParams_IncludesAnyOfAndOneOf verifies the
+// defensive branches of [dynamicRequiredParams] and
+// [dedupeDynamicStrings]: nil input, alternate-required branches in
+// anyOf/oneOf, and deduplication of repeated entries.
+func TestDynamicRequiredParams_IncludesAnyOfAndOneOf(t *testing.T) {
+	if got := dynamicRequiredParams(nil); got != nil {
+		t.Fatalf("dynamicRequiredParams(nil) = %v, want nil", got)
+	}
+	if got := dedupeDynamicStrings(nil); got != nil {
+		t.Fatalf("dedupeDynamicStrings(nil) = %v, want nil", got)
+	}
+	if got := dedupeDynamicStrings([]string{"", "branch", "branch"}); strings.Join(got, ",") != "branch" {
+		t.Fatalf("dedupeDynamicStrings() = %v, want branch", got)
+	}
+	schema := map[string]any{
+		"anyOf": []any{
+			"ignored",
+			map[string]any{"required": []any{"project_id"}},
+		},
+		"oneOf": []any{
+			map[string]any{"required": []any{"branch"}},
+		},
+	}
+
+	got := dynamicRequiredParams(schema)
+	want := []string{"branch", "project_id"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("dynamicRequiredParams() = %v, want %v", got, want)
+	}
+}
+
+// TestDynamicParameterGuidanceEntry_CoversAllFields verifies the per-entry
+// projection includes every populated field of toolutil.ParameterGuidance
+// (semantic_role, value_source, common_confusions, example_binding) and
+// omits empty ones to keep the model-facing guidance compact.
+func TestDynamicParameterGuidanceEntry_CoversAllFields(t *testing.T) {
+	tests := []struct {
+		name           string
+		item           toolutil.ParameterGuidance
+		wantKeys       []string
+		wantAbsentKeys []string
+	}{
+		{
+			name: "all fields populated",
+			item: toolutil.ParameterGuidance{
+				SemanticRole:     "project_id",
+				ValueSource:      "from URL or numeric ID",
+				CommonConfusions: []string{"namespace_id", "group_id"},
+				ExampleBinding:   `params.project_id:"group/project"`,
+			},
+			wantKeys:       []string{"semantic_role", "value_source", "common_confusions", "example_binding"},
+			wantAbsentKeys: nil,
+		},
+		{
+			name: "only semantic role",
+			item: toolutil.ParameterGuidance{
+				SemanticRole: "branch_name",
+			},
+			wantKeys:       []string{"semantic_role"},
+			wantAbsentKeys: []string{"value_source", "common_confusions", "example_binding"},
+		},
+		{
+			name: "only example binding",
+			item: toolutil.ParameterGuidance{
+				ExampleBinding: `params.ref:"main"`,
+			},
+			wantKeys:       []string{"example_binding"},
+			wantAbsentKeys: []string{"semantic_role", "value_source", "common_confusions"},
+		},
+		{
+			name:           "all fields empty produces empty entry",
+			item:           toolutil.ParameterGuidance{},
+			wantKeys:       nil,
+			wantAbsentKeys: []string{"semantic_role", "value_source", "common_confusions", "example_binding"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := dynamicParameterGuidanceEntry(tt.item)
+			if tt.wantKeys == nil {
+				if len(entry) != 0 {
+					t.Fatalf("entry = %+v, want empty map for all-empty input", entry)
+				}
+				return
+			}
+			for _, key := range tt.wantKeys {
+				if _, ok := entry[key]; !ok {
+					t.Errorf("entry missing key %q: %+v", key, entry)
+				}
+			}
+			for _, key := range tt.wantAbsentKeys {
+				if _, ok := entry[key]; ok {
+					t.Errorf("entry should not include key %q: %+v", key, entry)
+				}
+			}
+		})
+	}
+}
+
+// TestDynamicParameterGuidance_FiltersEmptyEntries verifies the outer
+// guidance projection drops params whose entries are entirely empty so the
+// guidance map only surfaces meaningful hints to the LLM.
+func TestDynamicParameterGuidance_FiltersEmptyEntries(t *testing.T) {
+	action := actioncatalog.Action{
+		Name: "create",
+		Route: toolutil.ActionRoute{
+			ParameterGuidance: map[string]toolutil.ParameterGuidance{
+				"project_id": {
+					SemanticRole:   "project_id",
+					ExampleBinding: `params.project_id:"group/project"`,
+				},
+				"unused_param": {}, // all fields empty; should be dropped
+				"branch": {
+					SemanticRole: "branch_name",
+				},
+			},
+		},
+	}
+
+	guidance := dynamicParameterGuidance(action)
+	if _, ok := guidance["unused_param"]; ok {
+		t.Errorf("guidance should drop entries with no populated fields: %+v", guidance)
+	}
+	for _, name := range []string{"project_id", "branch"} {
+		if _, ok := guidance[name]; !ok {
+			t.Errorf("guidance missing populated entry %q: %+v", name, guidance)
+		}
+	}
+}
+
+// TestDynamicParameterGuidance_NilWhenEmpty verifies the function returns
+// nil when the action declares no guidance at all, so enrichDynamicSchema
+// can skip the x_parameter_guidance key entirely.
+func TestDynamicParameterGuidance_NilWhenEmpty(t *testing.T) {
+	if got := dynamicParameterGuidance(actioncatalog.Action{Name: "noop", Route: toolutil.ActionRoute{}}); got != nil {
+		t.Fatalf("dynamicParameterGuidance(empty) = %+v, want nil", got)
+	}
+}
+
+// TestEnrichDynamicSchema_AttachesGuidanceAndDestructive verifies, through
+// the served gitlab://tools/{id} detail, the schema
+// returned by dynamicActionSchema carries the x_parameter_guidance extension
+// when the action declares guidance, and the x_destructive / x_confirmation
+// blocks when the route is destructive.
+func TestEnrichDynamicSchema_AttachesGuidanceAndDestructive(t *testing.T) {
+	catalog := actioncatalog.NewCatalog()
+	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{ToolName: "gitlab_widget", BaseDomain: "widget"})
+	group.SetAction(actioncatalog.Action{
+		Name: "remove",
+		Route: toolutil.ActionRoute{
+			Destructive: true,
+			ParameterGuidance: map[string]toolutil.ParameterGuidance{
+				"project_id": {
+					SemanticRole:   "project_id",
+					ExampleBinding: `params.project_id:"group/project"`,
+				},
+			},
+		},
+	})
+	if err := catalog.AddGroup(group); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+
+	// Read through the served surface: the enriched schema must reach the
+	// gitlab://tools/{id} detail, not only the enrichment function.
+	session := toolManifestSession(t, ToolSurfaceResourceOptions{
+		Surface: toolSurfaceDynamic,
+		Tools:   []*mcp.Tool{{Name: "gitlab_execute_action", Title: "Execute"}},
+		Catalog: catalog,
+	})
+	detail := readToolDetail(t, session, "gitlab://tools/widget.remove")
+	schema, ok2 := detail.InputSchema.(map[string]any)
+	if !ok2 {
+		t.Fatalf("detail input_schema = %T, want an enriched schema object", detail.InputSchema)
+	}
+
+	guidance, ok := schema["x_parameter_guidance"].(map[string]any)
+	if !ok {
+		t.Fatalf("schema missing x_parameter_guidance: %+v", schema)
+	}
+	entry, ok := guidance["project_id"].(map[string]any)
+	if !ok {
+		t.Fatalf("x_parameter_guidance missing project_id: %+v", guidance)
+	}
+	if entry["semantic_role"] != "project_id" {
+		t.Errorf("semantic_role = %v, want project_id", entry["semantic_role"])
+	}
+	if entry["example_binding"] != `params.project_id:"group/project"` {
+		t.Errorf("example_binding = %v, want quoted project ID", entry["example_binding"])
+	}
+
+	if got, exists := schema["x_destructive"].(bool); !exists || !got {
+		t.Errorf("x_destructive = %v, want true", schema["x_destructive"])
+	}
+	confirmation, ok := schema["x_confirmation"].(map[string]any)
+	if !ok || confirmation["location"] != "gitlab_execute_action.confirm" {
+		t.Errorf("x_confirmation = %+v, want confirm guidance", schema["x_confirmation"])
+	}
+}
+
+// TestEnrichDynamicSchema_OmitsGuidanceWhenAbsent verifies the schema does
+// not include x_parameter_guidance when the action has no guidance entries,
+// keeping the contract explicit for downstream consumers.
+func TestEnrichDynamicSchema_OmitsGuidanceWhenAbsent(t *testing.T) {
+	action := actioncatalog.Action{
+		Name: "noop",
+		Route: toolutil.ActionRoute{
+			Destructive: false,
+		},
+	}
+	schema := map[string]any{"type": "object"}
+	enriched := enrichDynamicSchema(schema, action)
+	if _, ok := enriched["x_parameter_guidance"]; ok {
+		t.Errorf("schema should not include x_parameter_guidance when no guidance declared: %+v", enriched)
+	}
+	if _, ok := enriched["x_destructive"]; ok {
+		t.Errorf("schema should not include x_destructive for non-destructive action: %+v", enriched)
+	}
 }

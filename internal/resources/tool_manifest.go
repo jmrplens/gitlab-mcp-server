@@ -715,3 +715,166 @@ func parseToolManifestURI(uri string) string {
 	}
 	return strings.ToLower(strings.TrimSpace(rest))
 }
+
+// dynamicRequiredParams extracts and deduplicates the list of required
+// parameter names from a JSON Schema. It supports both a top-level
+// "required" array and alternative-required branches in "anyOf"/"oneOf".
+// Returns nil when schema is nil or has no required parameters.
+func dynamicRequiredParams(schema map[string]any) []string {
+	if schema == nil {
+		return nil
+	}
+	var names []string
+	names = appendDynamicRequiredParamNames(names, schema["required"])
+	names = appendDynamicAlternativeRequiredParams(names, schema)
+	sort.Strings(names)
+	return dedupeDynamicStrings(names)
+}
+
+// appendDynamicRequiredParamNames appends each non-empty string in raw
+// to names. raw is expected to be either a []any or []string (the two
+// shapes the JSON parser can return for a JSON array); any other type
+// is ignored.
+func appendDynamicRequiredParamNames(names []string, raw any) []string {
+	switch values := raw.(type) {
+	case []any:
+		for _, value := range values {
+			if name, ok := value.(string); ok && name != "" {
+				names = append(names, name)
+			}
+		}
+	case []string:
+		names = append(names, values...)
+	}
+	return names
+}
+
+// appendDynamicAlternativeRequiredParams walks any "anyOf" or "oneOf"
+// branches in schema and merges their "required" lists into names.
+// Non-object alternatives are ignored.
+func appendDynamicAlternativeRequiredParams(names []string, schema map[string]any) []string {
+	for _, keyword := range []string{"anyOf", "oneOf"} {
+		alternatives, ok := schema[keyword].([]any)
+		if !ok || len(alternatives) == 0 {
+			continue
+		}
+		for _, raw := range alternatives {
+			alternative, isObject := raw.(map[string]any)
+			if !isObject {
+				continue
+			}
+			names = appendDynamicRequiredParamNames(names, alternative["required"])
+		}
+	}
+	return names
+}
+
+// dedupeDynamicStrings returns a slice of strings with consecutive
+// duplicates and empty values removed. The input is expected to be
+// pre-sorted by the caller (the only deduplication guarantee provided).
+func dedupeDynamicStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := values[:0]
+	var last string
+	for index, value := range values {
+		if value == "" || (index > 0 && value == last) {
+			continue
+		}
+		out = append(out, value)
+		last = value
+	}
+	return out
+}
+
+// dynamicActionSchema returns the JSON Schema (as a generic map) for
+// the params object of one dynamic action. The schema is cloned via
+// [toolutil.CloneMetaSchemaRoutes] so per-action edits do not leak
+// between sibling actions. When the action has no captured InputSchema
+// a permissive fallback object schema is returned.
+func dynamicActionSchema(action actioncatalog.Action) map[string]any {
+	route := toolutil.CloneMetaSchemaRoutes(map[string]toolutil.ActionMap{action.ToolName: {action.Name: action.Route}})[action.ToolName][action.Name]
+	if route.InputSchema == nil {
+		schema := map[string]any{
+			"type":                 "object",
+			"description":          "This dynamic action has no captured parameter schema. Send an empty params object {} unless the action description says otherwise.",
+			"additionalProperties": true,
+		}
+		return enrichDynamicSchema(schema, action)
+	}
+	return enrichDynamicSchema(route.InputSchema, action)
+}
+
+// cloneMetaSchemaRoutes creates a shallow snapshot of route maps so
+// resource handlers do not observe later registration changes from
+// other server builds. It is a thin wrapper around
+// [toolutil.CloneMetaSchemaRoutes] that exists for testability.
+func cloneMetaSchemaRoutes(routes map[string]toolutil.ActionMap) map[string]toolutil.ActionMap {
+	return toolutil.CloneMetaSchemaRoutes(routes)
+}
+
+// lookupMetaActionSchema returns the per-action params schema for the
+// given tool/action pair. It returns false when the tool or action is
+// unknown. When the route exists but has no captured InputSchema, a
+// permissive fallback object schema (with "additionalProperties: true"
+// and a guidance description) is returned along with true, so clients
+// always get a usable JSON Schema.
+func lookupMetaActionSchema(routes map[string]toolutil.ActionMap, tool, action string) (map[string]any, bool) {
+	return toolutil.LookupMetaActionSchema(routes, tool, action)
+}
+
+// enrichDynamicSchema adds x_parameter_guidance and (for destructive
+// actions) x_destructive / x_confirmation fields to schema in place.
+// The map is returned for fluent use.
+func enrichDynamicSchema(schema map[string]any, action actioncatalog.Action) map[string]any {
+	if guidance := dynamicParameterGuidance(action); len(guidance) > 0 {
+		schema["x_parameter_guidance"] = guidance
+	}
+	if action.Route.Destructive {
+		schema["x_destructive"] = true
+		schema["x_confirmation"] = map[string]any{
+			"location":    "gitlab_execute_action.confirm",
+			"description": "Set top-level confirm=true on gitlab_execute_action after explicit user approval; do not put confirm inside params.",
+		}
+	}
+	return schema
+}
+
+// dynamicParameterGuidance converts the route's
+// [toolutil.ParameterGuidance] map into the JSON shape embedded under
+// the schema's x_parameter_guidance key. Returns nil when there is no
+// guidance to embed.
+func dynamicParameterGuidance(action actioncatalog.Action) map[string]any {
+	if len(action.Route.ParameterGuidance) == 0 {
+		return nil
+	}
+	guidance := make(map[string]any, len(action.Route.ParameterGuidance))
+	for name, item := range action.Route.ParameterGuidance {
+		entry := dynamicParameterGuidanceEntry(item)
+		if len(entry) > 0 {
+			guidance[name] = entry
+		}
+	}
+	return guidance
+}
+
+// dynamicParameterGuidanceEntry renders a single guidance item as a
+// JSON map. Only the populated fields of item are included so the
+// output stays compact.
+func dynamicParameterGuidanceEntry(item toolutil.ParameterGuidance) map[string]any {
+	entry := make(map[string]any, 4)
+	if item.SemanticRole != "" {
+		entry["semantic_role"] = item.SemanticRole
+	}
+	if item.ValueSource != "" {
+		entry["value_source"] = item.ValueSource
+	}
+	if len(item.CommonConfusions) > 0 {
+		entry["common_confusions"] = append([]string(nil), item.CommonConfusions...)
+	}
+	if item.ExampleBinding != "" {
+		entry["example_binding"] = item.ExampleBinding
+	}
+	return entry
+}

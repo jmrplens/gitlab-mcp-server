@@ -47,13 +47,11 @@ const scopePrivate = "private"
 // gitlab:// URI registered in internal/resources is backed by a live GitLab
 // API call, so it gets no freshness window.
 //
-// The legacy gitlab://schema/ resources are deliberately absent. The server
-// never registers them — RegisterMetaSchemaResources and
-// RegisterDynamicSchemaResources survive for isolated tests and audits, and
-// the tool manifest replaced them for clients — but listing them here would
-// also have been wrong on the merits: both are derived from the action
-// catalog, so they vary with the licensing tier exactly as the manifest does.
-// If they are ever wired up, they belong with the tool manifest below.
+// The legacy gitlab://schema/ resources no longer exist: the tool manifest
+// (gitlab://tools, gitlab://tools/{id}) replaced them and their registration
+// helpers were removed. Had they survived, listing them here would also have
+// been wrong on the merits: both derived from the action catalog, so they
+// varied with the licensing tier exactly as the manifest does.
 var staticResourcePrefixes = []string{
 	"gitlab://guides/",
 }
