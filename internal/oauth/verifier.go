@@ -150,7 +150,7 @@ func fetchScopes(ctx context.Context, client *http.Client, endpoint, token, fiel
 		return nil
 	}
 	var payload map[string]any
-	if decodeErr := json.NewDecoder(resp.Body).Decode(&payload); decodeErr != nil {
+	if json.NewDecoder(resp.Body).Decode(&payload) != nil {
 		return nil
 	}
 	raw, _ := payload[field].([]any)
