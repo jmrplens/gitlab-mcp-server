@@ -146,6 +146,21 @@ type mcpServerGate struct {
 	trustedProxyHeader string
 	// challenge is the WWW-Authenticate value sent with a 401.
 	challenge string
+	// bearerOnly restricts credential extraction to Authorization: Bearer
+	// and ignores PRIVATE-TOKEN. Set in oauth mode: the SDK middleware
+	// verifies the Bearer token, so the gate must execute as that same
+	// identity — never as an unverified PRIVATE-TOKEN a request might also
+	// carry, which ExtractToken would otherwise prefer.
+	bearerOnly bool
+}
+
+// extractCredential returns the credential the gate authenticates with,
+// honoring bearerOnly.
+func (g *mcpServerGate) extractCredential(r *http.Request) string {
+	if g.bearerOnly {
+		return serverpool.ExtractBearerToken(r)
+	}
+	return serverpool.ExtractToken(r)
 }
 
 // middleware resolves the request's MCP server and either passes the request on
@@ -186,7 +201,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		}
 	}
 
-	token := serverpool.ExtractToken(r)
+	token := g.extractCredential(r)
 	if token == "" {
 		if g.limiter != nil {
 			g.limiter.RecordFailure(ip)

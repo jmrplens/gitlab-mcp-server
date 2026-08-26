@@ -3782,7 +3782,7 @@ func TestCrossOriginProtectionMiddleware_AllowsNonBrowserPost(t *testing.T) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	})
-	handler := crossOriginProtectionMiddleware(inner)
+	handler := crossOriginProtectionMiddleware(nil, inner)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
 	req.Header.Set(hdrContentType, mimeJSON)
@@ -3806,7 +3806,7 @@ func TestCrossOriginProtectionMiddleware_AllowsSameOriginPost(t *testing.T) {
 		called = true
 		w.WriteHeader(http.StatusOK)
 	})
-	handler := crossOriginProtectionMiddleware(inner)
+	handler := crossOriginProtectionMiddleware(nil, inner)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
 	req.Header.Set(hdrContentType, mimeJSON)
@@ -5435,6 +5435,80 @@ func TestValidateHTTPAuthConfig_OAuthRequiresHTTPSGitLabURL(t *testing.T) {
 			err := validateHTTPAuthConfig(cfg)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateHTTPAuthConfig(gitlab-url=%q) error = %v, wantErr %v", tt.gitlabURL, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestCrossOriginProtectionMiddleware_TrustedOriginAndWildcard exercises the
+// trusted-origins list end to end: a listed origin (including a bare IP for
+// local deploys) passes a cross-site browser POST, an unlisted one is still
+// rejected, and the "*" wildcard disables the protection for every origin.
+func TestCrossOriginProtectionMiddleware_TrustedOriginAndWildcard(t *testing.T) {
+	tests := []struct {
+		name     string
+		trusted  []string
+		origin   string
+		wantPass bool
+	}{
+		{"listed origin passes cross-site", []string{"https://ok.example"}, "https://ok.example", true},
+		{"unlisted origin rejected", []string{"https://ok.example"}, "https://evil.example", false},
+		{"IP origin passes for local deploy", []string{"http://192.168.1.50:8080"}, "http://192.168.1.50:8080", true},
+		{"other IP rejected", []string{"http://192.168.1.50:8080"}, "http://192.168.1.99:8080", false},
+		{"wildcard accepts any origin", []string{"*"}, "https://anything.example", true},
+		{"empty list rejects cross-site", nil, "https://evil.example", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			called := false
+			inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				w.WriteHeader(http.StatusOK)
+			})
+			handler := crossOriginProtectionMiddleware(tt.trusted, inner)
+
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://mcp.example/mcp", strings.NewReader(`{}`))
+			req.Header.Set(hdrContentType, mimeJSON)
+			req.Header.Set("Origin", tt.origin)
+			req.Header.Set("Sec-Fetch-Site", "cross-site")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+
+			if tt.wantPass && rr.Code != http.StatusOK {
+				t.Errorf("origin %q: status = %d, want 200 (should pass the CORS check)", tt.origin, rr.Code)
+			}
+			if !tt.wantPass && rr.Code != http.StatusForbidden {
+				t.Errorf("origin %q: status = %d, want 403 (should be rejected)", tt.origin, rr.Code)
+			}
+			if called != tt.wantPass {
+				t.Errorf("origin %q: inner called = %v, want %v", tt.origin, called, tt.wantPass)
+			}
+		})
+	}
+}
+
+// TestBuildTrustedOrigins_SeedsPublicURLOrigin verifies the public-url origin
+// is merged into the trusted list (deduplicated), so a same-domain browser
+// client on the deployment's declared origin is trusted without extra config.
+func TestBuildTrustedOrigins_SeedsPublicURLOrigin(t *testing.T) {
+	tests := []struct {
+		name      string
+		csv       string
+		publicURL string
+		want      []string
+	}{
+		{"public-url origin seeded", "", "https://mcp.jmrp.io/gitlab", []string{"https://mcp.jmrp.io"}},
+		{"explicit plus public-url deduped", "https://mcp.jmrp.io", "https://mcp.jmrp.io/gitlab", []string{"https://mcp.jmrp.io"}},
+		{"explicit list preserved", "https://a.example,https://b.example", "", []string{"https://a.example", "https://b.example"}},
+		{"both combined", "https://a.example", "https://mcp.jmrp.io", []string{"https://a.example", "https://mcp.jmrp.io"}},
+		{"empty yields nil", "", "", nil},
+		{"wildcard passes through", "*", "", []string{"*"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildTrustedOrigins(tt.csv, tt.publicURL)
+			if strings.Join(got, ",") != strings.Join(tt.want, ",") {
+				t.Errorf("buildTrustedOrigins(%q, %q) = %v, want %v", tt.csv, tt.publicURL, got, tt.want)
 			}
 		})
 	}

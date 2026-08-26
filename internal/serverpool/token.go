@@ -95,6 +95,18 @@ func ExtractToken(r *http.Request) string {
 	return ""
 }
 
+// ExtractBearerToken returns only the Authorization: Bearer credential,
+// ignoring PRIVATE-TOKEN. OAuth mode uses it so the gate authenticates as
+// the identity the SDK middleware verified, never as a PRIVATE-TOKEN the
+// same request might also carry.
+func ExtractBearerToken(r *http.Request) string {
+	auth := r.Header.Get("Authorization")
+	if after, found := strings.CutPrefix(auth, "Bearer "); found && after != "" {
+		return after
+	}
+	return ""
+}
+
 // ExtractGitLabURL resolves the GitLab instance URL for an HTTP request.
 // It is a compatibility wrapper around [ResolveRequestOptions].
 func ExtractGitLabURL(r *http.Request, defaultURL string) (string, error) {
