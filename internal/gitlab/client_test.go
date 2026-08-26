@@ -1082,10 +1082,10 @@ func TestPoolClientConstructors_UseTheirAuthScheme(t *testing.T) {
 // authentication scheme and nothing else.
 func assertAuthScheme(t *testing.T, path, bearer, private, token string, wantBearer, wantPrivate bool) {
 	t.Helper()
-	if got := bearer == "Bearer "+token; got != wantBearer {
+	if (bearer == "Bearer "+token) != wantBearer {
 		t.Errorf("%s: Authorization = %q, want bearer=%v", path, bearer, wantBearer)
 	}
-	if got := private == token; got != wantPrivate {
+	if (private == token) != wantPrivate {
 		t.Errorf("%s: PRIVATE-TOKEN = %q, want private=%v", path, private, wantPrivate)
 	}
 }
