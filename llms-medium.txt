@@ -769,7 +769,7 @@ Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
 - gitlab_group_access_token_rotate: Rotate a group access token, generating a new token value.
 - gitlab_group_access_token_rotate_self: Rotate the group access token used for the current request. Returns the new token value.
 - gitlab_group_add_push_rule: Add push rules to a GitLab group.
-- gitlab_group_archive: Archive a GitLab group (read-only).
+- gitlab_group_archive: Archive a GitLab group, making it and its projects read-only in GitLab.
 - gitlab_group_board_create: Create a new group issue board (Premium/Ultimate).
 - gitlab_group_board_delete: Delete a group issue board permanently.
 - gitlab_group_board_get: Get a single group issue board by ID.
@@ -1221,7 +1221,7 @@ Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
 - gitlab_project_approval_rule_get: Get a single project approval rule.
 - gitlab_project_approval_rule_list: List a project's approval rules.
 - gitlab_project_approval_rule_update: Update a project approval rule.
-- gitlab_project_archive: Archive a project (read-only).
+- gitlab_project_archive: Archive a project, making it read-only in GitLab.
 - gitlab_project_create: Create a new GitLab project.
 - gitlab_project_create_for_user: Create a project on behalf of a user (admin).
 - gitlab_project_create_fork_relation: Create a fork relationship to an upstream project.

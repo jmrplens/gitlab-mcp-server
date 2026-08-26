@@ -210,7 +210,7 @@ func FormatMarkdown(i Output) string {
 	fmt.Fprintf(&b, toolutil.FmtMdURLNewline, i.WebURL)
 	toolutil.WriteHints(
 		&b,
-		"Use gitlab_issue_note action 'list' to see comments on this issue",
+		"Use gitlab_issue action 'note_list' to see comments on this issue",
 		"Use action 'update' to change title, labels, assignees, or milestone",
 		"Use action 'mrs_related' to find linked MRs",
 	)
@@ -246,7 +246,7 @@ func FormatListMarkdown(out ListOutput) string {
 		toolutil.HintPreserveLinks,
 		"Use action 'get' with an issue_iid to see full details and description",
 		"Use action 'create' to create a new issue",
-		"Use gitlab_issue_note action 'create' to add a comment",
+		"Use gitlab_issue action 'note_create' to add a comment",
 	)
 	return b.String()
 }

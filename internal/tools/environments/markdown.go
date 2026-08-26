@@ -54,7 +54,7 @@ func FormatOutputMarkdown(e Output) string {
 	toolutil.WriteHints(
 		&b,
 		"Use action 'stop' to stop this environment",
-		"Use gitlab_deployment action 'list' with environment to see deployments",
+		"Use gitlab_environment action 'deployment_list' with environment to see deployments",
 	)
 	return b.String()
 }

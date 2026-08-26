@@ -129,7 +129,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	email, _, err := client.GL().Users.GetEmail(input.EmailID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get_email", err, http.StatusNotFound,
-			"verify email_id with gitlab_user_emails_list; the email may have been deleted")
+			"verify email_id with gitlab_list_emails; the email may have been deleted")
 	}
 	return toOutput(email), nil
 }
@@ -183,7 +183,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().Users.DeleteEmail(input.EmailID, gl.WithContext(ctx))
 	if err != nil {
 		return DeleteOutput{}, toolutil.WrapErrWithStatusHint("delete_email", err, http.StatusNotFound,
-			"verify email_id with gitlab_user_emails_list; the primary email cannot be deleted")
+			"verify email_id with gitlab_list_emails; the primary email cannot be deleted")
 	}
 	return DeleteOutput{EmailID: input.EmailID, Deleted: true}, nil
 }

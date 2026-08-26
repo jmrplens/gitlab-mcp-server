@@ -49,7 +49,7 @@ func projectSecurityOptions(individualTool string) toolutil.ActionSpecOptions {
 		tags = []string{"project", "security", "secret_push_protection", "vulnerability_scan", "settings", "configuration"}
 		aliases = []string{
 			individualTool,
-			"gitlab_get_project_secret_push_protection",
+			"gitlab_get_project_security_settings",
 			"project_secret_push_protection_get",
 			"project_security_posture",
 		}

@@ -65,7 +65,7 @@ func FormatGetMarkdown(out GetOutput) *mcp.CallToolResult {
 	}
 
 	fmt.Fprintf(&sb, "*Total settings: %d*\n", len(out.Settings))
-	toolutil.WriteHints(&sb, "Use `gitlab_update_application_settings` to change settings")
+	toolutil.WriteHints(&sb, "Use `gitlab_update_settings` to change settings")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
@@ -74,7 +74,7 @@ func FormatUpdateMarkdown(out UpdateOutput) *mcp.CallToolResult {
 	var sb strings.Builder
 	sb.WriteString("# Application Settings Updated\n\n")
 	fmt.Fprintf(&sb, "Settings updated successfully. Total settings: %d\n", len(out.Settings))
-	toolutil.WriteHints(&sb, "Verify changes with `gitlab_get_application_settings`")
+	toolutil.WriteHints(&sb, "Verify changes with `gitlab_get_settings`")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 

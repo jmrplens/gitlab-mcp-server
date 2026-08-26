@@ -364,7 +364,7 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 				ExampleBinding: `params.group_id:"my-org/platform"`,
 			},
 		}
-		options.IndividualTool.Description = "Archive a GitLab group (read-only). Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update."
+		options.IndividualTool.Description = "Archive a GitLab group, making it and its projects read-only in GitLab. Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update."
 	case "gitlab_group_unarchive":
 		options.Usage = "Unarchive a previously archived group, restoring write access. Idempotent; unarchiving a non-archived group is a no-op."
 		options.Aliases = []string{"unarchive group", "unfreeze group", "restore group write access"}

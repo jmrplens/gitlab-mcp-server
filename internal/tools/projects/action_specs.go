@@ -415,7 +415,7 @@ var projectActionMeta = map[string]projectActionMetaEntry{
 		usage:       "Archive a project so it becomes read-only. Send project_id; requires Owner role. Use unarchive to reverse.",
 		aliases:     []string{"archive project", "make project read-only", "freeze project", "lock project"},
 		related:     []string{"project.unarchive", actionProjectGet, actionProjectDelete},
-		description: "Archive a project (read-only). Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.",
+		description: "Archive a project, making it read-only in GitLab. Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.",
 	},
 	"gitlab_project_unarchive": {
 		usage:       "Unarchive a previously archived project to restore write access. Send project_id; requires Owner role.",

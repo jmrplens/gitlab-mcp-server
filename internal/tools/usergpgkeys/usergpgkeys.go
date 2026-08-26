@@ -81,7 +81,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	k, _, err := client.GL().Users.GetGPGKey(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get_gpg_key", err, http.StatusNotFound,
-			"verify key_id with gitlab_user_gpg_keys_list; the key may have been deleted")
+			"verify key_id with gitlab_list_gpg_keys; the key may have been deleted")
 	}
 	return toOutput(k), nil
 }
@@ -106,7 +106,7 @@ func GetForUser(ctx context.Context, client *gitlabclient.Client, input GetForUs
 	k, _, err := client.GL().Users.GetGPGKeyForUser(input.UserID, input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get_gpg_key_for_user", err, http.StatusNotFound,
-			"verify user_id and key_id with gitlab_user_gpg_keys_list_for_user; admin token may be required")
+			"verify user_id and key_id with gitlab_list_gpg_keys_for_user; admin token may be required")
 	}
 	return toOutput(k), nil
 }
@@ -181,7 +181,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().Users.DeleteGPGKey(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return DeleteOutput{}, toolutil.WrapErrWithStatusHint("delete_gpg_key", err, http.StatusNotFound,
-			"verify key_id with gitlab_user_gpg_keys_list; the key may already have been deleted")
+			"verify key_id with gitlab_list_gpg_keys; the key may already have been deleted")
 	}
 	return DeleteOutput{KeyID: input.KeyID, Deleted: true}, nil
 }
@@ -206,7 +206,7 @@ func DeleteForUser(ctx context.Context, client *gitlabclient.Client, input Delet
 	_, err := client.GL().Users.DeleteGPGKeyForUser(input.UserID, input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return DeleteOutput{}, toolutil.WrapErrWithStatusHint("delete_gpg_key_for_user", err, http.StatusForbidden,
-			"deleting GPG keys for other users requires admin token; verify user_id and key_id with gitlab_user_gpg_keys_list_for_user")
+			"deleting GPG keys for other users requires admin token; verify user_id and key_id with gitlab_list_gpg_keys_for_user")
 	}
 	return DeleteOutput{KeyID: input.KeyID, Deleted: true}, nil
 }

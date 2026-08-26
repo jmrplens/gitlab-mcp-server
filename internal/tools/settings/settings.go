@@ -77,7 +77,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	settings, _, err := client.GL().Settings.UpdateSettings(&opts, gl.WithContext(ctx))
 	if err != nil {
 		return output, toolutil.WrapErrWithStatusHint("settings_update", err, http.StatusBadRequest,
-			"settings keys must use snake_case matching the GitLab API (e.g. signup_enabled, default_project_visibility); use gitlab_settings_get first to inspect valid keys; requires administrator access")
+			"settings keys must use snake_case matching the GitLab API (e.g. signup_enabled, default_project_visibility); use gitlab_get_settings first to inspect valid keys; requires administrator access")
 	}
 
 	settingsRaw, err := json.Marshal(settings)

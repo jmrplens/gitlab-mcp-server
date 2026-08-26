@@ -816,7 +816,7 @@ func Verify(ctx context.Context, client *gitlabclient.Client, input VerifyInput)
 	_, err := client.GL().Runners.VerifyRegisteredRunner(opts, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("verify runner", err, http.StatusForbidden,
-			"runner authentication token is invalid, expired, or has been reset \u2014 obtain a fresh token via gitlab_runner_reset_auth_token or re-register the runner")
+			"runner authentication token is invalid, expired, or has been reset \u2014 obtain a fresh token via gitlab_runner_reset_token or re-register the runner")
 	}
 	return nil
 }
@@ -902,7 +902,7 @@ func DeleteByToken(ctx context.Context, client *gitlabclient.Client, input Delet
 	_, err := client.GL().Runners.DeleteRegisteredRunner(opts, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete registered runner by token", err, http.StatusForbidden,
-			"authentication token is invalid or already revoked \u2014 if you have the runner_id, use gitlab_runner_delete_by_id instead")
+			"authentication token is invalid or already revoked \u2014 if you have the runner_id, use gitlab_runner_delete_registered instead")
 	}
 	return nil
 }

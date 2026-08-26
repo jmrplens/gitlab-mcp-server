@@ -29032,7 +29032,7 @@
                 ]
               },
               "user_list_id": {
-                "description": "ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_feature_flag_user_list_list to find it",
+                "description": "ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_ff_user_list_list to find it",
                 "type": [
                   "null",
                   "integer"
@@ -29871,7 +29871,7 @@
                 ]
               },
               "user_list_id": {
-                "description": "ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_feature_flag_user_list_list to find it",
+                "description": "ID of the feature flag user list this strategy targets (for gitlabUserList strategies). Use gitlab_ff_user_list_list to find it",
                 "type": [
                   "null",
                   "integer"
@@ -42663,7 +42663,7 @@
   },
   {
     "name": "gitlab_group_archive",
-    "description": "Archive a GitLab group (read-only). Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update.",
+    "description": "Archive a GitLab group, making it and its projects read-only in GitLab. Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -148474,7 +148474,7 @@
   },
   {
     "name": "gitlab_project_archive",
-    "description": "Archive a project (read-only). Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.",
+    "description": "Archive a project, making it read-only in GitLab. Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

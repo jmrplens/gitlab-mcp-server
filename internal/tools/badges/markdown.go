@@ -37,7 +37,7 @@ func FormatBadgeListMarkdown(badges []BadgeItem, title string, pagination toolut
 			b.Kind)
 	}
 	toolutil.WritePagination(&sb, pagination)
-	toolutil.WriteHints(&sb, "Use `gitlab_get_badge` to view details of a specific badge")
+	toolutil.WriteHints(&sb, "Use `gitlab_get_project_badge` (or `gitlab_get_group_badge`) to view details of a specific badge")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 
@@ -56,7 +56,7 @@ func FormatBadgeMarkdown(b BadgeItem) *mcp.CallToolResult {
 	if b.Kind != "" {
 		fmt.Fprintf(&sb, "- **Kind**: %s\n", b.Kind)
 	}
-	toolutil.WriteHints(&sb, "Use `gitlab_update_badge` to modify this badge")
+	toolutil.WriteHints(&sb, "Use `gitlab_edit_project_badge` (or `gitlab_edit_group_badge`) to modify this badge")
 	return toolutil.ToolResultWithMarkdown(sb.String())
 }
 

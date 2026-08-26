@@ -233,7 +233,7 @@ BREAKING CHANGE: /auth/login is now /api/v2/auth/login
 ## Diagnostic Steps
 1. Check pipeline status: ` + "`gitlab_pipeline_get`" + ` for pipeline details.
 2. List jobs: ` + "`gitlab_job_list`" + ` to find the failing job.
-3. Read job log: ` + "`gitlab_job_log`" + ` for detailed output.
+3. Read job log: ` + "`gitlab_job_trace`" + ` for detailed output.
 4. Check variables: ` + "`gitlab_ci_variable_list`" + ` for missing configuration.
 5. Retry the job: ` + "`gitlab_job_retry`" + ` for transient failures.
 

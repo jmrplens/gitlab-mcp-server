@@ -45,7 +45,7 @@ func FormatShowMarkdown(f SecureFileItem) string {
 		fmt.Fprintf(&b, "\n### Certificate Metadata\n\n- **ID**: %s\n- **Expires At**: %s\n- **Issuer CN**: %s\n- **Subject CN**: %s\n",
 			m.ID, toolutil.FormatTimePtr(m.ExpiresAt), m.Issuer.CN, m.Subject.CN)
 	}
-	toolutil.WriteHints(&b, "Use `gitlab_download_secure_file` to download this file")
+	toolutil.WriteHints(&b, "Use `gitlab_show_secure_file` to download this file")
 	return b.String()
 }
 

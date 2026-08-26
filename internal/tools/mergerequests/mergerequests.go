@@ -1944,7 +1944,7 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return DependencyOutput{}, toolutil.WrapErrWithHint("mrCreateDependency", err,
-				"dependency would create a cycle, the blocking MR does not exist, or this dependency already exists \u2014 use gitlab_mr_get_dependencies to inspect current dependencies")
+				"dependency would create a cycle, the blocking MR does not exist, or this dependency already exists \u2014 use gitlab_mr_dependencies_list to inspect current dependencies")
 		}
 		return DependencyOutput{}, toolutil.WrapErrWithStatusHint("mrCreateDependency", err, http.StatusNotFound,
 			"verify project_id and merge_request_iid with gitlab_mr_get; blocking_merge_request_id is a global database ID, not an IID")
@@ -1977,7 +1977,7 @@ func DeleteDependency(ctx context.Context, client *gitlabclient.Client, input De
 				"MR dependencies require GitLab Premium or Ultimate")
 		}
 		return toolutil.WrapErrWithStatusHint("mrDeleteDependency", err, http.StatusNotFound,
-			"dependency not currently active \u2014 use gitlab_mr_get_dependencies to inspect existing dependencies")
+			"dependency not currently active \u2014 use gitlab_mr_dependencies_list to inspect existing dependencies")
 	}
 	return nil
 }

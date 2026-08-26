@@ -134,7 +134,7 @@ func formatGetMarkdownString(out GetOutput) string {
 	writeGroupDatadogActiveLine(&sb, i.Active)
 	writeGroupDatadogTimestamp(&sb, "Created", i.CreatedAt)
 	writeGroupDatadogTimestamp(&sb, "Updated", i.UpdatedAt)
-	toolutil.WriteHints(&sb, "Use `gitlab_update_integration` to modify this integration's settings")
+	toolutil.WriteHints(&sb, "Use `gitlab_set_integration` to modify this integration's settings")
 	return sb.String()
 }
 

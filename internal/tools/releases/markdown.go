@@ -75,9 +75,9 @@ func FormatMarkdown(r Output) string {
 	}
 	toolutil.WriteHints(
 		&b,
-		"Use gitlab_release_link action 'link_list' to see release assets",
-		"Use gitlab_release_link action 'link_create' to add a single asset link",
-		"Use gitlab_release_link action 'link_create_batch' to add multiple asset links in one call",
+		"Use gitlab_release action 'link_list' to see release assets",
+		"Use gitlab_release action 'link_create' to add a single asset link",
+		"Use gitlab_release action 'link_create_batch' to add multiple asset links in one call",
 		"Use gitlab_package action 'publish_and_link' to upload and link binaries to this release",
 		"Use gitlab_release action 'update' to edit the release description",
 	)

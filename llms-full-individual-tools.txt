@@ -4395,7 +4395,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_group_archive
 
-Archive a GitLab group (read-only). Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update.
+Archive a GitLab group, making it and its projects read-only in GitLab. Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update.
 
 **Parameters:**
 
@@ -11241,7 +11241,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_project_archive
 
-Archive a project (read-only). Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.
+Archive a project, making it read-only in GitLab. Returns: the project with archived set to true. See also: gitlab_project_unarchive, gitlab_project_get.
 
 **Parameters:**
 
