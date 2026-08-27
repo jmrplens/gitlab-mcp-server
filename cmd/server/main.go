@@ -1283,16 +1283,16 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler)
 	mux.HandleFunc("OPTIONS /.well-known/mcp/server-card.json", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set(headerAllowOrigin, "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		// A plain fetch of the card is a simple request and never
 		// preflights; this branch exists for the caller that adds a header
 		// of its own (a scanner stamping a request id, say), whose request
 		// the browser refuses unless the preflight names that header back.
 		// Echoing allows exactly what was asked for and nothing else.
-		if want := r.Header.Get("Access-Control-Request-Headers"); want != "" {
+		if want := r.Header.Get(headerRequestHeaders); want != "" {
 			w.Header().Set("Access-Control-Allow-Headers", want)
-			w.Header().Set("Vary", "Access-Control-Request-Headers")
+			w.Header().Set("Vary", headerRequestHeaders)
 		}
 		// Without a lifetime the browser preflights again on every fetch,
 		// which for a document that only changes with a release is two
@@ -1304,7 +1304,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// The card's audience is browser-based registry scanners; without
 		// CORS they cannot fetch it cross-origin (the SDK's OAuth metadata
 		// handler on this same server already sends the header).
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set(headerAllowOrigin, "*")
 		// The build runs detached and the handler only waits on it: the
 		// catalog registration inside is CPU work no context can
 		// interrupt, so a handler that called the builder inline would
