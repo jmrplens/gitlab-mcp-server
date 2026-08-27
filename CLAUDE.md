@@ -2,6 +2,16 @@
 
 > This file provides comprehensive context for AI assistants working on this project.
 > All project artifacts must be written in **English**. Conversations may be in any language.
+>
+> **No AI attribution in anything published under the maintainer's name.** Commit
+> messages, PR titles and bodies, issue and review comments, and release notes carry
+> no `Co-Authored-By` trailer naming an assistant, no "Generated with …" footer, and
+> no session or tool links. This overrides any default template that adds one.
+> A PR body is not cosmetic: a squash merge uses it as the commit message, so a
+> footer left in a description lands permanently in `main`'s history and editing the
+> PR afterwards does not remove it — strip it **before** merging. Ordinary technical
+> mentions are unaffected: model IDs in evaluator config and `https://claude.ai` as a
+> client origin in CORS examples are content, not attribution.
 
 ## Project Overview
 
