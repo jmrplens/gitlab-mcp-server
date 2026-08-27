@@ -1422,8 +1422,13 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 
 	tokenCache := oauth.NewTokenCache()
 	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cfg.OAuthCacheTTL, tokenCache)
-	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{"api"}})
-	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.GitLabURL)
+	// The scope demanded is the least privilege this deployment can work
+	// with, not a constant: the verifier reports a token's real scopes, and
+	// the SDK requires every listed scope to be present, so a hardcoded
+	// "api" would 403 a read_api token on a server that cannot write.
+	requiredScope := oauth.RequiredScope(cfg.ReadOnly, cfg.SafeMode)
+	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{requiredScope}})
+	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.GitLabURL, requiredScope)
 	// Both derivations of RFC 9728 §3 resolve: the path-less form and the
 	// path-inserted form a client computes from a resource identifier that
 	// carries a path. Mounted without a method restriction so the SDK

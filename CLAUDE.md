@@ -14,7 +14,7 @@
 | GitLab Client | `gitlab.com/gitlab-org/api/client-go/v2` v2.59.0       |
 | Transport     | stdio (primary), HTTP (optional)                    |
 | Platforms     | Windows, Linux & macOS, amd64 & arm64               |
-| Version       | 2.7.3                                               |
+| Version       | 2.7.4                                               |
 
 ### Scale
 
@@ -154,7 +154,7 @@ gitlab-mcp-server/
 │   ├── skills/                  # 18 reusable skill templates
 │   └── instructions/            # 7 coding standard instruction files
 ├── Makefile                     # Build, test, lint targets
-└── VERSION                      # Semantic version (2.7.3)
+└── VERSION                      # Semantic version (2.7.4)
 ```
 
 ## Key Development Patterns
@@ -313,6 +313,7 @@ make analyze-report                        # generate LLM-consumable report
 | `GITLAB_ENTERPRISE`      | No       | **Deprecated** — use `GITLAB_TIER`. Honored for back-compat only when `GITLAB_TIER` is unset: `true` → `ultimate`, `false` → `free`. Logs a deprecation warning |
 | `AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
 | `PUBLIC_URL`             | No       | Externally reachable https origin; required with `AUTH_MODE=oauth` (RFC 9728 resource identifier; flag `--public-url`) |
+| `TRUSTED_ORIGINS`        | No       | Comma-separated absolute origins allowed to make cross-origin browser requests; `*` accepts any origin and disables the protection; empty adds none, though a configured `PUBLIC_URL` origin is trusted regardless (flag `--trusted-origins`) |
 | `OAUTH_CACHE_TTL`        | No       | OAuth token identity cache TTL (`15m` default, range 1m–2h) |
 | `POOL_IDLE_TIMEOUT`      | No       | HTTP mode: reclaim a pooled per-token-and-URL server entry after this long unused (`1h` default, `0` disables, max 24h) |
 | `RATE_LIMIT_RPS`         | No       | Per-server tools/call rate limit in req/s (`0` = disabled) |
@@ -563,9 +564,9 @@ The tier affects tool registration (input/output schemas and tool lists) through
 
 - projects (push rules), projectmirrors, mergetrains, auditevents, dorametrics, dependencies, externalstatuschecks, groupscim, memberroles, enterpriseusers, attestations, compliancepolicy, projectaliases, geo, groupstoragemoves, vulnerabilities, securityattributes, securitycategories, securityfindings, securitysettings, groupanalytics, groupcredentials, groupsshcerts, projectiterations, groupiterations, epics, epicissues, epicnotes, epicdiscussions, groupepicboards, groupwikis, groupprotectedbranches, groupprotectedenvs, groupreleases, groupldap, groupsaml, groupserviceaccounts
 
-**Meta-tool mode** (`TOOL_SURFACE=meta`) — gates 16 dedicated Enterprise/Premium catalog groups:
+**Meta-tool mode** (`TOOL_SURFACE=meta`) — gates 17 dedicated Enterprise/Premium catalog groups:
 
-- gitlab_merge_train, gitlab_audit_event, gitlab_dora_metrics, gitlab_dependency, gitlab_external_status_check, gitlab_group_scim, gitlab_member_role, gitlab_enterprise_user, gitlab_attestation, gitlab_compliance_policy, gitlab_project_alias, gitlab_geo, gitlab_vulnerability, gitlab_security_attribute, gitlab_security_category, gitlab_security_finding
+- gitlab_merge_train, gitlab_audit_event, gitlab_dora_metrics, gitlab_dependency, gitlab_external_status_check, gitlab_group_scim, gitlab_member_role, gitlab_enterprise_user, gitlab_attestation, gitlab_compliance_policy, gitlab_project_alias, gitlab_geo, gitlab_vulnerability, gitlab_security_attribute, gitlab_security_category, gitlab_security_finding, gitlab_security_scan_profile
 
 Plus enterprise-only routes injected into 3 base meta-tools:
 

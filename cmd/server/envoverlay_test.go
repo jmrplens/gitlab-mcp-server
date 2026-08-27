@@ -168,3 +168,44 @@ func TestApplyHTTPEnvOverlay_NilInputsAreNoOps(t *testing.T) {
 		t.Errorf("poolIdleTimeout = %v, want it untouched", hcfg.poolIdleTimeout)
 	}
 }
+
+// TestApplyHTTPEnvOverlay_OAuthOriginSettingsFollowPrecedence verifies both
+// halves of the precedence rule for the two settings a containerised OAuth
+// deployment can only supply through the environment. Before they were
+// overlaid, AUTH_MODE=oauth reached the configuration but PUBLIC_URL did not,
+// so such a deployment failed at startup demanding a flag it had no way to
+// pass.
+func TestApplyHTTPEnvOverlay_OAuthOriginSettingsFollowPrecedence(t *testing.T) {
+	envPublicURL := "https://env.example.com/gitlab"
+	envOrigins := "https://env-origin.example"
+
+	t.Run("environment fills an unpassed flag", func(t *testing.T) {
+		hcfg := newOverlayConfig()
+		applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{
+			PublicURL:      &envPublicURL,
+			TrustedOrigins: &envOrigins,
+		})
+		if hcfg.publicURL != envPublicURL {
+			t.Errorf("publicURL = %q, want the environment value %q", hcfg.publicURL, envPublicURL)
+		}
+		if hcfg.trustedOrigins != envOrigins {
+			t.Errorf("trustedOrigins = %q, want the environment value %q", hcfg.trustedOrigins, envOrigins)
+		}
+	})
+
+	t.Run("passed flag beats the environment", func(t *testing.T) {
+		hcfg := newOverlayConfig("public-url", "trusted-origins")
+		hcfg.publicURL = "https://flag.example.com"
+		hcfg.trustedOrigins = "https://flag-origin.example"
+		applyHTTPEnvOverlay(hcfg, &config.HTTPEnvOverlay{
+			PublicURL:      &envPublicURL,
+			TrustedOrigins: &envOrigins,
+		})
+		if hcfg.publicURL != "https://flag.example.com" {
+			t.Errorf("publicURL = %q, want the flag value", hcfg.publicURL)
+		}
+		if hcfg.trustedOrigins != "https://flag-origin.example" {
+			t.Errorf("trustedOrigins = %q, want the flag value", hcfg.trustedOrigins)
+		}
+	})
+}

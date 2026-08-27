@@ -104,7 +104,7 @@ func testOAuthIdentityPropagation(t *testing.T, cfg e2eOAuthConfig) {
 func testProtectedResourceMetadata(t *testing.T, cfg e2eOAuthConfig) {
 	t.Helper()
 
-	handler := oauth.NewProtectedResourceHandler("https://mcp.example.com", cfg.gitlabURL)
+	handler := oauth.NewProtectedResourceHandler("https://mcp.example.com", cfg.gitlabURL, oauth.ScopeAPI)
 	ts := httptest.NewServer(handler)
 	defer ts.Close()
 
@@ -147,5 +147,12 @@ func testProtectedResourceMetadata(t *testing.T, cfg e2eOAuthConfig) {
 	}
 	if methods[0] != "header" {
 		t.Errorf("bearer_methods_supported[0] = %v, want %q", methods[0], "header")
+	}
+
+	// The scope a client is told to request is the one the deployment
+	// demands, so a read-only server does not make every user grant api.
+	scopes, ok := meta["scopes_supported"].([]any)
+	if !ok || len(scopes) != 1 || scopes[0] != oauth.ScopeAPI {
+		t.Errorf("scopes_supported = %v, want [%q]", meta["scopes_supported"], oauth.ScopeAPI)
 	}
 }

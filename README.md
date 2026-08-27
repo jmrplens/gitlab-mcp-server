@@ -25,7 +25,10 @@
 <!-- Listings -->
 
 [![Glama MCP Score](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server/badges/score.svg)](https://glama.ai/mcp/servers/jmrplens/gitlab-mcp-server)
-[![MCP Badge](https://lobehub.com/badge/mcp/jmrplens-gitlab-mcp-server)](https://lobehub.com/mcp/jmrplens-gitlab-mcp-server)
+<!-- The ?v= is a cache key for GitHub's image proxy, not a LobeHub parameter: the
+     proxy keyed a red "not listed" badge for a day, and only a changed URL evicts
+     it. Bump the number if the badge ever goes stale again. -->
+[![MCP Badge](https://lobehub.com/badge/mcp/jmrplens-gitlab-mcp-server?v=2)](https://lobehub.com/mcp/jmrplens-gitlab-mcp-server)
 [![MCP Toplist](https://mcptoplist.com/badge/io.github.jmrplens%2Fgitlab-mcp-server.svg)](https://mcptoplist.com/server/io.github.jmrplens%2Fgitlab-mcp-server)
 [![Cursor Directory](https://img.shields.io/badge/Cursor-Directory-000000?logo=cursor&logoColor=white)](https://cursor.directory/plugins/gitlab-mcp-server)
 [![Hosted endpoint](https://img.shields.io/badge/Hosted-mcp.jmrp.io%2Fgitlab-6d28d9?style=flat&logo=icloud&logoColor=white)](https://mcp.jmrp.io/)
@@ -195,7 +198,7 @@ A public instance runs at **`https://mcp.jmrp.io/gitlab`** — nothing to instal
 
 It is the fastest way to try the server, and the right way to keep using it is still **locally** (any option above) — for one concrete reason, not as a disclaimer: **your token and every request pass through someone else's machine.** Running it locally means your credentials and your GitLab traffic never leave your computer, which also makes it the only sensible option for a private self-managed instance.
 
-The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport, `GET` on it answers `405` by design, and `https://mcp.jmrp.io/gitlab/health` answers `ok`. A self-hosted HTTP deployment can also run `--auth-mode=oauth`, where clients discover GitLab as the authorization server through RFC 9728 metadata and authorize in the browser instead of copying tokens — see [OAuth App Setup](docs/guides/oauth-app-setup.md). It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers I maintain, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
+The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport, `GET` on it answers `405` by design, and `https://mcp.jmrp.io/gitlab/health` answers `200` with `{"status":"ok",…}`. A self-hosted HTTP deployment can also run `--auth-mode=oauth --gitlab-url=https://gitlab.com --public-url=https://mcp.example.com` (both are required: OAuth needs a fixed instance and the externally reachable origin that RFC 9728 identifies the resource by), where clients discover GitLab as the authorization server through that metadata and authorize in the browser instead of copying tokens — see [OAuth App Setup](docs/guides/oauth-app-setup.md). It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers I maintain, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
 
 **Then just ask:** open your AI client and try _"List my GitLab projects."_ See the [Getting Started guide](https://jmrp.io/docs/gitlab-mcp-server/getting-started/) for per-client details and [more example prompts](docs/guides/examples/usage-examples.md).
 
@@ -261,7 +264,7 @@ Rows use the base Community Edition catalog unless the Tier column says otherwis
 | **Tools**         | Up to 1071 individual / 32–50 meta                                                                                                  |
 | **Resources**     | 45 (static + templates)                                                                                                             |
 | **Prompts**       | 37 templates                                                                                                                        |
-| **Completions**   | Project, user, group, branch, tag                                                                                                   |
+| **Completions**   | 17 argument types: projects, groups, users, branches, tags, MRs, issues, pipelines, jobs, labels, milestones, SHAs                  |
 | **Server logs**   | Structured (text/JSON) to stderr — not the MCP `logging` capability, which is deprecated (SEP-2577) and deliberately not advertised |
 | **Progress**      | Tool execution progress reporting                                                                                                   |
 | **Elicitation**   | 4 interactive creation wizards                                                                                                      |
@@ -329,6 +332,10 @@ Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs
 | [Environment Variables](docs/reference/env.md)        | Exhaustive environment variable table with defaults and examples                       |
 | [CLI Reference](docs/reference/cli.md)                | All command-line flags, exit codes, and runtime examples                               |
 | [HTTP Server Mode](docs/guides/http-server-mode.md)   | Shared HTTP deployments, authentication, server pool isolation                         |
+| [OAuth App Setup](docs/guides/oauth-app-setup.md)     | GitLab OAuth application, scopes, redirect URIs, and which clients can complete a flow |
+| [CI/CD](docs/guides/ci-cd.md)                         | Running the server inside GitLab CI and GitHub Actions pipelines                       |
+| [Output Format](docs/reference/output-format.md)      | The response contract every tool follows: content blocks, pagination, next steps       |
+| [Error Handling](docs/concepts/error-handling.md)     | Error classification, GitLab message extraction, and the hints tools return            |
 | [Tools Reference](docs/reference/tools/README.md)     | All individual tools with input/output schemas, including GitLab.com-only Orbit        |
 | [Meta-Tools](docs/concepts/meta-tools.md)             | 32/49/50 domain meta-tools with action dispatching                                     |
 | [Dynamic Toolset](docs/concepts/dynamic-tools.md)     | 2-tool low-token mode with canonical action catalog, safety model, and examples        |
@@ -352,7 +359,11 @@ Yes. Set `GITLAB_URL` to your instance URL. When `GITLAB_URL` is omitted, stdio 
 <details>
 <summary><strong>Is my data safe?</strong></summary>
 
-The server runs locally on your machine (stdio mode) or on your own infrastructure (HTTP mode). No data is sent to third parties — all API calls go directly to your GitLab instance. See <a href="SECURITY.md">SECURITY.md</a> for details.
+When you run it yourself — locally over stdio, or on your own infrastructure over HTTP — all API calls go directly to your GitLab instance. The one request that leaves for anywhere else is the update check against GitHub Releases, which is on by default and disabled with <code>AUTO_UPDATE=false</code>.
+
+The exception is the <a href="#try-it-without-installing-anything-hosted-endpoint">hosted endpoint</a>: using <code>https://mcp.jmrp.io/gitlab</code> means your token and every request pass through that machine. Nothing is stored there, but it is someone else's server, which is why the hosted section says to keep using it locally.
+
+See <a href="PRIVACY.md">PRIVACY.md</a> for exactly what the update check sends, and <a href="SECURITY.md">SECURITY.md</a> for the security model.
 </details>
 
 <details>
@@ -423,20 +434,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       991 |     201,217 |
-| Unit tests (`_test.go`)  |       549 |     311,132 |
-| End-to-end tests         |       174 |      45,163 |
-| **Total**                | **1,714** | **557,512** |
+| Source (`.go`, non-test) |       991 |     201,275 |
+| Unit tests (`_test.go`)  |       549 |     311,262 |
+| End-to-end tests         |       174 |      45,170 |
+| **Total**                | **1,714** | **557,707** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,504 |
-| — exported (public)             |  2,618 |
-| — unexported (private)          |  4,886 |
-| Unit test functions (`TestXxx`) | 11,668 |
-| Subtests (`t.Run(...)`)         |  2,943 |
+| Source functions                |  7,506 |
+| — exported (public)             |  2,619 |
+| — unexported (private)          |  4,887 |
+| Unit test functions (`TestXxx`) | 11,671 |
+| Subtests (`t.Run(...)`)         |  2,947 |
 | End-to-end test functions       |    381 |
 
 ### Ratios worth noting
@@ -446,7 +457,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~203 lines |
 | Average test file length           |                 ~566 lines |
-| Comment lines in source            |  23,169 (~11.5% of source) |
+| Comment lines in source            |  23,194 (~11.5% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
@@ -478,8 +489,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,658 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,585 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,659 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,591 (impossible to avoid)                                                                         |
 | Longest function name in source      | `baseDestructiveEarlySinglePromptTemplateAndFixtures` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

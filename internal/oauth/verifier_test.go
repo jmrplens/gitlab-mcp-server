@@ -521,36 +521,52 @@ func TestNewGitLabVerifier_ScopeIntrospection_ResolvesGrantedScopes(t *testing.T
 			name:      "OAuth scopes come from token info",
 			patStatus: http.StatusNotFound, patBody: `{}`,
 			infoStatus: http.StatusOK, infoBody: `{"scope":["api"]}`,
-			want: []string{"api"},
+			want: []string{"api", "read_api"},
 		},
 		{
 			name:      "introspection unavailable assumes api",
 			patStatus: http.StatusNotFound, patBody: `{}`,
 			infoStatus: http.StatusNotFound, infoBody: `{}`,
-			want: []string{"api"},
+			want: []string{"api", "read_api"},
 		},
 		{
 			name:      "non-200 introspection falls back",
 			patStatus: http.StatusInternalServerError, patBody: `boom`,
 			infoStatus: http.StatusServiceUnavailable, infoBody: `down`,
-			want: []string{"api"},
+			want: []string{"api", "read_api"},
 		},
 		{
 			name:      "malformed introspection JSON falls back",
 			patStatus: http.StatusOK, patBody: `{not json`,
 			infoStatus: http.StatusOK, infoBody: `also{bad`,
-			want: []string{"api"},
+			want: []string{"api", "read_api"},
 		},
 		{
 			name:      "empty scope lists fall back",
 			patStatus: http.StatusOK, patBody: `{"scopes":[]}`,
 			infoStatus: http.StatusOK, infoBody: `{"scope":[]}`,
-			want: []string{"api"},
+			want: []string{"api", "read_api"},
 		},
 		{
 			name:      "non-string scope entries are ignored",
 			patStatus: http.StatusOK, patBody: `{"scopes":[7]}`,
 			infoStatus: http.StatusOK, infoBody: `{"scope":["read_api"]}`,
+			want: []string{"read_api"},
+		},
+		{
+			// api is a superset of read_api, but GitLab reports only the
+			// granted name and the SDK's scope check is plain set
+			// containment: without the implication, a read-only deployment
+			// asking for read_api would 403 the more privileged token.
+			name:      "api implies read_api",
+			patStatus: http.StatusOK, patBody: `{"scopes":["api","sudo"]}`,
+			infoStatus: http.StatusNotFound, infoBody: `{}`,
+			want: []string{"api", "sudo", "read_api"},
+		},
+		{
+			name:      "read_api alone is not widened",
+			patStatus: http.StatusOK, patBody: `{"scopes":["read_api"]}`,
+			infoStatus: http.StatusNotFound, infoBody: `{}`,
 			want: []string{"read_api"},
 		},
 	}
@@ -606,6 +622,35 @@ func TestMetadataURLFor_InsertsWellKnownBetweenHostAndPath(t *testing.T) {
 			t.Parallel()
 			if got := MetadataURLFor(tt.resource); got != tt.want {
 				t.Errorf("MetadataURLFor(%q) = %q, want %q", tt.resource, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestRequiredScope_LeastPrivilegeForTheDeployment verifies that a server
+// which cannot reach GitLab as a write asks only for read_api. Safe mode
+// counts as read-only because it answers mutating calls with a preview
+// instead of forwarding them, so demanding api there would make every user
+// grant write access the server never exercises.
+func TestRequiredScope_LeastPrivilegeForTheDeployment(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		readOnly bool
+		safeMode bool
+		want     string
+	}{
+		{"writes possible", false, false, ScopeAPI},
+		{"read-only", true, false, ScopeReadAPI},
+		{"safe mode", false, true, ScopeReadAPI},
+		{"both", true, true, ScopeReadAPI},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := RequiredScope(tt.readOnly, tt.safeMode); got != tt.want {
+				t.Errorf("RequiredScope(%t, %t) = %q, want %q", tt.readOnly, tt.safeMode, got, tt.want)
 			}
 		})
 	}
