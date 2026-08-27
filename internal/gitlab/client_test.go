@@ -264,6 +264,22 @@ func TestNewClientWithToken_SkipTLS(t *testing.T) {
 	}
 }
 
+// TestNewOAuthClientWithToken_InvalidURL verifies that
+// [NewOAuthClientWithToken] returns an error when the base URL is malformed,
+// mirroring TestNewClientWithToken_InvalidURL for the Bearer-auth
+// constructor used by the server pool in oauth HTTP mode. Without this test,
+// the gl.NewAuthSourceClient failure branch (wrapped as "creating gitlab
+// oauth client") was never exercised.
+func TestNewOAuthClientWithToken_InvalidURL(t *testing.T) {
+	_, err := NewOAuthClientWithToken(":/not-valid", "some-token", false)
+	if err == nil {
+		t.Fatal("NewOAuthClientWithToken() expected error for invalid URL, got nil")
+	}
+	if !strings.Contains(err.Error(), "creating gitlab oauth client") {
+		t.Errorf("NewOAuthClientWithToken() error = %v, want it to mention %q", err, "creating gitlab oauth client")
+	}
+}
+
 // TestHTTPTransport_ReturnsRoundTripper verifies the shared HTTP transport helper.
 func TestHTTPTransport_ReturnsRoundTripper(t *testing.T) {
 	for _, skipTLSVerify := range []bool{false, true} {
@@ -1010,6 +1026,29 @@ func TestPingDirect_NilContext(t *testing.T) {
 	pingErr := client.pingDirect(nil) //lint:ignore SA1012 intentionally passing nil context to trigger error path
 	if pingErr == nil {
 		t.Fatal("expected error for nil context, got nil")
+	}
+}
+
+// TestCredentialRejected_NilContext verifies that CredentialRejected returns
+// false (fail-open, per its documented contract) when
+// http.NewRequestWithContext fails to build the probe request, mirroring
+// TestPingDirect_NilContext for the credential-probe path. Without this test
+// the request-build error branch — distinct from the "no verdict" cases for
+// transport errors and non-401/403 status codes — was never exercised, and a
+// regression turning that branch into a panic or a mistaken "true" (treating
+// a local failure as an active rejection) would go unnoticed.
+func TestCredentialRejected_NilContext(t *testing.T) {
+	srv := stubVersionServer(t, http.StatusOK)
+	defer srv.Close()
+
+	client, err := NewClient(newTestConfig(srv.URL, testValidToken))
+	if err != nil {
+		t.Fatalf(fmtNewClientErr, err)
+	}
+
+	//nolint:staticcheck // intentionally passing nil context to trigger error path
+	if client.CredentialRejected(nil) { //lint:ignore SA1012 intentionally passing nil context to trigger error path
+		t.Error("CredentialRejected(nil) = true, want false (fail-open) when the probe request cannot be built")
 	}
 }
 

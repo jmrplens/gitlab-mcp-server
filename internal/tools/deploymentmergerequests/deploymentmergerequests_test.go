@@ -860,3 +860,45 @@ func deploymentMRSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[stri
 	}
 	return byTool
 }
+
+// TestList_ApproverFilterInvalid_ReturnsError verifies that a malformed
+// approver filter is rejected before any request reaches GitLab, and that the
+// error names the field the caller got wrong.
+//
+// Both approver filters accept either a list of user IDs or exactly one of
+// the "Any"/"None" literals, never a mix. Forwarding the mix would not fail
+// loudly — GitLab drops a filter it cannot parse — so the caller would get a
+// confidently unfiltered list back and no indication that the filter they
+// asked for was never applied.
+func TestList_ApproverFilterInvalid_ReturnsError(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     ListInput
+		wantField string
+	}{
+		{"approver_ids", ListInput{
+			ProjectID:    "42",
+			DeploymentID: 7,
+			ApproverIDs:  toolutil.ApproverIDsFilter{"Any", "7"},
+		}, "approver_ids"},
+		{"approved_by_ids", ListInput{
+			ProjectID:     "42",
+			DeploymentID:  7,
+			ApprovedByIDs: toolutil.ApproverIDsFilter{"None", "7"},
+		}, "approved_by_ids"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+				t.Error("request issued despite an invalid approver filter")
+			}))
+			_, err := List(context.Background(), client, tt.input)
+			if err == nil {
+				t.Fatal("List() error = nil, want an invalid-filter error")
+			}
+			if !strings.Contains(err.Error(), tt.wantField) {
+				t.Errorf("List() error = %q, want it to name %s", err, tt.wantField)
+			}
+		})
+	}
+}

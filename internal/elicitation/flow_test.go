@@ -165,11 +165,255 @@ func TestFlow_TypedPrompts_ReplayAnswers(t *testing.T) {
 }
 
 // TestFlow_NotSupported_ReturnsSentinel verifies that a flow without
-// elicitation support rejects every prompt with ErrElicitationNotSupported.
+// elicitation support rejects every prompt with ErrElicitationNotSupported,
+// on both the synchronous and the multi round-trip paths.
+//
+// Each method carries its own guard, so exercising one proves nothing about
+// the other seven: a method that dropped its check would reach a nil session
+// and panic instead of returning the sentinel every caller branches on.
+// ElicitURL is the one that genuinely differs between the two paths — it
+// dispatches on mrtr before checking support — which is why both are run.
 func TestFlow_NotSupported_ReturnsSentinel(t *testing.T) {
-	f := &Flow{answers: map[string]answerRecord{}}
-	if _, err := f.Confirm(context.Background(), "q", "Sure?"); !errors.Is(err, ErrElicitationNotSupported) {
-		t.Errorf("Confirm(no support) error = %v, want ErrElicitationNotSupported", err)
+	ctx := context.Background()
+	prompts := []struct {
+		name string
+		call func(*Flow) error
+	}{
+		{"Confirm", func(f *Flow) error { _, err := f.Confirm(ctx, "q", "Sure?"); return err }},
+		{"PromptText", func(f *Flow) error { _, err := f.PromptText(ctx, "q", "Title?", "title"); return err }},
+		{"SelectOne", func(f *Flow) error { _, err := f.SelectOne(ctx, "q", "Pick", []string{"a"}); return err }},
+		{"SelectMulti", func(f *Flow) error { _, err := f.SelectMulti(ctx, "q", "Pick", []string{"a"}, 1, 1); return err }},
+		{"SelectOneInt", func(f *Flow) error { _, err := f.SelectOneInt(ctx, "q", "Pick", []int{1}); return err }},
+		{"PromptNumber", func(f *Flow) error { _, err := f.PromptNumber(ctx, "q", "How many?", "n", 0, 10); return err }},
+		{"GatherData", func(f *Flow) error {
+			_, err := f.GatherData(ctx, "q", "Data", map[string]any{"type": "object"})
+			return err
+		}},
+		{"ElicitURL", func(f *Flow) error {
+			return f.ElicitURL(ctx, "q", "https://gitlab.example.com", "https://gitlab.example.com/x", "Open")
+		}},
+	}
+
+	for _, path := range []struct {
+		name string
+		mrtr bool
+	}{{"synchronous", false}, {"multi round-trip", true}} {
+		for _, tt := range prompts {
+			t.Run(path.name+"/"+tt.name, func(t *testing.T) {
+				f := &Flow{mrtr: path.mrtr, answers: map[string]answerRecord{}}
+				if err := tt.call(f); !errors.Is(err, ErrElicitationNotSupported) {
+					t.Errorf("%s(no support) error = %v, want ErrElicitationNotSupported", tt.name, err)
+				}
+			})
+		}
+	}
+}
+
+// TestFlow_EmptyOptions_Rejected verifies that the three option-list prompts
+// refuse an empty list instead of queueing it.
+//
+// An elicitation schema with an empty enum is one no answer can satisfy, so a
+// client would be asked to choose from nothing and the call could never make
+// progress. Failing at the call site names the caller's bug instead.
+func TestFlow_EmptyOptions_Rejected(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		call func(*Flow) error
+	}{
+		{"SelectOne", func(f *Flow) error { _, err := f.SelectOne(ctx, "q", "Pick", nil); return err }},
+		{"SelectMulti", func(f *Flow) error { _, err := f.SelectMulti(ctx, "q", "Pick", nil, 1, 1); return err }},
+		{"SelectOneInt", func(f *Flow) error { _, err := f.SelectOneInt(ctx, "q", "Pick", nil); return err }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newMRTRFlow(nil)
+			err := tt.call(f)
+			if err == nil || !strings.Contains(err.Error(), errOptionsEmpty) {
+				t.Errorf("%s(no options) error = %v, want %q", tt.name, err, errOptionsEmpty)
+			}
+			if len(f.pending) != 0 {
+				t.Errorf("%s queued %d input requests for an unanswerable prompt, want none", tt.name, len(f.pending))
+			}
+		})
+	}
+}
+
+// TestFlow_TypedPrompts_QueueWhenUnanswered verifies that every typed prompt
+// queues an input request and reports ErrInputPending on the first round, and
+// that the two prompts taking a field name fall back to "value" when the
+// caller passes none.
+//
+// The fallback is not cosmetic. The queued schema and the parser that reads
+// the answer back derive the property name separately, so a prompt that
+// queued "value" while its parser looked for "" would send the user a form,
+// receive a valid answer, and then fail to find it.
+func TestFlow_TypedPrompts_QueueWhenUnanswered(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name string
+		call func(*Flow) error
+		// wantField is the schema property the queued request must declare,
+		// or "" for prompts whose property name is not caller-supplied.
+		wantField string
+	}{
+		{"PromptText", func(f *Flow) error { _, err := f.PromptText(ctx, "q", "Title?", ""); return err }, "value"},
+		{"PromptNumber", func(f *Flow) error { _, err := f.PromptNumber(ctx, "q", "How many?", "", 0, 10); return err }, "value"},
+		{"SelectOne", func(f *Flow) error { _, err := f.SelectOne(ctx, "q", "Pick", []string{"a", "b"}); return err }, ""},
+		{"SelectMulti", func(f *Flow) error {
+			_, err := f.SelectMulti(ctx, "q", "Pick", []string{"a", "b"}, 1, 2)
+			return err
+		}, ""},
+		{"SelectOneInt", func(f *Flow) error { _, err := f.SelectOneInt(ctx, "q", "Pick", []int{1, 2}); return err }, ""},
+		{"GatherData", func(f *Flow) error {
+			_, err := f.GatherData(ctx, "q", "Data", map[string]any{"type": "object"})
+			return err
+		}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newMRTRFlow(nil)
+			if err := tt.call(f); !errors.Is(err, ErrInputPending) {
+				t.Fatalf("%s(unanswered) error = %v, want ErrInputPending", tt.name, err)
+			}
+			queued, ok := f.pending["q"].(*mcp.ElicitParams)
+			if !ok {
+				t.Fatalf("%s queued %T, want *mcp.ElicitParams", tt.name, f.pending["q"])
+			}
+			if tt.wantField == "" {
+				return
+			}
+			schema, _ := queued.RequestedSchema.(map[string]any)
+			props, _ := schema["properties"].(map[string]any)
+			if _, declared := props[tt.wantField]; !declared {
+				t.Errorf("%s queued schema properties = %v, want a %q property", tt.name, props, tt.wantField)
+			}
+		})
+	}
+}
+
+// urlFlow builds a multi round-trip Flow whose session advertises URL-mode
+// elicitation. The synchronous elicitation handler fails the test: on this
+// path the flow must queue an input request, never send one, and routing a
+// URL prompt through the legacy client is exactly the regression that would
+// otherwise pass unnoticed.
+func urlFlow(t *testing.T, answers map[string]answerRecord) *Flow {
+	t.Helper()
+	_, ss, cleanup := setupElicitURLSession(t, context.Background(),
+		func(context.Context, *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			t.Error("the multi round-trip path sent a synchronous elicitation request")
+			return nil, errors.New("unexpected synchronous elicitation")
+		})
+	t.Cleanup(cleanup)
+	if answers == nil {
+		answers = map[string]answerRecord{}
+	}
+	return &Flow{legacy: Client{session: ss}, mrtr: true, answers: answers}
+}
+
+// elicitURLBase and elicitURLTarget are the instance and in-instance page the
+// URL-mode tests prompt for.
+const (
+	elicitURLBase   = "https://gitlab.example.com"
+	elicitURLTarget = elicitURLBase + "/group/project/-/issues/1"
+)
+
+// TestFlow_ElicitURL_RefusesWhatItCannotSend verifies the two checks that run
+// before anything is queued: the client must actually support URL mode, and
+// the target must belong to the instance the caller named.
+//
+// The host check is the security-relevant one. The URL is rendered to the user
+// as somewhere their GitLab session will follow, so a prompt pointing off the
+// instance turns an ordinary tool call into a link the user has been told to
+// trust. Neither refusal may leave a queued request behind, or the next round
+// would send the very prompt that was just rejected.
+func TestFlow_ElicitURL_RefusesWhatItCannotSend(t *testing.T) {
+	t.Run("client without URL capability", func(t *testing.T) {
+		// newMRTRFlow's bare session advertises form elicitation but not URL.
+		f := newMRTRFlow(nil)
+		err := f.ElicitURL(context.Background(), "u", elicitURLBase, elicitURLTarget, "Open")
+		if !errors.Is(err, ErrURLElicitationNotSupported) {
+			t.Errorf("ElicitURL(form-only client) error = %v, want ErrURLElicitationNotSupported", err)
+		}
+		if len(f.pending) != 0 {
+			t.Error("a prompt the client cannot render was still queued")
+		}
+	})
+
+	t.Run("target outside the instance", func(t *testing.T) {
+		f := urlFlow(t, nil)
+		err := f.ElicitURL(context.Background(), "u", elicitURLBase, "https://elsewhere.example.net/x", "Open")
+		if err == nil || !strings.Contains(err.Error(), "does not match GitLab instance") {
+			t.Errorf("ElicitURL(foreign host) error = %v, want a host-mismatch error", err)
+		}
+		if len(f.pending) != 0 {
+			t.Error("a rejected URL was still queued for the client")
+		}
+	})
+}
+
+// TestFlow_ElicitURL_QueuesThenReplays verifies the round trip itself: an
+// unanswered prompt is queued in url mode, and a recorded answer resolves on
+// the next round without prompting again.
+//
+// URL mode is the one prompt whose answer carries no data, only an action, so
+// its replay path returns the action's error and nothing else. A regression
+// there would not fail loudly — it would silently re-prompt the user on every
+// round, and the call would never finish.
+func TestFlow_ElicitURL_QueuesThenReplays(t *testing.T) {
+	t.Run("unanswered queues a url-mode request", func(t *testing.T) {
+		f := urlFlow(t, nil)
+		err := f.ElicitURL(context.Background(), "u", elicitURLBase, elicitURLTarget, "Open the issue")
+		if !errors.Is(err, ErrInputPending) {
+			t.Fatalf("ElicitURL(unanswered) error = %v, want ErrInputPending", err)
+		}
+		queued, ok := f.pending["u"].(*mcp.ElicitParams)
+		if !ok {
+			t.Fatalf("ElicitURL queued %T, want *mcp.ElicitParams", f.pending["u"])
+		}
+		if queued.Mode != "url" {
+			t.Errorf("queued Mode = %q, want %q", queued.Mode, "url")
+		}
+		if queued.URL != elicitURLTarget {
+			t.Errorf("queued URL = %q, want %q", queued.URL, elicitURLTarget)
+		}
+		if queued.Message != "Open the issue" {
+			t.Errorf("queued Message = %q, want the caller's message", queued.Message)
+		}
+	})
+
+	t.Run("canceled context stops before queueing", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		f := urlFlow(t, nil)
+		if err := f.ElicitURL(ctx, "u", elicitURLBase, elicitURLTarget, "Open"); !errors.Is(err, context.Canceled) {
+			t.Errorf("ElicitURL(canceled ctx) error = %v, want context.Canceled", err)
+		}
+		if len(f.pending) != 0 {
+			t.Error("a canceled call still queued an input request")
+		}
+	})
+
+	replays := []struct {
+		name    string
+		action  string
+		wantErr error
+	}{
+		{"accepted resolves", "accept", nil},
+		{"declined surfaces ErrDeclined", "decline", ErrDeclined},
+		{"cancelled surfaces ErrCancelled", "cancel", ErrCancelled},
+	}
+	for _, tt := range replays {
+		t.Run(tt.name, func(t *testing.T) {
+			f := urlFlow(t, map[string]answerRecord{"u": {Action: tt.action}})
+			err := f.ElicitURL(context.Background(), "u", elicitURLBase, elicitURLTarget, "Open")
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("ElicitURL(%s) error = %v, want %v", tt.action, err, tt.wantErr)
+			}
+			if len(f.pending) != 0 {
+				t.Error("an already-answered prompt was queued again")
+			}
+		})
 	}
 }
 
@@ -413,6 +657,73 @@ func TestFlow_MRTR_InvalidRequestState(t *testing.T) {
 	}
 	if got := resultText(result); !strings.Contains(got, "state rejected") {
 		t.Errorf("result text = %q, want state rejection", got)
+	}
+}
+
+// TestFlow_MRTR_UnsupportedStateVersion verifies that well-formed request
+// state carrying a version this build does not know is rejected.
+//
+// The state is opaque to the client, which echoes back whatever it was given,
+// so a version bump means a client mid-conversation can hand back a payload
+// written by the previous build. Decoding it into the current shape would
+// silently misread the accumulated answers; refusing it restarts the flow,
+// which costs one round trip and cannot corrupt anything.
+func TestFlow_MRTR_UnsupportedStateVersion(t *testing.T) {
+	handler := func(_ context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
+		req.Params.RequestState = `{"v":99,"answers":{}}`
+		if _, err := FlowFromRequest(req); err != nil {
+			//nolint:nilerr // the rejection is asserted in-band via the result text
+			return textResult("state rejected: " + err.Error()), nil
+		}
+		return textResult("state accepted"), nil
+	}
+	cs := flowTestTool(t, handler, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "accept"}, nil
+	})
+
+	result, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "flow_tool", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	got := resultText(result)
+	if !strings.Contains(got, "state rejected") {
+		t.Fatalf("result text = %q, want the state to be rejected", got)
+	}
+	if !strings.Contains(got, "unsupported requestState version 99") {
+		t.Errorf("result text = %q, want the offending version named", got)
+	}
+}
+
+// TestFlow_MRTR_NoParams_StillUsesMultiRoundTrip verifies that a request
+// carrying no params still yields a multi round-trip flow.
+//
+// The mechanism is chosen by the negotiated protocol version, not by whether
+// this particular call happens to carry state. Falling back to the
+// synchronous path here would send a server-initiated elicitation request on
+// a session where the specification forbids one.
+func TestFlow_MRTR_NoParams_StillUsesMultiRoundTrip(t *testing.T) {
+	handler := func(_ context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
+		req.Params = nil
+		fl, err := FlowFromRequest(req)
+		if err != nil {
+			//nolint:nilerr // the outcome is asserted in-band via the result text
+			return textResult("unexpected error: " + err.Error()), nil
+		}
+		if !fl.UsesMultiRoundTrip() {
+			return textResult("downgraded to the synchronous path"), nil
+		}
+		return textResult("multi round-trip"), nil
+	}
+	cs := flowTestTool(t, handler, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "accept"}, nil
+	})
+
+	result, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "flow_tool", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if got := resultText(result); got != "multi round-trip" {
+		t.Errorf("result text = %q, want %q", got, "multi round-trip")
 	}
 }
 

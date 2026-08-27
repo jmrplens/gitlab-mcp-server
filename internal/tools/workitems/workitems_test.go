@@ -1014,6 +1014,39 @@ func TestCreate_AllOptions(t *testing.T) {
 	}
 }
 
+// TestCreate_WithStatus verifies that Create maps a documented status string
+// (e.g. "IN_PROGRESS") to the corresponding GitLab work item status GID via
+// mapStatusToID and forwards it in the CreateWorkItem request. No other
+// Create test sets input.Status, so a regression that dropped or
+// mis-mapped the status would go unnoticed and silently create work items
+// with the wrong initial status.
+func TestCreate_WithStatus(t *testing.T) {
+	var body string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		body = string(raw)
+		testutil.RespondJSON(w, http.StatusOK, `{"data":{"workItemCreate":{"workItem":{"id":"gid://gitlab/WorkItem/60","iid":"60","workItemType":{"name":"Issue"},"state":"OPEN","title":"With status","author":{"username":"dev"},"widgets":[]}}}}`)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	out, err := Create(t.Context(), client, CreateInput{
+		FullPath:       testFullPath,
+		WorkItemTypeID: testTypeGID,
+		Title:          "With status",
+		Status:         "IN_PROGRESS",
+	})
+	if err != nil {
+		t.Fatalf(fmtUnexpErr, err)
+	}
+	if out.WorkItem.Title != "With status" {
+		t.Errorf("Title = %q, want %q", out.WorkItem.Title, "With status")
+	}
+	wantStatus := string(gl.WorkItemStatusInProgress)
+	if !strings.Contains(body, wantStatus) {
+		t.Errorf("request body = %s, want it to contain mapped status %q", body, wantStatus)
+	}
+}
+
 // TestCreate_MinimalOptions verifies Create when minimal options.
 func TestCreate_MinimalOptions(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

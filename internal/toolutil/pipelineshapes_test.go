@@ -50,6 +50,22 @@ func TestNewBasicUserOutputs(t *testing.T) {
 	}
 }
 
+// TestNewPipelineDetailedStatusIllustrationOutput pins the nil-on-empty
+// contract of the illustration constructor. The function is currently
+// unreachable from production code (NewPipelineDetailedStatusOutput inlines
+// the same conversion because the SDK exposes Illustration as a value type,
+// not a pointer) but is kept for forward compatibility, so it must be
+// exercised directly to stay covered.
+func TestNewPipelineDetailedStatusIllustrationOutput(t *testing.T) {
+	if got := NewPipelineDetailedStatusIllustrationOutput(""); got != nil {
+		t.Errorf("empty image must return nil, got %+v", got)
+	}
+	got := NewPipelineDetailedStatusIllustrationOutput("icon.svg")
+	if got == nil || got.Image != "icon.svg" {
+		t.Errorf("NewPipelineDetailedStatusIllustrationOutput(%q) = %+v, want Image=icon.svg", "icon.svg", got)
+	}
+}
+
 // TestNewPipelineDetailedStatusOutput pins the detailed-status conversion
 // including the nested illustration image handling.
 func TestNewPipelineDetailedStatusOutput(t *testing.T) {

@@ -256,6 +256,23 @@ func TestToolManifestHelpers_DefensiveBranches(t *testing.T) {
 	if metaRouteVisible(nil, "gitlab_widget", "create") {
 		t.Fatal("metaRouteVisible(nil) = true, want false")
 	}
+
+	// rewriteSeeAlso with a nil resolver is the individual surface's path:
+	// hand-written "See also: gitlab_a, gitlab_b." clauses already use
+	// individual-tool names, so the description must pass through
+	// untouched rather than being rewritten or having names dropped.
+	const withSeeAlso = "Get one project. See also: gitlab_get_group, gitlab_list_projects."
+	if got := rewriteSeeAlso(withSeeAlso, nil); got != withSeeAlso {
+		t.Fatalf("rewriteSeeAlso(nil resolver) = %q, want description unchanged: %q", got, withSeeAlso)
+	}
+
+	// newSeeAlsoIndex(nil) must not panic on a nil catalog and must report
+	// "no names known" via a nil map, which is what makes rewriteSeeAlso's
+	// resolvers built on top of it drop every "See also:" reference instead
+	// of indexing a non-existent catalog.
+	if index := newSeeAlsoIndex(nil); index != nil {
+		t.Fatalf("newSeeAlsoIndex(nil) = %v, want nil", index)
+	}
 }
 
 // TestToolManifest_IndividualSurfaceUsesDirectToolIDs verifies that

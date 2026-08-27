@@ -203,6 +203,21 @@ func TestAccessTokenOperationPhrase_AllBranches(t *testing.T) {
 	}
 }
 
+// TestAccessTokenAliases_UnknownOperationUsesGenericTemplate verifies that
+// accessTokenAliases falls back to a generic "<operation> <scope> access
+// token" alias (with underscores replaced by spaces) when operation does
+// not match any of the seven known cases (list/get/create/rotate/
+// rotate_self/revoke/revoke_self). This documents the defensive fallback
+// for any future access-token operation added without updating this
+// switch, so aliasing degrades gracefully instead of returning nothing.
+func TestAccessTokenAliases_UnknownOperationUsesGenericTemplate(t *testing.T) {
+	got := accessTokenAliases("project", "archive_self")
+	want := []string{"archive self project access token"}
+	if len(got) != 1 || got[0] != want[0] {
+		t.Errorf("accessTokenAliases(project, archive_self) = %v, want %v", got, want)
+	}
+}
+
 // TestAccessTokenRelatedActions_AllBranches verifies the AccessTokenRelatedActions_AllBranches handler.
 // The test exercises the GET path of the underlying GitLab API call.
 // It asserts the returned output matches the expected fields.

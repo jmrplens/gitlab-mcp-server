@@ -4057,6 +4057,45 @@ func TestRegistry_DefensiveBranches(t *testing.T) {
 	})
 }
 
+// TestRegistry_AllActionsReadOnly verifies AllActionsReadOnly's three
+// branches: a nil receiver (used defensively wherever a registry might not
+// have been built yet) counts as read-only since it can dispatch nothing;
+// an empty registry counts as read-only for the same reason; and a
+// registry is read-only only when every entry is, so one mutating entry
+// among otherwise-read-only ones flips the result to false. This value
+// feeds the gitlab_execute_action tool's ReadOnlyHint/DestructiveHint
+// annotations (addExecuteActionTool), so a wrong answer here would
+// mislabel the tool's safety annotations to MCP clients.
+func TestRegistry_AllActionsReadOnly(t *testing.T) {
+	t.Run("nil registry", func(t *testing.T) {
+		var registry *Registry
+		if !registry.AllActionsReadOnly() {
+			t.Fatal("AllActionsReadOnly() on nil registry = false, want true")
+		}
+	})
+
+	t.Run("empty registry", func(t *testing.T) {
+		registry := &Registry{}
+		if !registry.AllActionsReadOnly() {
+			t.Fatal("AllActionsReadOnly() on empty registry = false, want true")
+		}
+	})
+
+	t.Run("all entries read-only", func(t *testing.T) {
+		registry := &Registry{entries: []actionEntry{{ID: "a.get", ReadOnly: true}, {ID: "a.list", ReadOnly: true}}}
+		if !registry.AllActionsReadOnly() {
+			t.Fatal("AllActionsReadOnly() with all read-only entries = false, want true")
+		}
+	})
+
+	t.Run("one mutating entry flips result to false", func(t *testing.T) {
+		registry := &Registry{entries: []actionEntry{{ID: "a.get", ReadOnly: true}, {ID: "a.delete", ReadOnly: false}}}
+		if registry.AllActionsReadOnly() {
+			t.Fatal("AllActionsReadOnly() with a mutating entry = true, want false")
+		}
+	})
+}
+
 func assertDescribeRequiresAction(t *testing.T, registry *Registry) {
 	t.Helper()
 	result, output, err := registry.Describe(t.Context(), nil, DescribeInput{})
@@ -5654,13 +5693,21 @@ func TestScoreCompareRefsIntent_PositiveCase(t *testing.T) {
 		t.Fatal("scoreCompareRefsIntentValue(refs) = 0, want positive score")
 	}
 
-	// Documented limitation: the second guard in scoreCompareRefsIntentValue
-	// (the "ref"/"refs" disambiguator check) is structurally unreachable from
-	// external callers because the "compare" entry in searchSynonymsMap lists
-	// "ref" and "refs" as alternatives. Any query that contains the literal
-	// word "compare" also satisfies the "ref"/"refs" check via the synonym
-	// walk. The guard exists as a defense-in-depth check, not as a reachable
-	// branch. We assert the contract through the positive path above.
+	// The second guard in scoreCompareRefsIntentValue (the "ref"/"refs"
+	// disambiguator check) is unreachable from normalizeSearchTerms-produced
+	// terms specifically, because the "compare" entry in searchSynonymsMap
+	// lists "ref"/"refs" as alternatives: any query containing the literal
+	// word "compare" also satisfies the "ref"/"refs" check through that
+	// synonym expansion. It is reachable, though, by any caller that
+	// constructs a []searchTerm directly instead of going through
+	// normalizeSearchTerms' synonym walk — searchTermsContainWord only
+	// checks each term's own Raw/Alternatives, so a hand-built term for
+	// "compare" without a "ref"/"refs" alternative exercises the guard's
+	// zero-score branch directly.
+	compareOnly := []searchTerm{{Raw: "compare", Alternatives: []string{"compare"}}}
+	if got := scoreCompareRefsIntentValue(entry, compareOnly); got != 0 {
+		t.Fatalf("scoreCompareRefsIntentValue(compare without ref/refs) = %d, want 0", got)
+	}
 }
 
 // TestScoreReleaseListIntent_PositiveCase verifies the ScoreReleaseListIntent_PositiveCase handler.

@@ -434,6 +434,112 @@ func TestBuildActionCatalog_InvalidExplicitGroupReturnsContext(t *testing.T) {
 	}
 }
 
+// TestBuildActionCatalog_CrossGroupDuplicateActionIDReturnsAddGroupContext
+// verifies that when two distinct explicit spec groups (different
+// ToolNames, so mergeActionSpecGroupOverrides never folds them together)
+// resolve to the same canonical action ID, the second catalog.AddGroup
+// call inside BuildActionCatalog's specGroups loop fails and the error is
+// wrapped with "add catalog group %q" context naming the group that lost
+// the race — distinct from the "build catalog group" context (a
+// groupFromActionSpecGroup failure, covered by
+// TestBuildActionCatalog_ActionSpecMapErrorReturnsContext) and the
+// "add MCP action group" context (covered by
+// TestBuildActionCatalog_DuplicateMCPGroupReturnsContext). Both probe
+// groups share BaseDomain "zzz_probe_shared", so both project their "get"
+// action to the identical ID "zzz_probe_shared.get" regardless of their
+// own distinct ToolNames.
+func TestBuildActionCatalog_CrossGroupDuplicateActionIDReturnsAddGroupContext(t *testing.T) {
+	spec := toolutil.NewActionSpec("get", testCatalogActionRoute(), toolutil.ActionSpecOptions{ReadOnly: true, Idempotent: true})
+
+	_, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{
+		{ToolName: "gitlab_zzz_probe_a", BaseDomain: "zzz_probe_shared", Actions: []toolutil.ActionSpec{spec}},
+		{ToolName: "gitlab_zzz_probe_b", BaseDomain: "zzz_probe_shared", Actions: []toolutil.ActionSpec{spec}},
+	}})
+	if err == nil {
+		t.Fatal("BuildActionCatalog() error = nil, want cross-group duplicate action id error")
+	}
+	// mergeActionSpecGroupOverrides sorts merged groups by ToolName before
+	// BuildActionCatalog's loop runs them through AddGroup in order, so
+	// "gitlab_zzz_probe_a" is added first and "gitlab_zzz_probe_b" is the
+	// one that collides.
+	if !strings.Contains(err.Error(), `add catalog group "gitlab_zzz_probe_b"`) {
+		t.Fatalf("BuildActionCatalog() error = %v, want add catalog group context for the colliding group", err)
+	}
+	if !strings.Contains(err.Error(), "duplicate action id") {
+		t.Fatalf("BuildActionCatalog() error = %v, want it to mention duplicate action id", err)
+	}
+}
+
+// TestBuildActionCatalog_CrossGroupAliasCollisionReturnsValidateContext
+// verifies that BuildActionCatalog's final catalog.Validate() call (after
+// every explicit spec group is individually added via AddGroup without
+// conflict) still catches a cross-group alias collision and wraps it with
+// "validate action catalog" context. AddGroup only checks action-ID and
+// group-name uniqueness per group; it does not check aliases across
+// groups, so two actions with different IDs (different BaseDomain, so no
+// AddGroup conflict) that happen to share a plain Aliases entry pass
+// AddGroup for both groups and are only rejected by the aggregate
+// seenAliases check inside Catalog.Validate().
+func TestBuildActionCatalog_CrossGroupAliasCollisionReturnsValidateContext(t *testing.T) {
+	specA := toolutil.NewActionSpec("get", testCatalogActionRoute(), toolutil.ActionSpecOptions{
+		ReadOnly: true, Idempotent: true, Aliases: []string{"zzz_shared_alias_probe"},
+	})
+	specB := toolutil.NewActionSpec("get", testCatalogActionRoute(), toolutil.ActionSpecOptions{
+		ReadOnly: true, Idempotent: true, Aliases: []string{"zzz_shared_alias_probe"},
+	})
+
+	_, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{
+		{ToolName: "gitlab_zzz_alias_probe_a", BaseDomain: "zzz_alias_probe_a", Actions: []toolutil.ActionSpec{specA}},
+		{ToolName: "gitlab_zzz_alias_probe_b", BaseDomain: "zzz_alias_probe_b", Actions: []toolutil.ActionSpec{specB}},
+	}})
+	if err == nil {
+		t.Fatal("BuildActionCatalog() error = nil, want cross-group alias collision error")
+	}
+	if !strings.Contains(err.Error(), "validate action catalog") {
+		t.Fatalf("BuildActionCatalog() error = %v, want validate action catalog context", err)
+	}
+	if !strings.Contains(err.Error(), `alias "zzz_shared_alias_probe" maps to both`) {
+		t.Fatalf("BuildActionCatalog() error = %v, want it to name the colliding alias", err)
+	}
+}
+
+// TestGroupFromActionSpecGroup_DefaultsSurfaceKindToMetaGroup verifies the
+// end-to-end contract that an explicit spec group left with a zero-value
+// SurfaceKind ends up as actioncatalog.SurfaceKindMetaGroup in the built
+// catalog, the same default NewGroup applies to ordinary domain-collected
+// groups.
+//
+// Note: this does NOT exercise the `if specGroup.SurfaceKind == ""`
+// assignment at action_catalog.go's groupFromActionSpecGroup (the
+// SurfaceKindMetaGroup fallback next to the SurfaceKind check) — that
+// branch is unreachable. groupFromActionSpecGroup's first statement clones
+// specGroup through actioncatalog.CloneCatalogGroupSpec, which already
+// defaults an empty SurfaceKind to SurfaceKindMetaGroup (group_spec.go);
+// by the time groupFromActionSpecGroup's own check runs, SurfaceKind can
+// never be empty. This mirrors the dead-branch pattern documented by
+// TestCatalogGroupSpec_Validate_DeadBranches and
+// TestActionsFromSpecs_SeenGuardIsUnreachable in the actioncatalog
+// package: a defensive check made redundant by an earlier layer. We keep
+// this test for the observable contract (the default reaches the built
+// catalog) even though the specific redundant line cannot be covered.
+func TestGroupFromActionSpecGroup_DefaultsSurfaceKindToMetaGroup(t *testing.T) {
+	spec := toolutil.NewActionSpec("get", testCatalogActionRoute(), toolutil.ActionSpecOptions{ReadOnly: true, Idempotent: true})
+
+	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{SpecGroups: []ActionSpecGroup{
+		{ToolName: "gitlab_zzz_surfacekind_probe", BaseDomain: "zzz_surfacekind_probe", Actions: []toolutil.ActionSpec{spec}},
+	}})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+	group, ok := catalog.Group("gitlab_zzz_surfacekind_probe")
+	if !ok {
+		t.Fatal("catalog missing gitlab_zzz_surfacekind_probe group")
+	}
+	if group.SurfaceKind != actioncatalog.SurfaceKindMetaGroup {
+		t.Fatalf("SurfaceKind = %q, want default %q", group.SurfaceKind, actioncatalog.SurfaceKindMetaGroup)
+	}
+}
+
 // TestEnsureActionSpecOwners_FillsMissingOwnersDefensively verifies owner
 // defaults are applied to clones without mutating caller-owned specs.
 func TestEnsureActionSpecOwners_FillsMissingOwnersDefensively(t *testing.T) {

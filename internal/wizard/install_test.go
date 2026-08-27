@@ -148,6 +148,31 @@ func TestInstallBinaryImpl_MkdirAllFails(t *testing.T) {
 	}
 }
 
+// TestInstallBinaryImpl_MkdirAllFails_BlockedByFile verifies installBinaryImpl
+// returns an error when a path component of the destination directory
+// already exists as a regular file. Unlike TestInstallBinaryImpl_MkdirAllFails
+// (a chmod 0o500 read-only parent, skipped when the test process runs as
+// root since root bypasses filesystem permission checks), a file blocking a
+// directory component fails os.MkdirAll with ENOTDIR unconditionally: it is
+// a type mismatch, not a permission check, so this reproduces the
+// install.go:74-76 error branch in root-run CI the same as anywhere else.
+func TestInstallBinaryImpl_MkdirAllFails_BlockedByFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	blocked := filepath.Join(tmpDir, "not-a-directory")
+	if err := os.WriteFile(blocked, []byte("i am a file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	deepDir := filepath.Join(blocked, "nested", "dir")
+	_, err := installBinaryImpl(deepDir)
+	if err == nil {
+		t.Fatal("expected error when a destination path component is a file, got nil")
+	}
+	if !strings.Contains(err.Error(), "creating directory") {
+		t.Errorf("error = %v, want to contain 'creating directory'", err)
+	}
+}
+
 // TestInstallBinaryImpl_PathTraversalCheckContract documents the install
 // path resolution contract: installBinaryImpl relies on filepath.Clean +
 // filepath.Abs to resolve any ".." segments before applying the

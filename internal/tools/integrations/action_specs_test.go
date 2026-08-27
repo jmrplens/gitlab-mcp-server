@@ -160,6 +160,31 @@ func TestApplyIntegrationMeta_KnownAndUnknown(t *testing.T) {
 	}
 }
 
+// TestGroupIntegrationOptions_KnownAndUnknown verifies the generic
+// group-integration option builder (list/get/set/delete) keeps the
+// per-action metadata for known tools and falls back to the generic
+// group.get RelatedActions for a tool name absent from
+// integrationActionMeta. All four production group-integration tool names
+// have metadata entries, so this fallback branch is otherwise untested by
+// the real ActionSpecs() call graph.
+func TestGroupIntegrationOptions_KnownAndUnknown(t *testing.T) {
+	known := groupIntegrationOptions("gitlab_list_group_integrations", "desc")
+	if isGenericMetaUsage(known.Usage) {
+		t.Fatalf("known group tool Usage still generic: %q", known.Usage)
+	}
+	if len(known.RelatedActions) == 1 && known.RelatedActions[0] == actionGroupGet {
+		t.Fatalf("known group tool RelatedActions not enriched: %+v", known.RelatedActions)
+	}
+
+	unknown := groupIntegrationOptions("gitlab_unknown_group_integration_tool", "desc")
+	if !isGenericMetaUsage(unknown.Usage) {
+		t.Fatalf("unknown group tool Usage = %q, want generic default", unknown.Usage)
+	}
+	if len(unknown.RelatedActions) != 1 || unknown.RelatedActions[0] != actionGroupGet {
+		t.Fatalf("unknown group tool RelatedActions = %+v, want [%s]", unknown.RelatedActions, actionGroupGet)
+	}
+}
+
 // TestGroupDatadogOptions_KnownAndUnknown verifies the group-Datadog option
 // builder leaves the edition at Free (group integration management is Free tier),
 // keeps the per-action metadata for known tools, and falls back to the generic

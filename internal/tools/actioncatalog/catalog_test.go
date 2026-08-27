@@ -269,24 +269,30 @@ func TestCatalog_AddActionCreatesGroupWithoutOptions(t *testing.T) {
 	}
 }
 
-// TestCatalog_AddGroup_DuplicateActionIDDeadBranch documents why the
-// intra-group duplicate action ID branch in AddGroup (the
-// "duplicate action id %q" return at the top of the ActionsInOrder loop)
-// cannot be reached through the public API. The two layers of defense
-// above it make it unreachable:
+// TestCatalog_AddGroup_SameNameCollisionRejectedBeforeDuplicateIDCheck
+// documents why a SAME-NAME collision never reaches the intra-group
+// duplicate action ID branch in AddGroup (the "duplicate action id %q"
+// return at the top of the ActionsInOrder loop): two layers of defense sit
+// above it for that specific case.
 //   - normalizeAction requires explicit IDs to match `<domain>.<name>`,
-//     so two different names always produce two different IDs after
-//     normalization, and any two actions that share a name get folded
-//     together by SetAction (which uses the trimmed name as the map
-//     key, overwriting the prior entry).
+//     so two actions sharing both name and an explicit ID must also agree
+//     on domain, or the second is rejected as a normalization mismatch
+//     before AddGroup's duplicate-ID check ever runs.
 //   - ActionsInOrder deduplicates by map key before AddGroup sees the
 //     slice, so two map entries that share a name cannot both surface
-//     as "duplicate IDs".
+//     as "duplicate IDs" — SetAction already folded them into one entry.
 //
-// We assert the documented contract below: feeding two actions with the
-// same explicit invalid ID is rejected at the normalization step, and
-// the duplicate-ID branch never has to fire.
-func TestCatalog_AddGroup_DuplicateActionIDDeadBranch(t *testing.T) {
+// This does NOT mean the duplicate-ID branch itself is unreachable: two
+// DIFFERENT names can still collide on ActionID by overriding per-action
+// Domain so domain+"."+name produces the same string for both, since
+// normalizeAction only checks an action's ID against its own domain/name,
+// never against sibling actions. See
+// TestCatalog_AddGroup_IntraGroupDuplicateIDViaDomainOverlap for that path.
+//
+// We assert the documented contract below: feeding two actions that share
+// both a name and an explicit invalid ID is rejected at the normalization
+// step, never reaching the duplicate-ID branch by this route.
+func TestCatalog_AddGroup_SameNameCollisionRejectedBeforeDuplicateIDCheck(t *testing.T) {
 	group := NewGroup(GroupOptions{ToolName: "gitlab_dup"})
 	group.SetAction(Action{Name: "one", ID: "shared.invalid", Route: testRoute(false)})
 	group.SetAction(Action{Name: "two", ID: "shared.invalid", Route: testRoute(false)})
@@ -296,6 +302,33 @@ func TestCatalog_AddGroup_DuplicateActionIDDeadBranch(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "has id") {
 		t.Fatalf("err = %q, want it to come from normalizeAction (mention 'has id')", err.Error())
+	}
+}
+
+// TestCatalog_AddGroup_IntraGroupDuplicateIDViaDomainOverlap verifies the
+// intra-group "duplicate action id %q" branch in AddGroup — the one
+// TestCatalog_AddGroup_DuplicateActionIDDeadBranch documents as unreachable
+// through same-name collisions. It is reachable through a different route:
+// ActionID is literally domain+"."+name, and normalizeAction only checks
+// that an action's own explicit ID (if any) matches its own domain+name —
+// it never compares across actions. Two actions with DIFFERENT Name values
+// (so SetAction's name-keyed map never folds them together) can still
+// compute to the SAME ActionID by choosing complementary per-action Domain
+// overrides: domain "foo.bar" + name "dup" and domain "foo" + name
+// "bar.dup" both yield "foo.bar.dup". Neither action's ID mismatches its
+// own domain/name, so normalizeGroup accepts both, and the collision is
+// only caught by the seenIDs check this test targets.
+func TestCatalog_AddGroup_IntraGroupDuplicateIDViaDomainOverlap(t *testing.T) {
+	group := NewGroup(GroupOptions{ToolName: "gitlab_probe"})
+	group.SetAction(Action{Name: "dup", Domain: "foo.bar", Route: testRoute(false)})
+	group.SetAction(Action{Name: "bar.dup", Domain: "foo", Route: testRoute(false)})
+
+	err := NewCatalog().AddGroup(group)
+	if err == nil {
+		t.Fatal("AddGroup() error = nil, want duplicate action id error")
+	}
+	if err.Error() != `duplicate action id "foo.bar.dup"` {
+		t.Fatalf("err = %q, want duplicate action id \"foo.bar.dup\"", err.Error())
 	}
 }
 

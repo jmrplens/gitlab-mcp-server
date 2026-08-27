@@ -241,6 +241,31 @@ func TestTransferSubGroup_Forbidden(t *testing.T) {
 	}
 }
 
+// TestTransferSubGroup_NotFound verifies that a status which is neither 403
+// nor 400 (here, 404) falls through both dedicated hint branches to the
+// final gitlab_group_get verification hint. Without this test the fallback
+// WrapErrWithStatusHint call at the end of TransferSubGroup's error handling
+// is never exercised, and a regression there (e.g. losing the hint) would go
+// unnoticed since only err != nil would be implicitly checked elsewhere.
+func TestTransferSubGroup_NotFound(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	_, err := TransferSubGroup(context.Background(), client, TransferSubGroupInput{GroupID: "99"})
+	if err == nil {
+		t.Fatal("expected error for 404 response")
+	}
+	if !strings.Contains(err.Error(), "groupTransferSubGroup") {
+		t.Errorf("expected operation name in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "gitlab_group_get") {
+		t.Errorf("expected gitlab_group_get verification hint, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "Owner role") || strings.Contains(err.Error(), "destination") {
+		t.Errorf("404 should not use the 403/400 hints, got: %v", err)
+	}
+}
+
 // TestFormatShareGroupMarkdown verifies the share confirmation Markdown.
 func TestFormatShareGroupMarkdown(t *testing.T) {
 	md := FormatShareGroupMarkdown(ShareGroupOutput{

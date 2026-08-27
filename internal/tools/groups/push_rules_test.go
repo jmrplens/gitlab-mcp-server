@@ -63,6 +63,27 @@ func TestGetPushRules_NotFound(t *testing.T) {
 	}
 }
 
+// TestGetPushRules_Forbidden verifies that a non-404 API failure (403) falls
+// through to the generic Owner/Premium hint branch instead of the 404-specific
+// "no push rules configured" hint. Regressing this branch (e.g. dropping the
+// WrapErrWithStatusHint call) would still return a non-nil error, so this
+// checks the wrapped message content rather than err != nil alone.
+func TestGetPushRules_Forbidden(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	_, err := GetPushRules(context.Background(), client, GetPushRulesInput{GroupID: "99"})
+	if err == nil {
+		t.Fatal("expected error for 403 response")
+	}
+	if !strings.Contains(err.Error(), "groupGetPushRules") {
+		t.Errorf("expected operation name in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Owner role") {
+		t.Errorf("expected Owner-role hint, got: %v", err)
+	}
+}
+
 // TestAddPushRule_Success verifies AddPushRule POSTs the configured settings.
 func TestAddPushRule_Success(t *testing.T) {
 	var gotBody string
@@ -122,6 +143,26 @@ func TestAddPushRule_Conflict(t *testing.T) {
 	}
 }
 
+// TestAddPushRule_Forbidden verifies that a non-422/400 API failure (403)
+// falls through to the generic Owner/Premium hint branch instead of the
+// already-exists/invalid-regex hint. Regressing this branch would still
+// return a non-nil error, so this checks the wrapped message content.
+func TestAddPushRule_Forbidden(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	_, err := AddPushRule(context.Background(), client, AddPushRuleInput{GroupID: "99", CommitMessageRegex: "x"})
+	if err == nil {
+		t.Fatal("expected error for 403 response")
+	}
+	if !strings.Contains(err.Error(), "groupAddPushRule") {
+		t.Errorf("expected operation name in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Owner role") {
+		t.Errorf("expected Owner-role hint, got: %v", err)
+	}
+}
+
 // TestEditPushRule_Success verifies EditPushRule PUTs the changed settings.
 func TestEditPushRule_Success(t *testing.T) {
 	var gotBody string
@@ -158,6 +199,31 @@ func TestEditPushRule_RequiresGroupID(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
 	if _, err := EditPushRule(context.Background(), client, EditPushRuleInput{}); err == nil {
 		t.Fatal("expected error for empty group_id")
+	}
+}
+
+// TestEditPushRule_InvalidRegex verifies a 422 response is reported as an
+// invalid-regex/Premium hint rather than falling through to the generic
+// add-first (404) hint. This is the branch a caller hits when they submit a
+// malformed regex, so losing the WrapErrWithHint call here would silently
+// downgrade a validation error into an unhelpful "no push rules exist" hint.
+func TestEditPushRule_InvalidRegex(t *testing.T) {
+	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+	}))
+	regex := "(unterminated"
+	_, err := EditPushRule(context.Background(), client, EditPushRuleInput{GroupID: "99", CommitMessageRegex: &regex})
+	if err == nil {
+		t.Fatal("expected error for 422 response")
+	}
+	if !strings.Contains(err.Error(), "groupEditPushRule") {
+		t.Errorf("expected operation name in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "regex") {
+		t.Errorf("expected invalid-regex hint, got: %v", err)
+	}
+	if strings.Contains(err.Error(), "add_push_rule") {
+		t.Errorf("422 should not use the 404 add-first hint, got: %v", err)
 	}
 }
 

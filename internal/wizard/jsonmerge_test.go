@@ -213,6 +213,33 @@ func TestWriteJSONFile_MkdirAllFailure(t *testing.T) {
 	}
 }
 
+// TestWriteJSONFile_WriteFileFails_PathIsDirectory verifies writeJSONFile
+// returns a wrapped "writing" error when the target path itself already
+// exists as a directory. TestWriteJSONFile_WriteFileFails uses a chmod
+// 0o500 read-only parent directory to force the write error, which the
+// test itself skips when running as root because root bypasses filesystem
+// permission checks. Opening a directory for O_WRONLY writing fails with
+// EISDIR unconditionally — a type mismatch, not a permission check — so
+// this reproduces the os.WriteFile failure branch in jsonmerge.go
+// regardless of process privilege.
+func TestWriteJSONFile_WriteFileFails_PathIsDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	// The write target is a directory, not a file: os.WriteFile must fail
+	// with EISDIR when it tries to open it for writing.
+	target := filepath.Join(tmpDir, "config.json")
+	if err := os.Mkdir(target, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	err := writeJSONFile(target, map[string]any{"key": "value"})
+	if err == nil {
+		t.Fatal("expected error when write target is a directory, got nil")
+	}
+	if !strings.Contains(err.Error(), "writing") {
+		t.Errorf("error = %v, want to contain 'writing'", err)
+	}
+}
+
 // TestMergeServerEntry_InvalidExistingJSON verifies that MergeServerEntry
 // returns an error when the existing config file has unparseable content.
 func TestMergeServerEntry_InvalidExistingJSON(t *testing.T) {

@@ -89,6 +89,18 @@ func TestNewIssueUserOutputsFromIssueAssignees(t *testing.T) {
 	}
 }
 
+// TestNewIssueUserOutputsFromIssueAssignees_AllNilElements verifies that a
+// non-empty input slice containing only nil pointers still returns nil
+// overall (the len(out)==0-after-filtering guard), distinct from the
+// top-of-function nil-slice guard already covered by
+// TestNewIssueUserOutputsFromIssueAssignees.
+func TestNewIssueUserOutputsFromIssueAssignees_AllNilElements(t *testing.T) {
+	got := NewIssueUserOutputsFromIssueAssignees([]*gl.IssueAssignee{nil, nil})
+	if got != nil {
+		t.Errorf("all-nil slice must return nil, got %+v", got)
+	}
+}
+
 // TestNewIssueUserOutputFromIssueAssignee verifies the single-assignee
 // (deprecated) converter copies fields and returns nil for nil.
 func TestNewIssueUserOutputFromIssueAssignee(t *testing.T) {

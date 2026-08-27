@@ -115,6 +115,33 @@ func TestSetIntegration_Error(t *testing.T) {
 	}
 }
 
+// TestSetIntegration_ConfigMarshalError verifies that a request-build failure
+// (SetIntegration issues a PUT, so client.GL().NewRequest JSON-marshals the
+// config body before any HTTP call is made) is wrapped with the "set_integration"
+// operation name rather than surfaced as a bare, unattributed error. A Config
+// value that json.Marshal cannot encode (here, a channel) makes NewRequest
+// fail deterministically without needing a live HTTP round trip; the mock
+// handler asserts the request never reaches the network. If the
+// WrapErrWithMessage call were dropped, the returned error would still be
+// non-nil but would lose the "set_integration" prefix this test checks for.
+func TestSetIntegration_ConfigMarshalError(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := SetIntegration(t.Context(), client, SetIntegrationInput{
+		ProjectID: testProjectID,
+		Slug:      testSlugSlack,
+		Config:    map[string]any{"bad": make(chan int)},
+	})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "set_integration") {
+		t.Errorf("expected error to be wrapped with operation name %q, got: %v", "set_integration", err)
+	}
+	if !strings.Contains(err.Error(), "unsupported type") {
+		t.Errorf("expected the underlying json.Marshal error to be preserved, got: %v", err)
+	}
+}
+
 // Group integrations.
 
 // matchGroupIntegrationsPath returns true when the path targets the group
@@ -257,6 +284,33 @@ func TestSetGroupIntegration_Error(t *testing.T) {
 		GroupID: testGroupPath, Slug: testSlugSlack, Config: map[string]any{"webhook": testWebhook},
 	}); err == nil {
 		t.Fatal(errExpectedNil)
+	}
+}
+
+// TestSetGroupIntegration_ConfigMarshalError verifies that a request-build
+// failure (SetGroupIntegration issues a PUT, so client.GL().NewRequest
+// JSON-marshals the config body before any HTTP call happens) is wrapped
+// with the "set_group_integration" operation name and its actionable hint,
+// not surfaced as a bare error. A Config value that json.Marshal cannot
+// encode (here, a channel) makes NewRequest fail deterministically, and the
+// mock handler asserts the request never reaches the network. Losing the
+// WrapErrWithStatusHint call would still leave err non-nil, so this checks
+// the wrapped message content rather than just err != nil.
+func TestSetGroupIntegration_ConfigMarshalError(t *testing.T) {
+	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+	_, err := SetGroupIntegration(t.Context(), client, SetGroupIntegrationInput{
+		GroupID: testGroupPath,
+		Slug:    testSlugSlack,
+		Config:  map[string]any{"bad": make(chan int)},
+	})
+	if err == nil {
+		t.Fatal(errExpectedNil)
+	}
+	if !strings.Contains(err.Error(), "set_group_integration") {
+		t.Errorf("expected error to be wrapped with operation name %q, got: %v", "set_group_integration", err)
+	}
+	if !strings.Contains(err.Error(), "unsupported type") {
+		t.Errorf("expected the underlying json.Marshal error to be preserved, got: %v", err)
 	}
 }
 

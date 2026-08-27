@@ -247,6 +247,34 @@ func TestCreateFeatureFlag_MissingParams(t *testing.T) {
 	}
 }
 
+// TestCreateFeatureFlag_InvalidStrategyRejected verifies that CreateFeatureFlag
+// rejects a strategy that is neither a valid removal (_destroy with an id)
+// nor a valid addition (a name) before any HTTP request is sent. This
+// exercises the validateStrategies error-propagation branch in
+// CreateFeatureFlag; if that branch regressed to swallow the validation
+// error, a malformed strategy would reach the GitLab API and either fail
+// with a confusing 400 or, worse, silently create a flag with unexpected
+// strategy data.
+func TestCreateFeatureFlag_InvalidStrategyRejected(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("request sent despite an invalid strategy")
+		testutil.RespondJSON(w, http.StatusCreated, featureFlagJSON)
+	})
+	client := testutil.NewTestClient(t, handler)
+
+	_, err := CreateFeatureFlag(context.Background(), client, CreateInput{
+		ProjectID:  "1",
+		Name:       "my-flag",
+		Strategies: []StrategyInput{{}}, // no name, no _destroy
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid strategy, got nil")
+	}
+	if !strings.Contains(err.Error(), "name is required") {
+		t.Errorf("error = %v, want it to mention 'name is required'", err)
+	}
+}
+
 // -- Update --.
 
 // TestUpdateFeatureFlag_Success verifies that UpdateFeatureFlag succeeds when the GitLab API returns a valid response.

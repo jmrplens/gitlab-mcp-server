@@ -71,3 +71,55 @@ func TestCompileToolSchemas_RoundTripAndCache(t *testing.T) {
 		t.Errorf("empty key changed InputSchema to %T, want map", untouched.InputSchema)
 	}
 }
+
+// TestCompileToolSchemas_NilToolIsNoOp verifies CompileToolSchemas does
+// nothing (and does not panic) when the tool pointer is nil, matching the
+// documented early-return contract alongside the empty-key case already
+// covered above.
+func TestCompileToolSchemas_NilToolIsNoOp(t *testing.T) {
+	CompileToolSchemas(nil, "some-key")
+}
+
+// TestCompiledSchema_MarshalErrorFallsBackToOriginalMap verifies that when
+// the map cannot be marshaled to JSON (a channel value, which
+// encoding/json rejects with an UnsupportedTypeError), compiledSchema falls
+// back to returning the original map unchanged instead of caching a
+// compiled schema, and that no cache entry is left behind for the key.
+func TestCompiledSchema_MarshalErrorFallsBackToOriginalMap(t *testing.T) {
+	key := "test|marshal-error|" + t.Name()
+	schema := map[string]any{"type": "object", "bad": make(chan int)}
+
+	got := compiledSchema(key, schema)
+	m, ok := got.(map[string]any)
+	if !ok {
+		t.Fatalf("compiledSchema() = %T, want the original map[string]any on marshal error", got)
+	}
+	if !reflect.DeepEqual(m, schema) {
+		t.Errorf("compiledSchema() = %v, want unchanged original map %v", m, schema)
+	}
+	if _, cached := compiledSchemaCache.Load(key); cached {
+		t.Error("compiledSchema() must not cache a schema when marshal fails")
+	}
+}
+
+// TestCompiledSchema_UnmarshalErrorFallsBackToOriginalMap verifies that when
+// the marshaled JSON is well-formed but does not fit the jsonschema.Schema
+// struct shape (here, "required" holding a string instead of the expected
+// []string), compiledSchema falls back to the original map instead of
+// caching a partially-populated or invalid compiled schema.
+func TestCompiledSchema_UnmarshalErrorFallsBackToOriginalMap(t *testing.T) {
+	key := "test|unmarshal-error|" + t.Name()
+	schema := map[string]any{"type": "object", "required": "not-an-array"}
+
+	got := compiledSchema(key, schema)
+	m, ok := got.(map[string]any)
+	if !ok {
+		t.Fatalf("compiledSchema() = %T, want the original map[string]any on unmarshal error", got)
+	}
+	if !reflect.DeepEqual(m, schema) {
+		t.Errorf("compiledSchema() = %v, want unchanged original map %v", m, schema)
+	}
+	if _, cached := compiledSchemaCache.Load(key); cached {
+		t.Error("compiledSchema() must not cache a schema when unmarshal fails")
+	}
+}

@@ -110,6 +110,17 @@ func TestNewMilestoneOutputs(t *testing.T) {
 	}
 }
 
+// TestNewMilestoneOutputs_AllNilElements verifies that a non-empty input
+// slice containing only nil pointers still returns nil overall (the
+// len(out)==0-after-filtering guard), distinct from the top-of-function
+// nil/empty-slice guard already covered by TestNewMilestoneOutputs.
+func TestNewMilestoneOutputs_AllNilElements(t *testing.T) {
+	got := NewMilestoneOutputs([]*gl.ReleaseMilestone{nil, nil})
+	if got != nil {
+		t.Errorf("all-nil slice must return nil, got %+v", got)
+	}
+}
+
 // TestNewEvidenceOutputs verifies the evidence list skips nil entries,
 // formats collected_at via timeToRFC3339, and returns nil for an empty
 // input slice.
@@ -131,6 +142,17 @@ func TestNewEvidenceOutputs(t *testing.T) {
 	}
 	if got[1].CollectedAt != "" {
 		t.Errorf("evidence[1] should have empty CollectedAt for nil pointer, got %q", got[1].CollectedAt)
+	}
+}
+
+// TestNewEvidenceOutputs_AllNilElements verifies that a non-empty input
+// slice containing only nil pointers still returns nil overall (the
+// len(out)==0-after-filtering guard), distinct from the top-of-function
+// nil/empty-slice guard already covered by TestNewEvidenceOutputs.
+func TestNewEvidenceOutputs_AllNilElements(t *testing.T) {
+	got := NewEvidenceOutputs([]*gl.ReleaseEvidence{nil, nil})
+	if got != nil {
+		t.Errorf("all-nil slice must return nil, got %+v", got)
 	}
 }
 

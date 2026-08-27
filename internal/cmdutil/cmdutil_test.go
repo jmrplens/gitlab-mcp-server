@@ -77,6 +77,41 @@ func TestRepositoryRoot_AbsError(t *testing.T) {
 	}
 }
 
+// TestRepositoryRoot_AbsError_RemovedCwd verifies RepositoryRoot surfaces the
+// underlying error from filepath.Abs when the working directory has been
+// deleted out from under the process. TestRepositoryRoot_AbsError revokes
+// read permission on the cwd, which is a no-op for a root-owned test
+// process (root bypasses discretionary permission checks, as this test
+// binary's own t.Skip acknowledges) and so leaves the filepath.Abs error
+// branch uncovered in CI environments that run as root. Deleting the
+// directory the process is chdir'd into fails getcwd(3) with ENOENT
+// regardless of privilege, exercising the same RepositoryRoot error path
+// without depending on permission enforcement.
+func TestRepositoryRoot_AbsError_RemovedCwd(t *testing.T) {
+	if os.PathSeparator == '\\' {
+		t.Skip("Windows getcwd does not fail the same way when the cwd directory is removed")
+	}
+
+	tmp := t.TempDir()
+	nested := filepath.Join(tmp, "gone")
+	if err := os.Mkdir(nested, 0o750); err != nil {
+		t.Fatalf("mkdir nested: %v", err)
+	}
+	t.Chdir(nested)
+
+	if err := os.RemoveAll(nested); err != nil {
+		t.Fatalf("remove nested: %v", err)
+	}
+
+	_, err := RepositoryRoot("relative")
+	if err == nil {
+		t.Fatal("RepositoryRoot() error = nil, want error from filepath.Abs")
+	}
+	if strings.Contains(err.Error(), "go.mod not found") {
+		t.Fatalf("RepositoryRoot() error = %q, want Abs error, not NotFound", err)
+	}
+}
+
 // TestFatalf_WritesMessageAndExits verifies Fatalf writes the formatted
 // diagnostic to stderr and exits with status 1, matching command-line behavior.
 func TestFatalf_WritesMessageAndExits(t *testing.T) {

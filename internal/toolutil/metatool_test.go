@@ -18,6 +18,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 )
 
@@ -2160,6 +2161,88 @@ func TestMakeMetaHandler_DestructiveNoElicitation(t *testing.T) {
 	}
 	if !called {
 		t.Error("handler was not called — confirm=true must bypass the guard")
+	}
+}
+
+// TestMakeMetaHandler_RouteOwnPendingInputIsReturnedAsResult verifies the
+// multi round-trip pending-input branch that MakeMetaHandler applies to its
+// *own* action dispatch — distinct from the generic destructive-confirm
+// guard (TestMakeMetaHandler_DestructiveActionConfirmBypass and friends),
+// which returns its pending result from an earlier point in the handler
+// and never reaches this branch. Here the route itself (a non-destructive
+// action) performs its own elicitation exchange via elicitation.FlowFromRequest
+// and reports the pending state through an *elicitation.InputRequiredError,
+// exactly as a route with elicitation needs beyond the generic destructive
+// prompt would. MakeMetaHandler must unwrap that error via
+// InputRequiredResultFromError and hand the input-required result straight
+// back to the client so the SDK's multi round-trip machinery can answer it
+// and retry — without ever surfacing it as a Go error.
+func TestMakeMetaHandler_RouteOwnPendingInputIsReturnedAsResult(t *testing.T) {
+	var elicited int
+	routes := ActionMap{
+		"needs_input": Route(func(ctx context.Context, _ map[string]any) (any, error) {
+			req := RequestFromContext(ctx)
+			flow, err := elicitation.FlowFromRequest(req)
+			if err != nil {
+				return nil, err
+			}
+			confirmed, confirmErr := flow.Confirm(ctx, "own-exchange", "Proceed with side effect?")
+			if confirmErr != nil {
+				if errors.Is(confirmErr, elicitation.ErrInputPending) {
+					elicited++
+					return nil, flow.PendingError()
+				}
+				return nil, confirmErr
+			}
+			if !confirmed {
+				return nil, errors.New("declined")
+			}
+			return map[string]string{"status": "done"}, nil
+		}),
+	}
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	AddMetaTool(server, "meta_pending", "Test route-owned pending input.", routes, nil, nil)
+
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	serverSession, err := server.Connect(t.Context(), serverTransport, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { _ = serverSession.Wait() })
+
+	var answered int
+	client := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			answered++
+			return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": true}}, nil
+		},
+	})
+	clientSession, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = clientSession.Close() })
+
+	result, err := clientSession.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "meta_pending",
+		Arguments: map[string]any{"action": "needs_input", "params": map[string]any{}},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("result = %+v, want successful execution after the pending round trip", result)
+	}
+	if elicited != 1 {
+		t.Errorf("elicited = %d, want exactly 1 (the pending branch runs once, before the answer is available)", elicited)
+	}
+	if answered != 1 {
+		t.Errorf("answered = %d, want exactly 1 elicitation round trip", answered)
+	}
+	tc, ok := result.Content[0].(*mcp.TextContent)
+	if !ok || !strings.Contains(tc.Text, "done") {
+		t.Fatalf("result content = %+v, want the route's final success payload", result.Content[0])
 	}
 }
 

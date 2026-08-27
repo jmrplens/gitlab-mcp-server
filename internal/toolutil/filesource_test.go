@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -96,6 +97,46 @@ func TestReadFileOrBase64(t *testing.T) {
 	}
 	if _, err = ReadFileOrBase64("op", "", "!!!"); err == nil || !strings.Contains(err.Error(), "invalid base64 content") {
 		t.Errorf("invalid base64 err = %v, want base64 message", err)
+	}
+}
+
+// TestReadFileOrBase64_TruncatedReadReturnsWrappedError verifies that
+// ReadFileOrBase64 wraps an io.ReadFull failure (fewer bytes available than
+// os.Stat reported) instead of silently returning a short/zero-padded
+// buffer, so callers never mistake a truncated read for the real content.
+//
+// Real short reads of an already-stat'd, already-opened regular file are a
+// TOCTOU race in general, but Linux sysfs attribute files give a
+// deterministic, non-racy way to trigger the exact same code path: sysfs
+// reports a fixed st_size of one page (4096 bytes) for attribute files
+// regardless of their actual content length, so os.Stat over-promises the
+// size and the subsequent io.ReadFull genuinely hits io.ErrUnexpectedEOF.
+// /sys/class/net/lo/mtu (the loopback interface's MTU, present on every
+// Linux system with loopback networking) is used as a stable instance of
+// this kernel behavior.
+func TestReadFileOrBase64_TruncatedReadReturnsWrappedError(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("relies on a Linux sysfs attribute-file size quirk")
+	}
+	const path = "/sys/class/net/lo/mtu"
+	info, statErr := os.Stat(path)
+	if statErr != nil {
+		t.Skipf("cannot stat %s: %v", path, statErr)
+	}
+	data, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Skipf("cannot read %s: %v", path, readErr)
+	}
+	if info.Size() <= int64(len(data)) {
+		t.Skipf("%s no longer over-reports its size (stat=%d, actual=%d); sysfs quirk not present", path, info.Size(), len(data))
+	}
+
+	_, err := ReadFileOrBase64("op", path, "")
+	if err == nil {
+		t.Fatal("ReadFileOrBase64() error = nil, want wrapped read error for a short read")
+	}
+	if !strings.Contains(err.Error(), "op: reading file:") {
+		t.Errorf("ReadFileOrBase64() error = %q, want it prefixed with %q", err, "op: reading file:")
 	}
 }
 

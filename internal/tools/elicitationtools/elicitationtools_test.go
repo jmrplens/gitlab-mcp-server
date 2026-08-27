@@ -853,6 +853,55 @@ func TestMCPRoundTripIssueCreate_ValidationError(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// newWizardFlow — multi round-trip RequestState rejection
+// ---------------------------------------------------------------------------.
+
+// TestIssueCreate_MRTR_InvalidRequestState verifies that IssueCreate surfaces
+// the error from newWizardFlow (and, underneath it, elicitation.FlowFromRequest)
+// when a multi round-trip (protocol 2026-07-28) request carries a corrupted
+// RequestState. The session here comes from a plain, un-negotiated
+// mcp.NewClient/mcp.NewServer pair, which the SDK connects on its default
+// (latest) protocol version, so the request qualifies for the MRTR path.
+// Without this check, a malformed RequestState reaching newWizardFlow's
+// "return nil, err" branch would go unnoticed, and a regression there could
+// let a corrupted client-echoed state silently restart the wizard instead of
+// failing closed.
+func TestIssueCreate_MRTR_InvalidRequestState(t *testing.T) {
+	ctx := context.Background()
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1.0.0"}, nil)
+	st, ct := mcp.NewInMemoryTransports()
+
+	ss, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	t.Cleanup(func() { _ = ss.Close() })
+
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1.0.0"}, nil)
+	cs, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = cs.Close() })
+
+	req := &mcp.CallToolRequest{
+		Session: ss,
+		Params: &mcp.CallToolParamsRaw{
+			Name:         "gitlab_interactive_issue_create",
+			RequestState: "{not json",
+		},
+	}
+
+	_, err = IssueCreate(ctx, req, nil, IssueInput{ProjectID: "42"})
+	if err == nil {
+		t.Fatal("expected error for corrupted MRTR RequestState, got nil")
+	}
+	if !strings.Contains(err.Error(), "requestState") {
+		t.Errorf("error = %q, want it to mention the rejected requestState", err.Error())
+	}
+}
+
+// ---------------------------------------------------------------------------
 // MR cancel at source branch prompt
 // ---------------------------------------------------------------------------.
 
