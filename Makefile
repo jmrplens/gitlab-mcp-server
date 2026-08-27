@@ -11,7 +11,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-openplugin check-mcpb mcpb publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-openplugin check-mcpb mcpb gen-npm sync-npm-version publish-npm-dry publish-npm publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        inspector inspector-stop help
@@ -735,6 +735,32 @@ mcpb:
 	lipo -create -output dist/local_darwin_all/gitlab-mcp-server dist/local_darwin_arm64/gitlab-mcp-server dist/local_darwin_amd64/gitlab-mcp-server; \
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -X main.version=$$VER" -o dist/local_windows_amd64/gitlab-mcp-server.exe ./cmd/server; \
 	bash scripts/build-mcpb.sh "$$VER"
+
+## gen-npm: assemble the npm distribution (launcher + 6 per-platform packages).
+## Reads release binaries from a directory of assets named as published
+## (gitlab-mcp-server-linux-amd64, ...). Version defaults to VERSION.
+##   make gen-npm NPM_BINARIES=dist
+gen-npm:
+	@command -v node >/dev/null || { echo "ERROR: Node.js is required"; exit 1; }
+	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
+	node scripts/build-npm.mjs --binaries "$(NPM_BINARIES)" --version "$$(tr -d '[:space:]' < VERSION)"
+
+## sync-npm-version: rewrite npm/gitlab-mcp-server/package.json version + pins to VERSION.
+## Run by the release version-stamp; safe to run anytime, needs no binaries.
+sync-npm-version:
+	@command -v node >/dev/null || { echo "ERROR: Node.js is required"; exit 1; }
+	node scripts/build-npm.mjs --sync-only --version "$$(tr -d '[:space:]' < VERSION)"
+
+## publish-npm-dry: assemble and validate the npm publish set without publishing.
+publish-npm-dry:
+	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
+	scripts/publish-npm.sh "$(NPM_BINARIES)" "$$(tr -d '[:space:]' < VERSION)" --dry-run
+
+## publish-npm: assemble and publish the npm distribution (platform packages, then launcher).
+## Auth via npm login or NPM_TOKEN. See the release process in CLAUDE.md.
+publish-npm:
+	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
+	scripts/publish-npm.sh "$(NPM_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
 
 ## publish-lobehub: push the current version of the existing LobeHub listing.
 ## Reads lhm.plugin.json (version kept in sync by scripts/update-server-json-sha.sh

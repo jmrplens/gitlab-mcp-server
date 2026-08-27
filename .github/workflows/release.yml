@@ -119,6 +119,31 @@ jobs:
           sha256sum dist/gitlab-mcp-server.mcpb
           gh release upload "v${VERSION}" dist/gitlab-mcp-server.mcpb --clobber
 
+      # npm publish. dist/ already holds the binaries under their release names
+      # at this point, so no artifact plumbing is needed — the same spot the
+      # mcpb step above reads from. setup-node's registry-url writes the .npmrc
+      # that reads NODE_AUTH_TOKEN, so scripts/publish-npm.sh stays
+      # auth-agnostic (it also runs under a local `npm login`). Provenance
+      # attaches automatically because the workflow has id-token: write. The
+      # step skips with a warning when NPM_TOKEN is unset, so a release is never
+      # blocked before the secret exists — same shape as the Homebrew and
+      # Docker Hub steps.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "::warning::NPM_TOKEN not set — skipping npm publish"
+            exit 0
+          fi
+          bash scripts/publish-npm.sh dist "${GITHUB_REF#refs/tags/v}"
+
       - name: Update Homebrew tap formula
         env:
           TAP_DEPLOY_KEY_B64: ${{ secrets.TAP_DEPLOY_KEY_B64 }}

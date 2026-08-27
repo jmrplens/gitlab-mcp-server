@@ -158,3 +158,10 @@ test/e2e/.bitbucket-admin-pass
 
 # Playwright MCP session artifacts (snapshots, console logs)
 .playwright-mcp/
+
+# Generated npm per-platform packages: each carries a release binary and is
+# assembled at publish time by scripts/build-npm.mjs. The launcher package
+# under npm/gitlab-mcp-server/ is checked in; the built distribution is not.
+/npm/packages/
+/npm/**/node_modules/
+/npm/**/*.tgz

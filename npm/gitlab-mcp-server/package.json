@@ -1,0 +1,43 @@
+{
+  "name": "@jmrplens/gitlab-mcp-server",
+  "version": "2.7.5",
+  "description": "Model Context Protocol (MCP) server exposing GitLab REST v4 and GraphQL as tools for AI assistants. Runs as a local binary over stdio or HTTP.",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "gitlab",
+    "ai",
+    "llm",
+    "claude",
+    "stdio",
+    "cli"
+  ],
+  "homepage": "https://jmrp.io/docs/gitlab-mcp-server",
+  "bugs": "https://github.com/jmrplens/gitlab-mcp-server/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jmrplens/gitlab-mcp-server.git",
+    "directory": "npm/gitlab-mcp-server"
+  },
+  "license": "MIT",
+  "author": "José M. Requena Plens",
+  "type": "commonjs",
+  "bin": {
+    "gitlab-mcp-server": "cli.js"
+  },
+  "files": [
+    "cli.js",
+    "README.md"
+  ],
+  "optionalDependencies": {
+    "@jmrplens/gitlab-mcp-server-linux-x64": "2.7.5",
+    "@jmrplens/gitlab-mcp-server-linux-arm64": "2.7.5",
+    "@jmrplens/gitlab-mcp-server-darwin-x64": "2.7.5",
+    "@jmrplens/gitlab-mcp-server-darwin-arm64": "2.7.5",
+    "@jmrplens/gitlab-mcp-server-win32-x64": "2.7.5",
+    "@jmrplens/gitlab-mcp-server-win32-arm64": "2.7.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

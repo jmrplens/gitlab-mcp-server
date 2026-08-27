@@ -103,6 +103,8 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
 Or install the native binary first, then register it:
 
 ```bash
+# Any platform (npm) — no separate install; clients can launch it with npx
+npm install -g @jmrplens/gitlab-mcp-server
 # macOS/Linux (Homebrew)
 brew install jmrplens/tap/gitlab-mcp-server
 # Linux/macOS (script)
@@ -114,6 +116,9 @@ irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/in
 
 claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
 ```
+
+Clients that launch servers with `npx` need no install at all — point them at
+`npx -y @jmrplens/gitlab-mcp-server`.
 
 Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs).
 
