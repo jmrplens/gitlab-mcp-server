@@ -1452,7 +1452,7 @@ func TestWithBaseContext_ShutdownReleasesEntryConstruction(t *testing.T) {
 	cfg.IgnoreScopes = true
 	pool := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
 		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
-	}, WithBaseContext(baseCtx))
+	}, WithBaseContext(func() context.Context { return baseCtx }))
 
 	done := make(chan time.Duration, 1)
 	go func() {
@@ -1502,12 +1502,18 @@ func TestNew_WithoutBaseContext_StillBuildsEntries(t *testing.T) {
 	if _, err := pool.GetOrCreate("glpat-default", srv.URL); err != nil {
 		t.Fatalf("GetOrCreate without WithBaseContext: %v", err)
 	}
-	// A nil context passed explicitly is ignored rather than stored, so it
-	// cannot turn into a panic on the first lookup.
+	// A nil function, and a function returning nil, both fall back to
+	// Background rather than turning into a panic on the first lookup.
 	pool2 := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
 		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
-	}, WithBaseContext(nil)) //nolint:staticcheck // the nil guard is the property under test
+	}, WithBaseContext(nil))
 	if _, err := pool2.GetOrCreate("glpat-nil-ctx", srv.URL); err != nil {
-		t.Fatalf("GetOrCreate with a nil base context: %v", err)
+		t.Fatalf("GetOrCreate with a nil base-context function: %v", err)
+	}
+	pool3 := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	}, WithBaseContext(func() context.Context { return nil }))
+	if _, err := pool3.GetOrCreate("glpat-nil-return", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate with a base-context function returning nil: %v", err)
 	}
 }

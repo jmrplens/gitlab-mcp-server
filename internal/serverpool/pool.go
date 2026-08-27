@@ -117,14 +117,23 @@ type ServerPool struct {
 	idleTimeout        time.Duration
 	metrics            Metrics
 	createdAt          time.Time
-	// baseCtx bounds the GitLab lookups that build an entry — the credential
-	// probe, tier and scope discovery, identity resolution. It is the
-	// server's lifetime, not the request's: an entry is shared by every
-	// request carrying the same credential, so deriving from whichever one
-	// happened to trigger construction would let a single client
+	// baseContext supplies the lifetime that bounds the GitLab lookups which
+	// build an entry — the credential probe, tier and scope discovery,
+	// identity resolution.
+	//
+	// It is the server's lifetime, not the request's: an entry is shared by
+	// every request carrying the same credential, so deriving from whichever
+	// one happened to trigger construction would let a single client
 	// disconnecting abort work that others are already waiting on, and leave
 	// the next request to start it over. Shutdown, however, must stop it.
-	baseCtx context.Context
+	//
+	// A function rather than a stored context, mirroring
+	// [net/http.Server.BaseContext], which exists for exactly this shape: a
+	// lifetime that belongs to the long-lived object rather than to any
+	// caller. Storing the context itself would hide an effective deadline
+	// from callers that cannot see it, which is what the guidance against
+	// context fields is about.
+	baseContext func() context.Context
 }
 
 // Option configures pool behavior.
@@ -154,12 +163,16 @@ func WithRevalidateInterval(d time.Duration) Option {
 // Without it the GitLab lookups that build an entry run under
 // context.Background() and survive shutdown until their own timeout expires.
 // They are deliberately not derived from the request that triggered them —
-// see [ServerPool.baseCtx] — but "not this request" is not the same as "no
-// lifetime at all". A nil context is ignored.
-func WithBaseContext(ctx context.Context) Option {
+// see [ServerPool.baseContext] — but "not this request" is not the same as
+// "no lifetime at all".
+//
+// The signature mirrors [net/http.Server.BaseContext]: a function, so the
+// pool never holds a context of its own. A nil function is ignored, and one
+// that returns nil falls back to [context.Background].
+func WithBaseContext(fn func() context.Context) Option {
 	return func(p *ServerPool) {
-		if ctx != nil {
-			p.baseCtx = ctx
+		if fn != nil {
+			p.baseContext = fn
 		}
 	}
 }
@@ -186,12 +199,24 @@ func New(cfg *config.Config, factory ServerFactory, opts ...Option) *ServerPool 
 		revalidateInterval: DefaultRevalidateInterval,
 		idleTimeout:        DefaultIdleTimeout,
 		createdAt:          time.Now(),
-		baseCtx:            context.Background(),
+		baseContext:        context.Background,
 	}
 	for _, opt := range opts {
 		opt(p)
 	}
 	return p
+}
+
+// lifetime returns the context that bounds entry construction, falling back
+// to [context.Background] when the configured function yields nothing.
+func (p *ServerPool) lifetime() context.Context {
+	if p.baseContext == nil {
+		return context.Background()
+	}
+	if ctx := p.baseContext(); ctx != nil {
+		return ctx
+	}
+	return context.Background()
 }
 
 // GetOrCreate returns the [*mcp.Server] for the given token and GitLab URL,
@@ -263,7 +288,7 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 	}
 	client.SetTier(p.cfg.Tier)
 
-	if verifyErr := verifyCredential(p.baseCtx, client); verifyErr != nil {
+	if verifyErr := verifyCredential(p.lifetime(), client); verifyErr != nil {
 		return nil, verifyErr
 	}
 
@@ -277,7 +302,7 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 		server:       server,
 		client:       client,
 		serverConfig: entryCfg,
-		identity:     resolveIdentity(p.baseCtx, client),
+		identity:     resolveIdentity(p.lifetime(), client),
 	}, nil
 }
 
@@ -443,7 +468,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string) 
 	// pin it explicitly via --tier/GITLAB_TIER.
 	autoDetectTier := !p.cfg.TierExplicit
 	if autoDetectTier || !p.cfg.IgnoreScopes {
-		ctx, cancel := context.WithTimeout(p.baseCtx, 10*time.Second)
+		ctx, cancel := context.WithTimeout(p.lifetime(), 10*time.Second)
 		defer cancel()
 
 		if autoDetectTier {

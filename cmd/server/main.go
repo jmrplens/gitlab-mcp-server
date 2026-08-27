@@ -1245,7 +1245,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// by the request that triggered it: an entry is shared, so one client
 		// disconnecting must not abort a build others are waiting on — but
 		// shutdown must stop it.
-		serverpool.WithBaseContext(ctx))
+		serverpool.WithBaseContext(func() context.Context { return ctx }))
 	defer pool.Close()
 
 	pool.StartRevalidation(ctx)
