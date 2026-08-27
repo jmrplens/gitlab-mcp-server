@@ -160,13 +160,16 @@ func TestProxy_ServerAndProxyCORSCollide(t *testing.T) {
 		t.Errorf("through a plain proxy: %d Access-Control-Allow-Origin headers, want exactly 1", n)
 	}
 
-	// Through the location that also advertises CORS there are two, and that
-	// is the deployment's bug rather than the server's — but a test that
-	// names it is what stops it being rediscovered in production.
+	// Through the location that also advertises CORS there must be two. This
+	// is asserted, not merely logged: the collision is the whole point of the
+	// case, and if a regression dropped the server's own header the response
+	// would carry one and a `> 1` log would silently stop verifying anything.
+	// The collision itself is the deployment's bug to fix — drop the proxy's
+	// CORS block for the MCP location, see docs/concepts/security.md — but the
+	// server must reproduce it here so that fix has something to point at.
 	got = proxied.do(t, mcpPOST(headers))
-	if n := len(got.header.Values("Access-Control-Allow-Origin")); n > 1 {
-		t.Logf("confirmed: a proxy CORS block plus the server's own produces %d Access-Control-Allow-Origin headers, which a browser rejects outright even though this request returned %d", n, got.status)
-		t.Log("the deployment must drop its proxy-level CORS for the MCP location; see docs/concepts/security.md")
+	if n := len(got.header.Values("Access-Control-Allow-Origin")); n <= 1 {
+		t.Errorf("through the CORS-advertising proxy: %d Access-Control-Allow-Origin headers, want more than 1 — a browser rejects a response with two, and this case exists to demonstrate it", n)
 	}
 }
 

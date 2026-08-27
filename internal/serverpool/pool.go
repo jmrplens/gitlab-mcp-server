@@ -305,6 +305,17 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 		return nil, errors.New("creating MCP server for pool: server factory is nil")
 	}
 
+	// Bail before doing any work if the pool's lifetime has already ended.
+	// The lookups below each bound themselves with a timeout derived from
+	// this context, so a cancelled one makes them fail fast — but the
+	// credential probe reports "not rejected" when it cannot reach GitLab,
+	// which on a cancelled context would wave a build through and register a
+	// full tool catalog after shutdown had begun. Checking here stops that
+	// at the door.
+	if err := p.lifetime().Err(); err != nil {
+		return nil, fmt.Errorf("pool shutting down, not building entry: %w", err)
+	}
+
 	// In oauth mode every credential arrives as Authorization: Bearer, and
 	// the pool must forward it the same way: an OAuth access token is only
 	// valid as Bearer (GitLab rejects gloas- tokens in PRIVATE-TOKEN, which

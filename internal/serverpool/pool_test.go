@@ -1608,3 +1608,38 @@ func TestGetOrCreate_ConcurrentDistinctKeysDoNotSerialize(t *testing.T) {
 		t.Errorf("%d of %d distinct-key builds were in flight together; distinct credentials are being serialized", inFlight, callers)
 	}
 }
+
+// TestGetOrCreate_AfterLifetimeCancel_DoesNotBuild verifies that once the
+// pool's base context is done, GetOrCreate refuses to build a new entry rather
+// than running the credential probe, tier and scope lookups and the factory
+// after shutdown has begun.
+//
+// The credential probe reports "not rejected" when it cannot reach GitLab,
+// which on a cancelled context would wave the build through; the factory has
+// no context of its own, so its tool-registration work would still run and
+// could delay a graceful shutdown. The guard stops it at the door.
+func TestGetOrCreate_AfterLifetimeCancel_DoesNotBuild(t *testing.T) {
+	var builds atomic.Int32
+	baseCtx, cancel := context.WithCancel(context.Background())
+	cfg := testConfig(stubGitLabBase)
+	pool := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		builds.Add(1)
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	}, WithBaseContext(func() context.Context { return baseCtx }))
+
+	cancel()
+
+	srv, err := pool.GetOrCreate("glpat-after-shutdown", stubGitLabBase)
+	if err == nil {
+		t.Error("GetOrCreate built an entry after the lifetime was cancelled")
+	}
+	if srv != nil {
+		t.Error("a server was returned despite the cancelled lifetime")
+	}
+	if builds.Load() != 0 {
+		t.Errorf("the factory ran %d times after shutdown; it should not run at all", builds.Load())
+	}
+	if pool.Size() != 0 {
+		t.Errorf("pool.Size() = %d, want 0 — nothing should have been inserted", pool.Size())
+	}
+}

@@ -251,4 +251,14 @@ func TestGate_ParamHeaderMatchesTheDocumentedName(t *testing.T) {
 	if strings.Contains(got.body, "Mcp-Param-Mcp-Param-") {
 		t.Fatalf("the wire header name is doubled: %s", got.body)
 	}
+	// Absence of those two strings is necessary but not sufficient: a 400 or
+	// 500 carrying neither would pass. The header validation is what is under
+	// test, so the call must actually get through it — 200 with the tool
+	// result, not merely "no known error string".
+	if got.status != http.StatusOK {
+		t.Fatalf("status = %d, want %d — the documented header should let the call through: %s", got.status, http.StatusOK, truncate(got.body))
+	}
+	if !strings.Contains(got.body, `"result"`) {
+		t.Errorf("a successful tools/call must carry a JSON-RPC result, got: %s", truncate(got.body))
+	}
 }

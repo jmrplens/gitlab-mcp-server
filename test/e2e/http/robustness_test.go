@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // assertStillServing fails the test if the server stopped answering. A rejection
@@ -359,13 +360,18 @@ func TestRobust_SlowUpstreamDoesNotHangTheServer(t *testing.T) {
 	// something that needs no GitLab at all.
 	assertStillServing(t, srv, "a request stuck on a hanging upstream")
 
+	// An explicit bound, not t.Context().Done(): the test context is only
+	// cancelled at cleanup or the global -timeout, so using it here would let
+	// a genuinely unbounded probe hang for the whole test run rather than
+	// fail promptly. The server's own credential probe is bounded at 5s, so a
+	// correctly behaving server returns well inside this window.
 	select {
 	case status := <-done:
 		if status >= http.StatusInternalServerError && status != http.StatusServiceUnavailable {
 			t.Errorf("a hanging upstream produced %d", status)
 		}
-	case <-t.Context().Done():
-		t.Fatal("the request never returned; the upstream probe is unbounded")
+	case <-time.After(30 * time.Second):
+		t.Fatal("the request never returned within 30s; the upstream probe is unbounded")
 	}
 }
 
