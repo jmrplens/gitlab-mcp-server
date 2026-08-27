@@ -313,7 +313,7 @@ make analyze-report                        # generate LLM-consumable report
 | `GITLAB_ENTERPRISE`      | No       | **Deprecated** — use `GITLAB_TIER`. Honored for back-compat only when `GITLAB_TIER` is unset: `true` → `ultimate`, `false` → `free`. Logs a deprecation warning |
 | `AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
 | `PUBLIC_URL`             | No       | Externally reachable https origin; required with `AUTH_MODE=oauth` (RFC 9728 resource identifier; flag `--public-url`) |
-| `TRUSTED_ORIGINS`        | No       | Comma-separated absolute origins allowed to make cross-origin browser requests; `*` accepts any origin and disables the protection; empty rejects all (flag `--trusted-origins`) |
+| `TRUSTED_ORIGINS`        | No       | Comma-separated absolute origins allowed to make cross-origin browser requests; `*` accepts any origin and disables the protection; empty adds none, though a configured `PUBLIC_URL` origin is trusted regardless (flag `--trusted-origins`) |
 | `OAUTH_CACHE_TTL`        | No       | OAuth token identity cache TTL (`15m` default, range 1m–2h) |
 | `POOL_IDLE_TIMEOUT`      | No       | HTTP mode: reclaim a pooled per-token-and-URL server entry after this long unused (`1h` default, `0` disables, max 24h) |
 | `RATE_LIMIT_RPS`         | No       | Per-server tools/call rate limit in req/s (`0` = disabled) |

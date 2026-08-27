@@ -359,7 +359,11 @@ Yes. Set `GITLAB_URL` to your instance URL. When `GITLAB_URL` is omitted, stdio 
 <details>
 <summary><strong>Is my data safe?</strong></summary>
 
-The server runs locally on your machine (stdio mode) or on your own infrastructure (HTTP mode). All API calls go directly to your GitLab instance. The one request that leaves for anywhere else is the update check against GitHub Releases, which is on by default and disabled with <code>AUTO_UPDATE=false</code> — see <a href="PRIVACY.md">PRIVACY.md</a> for exactly what it sends, and <a href="SECURITY.md">SECURITY.md</a> for the security model.
+When you run it yourself — locally over stdio, or on your own infrastructure over HTTP — all API calls go directly to your GitLab instance. The one request that leaves for anywhere else is the update check against GitHub Releases, which is on by default and disabled with <code>AUTO_UPDATE=false</code>.
+
+The exception is the <a href="#try-it-without-installing-anything-hosted-endpoint">hosted endpoint</a>: using <code>https://mcp.jmrp.io/gitlab</code> means your token and every request pass through that machine. Nothing is stored there, but it is someone else's server, which is why the hosted section says to keep using it locally.
+
+See <a href="PRIVACY.md">PRIVACY.md</a> for exactly what the update check sends, and <a href="SECURITY.md">SECURITY.md</a> for the security model.
 </details>
 
 <details>

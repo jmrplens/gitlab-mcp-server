@@ -61,10 +61,10 @@ META_TOOLS=false
 
 Meta-tools remain available because they are the most broadly compatible consolidated surface.
 
-| Mode             |                                                                         Tool Count | Best For                                                                   |
-| ---------------- | ---------------------------------------------------------------------------------: | -------------------------------------------------------------------------- |
-| Meta-tools       |    32 base / 49 self-managed Enterprise/Premium / 50 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
-| Individual tools | 894 CE / 1062 self-managed Enterprise/Premium / 1068 GitLab.com Enterprise/Premium | Clients that benefit from one MCP tool per GitLab operation                |
+| Mode             |                                                                                    Tool Count | Best For                                                                   |
+| ---------------- | --------------------------------------------------------------------------------------------: | -------------------------------------------------------------------------- |
+| Meta-tools       |               32 base / 49 self-managed Enterprise/Premium / 50 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
+| Individual tools | 847 CE / 1065 self-managed Enterprise/Premium / 1071 GitLab.com Enterprise/Premium with Orbit | Clients that benefit from one MCP tool per GitLab operation                |
 
 ---
 

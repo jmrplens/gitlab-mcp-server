@@ -66,7 +66,7 @@ sequenceDiagram
    - **Name**: `MCP Server` (or any descriptive name)
    - **Redirect URI**: See [Redirect URIs per IDE](#redirect-uris-per-ide) below
    - **Confidential**: **Unchecked** (MCP clients are public OAuth clients)
-   - **Scopes**: Check **`api`**
+   - **Scopes**: Check **`api`** — or **`read_api`** if the deployment runs `--read-only` or `--safe-mode`, which is all such a server asks for (see [Scopes](#scopes-pick-api-avoid-mcp))
 4. Click **Save application**
 5. Copy the **Application ID** — this is the `clientId` you will configure in MCP clients
 
