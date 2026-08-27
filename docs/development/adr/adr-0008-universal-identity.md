@@ -11,7 +11,7 @@ superseded_by: ""
 
 ## Status
 
-**Accepted** — implements unified identity resolution across stdio, HTTP legacy, and HTTP OAuth transport modes.
+**Accepted, partially unimplemented** — the unified resolution API exists and stdio and HTTP OAuth populate it. HTTP legacy does not: see the Superseded note under Decision. The title's "universal" describes the interface, not the coverage.
 
 ## Context
 
@@ -89,7 +89,7 @@ Implement Option 4 with the following architecture:
 
 ### Positive
 
-- **POS-001**: All tool handlers can access user identity via `ResolveIdentity(ctx, req)` regardless of transport mode.
+- **POS-001**: ~~All tool handlers can access user identity via `ResolveIdentity(ctx, req)` regardless of transport mode.~~ Narrowed: the call is uniform, the coverage is not. It resolves an identity in stdio and HTTP OAuth mode, and returns the zero value in HTTP legacy mode, where nothing populates `req.Extra.TokenInfo`. Its only consumer today is log enrichment in `toolutil/logging.go`, so the visible effect is a missing username in some log lines.
 - **POS-002**: HTTP legacy mode now validates tokens against GitLab (was previously unvalidated).
 - **POS-003**: Caching prevents redundant GitLab API calls — single validation per token per TTL period.
 - **POS-004**: ~~The `NormalizeAuthHeader` adapter enables legacy clients to work without code changes.~~ Withdrawn: the adapter was removed. Legacy clients keep working because the legacy gate reads `PRIVATE-TOKEN` directly.

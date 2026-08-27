@@ -45,6 +45,12 @@ const (
 // the verification without saying when to come back.
 const upstreamRetryAfter = 30 * time.Second
 
+// Response header names used by more than one rejection path.
+const (
+	headerRetryAfter      = "Retry-After"
+	headerWWWAuthenticate = "WWW-Authenticate"
+)
+
 // bearerGuard authenticates a request before the SDK bearer middleware sees
 // it, so that a rejection is cheap, rate limited, and precisely described.
 type bearerGuard struct {
@@ -86,7 +92,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 			status:  http.StatusTooManyRequests,
 			code:    errCodeTooManyRequests,
 			message: "Too many failed authentication attempts from this address. Retry later with a valid token.",
-			header:  newHeader("Retry-After", strconv.Itoa(int(authFailureWindow.Seconds()))),
+			header:  newHeader(headerRetryAfter, strconv.Itoa(int(authFailureWindow.Seconds()))),
 		}
 	}
 
@@ -100,7 +106,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,
 			message: oauthMissingTokenMessage,
-			header:  newHeader("WWW-Authenticate", g.challenge()),
+			header:  newHeader(headerWWWAuthenticate, g.challenge()),
 		}
 	}
 
@@ -125,7 +131,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 			status:  http.StatusForbidden,
 			code:    errCodeForbidden,
 			message: "This token does not carry the " + g.requiredScope + " scope that this deployment requires. Reauthorize the application requesting it.",
-			header: newHeader("WWW-Authenticate", g.challenge(
+			header: newHeader(headerWWWAuthenticate, g.challenge(
 				"error", "insufficient_scope",
 				"error_description", "the token lacks the "+g.requiredScope+" scope",
 				"scope", g.requiredScope,
@@ -152,7 +158,7 @@ func (g *bearerGuard) classify(err error, ip, token string) *gateFailure {
 			status:  http.StatusServiceUnavailable,
 			code:    errCodeUpstreamUnavailable,
 			message: "GitLab could not verify this token right now; the instance is unreachable or throttling. Retry shortly — the token itself has not been rejected.",
-			header:  newHeader("Retry-After", strconv.Itoa(int(delay.Seconds()))),
+			header:  newHeader(headerRetryAfter, strconv.Itoa(int(delay.Seconds()))),
 		}
 	}
 
@@ -173,7 +179,7 @@ func (g *bearerGuard) classify(err error, ip, token string) *gateFailure {
 		status:  http.StatusServiceUnavailable,
 		code:    errCodeUpstreamUnavailable,
 		message: "GitLab could not verify this token right now. Retry shortly — the token itself has not been rejected.",
-		header:  newHeader("Retry-After", strconv.Itoa(int(upstreamRetryAfter.Seconds()))),
+		header:  newHeader(headerRetryAfter, strconv.Itoa(int(upstreamRetryAfter.Seconds()))),
 	}
 }
 
@@ -184,7 +190,7 @@ func (g *bearerGuard) invalidTokenFailure(message string) *gateFailure {
 		status:  http.StatusUnauthorized,
 		code:    errCodeUnauthorized,
 		message: message,
-		header: newHeader("WWW-Authenticate", g.challenge(
+		header: newHeader(headerWWWAuthenticate, g.challenge(
 			"error", "invalid_token",
 			"error_description", "the access token is expired, revoked, or not valid for this GitLab instance",
 		)),

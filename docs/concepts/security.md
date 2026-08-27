@@ -234,13 +234,13 @@ The last row matters more than it looks. Reporting a throttled GitLab as `invali
 
 See [HTTP Server Mode — OAuth Mode](../guides/http-server-mode.md#oauth-mode) for the full architecture and flow diagram, and [OAuth App Setup](../guides/oauth-app-setup.md) for creating GitLab OAuth applications.
 
-| Threat                 | Mitigation                                                                                                          |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Token replay           | TTL-based expiration; tokens re-verified after cache expires                                                        |
-| Cache key leakage      | SHA-256 hashing of raw tokens; original tokens never stored                                                         |
-| Brute force            | Per-address failure budget (10/minute) plus a rejected-token cache, so repeated attempts never reach GitLab         |
-| Upstream amplification | Rejections are answered from memory; an unauthenticated flood costs at most one verification per address per window |
-| Memory dump            | Only SHA-256 hashes and user metadata stored; no raw tokens in cache                                                |
+| Threat                 | Mitigation                                                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token replay           | TTL-based expiration; tokens re-verified after cache expires                                                                                    |
+| Cache key leakage      | SHA-256 hashing of raw tokens; original tokens never stored                                                                                     |
+| Brute force            | Per-address failure budget (10/minute) plus a rejected-token cache, so repeated attempts never reach GitLab                                     |
+| Upstream amplification | A repeated token is answered from memory, and the failure budget caps the rest: at most ten distinct-token verifications per address per window |
+| Memory dump            | Only SHA-256 hashes and user metadata stored; no raw tokens in cache                                                                            |
 
 ## PAT Scope-Based Tool Filtering
 

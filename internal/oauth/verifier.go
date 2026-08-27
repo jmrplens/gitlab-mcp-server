@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"slices"
 	"strconv"
@@ -54,6 +55,8 @@ type UpstreamError struct {
 	Err error
 }
 
+// Error describes the failure, naming the status when GitLab answered with
+// one and saying it was unreachable when nothing came back at all.
 func (e *UpstreamError) Error() string {
 	if e.Status == 0 {
 		return fmt.Sprintf("gitlab unreachable for token verification: %v", e.Err)
@@ -61,12 +64,17 @@ func (e *UpstreamError) Error() string {
 	return fmt.Sprintf("gitlab could not verify the token (HTTP %d): %v", e.Status, e.Err)
 }
 
+// Unwrap exposes the underlying cause to errors.Is and errors.As.
 func (e *UpstreamError) Unwrap() error { return e.Err }
 
 // retryAfter reads RFC 9110 Retry-After, which is either delta-seconds or an
 // HTTP-date. An absent, malformed, or past value yields zero, meaning "the
 // server did not tell us"; the caller supplies its own default rather than
 // inventing one here.
+//
+// An HTTP-date is rounded up to the next whole second. The delay is rendered
+// into a Retry-After header with second granularity, so truncating 0.4s to 0
+// would invite a retry before the boundary GitLab asked for.
 func retryAfter(resp *http.Response) time.Duration {
 	raw := strings.TrimSpace(resp.Header.Get("Retry-After"))
 	if raw == "" {
@@ -80,7 +88,7 @@ func retryAfter(resp *http.Response) time.Duration {
 	}
 	if when, err := http.ParseTime(raw); err == nil {
 		if d := time.Until(when); d > 0 {
-			return d
+			return time.Duration(math.Ceil(d.Seconds())) * time.Second
 		}
 	}
 	return 0
@@ -154,7 +162,13 @@ func NewGitLabVerifier(gitlabURL string, skipTLS bool, cacheTTL time.Duration, c
 		case resp.StatusCode >= 500:
 			return nil, &UpstreamError{Status: resp.StatusCode, Err: errors.New("server error")}
 		default:
-			return nil, fmt.Errorf("unexpected GitLab response (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
+			// Only 401 and 403 are GitLab judging the credential. Anything
+			// else — a 404 from a misrouted proxy, a 408, whatever an
+			// intermediary invents — is a question that never got answered,
+			// and calling it invalid_token would cache a valid token as
+			// rejected and charge the caller's failure budget for someone
+			// else's routing mistake.
+			return nil, &UpstreamError{Status: resp.StatusCode, Err: errors.New("unexpected response")}
 		}
 
 		var user gitlabUserResponse

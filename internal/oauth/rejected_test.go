@@ -116,7 +116,10 @@ func TestRejectedTokens_Disabled_NeverReportsAHit(t *testing.T) {
 func TestRejectedTokens_DoesNotStoreRawTokens(t *testing.T) {
 	t.Parallel()
 
-	const secret = "glpat-a-real-token-typed-into-the-wrong-field"
+	// Not shaped like a real PAT on purpose: a fixture that looks like one
+	// trips secret scanners on every commit for no benefit — the property
+	// under test is that whatever arrives is hashed, not what it looks like.
+	const secret = "a-credential-typed-into-the-wrong-field"
 	r := NewRejectedTokens(8, time.Minute)
 	r.Record(secret)
 

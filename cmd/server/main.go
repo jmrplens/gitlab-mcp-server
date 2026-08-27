@@ -676,6 +676,10 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 	return validateOAuthCacheTTL(cfg.OAuthCacheTTL)
 }
 
+// validateOAuthCacheTTL bounds an explicitly configured TTL. A non-positive
+// value is not rejected here — see [oauthCacheTTL], which normalizes it at
+// the point of use so no construction path can produce the broken server a
+// zero would otherwise cause.
 func validateOAuthCacheTTL(ttl time.Duration) error {
 	if ttl <= 0 {
 		return nil
@@ -1426,7 +1430,8 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 
 	tokenCache := oauth.NewTokenCache()
 	rejectedTokens := oauth.NewRejectedTokens(rejectedTokenMaxSize, rejectedTokenTTL)
-	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cfg.OAuthCacheTTL, tokenCache)
+	cacheTTL := oauthCacheTTL(cfg.OAuthCacheTTL)
+	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cacheTTL, tokenCache)
 	// The scope demanded is the least privilege this deployment can work
 	// with, not a constant: the verifier reports a token's real scopes, and
 	// the SDK requires every listed scope to be present, so a hardcoded
@@ -1463,7 +1468,28 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	startPeriodicCleanup(ctx, tokenCache.Cleanup)
 	startPeriodicCleanup(ctx, rejectedTokens.Cleanup)
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
-	slog.Info("oauth mode enabled", "cache_ttl", cfg.OAuthCacheTTL, "resource", resourceID, "metadata_url", resourceMetadataURL)
+	slog.Info("oauth mode enabled", "cache_ttl", cacheTTL, "resource", resourceID, "metadata_url", resourceMetadataURL)
+}
+
+// oauthCacheTTL returns a TTL the verifier can actually work with.
+//
+// The value is not only a cache lifetime: the verifier stamps it into
+// auth.TokenInfo.Expiration, and the SDK's bearer middleware refuses a token
+// whose expiration has passed. A zero or negative TTL therefore expires every
+// token the instant it is verified, and the server answers 401 to every
+// request carrying a perfectly valid credential.
+//
+// Normalizing here rather than rejecting at config validation keeps the
+// invariant at the point that depends on it: a Config built by any path — the
+// flag layer, the environment overlay, a test constructing a zero value —
+// cannot produce that server.
+func oauthCacheTTL(configured time.Duration) time.Duration {
+	if configured > 0 {
+		return configured
+	}
+	slog.Warn("oauth cache ttl is not positive; using the default",
+		"configured", configured, "using", config.DefaultOAuthCacheTTL)
+	return config.DefaultOAuthCacheTTL
 }
 
 func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, mux *http.ServeMux) {
@@ -1699,6 +1725,13 @@ const (
 	corsMaxAge        = "86400"
 )
 
+// CORS response and request header names, each used on more than one path.
+const (
+	headerAllowOrigin    = "Access-Control-Allow-Origin"
+	headerRequestMethod  = "Access-Control-Request-Method"
+	headerRequestHeaders = "Access-Control-Request-Headers"
+)
+
 // corsMiddleware makes trusted origins usable from an actual browser.
 //
 // Allowing an origin past the cross-origin protection is only half of it. A
@@ -1730,12 +1763,12 @@ func corsMiddleware(trustedOrigins []string, next http.Handler) http.Handler {
 		// The origin is echoed rather than answered with "*" because these
 		// requests carry an Authorization header; "*" is invalid for a
 		// credentialed request and browsers reject it.
-		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set(headerAllowOrigin, origin)
 		w.Header().Set("Access-Control-Expose-Headers", corsExposeHeaders)
 
-		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
-			w.Header().Add("Vary", "Access-Control-Request-Method")
-			w.Header().Add("Vary", "Access-Control-Request-Headers")
+		if r.Method == http.MethodOptions && r.Header.Get(headerRequestMethod) != "" {
+			w.Header().Add("Vary", headerRequestMethod)
+			w.Header().Add("Vary", headerRequestHeaders)
 			w.Header().Set("Access-Control-Allow-Methods", corsAllowMethods)
 			w.Header().Set("Access-Control-Allow-Headers", corsAllowHeaders)
 			w.Header().Set("Access-Control-Max-Age", corsMaxAge)
