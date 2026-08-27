@@ -131,11 +131,11 @@ func NoteToOutput(n *gl.Note) NoteOutput {
 		CommitID:     n.CommitID,
 		Position:     toolutil.NewNotePositionOutput(n.Position),
 		ProjectID:    n.ProjectID,
+		CreatedAt:    toolutil.FormatTimePtr(n.CreatedAt),
+		UpdatedAt:    toolutil.FormatTimePtr(n.UpdatedAt),
+		ExpiresAt:    toolutil.FormatTimePtr(n.ExpiresAt),
+		ResolvedAt:   toolutil.FormatTimePtr(n.ResolvedAt),
 	}
-	out.CreatedAt = toolutil.FormatTimePtr(n.CreatedAt)
-	out.UpdatedAt = toolutil.FormatTimePtr(n.UpdatedAt)
-	out.ExpiresAt = toolutil.FormatTimePtr(n.ExpiresAt)
-	out.ResolvedAt = toolutil.FormatTimePtr(n.ResolvedAt)
 	return out
 }
 

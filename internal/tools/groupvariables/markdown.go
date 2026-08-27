@@ -21,16 +21,17 @@ func FormatListMarkdown(out ListOutput) string {
 }
 
 func toMarkdownVariable(v Output) toolutil.CICDVariableMarkdown {
-	markdown := toolutil.CICDVariableMarkdown{}
-	markdown.Key = v.Key
-	markdown.Value = v.Value
-	markdown.VariableType = v.VariableType
-	markdown.Protected = v.Protected
-	markdown.Masked = v.Masked
-	markdown.Hidden = v.Hidden
-	markdown.Raw = v.Raw
-	markdown.EnvironmentScope = v.EnvironmentScope
-	markdown.Description = v.Description
+	markdown := toolutil.CICDVariableMarkdown{
+		Key:              v.Key,
+		Value:            v.Value,
+		VariableType:     v.VariableType,
+		Protected:        v.Protected,
+		Masked:           v.Masked,
+		Hidden:           v.Hidden,
+		Raw:              v.Raw,
+		EnvironmentScope: v.EnvironmentScope,
+		Description:      v.Description,
+	}
 	return markdown
 }
 

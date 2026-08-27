@@ -108,8 +108,8 @@ func convertSnippet(s *gl.Snippet) Output {
 		RepositoryStorage: s.RepositoryStorage,
 		CreatedAt:         s.CreatedAt,
 		UpdatedAt:         s.UpdatedAt,
+		Author:            snippetAuthorOutput(s.Author),
 	}
-	out.Author = snippetAuthorOutput(s.Author)
 	for _, f := range s.Files {
 		out.Files = append(out.Files, FileOutput{Path: f.Path, RawURL: f.RawURL})
 	}

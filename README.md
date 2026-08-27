@@ -434,10 +434,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       992 |     202,109 |
-| Unit tests (`_test.go`)  |       553 |     314,659 |
+| Source (`.go`, non-test) |       992 |     202,111 |
+| Unit tests (`_test.go`)  |       553 |     314,660 |
 | End-to-end tests         |       182 |      47,508 |
-| **Total**                | **1,727** | **564,276** |
+| **Total**                | **1,727** | **564,279** |
 
 ### Functions
 

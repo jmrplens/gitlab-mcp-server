@@ -176,8 +176,8 @@ func toOutput(pe *gl.ProtectedEnvironment) Output {
 	out := Output{
 		Name:                  pe.Name,
 		RequiredApprovalCount: pe.RequiredApprovalCount,
+		DeployAccessLevels:    make([]AccessLevelOutput, 0, len(pe.DeployAccessLevels)),
 	}
-	out.DeployAccessLevels = make([]AccessLevelOutput, 0, len(pe.DeployAccessLevels))
 	for _, a := range pe.DeployAccessLevels {
 		out.DeployAccessLevels = append(out.DeployAccessLevels, toAccessLevelOutput(a))
 	}

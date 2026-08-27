@@ -170,11 +170,11 @@ func NoteOutputFromGitLab(n *gl.Note) NoteOutput {
 		Position:     NewNotePositionOutput(n.Position),
 		ProjectID:    n.ProjectID,
 		Confidential: n.Internal,
+		CreatedAt:    FormatTimePtr(n.CreatedAt),
+		UpdatedAt:    FormatTimePtr(n.UpdatedAt),
+		ExpiresAt:    FormatTimePtr(n.ExpiresAt),
+		ResolvedAt:   FormatTimePtr(n.ResolvedAt),
 	}
-	out.CreatedAt = FormatTimePtr(n.CreatedAt)
-	out.UpdatedAt = FormatTimePtr(n.UpdatedAt)
-	out.ExpiresAt = FormatTimePtr(n.ExpiresAt)
-	out.ResolvedAt = FormatTimePtr(n.ResolvedAt)
 	return out
 }
 

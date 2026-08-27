@@ -301,13 +301,13 @@ func GetSignature(ctx context.Context, client *gitlabclient.Client, input Signat
 	out := SignatureOutput{
 		SignatureType:      sig.SignatureType,
 		VerificationStatus: sig.VerificationStatus,
-	}
-	out.X509Certificate = X509CertificateOutput{
-		ID:                   sig.X509Certificate.ID,
-		Subject:              sig.X509Certificate.Subject,
-		SubjectKeyIdentifier: sig.X509Certificate.SubjectKeyIdentifier,
-		Email:                sig.X509Certificate.Email,
-		CertificateStatus:    sig.X509Certificate.CertificateStatus,
+		X509Certificate: X509CertificateOutput{
+			ID:                   sig.X509Certificate.ID,
+			Subject:              sig.X509Certificate.Subject,
+			SubjectKeyIdentifier: sig.X509Certificate.SubjectKeyIdentifier,
+			Email:                sig.X509Certificate.Email,
+			CertificateStatus:    sig.X509Certificate.CertificateStatus,
+		},
 	}
 	if sig.X509Certificate.SerialNumber != nil {
 		out.X509Certificate.SerialNumber = sig.X509Certificate.SerialNumber.String()

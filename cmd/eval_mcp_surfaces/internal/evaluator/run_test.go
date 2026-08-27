@@ -89,8 +89,9 @@ func TestIsRetriableModelOutputFailure(t *testing.T) {
 		{"empty args", withModelError("gitlab_execute_action tool call call_1 " + markerEmptyToolArgs), true},
 		{"success not retried", taskResult{FinalSuccess: true}, false},
 		{"wrong choice not retried", func() taskResult {
-			r := taskResult{}
-			r.Notes = []string{"expected action issue.create but model called issue.list"}
+			r := taskResult{
+				Notes: []string{"expected action issue.create but model called issue.list"},
+			}
 			r.Trace.Events = []traceEvent{{Kind: "validation", Content: "action mismatch"}}
 			return r
 		}(), false},
