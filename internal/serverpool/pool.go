@@ -341,6 +341,15 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating MCP server for pool: %w", err)
 	}
+	// A factory reporting success while handing back nothing is rejected here
+	// rather than downstream, because the entry is what gets cached. Letting
+	// it through poisons the key: the caller that triggered the build is told
+	// about it, but every later caller for the same credential takes the fast
+	// path, finds the entry, and receives a nil server with a nil error — the
+	// dereference this check exists to prevent, minus the diagnosis.
+	if server == nil {
+		return nil, errors.New("creating MCP server for pool: factory returned no server")
+	}
 
 	return &poolEntry{
 		server:       server,

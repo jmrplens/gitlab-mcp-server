@@ -86,8 +86,24 @@ func TestSelectSchemas_ValidateOptions(t *testing.T) {
 			_, err := parseSelectOneContent(map[string]any{"selection": "c"}, []string{"a", "b"})
 			return err
 		}, true},
+		// A client is free to answer with the wrong JSON type, so every
+		// parser reads the field through a checked assertion. Without a case
+		// per parser an unchecked one would panic on the first malformed
+		// answer rather than returning the error the caller expects.
+		{"select one rejects non-string selection", func() error {
+			_, err := parseSelectOneContent(map[string]any{"selection": 3}, []string{"a", "b"})
+			return err
+		}, true},
+		{"select multi rejects non-array selections", func() error {
+			_, err := parseSelectMultiContent(map[string]any{"selections": "a"}, []string{"a"}, 0, 0)
+			return err
+		}, true},
 		{"select multi rejects non-string element", func() error {
 			_, err := parseSelectMultiContent(map[string]any{"selections": []any{"a", 3}}, []string{"a"}, 0, 0)
+			return err
+		}, true},
+		{"select multi rejects out-of-enum element", func() error {
+			_, err := parseSelectMultiContent(map[string]any{"selections": []any{"c"}}, []string{"a", "b"}, 0, 0)
 			return err
 		}, true},
 		{"select multi rejects fewer than minItems", func() error {
@@ -145,6 +161,10 @@ func TestSelectSchemas_ValidateOptions(t *testing.T) {
 		}, true},
 		{"select int rejects non-string non-number", func() error {
 			_, err := parseSelectOneIntContent(map[string]any{"selection": true}, []int{1})
+			return err
+		}, true},
+		{"select int rejects out-of-enum value", func() error {
+			_, err := parseSelectOneIntContent(map[string]any{"selection": float64(9)}, []int{1, 2})
 			return err
 		}, true},
 	}

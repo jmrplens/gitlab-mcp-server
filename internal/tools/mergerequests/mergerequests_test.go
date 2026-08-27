@@ -16,6 +16,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
+	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/commits"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/issues"
@@ -5206,5 +5207,64 @@ func TestCreate_ApprovalsBeforeMerge_ReachRequest(t *testing.T) {
 	}
 	if !strings.Contains(body, `"approvals_before_merge":3`) {
 		t.Errorf("create body missing approvals_before_merge: %s", body)
+	}
+}
+
+// TestListGlobalAndGroup_ApproverFilterInvalid_ReturnsError verifies that the
+// global and group list surfaces reject a malformed approver filter before
+// issuing a request, and that the error names the field the caller got wrong.
+//
+// The project-scoped List already has this guard covered by
+// TestList_ApproverFilterInvalid_ReturnsError, but each surface builds its
+// options through its own function, so the validation is a separate code path
+// per surface rather than one shared check. Passing the bad filter through
+// would not fail loudly: GitLab ignores a filter it cannot parse, so the call
+// would return a confidently wrong, unfiltered result set.
+func TestListGlobalAndGroup_ApproverFilterInvalid_ReturnsError(t *testing.T) {
+	tests := []struct {
+		name      string
+		call      func(*gitlabclient.Client) error
+		wantField string
+	}{
+		{"global/approver_ids", func(c *gitlabclient.Client) error {
+			_, err := ListGlobal(context.Background(), c, ListGlobalInput{
+				ApproverIDs: toolutil.ApproverIDsFilter{"Any", "7"},
+			})
+			return err
+		}, "approver_ids"},
+		{"global/approved_by_ids", func(c *gitlabclient.Client) error {
+			_, err := ListGlobal(context.Background(), c, ListGlobalInput{
+				ApprovedByIDs: toolutil.ApproverIDsFilter{"None", "7"},
+			})
+			return err
+		}, "approved_by_ids"},
+		{"group/approver_ids", func(c *gitlabclient.Client) error {
+			_, err := ListGroup(context.Background(), c, ListGroupInput{
+				GroupID:     "acme",
+				ApproverIDs: toolutil.ApproverIDsFilter{"Any", "7"},
+			})
+			return err
+		}, "approver_ids"},
+		{"group/approved_by_ids", func(c *gitlabclient.Client) error {
+			_, err := ListGroup(context.Background(), c, ListGroupInput{
+				GroupID:       "acme",
+				ApprovedByIDs: toolutil.ApproverIDsFilter{"None", "7"},
+			})
+			return err
+		}, "approved_by_ids"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := testutil.NewTestClient(t, http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+				t.Error("request issued despite an invalid approver filter")
+			}))
+			err := tt.call(client)
+			if err == nil {
+				t.Fatal("error = nil, want an invalid-filter error")
+			}
+			if !strings.Contains(err.Error(), tt.wantField) {
+				t.Errorf("error = %q, want it to name %s", err, tt.wantField)
+			}
+		})
 	}
 }

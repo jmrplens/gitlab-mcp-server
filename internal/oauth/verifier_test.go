@@ -616,6 +616,13 @@ func TestMetadataURLFor_InsertsWellKnownBetweenHostAndPath(t *testing.T) {
 		{"https://mcp.example.com/gitlab", "https://mcp.example.com/.well-known/oauth-protected-resource/gitlab"},
 		{"https://mcp.example.com", "https://mcp.example.com/.well-known/oauth-protected-resource"},
 		{"http://localhost:8080", "http://localhost:8080/.well-known/oauth-protected-resource"},
+		// An identifier with no host cannot be split into host and path, so
+		// the derivation degrades to appending. Config validation rejects
+		// these before they reach here; the fallback exists so a challenge
+		// still carries a syntactically valid URL rather than a panic or an
+		// empty resource_metadata a client would silently ignore.
+		{"://not a url", "://not a url/.well-known/oauth-protected-resource"},
+		{"/gitlab/", "/gitlab/.well-known/oauth-protected-resource"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.resource, func(t *testing.T) {
@@ -676,6 +683,11 @@ func TestNewGitLabVerifier_UpstreamFailure_IsNotAnInvalidToken(t *testing.T) {
 		{"throttled without a hint", http.StatusTooManyRequests, "", http.StatusTooManyRequests, 0},
 		{"throttled with unparseable hint", http.StatusTooManyRequests, "soon", http.StatusTooManyRequests, 0},
 		{"throttled with a past date", http.StatusTooManyRequests, "Mon, 02 Jan 2006 15:04:05 GMT", http.StatusTooManyRequests, 0},
+		// A parseable but non-positive delta is treated as no hint at all.
+		// Passing it through would render "Retry-After: 0", telling the
+		// client to retry immediately — which is what the throttle is for.
+		{"throttled with a zero delta", http.StatusTooManyRequests, "0", http.StatusTooManyRequests, 0},
+		{"throttled with a negative delta", http.StatusTooManyRequests, "-5", http.StatusTooManyRequests, 0},
 		{"server error", http.StatusBadGateway, "", http.StatusBadGateway, 0},
 	}
 	for _, tt := range tests {
@@ -771,5 +783,40 @@ func TestRetryAfter_HTTPDate_RoundsUp(t *testing.T) {
 	// instant GitLab named.
 	if got < time.Second {
 		t.Errorf("retryAfter() = %v, want at least 1s after rounding up", got)
+	}
+}
+
+// TestFetchScopes_UnusableEndpoint_ReportsNoAnswer verifies that neither a
+// malformed endpoint nor an unreachable one is mistaken for a definitive
+// "this token has no scopes".
+//
+// The nil return means "this endpoint did not answer for this token kind",
+// which is what lets introspectScopes try the next endpoint and then fall
+// back to the historical assumption. An empty non-nil slice would read as a
+// real answer instead, stripping every scope from a perfectly good token and
+// locking the caller out whenever introspection is merely unreachable.
+func TestFetchScopes_UnusableEndpoint_ReportsNoAnswer(t *testing.T) {
+	t.Parallel()
+
+	// A server started and immediately closed yields an address nothing is
+	// listening on, so the request is well-formed and the round trip fails.
+	closed := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	unreachable := closed.URL + "/api/v4/personal_access_tokens/self"
+	closed.Close()
+
+	tests := []struct {
+		name     string
+		endpoint string
+	}{
+		{"endpoint that cannot be parsed", "://not a url"},
+		{"host that refuses the connection", unreachable},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := fetchScopes(t.Context(), http.DefaultClient, tt.endpoint, "glpat-x", "scopes"); got != nil {
+				t.Errorf("fetchScopes(%s) = %v, want nil", tt.name, got)
+			}
+		})
 	}
 }

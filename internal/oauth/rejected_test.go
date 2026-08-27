@@ -3,6 +3,7 @@
 package oauth
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -58,6 +59,45 @@ func TestRejectedTokens_AtCapacity_StaysBounded(t *testing.T) {
 
 	if got := r.Len(); got > capacity {
 		t.Errorf("Len() = %d, want at most %d", got, capacity)
+	}
+}
+
+// TestRejectedTokens_ExpiredEntriesMakeRoom verifies that a full cache admits
+// a new rejection by sweeping the expired entries first, instead of
+// sacrificing one that is still doing useful work.
+//
+// Eviction has two stages and the order matters: the fallback that drops the
+// entry nearest expiry is for a cache full of live entries only. If it ran
+// first on a cache of dead ones it would discard a live rejection while three
+// useless entries stayed, and the token behind that live entry would go back
+// to reaching GitLab on every attempt — the amplification this cache exists
+// to prevent. The bounded case is covered separately by
+// TestRejectedTokens_AtCapacity_StaysBounded, which never lets an entry
+// expire and so only ever reaches the fallback.
+func TestRejectedTokens_ExpiredEntriesMakeRoom(t *testing.T) {
+	t.Parallel()
+
+	const capacity = 3
+	const ttl = 100 * time.Millisecond
+
+	r := NewRejectedTokens(capacity, ttl)
+	for i := range capacity {
+		r.Record("glpat-stale-" + strconv.Itoa(i))
+	}
+	if got := r.Len(); got != capacity {
+		t.Fatalf("Len() = %d, want %d before anything expires", got, capacity)
+	}
+
+	time.Sleep(ttl + 50*time.Millisecond)
+	r.Record("glpat-fresh")
+
+	// Only the new entry survives: all three expired ones were swept, which
+	// is what freed the slot.
+	if got := r.Len(); got != 1 {
+		t.Errorf("Len() = %d, want 1 (three expired entries swept, one admitted)", got)
+	}
+	if !r.Contains("glpat-fresh") {
+		t.Error("the newly recorded rejection was not admitted")
 	}
 }
 

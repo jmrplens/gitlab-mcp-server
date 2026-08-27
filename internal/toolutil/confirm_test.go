@@ -390,6 +390,68 @@ func TestConfirmAction_UnknownActionFailsClosed(t *testing.T) {
 	}
 }
 
+// TestExplicitConfirmFromRequest verifies that ExplicitConfirmFromRequest
+// detects the reserved confirm key on both call shapes it must support
+// (flat on individual tools, nested under params on dispatcher surfaces),
+// and fails closed (false) for a nil/malformed request instead of panicking
+// or misreporting confirmation. This matters because clearguard.go gates a
+// destructive workitems action on this return value: a false positive here
+// would let a destructive call bypass confirmation, and a JSON-decode panic
+// would crash the handler on any malformed client payload.
+func TestExplicitConfirmFromRequest(t *testing.T) {
+	tests := []struct {
+		name string
+		req  *mcp.CallToolRequest
+		want bool
+	}{
+		{"nil request", nil, false},
+		{"nil params", &mcp.CallToolRequest{Params: nil}, false},
+		{"empty arguments", &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Arguments: nil}}, false},
+		{
+			name: "malformed JSON arguments",
+			req: &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
+				Arguments: []byte("{not valid json"),
+			}},
+			want: false,
+		},
+		{
+			name: "flat confirm true",
+			req: &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
+				Arguments: []byte(`{"confirm":true}`),
+			}},
+			want: true,
+		},
+		{
+			name: "flat confirm false",
+			req: &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
+				Arguments: []byte(`{"confirm":false}`),
+			}},
+			want: false,
+		},
+		{
+			name: "nested params confirm true",
+			req: &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
+				Arguments: []byte(`{"action":"delete","params":{"confirm":true}}`),
+			}},
+			want: true,
+		},
+		{
+			name: "no confirm anywhere",
+			req: &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{
+				Arguments: []byte(`{"action":"delete","params":{}}`),
+			}},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ExplicitConfirmFromRequest(tt.req); got != tt.want {
+				t.Errorf("ExplicitConfirmFromRequest() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // surfaceToolText concatenates text content of a CallToolResult for assertions.
 func surfaceToolText(result *mcp.CallToolResult) string {
 	if result == nil {

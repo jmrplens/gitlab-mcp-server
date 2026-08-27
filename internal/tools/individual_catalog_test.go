@@ -3,15 +3,18 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/elicitation"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
@@ -369,6 +372,102 @@ func TestRegisterIndividualCatalogTools_DestructiveConfirmationDeclined(t *testi
 	}
 	if !strings.Contains(result.Content[0].(*mcp.TextContent).Text, "Operation canceled") {
 		t.Fatalf("result = %#v, want cancellation", result.Content)
+	}
+}
+
+// TestRegisterIndividualCatalogTools_InputRequiredResultSurfaced verifies
+// that individualCatalogHandler surfaces an *elicitation.InputRequiredError
+// returned by a route handler as a successful tool result instead of a
+// JSON-RPC error. This is the multi round-trip (MRTR) elicitation contract:
+// a wizard-style action's first invocation has no answer yet, so it queues
+// an input request and must return normally (result, nil error) so the SDK
+// client middleware can retry the call with the user's answer attached.
+// Without this branch, a pending MRTR elicitation would surface to the
+// client as a tool call error instead of the input-required result the
+// protocol expects, breaking every interactive elicitation tool.
+//
+// The in-memory client accepts the elicitation prompt, so the SDK's
+// middleware completes the full round trip inside one CallTool invocation:
+// the first internal call hits individualCatalogHandler's
+// InputRequiredResultFromError branch and returns the queued input
+// request, the client answers it, and the retry reaches the handler's
+// success path.
+func TestRegisterIndividualCatalogTools_InputRequiredResultSurfaced(t *testing.T) {
+	var called atomic.Bool
+	spec := toolutil.NewActionSpec("confirm_thing", toolutil.RouteActionWithRequest(nil,
+		func(ctx context.Context, req *mcp.CallToolRequest, _ *gitlabclient.Client, _ struct{}) (struct{}, error) {
+			fl, err := elicitation.FlowFromRequest(req)
+			if err != nil {
+				return struct{}{}, err
+			}
+			confirmed, confirmErr := fl.Confirm(ctx, "confirm", "Proceed?")
+			if confirmErr != nil {
+				if errors.Is(confirmErr, elicitation.ErrInputPending) {
+					// Mirrors elicitationtools.flowError: a pending MRTR answer
+					// must surface as *elicitation.InputRequiredError, not a
+					// plain error, so individualCatalogHandler returns the
+					// queued input-required result instead of failing the call.
+					return struct{}{}, fl.PendingError()
+				}
+				return struct{}{}, confirmErr
+			}
+			// The answer itself has to be read. Discarding it would let the
+			// handler complete on a form the user submitted with the box
+			// unticked, and this test would still pass — while asserting
+			// nothing about the value that came back.
+			if !confirmed {
+				return struct{}{}, errors.New("confirmation was not accepted")
+			}
+			called.Store(true)
+			return struct{}{}, nil
+		}), toolutil.ActionSpecOptions{
+		OwnerPackage:   "tools",
+		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_confirm_thing", Title: "Confirm Thing", Description: "Confirm thing test."},
+	})
+	catalog := testIndividualCatalog(t, spec)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{})
+
+	st, ct := mcp.NewInMemoryTransports()
+	ctx := context.Background()
+	serverSession, err := server.Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	var answered atomic.Int32
+	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, &mcp.ClientOptions{
+		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			answered.Add(1)
+			return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": true}}, nil
+		},
+	})
+	session, err := mcpClient.Connect(ctx, ct, nil)
+	if err != nil {
+		_ = serverSession.Close()
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() {
+		session.Close()
+		_ = serverSession.Close()
+	})
+
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "gitlab_test_confirm_thing", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil result")
+	}
+	if !called.Load() {
+		t.Fatal("route handler never reached completion after the MRTR round trip; input-required branch may not have surfaced correctly")
+	}
+	// Exactly one: the handler suspended, the client answered, and the retry
+	// replayed that answer from the request state instead of asking again. A
+	// count of zero would mean the round trip never happened and the handler
+	// completed some other way; more than one would mean the replay is not
+	// working and a multi-step flow would re-prompt on every round.
+	if got := answered.Load(); got != 1 {
+		t.Errorf("elicitation responses = %d, want exactly 1", got)
 	}
 }
 

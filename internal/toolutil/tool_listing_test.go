@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -72,5 +73,42 @@ func TestListRegisteredTools_NilServerAndCancelledContext(t *testing.T) {
 	cancel()
 	if _, listErr := ListRegisteredTools(cancelled, mcp.NewServer(&mcp.Implementation{Name: "t", Version: "0"}, nil), "x"); listErr == nil {
 		t.Error("cancelled context: expected connect/list error, got nil")
+	}
+}
+
+// TestListRegisteredTools_ListToolsErrorIsWrapped verifies that a failure of
+// the tools/list RPC itself (as opposed to failing to connect, which
+// TestListRegisteredTools_NilServerAndCancelledContext already covers) is
+// wrapped with the "list tools:" prefix. Server-side receiving middleware
+// intercepts the tools/list method and returns an error deterministically —
+// this is the only method affected, so connecting both sessions still
+// succeeds and the failure is isolated to the ListTools RPC.
+func TestListRegisteredTools_ListToolsErrorIsWrapped(t *testing.T) {
+	boom := errors.New("boom: tools/list intentionally broken for test")
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method == "tools/list" {
+				return nil, boom
+			}
+			return next(ctx, method, req)
+		}
+	})
+
+	_, err := ListRegisteredTools(t.Context(), server, "test-list-client")
+	if err == nil {
+		t.Fatal("ListRegisteredTools() error = nil, want wrapped tools/list error")
+	}
+	if !strings.Contains(err.Error(), "list tools:") {
+		t.Errorf("ListRegisteredTools() error = %q, want it prefixed with %q", err, "list tools:")
+	}
+	// The cause must still be legible through the prefix, or the caller is
+	// told only that listing failed and not why. Note what this cannot
+	// assert: errors.Is(err, boom) is false here, because the error crosses
+	// jsonrpc2 and is rebuilt from the wire, which preserves the message and
+	// destroys the identity. No client-side assertion can distinguish %w from
+	// %v for an error that made that trip.
+	if !strings.Contains(err.Error(), boom.Error()) {
+		t.Errorf("ListRegisteredTools() error = %q, want the underlying cause preserved", err)
 	}
 }

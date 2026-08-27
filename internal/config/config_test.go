@@ -1859,3 +1859,59 @@ func TestValidate_OAuthRequiresPublicURL(t *testing.T) {
 		})
 	}
 }
+
+// TestLoad_PoolIdleTimeoutInvalid verifies that Load surfaces a wrapped error
+// when POOL_IDLE_TIMEOUT cannot be parsed as a duration or exceeds
+// MaxPoolIdleTimeout. This exercises the loadLimitEnv error path distinct
+// from the POOL_IDLE_TIMEOUT=0 "disabled" case already covered by
+// TestLoad_DisableableDurations_AcceptZero: a non-zero, invalid value must
+// still fail startup rather than silently falling back to the default.
+func TestLoad_PoolIdleTimeoutInvalid(t *testing.T) {
+	t.Setenv("GITLAB_URL", testHTTPExampleURL)
+	t.Setenv("GITLAB_TOKEN", "test")
+
+	t.Run("unparseable duration", func(t *testing.T) {
+		t.Setenv("POOL_IDLE_TIMEOUT", "notaduration")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("Load() error = nil, want error for unparseable POOL_IDLE_TIMEOUT")
+		}
+		if !strings.Contains(err.Error(), "POOL_IDLE_TIMEOUT") {
+			t.Errorf("Load() error = %v, want it to mention POOL_IDLE_TIMEOUT", err)
+		}
+	})
+
+	t.Run("exceeds maximum", func(t *testing.T) {
+		t.Setenv("POOL_IDLE_TIMEOUT", "48h")
+		_, err := Load()
+		if err == nil {
+			t.Fatal("Load() error = nil, want error for POOL_IDLE_TIMEOUT exceeding MaxPoolIdleTimeout")
+		}
+		if !strings.Contains(err.Error(), "exceeds maximum") {
+			t.Errorf("Load() error = %v, want it to mention 'exceeds maximum'", err)
+		}
+	})
+}
+
+// TestValidate_OAuthModeRejectsInvalidPublicURLThroughValidate verifies that
+// c.validate() itself (not just validatePublicURL in isolation) surfaces the
+// RFC 9728 error when AuthMode is "oauth" and PublicURL is empty or
+// malformed. This exercises the return path inside validateModeEnums that
+// propagates validatePublicURL's error, which a direct call to
+// validatePublicURL (see TestValidate_OAuthRequiresPublicURL) does not touch.
+func TestValidate_OAuthModeRejectsInvalidPublicURLThroughValidate(t *testing.T) {
+	cfg := &Config{
+		GitLabURL:      testGitLabURL,
+		GitLabToken:    testGitLabToken,
+		MaxHTTPClients: 1,
+		AuthMode:       "oauth",
+		PublicURL:      "",
+	}
+	err := cfg.validate()
+	if err == nil {
+		t.Fatal("validate() error = nil, want error for oauth mode without PublicURL")
+	}
+	if !strings.Contains(err.Error(), "--public-url") {
+		t.Errorf("validate() error = %v, want it to mention --public-url", err)
+	}
+}

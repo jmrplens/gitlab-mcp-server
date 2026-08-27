@@ -1545,3 +1545,21 @@ func TestRepositoryBlob_DecodesBase64Envelope(t *testing.T) {
 		t.Errorf("Blob ContentCategory = %q, want text", out.ContentCategory)
 	}
 }
+
+// TestDecodeBlobEnvelope_InvalidBase64PassesThroughRaw verifies that
+// decodeBlobEnvelope returns the original bytes unchanged when the JSON
+// envelope parses and declares encoding "base64", but its content field is
+// not valid base64. This matters because the GitLab blobs endpoint's
+// envelope shape (JSON with a base64 content field) is indistinguishable
+// from a raw, non-JSON blob body until the content is actually decoded;
+// silently returning the mis-encoded string instead of the raw bytes would
+// corrupt binary/text blobs whose bytes merely happen to parse as this
+// envelope's JSON shape. Complements TestRepositoryBlob_DecodesBase64Envelope,
+// which covers the successful-decode path.
+func TestDecodeBlobEnvelope_InvalidBase64PassesThroughRaw(t *testing.T) {
+	raw := []byte(`{"content":"not valid base64!!","encoding":"base64"}`)
+	got := decodeBlobEnvelope(raw)
+	if string(got) != string(raw) {
+		t.Fatalf("decodeBlobEnvelope() = %q, want the original envelope bytes unchanged: %q", got, raw)
+	}
+}

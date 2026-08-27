@@ -261,9 +261,9 @@ func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
 
 // ----- branch coverage -----
 
-// TestStreamDownload_DeadBranches documents why the four error-return
-// branches inside streamDownloadPackageFile are unreachable through any
-// public call path:
+// TestStreamDownload_DeadBranches documents why three of the four
+// error-return branches inside streamDownloadPackageFile are unreachable
+// through any public call path:
 //
 //  1. FormatPackageURL error: the function only fails on invalid pid
 //     types in parseID. streamDownloadPackageFile always feeds it
@@ -271,16 +271,19 @@ func TestStreamDownload_OutputPathIsDirectory(t *testing.T) {
 //  2. NewRequest error: the only error path is url.PathUnescape on a
 //     malformed percent-encoded path. FormatPackageURL generates the
 //     path with PathEscape, so the result is always well-formed.
-//  3. outFile.Sync error: the file handle is still open (deferred Close
-//     has not run) and the writer has finished writing before Sync is
-//     called. The only way Sync would fail is on a filesystem-level
-//     error, which cannot be simulated in a unit test.
-//  4. outFile.Stat error: the file handle is still open, so Stat
+//  3. outFile.Stat error: the file handle is still open, so Stat
 //     succeeds unconditionally under normal conditions.
+//
+// The fourth, outFile.Sync error, is reachable and covered separately by
+// TestStreamDownload_SyncErrorOnFIFO (packages_stream_sync_unix_test.go):
+// fsync(2) genuinely fails with EINVAL when the output path is a named
+// pipe rather than a regular file, so the "file handle is still open"
+// reasoning above does not make Sync infallible -- it only rules out the
+// permission/existence failures that regular-file tricks would hit.
 //
 // We assert the documented contract below: a happy-path download
 // streams the payload to disk, syncs the file, and reports its size
-// without invoking any of the four unreachable branches.
+// without invoking any of the three unreachable branches.
 func TestStreamDownload_DeadBranches(t *testing.T) {
 	fileBody := "dead-branch-fixture"
 	client := testutil.NewTestClient(t, testStreamServer(t, fileBody, http.StatusOK))

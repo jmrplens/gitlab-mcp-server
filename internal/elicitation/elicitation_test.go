@@ -10,6 +10,7 @@ import (
 	"errors"
 	"math"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -1222,6 +1223,74 @@ func TestConfirmAction_Confirmed(t *testing.T) {
 	result := ConfirmAction(ctx, req, "Delete project?")
 	if result != nil {
 		t.Error("expected nil result when user confirms")
+	}
+}
+
+// TestConfirmAction_MalformedRequestState_FailsClosed verifies that
+// [ConfirmAction] refuses the action when the echoed request state cannot be
+// decoded, rather than treating the undecodable state as "no answer yet".
+//
+// This is the fail-closed edge of a destructive-action guard. Reading the
+// state is how the second round learns the user already answered; if that
+// read fails and the failure were ignored, the guard would either re-prompt
+// forever or, worse, fall through to a path that never asked at all.
+func TestConfirmAction_MalformedRequestState_FailsClosed(t *testing.T) {
+	handler := func(ctx context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
+		req.Params.RequestState = "{not json"
+		if res := ConfirmAction(ctx, req, "Delete project?"); res != nil {
+			return res, nil
+		}
+		return textResult("confirmation was skipped"), nil
+	}
+	cs := flowTestTool(t, handler, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		t.Error("a request whose state cannot be decoded must not reach the user")
+		return nil, errors.New("unexpected elicitation")
+	})
+
+	result, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "flow_tool", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if !result.IsError {
+		t.Error("IsError = false, want true: a failed confirmation must not read as success")
+	}
+	if got := resultText(result); !strings.Contains(got, "Confirmation failed") {
+		t.Errorf("result text = %q, want a confirmation failure", got)
+	}
+}
+
+// TestConfirmAction_MultiRoundTrip_QueuesThenConfirms verifies that on a
+// protocol 2026-07-28 session [ConfirmAction] answers the first round with an
+// input-required result and completes on the retry.
+//
+// Sending a server-initiated elicitation request here is forbidden by the
+// specification, so the guard has to suspend the call instead of blocking on
+// an answer. Only driving both rounds shows that it resumes.
+func TestConfirmAction_MultiRoundTrip_QueuesThenConfirms(t *testing.T) {
+	var rounds atomic.Int32
+	handler := func(ctx context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
+		rounds.Add(1)
+		if res := ConfirmAction(ctx, req, "Delete project?"); res != nil {
+			return res, nil
+		}
+		return textResult("confirmed"), nil
+	}
+	cs := flowTestTool(t, handler, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": true}}, nil
+	})
+
+	result, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "flow_tool", Arguments: map[string]any{}})
+	if err != nil {
+		t.Fatalf("CallTool error: %v", err)
+	}
+	if got := resultText(result); got != "confirmed" {
+		t.Errorf("result text = %q, want %q", got, "confirmed")
+	}
+	// Two rounds is the mechanism itself: one that queued the request and one
+	// that read the answer back. A single round would mean the guard answered
+	// without ever asking.
+	if got := rounds.Load(); got != 2 {
+		t.Errorf("handler ran %d times, want 2 (queue then resume)", got)
 	}
 }
 
