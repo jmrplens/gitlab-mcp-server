@@ -263,6 +263,13 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 // credential has already been verified by this point, so an instance that
 // will not answer /user costs the caller a username in its log lines and
 // nothing else.
+//
+// The context is background-scoped with its own bound, matching
+// [verifyCredential] and [ServerPool.entryConfig], and that is deliberate
+// rather than an oversight: an entry is shared by every request carrying the
+// same credential. Deriving from the request that happened to trigger
+// construction would let one client disconnecting abort a build that other
+// requests are already waiting on, and leave the next one to start it over.
 func resolveIdentity(client *gitlabclient.Client) UserIdentity {
 	ctx, cancel := context.WithTimeout(context.Background(), credentialCheckTimeout)
 	defer cancel()
