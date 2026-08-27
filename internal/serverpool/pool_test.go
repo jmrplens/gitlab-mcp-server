@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -696,8 +697,13 @@ func TestInsertEntry_ExistingEntry(t *testing.T) {
 	if size := pool.Size(); size != 2 {
 		t.Fatalf("pool.Size() = %d, want 2 (rebuilt entry discarded)", size)
 	}
-	if hits := pool.Stats().Hits; hits != 1 {
-		t.Fatalf("Hits = %d, want 1", hits)
+	// insertEntry counts nothing. It is only reached from the slow path in
+	// GetOrCreate, where the miss has already been charged, so counting a hit
+	// here as well would make one call show up as both and Hits plus Misses
+	// would stop being the number of calls. This test drives insertEntry
+	// directly, so no counter should have moved at all.
+	if stats := pool.Stats(); stats.Hits != 0 || stats.Misses != 0 {
+		t.Fatalf("Hits = %d, Misses = %d; insertEntry must not touch the counters", stats.Hits, stats.Misses)
 	}
 }
 
@@ -1515,5 +1521,90 @@ func TestNew_WithoutBaseContext_StillBuildsEntries(t *testing.T) {
 	}, WithBaseContext(func() context.Context { return nil }))
 	if _, err := pool3.GetOrCreate("glpat-nil-return", srv.URL); err != nil {
 		t.Fatalf("GetOrCreate with a base-context function returning nil: %v", err)
+	}
+}
+
+// TestGetOrCreate_ConcurrentCallersShareOneBuild verifies that callers racing
+// for the same credential collapse into a single build.
+//
+// A client that opens several connections at once — the normal startup burst —
+// used to cost one credential probe, one tier lookup, one scope lookup and one
+// identity lookup per connection, all for a single credential, with every
+// result but one discarded. The waiters block exactly as long as they would
+// have blocked building it themselves, so nothing is slower.
+func TestGetOrCreate_ConcurrentCallersShareOneBuild(t *testing.T) {
+	var builds atomic.Int32
+	cfg := testConfig(stubGitLabBase)
+	pool := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		builds.Add(1)
+		// Long enough that every caller is inside the race window.
+		time.Sleep(50 * time.Millisecond)
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	})
+
+	const callers = 20
+	var wg sync.WaitGroup
+	servers := make([]*mcp.Server, callers)
+	for i := range callers {
+		wg.Go(func() {
+			srv, _ := pool.GetOrCreate("glpat-same", stubGitLabBase)
+			servers[i] = srv
+		})
+	}
+	wg.Wait()
+
+	if got := builds.Load(); got != 1 {
+		t.Errorf("factory ran %d times for %d concurrent callers sharing one credential, want 1", got, callers)
+	}
+	for i, srv := range servers {
+		if srv == nil {
+			t.Errorf("caller %d got no server", i)
+			continue
+		}
+		if srv != servers[0] {
+			t.Errorf("caller %d got a different server; every caller must share the one entry", i)
+		}
+	}
+	// Every caller found no entry when it asked, so every caller is a miss:
+	// Hits plus Misses must still be the number of calls.
+	if stats := pool.Stats(); stats.Hits+stats.Misses != callers {
+		t.Errorf("Hits(%d) + Misses(%d) = %d, want %d", stats.Hits, stats.Misses, stats.Hits+stats.Misses, callers)
+	}
+}
+
+// TestGetOrCreate_ConcurrentDistinctKeysDoNotSerialize verifies the other half
+// of the trade: collapsing same-key builds must not put different credentials
+// behind one another, which is what building under the pool lock would do.
+func TestGetOrCreate_ConcurrentDistinctKeysDoNotSerialize(t *testing.T) {
+	release := make(chan struct{})
+	var started atomic.Int32
+
+	cfg := testConfig(stubGitLabBase)
+	pool := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		started.Add(1)
+		<-release
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	})
+
+	const callers = 5
+	var wg sync.WaitGroup
+	for i := range callers {
+		wg.Go(func() {
+			_, _ = pool.GetOrCreate(fmt.Sprintf("glpat-distinct-%d", i), stubGitLabBase)
+		})
+	}
+
+	// All five builds must be in flight at once. If they were serialized, only
+	// the first would have started.
+	deadline := time.Now().Add(5 * time.Second)
+	for started.Load() < callers && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	inFlight := started.Load()
+	close(release)
+	wg.Wait()
+
+	if inFlight != callers {
+		t.Errorf("%d of %d distinct-key builds were in flight together; distinct credentials are being serialized", inFlight, callers)
 	}
 }

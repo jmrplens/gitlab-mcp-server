@@ -247,7 +247,7 @@ Client aborts are always propagated into handler contexts, so an abandoned POST 
 
 ### Gateway routing annotation
 
-On the dynamic tool surface, the `action` property of `gitlab_execute_action` carries the [SEP-2243](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2243) `x-mcp-header` annotation with the value `Mcp-Param-Action`, so MCP-aware gateways can route, rate-limit, and observe calls by canonical action ID without parsing the JSON-RPC body.
+On the dynamic tool surface, the `action` property of `gitlab_execute_action` carries the [SEP-2243](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2243) `x-mcp-header` annotation with the value `Action` — the SDK prefixes it to form the wire header `Mcp-Param-Action` — so MCP-aware gateways can route, rate-limit, and observe calls by canonical action ID without parsing the JSON-RPC body.
 
 ## Session management
 

@@ -383,8 +383,8 @@ FLAGS
   -http-addr string         HTTP listen address (default ":8080")
   -gitlab-url string        Fixed GitLab URL; omit to require per-request GITLAB-URL header
   -skip-tls-verify          Skip TLS certificate verification (default false)
-	-meta-tools               Legacy boolean tool selector; prefer -tool-surface
-	-tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
+  -meta-tools               Legacy boolean tool selector; prefer -tool-surface
+  -tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
   -capability-surface str   Capability surface: full|minimal (default full)
   -meta-param-schema str    Meta-tool input schema mode: opaque|compact|full (default opaque)
   -tier string              Force licensing tier: free|ce|premium|ultimate; omit to detect per server entry
@@ -408,6 +408,7 @@ FLAGS
   -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
   -public-url string        Externally reachable https origin; required with -auth-mode=oauth (RFC 9728 resource identifier)
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
+  -revalidate-interval dur  How often pooled tokens are re-validated against GitLab (default %s, 0 to disable)
   -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
   -rate-limit-rps float     Per-server tools/call rate limit (0 = disabled)
   -rate-limit-burst int     Token-bucket burst size when --rate-limit-rps > 0 (default %d)
@@ -416,8 +417,8 @@ ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
   GITLAB_TOKEN              Personal Access Token (glpat-...)
   GITLAB_SKIP_TLS_VERIFY    Skip TLS verification: true/false (default false)
-	TOOL_SURFACE              Canonical tool surface: dynamic|meta|individual (default dynamic)
-	META_TOOLS                Deprecated legacy selector: true|false|dynamic; ignored when TOOL_SURFACE is set
+  TOOL_SURFACE              Canonical tool surface: dynamic|meta|individual (default dynamic)
+  META_TOOLS                Deprecated legacy selector: true|false|dynamic; ignored when TOOL_SURFACE is set
   CAPABILITY_SURFACE        Resource/prompt surface: full|minimal (default full)
   META_PARAM_SCHEMA         Meta-tool input schema: opaque|compact|full (default opaque)
   GITLAB_TIER               Force licensing tier: free|ce|premium|ultimate; omit to detect from license
@@ -435,6 +436,20 @@ ENVIRONMENT VARIABLES (stdio mode)
   RATE_LIMIT_BURST          Token-bucket burst size when RATE_LIMIT_RPS > 0 (default 40)
   YOLO_MODE                 Skip destructive action confirmation prompts (default false)
   LOG_LEVEL                 Logging: debug/info/warn/error (default info)
+
+ENVIRONMENT VARIABLES (HTTP mode)
+  Every flag above also reads its value from the environment when the flag is
+  not passed. Precedence: an explicitly passed flag, then the environment,
+  then the built-in default. The variables below have no stdio equivalent:
+
+  AUTH_MODE                 Authentication mode: legacy|oauth (default legacy)
+  PUBLIC_URL                Externally reachable https origin; required with AUTH_MODE=oauth
+  TRUSTED_ORIGINS           Origins allowed to make cross-origin browser requests
+  OAUTH_CACHE_TTL           OAuth token cache TTL (default 15m, min 1m, max 2h)
+  MAX_HTTP_CLIENTS          Maximum concurrent client sessions (default 100)
+  SESSION_TIMEOUT           Idle session timeout (default 30m)
+  POOL_IDLE_TIMEOUT         Reclaim an unused pooled server after this long (default 1h, 0 disables)
+  SESSION_REVALIDATE_INTERVAL  Token re-validation interval (default 15m, 0 disables)
 
 JSON CONFIGURATION EXAMPLES
 
@@ -478,6 +493,7 @@ JSON CONFIGURATION EXAMPLES
 		config.DefaultAutoUpdateRepo, config.DefaultAutoUpdateInterval,
 		config.DefaultAutoUpdateTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
+		config.DefaultRevalidateInterval,
 		config.DefaultRateLimitBurst,
 		config.DefaultGitLabURL,
 		config.DefaultAutoUpdateRepo)

@@ -1,0 +1,245 @@
+//go:build httpe2e
+
+// crossorigin_test.go pins the decisions the HTTP handler makes about browser
+// requests, over real HTTP against the real binary.
+//
+// Every case here was found by hand before it was written down. The preflight
+// one in particular: --trusted-origins shipped in 2.7.4 and did not work from
+// an actual browser, because the OPTIONS that precedes a cross-origin POST was
+// answered 401 and the real request never followed. It looked correct in every
+// curl matrix, and in the one deployment that mattered a reverse proxy answered
+// the preflight and hid it.
+package httpe2e
+
+import (
+	"net/http"
+	"strings"
+	"testing"
+)
+
+const trustedOrigin = "https://client.example"
+
+// TestCrossOrigin_NonBrowserClientIsUnaffected verifies the case that must
+// never break: a request carrying neither Origin nor Sec-Fetch-Site — every
+// CLI, IDE and SDK client — is not a browser request and is not subject to any
+// of this.
+func TestCrossOrigin_NonBrowserClientIsUnaffected(t *testing.T) {
+	srv := startServer(t, nil, "--gitlab-url=https://gitlab.example.com")
+
+	got := srv.do(t, mcpPOST(map[string]string{"PRIVATE-TOKEN": "glpat-whatever"}))
+
+	if got.status == http.StatusForbidden {
+		t.Fatalf("a request with no Origin was refused as cross-origin: %d %s", got.status, got.body)
+	}
+	if got.header.Get("Access-Control-Allow-Origin") != "" {
+		t.Error("a request with no Origin should get no CORS headers")
+	}
+}
+
+// TestCrossOrigin_UntrustedOriginIsRefused verifies the default: with no
+// trusted origins configured, a browser request from another origin is refused
+// before authentication or MCP dispatch, which is what the transport's
+// DNS-rebinding requirement asks for.
+func TestCrossOrigin_UntrustedOriginIsRefused(t *testing.T) {
+	srv := startServer(t, nil, "--gitlab-url=https://gitlab.example.com")
+
+	got := srv.do(t, mcpPOST(map[string]string{
+		"PRIVATE-TOKEN":  "glpat-whatever",
+		"Origin":         "https://evil.example",
+		"Sec-Fetch-Site": "cross-site",
+	}))
+
+	if got.status != http.StatusForbidden {
+		t.Errorf("status = %d, want %d for an untrusted cross-site POST", got.status, http.StatusForbidden)
+	}
+}
+
+// TestCrossOrigin_TrustedOriginPasses verifies that an allowlisted origin gets
+// through the protection and is answered on its merits — an explicit allowlist
+// is validation, which is what the requirement asks for, not "refuse
+// everything".
+func TestCrossOrigin_TrustedOriginPasses(t *testing.T) {
+	srv := startServer(t, nil,
+		"--gitlab-url=https://gitlab.example.com",
+		"--trusted-origins="+trustedOrigin,
+	)
+
+	got := srv.do(t, mcpPOST(map[string]string{
+		"PRIVATE-TOKEN":  "glpat-whatever",
+		"Origin":         trustedOrigin,
+		"Sec-Fetch-Site": "cross-site",
+	}))
+
+	if got.status == http.StatusForbidden {
+		t.Fatalf("a trusted origin was refused: %d %s", got.status, got.body)
+	}
+	if origin := got.header.Get("Access-Control-Allow-Origin"); origin != trustedOrigin {
+		t.Errorf("Access-Control-Allow-Origin = %q, want the request origin %q", origin, trustedOrigin)
+	}
+	// Neither header is CORS-safelisted, so a browser cannot read the session
+	// or protocol version unless they are exposed by name.
+	if exposed := got.header.Get("Access-Control-Expose-Headers"); !strings.Contains(exposed, "Mcp-Session-Id") {
+		t.Errorf("Access-Control-Expose-Headers = %q, want it to name Mcp-Session-Id", exposed)
+	}
+}
+
+// TestCrossOrigin_ExactlyOneAllowOriginHeader verifies the property that a
+// browser enforces and curl does not: more than one
+// Access-Control-Allow-Origin is a CORS failure, and the response is rejected
+// outright.
+//
+// This is the shape of a real outage. A reverse proxy in front adding its own
+// `add_header Access-Control-Allow-Origin "*"` produces exactly two, and
+// Chromium answers "contains multiple values ... but only one is allowed".
+// The server's own response must never contribute more than one.
+func TestCrossOrigin_ExactlyOneAllowOriginHeader(t *testing.T) {
+	srv := startServer(t, nil,
+		"--gitlab-url=https://gitlab.example.com",
+		"--trusted-origins="+trustedOrigin,
+	)
+
+	for _, r := range []request{
+		mcpPOST(map[string]string{
+			"PRIVATE-TOKEN":  "glpat-whatever",
+			"Origin":         trustedOrigin,
+			"Sec-Fetch-Site": "cross-site",
+		}),
+		{
+			method: http.MethodOptions, path: "/mcp",
+			headers: map[string]string{
+				"Origin":                         trustedOrigin,
+				"Access-Control-Request-Method":  http.MethodPost,
+				"Access-Control-Request-Headers": "content-type",
+			},
+		},
+	} {
+		got := srv.do(t, r)
+		if n := len(got.header.Values("Access-Control-Allow-Origin")); n > 1 {
+			t.Errorf("%s: %d Access-Control-Allow-Origin headers, want at most 1 — a browser rejects the response outright", r.method, n)
+		}
+	}
+}
+
+// TestCrossOrigin_WildcardEchoesTheOrigin verifies that '*' accepts any origin
+// while still echoing it rather than emitting a literal asterisk. These
+// requests may carry credentials, and a browser rejects the wildcard on a
+// credentialed request, so the literal form would defeat the setting.
+func TestCrossOrigin_WildcardEchoesTheOrigin(t *testing.T) {
+	srv := startServer(t, nil,
+		"--gitlab-url=https://gitlab.example.com",
+		"--trusted-origins=*",
+	)
+
+	const anyOrigin = "https://anything.example"
+	got := srv.do(t, mcpPOST(map[string]string{
+		"PRIVATE-TOKEN":  "glpat-whatever",
+		"Origin":         anyOrigin,
+		"Sec-Fetch-Site": "cross-site",
+	}))
+
+	if got.status == http.StatusForbidden {
+		t.Fatalf("'*' should accept any origin, got %d", got.status)
+	}
+	if origin := got.header.Get("Access-Control-Allow-Origin"); origin != anyOrigin {
+		t.Errorf("Access-Control-Allow-Origin = %q, want the echoed origin %q", origin, anyOrigin)
+	}
+}
+
+// TestCrossOrigin_PreflightIsAnswered verifies the half that shipped broken: a
+// browser sends OPTIONS before a cross-origin POST carrying Authorization or a
+// JSON content type, and until that preflight is answered the real request is
+// never sent.
+func TestCrossOrigin_PreflightIsAnswered(t *testing.T) {
+	srv := startServer(t, nil,
+		"--gitlab-url=https://gitlab.example.com",
+		"--trusted-origins="+trustedOrigin,
+	)
+
+	got := srv.do(t, request{
+		method: http.MethodOptions, path: "/mcp",
+		headers: map[string]string{
+			"Origin":                         trustedOrigin,
+			"Access-Control-Request-Method":  http.MethodPost,
+			"Access-Control-Request-Headers": "content-type,private-token",
+		},
+	})
+
+	if got.status != http.StatusNoContent {
+		t.Fatalf("preflight status = %d, want %d (401 here is the bug that made --trusted-origins useless in a browser)", got.status, http.StatusNoContent)
+	}
+	for header, want := range map[string]string{
+		"Access-Control-Allow-Origin": trustedOrigin,
+		"Access-Control-Max-Age":      "86400",
+	} {
+		if got := got.header.Get(header); got != want {
+			t.Errorf("%s = %q, want %q", header, got, want)
+		}
+	}
+	for _, name := range []string{"Content-Type", "PRIVATE-TOKEN", "Mcp-Session-Id"} {
+		if allowed := got.header.Get("Access-Control-Allow-Headers"); !strings.Contains(allowed, name) {
+			t.Errorf("Access-Control-Allow-Headers = %q, want it to name %s", allowed, name)
+		}
+	}
+	if !strings.Contains(strings.Join(got.header.Values("Vary"), ","), "Origin") {
+		t.Error("a response that varies by Origin must say so, or a cache serves one origin's permission to another")
+	}
+}
+
+// TestCrossOrigin_UntrustedPreflightGetsNoPermission verifies that the
+// preflight path never widens the trust decision: an origin that is not on the
+// list gets no allow header, whatever it asks for.
+func TestCrossOrigin_UntrustedPreflightGetsNoPermission(t *testing.T) {
+	srv := startServer(t, nil,
+		"--gitlab-url=https://gitlab.example.com",
+		"--trusted-origins="+trustedOrigin,
+	)
+
+	got := srv.do(t, request{
+		method: http.MethodOptions, path: "/mcp",
+		headers: map[string]string{
+			"Origin":                        "https://evil.example",
+			"Access-Control-Request-Method": http.MethodPost,
+		},
+	})
+
+	if origin := got.header.Get("Access-Control-Allow-Origin"); origin != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want none for an untrusted origin", origin)
+	}
+}
+
+// TestCrossOrigin_SafeMethodsStayReachable verifies that the endpoints a
+// registry, a scanner or a load balancer reads are not caught by any of this.
+func TestCrossOrigin_SafeMethodsStayReachable(t *testing.T) {
+	srv := startServer(t, nil, "--gitlab-url=https://gitlab.example.com")
+
+	for _, path := range []string{"/health", "/.well-known/mcp/server-card.json"} {
+		got := srv.do(t, request{
+			method:  http.MethodGet,
+			path:    path,
+			headers: map[string]string{"Origin": "https://evil.example", "Sec-Fetch-Site": "cross-site"},
+		})
+		if got.status == http.StatusForbidden {
+			t.Errorf("GET %s was refused as cross-origin; safe methods are exempt", path)
+		}
+	}
+}
+
+// TestCrossOrigin_MalformedTrustedOriginFailsStartup verifies that a
+// deployment cannot come up believing an origin is trusted when it is not.
+// Silently dropping a bad entry is worse than refusing to boot.
+func TestCrossOrigin_MalformedTrustedOriginFailsStartup(t *testing.T) {
+	bin := serverBinary(t)
+	port := freePort(t)
+
+	out, err := runServerExpectingExit(t, bin,
+		"--http", "--http-addr=127.0.0.1:"+itoa(port),
+		"--gitlab-url=https://gitlab.example.com",
+		"--trusted-origins=not a url",
+	)
+	if err == nil {
+		t.Fatal("the server started with a malformed trusted origin")
+	}
+	if !strings.Contains(out, "trusted-origins") {
+		t.Errorf("the startup error should name the flag; got:\n%s", out)
+	}
+}

@@ -34,11 +34,21 @@ const (
 	// executeActionActionParam is the top-level input property carrying the
 	// canonical action ID for gitlab_execute_action.
 	executeActionActionParam = "action"
-	// executeActionHeaderName is the HTTP header that MCP-aware gateways
-	// receive the action ID in, declared through the SEP-2243 x-mcp-header
-	// annotation so they can route and observe calls without inspecting the
-	// JSON-RPC body.
-	executeActionHeaderName = "Mcp-Param-Action"
+	// executeActionHeaderSuffix is the value of the SEP-2243 x-mcp-header
+	// annotation on the action property, so MCP-aware gateways can route and
+	// observe calls by canonical action ID without inspecting the JSON-RPC
+	// body.
+	//
+	// It is the suffix, not the full header name: the SDK prepends
+	// "Mcp-Param-" to whatever this annotation says, on both the sending and
+	// the validating side. Declaring the full name here produced
+	// "Mcp-Param-Mcp-Param-Action" on the wire, so a client sending the
+	// documented header was answered "header mismatch" — the annotation was
+	// unusable for the one purpose it exists for.
+	executeActionHeaderSuffix = "Action"
+	// executeActionHeaderName is the resulting wire header, for documentation
+	// and for tests that assert what a client must actually send.
+	executeActionHeaderName = "Mcp-Param-" + executeActionHeaderSuffix
 	// xMCPHeaderKeyword is the JSON Schema keyword defined by SEP-2243.
 	xMCPHeaderKeyword = "x-mcp-header"
 
@@ -301,7 +311,7 @@ func annotateActionHeader(schema *jsonschema.Schema) *jsonschema.Schema {
 	if action.Extra == nil {
 		action.Extra = make(map[string]any, 1)
 	}
-	action.Extra[xMCPHeaderKeyword] = executeActionHeaderName
+	action.Extra[xMCPHeaderKeyword] = executeActionHeaderSuffix
 	return schema
 }
 

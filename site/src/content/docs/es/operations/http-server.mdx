@@ -247,7 +247,7 @@ Las cancelaciones del cliente siempre se propagan a los contextos de los manejad
 
 ### Anotación de enrutado para gateways
 
-En la superficie dinámica de herramientas, la propiedad `action` de `gitlab_execute_action` lleva la anotación `x-mcp-header` de [SEP-2243](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2243) con el valor `Mcp-Param-Action`, de modo que los gateways compatibles con MCP pueden enrutar, limitar y observar las llamadas por ID canónico de acción sin analizar el cuerpo JSON-RPC.
+En la superficie dinámica de herramientas, la propiedad `action` de `gitlab_execute_action` lleva la anotación `x-mcp-header` de [SEP-2243](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2243) con el valor `Action` —el SDK le antepone el prefijo para formar la cabecera real `Mcp-Param-Action`—, de modo que los gateways compatibles con MCP pueden enrutar, limitar y observar las llamadas por ID canónico de acción sin analizar el cuerpo JSON-RPC.
 
 ## Gestión de sesiones
 

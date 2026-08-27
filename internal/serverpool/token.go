@@ -87,12 +87,25 @@ func ExtractToken(r *http.Request) string {
 		return token
 	}
 
-	auth := r.Header.Get("Authorization")
-	if after, found := strings.CutPrefix(auth, "Bearer "); found && after != "" {
-		return after
-	}
+	return bearerCredential(r)
+}
 
-	return ""
+// bearerCredential returns the token from an Authorization: Bearer header.
+//
+// The scheme is matched case-insensitively because RFC 9110 section 11.1 says
+// it is case-insensitive, and because the SDK's own bearer middleware lowercases
+// it before comparing. Matching only "Bearer " meant a client sending "bearer"
+// was verified upstream by the SDK — at the cost of a real API call — and then
+// refused here as though it had sent no credential at all.
+func bearerCredential(r *http.Request) string {
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+	scheme, token, found := strings.Cut(auth, " ")
+	if !found || !strings.EqualFold(scheme, "bearer") {
+		return ""
+	}
+	// RFC 9110 allows more than one space between the scheme and the
+	// credential, and some clients emit one.
+	return strings.TrimSpace(token)
 }
 
 // ExtractBearerToken returns only the Authorization: Bearer credential,
@@ -100,11 +113,7 @@ func ExtractToken(r *http.Request) string {
 // the identity the SDK middleware verified, never as a PRIVATE-TOKEN the
 // same request might also carry.
 func ExtractBearerToken(r *http.Request) string {
-	auth := r.Header.Get("Authorization")
-	if after, found := strings.CutPrefix(auth, "Bearer "); found && after != "" {
-		return after
-	}
-	return ""
+	return bearerCredential(r)
 }
 
 // ExtractGitLabURL resolves the GitLab instance URL for an HTTP request.

@@ -164,7 +164,8 @@ cancels its in-flight GitLab API calls. The SDK applies this to protocol
 
 On the dynamic tool surface, the `action` property of `gitlab_execute_action`
 carries the [SEP-2243](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2243)
-`x-mcp-header` annotation with the value `Mcp-Param-Action`. MCP-aware gateways
+`x-mcp-header` annotation with the value `Action`, which the SDK prefixes to
+form the wire header `Mcp-Param-Action`. MCP-aware gateways
 can therefore route, rate-limit, and observe calls by canonical action ID from
 the request header, without parsing the JSON-RPC body.
 

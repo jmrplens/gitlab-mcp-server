@@ -4921,8 +4921,12 @@ func TestServeHTTP_ToolsList_ExecuteActionCarriesXMCPHeader(t *testing.T) {
 		if tool.Name != "gitlab_execute_action" {
 			continue
 		}
-		if got := tool.InputSchema.Properties["action"].XMCPHeader; got != "Mcp-Param-Action" {
-			t.Fatalf("gitlab_execute_action action x-mcp-header = %q, want Mcp-Param-Action", got)
+		// The suffix, not the full header name: the SDK prepends
+		// "Mcp-Param-" to this value, so the wire header a client sends is
+		// Mcp-Param-Action. Asserting the full name here is what let
+		// "Mcp-Param-Mcp-Param-Action" ship.
+		if got := tool.InputSchema.Properties["action"].XMCPHeader; got != "Action" {
+			t.Fatalf("gitlab_execute_action action x-mcp-header = %q, want Action", got)
 		}
 		return
 	}
