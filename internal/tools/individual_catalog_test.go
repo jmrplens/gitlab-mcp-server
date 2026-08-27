@@ -400,7 +400,8 @@ func TestRegisterIndividualCatalogTools_InputRequiredResultSurfaced(t *testing.T
 			if err != nil {
 				return struct{}{}, err
 			}
-			if _, confirmErr := fl.Confirm(ctx, "confirm", "Proceed?"); confirmErr != nil {
+			confirmed, confirmErr := fl.Confirm(ctx, "confirm", "Proceed?")
+			if confirmErr != nil {
 				if errors.Is(confirmErr, elicitation.ErrInputPending) {
 					// Mirrors elicitationtools.flowError: a pending MRTR answer
 					// must surface as *elicitation.InputRequiredError, not a
@@ -409,6 +410,13 @@ func TestRegisterIndividualCatalogTools_InputRequiredResultSurfaced(t *testing.T
 					return struct{}{}, fl.PendingError()
 				}
 				return struct{}{}, confirmErr
+			}
+			// The answer itself has to be read. Discarding it would let the
+			// handler complete on a form the user submitted with the box
+			// unticked, and this test would still pass — while asserting
+			// nothing about the value that came back.
+			if !confirmed {
+				return struct{}{}, errors.New("confirmation was not accepted")
 			}
 			called.Store(true)
 			return struct{}{}, nil
@@ -426,8 +434,10 @@ func TestRegisterIndividualCatalogTools_InputRequiredResultSurfaced(t *testing.T
 	if err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
+	var answered atomic.Int32
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0.0.1"}, &mcp.ClientOptions{
 		ElicitationHandler: func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+			answered.Add(1)
 			return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"confirmed": true}}, nil
 		},
 	})
@@ -450,6 +460,14 @@ func TestRegisterIndividualCatalogTools_InputRequiredResultSurfaced(t *testing.T
 	}
 	if !called.Load() {
 		t.Fatal("route handler never reached completion after the MRTR round trip; input-required branch may not have surfaced correctly")
+	}
+	// Exactly one: the handler suspended, the client answered, and the retry
+	// replayed that answer from the request state instead of asking again. A
+	// count of zero would mean the round trip never happened and the handler
+	// completed some other way; more than one would mean the replay is not
+	// working and a multi-step flow would re-prompt on every round.
+	if got := answered.Load(); got != 1 {
+		t.Errorf("elicitation responses = %d, want exactly 1", got)
 	}
 }
 

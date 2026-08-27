@@ -102,4 +102,13 @@ func TestListRegisteredTools_ListToolsErrorIsWrapped(t *testing.T) {
 	if !strings.Contains(err.Error(), "list tools:") {
 		t.Errorf("ListRegisteredTools() error = %q, want it prefixed with %q", err, "list tools:")
 	}
+	// The cause must still be legible through the prefix, or the caller is
+	// told only that listing failed and not why. Note what this cannot
+	// assert: errors.Is(err, boom) is false here, because the error crosses
+	// jsonrpc2 and is rebuilt from the wire, which preserves the message and
+	// destroys the identity. No client-side assertion can distinguish %w from
+	// %v for an error that made that trip.
+	if !strings.Contains(err.Error(), boom.Error()) {
+		t.Errorf("ListRegisteredTools() error = %q, want the underlying cause preserved", err)
+	}
 }

@@ -1695,7 +1695,7 @@ func TestLifetime_BaseContextYieldingNil_FallsBackToBackground(t *testing.T) {
 		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
 	}, WithBaseContext(func() context.Context { return nil }))
 
-	if ctx := pool.lifetime(); ctx == nil {
+	if pool.lifetime() == nil {
 		t.Fatal("lifetime() = nil, want a usable context")
 	}
 	srv, err := pool.GetOrCreate("glpat-nil-base-context", stubGitLabBase)
