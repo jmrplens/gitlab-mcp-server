@@ -84,7 +84,16 @@ jobs:
   sonarcloud:
     name: "SA: SonarCloud"
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # The only job here with a bound, because a hung scanner would otherwise
+    # sit on a runner for the six-hour default. It has to leave room for the
+    # scan to grow with the repository: at 5 minutes it started failing every
+    # attempt once the analysis reached 250s on top of ~51s of setup — 302s
+    # against a 300s ceiling. The scan itself had finished; what was cut off
+    # was the upload of the 8 MB report, so the run was killed after doing
+    # all the work and before recording any of it. 15 keeps the guard against
+    # a genuine hang while giving the scan roughly three times its current
+    # runtime, so ordinary growth does not re-break it.
+    timeout-minutes: 15
     needs: [test]
     steps:
       - uses: actions/checkout@v7
