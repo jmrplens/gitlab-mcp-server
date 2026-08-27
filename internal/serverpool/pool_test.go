@@ -1643,3 +1643,89 @@ func TestGetOrCreate_AfterLifetimeCancel_DoesNotBuild(t *testing.T) {
 		t.Errorf("pool.Size() = %d, want 0 — nothing should have been inserted", pool.Size())
 	}
 }
+
+// TestGetOrCreate_FactoryReturnsNoServer_IsNeverCached verifies that a
+// factory which reports success while handing back no server is refused at
+// construction, and that nothing is left behind for the next caller.
+//
+// The second call is the assertion that matters. Rejecting the nil on the way
+// out of the build only protects the caller who triggered it; if the entry is
+// still cached, every later caller for that credential takes the fast path,
+// finds it, and receives a nil server with a nil error — the dereference the
+// check exists to prevent, now with nothing to diagnose it by. One transient
+// factory fault would poison that key for the life of the process.
+func TestGetOrCreate_FactoryReturnsNoServer_IsNeverCached(t *testing.T) {
+	pool := New(testConfig(stubGitLabBase), func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return nil, nil //nolint:nilnil // the point of the test: success reported with nothing built
+	})
+
+	srv, err := pool.GetOrCreate("glpat-nil-server", stubGitLabBase)
+	if err == nil {
+		t.Fatal("GetOrCreate() error = nil, want a refusal when the factory built nothing")
+	}
+	if srv != nil {
+		t.Errorf("GetOrCreate() server = %v, want nil alongside the error", srv)
+	}
+	if pool.Size() != 0 {
+		t.Errorf("Size() = %d, want 0: a failed build must leave nothing cached", pool.Size())
+	}
+
+	// The same credential again must fail the same way, not silently hand
+	// back the cached nil.
+	srv, err = pool.GetOrCreate("glpat-nil-server", stubGitLabBase)
+	if err == nil {
+		t.Fatal("second GetOrCreate() error = nil: a poisoned entry survived the first failure")
+	}
+	if srv != nil {
+		t.Errorf("second GetOrCreate() server = %v, want nil", srv)
+	}
+}
+
+// TestLifetime_BaseContextYieldingNil_FallsBackToBackground verifies that a
+// base-context function returning nil does not propagate that nil into entry
+// construction.
+//
+// The function is supplied by the embedder, so it can legitimately return nil
+// before the server's context exists. Passing nil down would panic inside the
+// GitLab client rather than at the call site, so the pool substitutes a real
+// context and carries on: losing shutdown propagation for that build is a far
+// smaller failure than crashing the request.
+func TestLifetime_BaseContextYieldingNil_FallsBackToBackground(t *testing.T) {
+	pool := New(testConfig(stubGitLabBase), func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	}, WithBaseContext(func() context.Context { return nil }))
+
+	if ctx := pool.lifetime(); ctx == nil {
+		t.Fatal("lifetime() = nil, want a usable context")
+	}
+	srv, err := pool.GetOrCreate("glpat-nil-base-context", stubGitLabBase)
+	if err != nil {
+		t.Fatalf("GetOrCreate() error = %v, want the build to proceed", err)
+	}
+	if srv == nil {
+		t.Error("GetOrCreate() server = nil, want a server")
+	}
+}
+
+// TestStartIdleEviction_NilContextAndDisabled_DoesNotPanic verifies that idle
+// eviction tolerates a nil context and stays quiet when it is switched off.
+//
+// A caller that passes an uninitialized context gets a defensive substitute
+// rather than a panic in a background goroutine, where it would take the
+// process down with a stack trace pointing away from the mistake.
+func TestStartIdleEviction_NilContextAndDisabled_DoesNotPanic(t *testing.T) {
+	pool := New(testConfig(stubGitLabBase), func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	}, WithIdleTimeout(0))
+
+	//nolint:staticcheck // deliberately passes a nil context to exercise the guard
+	pool.StartIdleEviction(nil)
+
+	// Disabled means no sweeper: an entry stays put however long it sits.
+	if _, err := pool.GetOrCreate("glpat-never-evicted", stubGitLabBase); err != nil {
+		t.Fatalf("GetOrCreate() error = %v", err)
+	}
+	if pool.Size() != 1 {
+		t.Errorf("Size() = %d, want 1", pool.Size())
+	}
+}
