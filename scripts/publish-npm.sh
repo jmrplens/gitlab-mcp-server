@@ -40,14 +40,14 @@ publish() {
     return 0
   fi
   echo "Publishing $name@$VERSION…"
-  # Provenance requires the OIDC token CI provides; it is silently unavailable
-  # (and must not be requested) on a developer machine.
-  prov=""
-  if [ -n "${CI:-}" ] && [ -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
-    prov="--provenance"
-  fi
-  # shellcheck disable=SC2086 -- $prov and $DRY_RUN are intentionally word-split
-  npm publish "$dir" --access public $prov $DRY_RUN
+  # No --provenance flag on purpose. In CI this publishes through npm's OIDC
+  # trusted publisher, which generates and attaches provenance automatically;
+  # the local bootstrap publish (token auth, no OIDC) simply has none. Auth is
+  # left to the environment — the workflow's setup-node registry config for the
+  # OIDC exchange, or a developer's `npm login` / .npmrc for the bootstrap — so
+  # this script never sees a credential.
+  # shellcheck disable=SC2086 -- $DRY_RUN is intentionally word-split
+  npm publish "$dir" --access public $DRY_RUN
 }
 
 for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64; do
