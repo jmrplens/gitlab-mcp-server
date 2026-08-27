@@ -36,6 +36,7 @@
   "email": "mail@jmrp.io",
   "url": "https://jmrp.io/",
   "mainEntityOfPage": "https://jmrp.io/about/",
+  "publishingPrinciples": "https://jmrp.io/about/#editorial",
   "image": {
     "@type": "ImageObject",
     "url": "https://jmrp.io/identity/avatar.png",
@@ -278,6 +279,7 @@
     "https://codeberg.org/jmrplens",
     "https://gitlab.com/jmrp",
     "https://pypi.org/user/jmrplens/",
-    "https://hub.docker.com/u/jmrplens"
+    "https://hub.docker.com/u/jmrplens",
+    "https://tangled.org/jmrp.io"
   ]
 }
