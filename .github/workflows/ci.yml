@@ -197,6 +197,12 @@ jobs:
           pnpm run chips:check
           pnpm run facts:check
           pnpm run i18n:check
+          # The Person entity is fetched from its canonical source at build
+          # time, with this snapshot as the offline fallback. A stale snapshot
+          # is invisible while the fetch works and ships a Person missing
+          # several properties the moment it does not, announced by nothing
+          # louder than a console.warn. The guard existed and nothing ran it.
+          pnpm run identity:check
           pnpm run eslint
           pnpm run format:check
         working-directory: site

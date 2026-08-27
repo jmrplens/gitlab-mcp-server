@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1310,5 +1311,104 @@ func TestGetOrCreate_OAuthMode_BuildsBearerClient(t *testing.T) {
 				t.Errorf("oauth-mode probe also sent PRIVATE-TOKEN %q", private)
 			}
 		})
+	}
+}
+
+// TestIdentityFor_ResolvesTheUserBehindAPooledToken verifies that the pool
+// records who a credential belongs to when it builds the entry, and answers
+// for it afterwards from memory.
+//
+// HTTP legacy mode mounts no bearer middleware, so nothing populates
+// req.Extra.TokenInfo there and tool handlers used to resolve the zero
+// identity — log lines carried no user at all. This is where the answer comes
+// from now.
+func TestIdentityFor_ResolvesTheUserBehindAPooledToken(t *testing.T) {
+	var userCalls atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		userCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":4242,"username":"pooled-user"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := testConfig(srv.URL)
+	cfg.IgnoreScopes = true
+	pool := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	})
+
+	if _, ok := pool.IdentityFor("glpat-x", srv.URL); ok {
+		t.Error("IdentityFor should report no entry before GetOrCreate has run")
+	}
+
+	if _, err := pool.GetOrCreate("glpat-x", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+
+	identity, ok := pool.IdentityFor("glpat-x", srv.URL)
+	if !ok {
+		t.Fatal("IdentityFor found no entry for a token the pool just built")
+	}
+	if !identity.Resolved() {
+		t.Fatal("identity should be resolved")
+	}
+	if identity.UserID != "4242" || identity.Username != "pooled-user" {
+		t.Errorf("identity = %+v, want {4242 pooled-user}", identity)
+	}
+
+	// Resolution happens once per entry, not once per request: a second
+	// lookup must not reach GitLab again.
+	before := userCalls.Load()
+	if _, stillThere := pool.IdentityFor("glpat-x", srv.URL); !stillThere {
+		t.Fatal("second IdentityFor lost the entry")
+	}
+	if got := userCalls.Load(); got != before {
+		t.Errorf("/user calls went from %d to %d; the answer must come from the entry", before, got)
+	}
+}
+
+// TestIdentityFor_UnresolvableUser_ReportsUnknown verifies that a /user
+// response carrying no id leaves the identity unresolved rather than
+// inventing one.
+//
+// The credential probe only asks whether GitLab accepts the token, so a 200
+// with an empty body builds the entry perfectly well. Formatting the decoded
+// zero would produce the string "0", which reads as a resolved user to every
+// caller and puts a user that does not exist into the logs.
+func TestIdentityFor_UnresolvableUser_ReportsUnknown(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := testConfig(srv.URL)
+	cfg.IgnoreScopes = true
+	pool := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	})
+
+	if _, err := pool.GetOrCreate("glpat-y", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate should succeed when the credential is accepted: %v", err)
+	}
+
+	identity, ok := pool.IdentityFor("glpat-y", srv.URL)
+	if !ok {
+		t.Fatal("the entry should exist even without an identity")
+	}
+	if identity.Resolved() {
+		t.Errorf("identity = %+v, want unresolved", identity)
 	}
 }

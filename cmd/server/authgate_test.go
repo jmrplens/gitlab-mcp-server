@@ -16,6 +16,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 const gateTestToken = "glpat-test-token-value"
@@ -460,4 +461,65 @@ func TestRegisterLegacyMCPHandlers_UnauthenticatedPOST_NeverReturnsNoServerAvail
 		t.Errorf("Content-Type = %q, want application/json so clients can parse the reason", ct)
 	}
 	decodeJSONRPCError(t, got)
+}
+
+// TestMcpServerGate_WithIdentity_AttachesThePooledUser verifies that HTTP mode
+// now resolves an identity for tool handlers.
+//
+// toolutil.ResolveIdentity reads req.Extra.TokenInfo first and falls back to
+// the context. Only the SDK's bearer middleware can fill that field, and
+// legacy mode does not mount it, so every HTTP legacy request used to resolve
+// the zero identity and log lines carried no user at all.
+func TestMcpServerGate_WithIdentity_AttachesThePooledUser(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":77,"username":"legacy-user"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := &config.Config{GitLabURL: srv.URL, IgnoreScopes: true, TierExplicit: true}
+	pool := serverpool.New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil), nil
+	})
+	gate := &mcpServerGate{pool: pool, gitlabURL: srv.URL, challenge: legacyAuthChallenge}
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+	req.Header.Set("PRIVATE-TOKEN", "glpat-legacy")
+
+	if _, failure := gate.resolve(req); failure != nil {
+		t.Fatalf("resolve: %+v", failure)
+	}
+
+	identity := toolutil.IdentityFromContext(gate.withIdentity(t.Context(), req))
+	if !identity.IsAuthenticated() {
+		t.Fatal("legacy mode should now resolve an identity")
+	}
+	if identity.UserID != "77" || identity.Username != "legacy-user" {
+		t.Errorf("identity = %+v, want {77 legacy-user}", identity)
+	}
+}
+
+// TestMcpServerGate_WithIdentity_UnknownTokenLeavesContextAlone verifies that
+// an unresolved identity is left absent rather than stored empty, so a handler
+// can tell "the lookup did not succeed" from "a user with no name".
+func TestMcpServerGate_WithIdentity_UnknownTokenLeavesContextAlone(t *testing.T) {
+	cfg := &config.Config{GitLabURL: "https://gitlab.example.com", IgnoreScopes: true, TierExplicit: true}
+	pool := serverpool.New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil), nil
+	})
+	gate := &mcpServerGate{pool: pool, gitlabURL: cfg.GitLabURL, challenge: legacyAuthChallenge}
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+	req.Header.Set("PRIVATE-TOKEN", "glpat-never-pooled")
+
+	// No GetOrCreate ran for this token, so the pool holds nothing.
+	if identity := toolutil.IdentityFromContext(gate.withIdentity(t.Context(), req)); identity.IsAuthenticated() {
+		t.Errorf("identity = %+v, want the zero value for a token the pool never built", identity)
+	}
 }

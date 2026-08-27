@@ -13,9 +13,10 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/shirou/gopsutil/v4 v4.26.7
 	github.com/tiktoken-go/tokenizer v0.8.1
-	gitlab.com/gitlab-org/api/client-go/v2 v2.59.0
+	gitlab.com/gitlab-org/api/client-go/v2 v2.60.0
 	golang.org/x/crypto v0.55.0
 	golang.org/x/image v0.45.0
+	golang.org/x/oauth2 v0.36.0
 	golang.org/x/time v0.15.0
 	golang.org/x/tools v0.49.0
 )
@@ -65,7 +66,6 @@ require (
 	gitlab.com/gitlab-org/api/client-go v1.46.0 // indirect
 	golang.org/x/exp v0.0.0-20260812173653-3d80eb74bc5b // indirect
 	golang.org/x/mod v0.40.0 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect

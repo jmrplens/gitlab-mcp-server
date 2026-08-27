@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,11 +33,27 @@ type poolEntry struct {
 	server        *mcp.Server
 	client        *gitlabclient.Client
 	serverConfig  *config.ServerConfig
+	identity      UserIdentity
 	element       *list.Element
 	createdAt     time.Time
 	lastValidated time.Time
 	lastUsed      time.Time
 }
+
+// UserIdentity is the GitLab user a pooled credential belongs to.
+//
+// It is resolved once when the entry is built, alongside tier and scope
+// discovery, and then answers for every request that reuses the entry. The
+// zero value means the lookup did not succeed — an instance that refuses
+// /user to this token, say — which callers must treat as "unknown", never as
+// "anonymous".
+type UserIdentity struct {
+	UserID   string
+	Username string
+}
+
+// Resolved reports whether the identity was actually determined.
+func (u UserIdentity) Resolved() bool { return u.UserID != "" }
 
 // defaultMaxSize is the fallback number of HTTP client sessions retained when
 // the operator does not configure a pool size.
@@ -235,7 +252,56 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 		server:       server,
 		client:       client,
 		serverConfig: entryCfg,
+		identity:     resolveIdentity(client),
 	}, nil
+}
+
+// resolveIdentity looks up the GitLab user behind a pooled credential.
+//
+// Cost is one call per pool entry, not per request, alongside the tier and
+// scope lookups the entry already performs. A failure is not fatal: the
+// credential has already been verified by this point, so an instance that
+// will not answer /user costs the caller a username in its log lines and
+// nothing else.
+func resolveIdentity(client *gitlabclient.Client) UserIdentity {
+	ctx, cancel := context.WithTimeout(context.Background(), credentialCheckTimeout)
+	defer cancel()
+
+	info, err := client.CurrentUser(ctx)
+	if err != nil {
+		slog.Debug("could not resolve the user behind a pooled token", "error", err)
+		return UserIdentity{}
+	}
+	// A zero id is not user zero: no such user can exist. GitLab's users.id
+	// is a bigint fed by users_id_seq, whose range starts at 1 — Postgres
+	// rejects setval(..., 0) as out of bounds — and the first account on a
+	// fresh instance is root with id 1. So a zero here only ever means the
+	// response carried no id, and formatting it would put the string "0" in
+	// the logs as though it were a real user.
+	if info.UserID == 0 {
+		slog.Debug("gitlab returned no user id for a pooled token")
+		return UserIdentity{}
+	}
+	return UserIdentity{UserID: strconv.Itoa(info.UserID), Username: info.Username}
+}
+
+// IdentityFor returns the GitLab user behind a pooled credential, and whether
+// the pool holds an entry for it at all.
+//
+// Reading rather than resolving is the point: the answer was determined when
+// the entry was built, so a request costs a map lookup. A caller that gets
+// ok=false has asked before [ServerPool.GetOrCreate] ran for this credential.
+func (p *ServerPool) IdentityFor(token, gitlabURL string) (UserIdentity, bool) {
+	key := sessionKey(token, gitlabURL)
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	entry, ok := p.entries[key]
+	if !ok {
+		return UserIdentity{}, false
+	}
+	return entry.identity, true
 }
 
 // insertEntry commits a freshly built entry under the write lock. If another

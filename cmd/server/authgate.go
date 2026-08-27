@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // Authentication rate limiting for HTTP mode: a client IP is blocked after
@@ -205,7 +206,39 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 			failure.write(w)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), resolvedServerContextKey{}, server)))
+		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, server)
+		ctx = g.withIdentity(ctx, r)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+// withIdentity attaches the GitLab user behind the request's credential to
+// the context, so tool handlers resolve an identity in HTTP mode too.
+//
+// [toolutil.ResolveIdentity] reads req.Extra.TokenInfo first and falls back to
+// the context. Only the SDK's bearer middleware can populate that field — its
+// context key is unexported — and legacy mode does not mount it, so before
+// this every HTTP legacy request resolved to the zero identity and log lines
+// carried no user at all. The pool resolved the user when it built the entry,
+// so this is a map lookup, not a round trip.
+//
+// An unresolved identity is left absent rather than stored empty: a handler
+// must be able to tell "the lookup did not succeed" from "user with no name".
+func (g *mcpServerGate) withIdentity(ctx context.Context, r *http.Request) context.Context {
+	if g.pool == nil {
+		return ctx
+	}
+	options, err := serverpool.ResolveRequestOptions(r, g.gitlabURL)
+	if err != nil {
+		return ctx
+	}
+	identity, ok := g.pool.IdentityFor(g.extractCredential(r), options.GitLabURL)
+	if !ok || !identity.Resolved() {
+		return ctx
+	}
+	return toolutil.IdentityToContext(ctx, toolutil.UserIdentity{
+		UserID:   identity.UserID,
+		Username: identity.Username,
 	})
 }
 

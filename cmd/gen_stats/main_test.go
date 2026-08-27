@@ -64,8 +64,13 @@ func TestIsTestFunctionName_ExcludesTestMain(t *testing.T) {
 	}
 }
 
-// TestScanGoFile_SkipsRawStringFixtures verifies that fake test functions
-// embedded in multi-line raw strings (fixture sources) are not counted.
+// TestScanGoFile_SkipsRawStringFixtures verifies that a fake test embedded in
+// a multi-line raw string does not reach the line-level counters. A fixture
+// source holding a whole fake Go file must not inflate subtest, defer or
+// error-check totals, which is what the backtick-parity skip is for.
+//
+// Declaration counting is no longer the line scanner's job — see
+// [TestScanGoDecls_CountsDeclarationsNotText] — so TestFuncs stays zero here.
 func TestScanGoFile_SkipsRawStringFixtures(t *testing.T) {
 	dir := t.TempDir()
 	src := "package p\n\nconst fixture = `\nfunc TestFake(t *testing.T) {\n\tt.Run(\"sub\", nil)\n}\n`\n\nfunc TestReal(t *testing.T) {}\n"
@@ -77,10 +82,113 @@ func TestScanGoFile_SkipsRawStringFixtures(t *testing.T) {
 	if _, err := scanGoFile(path, false, true, &s); err != nil {
 		t.Fatalf("scanGoFile: %v", err)
 	}
-	if s.TestFuncs != 1 {
-		t.Errorf("TestFuncs = %d, want 1 (fixture-embedded fake must not count)", s.TestFuncs)
-	}
 	if s.Subtests != 0 {
-		t.Errorf("Subtests = %d, want 0", s.Subtests)
+		t.Errorf("Subtests = %d, want 0 — the t.Run inside the raw string is data, not code", s.Subtests)
+	}
+	if s.TestFuncs != 0 {
+		t.Errorf("TestFuncs = %d, want 0 — the line scanner no longer counts declarations", s.TestFuncs)
+	}
+}
+
+// TestScanGoDecls_CountsDeclarationsNotText verifies that declarations are
+// counted by parsing, which is what makes the fixture case correct without a
+// heuristic.
+//
+// The line scanner skipped raw strings by counting backtick parity, and a
+// single line holding an odd number of backticks flipped it into "inside a
+// raw string" until the next such line — swallowing 225 real test
+// declarations across this repository and putting these totals permanently at
+// odds with cmd/gen_testing_docs. A parser has no such failure mode: the fake
+// below is a string constant, and the real declaration after it is a
+// declaration regardless of how many backticks preceded it.
+func TestScanGoDecls_CountsDeclarationsNotText(t *testing.T) {
+	tests := []struct {
+		name          string
+		src           string
+		isTest        bool
+		isE2E         bool
+		wantTestFuncs int
+		wantE2EFuncs  int
+		wantExported  int
+		wantStructs   int
+	}{
+		{
+			name:          "fake test inside a raw string is not a declaration",
+			src:           "package p\n\nconst fixture = `\nfunc TestFake(t *testing.T) {}\n`\n\nfunc TestReal(t *testing.T) {}\n",
+			isTest:        true,
+			wantTestFuncs: 1,
+		},
+		{
+			name: "an odd backtick count does not hide what follows",
+			src: "package p\n\nfunc TestBefore(t *testing.T) {}\n\n" +
+				"var doc = \"a ` lone backtick in an interpreted string\"\n\n" +
+				"func TestAfter(t *testing.T) {}\n",
+			isTest:        true,
+			wantTestFuncs: 2,
+		},
+		{
+			name:          "TestMain is not a test",
+			src:           "package p\n\nfunc TestMain(m *testing.M) {}\n\nfunc TestReal(t *testing.T) {}\n",
+			isTest:        true,
+			wantTestFuncs: 1,
+		},
+		{
+			name:         "e2e files count separately",
+			src:          "package p\n\nfunc TestFlow(t *testing.T) {}\n",
+			isE2E:        true,
+			wantE2EFuncs: 1,
+		},
+		{
+			name:         "source declarations, structs included",
+			src:          "package p\n\ntype Thing struct{}\n\ntype Alias = int\n\nfunc Exported() {}\n\nfunc unexported() {}\n",
+			wantExported: 1,
+			wantStructs:  1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			name := "x.go"
+			if tt.isTest || tt.isE2E {
+				name = "x_test.go"
+			}
+			path := filepath.Join(dir, name)
+			if err := os.WriteFile(path, []byte(tt.src), 0o600); err != nil {
+				t.Fatalf("write fixture: %v", err)
+			}
+
+			var s repoStats
+			if err := scanGoDecls(path, tt.isE2E, tt.isTest, &s); err != nil {
+				t.Fatalf("scanGoDecls: %v", err)
+			}
+			if s.TestFuncs != tt.wantTestFuncs {
+				t.Errorf("TestFuncs = %d, want %d", s.TestFuncs, tt.wantTestFuncs)
+			}
+			if s.E2ETestFuncs != tt.wantE2EFuncs {
+				t.Errorf("E2ETestFuncs = %d, want %d", s.E2ETestFuncs, tt.wantE2EFuncs)
+			}
+			if s.ExportedFuncs != tt.wantExported {
+				t.Errorf("ExportedFuncs = %d, want %d", s.ExportedFuncs, tt.wantExported)
+			}
+			if s.StructTypes != tt.wantStructs {
+				t.Errorf("StructTypes = %d, want %d", s.StructTypes, tt.wantStructs)
+			}
+		})
+	}
+}
+
+// TestScanGoDecls_UnparseableFile_Reports verifies that a file the parser
+// cannot read surfaces as an error rather than silently contributing zero.
+// A generator that under-reports without saying so is what this whole change
+// is correcting.
+func TestScanGoDecls_UnparseableFile_Reports(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "broken.go")
+	if err := os.WriteFile(path, []byte("package p\n\nfunc ("), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+	var s repoStats
+	if err := scanGoDecls(path, false, false, &s); err == nil {
+		t.Error("expected an error for an unparseable file")
 	}
 }
