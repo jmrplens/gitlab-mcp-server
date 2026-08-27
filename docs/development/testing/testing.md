@@ -73,7 +73,7 @@
 | resources     |       175 |    99.7% | Package resources registers read-only MCP resources for GitLab and server metadata.                                                                                                                               |
 | serverpool    |        66 |    98.8% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
 | subscriptions |        85 |   100.0% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                          |
-| testutil      |        34 |    88.7% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
+| testutil      |        34 |    88.2% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
 | toolutil      |       724 |    98.9% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard        |       329 |   100.0% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
 | **Subtotal**  | **2,233** |          |                                                                                                                                                                                                                   |
@@ -357,7 +357,7 @@
 | resources     |    99.7% |
 | serverpool    |    98.8% |
 | subscriptions |   100.0% |
-| testutil      |    88.7% |
+| testutil      |    88.2% |
 | toolutil      |    98.9% |
 | wizard        |   100.0% |
 
@@ -572,8 +572,8 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/internal/apidocs** (87.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (87.5%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/audit_1to1/internal/actions** (87.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **testutil** (88.2%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **cmd/gen_docker_tools** (88.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **testutil** (88.7%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 
 <!-- END TESTING STATS -->
