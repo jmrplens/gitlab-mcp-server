@@ -48,8 +48,10 @@ type HTTPEnvOverlay struct {
 	PoolIdleTimeout    *time.Duration
 	RevalidateInterval *time.Duration
 
-	AuthMode      *string
-	OAuthCacheTTL *time.Duration
+	AuthMode       *string
+	PublicURL      *string
+	TrustedOrigins *string
+	OAuthCacheTTL  *time.Duration
 
 	RateLimitRPS   *float64
 	RateLimitBurst *int
@@ -199,6 +201,18 @@ func loadOverlayAuthAndRate(o *HTTPEnvOverlay) error {
 			return err
 		}
 		o.AuthMode = &auth.mode
+	}
+	// PUBLIC_URL and TRUSTED_ORIGINS are passed through unparsed: both are
+	// validated later against the fully resolved configuration (public-url
+	// only has to be https when auth-mode ends up being oauth), and parsing
+	// them twice would let the two checks disagree.
+	if envPresent("PUBLIC_URL") {
+		value := strings.TrimSpace(os.Getenv("PUBLIC_URL"))
+		o.PublicURL = &value
+	}
+	if envPresent("TRUSTED_ORIGINS") {
+		value := strings.TrimSpace(os.Getenv("TRUSTED_ORIGINS"))
+		o.TrustedOrigins = &value
 	}
 	if envPresent("OAUTH_CACHE_TTL") {
 		auth, err := loadAuthEnv()

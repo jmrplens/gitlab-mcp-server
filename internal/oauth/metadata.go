@@ -13,13 +13,18 @@ import (
 // Protected Resource Metadata. MCP clients use this endpoint to discover
 // the GitLab authorization server associated with this resource.
 //
+// requiredScope is the GitLab scope this deployment actually needs, which a
+// client reads from scopes_supported to build its authorization request. It
+// is the least privilege that works: a server that can only read asks for
+// read_api rather than making every user grant full api.
+//
 // The handler is registered at /.well-known/oauth-protected-resource.
-func NewProtectedResourceHandler(resourceURL, gitlabURL string) http.Handler {
+func NewProtectedResourceHandler(resourceURL, gitlabURL, requiredScope string) http.Handler {
 	metadata := &oauthex.ProtectedResourceMetadata{
 		Resource:               resourceURL,
 		AuthorizationServers:   []string{gitlabURL},
 		BearerMethodsSupported: []string{"header"},
-		ScopesSupported:        []string{"api"},
+		ScopesSupported:        []string{requiredScope},
 		// RFC 9728 RECOMMENDED fields: a human name and a docs URL let a
 		// directory or consent screen label this resource instead of
 		// showing only its URL.

@@ -14,7 +14,7 @@ import (
 // returns a valid RFC 9728 Protected Resource Metadata JSON document with
 // the expected resource, authorization server, bearer methods and scopes.
 func TestNewProtectedResourceHandler_ValidResponse(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com")
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com", ScopeAPI)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -57,11 +57,37 @@ func TestNewProtectedResourceHandler_ValidResponse(t *testing.T) {
 	}
 }
 
+// TestNewProtectedResourceHandler_AdvertisesTheScopeItRequires verifies that
+// scopes_supported carries the scope the deployment was built with rather
+// than a constant. A client reads this field to decide what to ask GitLab
+// for, so a read-only server advertising "api" would make every user grant
+// write access the server can never use.
+func TestNewProtectedResourceHandler_AdvertisesTheScopeItRequires(t *testing.T) {
+	for _, want := range []string{ScopeAPI, ScopeReadAPI} {
+		t.Run(want, func(t *testing.T) {
+			handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com", want)
+
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", http.NoBody)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			var body map[string]any
+			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode JSON: %v", err)
+			}
+			scopes, ok := body["scopes_supported"].([]any)
+			if !ok || len(scopes) != 1 || scopes[0] != want {
+				t.Errorf("scopes_supported = %v, want [%q]", body["scopes_supported"], want)
+			}
+		})
+	}
+}
+
 // TestNewProtectedResourceHandler_CORSHeaders verifies that the handler
 // sets Access-Control-Allow-Origin: * so browser-based clients can fetch
 // the metadata document cross-origin.
 func TestNewProtectedResourceHandler_CORSHeaders(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com")
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com", ScopeAPI)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -75,7 +101,7 @@ func TestNewProtectedResourceHandler_CORSHeaders(t *testing.T) {
 // TestNewProtectedResourceHandler_OptionsPreflightReturns204 verifies that
 // OPTIONS preflight requests receive 204 No Content for CORS compliance.
 func TestNewProtectedResourceHandler_OptionsPreflightReturns204(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com")
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com", ScopeAPI)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -89,7 +115,7 @@ func TestNewProtectedResourceHandler_OptionsPreflightReturns204(t *testing.T) {
 // TestNewProtectedResourceHandler_PostMethodNotAllowed verifies that POST
 // and other non-GET/OPTIONS methods return 405 Method Not Allowed.
 func TestNewProtectedResourceHandler_PostMethodNotAllowed(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com")
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com", ScopeAPI)
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()

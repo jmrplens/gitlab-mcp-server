@@ -43,6 +43,8 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 		"PoolIdleTimeout":    overlay.PoolIdleTimeout == nil,
 		"RevalidateInterval": overlay.RevalidateInterval == nil,
 		"AuthMode":           overlay.AuthMode == nil,
+		"PublicURL":          overlay.PublicURL == nil,
+		"TrustedOrigins":     overlay.TrustedOrigins == nil,
 		"OAuthCacheTTL":      overlay.OAuthCacheTTL == nil,
 		"RateLimitRPS":       overlay.RateLimitRPS == nil,
 		"RateLimitBurst":     overlay.RateLimitBurst == nil,
@@ -97,6 +99,21 @@ func presentVariableCases() []presentVariableCase {
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
 				t.Helper()
 				assertStr(t, "GitLabURL", o.GitLabURL, "https://gitlab.example.com")
+			},
+		},
+		{
+			// Without this, a compose deployment that sets AUTH_MODE=oauth
+			// with no flags cannot start at all: the overlay reads the mode
+			// but not the resource identifier oauth mode requires.
+			name: "public url and trusted origins reach the overlay",
+			env: map[string]string{
+				"PUBLIC_URL":      " https://mcp.example.com/gitlab ",
+				"TRUSTED_ORIGINS": " https://claude.ai,https://inspector.example ",
+			},
+			assert: func(t *testing.T, o *HTTPEnvOverlay) {
+				t.Helper()
+				assertStr(t, "PublicURL", o.PublicURL, "https://mcp.example.com/gitlab")
+				assertStr(t, "TrustedOrigins", o.TrustedOrigins, "https://claude.ai,https://inspector.example")
 			},
 		},
 		{
@@ -360,7 +377,8 @@ func clearOverlayEnv(t *testing.T) {
 		"GITLAB_READ_ONLY", "GITLAB_SAFE_MODE", "EMBEDDED_RESOURCES",
 		"GITLAB_IGNORE_SCOPES", "EXCLUDE_TOOLS", "MAX_HTTP_CLIENTS",
 		"SESSION_TIMEOUT", "POOL_IDLE_TIMEOUT", "SESSION_REVALIDATE_INTERVAL",
-		"AUTH_MODE", "OAUTH_CACHE_TTL", "RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
+		"AUTH_MODE", "PUBLIC_URL", "TRUSTED_ORIGINS", "OAUTH_CACHE_TTL",
+		"RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
 		"AUTO_UPDATE", "AUTO_UPDATE_REPO", "AUTO_UPDATE_INTERVAL", "AUTO_UPDATE_TIMEOUT",
 	} {
 		// t.Setenv registers the restore; unsetting afterwards makes the

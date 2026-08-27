@@ -54,6 +54,8 @@ func applyOverlayStrings(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
 	overlayString(hcfg, "meta-param-schema", &hcfg.metaParamSchema, o.MetaParamSchema)
 	overlayString(hcfg, "exclude-tools", &hcfg.excludeTools, o.ExcludeTools)
 	overlayString(hcfg, "auth-mode", &hcfg.authMode, o.AuthMode)
+	overlayString(hcfg, "public-url", &hcfg.publicURL, o.PublicURL)
+	overlayString(hcfg, "trusted-origins", &hcfg.trustedOrigins, o.TrustedOrigins)
 	overlayString(hcfg, "auto-update", &hcfg.autoUpdate, o.AutoUpdate)
 	overlayString(hcfg, "auto-update-repo", &hcfg.autoUpdateRepo, o.AutoUpdateRepo)
 }

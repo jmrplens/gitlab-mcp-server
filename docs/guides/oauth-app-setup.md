@@ -93,7 +93,7 @@ The three types differ only in who owns and can revoke the application — the O
 ### Scopes: pick `api`, avoid `mcp`
 
 - **`api`** — what this server needs. Every action it exposes is a REST v4 or GraphQL call made with the user's token.
-- **`read_api`** — enough for a read-only deployment (`--read-only`), but tools that write will fail.
+- **`read_api`** — the right choice for a deployment that cannot write. The server asks for it rather than `api` whenever `--read-only` or `--safe-mode` is set, and advertises it in the RFC 9728 `scopes_supported` field, so a client that follows discovery requests exactly the privilege the deployment can use. A token granted `api` is accepted everywhere `read_api` is required, since `api` is a superset; the reverse is not true, and a `read_api` token on a writable deployment is refused with `403 insufficient scope` rather than failing later on the first write.
 - **`mcp`** — do **not** pick this one. Despite the name it is scoped to *GitLab's own built-in MCP server*, and a credential minted for it grants no general REST or GraphQL access, so every action here would fail. See [Dynamic Client Registration and the `mcp` scope](#dynamic-client-registration-and-the-mcp-scope).
 
 > **Device authorization grant**: leave the checkbox unchecked. No MCP client uses RFC 8628 — the MCP authorization flow is authorization code + PKCE with a browser redirect — and enabling an unused grant only adds device-code phishing surface. It can be enabled later without recreating the app.

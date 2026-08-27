@@ -7,11 +7,31 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
 )
+
+// GitLab API scopes this server can operate under. api permits reads and
+// writes; read_api is enough for a deployment that never mutates, and is
+// what such a deployment asks for so users are not made to grant more.
+const (
+	ScopeAPI     = "api"
+	ScopeReadAPI = "read_api"
+)
+
+// RequiredScope reports the least-privilege GitLab scope a deployment needs:
+// read_api when no request can reach GitLab as a write, api otherwise.
+// Safe mode counts as read-only here because it answers mutating calls with
+// a preview instead of forwarding them.
+func RequiredScope(readOnly, safeMode bool) string {
+	if readOnly || safeMode {
+		return ScopeReadAPI
+	}
+	return ScopeAPI
+}
 
 // gitlabUserResponse holds the minimal fields from GitLab's /api/v4/user endpoint.
 type gitlabUserResponse struct {
@@ -123,13 +143,25 @@ func NewGitLabVerifier(gitlabURL string, skipTLS bool, cacheTTL time.Duration, c
 // refusal here would brick instances where introspection is restricted.
 func introspectScopes(ctx context.Context, client *http.Client, gitlabURL, token string) []string {
 	if scopes := fetchScopes(ctx, client, gitlabURL+"/api/v4/personal_access_tokens/self", token, "scopes"); scopes != nil {
-		return scopes
+		return expandImpliedScopes(scopes)
 	}
 	if scopes := fetchScopes(ctx, client, gitlabURL+"/oauth/token/info", token, "scope"); scopes != nil {
-		return scopes
+		return expandImpliedScopes(scopes)
 	}
 	slog.Debug("token scope introspection unavailable; assuming api scope")
-	return []string{"api"}
+	return expandImpliedScopes([]string{"api"})
+}
+
+// expandImpliedScopes adds the scopes GitLab grants implicitly. api is a
+// strict superset of read_api, but GitLab reports only the granted name, and
+// the SDK's scope check is a plain set containment: without this, a
+// read-only deployment asking for read_api would reject the very tokens that
+// carry more authority than it needs.
+func expandImpliedScopes(scopes []string) []string {
+	if slices.Contains(scopes, ScopeAPI) && !slices.Contains(scopes, ScopeReadAPI) {
+		return append(slices.Clone(scopes), ScopeReadAPI)
+	}
+	return scopes
 }
 
 // fetchScopes reads one introspection endpoint and returns the named
