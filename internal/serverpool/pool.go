@@ -117,6 +117,14 @@ type ServerPool struct {
 	idleTimeout        time.Duration
 	metrics            Metrics
 	createdAt          time.Time
+	// baseCtx bounds the GitLab lookups that build an entry — the credential
+	// probe, tier and scope discovery, identity resolution. It is the
+	// server's lifetime, not the request's: an entry is shared by every
+	// request carrying the same credential, so deriving from whichever one
+	// happened to trigger construction would let a single client
+	// disconnecting abort work that others are already waiting on, and leave
+	// the next request to start it over. Shutdown, however, must stop it.
+	baseCtx context.Context
 }
 
 // Option configures pool behavior.
@@ -137,6 +145,22 @@ func WithMaxSize(n int) Option {
 func WithRevalidateInterval(d time.Duration) Option {
 	return func(p *ServerPool) {
 		p.revalidateInterval = d
+	}
+}
+
+// WithBaseContext ties entry construction to a lifetime the caller controls,
+// normally the server's root context.
+//
+// Without it the GitLab lookups that build an entry run under
+// context.Background() and survive shutdown until their own timeout expires.
+// They are deliberately not derived from the request that triggered them —
+// see [ServerPool.baseCtx] — but "not this request" is not the same as "no
+// lifetime at all". A nil context is ignored.
+func WithBaseContext(ctx context.Context) Option {
+	return func(p *ServerPool) {
+		if ctx != nil {
+			p.baseCtx = ctx
+		}
 	}
 }
 
@@ -162,6 +186,7 @@ func New(cfg *config.Config, factory ServerFactory, opts ...Option) *ServerPool 
 		revalidateInterval: DefaultRevalidateInterval,
 		idleTimeout:        DefaultIdleTimeout,
 		createdAt:          time.Now(),
+		baseCtx:            context.Background(),
 	}
 	for _, opt := range opts {
 		opt(p)
@@ -238,7 +263,7 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 	}
 	client.SetTier(p.cfg.Tier)
 
-	if verifyErr := verifyCredential(client); verifyErr != nil {
+	if verifyErr := verifyCredential(p.baseCtx, client); verifyErr != nil {
 		return nil, verifyErr
 	}
 
@@ -252,7 +277,7 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 		server:       server,
 		client:       client,
 		serverConfig: entryCfg,
-		identity:     resolveIdentity(client),
+		identity:     resolveIdentity(p.baseCtx, client),
 	}, nil
 }
 
@@ -270,8 +295,8 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 // same credential. Deriving from the request that happened to trigger
 // construction would let one client disconnecting abort a build that other
 // requests are already waiting on, and leave the next one to start it over.
-func resolveIdentity(client *gitlabclient.Client) UserIdentity {
-	ctx, cancel := context.WithTimeout(context.Background(), credentialCheckTimeout)
+func resolveIdentity(base context.Context, client *gitlabclient.Client) UserIdentity {
+	ctx, cancel := context.WithTimeout(base, credentialCheckTimeout)
 	defer cancel()
 
 	info, err := client.CurrentUser(ctx)
@@ -393,8 +418,8 @@ var ErrInvalidCredential = errors.New("gitlab rejected the credential")
 // entry is admitted: failing closed whenever GitLab is unreachable would turn
 // an instance outage into a total denial of service, which is worse than the
 // churn this prevents.
-func verifyCredential(client *gitlabclient.Client) error {
-	ctx, cancel := context.WithTimeout(context.Background(), credentialCheckTimeout)
+func verifyCredential(base context.Context, client *gitlabclient.Client) error {
+	ctx, cancel := context.WithTimeout(base, credentialCheckTimeout)
 	defer cancel()
 
 	if client.CredentialRejected(ctx) {
@@ -418,7 +443,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string) 
 	// pin it explicitly via --tier/GITLAB_TIER.
 	autoDetectTier := !p.cfg.TierExplicit
 	if autoDetectTier || !p.cfg.IgnoreScopes {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(p.baseCtx, 10*time.Second)
 		defer cancel()
 
 		if autoDetectTier {
