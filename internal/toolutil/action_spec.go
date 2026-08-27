@@ -763,9 +763,18 @@ func validateActionSpecCompatibility(spec ActionSpec) error {
 	return validateParameterAliasSpecs(spec.Name, spec.Route.InputSchema, spec.Compatibility.ParameterAliases)
 }
 
+// validateActionAliasSpecs checks the compatibility aliases declared for one
+// action.
+//
+// Unlike [validateParameterAliasSpecs], it keeps no map of aliases already
+// seen. It cannot need one: every alias here must target the action's own
+// canonical name — the check below rejects anything else outright — so two
+// aliases sharing a name necessarily share a target too, and there is no
+// conflict left to detect. A duplicate declaration is therefore accepted as
+// the no-op it is. Parameter aliases have no such constraint (each may point
+// at a different parameter), which is why the sibling does track them.
 func validateActionAliasSpecs(actionName string, aliases []ActionAliasSpec) error {
 	canonicalName := strings.ToLower(strings.TrimSpace(actionName))
-	seen := make(map[string]string, len(aliases))
 	for _, alias := range aliases {
 		aliasName := strings.TrimSpace(strings.ToLower(alias.Alias))
 		target := strings.TrimSpace(strings.ToLower(alias.Target))
@@ -787,10 +796,6 @@ func validateActionAliasSpecs(actionName string, aliases []ActionAliasSpec) erro
 		if alias.Deprecated && strings.TrimSpace(alias.RemovalVersion) == "" {
 			return fmt.Errorf("action spec %q deprecated compatibility action alias %q has no removal version", actionName, aliasName)
 		}
-		if existingTarget, ok := seen[aliasName]; ok && existingTarget != target {
-			return fmt.Errorf("action spec %q compatibility action alias %q targets both %q and %q", actionName, aliasName, existingTarget, target)
-		}
-		seen[aliasName] = target
 	}
 	return nil
 }

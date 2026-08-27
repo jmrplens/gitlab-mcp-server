@@ -33,10 +33,17 @@ func FormatTodoMarkdown(t TodoOutput) string {
 	return b.String()
 }
 
-// FormatListAllMarkdown renders a list of globally-scoped issues as a Markdown table.
-func FormatListAllMarkdown(out ListOutput) string {
+// formatIssueList renders an issue list under the given heading, closing with
+// the caller's hints.
+//
+// The two list surfaces differ only in those two things; the table between
+// them is the same. Rendering it once is what keeps them that way: the row
+// format carries the issue link, the state emoji and the escaping, and a
+// change applied to one copy and not the other would silently leave the
+// project and global listings rendering differently.
+func formatIssueList(out ListOutput, heading string, hints ...string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## All Issues (%d)\n\n", out.Pagination.TotalItems)
+	fmt.Fprintf(&b, "## %s (%d)\n\n", heading, out.Pagination.TotalItems)
 	toolutil.WriteListSummary(&b, len(out.Issues), out.Pagination)
 	if len(out.Issues) == 0 {
 		b.WriteString(msgNoIssuesFound)
@@ -49,13 +56,16 @@ func FormatListAllMarkdown(out ListOutput) string {
 		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(AuthorName(i)), toolutil.EscapeMdTableCell(labels))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
+	toolutil.WriteHints(&b, append([]string{toolutil.HintPreserveLinks}, hints...)...)
+	return b.String()
+}
+
+// FormatListAllMarkdown renders a list of globally-scoped issues as a Markdown table.
+func FormatListAllMarkdown(out ListOutput) string {
+	return formatIssueList(out, "All Issues",
 		"Use `gitlab_issue_get` to view issue details",
 		"Use `gitlab_issue_update` to change state or labels",
 	)
-	return b.String()
 }
 
 // AuthorName returns the issue author's display username for Markdown, read from
@@ -227,28 +237,11 @@ func formatGetMarkdownResult(out getOutput) *mcp.CallToolResult {
 
 // FormatListMarkdown renders a list of issues as a Markdown table.
 func FormatListMarkdown(out ListOutput) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## Issues (%d)\n\n", out.Pagination.TotalItems)
-	toolutil.WriteListSummary(&b, len(out.Issues), out.Pagination)
-	if len(out.Issues) == 0 {
-		b.WriteString(msgNoIssuesFound)
-		return b.String()
-	}
-	b.WriteString(tblHeaderIssues)
-	b.WriteString(toolutil.TblSep5Col)
-	for _, i := range out.Issues {
-		labels := strings.Join(i.Labels, ", ")
-		fmt.Fprintf(&b, "| [#%d](%s) | %s | %s %s | %s | %s |\n", i.IID, i.WebURL, toolutil.EscapeMdTableCell(i.Title), toolutil.IssueStateEmoji(i.State), i.State, toolutil.EscapeMdTableCell(AuthorName(i)), toolutil.EscapeMdTableCell(labels))
-	}
-	toolutil.WritePagination(&b, out.Pagination)
-	toolutil.WriteHints(
-		&b,
-		toolutil.HintPreserveLinks,
+	return formatIssueList(out, "Issues",
 		"Use action 'get' with an issue_iid to see full details and description",
 		"Use action 'create' to create a new issue",
 		"Use gitlab_issue action 'note_create' to add a comment",
 	)
-	return b.String()
 }
 
 // FormatListGroupMarkdown renders a paginated list of group issues as a Markdown table.
