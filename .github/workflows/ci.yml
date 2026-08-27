@@ -129,6 +129,15 @@ jobs:
       - name: Verify E2E tests compile
         run: go test -tags e2e -c -o /dev/null ./test/e2e/suite/
 
+      # The HTTP transport module needs no GitLab and no credentials, so it
+      # runs here rather than only on demand. It is the gate for the handler
+      # chain in package main — cross-origin, preflight, auth modes, rate
+      # limiting, and every flag that restricts something — which unit tests
+      # cannot reach and which has shipped broken more than once. The nginx
+      # cases skip when Docker is unavailable.
+      - name: HTTP transport end-to-end
+        run: go test -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/
+
   golangci-lint:
     name: golangci-lint
     runs-on: ubuntu-latest
