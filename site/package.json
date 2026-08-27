@@ -16,6 +16,7 @@
     "chips:check": "node scripts/check-chips.mjs",
     "facts:check": "node scripts/check-facts.mjs",
     "identity:sync": "node scripts/sync-identity.mjs",
+    "identity:check": "node scripts/sync-identity.mjs --check",
     "eslint": "eslint .",
     "html-validate": "html-validate 'dist/**/*.html'",
     "htmlhint": "htmlhint 'dist/**/*.html'",

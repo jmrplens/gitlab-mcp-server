@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1310,5 +1311,209 @@ func TestGetOrCreate_OAuthMode_BuildsBearerClient(t *testing.T) {
 				t.Errorf("oauth-mode probe also sent PRIVATE-TOKEN %q", private)
 			}
 		})
+	}
+}
+
+// TestIdentityFor_ResolvesTheUserBehindAPooledToken verifies that the pool
+// records who a credential belongs to when it builds the entry, and answers
+// for it afterwards from memory.
+//
+// HTTP legacy mode mounts no bearer middleware, so nothing populates
+// req.Extra.TokenInfo there and tool handlers used to resolve the zero
+// identity — log lines carried no user at all. This is where the answer comes
+// from now.
+func TestIdentityFor_ResolvesTheUserBehindAPooledToken(t *testing.T) {
+	var userCalls atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		userCalls.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":4242,"username":"pooled-user"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := testConfig(srv.URL)
+	cfg.IgnoreScopes = true
+	pool := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	})
+
+	if _, ok := pool.IdentityFor("glpat-x", srv.URL); ok {
+		t.Error("IdentityFor should report no entry before GetOrCreate has run")
+	}
+
+	if _, err := pool.GetOrCreate("glpat-x", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+
+	identity, ok := pool.IdentityFor("glpat-x", srv.URL)
+	if !ok {
+		t.Fatal("IdentityFor found no entry for a token the pool just built")
+	}
+	if !identity.Resolved() {
+		t.Fatal("identity should be resolved")
+	}
+	if identity.UserID != "4242" || identity.Username != "pooled-user" {
+		t.Errorf("identity = %+v, want {4242 pooled-user}", identity)
+	}
+
+	// Resolution happens once per entry, not once per request: a second
+	// lookup must not reach GitLab again.
+	before := userCalls.Load()
+	if _, stillThere := pool.IdentityFor("glpat-x", srv.URL); !stillThere {
+		t.Fatal("second IdentityFor lost the entry")
+	}
+	if got := userCalls.Load(); got != before {
+		t.Errorf("/user calls went from %d to %d; the answer must come from the entry", before, got)
+	}
+}
+
+// TestIdentityFor_UnresolvableUser_ReportsUnknown verifies that a /user
+// response carrying no id leaves the identity unresolved rather than
+// inventing one.
+//
+// The credential probe only asks whether GitLab accepts the token, so a 200
+// with an empty body builds the entry perfectly well. Formatting the decoded
+// zero would produce the string "0", which reads as a resolved user to every
+// caller and puts a user that does not exist into the logs.
+func TestIdentityFor_UnresolvableUser_ReportsUnknown(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := testConfig(srv.URL)
+	cfg.IgnoreScopes = true
+	pool := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	})
+
+	if _, err := pool.GetOrCreate("glpat-y", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate should succeed when the credential is accepted: %v", err)
+	}
+
+	identity, ok := pool.IdentityFor("glpat-y", srv.URL)
+	if !ok {
+		t.Fatal("the entry should exist even without an identity")
+	}
+	if identity.Resolved() {
+		t.Errorf("identity = %+v, want unresolved", identity)
+	}
+}
+
+// TestWithBaseContext_ShutdownReleasesEntryConstruction verifies that the
+// GitLab lookups which build an entry are bounded by a lifetime the caller
+// owns, so shutdown does not leave them running.
+//
+// They are deliberately not derived from the request that triggered them — an
+// entry is shared by every request carrying the same credential, so one client
+// disconnecting must not abort work others are waiting on. That justifies
+// ignoring the request context; it does not justify ignoring shutdown, which
+// is what context.Background() did: the probe went on until its own five
+// second timeout with nothing left to serve.
+//
+// Cancellation releases the call rather than failing construction. The
+// credential probe reports "not rejected" when it cannot reach GitLab at all,
+// which is the correct reading — an unreachable instance is not a verdict on
+// the token — so what is asserted here is promptness, not an error.
+func TestWithBaseContext_ShutdownReleasesEntryConstruction(t *testing.T) {
+	release := make(chan struct{})
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, r *http.Request) {
+		// Hold the probe open until the test cancels the base context, so
+		// cancellation is what ends the call rather than a race with the
+		// response.
+		select {
+		case <-release:
+		case <-r.Context().Done():
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	defer close(release)
+
+	baseCtx, shutdown := context.WithCancel(context.Background())
+	cfg := testConfig(srv.URL)
+	cfg.IgnoreScopes = true
+	pool := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	}, WithBaseContext(func() context.Context { return baseCtx }))
+
+	done := make(chan time.Duration, 1)
+	go func() {
+		start := time.Now()
+		_, _ = pool.GetOrCreate("glpat-shutdown", srv.URL)
+		done <- time.Since(start)
+	}()
+
+	// Give the probe time to reach the handler before shutting down.
+	time.Sleep(50 * time.Millisecond)
+	shutdown()
+
+	select {
+	case elapsed := <-done:
+		// credentialCheckTimeout is 5s; anything near it means the lookups
+		// ran to their own bound with the server already gone.
+		if elapsed > 2*time.Second {
+			t.Errorf("entry construction took %v after shutdown; it should be released promptly", elapsed)
+		}
+	case <-time.After(8 * time.Second):
+		t.Fatal("entry construction never returned after the base context was cancelled")
+	}
+}
+
+// TestNew_WithoutBaseContext_StillBuildsEntries verifies the default: a pool
+// created without the option behaves as before, so every existing caller and
+// test keeps working.
+func TestNew_WithoutBaseContext_StillBuildsEntries(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":9,"username":"default-ctx"}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := testConfig(srv.URL)
+	cfg.IgnoreScopes = true
+	pool := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	})
+
+	if _, err := pool.GetOrCreate("glpat-default", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate without WithBaseContext: %v", err)
+	}
+	// A nil function, and a function returning nil, both fall back to
+	// Background rather than turning into a panic on the first lookup.
+	pool2 := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	}, WithBaseContext(nil))
+	if _, err := pool2.GetOrCreate("glpat-nil-ctx", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate with a nil base-context function: %v", err)
+	}
+	pool3 := New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	}, WithBaseContext(func() context.Context { return nil }))
+	if _, err := pool3.GetOrCreate("glpat-nil-return", srv.URL); err != nil {
+		t.Fatalf("GetOrCreate with a base-context function returning nil: %v", err)
 	}
 }

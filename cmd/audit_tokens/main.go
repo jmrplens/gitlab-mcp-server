@@ -324,35 +324,51 @@ func buildMetaActionMaps(client *gitlabclient.Client, enterprise bool) map[strin
 	return catalog.ActionMaps()
 }
 
-// listToolsFromServer connects to server in-memory and returns the advertised
-// tool definitions.
-func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
+// connectInMemory pairs an in-memory client session with server, or exits.
+//
+// The three measurement passes below each need the same six-line handshake and
+// differed only in the label their failure message carried, which is exactly
+// the shape a helper exists for. The returned close function tears both
+// sessions down in the order they were opened.
+//
+// Callers close explicitly rather than with defer: every failure path here
+// ends in os.Exit, which does not run deferred functions, so a defer would
+// read as cleanup that never happens.
+func connectInMemory(server *mcp.Server, what string) (session *mcp.ClientSession, closeBoth func()) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
 	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
+		fmt.Fprintf(os.Stderr, "server connect (%s): %v\n", what, err)
 		os.Exit(1)
 	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
+	session, err = mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
 		_ = serverSession.Close()
-		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
+		fmt.Fprintf(os.Stderr, "client connect (%s): %v\n", what, err)
 		os.Exit(1)
 	}
-
-	result, err := session.ListTools(ctx, nil)
-	if err != nil {
+	return session, func() {
 		_ = session.Close()
 		_ = serverSession.Close()
+	}
+}
+
+// listToolsFromServer connects to server in-memory and returns the advertised
+// tool definitions.
+func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
+	session, closeBoth := connectInMemory(server, "tools")
+
+	result, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		closeBoth()
 		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
 		os.Exit(1)
 	}
-	_ = session.Close()
-	_ = serverSession.Close()
+	closeBoth()
 	return result.Tools
 }
 
@@ -411,25 +427,11 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 		resources.RegisterWorkflowGuides(server)
 	}
 
-	st, ct := mcp.NewInMemoryTransports()
+	session, closeBoth := connectInMemory(server, "resources")
 	ctx := context.Background()
 
-	serverSession, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "server connect (resources): %v\n", err)
-		os.Exit(1)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		_ = serverSession.Close()
-		fmt.Fprintf(os.Stderr, "client connect (resources): %v\n", err)
-		os.Exit(1)
-	}
 	fatalWithSession := func(format string, args ...any) {
-		_ = session.Close()
-		_ = serverSession.Close()
+		closeBoth()
 		fmt.Fprintf(os.Stderr, format, args...)
 		os.Exit(1)
 	}
@@ -460,8 +462,7 @@ func measureResourcesWithOptions(client *gitlabclient.Client, metaRoutes map[str
 		totalTokens += countTokens(b)
 	}
 
-	_ = session.Close()
-	_ = serverSession.Close()
+	closeBoth()
 	return totalTokens
 }
 
@@ -480,39 +481,22 @@ func measurePrompts(client *gitlabclient.Client) int {
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: auditVer}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	prompts.Register(server, client)
 
-	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
-
-	serverSession, err := server.Connect(ctx, st, nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "server connect (prompts): %v\n", err)
-		os.Exit(1)
-	}
-
-	mcpClient := mcp.NewClient(&mcp.Implementation{Name: clientName, Version: auditVer}, nil)
-	session, err := mcpClient.Connect(ctx, ct, nil)
-	if err != nil {
-		_ = serverSession.Close()
-		fmt.Fprintf(os.Stderr, "client connect (prompts): %v\n", err)
-		os.Exit(1)
-	}
+	session, closeBoth := connectInMemory(server, "prompts")
 
 	totalTokens := 0
-	p, err := session.ListPrompts(ctx, nil)
+	p, err := session.ListPrompts(context.Background(), nil)
 	if err == nil {
 		for _, pr := range p.Prompts {
 			b, mErr := marshalModelFacing(pr)
 			if mErr != nil {
-				_ = session.Close()
-				_ = serverSession.Close()
+				closeBoth()
 				fmt.Fprintf(os.Stderr, "marshal prompt %s: %v\n", pr.Name, mErr)
 				os.Exit(1)
 			}
 			totalTokens += countTokens(b)
 		}
 	}
-	_ = session.Close()
-	_ = serverSession.Close()
+	closeBoth()
 	return totalTokens
 }
 

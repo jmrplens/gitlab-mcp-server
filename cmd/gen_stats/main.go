@@ -22,6 +22,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -159,6 +162,9 @@ func collectStats(root string) (*repoStats, error) {
 		lines, scanErr := scanGoFile(path, isE2E, isTest, s)
 		if scanErr != nil {
 			return nil, fmt.Errorf("scanning %s: %w", path, scanErr)
+		}
+		if declErr := scanGoDecls(path, isE2E, isTest, s); declErr != nil {
+			return nil, declErr
 		}
 
 		switch {
@@ -299,9 +305,6 @@ func scanGoFile(path string, isE2E, isTest bool, s *repoStats) (int, error) {
 
 func scanGoLine(line string, isE2E, isTest bool, s *repoStats) {
 	trimmed := strings.TrimSpace(line)
-	if strings.HasPrefix(trimmed, "func ") {
-		updateFunctionStats(extractFuncName(trimmed), isE2E, isTest, s)
-	}
 	if (isTest || isE2E) && strings.Contains(line, "t.Run(") {
 		s.Subtests++
 	}
@@ -320,6 +323,50 @@ func scanGoLine(line string, isE2E, isTest bool, s *repoStats) {
 	if !isTest && !isE2E {
 		updateSourceLineStats(line, trimmed, s)
 	}
+}
+
+// scanGoDecls counts declarations by parsing the file, not by reading its
+// lines.
+//
+// The line scanner cannot do this correctly and never could. It skips
+// multi-line raw strings by counting backtick parity, which is the right
+// instinct — a fixture embedding a fake Go file must not inflate the
+// counters — but the wrong mechanism: a single line holding an odd number of
+// backticks flips it into "inside a raw string" and everything until the next
+// such line disappears. In this repository that is table-driven tests whose
+// case data contains Markdown or Go snippets, and it was swallowing 225 real
+// test declarations, which is why these figures disagreed with
+// cmd/gen_testing_docs, whose totals come from go/ast.
+//
+// Only declarations move here. The remaining line heuristics — defer, error
+// checks, nolint directives, TODO comments, comment and "gitlab" lines — are
+// textual by nature and genuinely want the raw-string skip, so they stay
+// where they are.
+func scanGoDecls(path string, isE2E, isTest bool, s *repoStats) error {
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.SkipObjectResolution)
+	if err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+	for _, decl := range file.Decls {
+		switch d := decl.(type) {
+		case *ast.FuncDecl:
+			updateFunctionStats(d.Name.Name, isE2E, isTest, s)
+		case *ast.GenDecl:
+			if isTest || isE2E || d.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range d.Specs {
+				ts, ok := spec.(*ast.TypeSpec)
+				if !ok {
+					continue
+				}
+				if _, isStruct := ts.Type.(*ast.StructType); isStruct {
+					s.StructTypes++
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func updateFunctionStats(name string, isE2E, isTest bool, s *repoStats) {
@@ -344,9 +391,6 @@ func updateFunctionStats(name string, isE2E, isTest bool, s *repoStats) {
 }
 
 func updateSourceLineStats(line, trimmed string, s *repoStats) {
-	if strings.HasPrefix(trimmed, "type ") && strings.Contains(trimmed, "struct") {
-		s.StructTypes++
-	}
 	if strings.HasPrefix(trimmed, "//") {
 		s.CommentLines++
 	}
@@ -372,35 +416,6 @@ func isTestFunctionName(name string) bool {
 		return true
 	}
 	return unicode.IsUpper(rune(name[len("Test")]))
-}
-
-// extractFuncName returns the identifier from a trimmed "func ..." line.
-// Handles methods (func (r *T) Name(...)) and plain functions (func Name(...)).
-func extractFuncName(trimmed string) string {
-	rest := strings.TrimPrefix(trimmed, "func ")
-	if strings.HasPrefix(rest, "(") {
-		depth := 0
-		for i, c := range rest {
-			switch c {
-			case '(':
-				depth++
-			case ')':
-				depth--
-				if depth == 0 {
-					after := strings.TrimSpace(rest[i+1:])
-					if idx := strings.IndexByte(after, '('); idx > 0 {
-						return after[:idx]
-					}
-					return ""
-				}
-			}
-		}
-		return ""
-	}
-	if idx := strings.IndexByte(rest, '('); idx > 0 {
-		return rest[:idx]
-	}
-	return ""
 }
 
 // isTODOComment reports whether trimmed is a task-annotation comment.

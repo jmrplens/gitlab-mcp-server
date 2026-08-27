@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,11 +33,27 @@ type poolEntry struct {
 	server        *mcp.Server
 	client        *gitlabclient.Client
 	serverConfig  *config.ServerConfig
+	identity      UserIdentity
 	element       *list.Element
 	createdAt     time.Time
 	lastValidated time.Time
 	lastUsed      time.Time
 }
+
+// UserIdentity is the GitLab user a pooled credential belongs to.
+//
+// It is resolved once when the entry is built, alongside tier and scope
+// discovery, and then answers for every request that reuses the entry. The
+// zero value means the lookup did not succeed — an instance that refuses
+// /user to this token, say — which callers must treat as "unknown", never as
+// "anonymous".
+type UserIdentity struct {
+	UserID   string
+	Username string
+}
+
+// Resolved reports whether the identity was actually determined.
+func (u UserIdentity) Resolved() bool { return u.UserID != "" }
 
 // defaultMaxSize is the fallback number of HTTP client sessions retained when
 // the operator does not configure a pool size.
@@ -100,6 +117,23 @@ type ServerPool struct {
 	idleTimeout        time.Duration
 	metrics            Metrics
 	createdAt          time.Time
+	// baseContext supplies the lifetime that bounds the GitLab lookups which
+	// build an entry — the credential probe, tier and scope discovery,
+	// identity resolution.
+	//
+	// It is the server's lifetime, not the request's: an entry is shared by
+	// every request carrying the same credential, so deriving from whichever
+	// one happened to trigger construction would let a single client
+	// disconnecting abort work that others are already waiting on, and leave
+	// the next request to start it over. Shutdown, however, must stop it.
+	//
+	// A function rather than a stored context, mirroring
+	// [net/http.Server.BaseContext], which exists for exactly this shape: a
+	// lifetime that belongs to the long-lived object rather than to any
+	// caller. Storing the context itself would hide an effective deadline
+	// from callers that cannot see it, which is what the guidance against
+	// context fields is about.
+	baseContext func() context.Context
 }
 
 // Option configures pool behavior.
@@ -120,6 +154,26 @@ func WithMaxSize(n int) Option {
 func WithRevalidateInterval(d time.Duration) Option {
 	return func(p *ServerPool) {
 		p.revalidateInterval = d
+	}
+}
+
+// WithBaseContext ties entry construction to a lifetime the caller controls,
+// normally the server's root context.
+//
+// Without it the GitLab lookups that build an entry run under
+// context.Background() and survive shutdown until their own timeout expires.
+// They are deliberately not derived from the request that triggered them —
+// see [ServerPool.baseContext] — but "not this request" is not the same as
+// "no lifetime at all".
+//
+// The signature mirrors [net/http.Server.BaseContext]: a function, so the
+// pool never holds a context of its own. A nil function is ignored, and one
+// that returns nil falls back to [context.Background].
+func WithBaseContext(fn func() context.Context) Option {
+	return func(p *ServerPool) {
+		if fn != nil {
+			p.baseContext = fn
+		}
 	}
 }
 
@@ -145,11 +199,24 @@ func New(cfg *config.Config, factory ServerFactory, opts ...Option) *ServerPool 
 		revalidateInterval: DefaultRevalidateInterval,
 		idleTimeout:        DefaultIdleTimeout,
 		createdAt:          time.Now(),
+		baseContext:        context.Background,
 	}
 	for _, opt := range opts {
 		opt(p)
 	}
 	return p
+}
+
+// lifetime returns the context that bounds entry construction, falling back
+// to [context.Background] when the configured function yields nothing.
+func (p *ServerPool) lifetime() context.Context {
+	if p.baseContext == nil {
+		return context.Background()
+	}
+	if ctx := p.baseContext(); ctx != nil {
+		return ctx
+	}
+	return context.Background()
 }
 
 // GetOrCreate returns the [*mcp.Server] for the given token and GitLab URL,
@@ -221,7 +288,7 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 	}
 	client.SetTier(p.cfg.Tier)
 
-	if verifyErr := verifyCredential(client); verifyErr != nil {
+	if verifyErr := verifyCredential(p.lifetime(), client); verifyErr != nil {
 		return nil, verifyErr
 	}
 
@@ -235,7 +302,63 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 		server:       server,
 		client:       client,
 		serverConfig: entryCfg,
+		identity:     resolveIdentity(p.lifetime(), client),
 	}, nil
+}
+
+// resolveIdentity looks up the GitLab user behind a pooled credential.
+//
+// Cost is one call per pool entry, not per request, alongside the tier and
+// scope lookups the entry already performs. A failure is not fatal: the
+// credential has already been verified by this point, so an instance that
+// will not answer /user costs the caller a username in its log lines and
+// nothing else.
+//
+// The context is background-scoped with its own bound, matching
+// [verifyCredential] and [ServerPool.entryConfig], and that is deliberate
+// rather than an oversight: an entry is shared by every request carrying the
+// same credential. Deriving from the request that happened to trigger
+// construction would let one client disconnecting abort a build that other
+// requests are already waiting on, and leave the next one to start it over.
+func resolveIdentity(base context.Context, client *gitlabclient.Client) UserIdentity {
+	ctx, cancel := context.WithTimeout(base, credentialCheckTimeout)
+	defer cancel()
+
+	info, err := client.CurrentUser(ctx)
+	if err != nil {
+		slog.Debug("could not resolve the user behind a pooled token", "error", err)
+		return UserIdentity{}
+	}
+	// A zero id is not user zero: no such user can exist. GitLab's users.id
+	// is a bigint fed by users_id_seq, whose range starts at 1 — Postgres
+	// rejects setval(..., 0) as out of bounds — and the first account on a
+	// fresh instance is root with id 1. So a zero here only ever means the
+	// response carried no id, and formatting it would put the string "0" in
+	// the logs as though it were a real user.
+	if info.UserID == 0 {
+		slog.Debug("gitlab returned no user id for a pooled token")
+		return UserIdentity{}
+	}
+	return UserIdentity{UserID: strconv.Itoa(info.UserID), Username: info.Username}
+}
+
+// IdentityFor returns the GitLab user behind a pooled credential, and whether
+// the pool holds an entry for it at all.
+//
+// Reading rather than resolving is the point: the answer was determined when
+// the entry was built, so a request costs a map lookup. A caller that gets
+// ok=false has asked before [ServerPool.GetOrCreate] ran for this credential.
+func (p *ServerPool) IdentityFor(token, gitlabURL string) (UserIdentity, bool) {
+	key := sessionKey(token, gitlabURL)
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	entry, ok := p.entries[key]
+	if !ok {
+		return UserIdentity{}, false
+	}
+	return entry.identity, true
 }
 
 // insertEntry commits a freshly built entry under the write lock. If another
@@ -320,8 +443,8 @@ var ErrInvalidCredential = errors.New("gitlab rejected the credential")
 // entry is admitted: failing closed whenever GitLab is unreachable would turn
 // an instance outage into a total denial of service, which is worse than the
 // churn this prevents.
-func verifyCredential(client *gitlabclient.Client) error {
-	ctx, cancel := context.WithTimeout(context.Background(), credentialCheckTimeout)
+func verifyCredential(base context.Context, client *gitlabclient.Client) error {
+	ctx, cancel := context.WithTimeout(base, credentialCheckTimeout)
 	defer cancel()
 
 	if client.CredentialRejected(ctx) {
@@ -345,7 +468,7 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string) 
 	// pin it explicitly via --tier/GITLAB_TIER.
 	autoDetectTier := !p.cfg.TierExplicit
 	if autoDetectTier || !p.cfg.IgnoreScopes {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(p.lifetime(), 10*time.Second)
 		defer cancel()
 
 		if autoDetectTier {

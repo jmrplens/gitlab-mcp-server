@@ -45,10 +45,17 @@ const (
 
 	cmdPattern      = "./cmd/..."
 	internalPattern = "./internal/..."
-	e2eSuitePattern = "./test/e2e/suite"
+	e2ePattern      = "./test/e2e/..."
 	e2eSuiteRun     = "./test/e2e/suite/"
-	e2eSuitePath    = "test/e2e/suite"
-	e2eSuiteDisplay = "test/e2e/suite/"
+	e2ePath         = "test/e2e"
+	e2eDisplay      = "test/e2e/"
+	// orbitliveTag reveals test/e2e/orbit to `go list`: every file in that
+	// package is behind it, so without the tag the package reports no Go
+	// files and drops out of the listing entirely — which is why its four
+	// live-test functions were missing from these totals while the README,
+	// which reads the git index, counted them. The tag gates nothing outside
+	// that directory, so cmd/ and internal/ resolve identically with it.
+	orbitliveTag = "orbitlive"
 
 	goFileSuffix     = ".go"
 	goTestFileSuffix = "_test.go"
@@ -238,7 +245,7 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 
 	metrics := repositoryMetrics{
 		NamingCounts: map[string]int{},
-		E2ENote:      "E2E tests are counted statically from test/e2e/suite because they require a real GitLab fixture to execute.",
+		E2ENote:      "E2E tests are counted statically from test/e2e because they require a live GitLab to execute: test/e2e/suite needs a provisioned instance, and test/e2e/orbit needs a gitlab.com token for the Knowledge Graph API.",
 	}
 
 	coverageByPackage := map[string]coverageValue{}
@@ -310,7 +317,7 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 
 // listPackages returns all packages covered by the testing reference document.
 func listPackages(ctx context.Context) ([]packageInfo, error) {
-	output, err := runGo(ctx, []string{"list", "-f", "{{.ImportPath}}\t{{.Dir}}\t{{.Name}}", cmdPattern, internalPattern, e2eSuitePattern})
+	output, err := runGo(ctx, []string{"list", "-tags", orbitliveTag, "-f", "{{.ImportPath}}\t{{.Dir}}\t{{.Name}}", cmdPattern, internalPattern, e2ePattern})
 	if err != nil {
 		return nil, fmt.Errorf("list packages: %w", err)
 	}
@@ -786,7 +793,7 @@ func renderOverview(metrics repositoryMetrics) string {
 			{"cmd test functions", fmtInt(totals[layerCmd].tests)},
 			{fmt.Sprintf(testFilesMetricFormat, internalPathPrefix), fmtInt(testFilesWithPrefix(metrics.Packages, internalPathPrefix))},
 			{fmt.Sprintf(testFilesMetricFormat, cmdPathPrefix), fmtInt(testFilesWithPrefix(metrics.Packages, cmdPathPrefix))},
-			{fmt.Sprintf(testFilesMetricFormat, e2eSuiteDisplay), fmtInt(testFilesWithPrefix(metrics.Packages, e2eSuitePath))},
+			{fmt.Sprintf(testFilesMetricFormat, e2eDisplay), fmtInt(testFilesWithPrefix(metrics.Packages, e2ePath))},
 			{"Tool sub-packages tested", fmtInt(countTestedPackages(toolPackages))},
 			{"Core packages tested", fmtInt(countTestedPackages(corePackages))},
 			{fmt.Sprintf("Overall coverage (`go test %s %s`)", internalPattern, cmdPattern), fmtCoverage(metrics.OverallCoverage)},
@@ -1237,7 +1244,7 @@ func classifyLayer(relPath string) string {
 		return layerCore
 	case strings.HasPrefix(relPath, cmdPathPrefix):
 		return layerCmd
-	case relPath == e2eSuitePath:
+	case strings.HasPrefix(relPath, e2ePath):
 		return layerE2E
 	default:
 		return layerOther
