@@ -204,6 +204,9 @@ Para despliegues HTTP en producción, considera usar el modo OAuth (`--auth-mode
 - La identidad del token se cachea durante `--oauth-cache-ttl` (por defecto: 15 minutos, rango: 1m–2h), con clave hash SHA-256 — los tokens en claro nunca se almacenan
 - Los scopes concedidos se introspeccionan desde GitLab en lugar de asumirse
 - El modo OAuth es **solo Bearer**: `PRIVATE-TOKEN` se rechaza con `401`. Los clientes sin soporte OAuth envían un token de acceso personal como `Authorization: Bearer <glpat-...>`, que se verifica igual
+- El scope exigido es el menor privilegio con el que el despliegue puede funcionar: `read_api` con `--read-only` o `--safe-mode`, `api` en el resto de casos, anunciado en el `scopes_supported` de los metadatos. Un token `api` satisface ambos
+- Los rechazos son baratos y acotados: diez fallos de autenticación desde una misma dirección en un minuto se responden con `429`, y un token que GitLab ya rechazó se rechaza desde memoria durante cinco minutos en lugar de volver a preguntar. Ni una caída ni un `429` de GitLab se cachean nunca — no dicen nada sobre la credencial
+- Un GitLab saturado o inalcanzable responde `503` con `Retry-After` y **sin** desafío, no `401`. Reportarlo como token inválido haría que un cliente correcto descartase una credencial buena y arrancase un flujo de autorización nuevo, añadiendo carga justo cuando la instancia pedía menos
 
 Consulta [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) para crear la Aplicación OAuth de GitLab requerida, y [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/) para los detalles completos de configuración.
 
@@ -218,6 +221,8 @@ gitlab-mcp-server --http --trusted-origins=https://mcp.example.com
 ```
 
 Una lista blanca **es** validación: todo origen que no esté en ella se sigue rechazando. Una IP a secas sirve para despliegues locales, `*` acepta cualquier origen (desactivando la protección — solo razonable en una red de confianza o tras un proxy del mismo origen), y el origen de `--public-url` es de confianza automáticamente. Una entrada malformada impide arrancar.
+
+Permitir el origen es solo la mitad de lo que necesita un navegador. Antes de enviar un `POST` cross-origin con `Authorization`, envía un preflight `OPTIONS` sin credenciales — que el modo OAuth rechazaba con `401`, así que la petición real nunca llegaba a salir. Un preflight desde un origen de confianza se responde ahora con `204` y las cabeceras CORS, y la respuesta expone `Mcp-Session-Id` y `Mcp-Protocol-Version` para que un navegador pueda leerlas. El origen se devuelve tal cual en lugar de responder `*`, porque un navegador rechaza el comodín en una petición con credenciales.
 
 ## Verificación de la integridad del release
 

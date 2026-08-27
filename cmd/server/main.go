@@ -676,6 +676,10 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 	return validateOAuthCacheTTL(cfg.OAuthCacheTTL)
 }
 
+// validateOAuthCacheTTL bounds an explicitly configured TTL. A non-positive
+// value is not rejected here — see [oauthCacheTTL], which normalizes it at
+// the point of use so no construction path can produce the broken server a
+// zero would otherwise cause.
 func validateOAuthCacheTTL(ttl time.Duration) error {
 	if ttl <= 0 {
 		return nil
@@ -1279,16 +1283,16 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", healthHandler)
 	mux.HandleFunc("OPTIONS /.well-known/mcp/server-card.json", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set(headerAllowOrigin, "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		// A plain fetch of the card is a simple request and never
 		// preflights; this branch exists for the caller that adds a header
 		// of its own (a scanner stamping a request id, say), whose request
 		// the browser refuses unless the preflight names that header back.
 		// Echoing allows exactly what was asked for and nothing else.
-		if want := r.Header.Get("Access-Control-Request-Headers"); want != "" {
+		if want := r.Header.Get(headerRequestHeaders); want != "" {
 			w.Header().Set("Access-Control-Allow-Headers", want)
-			w.Header().Set("Vary", "Access-Control-Request-Headers")
+			w.Header().Set("Vary", headerRequestHeaders)
 		}
 		// Without a lifetime the browser preflights again on every fetch,
 		// which for a document that only changes with a release is two
@@ -1300,7 +1304,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// The card's audience is browser-based registry scanners; without
 		// CORS they cannot fetch it cross-origin (the SDK's OAuth metadata
 		// handler on this same server already sends the header).
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set(headerAllowOrigin, "*")
 		// The build runs detached and the handler only waits on it: the
 		// catalog registration inside is CPU work no context can
 		// interrupt, so a handler that called the builder inline would
@@ -1332,6 +1336,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 
 	var rootHandler http.Handler = mux
 	rootHandler = crossOriginProtectionMiddleware(cfg.TrustedOrigins, rootHandler)
+	rootHandler = corsMiddleware(cfg.TrustedOrigins, rootHandler)
 	rootHandler = securityHeadersMiddleware(rootHandler)
 	if hosts := allowedHosts(httpAddr); len(hosts) > 0 {
 		rootHandler = hostValidationMiddleware(hosts, rootHandler)
@@ -1409,24 +1414,37 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	resourceMetadataURL := oauth.MetadataURLFor(resourceID)
 	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))
 
-	// No rate limiter: the SDK's bearer middleware rejects unauthenticated
-	// requests before the gate sees them. The gate still classifies the
-	// GITLAB-URL and pool failures that the middleware cannot know about.
+	// The limiter is shared with the guard in front: both charge failures to
+	// the same per-address budget, so a caller cannot get a fresh allowance
+	// by failing at a different layer. The gate reaches it only for the pool
+	// rejections the guard cannot see.
+	authLimiter := serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
 	gate := &mcpServerGate{
 		pool:               pool,
 		gitlabURL:          cfg.GitLabURL,
+		limiter:            authLimiter,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		challenge:          `Bearer resource_metadata="` + resourceMetadataURL + `"`,
 		bearerOnly:         true,
 	}
 
 	tokenCache := oauth.NewTokenCache()
-	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cfg.OAuthCacheTTL, tokenCache)
+	rejectedTokens := oauth.NewRejectedTokens(rejectedTokenMaxSize, rejectedTokenTTL)
+	cacheTTL := oauthCacheTTL(cfg.OAuthCacheTTL)
+	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cacheTTL, tokenCache)
 	// The scope demanded is the least privilege this deployment can work
 	// with, not a constant: the verifier reports a token's real scopes, and
 	// the SDK requires every listed scope to be present, so a hardcoded
 	// "api" would 403 a read_api token on a server that cannot write.
 	requiredScope := oauth.RequiredScope(cfg.ReadOnly, cfg.SafeMode)
+	guard := &bearerGuard{
+		verify:             verifier,
+		rejected:           rejectedTokens,
+		limiter:            authLimiter,
+		trustedProxyHeader: cfg.TrustedProxyHeader,
+		metadataURL:        resourceMetadataURL,
+		requiredScope:      requiredScope,
+	}
 	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{requiredScope}})
 	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.GitLabURL, requiredScope)
 	// Both derivations of RFC 9728 §3 resolve: the path-less form and the
@@ -1441,9 +1459,37 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	// Bearer only: oauth mode advertises the RFC 6750 scheme, so the legacy
 	// PRIVATE-TOKEN header alias is not silently rewritten into it here —
 	// what the challenge advertises is exactly what is accepted.
-	mux.Handle("/", authMiddleware(gate.middleware(mcpHandler)))
+	//
+	// The guard wraps the SDK middleware rather than replacing it: only the
+	// SDK can publish the token info its streamable handler reads back, so
+	// it stays, and its verification is a cache hit on what the guard has
+	// already resolved.
+	mux.Handle("/", guard.middleware(authMiddleware(gate.middleware(mcpHandler))))
 	startPeriodicCleanup(ctx, tokenCache.Cleanup)
-	slog.Info("oauth mode enabled", "cache_ttl", cfg.OAuthCacheTTL, "resource", resourceID, "metadata_url", resourceMetadataURL)
+	startPeriodicCleanup(ctx, rejectedTokens.Cleanup)
+	startPeriodicCleanup(ctx, authLimiter.Cleanup)
+	slog.Info("oauth mode enabled", "cache_ttl", cacheTTL, "resource", resourceID, "metadata_url", resourceMetadataURL)
+}
+
+// oauthCacheTTL returns a TTL the verifier can actually work with.
+//
+// The value is not only a cache lifetime: the verifier stamps it into
+// auth.TokenInfo.Expiration, and the SDK's bearer middleware refuses a token
+// whose expiration has passed. A zero or negative TTL therefore expires every
+// token the instant it is verified, and the server answers 401 to every
+// request carrying a perfectly valid credential.
+//
+// Normalizing here rather than rejecting at config validation keeps the
+// invariant at the point that depends on it: a Config built by any path — the
+// flag layer, the environment overlay, a test constructing a zero value —
+// cannot produce that server.
+func oauthCacheTTL(configured time.Duration) time.Duration {
+	if configured > 0 {
+		return configured
+	}
+	slog.Warn("oauth cache ttl is not positive; using the default",
+		"configured", configured, "using", config.DefaultOAuthCacheTTL)
+	return config.DefaultOAuthCacheTTL
 }
 
 func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, mux *http.ServeMux) {
@@ -1663,6 +1709,74 @@ func buildTrustedOrigins(csv, publicURL string) []string {
 		}
 	}
 	return origins
+}
+
+// CORS values for the MCP endpoint. The header list is the union of what the
+// transport defines and what this server reads: a browser sends only the
+// headers it was told it may send, so anything omitted here becomes a header
+// a browser client silently cannot use.
+const (
+	corsAllowMethods = "GET, POST, DELETE, OPTIONS"
+	corsAllowHeaders = "Authorization, Content-Type, Accept, PRIVATE-TOKEN, GITLAB-URL, " +
+		"Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID"
+	// The session and protocol headers are unsafelisted response headers, so
+	// a browser cannot read them unless they are exposed by name.
+	corsExposeHeaders = "Mcp-Session-Id, Mcp-Protocol-Version"
+	corsMaxAge        = "86400"
+)
+
+// CORS response and request header names, each used on more than one path.
+const (
+	headerAllowOrigin    = "Access-Control-Allow-Origin"
+	headerRequestMethod  = "Access-Control-Request-Method"
+	headerRequestHeaders = "Access-Control-Request-Headers"
+)
+
+// corsMiddleware makes trusted origins usable from an actual browser.
+//
+// Allowing an origin past the cross-origin protection is only half of it. A
+// browser will not even send the POST until a preflight OPTIONS comes back
+// with permission, and in oauth mode that preflight — which carries no
+// Authorization header, by definition — was answered 401 by the bearer
+// middleware. The effect was that --trusted-origins worked for anything
+// except the browser clients it exists for, unless a reverse proxy in front
+// answered the preflight on the server's behalf.
+//
+// Only origins the operator has trusted get an answer. An untrusted origin
+// is passed through unchanged and reaches the protection below, which is
+// what refuses it; no header here weakens that decision.
+func corsMiddleware(trustedOrigins []string, next http.Handler) http.Handler {
+	if len(trustedOrigins) == 0 {
+		return next
+	}
+	allowAll := slices.Contains(trustedOrigins, "*")
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin == "" || (!allowAll && !slices.Contains(trustedOrigins, origin)) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// Vary regardless of the outcome: the response body for a given URL
+		// does not depend on Origin, but these headers do, and a cache that
+		// does not know that would serve one origin's permission to another.
+		w.Header().Add("Vary", "Origin")
+		// The origin is echoed rather than answered with "*" because these
+		// requests carry an Authorization header; "*" is invalid for a
+		// credentialed request and browsers reject it.
+		w.Header().Set(headerAllowOrigin, origin)
+		w.Header().Set("Access-Control-Expose-Headers", corsExposeHeaders)
+
+		if r.Method == http.MethodOptions && r.Header.Get(headerRequestMethod) != "" {
+			w.Header().Add("Vary", headerRequestMethod)
+			w.Header().Add("Vary", headerRequestHeaders)
+			w.Header().Set("Access-Control-Allow-Methods", corsAllowMethods)
+			w.Header().Set("Access-Control-Allow-Headers", corsAllowHeaders)
+			w.Header().Set("Access-Control-Max-Age", corsMaxAge)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // crossOriginProtectionMiddleware applies explicit CSRF-oriented checks for

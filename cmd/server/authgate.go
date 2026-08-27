@@ -33,6 +33,7 @@ const (
 const (
 	errCodeInvalidRequest      = -32600 // standard JSON-RPC "Invalid Request"
 	errCodeUnauthorized        = -40100 // mirrors HTTP 401
+	errCodeForbidden           = -40300 // mirrors HTTP 403
 	errCodeTooManyRequests     = -42900 // mirrors HTTP 429
 	errCodeUpstreamUnavailable = -50300 // mirrors HTTP 503
 )
@@ -57,6 +58,13 @@ const legacyAuthChallenge = `Bearer realm="gitlab-mcp-server"`
 const missingTokenMessage = "Authentication required: send a GitLab personal access token as " +
 	"'Authorization: Bearer <glpat-...>' or 'PRIVATE-TOKEN: <glpat-...>'. " +
 	"This server uses static token authentication; no OAuth authorization server is configured."
+
+// oauthMissingTokenMessage is the equivalent for --auth-mode=oauth, where
+// PRIVATE-TOKEN is not an accepted alias and the client is expected to
+// discover the authorization server rather than be handed a token by a human.
+const oauthMissingTokenMessage = "Authentication required: send an OAuth access token as " +
+	"'Authorization: Bearer <token>'. Discover the authorization server through the " +
+	"resource_metadata URL in this response's WWW-Authenticate header."
 
 // resolvedServerContextKey carries the pool server that [mcpServerGate] resolved
 // for a request through to the SDK's getServer callback.
@@ -85,6 +93,22 @@ type gateFailure struct {
 	// header carries response headers the status requires, such as
 	// WWW-Authenticate on 401 or Retry-After on 429.
 	header http.Header
+}
+
+// newHeader builds a canonical single-value header set.
+//
+// Constructing an http.Header from a map literal skips canonicalization, so a
+// key spelled the way its RFC spells it — "WWW-Authenticate" — never answers
+// Header.Get, whose lookup key is canonicalized to "Www-Authenticate". The
+// wire output stays correct either way because [gateFailure.write] uses Add,
+// but anything reading a failure back sees an empty header. Pairs arrive as
+// alternating name and value; an odd trailing name is ignored.
+func newHeader(pairs ...string) http.Header {
+	h := http.Header{}
+	for i := 0; i+1 < len(pairs); i += 2 {
+		h.Set(pairs[i], pairs[i+1])
+	}
+	return h
 }
 
 // jsonRPCError is the wire shape of a transport-level rejection.
@@ -139,9 +163,10 @@ func (f *gateFailure) write(w http.ResponseWriter) {
 type mcpServerGate struct {
 	pool      *serverpool.ServerPool
 	gitlabURL string
-	// limiter blocks IPs with repeated authentication failures. It is nil in
-	// OAuth mode, where the SDK's bearer middleware rejects unauthenticated
-	// requests before they reach the gate.
+	// limiter blocks IPs with repeated authentication failures. In OAuth
+	// mode it is the same limiter [bearerGuard] uses, so the two layers
+	// share one per-address budget and a caller cannot earn a fresh
+	// allowance by failing at whichever layer it has not exhausted yet.
 	limiter            *serverpool.AuthRateLimiter
 	trustedProxyHeader string
 	// challenge is the WWW-Authenticate value sent with a 401.
@@ -195,9 +220,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 			status:  http.StatusTooManyRequests,
 			code:    errCodeTooManyRequests,
 			message: "Too many failed authentication attempts from this address. Retry later with a valid token.",
-			header: http.Header{
-				"Retry-After": []string{strconv.Itoa(int(authFailureWindow.Seconds()))},
-			},
+			header:  newHeader("Retry-After", strconv.Itoa(int(authFailureWindow.Seconds()))),
 		}
 	}
 
@@ -211,7 +234,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,
 			message: missingTokenMessage,
-			header:  http.Header{"WWW-Authenticate": []string{g.challenge}},
+			header:  newHeader("WWW-Authenticate", g.challenge),
 		}
 	}
 
@@ -240,7 +263,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,
 			message: "GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.",
-			header:  http.Header{"WWW-Authenticate": []string{g.challenge}},
+			header:  newHeader("WWW-Authenticate", g.challenge),
 		}
 	}
 	if err != nil {

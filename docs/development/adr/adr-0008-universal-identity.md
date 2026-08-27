@@ -11,7 +11,7 @@ superseded_by: ""
 
 ## Status
 
-**Accepted** — implements unified identity resolution across stdio, HTTP legacy, and HTTP OAuth transport modes.
+**Accepted, partially unimplemented** — the unified resolution API exists and stdio and HTTP OAuth populate it. HTTP legacy does not: see the Superseded note under Decision. The title's "universal" describes the interface, not the coverage.
 
 ## Context
 
@@ -46,7 +46,7 @@ Each tool handler calls `client.CurrentUser(ctx)` on demand to resolve identity.
 
 #### Option 4: RequireBearerToken for HTTP + context fallback for stdio (accepted)
 
-- HTTP modes: Use `auth.RequireBearerToken` middleware with a `NormalizeAuthHeader` adapter for legacy PRIVATE-TOKEN headers. The SDK automatically populates `req.Extra.TokenInfo`.
+- HTTP modes: Use `auth.RequireBearerToken` middleware with a `NormalizeAuthHeader` adapter for legacy PRIVATE-TOKEN headers. The SDK automatically populates `req.Extra.TokenInfo`. *(The adapter was later removed — see the Superseded note below.)*
 - Stdio mode: Resolve identity once at startup via `CurrentUser`, store in context via `IdentityToContext(ctx, identity)`.
 - Unified resolution: `ResolveIdentity(ctx, req)` checks `req.Extra.TokenInfo` first, falls back to context.
 
@@ -66,7 +66,11 @@ Implement Option 4 with the following architecture:
 - `auth.RequireBearerToken(verifier)` applied to all HTTP modes.
 - `oauth.NormalizeAuthHeader` middleware wraps only non-OAuth mode, converting `PRIVATE-TOKEN` header to `Authorization: Bearer`.
 
-> **Superseded (2026-08)**: the normalization adapter is no longer mounted. OAuth mode is Bearer-only — what the `WWW-Authenticate` challenge advertises is exactly what is accepted — and legacy mode reads both headers directly. A personal access token sent as `Authorization: Bearer` works in either mode, so nothing is lost.
+> **Superseded (2026-08)**: the normalization adapter is gone. OAuth mode is Bearer-only — what the `WWW-Authenticate` challenge advertises is exactly what is accepted — and legacy mode reads both headers directly through `serverpool.ExtractToken`, never through this package. A personal access token sent as `Authorization: Bearer` works in either mode, so nothing is lost.
+>
+> `oauth.NormalizeAuthHeader` survived as unmounted code for a while after that, with this document still describing it as wired. It was deleted in 2026-08; the surviving statements about it below record what was decided in 2025, not how the server behaves.
+>
+> Two further corrections to the description above: `auth.RequireBearerToken` is mounted in **oauth mode only**, not "all HTTP modes" — legacy mode authenticates in `mcpServerGate` alone, which is why `req.Extra.TokenInfo` is unset there and identity in legacy HTTP mode degrades to the empty value that `ResolveIdentity` returns. And in oauth mode the SDK middleware is no longer the outermost layer: `bearerGuard` runs in front of it to rate-limit, cache rejections, and answer with RFC 6750 error codes.
 
 ### Stdio Mode (`cmd/server/main.go`)
 
@@ -85,16 +89,16 @@ Implement Option 4 with the following architecture:
 
 ### Positive
 
-- **POS-001**: All tool handlers can access user identity via `ResolveIdentity(ctx, req)` regardless of transport mode.
+- **POS-001**: ~~All tool handlers can access user identity via `ResolveIdentity(ctx, req)` regardless of transport mode.~~ Narrowed: the call is uniform, the coverage is not. It resolves an identity in stdio and HTTP OAuth mode, and returns the zero value in HTTP legacy mode, where nothing populates `req.Extra.TokenInfo`. Its only consumer today is log enrichment in `toolutil/logging.go`, so the visible effect is a missing username in some log lines.
 - **POS-002**: HTTP legacy mode now validates tokens against GitLab (was previously unvalidated).
 - **POS-003**: Caching prevents redundant GitLab API calls — single validation per token per TTL period.
-- **POS-004**: The `NormalizeAuthHeader` adapter enables legacy clients to work without code changes.
+- **POS-004**: ~~The `NormalizeAuthHeader` adapter enables legacy clients to work without code changes.~~ Withdrawn: the adapter was removed. Legacy clients keep working because the legacy gate reads `PRIVATE-TOKEN` directly.
 - **POS-005**: Clean API — tool handlers call one function, no mode-specific branching.
 
 ### Negative
 
 - **NEG-001**: Stdio mode identity is resolved once at startup. If the token is revoked mid-session, the identity remains stale until restart.
-- **NEG-002**: The `NormalizeAuthHeader` middleware adds minimal overhead to every HTTP legacy request (header copy).
+- **NEG-002**: ~~The `NormalizeAuthHeader` middleware adds minimal overhead to every HTTP legacy request (header copy).~~ Withdrawn with POS-004: there is no such middleware.
 
 ### Neutral
 

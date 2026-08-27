@@ -108,6 +108,28 @@ Two behaviors are worth knowing:
 - **`--public-url` seeds its own origin.** The flag already declares the externally reachable origin of the deployment, so that origin is trusted automatically. In OAuth mode `--public-url` is required, which means the origin RFC 9728 discovery points at is trusted without extra configuration.
 - **A malformed origin fails startup.** A deployment that believes an origin is trusted when it is not is worse than one that refuses to start, so entries are validated before the server is built.
 
+### The browser preflight
+
+Allowing an origin past the protection is only half of what a browser needs. Before it sends a cross-origin `POST` carrying `Authorization` or `Content-Type: application/json`, it sends a preflight `OPTIONS` — and that request carries no credentials by definition. In OAuth mode the bearer layer answered it `401`, so the browser never sent the real request and `--trusted-origins` appeared to do nothing unless a reverse proxy in front answered the preflight instead.
+
+A preflight from a trusted origin is now answered directly:
+
+```http
+HTTP/1.1 204 No Content
+Access-Control-Allow-Origin: https://claude.ai
+Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
+Access-Control-Allow-Headers: Authorization, Content-Type, Accept, PRIVATE-TOKEN, GITLAB-URL, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID
+Access-Control-Max-Age: 86400
+Vary: Origin
+```
+
+The actual response then carries `Access-Control-Allow-Origin` and `Access-Control-Expose-Headers: Mcp-Session-Id, Mcp-Protocol-Version` — without the latter a browser cannot read either header, since neither is CORS-safelisted.
+
+Two properties are deliberate:
+
+- **The origin is echoed, never `*`.** These requests carry an `Authorization` header, and a browser rejects the wildcard on a credentialed request. `--trusted-origins='*'` echoes whatever origin asked rather than emitting a literal asterisk.
+- **An untrusted origin gets no header.** It is passed straight to the protection above, which refuses it. Nothing here widens the trust decision; it only makes an already-granted one usable.
+
 ## TLS
 
 - All GitLab API communication uses HTTPS by default
@@ -182,15 +204,43 @@ When running with `--auth-mode=oauth`, the server validates every request's Bear
 - **[RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata** — The `/.well-known/oauth-protected-resource` endpoint advertises the GitLab authorization server URL, enabling compliant OAuth clients to discover the token issuer
 - **PKCE** — The OAuth 2.1 flow uses Proof Key for Code Exchange (PKCE) to protect against authorization code interception attacks. MCP clients generate a code verifier/challenge pair for each authorization request
 - **Cache eviction** — A background goroutine runs every 30 seconds to clean up expired entries. The cache is bounded by TTL, not by size
+- **Least-privilege scope** — the deployment demands `read_api` under `--read-only` or `--safe-mode` and `api` otherwise, advertises that in the metadata's `scopes_supported`, and refuses a token without it. An `api` token satisfies a `read_api` requirement, since `api` is a superset
+
+### Rejections are cheap, and they are bounded
+
+An unauthenticated request is something anyone can generate. Relaying each one to GitLab to ask whether the token is valid turns a public deployment into an amplifier: attacker traffic becomes load on someone else's API, and on gitlab.com it becomes rate-limit pressure charged to the server's own address, where it lands on the legitimate users sharing it.
+
+Three layers sit in front of that, in this order:
+
+1. **Per-address failure budget** — ten authentication failures in one minute block the address for the rest of the window, answered `429` with `Retry-After`. Checked first, so a blocked caller costs nothing at all. Failures at this layer and at the pool share one budget, so exhausting one does not earn a fresh allowance at the other.
+2. **Rejected-token cache** — a token GitLab has already refused is refused from memory for five minutes without asking again. Keyed by SHA-256 digest, never the raw credential, and bounded to 4096 entries because the keys come from the caller.
+3. **Verified-identity cache** — the existing positive cache, so an accepted token is verified once per TTL rather than once per request.
+
+Neither cache records an upstream failure. A timeout, a `5xx`, or a `429` from GitLab says nothing about the credential, so caching one would lock out a valid token for the whole TTL over a transient outage.
+
+### What a rejection tells the client
+
+The [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750) error code in `WWW-Authenticate` is the difference between a client reauthorizing, asking for more scope, or simply retrying:
+
+| Condition                       | Status | Challenge                                            |
+| ------------------------------- | ------ | ---------------------------------------------------- |
+| No credential at all            | `401`  | no `error` code (RFC 6750 §3.1), `resource_metadata` |
+| GitLab rejected the token       | `401`  | `error="invalid_token"` with a description           |
+| Token lacks the required scope  | `403`  | `error="insufficient_scope"`, `scope="<required>"`   |
+| Address over the failure budget | `429`  | none; `Retry-After`                                  |
+| GitLab throttled or unreachable | `503`  | **none**; `Retry-After`                              |
+
+The last row matters more than it looks. Reporting a throttled GitLab as `invalid_token` makes a well-behaved MCP client discard a good credential and start a fresh authorization flow — generating more upstream traffic at exactly the moment the instance asked for less, and asking the user to re-approve an application that was never the problem. A `503` carries no challenge, propagates GitLab's own `Retry-After` when it sent one, and says plainly that the token has not been rejected.
 
 See [HTTP Server Mode — OAuth Mode](../guides/http-server-mode.md#oauth-mode) for the full architecture and flow diagram, and [OAuth App Setup](../guides/oauth-app-setup.md) for creating GitLab OAuth applications.
 
-| Threat            | Mitigation                                                           |
-| ----------------- | -------------------------------------------------------------------- |
-| Token replay      | TTL-based expiration; tokens re-verified after cache expires         |
-| Cache key leakage | SHA-256 hashing of raw tokens; original tokens never stored          |
-| Brute force       | GitLab API rate limiting applies to verification requests            |
-| Memory dump       | Only SHA-256 hashes and user metadata stored; no raw tokens in cache |
+| Threat                 | Mitigation                                                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token replay           | TTL-based expiration; tokens re-verified after cache expires                                                                                    |
+| Cache key leakage      | SHA-256 hashing of raw tokens; original tokens never stored                                                                                     |
+| Brute force            | Per-address failure budget (10/minute) plus a rejected-token cache, so repeated attempts never reach GitLab                                     |
+| Upstream amplification | A repeated token is answered from memory, and the failure budget caps the rest: at most ten distinct-token verifications per address per window |
+| Memory dump            | Only SHA-256 hashes and user metadata stored; no raw tokens in cache                                                                            |
 
 ## PAT Scope-Based Tool Filtering
 
