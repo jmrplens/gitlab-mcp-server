@@ -204,6 +204,9 @@ For production HTTP deployments, consider using OAuth mode (`--auth-mode=oauth`)
 - Token identity is cached for `--oauth-cache-ttl` (default: 15 minutes, range: 1m–2h), keyed by a SHA-256 hash — raw tokens are never stored
 - Granted scopes are introspected from GitLab rather than assumed
 - OAuth mode is **Bearer-only**: `PRIVATE-TOKEN` is rejected with `401`. Clients without OAuth support send a personal access token as `Authorization: Bearer <glpat-...>`, which is verified the same way
+- The scope demanded is the least privilege the deployment can work with: `read_api` under `--read-only` or `--safe-mode`, `api` otherwise, advertised in the metadata's `scopes_supported`. An `api` token satisfies both
+- Rejections are cheap and bounded: ten authentication failures from one address in a minute earn a `429`, and a token GitLab has already refused is refused from memory for five minutes rather than asked about again. Neither an outage nor a `429` from GitLab is ever cached — those say nothing about the credential
+- A throttled or unreachable GitLab answers `503` with `Retry-After` and **no** challenge, not `401`. Reporting it as an invalid token would make a well-behaved client discard a good credential and start a fresh authorization flow, adding upstream load exactly when the instance asked for less
 
 See [`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md) for creating the required GitLab OAuth Application, and [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/) for full configuration details.
 
@@ -218,6 +221,8 @@ gitlab-mcp-server --http --trusted-origins=https://mcp.example.com
 ```
 
 An allowlist **is** validation: every origin not on it is still refused. A bare IP works for local deployments, `*` accepts any origin (disabling the protection — only sensible on a trusted network or behind a same-origin proxy), and the `--public-url` origin is trusted automatically. A malformed entry fails startup.
+
+Allowing the origin is only half of what a browser needs. Before it sends a cross-origin `POST` carrying `Authorization`, it sends a preflight `OPTIONS` with no credentials — which OAuth mode used to refuse with `401`, so the real request never happened. A preflight from a trusted origin is now answered `204` with the CORS headers, and the response exposes `Mcp-Session-Id` and `Mcp-Protocol-Version` so a browser can actually read them. The origin is echoed rather than answered with `*`, because a browser rejects the wildcard on a credentialed request.
 
 ## Verifying release integrity
 

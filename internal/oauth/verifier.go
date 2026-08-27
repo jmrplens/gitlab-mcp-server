@@ -4,11 +4,13 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -31,6 +33,57 @@ func RequiredScope(readOnly, safeMode bool) string {
 		return ScopeReadAPI
 	}
 	return ScopeAPI
+}
+
+// UpstreamError reports that the GitLab instance could not answer the
+// verification request, as opposed to answering that the token is bad.
+//
+// The distinction is not cosmetic. Reporting a throttled or unreachable
+// GitLab as an invalid token tells a well-behaved MCP client to discard a
+// perfectly good credential and start a fresh authorization flow — which
+// generates more upstream traffic at the exact moment the instance asked for
+// less, and asks the user to re-approve an application that was never the
+// problem.
+type UpstreamError struct {
+	// Status is the HTTP status GitLab returned, or 0 when the request never
+	// produced a response at all.
+	Status int
+	// RetryAfter is the delay GitLab asked for, or 0 when it did not say.
+	RetryAfter time.Duration
+	// Err is the underlying cause.
+	Err error
+}
+
+func (e *UpstreamError) Error() string {
+	if e.Status == 0 {
+		return fmt.Sprintf("gitlab unreachable for token verification: %v", e.Err)
+	}
+	return fmt.Sprintf("gitlab could not verify the token (HTTP %d): %v", e.Status, e.Err)
+}
+
+func (e *UpstreamError) Unwrap() error { return e.Err }
+
+// retryAfter reads RFC 9110 Retry-After, which is either delta-seconds or an
+// HTTP-date. An absent, malformed, or past value yields zero, meaning "the
+// server did not tell us"; the caller supplies its own default rather than
+// inventing one here.
+func retryAfter(resp *http.Response) time.Duration {
+	raw := strings.TrimSpace(resp.Header.Get("Retry-After"))
+	if raw == "" {
+		return 0
+	}
+	if seconds, err := strconv.Atoi(raw); err == nil {
+		if seconds <= 0 {
+			return 0
+		}
+		return time.Duration(seconds) * time.Second
+	}
+	if when, err := http.ParseTime(raw); err == nil {
+		if d := time.Until(when); d > 0 {
+			return d
+		}
+	}
+	return 0
 }
 
 // gitlabUserResponse holds the minimal fields from GitLab's /api/v4/user endpoint.
@@ -82,7 +135,7 @@ func NewGitLabVerifier(gitlabURL string, skipTLS bool, cacheTTL time.Duration, c
 
 		resp, err := client.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("token verification request failed: %w", err)
+			return nil, &UpstreamError{Err: fmt.Errorf("token verification request failed: %w", err)}
 		}
 		defer resp.Body.Close()
 
@@ -92,9 +145,14 @@ func NewGitLabVerifier(gitlabURL string, skipTLS bool, cacheTTL time.Duration, c
 		case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 			return nil, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
 		case resp.StatusCode == http.StatusTooManyRequests:
-			return nil, fmt.Errorf("GitLab rate limit exceeded (HTTP 429) — retry later: %w", auth.ErrInvalidToken)
+			// Not an invalid token: GitLab declined to answer the question.
+			return nil, &UpstreamError{
+				Status:     resp.StatusCode,
+				RetryAfter: retryAfter(resp),
+				Err:        errors.New("rate limit exceeded"),
+			}
 		case resp.StatusCode >= 500:
-			return nil, fmt.Errorf("GitLab server error (HTTP %d)", resp.StatusCode)
+			return nil, &UpstreamError{Status: resp.StatusCode, Err: errors.New("server error")}
 		default:
 			return nil, fmt.Errorf("unexpected GitLab response (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
 		}

@@ -24,6 +24,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -5512,4 +5513,169 @@ func TestBuildTrustedOrigins_SeedsPublicURLOrigin(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestCorsMiddleware_TrustedOriginPreflight_IsAnswered verifies the fix that
+// makes --trusted-origins usable from an actual browser. Allowing an origin
+// past the cross-origin protection is only half of it: a browser will not
+// send the POST until a preflight comes back with permission, and in oauth
+// mode that preflight carries no Authorization header by definition, so the
+// bearer layer answered it 401 and the real request never happened.
+func TestCorsMiddleware_TrustedOriginPreflight_IsAnswered(t *testing.T) {
+	t.Parallel()
+
+	var reached atomic.Bool
+	handler := corsMiddleware([]string{"https://claude.ai"}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		reached.Store(true)
+	}))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/mcp", http.NoBody)
+	req.Header.Set("Origin", "https://claude.ai")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if reached.Load() {
+		t.Error("a preflight must be answered here, not forwarded to the authenticated handler")
+	}
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+	want := map[string]string{
+		"Access-Control-Allow-Origin":  "https://claude.ai",
+		"Access-Control-Allow-Methods": corsAllowMethods,
+		"Access-Control-Allow-Headers": corsAllowHeaders,
+		"Access-Control-Max-Age":       corsMaxAge,
+	}
+	for name, value := range want {
+		if got := rec.Header().Get(name); got != value {
+			t.Errorf("%s = %q, want %q", name, got, value)
+		}
+	}
+	// The origin is echoed, never "*": these requests carry Authorization,
+	// and a browser rejects the wildcard on a credentialed request.
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got == "*" {
+		t.Error("a credentialed endpoint must echo the origin, not answer with *")
+	}
+	if !slices.Contains(rec.Header().Values("Vary"), "Origin") {
+		t.Error("the response varies by Origin and must say so")
+	}
+}
+
+// TestCorsMiddleware_UntrustedOrigin_IsLeftToTheProtection verifies that this
+// middleware never widens the trust decision: an origin the operator did not
+// list gets no permission headers and is passed down to the cross-origin
+// protection, which is what refuses it.
+func TestCorsMiddleware_UntrustedOrigin_IsLeftToTheProtection(t *testing.T) {
+	t.Parallel()
+
+	var reached atomic.Bool
+	handler := corsMiddleware([]string{"https://claude.ai"}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/mcp", http.NoBody)
+	req.Header.Set("Origin", "https://evil.example")
+	req.Header.Set("Access-Control-Request-Method", "POST")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if !reached.Load() {
+		t.Error("an untrusted origin must be passed through, not answered here")
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want none for an untrusted origin", got)
+	}
+}
+
+// TestCorsMiddleware_ActualRequest_ExposesTransportHeaders verifies the
+// non-preflight half: a real cross-origin request from a trusted origin must
+// carry the allow header, and must name the session and protocol headers,
+// which a browser cannot read otherwise because neither is CORS-safelisted.
+func TestCorsMiddleware_ActualRequest_ExposesTransportHeaders(t *testing.T) {
+	t.Parallel()
+
+	var reached atomic.Bool
+	handler := corsMiddleware([]string{"https://claude.ai"}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+	req.Header.Set("Origin", "https://claude.ai")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if !reached.Load() {
+		t.Error("an actual request must reach the handler")
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://claude.ai" {
+		t.Errorf("Access-Control-Allow-Origin = %q, want the request origin", got)
+	}
+	if got := rec.Header().Get("Access-Control-Expose-Headers"); got != corsExposeHeaders {
+		t.Errorf("Access-Control-Expose-Headers = %q, want %q", got, corsExposeHeaders)
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Methods"); got != "" {
+		t.Error("Access-Control-Allow-Methods belongs to a preflight response only")
+	}
+}
+
+// TestCorsMiddleware_WildcardAndNoOrigin_BehaveAsConfigured verifies the two
+// edges: '*' answers any origin, and a request with no Origin header — every
+// non-browser MCP client — is untouched.
+func TestCorsMiddleware_WildcardAndNoOrigin_BehaveAsConfigured(t *testing.T) {
+	t.Parallel()
+
+	t.Run("wildcard trusts any origin", func(t *testing.T) {
+		t.Parallel()
+		handler := corsMiddleware([]string{"*"}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/mcp", http.NoBody)
+		req.Header.Set("Origin", "https://anything.example")
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusNoContent {
+			t.Errorf("status = %d, want %d", rec.Code, http.StatusNoContent)
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "https://anything.example" {
+			t.Errorf("Access-Control-Allow-Origin = %q, want the echoed origin", got)
+		}
+	})
+
+	t.Run("no origin passes through untouched", func(t *testing.T) {
+		t.Parallel()
+		var reached atomic.Bool
+		handler := corsMiddleware([]string{"https://claude.ai"}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			reached.Store(true)
+		}))
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if !reached.Load() {
+			t.Error("a request with no Origin must reach the handler")
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+			t.Errorf("Access-Control-Allow-Origin = %q, want none when there is no Origin", got)
+		}
+	})
+
+	t.Run("no trusted origins disables the middleware", func(t *testing.T) {
+		t.Parallel()
+		var reached atomic.Bool
+		handler := corsMiddleware(nil, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			reached.Store(true)
+		}))
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/mcp", http.NoBody)
+		req.Header.Set("Origin", "https://claude.ai")
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if !reached.Load() {
+			t.Error("with no trusted origins configured nothing may be answered here")
+		}
+	})
 }

@@ -429,26 +429,6 @@ func TestNewGitLabVerifier_Forbidden(t *testing.T) {
 	}
 }
 
-// TestNewGitLabVerifier_RateLimited verifies that a 429 response returns
-// an error wrapping auth.ErrInvalidToken with rate-limit context.
-func TestNewGitLabVerifier_RateLimited(t *testing.T) {
-	t.Parallel()
-
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "too many requests", http.StatusTooManyRequests)
-	}))
-	defer srv.Close()
-
-	verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
-	_, err := verifier(context.Background(), "rate-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
-	if err == nil {
-		t.Fatal("expected error for 429 response")
-	}
-	if !isErrInvalidToken(err) {
-		t.Errorf("429 error should wrap auth.ErrInvalidToken, got: %v", err)
-	}
-}
-
 // TestNewGitLabVerifier_UserIDZero verifies that a valid HTTP 200 response
 // with user.ID == 0 returns an error wrapping auth.ErrInvalidToken.
 func TestNewGitLabVerifier_UserIDZero(t *testing.T) {
@@ -653,5 +633,95 @@ func TestRequiredScope_LeastPrivilegeForTheDeployment(t *testing.T) {
 				t.Errorf("RequiredScope(%t, %t) = %q, want %q", tt.readOnly, tt.safeMode, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestNewGitLabVerifier_UpstreamFailure_IsNotAnInvalidToken verifies the
+// distinction that matters most in this file: GitLab declining to answer is
+// not GitLab saying the token is bad. Reporting a throttled or unreachable
+// instance as invalid_token makes a well-behaved MCP client discard a good
+// credential and start a fresh authorization flow, adding upstream load at
+// exactly the wrong moment.
+func TestNewGitLabVerifier_UpstreamFailure_IsNotAnInvalidToken(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		status         int
+		retryAfter     string
+		wantStatus     int
+		wantRetryAfter time.Duration
+	}{
+		{"throttled with delta-seconds", http.StatusTooManyRequests, "17", http.StatusTooManyRequests, 17 * time.Second},
+		{"throttled without a hint", http.StatusTooManyRequests, "", http.StatusTooManyRequests, 0},
+		{"throttled with unparseable hint", http.StatusTooManyRequests, "soon", http.StatusTooManyRequests, 0},
+		{"throttled with a past date", http.StatusTooManyRequests, "Mon, 02 Jan 2006 15:04:05 GMT", http.StatusTooManyRequests, 0},
+		{"server error", http.StatusBadGateway, "", http.StatusBadGateway, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				if tt.retryAfter != "" {
+					w.Header().Set("Retry-After", tt.retryAfter)
+				}
+				w.WriteHeader(tt.status)
+			}))
+			defer srv.Close()
+
+			verifier := NewGitLabVerifier(srv.URL, false, time.Minute, nil)
+			_, err := verifier(t.Context(), "token", httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody))
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			if isErrInvalidToken(err) {
+				t.Errorf("an upstream failure must not wrap auth.ErrInvalidToken: %v", err)
+			}
+
+			var upstream *UpstreamError
+			if !errors.As(err, &upstream) {
+				t.Fatalf("error should be an *UpstreamError, got %T: %v", err, err)
+			}
+			if upstream.Status != tt.wantStatus {
+				t.Errorf("Status = %d, want %d", upstream.Status, tt.wantStatus)
+			}
+			if upstream.RetryAfter != tt.wantRetryAfter {
+				t.Errorf("RetryAfter = %v, want %v", upstream.RetryAfter, tt.wantRetryAfter)
+			}
+		})
+	}
+}
+
+// TestNewGitLabVerifier_UnreachableInstance_ReportsNoStatus verifies that a
+// transport failure — nothing was ever answered — is classified upstream with
+// a zero status, so a caller can tell "GitLab said 429" from "GitLab said
+// nothing at all" and still not blame the credential.
+func TestNewGitLabVerifier_UnreachableInstance_ReportsNoStatus(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	srv.Close() // closed immediately: the connection cannot be made
+
+	verifier := NewGitLabVerifier(srv.URL, false, time.Minute, nil)
+	_, err := verifier(t.Context(), "token", httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", http.NoBody))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if isErrInvalidToken(err) {
+		t.Errorf("an unreachable instance must not wrap auth.ErrInvalidToken: %v", err)
+	}
+
+	var upstream *UpstreamError
+	if !errors.As(err, &upstream) {
+		t.Fatalf("error should be an *UpstreamError, got %T: %v", err, err)
+	}
+	if upstream.Status != 0 {
+		t.Errorf("Status = %d, want 0 for a request that got no response", upstream.Status)
+	}
+	if upstream.Error() == "" {
+		t.Error("UpstreamError should describe itself")
 	}
 }
