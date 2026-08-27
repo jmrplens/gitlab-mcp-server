@@ -222,6 +222,8 @@ gitlab-mcp-server --http --trusted-origins=https://mcp.example.com
 
 Una lista blanca **es** validación: todo origen que no esté en ella se sigue rechazando. Una IP a secas sirve para despliegues locales, `*` acepta cualquier origen (desactivando la protección — solo razonable en una red de confianza o tras un proxy del mismo origen), y el origen de `--public-url` es de confianza automáticamente. Una entrada malformada impide arrancar.
 
+Si un proxy inverso delante ya anuncia CORS en nombre del servidor —la forma con la que arrancaron casi todos los despliegues—, ese bloque tiene que salir en el mismo cambio. Dos cabeceras `Access-Control-Allow-Origin` son un fallo de CORS, no una fusión: `curl` responde `200` y el navegador rechaza la respuesta diciendo que la cabecera «contiene múltiples valores… y solo se permite uno». Dejar las dos deja el endpoint peor que antes, porque el `*` solitario del proxy al menos servía para peticiones sin credenciales.
+
 Permitir el origen es solo la mitad de lo que necesita un navegador. Antes de enviar un `POST` cross-origin con `Authorization`, envía un preflight `OPTIONS` sin credenciales — que el modo OAuth rechazaba con `401`, así que la petición real nunca llegaba a salir. Un preflight desde un origen de confianza se responde ahora con `204` y las cabeceras CORS, y la respuesta expone `Mcp-Session-Id` y `Mcp-Protocol-Version` para que un navegador pueda leerlas. El origen se devuelve tal cual en lugar de responder `*`, porque un navegador rechaza el comodín en una petición con credenciales.
 
 ## Verificación de la integridad del release

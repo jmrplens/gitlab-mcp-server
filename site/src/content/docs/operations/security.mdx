@@ -222,6 +222,8 @@ gitlab-mcp-server --http --trusted-origins=https://mcp.example.com
 
 An allowlist **is** validation: every origin not on it is still refused. A bare IP works for local deployments, `*` accepts any origin (disabling the protection — only sensible on a trusted network or behind a same-origin proxy), and the `--public-url` origin is trusted automatically. A malformed entry fails startup.
 
+If a reverse proxy in front already advertises CORS on the server's behalf — the shape most deployments started with — that block has to come out in the same change. Two `Access-Control-Allow-Origin` headers is a CORS failure, not a merge: `curl` reports `200` and a browser refuses the response, saying the header "contains multiple values ... but only one is allowed". Keeping both leaves the endpoint worse off than before, because the proxy's lone `*` at least worked for requests without credentials.
+
 Allowing the origin is only half of what a browser needs. Before it sends a cross-origin `POST` carrying `Authorization`, it sends a preflight `OPTIONS` with no credentials — which OAuth mode used to refuse with `401`, so the real request never happened. A preflight from a trusted origin is now answered `204` with the CORS headers, and the response exposes `Mcp-Session-Id` and `Mcp-Protocol-Version` so a browser can actually read them. The origin is echoed rather than answered with `*`, because a browser rejects the wildcard on a credentialed request.
 
 ## Verifying release integrity

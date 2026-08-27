@@ -2,6 +2,26 @@
 
 E2E tests validate the full MCP server against a real GitLab instance using in-memory transport (`mcp.NewInMemoryTransports()`). Build tag: `e2e`.
 
+There are two modules, answering different questions:
+
+| Module           | Build tag  | Needs GitLab | What it covers                                                                     |
+| ---------------- | ---------- | ------------ | ---------------------------------------------------------------------------------- |
+| `test/e2e/suite` | `e2e`      | yes          | Tool behaviour against a real instance, over in-memory MCP transport                |
+| `test/e2e/http`  | `httpe2e`  | no           | The HTTP transport itself: cross-origin, preflight, auth modes, rate limiting, proxy |
+| `test/e2e/orbit` | `orbitlive`| gitlab.com   | The experimental Knowledge Graph API                                                |
+
+## HTTP transport module
+
+```bash
+make test-e2e-http
+```
+
+No GitLab and no credentials: the module builds the binary, starts it with the flags each case needs, and stands up a fake instance for the few behaviours that only appear once GitLab answers — the failure budget is charged when a credential is *rejected*, and deliberately not when the instance is merely unreachable.
+
+It exists because the in-memory suite cannot reach any of this. The handler chain is assembled in `package main`, so a unit test could not import it and a test that reassembled it would be testing its own copy. Every case in the module corresponds to something that shipped broken: a preflight answered `401`, which made `--trusted-origins` useless in a browser; a throttled GitLab reported as an invalid token; an invalid token relayed upstream on every retry; and an `x-mcp-header` annotation carrying a prefix the transport also adds.
+
+The `TestProxy_*` cases run a real nginx in Docker in front of the server, and **skip** when Docker is unavailable rather than modelling one. That layer is not optional detail: a proxy answering `OPTIONS` itself hides a server that cannot, and a proxy adding its own CORS headers collides with the server's to produce a response `curl` reports as `200` and a browser refuses outright.
+
 ## Quick Start
 
 ### Self-Hosted Mode

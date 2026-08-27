@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -70,8 +71,16 @@ const DefaultRevalidateInterval = 15 * time.Minute
 const DefaultIdleTimeout = 1 * time.Hour
 
 // idleSweepDivisor sets the sweep cadence as a fraction of the idle timeout,
-// so an entry outlives its timeout by at most a quarter of it. The sweep never
-// runs more often than idleSweepMinInterval.
+// bounded below by idleSweepMinInterval so a small timeout cannot turn the
+// sweep into a hot loop.
+//
+// The floor is the part worth stating plainly: an entry outlives its timeout by
+// at most a quarter of it only while that quarter is longer than the floor,
+// which means from a four-minute timeout upwards. Below that the floor
+// dominates, and an entry configured to expire after a second can still be
+// held for up to a minute. That is a deliberate trade — the sweep costs a lock
+// and a walk of every entry — but it is not what "a quarter of the timeout"
+// suggests on its own.
 const (
 	idleSweepDivisor     = 4
 	idleSweepMinInterval = 1 * time.Minute
@@ -117,6 +126,10 @@ type ServerPool struct {
 	idleTimeout        time.Duration
 	metrics            Metrics
 	createdAt          time.Time
+	// building collapses concurrent first-requests for one key into a single
+	// build, so a client opening several connections at once costs one set of
+	// upstream lookups rather than one per connection.
+	building singleflight.Group
 	// baseContext supplies the lifetime that bounds the GitLab lookups which
 	// build an entry — the credential probe, tier and scope discovery,
 	// identity resolution.
@@ -249,18 +262,38 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 	}
 	p.mu.RUnlock()
 
-	// Slow path: build the new client and server WITHOUT holding p.mu. Client
-	// creation, tier/scope detection (entryConfig), and the factory all perform
-	// GitLab network I/O; doing that under the write lock would serialize every
-	// caller behind a single slow round-trip and can stall the whole pool when an
-	// instance is slow or unreachable. The freshly built entry is committed below
-	// under the lock with a double-check, so concurrent builders for the same key
-	// converge on one stored entry.
-	entry, err := p.buildEntry(token, gitlabURL)
+	// Slow path: build WITHOUT holding p.mu. Client creation, tier and scope
+	// detection and the factory all perform GitLab network I/O, and doing that
+	// under the write lock would serialize every caller behind one slow
+	// round-trip, stalling the whole pool whenever an instance is slow.
+	//
+	// Callers racing for the *same* key are collapsed into one build instead of
+	// each doing their own. A client that opens several connections at once —
+	// which is the normal startup burst — used to cost one credential probe,
+	// one tier lookup, one scope lookup and one identity lookup per connection,
+	// all for a single credential, with every result but one thrown away. The
+	// waiters block exactly as long as they would have blocked building it
+	// themselves, so nothing is slower and the upstream cost is one.
+	// Counted here rather than inside the build, so that Hits plus Misses is
+	// still the number of calls: a caller that joins someone else's in-flight
+	// build found no entry, which is a miss however the work was shared.
+	p.metrics.Misses.Add(1)
+
+	built, err, _ := p.building.Do(key, func() (any, error) {
+		entry, buildErr := p.buildEntry(token, gitlabURL)
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		return p.insertEntry(key, token, entry), nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	return p.insertEntry(key, token, entry), nil
+	server, ok := built.(*mcp.Server)
+	if !ok || server == nil {
+		return nil, errors.New("creating MCP server for pool: builder returned no server")
+	}
+	return server, nil
 }
 
 // buildEntry creates the GitLab client, resolves the per-entry configuration,
@@ -270,6 +303,17 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 	if p.factory == nil {
 		return nil, errors.New("creating MCP server for pool: server factory is nil")
+	}
+
+	// Bail before doing any work if the pool's lifetime has already ended.
+	// The lookups below each bound themselves with a timeout derived from
+	// this context, so a cancelled one makes them fail fast — but the
+	// credential probe reports "not rejected" when it cannot reach GitLab,
+	// which on a cancelled context would wave a build through and register a
+	// full tool catalog after shutdown had begun. Checking here stops that
+	// at the door.
+	if err := p.lifetime().Err(); err != nil {
+		return nil, fmt.Errorf("pool shutting down, not building entry: %w", err)
 	}
 
 	// In oauth mode every credential arrives as Authorization: Bearer, and
@@ -374,8 +418,6 @@ func (p *ServerPool) insertEntry(key, token string, entry *poolEntry) *mcp.Serve
 		return server
 	}
 
-	p.metrics.Misses.Add(1)
-
 	if p.lru.Len() >= p.maxSize {
 		p.evictLRU()
 	}
@@ -405,6 +447,11 @@ func (p *ServerPool) insertEntry(key, token string, entry *poolEntry) *mcp.Serve
 // Every hit refreshes lastUsed, which is what idle eviction reads; the LRU
 // position alone cannot serve that purpose because it only orders entries
 // relative to each other and carries no wall-clock age.
+//
+// It counts nothing. Its only caller is the double check in [ServerPool.insertEntry],
+// which is reached from the slow path where the miss has already been charged;
+// counting a hit here too would make one call show up as both, and Hits plus
+// Misses would stop being the number of calls.
 func (p *ServerPool) existingServerLocked(key string) (*mcp.Server, bool) {
 	entry, ok := p.entries[key]
 	if !ok {
@@ -412,7 +459,6 @@ func (p *ServerPool) existingServerLocked(key string) (*mcp.Server, bool) {
 	}
 	p.lru.MoveToFront(entry.element)
 	entry.lastUsed = time.Now()
-	p.metrics.Hits.Add(1)
 	return entry.server, true
 }
 

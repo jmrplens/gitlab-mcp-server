@@ -125,6 +125,27 @@ Vary: Origin
 
 The actual response then carries `Access-Control-Allow-Origin` and `Access-Control-Expose-Headers: Mcp-Session-Id, Mcp-Protocol-Version` — without the latter a browser cannot read either header, since neither is CORS-safelisted.
 
+### Do not let a reverse proxy answer CORS as well
+
+A proxy in front that advertises CORS on the server's behalf — the shape most deployments started with, because the server could not answer a preflight — now collides with the server's own answer:
+
+```http
+HTTP/1.1 200 OK
+Access-Control-Allow-Origin: https://claude.ai
+Access-Control-Allow-Origin: *
+```
+
+`curl` reports `200` and the headers look generous. A browser refuses the response outright, because [Fetch](https://fetch.spec.whatwg.org/) treats more than one `Access-Control-Allow-Origin` as a failure rather than merging them. Chromium says so plainly:
+
+```text
+The 'Access-Control-Allow-Origin' header contains multiple values
+'https://claude.ai, *', but only one is allowed.
+```
+
+So a deployment that keeps its proxy-level CORS after upgrading is **worse off than before**: previously the proxy's lone `*` at least worked for requests without credentials. Remove the `add_header Access-Control-*` block and the `OPTIONS` short-circuit from the MCP location, and let `--trusted-origins` decide. Both changes belong in the same deploy — between them the endpoint is broken for browsers in a way no `curl` check reveals.
+
+`test/e2e/http` pins this: `TestProxy_ServerAndProxyCORSCollide` runs a real nginx with that block and reports the collision.
+
 Two properties are deliberate:
 
 - **The origin is echoed, never `*`.** These requests carry an `Authorization` header, and a browser rejects the wildcard on a credentialed request. `--trusted-origins='*'` echoes whatever origin asked rather than emitting a literal asterisk.

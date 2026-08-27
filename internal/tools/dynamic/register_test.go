@@ -2556,8 +2556,19 @@ func TestExecuteActionSchema_XMCPHeader_AnnotatesActionParam(t *testing.T) {
 	if !ok {
 		t.Fatalf("gitlab_execute_action schema has no action property: %v", properties)
 	}
-	if got := action["x-mcp-header"]; got != executeActionHeaderName {
-		t.Fatalf("action x-mcp-header = %v, want %q", got, executeActionHeaderName)
+	// The annotation carries the suffix, not the full header: the SDK
+	// prepends "Mcp-Param-" on both the sending and validating side, so
+	// declaring the full name here put "Mcp-Param-Mcp-Param-Action" on the
+	// wire and made the documented header a mismatch.
+	if got := action["x-mcp-header"]; got != executeActionHeaderSuffix {
+		t.Fatalf("action x-mcp-header = %v, want %q", got, executeActionHeaderSuffix)
+	}
+	// And the wire header a client must send is the prefixed form. Naming it
+	// here is what makes the relationship legible: the schema value and the
+	// header are not the same string, and conflating them is the bug this
+	// pair of assertions exists to prevent.
+	if executeActionHeaderName != "Mcp-Param-"+executeActionHeaderSuffix {
+		t.Errorf("wire header = %q, want the annotation prefixed with Mcp-Param-", executeActionHeaderName)
 	}
 	if params, paramsOK := properties["params"].(map[string]any); !paramsOK {
 		t.Fatalf("gitlab_execute_action schema has no params property: %v", properties)

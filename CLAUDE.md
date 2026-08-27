@@ -138,6 +138,7 @@ gitlab-mcp-server/
 │   ├── oauth-app-setup.md       # Creating GitLab OAuth applications for MCP clients
 │   └── ide-configuration.md     # Per-IDE MCP JSON configuration (stdio, HTTP legacy, OAuth)
 ├── test/e2e/                    # End-to-end integration tests
+│   ├── http/                    # HTTP transport module (`httpe2e`): cross-origin, preflight, auth modes, rate limiting, nginx layer. Needs no GitLab
 │   ├── docker-compose.yml       # Ephemeral GitLab CE + Runner + fixture service for Docker mode
 │   ├── .env.docker              # Docker mode environment variables
 │   ├── README.md                # E2E documentation
@@ -214,6 +215,7 @@ make golangci-lint                       # Consolidated Go formatting and lintin
 # End-to-end tests (requires .env with GITLAB_URL, GITLAB_TOKEN)
 go test -v -tags e2e -timeout 300s ./test/e2e/suite/   # Run all e2e tests
 make test-e2e                                          # Same via Makefile
+make test-e2e-http                                     # HTTP transport module: no GitLab, no credentials
 make test-e2e-docker                                   # Ephemeral GitLab CE + runner + fixture service (Docker, ~4 GB RAM)
 go test -tags e2e -c -o NUL ./test/e2e/suite/           # Compile-only check (Windows)
 go test -tags e2e -c -o /dev/null ./test/e2e/suite/     # Compile-only check (Linux)
