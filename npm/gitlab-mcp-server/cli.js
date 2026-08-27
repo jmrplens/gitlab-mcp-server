@@ -42,7 +42,7 @@ function binaryName() {
 // it finds the dependency whether the install is flat, nested, hoisted, or run
 // through npx's throwaway prefix.
 function resolveBinary(key) {
-  const pkg = `@jmrplens/gitlab-mcp-server-${key}`;
+  const pkg = `@jmrp.io/gitlab-mcp-server-${key}`;
   try {
     return require.resolve(`${pkg}/${binaryName()}`);
   } catch {
@@ -71,7 +71,7 @@ if (!binary) {
   // install that skipped optional dependencies (npm install --no-optional, or
   // a lockfile pinned on a different OS), not a broken release.
   fail(
-    `the @jmrplens/gitlab-mcp-server-${key} package is not installed. ` +
+    `the @jmrp.io/gitlab-mcp-server-${key} package is not installed. ` +
       "It is an optional dependency that carries the binary for this platform; " +
       "reinstall without --no-optional, or delete node_modules and the lockfile " +
       "and install again.",

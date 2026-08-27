@@ -1,4 +1,4 @@
-# @jmrplens/gitlab-mcp-server
+# @jmrp.io/gitlab-mcp-server
 
 A [Model Context Protocol](https://modelcontextprotocol.io) server that exposes
 the GitLab REST v4 and GraphQL APIs as tools for AI assistants. It runs as a
@@ -12,7 +12,7 @@ downloaded at install time.
 ## Run without installing
 
 ```bash
-npx @jmrplens/gitlab-mcp-server
+npx @jmrp.io/gitlab-mcp-server
 ```
 
 Most MCP clients are configured to launch the server this way. For example:
@@ -22,7 +22,7 @@ Most MCP clients are configured to launch the server this way. For example:
   "mcpServers": {
     "gitlab": {
       "command": "npx",
-      "args": ["-y", "@jmrplens/gitlab-mcp-server"],
+      "args": ["-y", "@jmrp.io/gitlab-mcp-server"],
       "env": {
         "GITLAB_URL": "https://gitlab.com",
         "GITLAB_TOKEN": "glpat-…"
@@ -35,7 +35,7 @@ Most MCP clients are configured to launch the server this way. For example:
 ## Install
 
 ```bash
-npm install -g @jmrplens/gitlab-mcp-server
+npm install -g @jmrp.io/gitlab-mcp-server
 gitlab-mcp-server --help
 ```
 
@@ -51,7 +51,7 @@ modes, tool surfaces, tiers — is documented in the
 The server can update itself in place, but that is disabled here: npm owns the
 binary, and letting it replace itself would desynchronize what npm has
 recorded. Update with your package manager instead (`npm update -g
-@jmrplens/gitlab-mcp-server`). Setting `AUTO_UPDATE` explicitly still takes
+@jmrp.io/gitlab-mcp-server`). Setting `AUTO_UPDATE` explicitly still takes
 effect if you have a reason to override it.
 
 ## Supported platforms

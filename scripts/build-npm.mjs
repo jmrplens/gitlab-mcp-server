@@ -80,9 +80,9 @@ function writePlatformPackage(plat, version, binariesDir, outDir) {
   chmodSync(dst, 0o755);
 
   const pkg = {
-    name: `@jmrplens/gitlab-mcp-server-${plat.key}`,
+    name: `@jmrp.io/gitlab-mcp-server-${plat.key}`,
     version,
-    description: `gitlab-mcp-server prebuilt binary for ${plat.os} ${plat.cpu}. Installed automatically as an optional dependency of @jmrplens/gitlab-mcp-server.`,
+    description: `gitlab-mcp-server prebuilt binary for ${plat.os} ${plat.cpu}. Installed automatically as an optional dependency of @jmrp.io/gitlab-mcp-server.`,
     license: "MIT",
     author: "José M. Requena Plens",
     homepage: "https://jmrp.io/docs/gitlab-mcp-server",
@@ -95,9 +95,9 @@ function writePlatformPackage(plat, version, binariesDir, outDir) {
   writeFileSync(join(dir, "package.json"), JSON.stringify(pkg, null, 2) + "\n");
   writeFileSync(
     join(dir, "README.md"),
-    `# @jmrplens/gitlab-mcp-server-${plat.key}\n\n` +
+    `# @jmrp.io/gitlab-mcp-server-${plat.key}\n\n` +
       `The ${plat.os}/${plat.cpu} binary for ` +
-      `[@jmrplens/gitlab-mcp-server](https://www.npmjs.com/package/@jmrplens/gitlab-mcp-server). ` +
+      `[@jmrp.io/gitlab-mcp-server](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server). ` +
       "You do not install this directly; it comes in as an optional dependency of the main package.\n",
   );
   return { name: pkg.name, dir };
@@ -112,7 +112,7 @@ function syncMainPackage(version, outDir) {
   const pkg = JSON.parse(readFileSync(path, "utf8"));
   pkg.version = version;
   pkg.optionalDependencies = Object.fromEntries(
-    PLATFORMS.map((p) => [`@jmrplens/gitlab-mcp-server-${p.key}`, version]),
+    PLATFORMS.map((p) => [`@jmrp.io/gitlab-mcp-server-${p.key}`, version]),
   );
   writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");
   return { name: pkg.name, dir };
