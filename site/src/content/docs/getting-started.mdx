@@ -136,6 +136,49 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
 ```
 
+### npm / npx (any platform)
+
+Published as [`@jmrp.io/gitlab-mcp-server`](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server). npm downloads only the prebuilt binary for your platform — nothing compiles, and nothing runs at install time, so it works with `--ignore-scripts` and behind a proxy.
+
+<Tabs syncKey="pkg">
+<TabItem label="npx">
+
+```bash
+# Zero install — clients can launch it directly
+npx -y @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="npm">
+
+```bash
+npm install -g @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pnpm">
+
+```bash
+pnpm add -g @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+</Tabs>
+
+Point any MCP client at `npx` with no install at all:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "npx",
+      "args": ["-y", "@jmrp.io/gitlab-mcp-server"],
+      "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
+    }
+  }
+}
+```
+
 ### One-line installer (native binary)
 
 Installs the binary onto your PATH, then registers it. Updates are handled by the binary's built-in auto-update (or by Homebrew, which pins its own checksummed formula).
