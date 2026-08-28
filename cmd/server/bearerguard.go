@@ -62,6 +62,16 @@ type bearerGuard struct {
 	// metadataURL is the RFC 9728 protected-resource metadata URL every
 	// challenge points at.
 	metadataURL string
+	// resolveInstance reports which published GitLab instance a request
+	// selected, or an error when it named one this deployment does not
+	// serve. Nil means "one fixed instance", the single-instance case.
+	//
+	// The guard runs it before verifying, so a request naming an instance
+	// that is not published is refused here rather than several layers later —
+	// and, more to the point, before the bearer token is sent anywhere. The
+	// verifier runs the same resolver again for the URL to verify against;
+	// it is a pure function of the request, so the two cannot disagree.
+	resolveInstance oauth.InstanceResolver
 	// minimumScope is the least a token must carry to be admitted. A token
 	// without it is refused with insufficient_scope rather than executed and
 	// failed later by GitLab.
@@ -115,6 +125,19 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 			code:    errCodeUnauthorized,
 			message: oauthMissingTokenMessage,
 			header:  newHeader(headerWWWAuthenticate, g.challenge()),
+		}
+	}
+
+	if g.resolveInstance != nil {
+		if _, err := g.resolveInstance(r); err != nil {
+			// Not charged to the limiter: the caller misaddressed the
+			// request, which says nothing about the credential.
+			slog.Info("request rejected: unpublished GitLab instance requested", "error", err)
+			return &gateFailure{
+				status:  http.StatusForbidden,
+				code:    errCodeForbidden,
+				message: "This deployment does not serve the GitLab instance the GITLAB-URL header names. " + err.Error() + ".",
+			}
 		}
 	}
 

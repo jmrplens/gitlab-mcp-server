@@ -160,6 +160,28 @@ type gitlabUserResponse struct {
 //   - Extra["token"]: the raw token (for downstream GitLab client creation)
 //   - Expiration: now + cacheTTL (so the SDK middleware honors TTL)
 func NewGitLabVerifier(gitlabURL string, skipTLS bool, cacheTTL time.Duration, cache *TokenCache) auth.TokenVerifier {
+	return NewGitLabVerifierFor(
+		func(*http.Request) (string, error) { return gitlabURL, nil },
+		skipTLS, cacheTTL, cache,
+	)
+}
+
+// InstanceResolver reports which GitLab instance a request must be verified
+// against. It is a pure function of the request: the guard in front calls it
+// to reject an instance the deployment does not publish, and the verifier
+// calls it again to know where to send the verification, and the two must
+// agree without sharing state.
+type InstanceResolver func(*http.Request) (string, error)
+
+// NewGitLabVerifierFor is [NewGitLabVerifier] for a deployment that publishes
+// more than one instance.
+//
+// Verification is per instance because a token means nothing away from the
+// GitLab that issued it: sending it to the wrong one either fails or, worse,
+// succeeds against an instance where the same string happens to be valid for
+// somebody else. The resolver is the operator's allow-list made executable,
+// and the cache is keyed by instance and token together for the same reason.
+func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.Duration, cache *TokenCache) auth.TokenVerifier {
 	baseTransport, ok := http.DefaultTransport.(*http.Transport)
 	if !ok {
 		baseTransport = &http.Transport{}
@@ -176,16 +198,19 @@ func NewGitLabVerifier(gitlabURL string, skipTLS bool, cacheTTL time.Duration, c
 		Timeout:   10 * time.Second,
 	}
 
-	userURL := gitlabURL + "/api/v4/user"
+	return func(ctx context.Context, token string, r *http.Request) (*auth.TokenInfo, error) {
+		gitlabURL, err := resolve(r)
+		if err != nil {
+			return nil, err
+		}
 
-	return func(ctx context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
 		if cache != nil {
-			if info, cached := cache.Get(token); cached {
+			if info, cached := cache.Get(gitlabURL, token); cached {
 				return info, nil
 			}
 		}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, userURL, http.NoBody)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, gitlabURL+"/api/v4/user", http.NoBody)
 		if err != nil {
 			return nil, fmt.Errorf("create verification request: %w", err)
 		}
@@ -251,7 +276,7 @@ func NewGitLabVerifier(gitlabURL string, skipTLS bool, cacheTTL time.Duration, c
 		}
 
 		if cache != nil {
-			cache.Put(token, info, cacheTTL)
+			cache.Put(gitlabURL, token, info, cacheTTL)
 		}
 
 		return info, nil

@@ -261,7 +261,7 @@ func TestNewGitLabVerifier_CacheInvalidationOnError(t *testing.T) {
 	}
 
 	// Expire the cached entry to force re-validation against the now-401 server
-	cache.Delete("inv-token")
+	cache.Delete(srv.URL, "inv-token")
 
 	_, err = verifier(context.Background(), "inv-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
@@ -271,7 +271,7 @@ func TestNewGitLabVerifier_CacheInvalidationOnError(t *testing.T) {
 		t.Errorf("expected auth.ErrInvalidToken, got: %v", err)
 	}
 
-	if _, ok := cache.Get("inv-token"); ok {
+	if _, ok := cache.Get(srv.URL, "inv-token"); ok {
 		t.Error("cache should not contain invalidated token")
 	}
 }
@@ -352,19 +352,19 @@ func TestNewGitLabVerifier_NetworkErrorWithCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first call: %v", err)
 	}
-	if _, ok := cache.Get("net-token"); !ok {
+	if _, ok := cache.Get(srv.URL, "net-token"); !ok {
 		t.Fatal("token should be cached after successful call")
 	}
 
 	srv.Close()
 
-	cache.Delete("net-token")
+	cache.Delete(srv.URL, "net-token")
 	_, err = verifier(context.Background(), "net-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
 		t.Fatal("expected error for closed server")
 	}
 
-	if _, ok := cache.Get("net-token"); ok {
+	if _, ok := cache.Get(srv.URL, "net-token"); ok {
 		t.Error("cache entry should be deleted after network error")
 	}
 }
@@ -395,7 +395,7 @@ func TestNewGitLabVerifier_ServerErrorWithCache(t *testing.T) {
 		t.Fatalf("first call: %v", err)
 	}
 
-	cache.Delete("srv-token")
+	cache.Delete(srv.URL, "srv-token")
 
 	_, err = verifier(context.Background(), "srv-token", httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil))
 	if err == nil {
@@ -404,7 +404,7 @@ func TestNewGitLabVerifier_ServerErrorWithCache(t *testing.T) {
 	if isErrInvalidToken(err) {
 		t.Error("500 error should NOT wrap auth.ErrInvalidToken")
 	}
-	if _, ok := cache.Get("srv-token"); ok {
+	if _, ok := cache.Get(srv.URL, "srv-token"); ok {
 		t.Error("cache entry should be deleted after server error")
 	}
 }

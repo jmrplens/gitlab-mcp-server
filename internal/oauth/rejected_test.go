@@ -170,7 +170,7 @@ func TestRejectedTokens_DoesNotStoreRawTokens(t *testing.T) {
 			t.Fatal("raw token stored as a cache key")
 		}
 	}
-	if _, ok := r.entries[tokenKey(secret)]; !ok {
+	if _, ok := r.entries[rejectedKey(secret)]; !ok {
 		t.Error("entry not keyed by the SHA-256 digest")
 	}
 }

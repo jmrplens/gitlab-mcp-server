@@ -15,7 +15,13 @@ type cacheEntry struct {
 }
 
 // TokenCache is a thread-safe, TTL-based cache for verified token identities.
-// Keys are SHA-256 hashes of raw tokens to avoid storing sensitive material.
+// Keys are SHA-256 hashes of the instance URL and the raw token, so no
+// sensitive material is stored.
+//
+// The instance is part of the key, not an afterthought. A token is only ever
+// valid for the GitLab that issued it, so a cache keyed by the token alone
+// would let a deployment publishing more than one instance accept a
+// credential verified against the first as proof of identity on the second.
 type TokenCache struct {
 	mu      sync.RWMutex
 	entries map[string]cacheEntry
@@ -30,8 +36,8 @@ func NewTokenCache() *TokenCache {
 
 // Get returns the cached [auth.TokenInfo] for the given raw token if present
 // and not expired. Expired entries are lazily evicted on read.
-func (c *TokenCache) Get(token string) (*auth.TokenInfo, bool) {
-	key := tokenKey(token)
+func (c *TokenCache) Get(gitlabURL, token string) (*auth.TokenInfo, bool) {
+	key := tokenKey(gitlabURL, token)
 
 	c.mu.RLock()
 	entry, ok := c.entries[key]
@@ -52,8 +58,8 @@ func (c *TokenCache) Get(token string) (*auth.TokenInfo, bool) {
 }
 
 // Put stores a [auth.TokenInfo] for the given raw token with the specified TTL.
-func (c *TokenCache) Put(token string, info *auth.TokenInfo, ttl time.Duration) {
-	key := tokenKey(token)
+func (c *TokenCache) Put(gitlabURL, token string, info *auth.TokenInfo, ttl time.Duration) {
+	key := tokenKey(gitlabURL, token)
 
 	c.mu.Lock()
 	c.entries[key] = cacheEntry{
@@ -64,8 +70,8 @@ func (c *TokenCache) Put(token string, info *auth.TokenInfo, ttl time.Duration) 
 }
 
 // Evict removes the cache entry for the given raw token.
-func (c *TokenCache) Evict(token string) {
-	key := tokenKey(token)
+func (c *TokenCache) Evict(gitlabURL, token string) {
+	key := tokenKey(gitlabURL, token)
 
 	c.mu.Lock()
 	delete(c.entries, key)
@@ -73,8 +79,8 @@ func (c *TokenCache) Evict(token string) {
 }
 
 // Delete is an alias for [Evict] for API ergonomics.
-func (c *TokenCache) Delete(token string) {
-	c.Evict(token)
+func (c *TokenCache) Delete(gitlabURL, token string) {
+	c.Evict(gitlabURL, token)
 }
 
 // Len returns the total number of entries (including potentially expired ones).
@@ -97,8 +103,12 @@ func (c *TokenCache) Cleanup() {
 	c.mu.Unlock()
 }
 
-// tokenKey returns the SHA-256 hex digest of a raw token.
-func tokenKey(token string) string {
-	h := sha256.Sum256([]byte(token))
+// tokenKey returns the SHA-256 hex digest of an instance URL and a raw token.
+//
+// The NUL separator is what keeps the pair unambiguous: without it the
+// instance "https://a.example/b" with token "c" and "https://a.example" with
+// token "/bc" would hash identically, and a NUL cannot occur in either.
+func tokenKey(gitlabURL, token string) string {
+	h := sha256.Sum256([]byte(gitlabURL + "\x00" + token))
 	return hex.EncodeToString(h[:])
 }

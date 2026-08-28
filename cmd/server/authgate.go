@@ -163,8 +163,12 @@ func (f *gateFailure) write(w http.ResponseWriter) {
 // protocol negotiation. Resolving ahead of the handler lets each condition
 // carry its own status, headers, and machine-readable reason.
 type mcpServerGate struct {
-	pool      *serverpool.ServerPool
-	gitlabURL string
+	pool *serverpool.ServerPool
+	// gitlabURLs are the instances this deployment publishes. Empty means
+	// the caller chooses freely (legacy, unfixed); one is the pinned
+	// instance every request reaches; several make the GITLAB-URL header a
+	// selection among them, refused when it names anything else.
+	gitlabURLs []string
 	// limiter blocks IPs with repeated authentication failures. In OAuth
 	// mode it is the same limiter [bearerGuard] uses, so the two layers
 	// share one per-address budget and a caller cannot earn a fresh
@@ -247,7 +251,7 @@ func (g *mcpServerGate) withIdentity(ctx context.Context, r *http.Request) conte
 	if g.pool == nil {
 		return ctx
 	}
-	options, err := serverpool.ResolveRequestOptions(r, g.gitlabURL)
+	options, err := serverpool.ResolveRequestOptionsFor(r, g.gitlabURLs)
 	if err != nil {
 		return ctx
 	}
@@ -290,7 +294,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		}
 	}
 
-	options, err := serverpool.ResolveRequestOptions(r, g.gitlabURL)
+	options, err := serverpool.ResolveRequestOptionsFor(r, g.gitlabURLs)
 	if err != nil {
 		slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
 		return nil, &gateFailure{

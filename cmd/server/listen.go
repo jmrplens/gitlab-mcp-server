@@ -10,6 +10,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -49,11 +50,11 @@ func isUnixSocketAddr(addr string) bool {
 
 // listenHTTP binds the address the server serves on: a unix socket when the
 // address is a path, a TCP port otherwise.
-func listenHTTP(addr string, socketMode os.FileMode) (net.Listener, error) {
+func listenHTTP(ctx context.Context, addr string, socketMode os.FileMode) (net.Listener, error) {
 	if !isUnixSocketAddr(addr) {
-		return net.Listen("tcp", addr)
+		return (&net.ListenConfig{}).Listen(ctx, "tcp", addr)
 	}
-	return listenUnix(addr, socketMode)
+	return listenUnix(ctx, addr, socketMode)
 }
 
 // listenUnix binds a unix socket, clearing a stale one first and applying the
@@ -62,8 +63,8 @@ func listenHTTP(addr string, socketMode os.FileMode) (net.Listener, error) {
 // The mode is applied after bind rather than through umask: umask can only
 // remove bits, it is process-global, and it would make the resulting
 // permissions depend on how the service manager happened to be configured.
-func listenUnix(path string, socketMode os.FileMode) (net.Listener, error) {
-	if err := clearStaleSocket(path); err != nil {
+func listenUnix(ctx context.Context, path string, socketMode os.FileMode) (net.Listener, error) {
+	if err := clearStaleSocket(ctx, path); err != nil {
 		return nil, err
 	}
 	if dir := filepath.Dir(path); dir != "" {
@@ -71,7 +72,7 @@ func listenUnix(path string, socketMode os.FileMode) (net.Listener, error) {
 			return nil, fmt.Errorf("--http-addr %q: its directory is not usable: %w", path, err)
 		}
 	}
-	listener, err := net.Listen("unix", path)
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "unix", path)
 	if err != nil {
 		return nil, fmt.Errorf("listening on unix socket %q: %w", path, err)
 	}
@@ -82,9 +83,9 @@ func listenUnix(path string, socketMode os.FileMode) (net.Listener, error) {
 	// whole path exists to avoid: either the proxy cannot reach it, or
 	// everyone can. Failing loudly beats serving on a socket whose
 	// permissions nobody checked.
-	if err := os.Chmod(path, socketMode); err != nil {
+	if chmodErr := os.Chmod(path, socketMode); chmodErr != nil {
 		_ = listener.Close()
-		return nil, fmt.Errorf("setting mode %#o on unix socket %q: %w", socketMode, path, err)
+		return nil, fmt.Errorf("setting mode %#o on unix socket %q: %w", socketMode, path, chmodErr)
 	}
 	slog.Info("listening on unix socket", "path", path, "mode", fmt.Sprintf("%#o", socketMode))
 	return listener, nil
@@ -97,7 +98,7 @@ func listenUnix(path string, socketMode os.FileMode) (net.Listener, error) {
 // on an existing path always fails, so an unconditional remove would let a
 // second instance silently steal a socket the first is still serving. A
 // successful connect proves someone is there.
-func clearStaleSocket(path string) error {
+func clearStaleSocket(ctx context.Context, path string) error {
 	info, err := os.Lstat(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -108,15 +109,40 @@ func clearStaleSocket(path string) error {
 	if info.Mode()&fs.ModeSocket == 0 {
 		return fmt.Errorf("--http-addr %q exists and is not a socket; refusing to replace it", path)
 	}
-	conn, dialErr := net.DialTimeout("unix", path, staleSocketDialTimeout)
+	conn, dialErr := (&net.Dialer{Timeout: staleSocketDialTimeout}).DialContext(ctx, "unix", path)
 	if dialErr == nil {
 		_ = conn.Close()
 		return fmt.Errorf("--http-addr %q is already served by another process", path)
 	}
-	if err := os.Remove(path); err != nil {
-		return fmt.Errorf("removing stale socket %q: %w", path, err)
+	if removeErr := os.Remove(path); removeErr != nil {
+		return fmt.Errorf("removing stale socket %q: %w", path, removeErr)
 	}
 	slog.Warn("removed a stale unix socket left by an earlier run", "path", path)
+	return nil
+}
+
+// repeatedFlag is a flag that may be given more than once, and whose single
+// occurrence may itself be a comma-separated list.
+//
+// Both spellings are accepted because both reach the same flag by different
+// routes: an operator writing a systemd unit repeats the flag, while the
+// environment overlay has one string to give it. Order is preserved and
+// meaningful — the first entry is the deployment's default instance.
+type repeatedFlag []string
+
+func (r *repeatedFlag) String() string {
+	if r == nil {
+		return ""
+	}
+	return strings.Join(*r, ",")
+}
+
+func (r *repeatedFlag) Set(value string) error {
+	for part := range strings.SplitSeq(value, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			*r = append(*r, trimmed)
+		}
+	}
 	return nil
 }
 

@@ -1050,7 +1050,16 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://mcp.jmrp.io/gitlab"
+      "url": "https://mcp.jmrp.io/gitlab",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <token>. The endpoint runs in OAuth mode: a client that speaks the OAuth flow needs no header at all and discovers the authorization server from the 401 challenge. A GitLab personal access token also works here, sent as 'Bearer glpat-...', which keeps clients with no OAuth flow working. It travels per request and is never stored server-side.",
+          "isRequired": false,
+          "isSecret": true,
+          "placeholder": "Bearer glpat-xxxxxxxxxxxxxxxxxxxx"
+        }
+      ]
     }
   ]
 }

@@ -14,6 +14,7 @@ package httpe2e
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -31,21 +32,26 @@ func oauthServer(t *testing.T, gitlabURL string, extra ...string) *server {
 	return startServer(t, nil, flags...)
 }
 
-// TestOAuth_MetadataAdvertisesTheScopeItRequires verifies the RFC 9728
-// document, including the least-privilege scope: a client reads
-// scopes_supported to decide what to ask GitLab for, so a read-only deployment
-// advertising "api" would make every user grant write access it can never use.
-func TestOAuth_MetadataAdvertisesTheScopeItRequires(t *testing.T) {
+// TestOAuth_MetadataAdvertisesTheScopesItAccepts verifies the RFC 9728
+// document, including the scopes a client may authorize with.
+//
+// A client reads scopes_supported to decide what to ask GitLab for. A
+// read-only deployment advertising "api" would make every user grant write
+// access it can never use; a writing deployment advertising only "api" would
+// leave a client that deliberately wants a credential which cannot break
+// anything no documented way to ask for one — and such a token IS accepted,
+// served the read-only surface.
+func TestOAuth_MetadataAdvertisesTheScopesItAccepts(t *testing.T) {
 	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
 
 	for _, tc := range []struct {
 		name  string
 		flags []string
-		want  string
+		want  []string
 	}{
-		{"writes possible", nil, "api"},
-		{"read-only", []string{"--read-only"}, "read_api"},
-		{"safe mode", []string{"--safe-mode"}, "read_api"},
+		{"writes possible", nil, []string{"api", "read_api"}},
+		{"read-only", []string{"--read-only"}, []string{"read_api"}},
+		{"safe mode", []string{"--safe-mode"}, []string{"read_api"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := oauthServer(t, gitlab.url, tc.flags...)
@@ -70,8 +76,8 @@ func TestOAuth_MetadataAdvertisesTheScopeItRequires(t *testing.T) {
 			if len(meta.AuthServers) != 1 || meta.AuthServers[0] != gitlab.url {
 				t.Errorf("authorization_servers = %v, want [%q]", meta.AuthServers, gitlab.url)
 			}
-			if len(meta.ScopesSupported) != 1 || meta.ScopesSupported[0] != tc.want {
-				t.Errorf("scopes_supported = %v, want [%q]", meta.ScopesSupported, tc.want)
+			if !slices.Equal(meta.ScopesSupported, tc.want) {
+				t.Errorf("scopes_supported = %v, want %v", meta.ScopesSupported, tc.want)
 			}
 			if meta.ResourceName == "" {
 				t.Error("resource_name is RECOMMENDED by RFC 9728 and lets a consent screen name this resource")
@@ -125,6 +131,117 @@ func TestOAuth_MissingCredentialChallengeHasNoErrorCode(t *testing.T) {
 	}
 	if !strings.Contains(challenge, "resource_metadata=") {
 		t.Errorf("challenge must point at the metadata URL so a client can discover the authorization server: %q", challenge)
+	}
+	// The MCP authorization specification says a server SHOULD name the
+	// scope in the challenge, "following the principle of least privilege
+	// and preventing clients from requesting excessive permissions". A
+	// client that reads the header and stops there would otherwise guess,
+	// and the guess that costs it — asking for every scope the
+	// authorization server advertises — is answered by GitLab with
+	// invalid_scope.
+	if !strings.Contains(challenge, `scope="api"`) {
+		t.Errorf("challenge %q does not name the scope a client should request", challenge)
+	}
+}
+
+// TestOAuth_ChallengeIsReadableCrossOrigin verifies that a browser-based
+// client can actually READ the challenge it is sent.
+//
+// WWW-Authenticate is an unsafelisted response header, so without naming it
+// in Access-Control-Expose-Headers the browser hides it: the client gets the
+// 401 but cannot see the resource_metadata URL, and automatic discovery — the
+// entire point of the challenge — fails for exactly the audience CORS serves.
+func TestOAuth_ChallengeIsReadableCrossOrigin(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := oauthServer(t, gitlab.url, "--trusted-origins=https://claude.ai")
+
+	got := srv.do(t, mcpPOST(map[string]string{"Origin": "https://claude.ai"}))
+
+	if got.status != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", got.status, http.StatusUnauthorized)
+	}
+	exposed := got.header.Get("Access-Control-Expose-Headers")
+	if !strings.Contains(exposed, "WWW-Authenticate") {
+		t.Errorf("Access-Control-Expose-Headers = %q; a browser client cannot read the challenge without it", exposed)
+	}
+}
+
+// TestOAuth_UnknownPathIs404NotAChallenge verifies that routing happens before
+// authentication.
+//
+// Every unknown path used to answer 401, because the auth gate was the
+// catch-all handler. That tells a scanner probing
+// /.well-known/oauth-authorization-server that a protected metadata document
+// lives there when it simply is not served, and leaves nothing able to
+// distinguish "exists but needs a token" from "is not here".
+func TestOAuth_UnknownPathIs404NotAChallenge(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := oauthServer(t, gitlab.url)
+
+	for _, path := range []string{
+		"/.well-known/oauth-authorization-server",
+		"/.well-known/mcp",
+		"/a-path-this-server-does-not-serve",
+	} {
+		t.Run(path, func(t *testing.T) {
+			got := srv.do(t, request{method: http.MethodPost, path: path, body: toolsListBody})
+
+			if got.status != http.StatusNotFound {
+				t.Errorf("status = %d, want %d for a path this server does not serve", got.status, http.StatusNotFound)
+			}
+			if challenge := got.header.Get("WWW-Authenticate"); challenge != "" {
+				t.Errorf("a 404 must not carry an authentication challenge, got %q", challenge)
+			}
+			if got.header.Get("X-Content-Type-Options") != "nosniff" {
+				t.Error("the security headers apply to a 404 like any other response")
+			}
+		})
+	}
+}
+
+// TestOAuth_ServerCardFollowsTheAuthMode verifies that the card describes THIS
+// deployment rather than the binary.
+//
+// It declared header-token whatever --auth-mode said, so an oauth deployment
+// published a card contradicting its own 401 challenge, and a directory
+// rendering the card told users to send a header the endpoint refuses.
+func TestOAuth_ServerCardFollowsTheAuthMode(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := oauthServer(t, gitlab.url)
+
+	// Both locations: /server-card is what the server-card extension
+	// recommends, and the .well-known path its earlier draft did.
+	for _, path := range []string{"/server-card", "/.well-known/mcp/server-card.json"} {
+		t.Run(path, func(t *testing.T) {
+			got := srv.do(t, request{method: http.MethodGet, path: path})
+			if got.status != http.StatusOK {
+				t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
+			}
+
+			var card struct {
+				Authentication struct {
+					Required         bool     `json:"required"`
+					Schemes          []string `json:"schemes"`
+					ResourceMetadata string   `json:"resourceMetadata"`
+					Scopes           []string `json:"scopes"`
+				} `json:"authentication"`
+			}
+			if err := json.Unmarshal([]byte(got.body), &card); err != nil {
+				t.Fatalf("card is not JSON: %v\n%s", err, got.body)
+			}
+			if !slices.Equal(card.Authentication.Schemes, []string{"oauth2"}) {
+				t.Errorf("schemes = %v, want [oauth2] in oauth mode", card.Authentication.Schemes)
+			}
+			if !card.Authentication.Required {
+				t.Error("required = false, want true")
+			}
+			if card.Authentication.ResourceMetadata == "" {
+				t.Error("the card should point at the RFC 9728 document in oauth mode")
+			}
+			if !slices.Contains(card.Authentication.Scopes, "api") {
+				t.Errorf("scopes = %v, want it to name the scope this deployment recommends", card.Authentication.Scopes)
+			}
+		})
 	}
 }
 

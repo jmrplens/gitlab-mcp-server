@@ -73,10 +73,10 @@ func newGate(t *testing.T, factory serverpool.ServerFactory) *mcpServerGate {
 func newGateAgainst(t *testing.T, factory serverpool.ServerFactory, gitlabURL string) *mcpServerGate {
 	t.Helper()
 	return &mcpServerGate{
-		pool:      newGateTestPool(t, factory, gitlabURL),
-		gitlabURL: gitlabURL,
-		limiter:   serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow),
-		challenge: legacyAuthChallenge,
+		pool:       newGateTestPool(t, factory, gitlabURL),
+		gitlabURLs: []string{gitlabURL},
+		limiter:    serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow),
+		challenge:  legacyAuthChallenge,
 	}
 }
 
@@ -170,7 +170,7 @@ func TestMCPServerGate_OAuthChallenge_AdvertisesResourceMetadata(t *testing.T) {
 // client can tell it apart from a protocol-version rejection.
 func TestMCPServerGate_InvalidGitLabURLHeader_Returns400WithReason(t *testing.T) {
 	gate := newGate(t, okFactory)
-	gate.gitlabURL = "" // no fixed instance, so the header is authoritative
+	gate.gitlabURLs = nil // no fixed instance, so the header is authoritative
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
 	req.Header.Set("PRIVATE-TOKEN", gateTestToken)
 	req.Header.Set("GITLAB-URL", "://not a url")
@@ -487,7 +487,7 @@ func TestMcpServerGate_WithIdentity_AttachesThePooledUser(t *testing.T) {
 	pool := serverpool.New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
 		return mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil), nil
 	})
-	gate := &mcpServerGate{pool: pool, gitlabURL: srv.URL, challenge: legacyAuthChallenge}
+	gate := &mcpServerGate{pool: pool, gitlabURLs: []string{srv.URL}, challenge: legacyAuthChallenge}
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
 	req.Header.Set("PRIVATE-TOKEN", "glpat-legacy")
@@ -513,7 +513,7 @@ func TestMcpServerGate_WithIdentity_UnknownTokenLeavesContextAlone(t *testing.T)
 	pool := serverpool.New(cfg, func(*gitlabclient.Client, *config.ServerConfig) (*mcp.Server, error) {
 		return mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil), nil
 	})
-	gate := &mcpServerGate{pool: pool, gitlabURL: cfg.GitLabURL, challenge: legacyAuthChallenge}
+	gate := &mcpServerGate{pool: pool, gitlabURLs: []string{cfg.GitLabURL}, challenge: legacyAuthChallenge}
 
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
 	req.Header.Set("PRIVATE-TOKEN", "glpat-never-pooled")

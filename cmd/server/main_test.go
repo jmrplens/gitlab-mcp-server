@@ -962,6 +962,85 @@ func TestRunWithContext_HTTPInvalidURL(t *testing.T) {
 	}
 }
 
+// TestNormalizeFixedGitLabURL_ReadsBothFields pins the invariant that the two
+// instance fields are both INPUTS.
+//
+// The flag parser fills the list; a caller constructing httpConfig directly
+// fills the singular field. Reading only the list discards that URL along with
+// its validation — an unusable --gitlab-url stopped being rejected and the
+// server started anyway, serving an instance nobody configured. That is not
+// hypothetical: it hung TestRunWithContext_HTTPInvalidURL for the full test
+// timeout, because the run it was supposed to reject went on serving.
+func TestNormalizeFixedGitLabURL_ReadsBothFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		hcfg      httpConfig
+		wantURL   string
+		wantList  []string
+		wantErrIn string
+	}{
+		{
+			name:     "the singular field alone is honored",
+			hcfg:     httpConfig{gitlabURL: "https://gitlab.example.com/"},
+			wantURL:  "https://gitlab.example.com",
+			wantList: []string{"https://gitlab.example.com"},
+		},
+		{
+			name:     "the list alone is honored",
+			hcfg:     httpConfig{gitlabURLs: repeatedFlag{"https://gitlab.com", "https://gitlab.example.com"}},
+			wantURL:  "https://gitlab.com",
+			wantList: []string{"https://gitlab.com", "https://gitlab.example.com"},
+		},
+		{
+			name:     "the list wins when both are set",
+			hcfg:     httpConfig{gitlabURL: "https://ignored.example.com", gitlabURLs: repeatedFlag{"https://gitlab.com"}},
+			wantURL:  "https://gitlab.com",
+			wantList: []string{"https://gitlab.com"},
+		},
+		{
+			name: "neither leaves both empty",
+			hcfg: httpConfig{},
+		},
+		{
+			// The validation that stopped running, and its message must
+			// name the flag rather than the GITLAB-URL header.
+			name:      "an unusable singular value is still rejected",
+			hcfg:      httpConfig{gitlabURL: "ftp://gitlab.example.com"},
+			wantErrIn: "--gitlab-url must use http:// or https://",
+		},
+		{
+			name:      "an unusable entry in the list is rejected",
+			hcfg:      httpConfig{gitlabURLs: repeatedFlag{"https://gitlab.com", "https://"}},
+			wantErrIn: "--gitlab-url must include a host",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			hcfg := tt.hcfg
+			err := normalizeFixedGitLabURL(&hcfg)
+
+			if tt.wantErrIn != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErrIn) {
+					t.Fatalf("error = %v, want one containing %q", err, tt.wantErrIn)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("normalizeFixedGitLabURL() error = %v", err)
+			}
+			if hcfg.gitlabURL != tt.wantURL {
+				t.Errorf("gitlabURL = %q, want %q", hcfg.gitlabURL, tt.wantURL)
+			}
+			if !slices.Equal([]string(hcfg.gitlabURLs), tt.wantList) {
+				t.Errorf("gitlabURLs = %v, want %v", hcfg.gitlabURLs, tt.wantList)
+			}
+		})
+	}
+}
+
 // TestCreateServer_ReturnsConfiguredServer verifies that [createServer]
 // produces a valid MCP server with tools, resources, and prompts registered.
 func TestCreateServer_ReturnsConfiguredServer(t *testing.T) {
@@ -2245,6 +2324,91 @@ func TestServeHTTP_RequestWithToken(t *testing.T) {
 	}
 
 	closeMCPSession(t, "http://"+addr, resp.Header.Get(hdrMCPSessionID))
+	cancel()
+	select {
+	case err = <-errCh:
+		if err != nil {
+			t.Fatalf("serveHTTP error: %v", err)
+		}
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("serveHTTP did not shut down in time")
+	}
+}
+
+// TestServeHTTP_UnknownPath_Is404NotAChallenge verifies that routing now
+// happens before authentication.
+//
+// Every unknown path used to answer 401, because the auth gate was the
+// catch-all handler. That told every directory and scanner probing
+// /.well-known/oauth-authorization-server that a protected metadata document
+// lives there — it does not — and left nothing able to tell "exists but needs
+// a token" apart from "is not here". The MCP endpoint keeps answering on the
+// root and on /mcp; everything else is 404, and unauthenticated.
+func TestServeHTTP_UnknownPath_Is404NotAChallenge(t *testing.T) {
+	mockGL := newMockGitLabServer(t)
+	cfg := &config.Config{
+		GitLabURL:      mockGL.URL,
+		MaxHTTPClients: config.DefaultMaxHTTPClients,
+		SessionTimeout: config.DefaultSessionTimeout,
+		ToolSurface:    config.ToolSurfaceDynamic,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := listener.Addr().String()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- serveHTTPOn(ctx, cfg, addr, listener, defaultHTTPIdleTimeout)
+	}()
+	waitForHTTPServerReady(t, addr, errCh)
+
+	tests := []struct {
+		name string
+		path string
+		want int
+	}{
+		{name: "a well-known document this server does not serve", path: "/.well-known/oauth-authorization-server", want: http.StatusNotFound},
+		{name: "the retired well-known mcp path", path: "/.well-known/mcp", want: http.StatusNotFound},
+		{name: "an invented path", path: "/nope", want: http.StatusNotFound},
+		// The endpoint itself still authenticates: 404 must not have
+		// swallowed the routes that matter.
+		{name: "the root is the MCP endpoint", path: "/", want: http.StatusUnauthorized},
+		{name: "the named MCP endpoint", path: "/mcp", want: http.StatusUnauthorized},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`
+			req, reqErr := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr+tt.path, strings.NewReader(body))
+			if reqErr != nil {
+				t.Fatalf("new request: %v", reqErr)
+			}
+			req.Header.Set(hdrContentType, mimeJSON)
+			req.Header.Set("Accept", mimeJSONSSE)
+
+			resp, doErr := testHTTPClient.Do(req)
+			if doErr != nil {
+				t.Fatalf("request failed: %v", doErr)
+			}
+			respBody := readAndCloseBody(t, resp)
+			if resp.StatusCode != tt.want {
+				t.Errorf("status = %d, want %d: %s", resp.StatusCode, tt.want, respBody)
+			}
+			if tt.want == http.StatusNotFound && resp.Header.Get("WWW-Authenticate") != "" {
+				t.Error("a 404 must not carry an authentication challenge")
+			}
+			// The security headers apply to a 404 like any other response.
+			if got := resp.Header.Get("X-Content-Type-Options"); got != "nosniff" {
+				t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+			}
+		})
+	}
+
 	cancel()
 	select {
 	case err = <-errCh:
@@ -3734,6 +3898,43 @@ func TestHostValidationMiddleware_BlockedHost(t *testing.T) {
 
 	if rr.Code != http.StatusForbidden {
 		t.Errorf("expected 403 for blocked host, got %d", rr.Code)
+	}
+}
+
+// TestSecurityHeaders_CoverRejectionsToo verifies that a response written by a
+// middleware that answers instead of forwarding still carries the security
+// headers.
+//
+// Host validation used to sit OUTSIDE securityHeadersMiddleware, so its 403
+// went out bare: no nosniff, no CSP, no X-Frame-Options, no Referrer-Policy.
+// A header policy with a hole in it is not a policy, and the hole was in a
+// rejection — the response an unwanted caller is precisely the one to get.
+func TestSecurityHeaders_CoverRejectionsToo(t *testing.T) {
+	t.Parallel()
+
+	inner := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	handler := securityHeadersMiddleware(hostValidationMiddleware(map[string]bool{"localhost": true}, inner))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://evil.example.com/", http.NoBody)
+	req.Host = "evil.example.com"
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
+	}
+	want := map[string]string{
+		"X-Content-Type-Options":  "nosniff",
+		"X-Frame-Options":         "DENY",
+		"Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+		"Referrer-Policy":         "no-referrer",
+	}
+	for name, value := range want {
+		if got := rr.Header().Get(name); got != value {
+			t.Errorf("%s = %q, want %q", name, got, value)
+		}
 	}
 }
 

@@ -41,6 +41,19 @@ func overlayString(hcfg *httpConfig, flagName string, target, value *string) {
 	}
 }
 
+// overlayGitLabURLs applies GITLAB_URL to the instance list.
+//
+// The environment carries one string where the flag can be repeated, so a
+// comma-separated value spells the same list — the flag parser accepts that
+// form too, for exactly this reason.
+func overlayGitLabURLs(hcfg *httpConfig, value *string) {
+	if value == nil || hcfg.setFlags["gitlab-url"] {
+		return
+	}
+	hcfg.gitlabURLs = nil
+	_ = hcfg.gitlabURLs.Set(*value)
+}
+
 func overlayBool(hcfg *httpConfig, flagName string, target, value *bool) {
 	if value != nil && !hcfg.setFlags[flagName] {
 		*target = *value
@@ -48,7 +61,7 @@ func overlayBool(hcfg *httpConfig, flagName string, target, value *bool) {
 }
 
 func applyOverlayStrings(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
-	overlayString(hcfg, "gitlab-url", &hcfg.gitlabURL, o.GitLabURL)
+	overlayGitLabURLs(hcfg, o.GitLabURL)
 	overlayString(hcfg, "tool-surface", &hcfg.toolSurface, o.ToolSurface)
 	overlayString(hcfg, "capability-surface", &hcfg.capabilitySurface, o.CapabilitySurface)
 	overlayString(hcfg, "meta-param-schema", &hcfg.metaParamSchema, o.MetaParamSchema)

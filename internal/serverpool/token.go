@@ -190,9 +190,9 @@ func ResolveRequestOptionsFor(r *http.Request, allowed []string) (RequestOptions
 			// working unchanged.
 			return RequestOptions{GitLabURL: normalizedAllowed[0], IgnoredOptions: ignoredOptions, DeprecatedOptions: deprecatedOptions}, nil
 		}
-		normalizedHeader, err := normalizeGitLabURL(header)
-		if err != nil {
-			return RequestOptions{}, err
+		normalizedHeader, headerErr := normalizeGitLabURL(header)
+		if headerErr != nil {
+			return RequestOptions{}, headerErr
 		}
 		if !slices.Contains(normalizedAllowed, normalizedHeader) {
 			return RequestOptions{}, &DisallowedGitLabURLError{Allowed: normalizedAllowed}

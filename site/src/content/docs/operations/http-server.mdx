@@ -507,14 +507,15 @@ A ready-to-use instance of this server runs at **`https://mcp.jmrp.io/gitlab`** 
     "gitlab": {
       "type": "http",
       "url": "https://mcp.jmrp.io/gitlab",
-      "headers": { "PRIVATE-TOKEN": "glpat-xxxxxxxxxxxx" }
+      "headers": { "Authorization": "Bearer glpat-xxxxxxxxxxxx" }
     }
   }
 }
 ```
 
-- **`PRIVATE-TOKEN`** (required) — your GitLab Personal Access Token. It travels with each request and is never stored server-side.
-- **`GITLAB-URL`** (optional) — target another GitLab instance; defaults to `https://gitlab.com`. Self-managed instances must be reachable from the public internet.
+- **`Authorization`** (optional) — `Bearer <token>`. The endpoint runs in OAuth mode, so a client that speaks the OAuth flow needs no header at all and discovers the authorization server from the `401` challenge. A GitLab personal access token also works, sent as `Bearer glpat-...`, verified exactly like an OAuth one. It travels with each request and is never stored server-side. A `read_api` token is accepted and served a read-only tool surface.
+- **`PRIVATE-TOKEN`** — the legacy-mode header, not accepted here.
+- **`GITLAB-URL`** — ignored: this deployment fixes the instance to `https://gitlab.com`.
 
 The endpoint runs in **stateless streamable HTTP** mode: `POST` is the transport, `GET` answers `405` by design (it is not down), and `https://mcp.jmrp.io/gitlab/health` answers `ok`. The tool surface is the default `dynamic` one — two tools, `gitlab_find_action` and `gitlab_execute_action`.
 

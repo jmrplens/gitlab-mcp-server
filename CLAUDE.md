@@ -344,7 +344,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 
 | Flag                  | Default | Description                                              |
 | --------------------- | ------- | -------------------------------------------------------- |
-| `--gitlab-url`        | —       | Fixed GitLab instance URL (optional; omit to require `GITLAB-URL` per request) |
+| `--gitlab-url`        | —       | GitLab instance URL (optional; omit to require `GITLAB-URL` per request). Repeatable/comma-separated: the first is the default, all are published in RFC 9728 `authorization_servers`, and `GITLAB-URL` then selects among them — anything else is refused with 403 rather than ignored |
 | `--skip-tls-verify`   | `false` | Skip TLS verification for self-signed certs              |
 | `--meta-tools`        | `true`  | Enable meta-tools for tool discovery                     |
 | `--tool-surface`      | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
@@ -358,7 +358,9 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--stateless`         | `true`  | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28; default): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`; synchronous server-initiated requests are unavailable, but protocol 2026-07-28 clients keep elicitation through MRTR. Use `--stateless=false` for legacy stateful sessions |
 | `--json-response`     | `false` | Return `application/json` response bodies instead of `text/event-stream` (SSE) |
 | `--max-request-body-bytes` | `0` | Maximum streamable HTTP request body size in bytes; `0` uses the SDK default (4 MiB) |
-| `--http-addr`         | `:8080` | HTTP listen address                                      |
+| `--http-addr`         | `:8080` | Listen address. `host:port` binds TCP; a value containing a path separator binds a unix socket instead (removes the proxy hop rather than encrypting it) |
+| `--http-socket-mode`  | `0660`  | Octal permission mode for a unix socket named by `--http-addr` |
+| `--tls-cert` / `--tls-key` | — | PEM certificate and key; serves HTTPS on the listener itself, for a proxy that does not share the machine. Both or neither, loaded at startup, TLS 1.2 floor |
 | `--auth-mode`         | `legacy` | Authentication mode: `legacy` or `oauth` (RFC 9728 Bearer verification) |
 | `--public-url`        | _(empty)_ | Externally reachable https origin; required with `--auth-mode=oauth` (RFC 9728 resource identifier and metadata-URL derivation) |
 | `--oauth-cache-ttl`   | `15m`   | OAuth token identity cache TTL (range 1m–2h)             |
@@ -539,6 +541,7 @@ ADRs document key decisions in `docs/development/adr`:
 | ADR-0015 | Polled resource subscriptions (supersedes ADR-0010)            | Accepted (26 subscribable kinds, 10 watchers/token, lease demotes rather than stops) |
 | ADR-0016 | No webhook ingestion                                           | Accepted (`Reader` seam unchanged; no inbound HTTP surface added) |
 | ADR-0017 | Pull-safe event sources surveyed and declined                  | Accepted (Events API, ActionCable, ETag probed live; polling stays the only freshness source; revisit triggers recorded) |
+| ADR-0018 | Authorization admits at the minimum scope; writes gated per action | Accepted (a read_api token is admitted and served a read-only surface; `tools/list` stays authenticated per the MCP authorization spec) |
 
 ### Modular tools sub-packages (ADR-0004)
 
@@ -587,6 +590,16 @@ Plus enterprise-only routes injected into 3 base meta-tools:
 - `gitlab_project` → push_rule_*, mirror_*, security_settings_*
 - `gitlab_group` → iterations, epics, wikis, protected branches/envs, releases, LDAP, SAML, SSH certs, credentials, analytics, service accounts
 - `gitlab_issue` → iterations
+
+### OAuth admission, per-action write gating, and HTTP routing
+
+Three invariants of HTTP mode that are easy to break by touching the wrong layer:
+
+- **Admission asks for the minimum, not the deployment's scope.** `oauth.MinimumScope` (`read_api`) is what the door checks; `oauth.RequiredScope` is only what the challenge _recommends_ and the first entry of `oauth.SupportedScopes`. A `read_api` token is admitted by a deployment that writes and is served a read-only surface: `serverpool.applyScopeReadOnly` sets `ServerConfig.ReadOnly` when `gitlabclient.WriteCapable` says the token cannot write, so the write check is the per-action one the catalog already carries. Do not reintroduce a deployment-wide scope demand at the door — that is what refused a read-only OAuth application at `initialize`. Unknown scopes (`nil`) mean write-capable: a wrong "no" silently removes tools, a wrong "yes" surfaces as GitLab's own 403.
+- **Routing happens before authentication.** `mountMCPEndpoint` mounts the MCP handler on `/{$}`, `/mcp`, and the `--public-url` path prefix (for a proxy that forwards its prefix instead of stripping it); everything else is an unauthenticated 404. A catch-all auth gate told every scanner that `/.well-known/oauth-authorization-server` was a protected document that is not there. `securityHeadersMiddleware` is the outermost wrapper so even a middleware that answers instead of forwarding (host validation's 403) carries `nosniff`, CSP, `X-Frame-Options` and `Referrer-Policy`.
+- **The instance is chosen from an allow-list, and verification follows it.** `--gitlab-url` is repeatable; `serverpool.ResolveRequestOptionsFor` refuses a `GITLAB-URL` header naming an unpublished instance instead of ignoring it, `oauth.NewGitLabVerifierFor` verifies against the instance the request selected, and `oauth.TokenCache` keys on instance **and** token. Keying that cache on the token alone would let a credential verified against one published instance pass as identity on another.
+
+Nothing here should need a reverse proxy to be correct: the binary answers its own CORS preflights, its own 404s, its own security headers, and can terminate TLS or listen on a unix socket itself.
 
 ### Resource subscriptions (ADR-0015)
 

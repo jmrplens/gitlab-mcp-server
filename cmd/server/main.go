@@ -152,8 +152,14 @@ const (
 // without requiring a GITLAB_TOKEN — each client must provide its own token
 // via PRIVATE-TOKEN header or Authorization: Bearer.
 type httpConfig struct {
-	addr          string
-	gitlabURL     string
+	addr string
+	// gitlabURL is the deployment's default instance: the first entry of
+	// gitlabURLs, kept as its own field because every consumer that only
+	// ever handled one instance still reads exactly that.
+	gitlabURL string
+	// gitlabURLs is every instance --gitlab-url published, in order. More
+	// than one turns the GITLAB-URL header into a choice among them.
+	gitlabURLs    repeatedFlag
 	skipTLSVerify bool
 	metaTools     bool
 	metaToolsSet  bool
@@ -252,7 +258,7 @@ func main() {
 	flag.StringVar(&toolSearch, "tool-search", "", "Search tools by name/description and exit")
 	flag.BoolVar(&useHTTP, "http", false, "Run MCP server in HTTP mode")
 	flag.StringVar(&hcfg.addr, "http-addr", ":8080", "HTTP listen address")
-	flag.StringVar(&hcfg.gitlabURL, "gitlab-url", "", "Fixed GitLab instance URL; omit to require per-request GITLAB-URL header")
+	flag.Var(&hcfg.gitlabURLs, "gitlab-url", "GitLab instance URL; omit to require a per-request GITLAB-URL header. Repeat (or comma-separate) to publish several instances, the first being the default; a GITLAB-URL header is then honored only if it names one of them")
 	flag.BoolVar(&hcfg.skipTLSVerify, "skip-tls-verify", false, "Skip TLS certificate verification")
 	flag.BoolVar(&hcfg.metaTools, "meta-tools", false, "Legacy boolean tool selector; prefer --tool-surface")
 	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: dynamic (default), meta, individual")
@@ -577,11 +583,49 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	return serveHTTP(ctx, cfg, hcfg.addr, hcfg.httpIdleTimeout)
 }
 
+// normalizeFixedGitLabURL canonicalizes every published instance and elects
+// the first as the deployment default.
+//
+// One instance is the shape this has always had; the list is what lets a
+// single oauth deployment serve gitlab.com and a self-managed instance at
+// once without reopening the hole a free-form GITLAB-URL header would be —
+// see [serverpool.ResolveRequestOptionsFor].
 func normalizeFixedGitLabURL(hcfg *httpConfig) error {
-	if hcfg.gitlabURL == "" {
+	// Both fields are inputs, not just outputs. The flag parser fills the
+	// list, but a caller that predates it — a test, anything constructing
+	// httpConfig directly — sets the singular field, and reading only the
+	// list there silently DISCARDS the URL along with its validation: an
+	// unusable --gitlab-url stopped being rejected and the server started
+	// anyway, serving nothing anyone configured.
+	configured := hcfg.gitlabURLs
+	if len(configured) == 0 && strings.TrimSpace(hcfg.gitlabURL) != "" {
+		configured = []string{hcfg.gitlabURL}
+	}
+	// Validated here rather than by NormalizeGitLabURLs alone, whose errors
+	// name the GITLAB-URL *header*: the operator is looking at a flag, and
+	// being told a header is wrong sends them to the wrong file.
+	for _, candidate := range configured {
+		if err := validateFixedGitLabURL(candidate); err != nil {
+			return err
+		}
+	}
+	normalized, err := serverpool.NormalizeGitLabURLs(configured)
+	if err != nil {
+		return fmt.Errorf("--gitlab-url is not a valid URL: %w", err)
+	}
+	hcfg.gitlabURLs = normalized
+	if len(normalized) == 0 {
+		hcfg.gitlabURL = ""
 		return nil
 	}
-	u, err := url.Parse(hcfg.gitlabURL)
+	hcfg.gitlabURL = normalized[0]
+	return nil
+}
+
+// validateFixedGitLabURL rejects a --gitlab-url value with a message naming
+// the flag the operator actually typed.
+func validateFixedGitLabURL(raw string) error {
+	u, err := url.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("--gitlab-url is not a valid URL: %w", err)
 	}
@@ -591,7 +635,6 @@ func normalizeFixedGitLabURL(hcfg *httpConfig) error {
 	if u.Host == "" {
 		return errors.New("--gitlab-url must include a host")
 	}
-	hcfg.gitlabURL = strings.TrimRight(hcfg.gitlabURL, "/")
 	return nil
 }
 
@@ -611,6 +654,7 @@ func resolveHTTPTier(hcfg *httpConfig) (edition.Tier, bool, error) {
 func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, tier edition.Tier, tierExplicit bool) *config.Config {
 	return &config.Config{
 		GitLabURL:           hcfg.gitlabURL,
+		GitLabURLs:          hcfg.gitlabURLs,
 		SkipTLSVerify:       hcfg.skipTLSVerify,
 		MetaTools:           metaTools,
 		ToolSurface:         toolSurface,
@@ -1389,10 +1433,16 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	var rootHandler http.Handler = mux
 	rootHandler = crossOriginProtectionMiddleware(cfg.TrustedOrigins, rootHandler)
 	rootHandler = corsMiddleware(cfg, rootHandler)
-	rootHandler = securityHeadersMiddleware(rootHandler)
 	if hosts := allowedHosts(httpAddr); len(hosts) > 0 {
 		rootHandler = hostValidationMiddleware(hosts, rootHandler)
 	}
+	// Outermost, so that EVERY response carries the security headers —
+	// including the ones written by a middleware that answers instead of
+	// forwarding. Host validation used to sit outside this and its 403 went
+	// out bare: no nosniff, no CSP, no X-Frame-Options, no Referrer-Policy.
+	// A header policy with a hole in it is not a policy, and the hole was in
+	// a rejection, which is exactly the response an attacker gets to see.
+	rootHandler = securityHeadersMiddleware(rootHandler)
 
 	httpServer := newHTTPServer(httpAddr, rootHandler, httpIdleTimeout)
 	if cfg.TLSCertFile != "" {
@@ -1403,39 +1453,10 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		httpServer.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
 
-	// A pre-bound listener wins over the address. This is what lets a caller
-	// — the tests, above all — reserve the port and hand over the live
-	// socket, instead of closing a probe listener and racing everything else
-	// on the machine to re-bind the same address.
-	//
-	// Binding here rather than inside the goroutine also means a bind
-	// failure (a port in use, a socket path that is not writable) is
-	// returned as a startup error, not raced against the shutdown select.
-	if listener == nil {
-		bound, err := listenHTTP(httpAddr, cfg.SocketMode)
-		if err != nil {
-			return fmt.Errorf("binding %q: %w", httpAddr, err)
-		}
-		listener = bound
+	serverErr, startErr := startServing(ctx, cfg, httpServer, httpAddr, listener)
+	if startErr != nil {
+		return startErr
 	}
-
-	serverErr := make(chan error, 1)
-	go func() {
-		// ServeTLS with empty filenames would demand a certificate from
-		// TLSConfig, so the plain path stays plain: TLS is only reached
-		// when the operator supplied a pair, which validateTLSFiles has
-		// already loaded once to prove it parses.
-		var err error
-		if cfg.TLSCertFile != "" {
-			err = httpServer.ServeTLS(listener, cfg.TLSCertFile, cfg.TLSKeyFile)
-		} else {
-			err = httpServer.Serve(listener)
-		}
-		if err != nil && err != http.ErrServerClosed {
-			serverErr <- err
-		}
-		close(serverErr)
-	}()
 
 	select {
 	case <-ctx.Done():
@@ -1449,6 +1470,52 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	case err := <-serverErr:
 		return fmt.Errorf("mcp server error (http): %w", err)
 	}
+}
+
+// startServing binds the listener if the caller did not supply one and serves
+// on it in the background, returning the channel that reports a serve failure.
+//
+// A pre-bound listener wins over the address. This is what lets a caller — the
+// tests, above all — reserve the port and hand over the live socket, instead
+// of closing a probe listener and racing everything else on the machine to
+// re-bind the same address.
+//
+// Binding here rather than inside the goroutine means a bind failure (a port
+// already in use, a socket path that is not writable) is returned as a startup
+// error rather than raced against the shutdown select.
+func startServing(
+	ctx context.Context,
+	cfg *config.Config,
+	httpServer *http.Server,
+	httpAddr string,
+	listener net.Listener,
+) (<-chan error, error) {
+	if listener == nil {
+		bound, err := listenHTTP(ctx, httpAddr, cfg.SocketMode)
+		if err != nil {
+			return nil, fmt.Errorf("binding %q: %w", httpAddr, err)
+		}
+		listener = bound
+	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		// ServeTLS with empty filenames would demand a certificate from
+		// TLSConfig, so the plain path stays plain: TLS is only reached when
+		// the operator supplied a pair, which validateTLSFiles has already
+		// loaded once to prove it parses.
+		var err error
+		if cfg.TLSCertFile != "" {
+			err = httpServer.ServeTLS(listener, cfg.TLSCertFile, cfg.TLSKeyFile)
+		} else {
+			err = httpServer.Serve(listener)
+		}
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+	return serverErr, nil
 }
 
 func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, mux *http.ServeMux) {
@@ -1564,7 +1631,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	authLimiter := serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
 	gate := &mcpServerGate{
 		pool:               pool,
-		gitlabURL:          cfg.GitLabURL,
+		gitlabURLs:         cfg.InstanceURLs(),
 		limiter:            authLimiter,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		// The same challenge the guard in front emits, minus its error
@@ -1578,9 +1645,26 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	tokenCache := oauth.NewTokenCache()
 	rejectedTokens := oauth.NewRejectedTokens(rejectedTokenMaxSize, rejectedTokenTTL)
 	cacheTTL := oauthCacheTTL(cfg.OAuthCacheTTL)
-	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cacheTTL, tokenCache)
+	// The token is verified against the instance the request selected, not
+	// against a single instance fixed at startup: a token is only ever valid
+	// for the GitLab that issued it. The resolver is the operator's
+	// allow-list, so a caller cannot name an instance of their own and be
+	// handed the bearer token — which is what made a free-form GITLAB-URL
+	// header unacceptable in oauth mode in the first place.
+	resolveInstance := func(r *http.Request) (string, error) {
+		if r == nil {
+			return cfg.GitLabURL, nil
+		}
+		options, err := serverpool.ResolveRequestOptionsFor(r, cfg.InstanceURLs())
+		if err != nil {
+			return "", err
+		}
+		return options.GitLabURL, nil
+	}
+	verifier := oauth.NewGitLabVerifierFor(resolveInstance, cfg.SkipTLSVerify, cacheTTL, tokenCache)
 	guard := &bearerGuard{
 		verify:             verifier,
+		resolveInstance:    resolveInstance,
 		rejected:           rejectedTokens,
 		limiter:            authLimiter,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
@@ -1592,7 +1676,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		advertisedScope: requiredScope,
 	}
 	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{oauth.MinimumScope}})
-	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.GitLabURL, oauth.SupportedScopes(cfg.ReadOnly, cfg.SafeMode))
+	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.InstanceURLs(), oauth.SupportedScopes(cfg.ReadOnly, cfg.SafeMode))
 	// Both derivations of RFC 9728 §3 resolve: the path-less form and the
 	// path-inserted form a client computes from a resource identifier that
 	// carries a path. Mounted without a method restriction so the SDK
@@ -1643,7 +1727,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
 	gate := &mcpServerGate{
 		pool:               pool,
-		gitlabURL:          cfg.GitLabURL,
+		gitlabURLs:         cfg.InstanceURLs(),
 		limiter:            authLimiter,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		challenge:          legacyAuthChallenge,
@@ -1903,11 +1987,14 @@ func corsAllowHeadersFor(cfg *config.Config) string {
 }
 
 // gitLabURLHeaderHonored reports whether a per-request GITLAB-URL header can
-// change which instance a request reaches. A deployment that pinned one with
-// --gitlab-url logs the header as ignored, so advertising it would be a
-// standing invitation to send something that silently does nothing.
+// change which instance a request reaches.
+//
+// It cannot when the deployment pinned exactly one instance: the header is
+// logged as ignored, so advertising it would be a standing invitation to send
+// something that silently does nothing. It can with none (the caller chooses
+// freely) and with several (the caller selects among the published ones).
 func gitLabURLHeaderHonored(cfg *config.Config) bool {
-	return cfg.GitLabURL == ""
+	return len(cfg.InstanceURLs()) != 1
 }
 
 // mcpEndpointPath is the named path the MCP endpoint answers on, alongside
@@ -2081,7 +2168,7 @@ var buildServerCardFn = buildServerCard //nolint:gochecknoglobals // test seam
 // to keep in sync.
 func serverCardAuthentication(cfg *config.Config) map[string]any {
 	if cfg.AuthMode == config.AuthModeOAuth {
-		auth := map[string]any{
+		authInfo := map[string]any{
 			"required": true,
 			"schemes":  []string{"oauth2"},
 			// Named as the RFC 9728 field a client already knows, so a
@@ -2090,9 +2177,9 @@ func serverCardAuthentication(cfg *config.Config) map[string]any {
 			"scopes": []string{oauth.RequiredScope(cfg.ReadOnly, cfg.SafeMode)},
 		}
 		if cfg.PublicURL != "" {
-			auth["resourceMetadata"] = oauth.MetadataURLFor(cfg.PublicURL)
+			authInfo["resourceMetadata"] = oauth.MetadataURLFor(cfg.PublicURL)
 		}
-		return auth
+		return authInfo
 	}
 	return map[string]any{
 		"required": true,

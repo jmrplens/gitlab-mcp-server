@@ -22,10 +22,15 @@ import (
 // user is asked to grant more than it can use.
 //
 // The handler is registered at /.well-known/oauth-protected-resource.
-func NewProtectedResourceHandler(resourceURL, gitlabURL string, supportedScopes []string) http.Handler {
+func NewProtectedResourceHandler(resourceURL string, gitlabURLs, supportedScopes []string) http.Handler {
 	metadata := &oauthex.ProtectedResourceMetadata{
-		Resource:               resourceURL,
-		AuthorizationServers:   []string{gitlabURL},
+		Resource: resourceURL,
+		// RFC 9728 defines authorization_servers as an array, so a
+		// deployment publishing several GitLab instances lists them all and
+		// a client picks the one it holds an account on. That is what makes
+		// one endpoint able to serve gitlab.com and a self-managed instance
+		// without a free-form header choosing where tokens get sent.
+		AuthorizationServers:   gitlabURLs,
 		BearerMethodsSupported: []string{"header"},
 		ScopesSupported:        supportedScopes,
 		// RFC 9728 RECOMMENDED fields: a human name and a docs URL let a

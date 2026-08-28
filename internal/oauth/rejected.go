@@ -1,6 +1,8 @@
 package oauth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"sync"
 	"time"
 )
@@ -46,7 +48,7 @@ func (r *RejectedTokens) Contains(token string) bool {
 	if r.max <= 0 || r.ttl <= 0 {
 		return false
 	}
-	key := tokenKey(token)
+	key := rejectedKey(token)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -71,7 +73,7 @@ func (r *RejectedTokens) Record(token string) {
 	if r.max <= 0 || r.ttl <= 0 {
 		return
 	}
-	key := tokenKey(token)
+	key := rejectedKey(token)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -131,4 +133,16 @@ func (r *RejectedTokens) Cleanup() {
 			delete(r.entries, key)
 		}
 	}
+}
+
+// rejectedKey returns the SHA-256 hex digest of a raw token.
+//
+// A rejection is not keyed by instance, unlike [TokenCache]: this cache only
+// ever suppresses work — a token GitLab already refused is refused again
+// without a round trip — so the worst a cross-instance collision could do is
+// re-check a token that would have been re-checked anyway. Keying an
+// admission decision that way would be a different matter entirely.
+func rejectedKey(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
 }

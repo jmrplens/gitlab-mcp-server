@@ -507,14 +507,15 @@ Hay una instancia lista para usar de este servidor en **`https://mcp.jmrp.io/git
     "gitlab": {
       "type": "http",
       "url": "https://mcp.jmrp.io/gitlab",
-      "headers": { "PRIVATE-TOKEN": "glpat-xxxxxxxxxxxx" }
+      "headers": { "Authorization": "Bearer glpat-xxxxxxxxxxxx" }
     }
   }
 }
 ```
 
-- **`PRIVATE-TOKEN`** (obligatoria) — tu Personal Access Token de GitLab. Viaja en cada petición y nunca se guarda en el servidor.
-- **`GITLAB-URL`** (opcional) — apunta a otra instancia de GitLab; por defecto `https://gitlab.com`. Las instancias autogestionadas deben ser accesibles desde Internet.
+- **`Authorization`** (opcional) — `Bearer <token>`. El endpoint funciona en modo OAuth, así que un cliente que hable el flujo OAuth no necesita cabecera alguna y descubre el servidor de autorización desde el desafío del `401`. Un token de acceso personal de GitLab también sirve, enviado como `Bearer glpat-...`, verificado igual que uno de OAuth. Viaja en cada petición y nunca se guarda en el servidor. Un token `read_api` se acepta y recibe una superficie de solo lectura.
+- **`PRIVATE-TOKEN`** — la cabecera del modo legacy; aquí no se acepta.
+- **`GITLAB-URL`** — se ignora: este despliegue fija la instancia a `https://gitlab.com`.
 
 El endpoint funciona en modo **streamable HTTP sin estado**: `POST` es el transporte, `GET` responde `405` por diseño (no está caído) y `https://mcp.jmrp.io/gitlab/health` responde `ok`. La superficie de herramientas es la `dynamic` por defecto — dos herramientas, `gitlab_find_action` y `gitlab_execute_action`.
 

@@ -213,13 +213,13 @@ Hay una instancia pública en **`https://mcp.jmrp.io/gitlab`** — nada que inst
     "gitlab": {
       "type": "http",
       "url": "https://mcp.jmrp.io/gitlab",
-      "headers": { "PRIVATE-TOKEN": "glpat-xxxxxxxxxxxx" }
+      "headers": { "Authorization": "Bearer glpat-xxxxxxxxxxxx" }
     }
   }
 }
 ```
 
-La cabecera `PRIVATE-TOKEN` es obligatoria y viaja en cada petición — nunca se guarda en el servidor. `GITLAB-URL` es opcional y por defecto vale `https://gitlab.com`; ponla para llegar a otra instancia, que debe ser accesible desde Internet.
+El endpoint funciona en modo OAuth, así que la credencial viaja en `Authorization: Bearer` — un token de acceso personal de GitLab sirve ahí, verificado igual que uno de OAuth. Viaja en cada petición y nunca se guarda en el servidor. Un cliente que hable el flujo OAuth no necesita cabecera alguna: el `401` lleva un desafío RFC 9728 que sigue para autorizar en el navegador. `PRIVATE-TOKEN` es la cabecera del modo legacy y aquí no se acepta; la instancia está fijada a `https://gitlab.com`, así que `GITLAB-URL` se ignora. Un token `read_api` se acepta y recibe una superficie de herramientas de solo lectura.
 
 Es la forma más rápida de probar el servidor, y la forma correcta de usarlo a diario sigue siendo **en local** (cualquier opción de arriba), por un motivo concreto: tu token y todas tus peticiones pasan por la máquina de otra persona. Ejecutarlo en local mantiene ambos en tu ordenador — la única opción sensata para una instancia autogestionada privada.
 

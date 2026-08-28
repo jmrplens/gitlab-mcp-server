@@ -196,13 +196,15 @@ A public instance runs at **`https://mcp.jmrp.io/gitlab`** — nothing to instal
     "gitlab": {
       "type": "http",
       "url": "https://mcp.jmrp.io/gitlab",
-      "headers": { "PRIVATE-TOKEN": "glpat-xxxxxxxxxxxx" }
+      "headers": { "Authorization": "Bearer glpat-xxxxxxxxxxxx" }
     }
   }
 }
 ```
 
-`PRIVATE-TOKEN` is required and travels per request — it is never stored on the server. `GITLAB-URL` is optional and defaults to `https://gitlab.com`; set it to reach another instance (it must be reachable from the public internet).
+The endpoint runs in OAuth mode, so the credential travels as `Authorization: Bearer` — a GitLab personal access token works there, verified exactly like an OAuth one, which is what keeps clients with no OAuth flow (and headless use) working. It travels per request and is never stored on the server. A client that speaks the OAuth flow needs no header at all: the `401` carries an RFC 9728 challenge it follows to authorize in the browser. `PRIVATE-TOKEN` is the legacy-mode header and is **not** accepted here; the instance is fixed to `https://gitlab.com`, so `GITLAB-URL` is ignored.
+
+A `read_api` token is accepted and served a read-only tool surface — the write check is per action, so a credential that cannot break anything is a supported way to use the endpoint rather than a rejected one.
 
 It is the fastest way to try the server, and the right way to keep using it is still **locally** (any option above) — for one concrete reason, not as a disclaimer: **your token and every request pass through someone else's machine.** Running it locally means your credentials and your GitLab traffic never leave your computer, which also makes it the only sensible option for a private self-managed instance.
 
@@ -442,40 +444,40 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       992 |     202,107 |
-| Unit tests (`_test.go`)  |       553 |     314,659 |
-| End-to-end tests         |       182 |      47,508 |
-| **Total**                | **1,727** | **564,274** |
+| Source (`.go`, non-test) |       993 |     203,012 |
+| Unit tests (`_test.go`)  |       554 |     315,492 |
+| End-to-end tests         |       182 |      47,625 |
+| **Total**                | **1,729** | **566,129** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,693 |
-| — exported (public)             |  2,675 |
-| — unexported (private)          |  5,018 |
-| Unit test functions (`TestXxx`) | 11,985 |
-| Subtests (`t.Run(...)`)         |  2,986 |
-| End-to-end test functions       |    439 |
+| Source functions                |  7,724 |
+| — exported (public)             |  2,686 |
+| — unexported (private)          |  5,038 |
+| Unit test functions (`TestXxx`) | 12,005 |
+| Subtests (`t.Run(...)`)         |  2,995 |
+| End-to-end test functions       |    442 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.56× more tests than code |
-| Average source file length         |                 ~203 lines |
+| Test lines vs source lines         | 1.55× more tests than code |
+| Average source file length         |                 ~204 lines |
 | Average test file length           |                 ~569 lines |
-| Comment lines in source            |  23,569 (~11.7% of source) |
+| Comment lines in source            |  24,003 (~11.8% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,715 |
-| `defer` statements                 |   934 |
-| `struct` types defined             | 2,743 |
-| `//nolint` suppressions            |   263 |
+| `if err != nil` checks             | 6,737 |
+| `defer` statements                 |   941 |
+| `struct` types defined             | 2,744 |
+| `//nolint` suppressions            |   264 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
@@ -497,8 +499,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,674 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,629 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,691 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,730 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

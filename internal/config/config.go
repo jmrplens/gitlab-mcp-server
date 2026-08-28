@@ -145,9 +145,9 @@ type Config struct {
 	// the instance it is about to use, so a caller naming a host of their own
 	// would be handed the token. Empty or single-valued behaves exactly as
 	// GitLabURL alone always has.
-	GitLabURLs    []string
-	GitLabToken   string
-	SkipTLSVerify bool
+	GitLabURLs        []string
+	GitLabToken       string
+	SkipTLSVerify     bool
 	DisableRetries    bool // Disable GitLab client retries for unit tests.
 	MetaTools         bool
 	ToolSurface       string
@@ -232,6 +232,27 @@ type Config struct {
 	// shape of the `params` object. Allowed values: "opaque" (default),
 	// "compact", "full". See [DefaultMetaParamSchema] and constants.
 	MetaParamSchema string
+}
+
+// InstanceURLs returns the GitLab instances this configuration publishes.
+//
+// GitLabURLs is the full list and GitLabURL its first entry, but only the
+// flag layer fills both. Every other constructor — a test, a stdio load, any
+// caller that predates the list — sets GitLabURL alone, and reading the slice
+// directly there yields "no instance fixed", which resolves to the public
+// GitLab and sends the request somewhere nobody asked for. Deriving one from
+// the other here means the two cannot disagree.
+func (c *Config) InstanceURLs() []string {
+	if c == nil {
+		return nil
+	}
+	if len(c.GitLabURLs) > 0 {
+		return c.GitLabURLs
+	}
+	if c.GitLabURL == "" {
+		return nil
+	}
+	return []string{c.GitLabURL}
 }
 
 // Enterprise reports whether the resolved tier is an Enterprise (Premium or
