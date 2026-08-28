@@ -42,8 +42,54 @@ Per-IDE MCP client configuration examples for gitlab-mcp-server, covering both s
 | **HTTP Legacy** | HTTP         | `PRIVATE-TOKEN` header per-request                                                               | Multi-user, simple setup                   |
 | **HTTP OAuth**  | HTTP         | Automatic OAuth 2.1 flow via [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) discovery | Multi-user, production, zero-config tokens |
 
-> **Tip**: In HTTP modes, clients send a `GITLAB-URL` header only when the server was started without `--gitlab-url`. If `--gitlab-url` is configured, it is authoritative and client-provided `GITLAB-URL` values are ignored and logged.
+> **Tip**: In HTTP modes, what a `GITLAB-URL` header does depends on how many instances the deployment publishes. With no `--gitlab-url`, the header chooses the instance per request. With exactly one, that instance is authoritative and the header is ignored and logged — this is the public endpoint's case, fixed to `https://gitlab.com`. With several, they form an allow-list the header selects among (the first is the default when no header is sent), and a value outside it is refused rather than ignored: `403` in OAuth mode, `400` in legacy mode.
 > **Docker note**: The published Docker image starts in HTTP mode by default. If an IDE launches Docker as a stdio MCP process, pass `--http=false` after the image name and keep `docker run -i`; do not publish port 8080 in that mode.
+
+---
+
+## Public Hosted Endpoint (mcp.jmrp.io)
+
+Every example in this file configures a server you run yourself. To use the public instance at `https://mcp.jmrp.io/gitlab` instead, the shapes are identical with two differences: the URL is fixed, and the GitLab OAuth Application already exists — you do not create one, you point your client at its Application ID. The [server card](https://mcp.jmrp.io/servers/gitlab/) publishes that ID next to a copy button in each snippet; it is not repeated here, because this repository publishes artifacts only and does not operate that deployment.
+
+Claude Code:
+
+```bash
+claude mcp add gitlab \
+  --transport http \
+  --client-id CLIENT_ID_FROM_THE_SERVER_CARD \
+  --callback-port 8090 \
+  https://mcp.jmrp.io/gitlab
+```
+
+Cursor (`.cursor/mcp.json`) — VS Code (`.vscode/mcp.json`) is the same object with `servers` in place of `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.jmrp.io/gitlab",
+      "oauth": {
+        "clientId": "CLIENT_ID_FROM_THE_SERVER_CARD",
+        "scopes": ["api"]
+      }
+    }
+  }
+}
+```
+
+Use `"scopes": ["read_api"]` for a credential that cannot change anything: it is admitted and served a read-only tool surface, not refused.
+
+Claude Desktop has no JSON path for remote OAuth servers — add `https://mcp.jmrp.io/gitlab` as a Custom Connector exactly as described under **Claude Desktop → HTTP OAuth Mode** below, using the card's Application ID under **Advanced settings**.
+
+For a client with no OAuth flow, or for headless use, send the credential yourself; a gitlab.com personal access token is verified exactly like an OAuth one:
+
+```bash
+claude mcp add --transport http gitlab https://mcp.jmrp.io/gitlab \
+  --header "Authorization: Bearer <your token>"
+```
+
+`PRIVATE-TOKEN` is the legacy-mode header and is not accepted there, and `GITLAB-URL` is ignored: the deployment fixes the instance to `https://gitlab.com`. Its full property table and caveats are in [HTTP Server Mode — Public Hosted Endpoint](http-server-mode.md#public-hosted-endpoint).
 
 ---
 
@@ -636,6 +682,7 @@ Codex-specific notes:
 - [OAuth App Setup](oauth-app-setup.md) — creating GitLab OAuth applications
 - [Configuration](../reference/configuration.md) — environment variables and config loading order
 - [HTTP Server Mode](http-server-mode.md) — HTTP transport architecture and deployment
+- [HTTP Server Mode — Public Hosted Endpoint](http-server-mode.md#public-hosted-endpoint) — the public instance's properties and caveats
 
 ### External
 

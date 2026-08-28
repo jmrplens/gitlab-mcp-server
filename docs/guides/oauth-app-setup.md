@@ -5,6 +5,8 @@ How to create a GitLab OAuth Application for use with gitlab-mcp-server in OAuth
 > **Diátaxis type**: How-to
 > **Audience**: 🔧 Server administrators, team leads
 > **Prerequisites**: GitLab admin or group owner access; server running with `--auth-mode=oauth` over an **https** GitLab URL (bearer tokens are forwarded upstream on every call, so cleartext is refused; `http` is allowed only for loopback development)
+>
+> **Arrived here from `https://mcp.jmrp.io/gitlab`?** You do not need any of this. That endpoint's RFC 9728 metadata names this page as its documentation, but its GitLab OAuth Application is already registered — the [server card](https://mcp.jmrp.io/servers/gitlab/) publishes the client ID and a ready-made snippet per client, and [IDE Configuration](ide-configuration.md#public-hosted-endpoint-mcpjmrpio) carries the same snippets. Everything below is for a deployment you run yourself.
 
 ---
 

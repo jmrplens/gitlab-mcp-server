@@ -114,6 +114,10 @@ For read-only setups, you can use a token with `read_api` scope and enable `GITL
 
 Pick one — each path ends with you typing a prompt to your assistant. For the full per-client reference, see [Manual configuration](#manual-configuration) below.
 
+:::tip[Want to look before installing?]
+The [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) signs in with OAuth and calls the [hosted endpoint](#try-it-without-installing-anything-hosted-endpoint) — `https://mcp.jmrp.io/gitlab` — read-only from a browser tab, with nothing downloaded. Running it yourself is still the way to keep using it.
+:::
+
 ### One-click buttons
 
 These register a **Docker**-based server (it auto-pulls the image on first run; you need [Docker](https://www.docker.com/) installed). VS Code prompts for your token; Cursor / LM Studio / Kiro add a `YOUR_GITLAB_TOKEN` placeholder you replace.
@@ -220,9 +224,13 @@ A public instance runs at **`https://mcp.jmrp.io/gitlab`** — nothing to instal
 
 The endpoint runs in OAuth mode, so the credential travels as `Authorization: Bearer` — a GitLab personal access token works there, verified exactly like an OAuth one. It travels per request and is never stored on the server. A client that speaks the OAuth flow needs no header at all: the `401` carries an RFC 9728 challenge it follows to authorize in the browser. `PRIVATE-TOKEN` is the legacy-mode header and is not accepted here; the instance is fixed to `https://gitlab.com`, so `GITLAB-URL` is ignored. A `read_api` token is accepted and served a read-only tool surface.
 
+Two pages make it easier still. The [server card](https://mcp.jmrp.io/servers/gitlab/) lists the whole catalog with no credential at all and carries copy-paste config for Claude Code, Cursor and VS Code — including the OAuth client ID those clients need. The [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) calls the same endpoint read-only from a browser tab: sign in with OAuth, pick a tool, read the raw JSON-RPC it returns — nothing installed.
+
 It is the fastest way to try the server, and the right way to keep using it is still **locally** (any option above), for one concrete reason: your token and every request pass through someone else's machine. Running it locally keeps both on your own computer — the only sensible option for a private self-managed instance.
 
-The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport, `GET` on it answers `405` by design, and `https://mcp.jmrp.io/gitlab/health` answers `ok`. It is one of the servers listed at [mcp.jmrp.io](https://mcp.jmrp.io/), a directory of the MCP servers maintained by this author, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
+The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport and an _authenticated_ `GET` answers `405` by design; with no credential, any method answers `401` carrying the RFC 6750 challenge an OAuth client follows — a bare `curl` that gets `401` is the endpoint working, not failing. `https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",…}`. It is one of the servers listed at [mcp.jmrp.io](https://mcp.jmrp.io/), a directory of the MCP servers maintained by this author, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
+
+It is a personal service, run by one person and offered as-is: no SLA, no support channel, and no promise it is unchanged next week. It adds no quota of its own — every call spends GitLab.com's own limits, under your own token. And it tracks the latest release automatically, so what it serves follows the newest tag rather than a pinned version.
 
 ## Download
 

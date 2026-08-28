@@ -89,6 +89,26 @@ and open it with Claude Desktop — see the
 
 Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs). Prefer a guided flow with no JSON to edit? Run `gitlab-mcp-server --setup` after installing the binary (see [Step 2](#step-2-run-the-setup-wizard)).
 
+### Try it without installing anything (hosted endpoint)
+
+A public instance runs at `https://mcp.jmrp.io/gitlab` — nothing to install, no account beyond your own GitLab.com token. It runs in OAuth mode: a client that speaks the OAuth flow authorizes in the browser and stores its own token, and anything that cannot open a browser sends a personal access token as `Authorization: Bearer` instead:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.jmrp.io/gitlab",
+      "headers": { "Authorization": "Bearer glpat-xxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+The [server card](https://mcp.jmrp.io/servers/gitlab/) carries copy-paste config for Claude Code, Cursor and VS Code, including the OAuth client ID those clients need — without it they fall back to dynamic registration and receive a scope this server cannot use. The [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) signs in with OAuth and calls the same endpoint read-only, with nothing to install.
+
+It is a personal service run best-effort, with no SLA: your token and every request pass through a machine you do not control, and the instance is fixed to `https://gitlab.com`. For a self-managed GitLab, or for anything you would rather keep on your own computer, use one of the paths above. The full property table is in [HTTP Server Mode — Public Hosted Endpoint](guides/http-server-mode.md#public-hosted-endpoint).
+
 ---
 
 ## Step 1: Download the Binary

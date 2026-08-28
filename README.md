@@ -50,6 +50,8 @@ You talk to your AI assistant; it does the GitLab work. No project IDs, API endp
 
 Pick one. Each path ends with you typing a prompt to your assistant.
 
+> **Want to look before installing?** The [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) signs in with OAuth and calls the [hosted endpoint](#try-it-without-installing-anything-hosted-endpoint) read-only from a browser tab — nothing downloaded. Running it yourself is still the way to keep using it.
+
 ### One-click install
 
 <table>
@@ -206,9 +208,13 @@ The endpoint runs in OAuth mode, so the credential travels as `Authorization: Be
 
 A `read_api` token is accepted and served a read-only tool surface — the write check is per action, so a credential that cannot break anything is a supported way to use the endpoint rather than a rejected one.
 
+Two pages make it easier still. The [server card](https://mcp.jmrp.io/servers/gitlab/) lists the whole catalog with no credential at all and carries copy-paste config for Claude Code, Cursor and VS Code — including the OAuth client ID those clients need. The [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) calls the same endpoint read-only from a browser tab: sign in with OAuth, pick a tool, read the raw JSON-RPC it returns — nothing installed.
+
 It is the fastest way to try the server, and the right way to keep using it is still **locally** (any option above) — for one concrete reason, not as a disclaimer: **your token and every request pass through someone else's machine.** Running it locally means your credentials and your GitLab traffic never leave your computer, which also makes it the only sensible option for a private self-managed instance.
 
-The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport, `GET` on it answers `405` by design, and `https://mcp.jmrp.io/gitlab/health` answers `200` with `{"status":"ok",…}`. A self-hosted HTTP deployment can also run `--auth-mode=oauth --gitlab-url=https://gitlab.com --public-url=https://mcp.example.com` (both are required: OAuth needs a fixed instance and the externally reachable origin that RFC 9728 identifies the resource by), where clients discover GitLab as the authorization server through that metadata and authorize in the browser instead of copying tokens — see [OAuth App Setup](docs/guides/oauth-app-setup.md). It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers I maintain, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
+The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport and an _authenticated_ `GET` answers `405` by design; with no credential, any method answers `401` carrying the RFC 6750 challenge an OAuth client follows — a bare `curl` that gets `401` is the endpoint working, not failing. `https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",…}`. A self-hosted HTTP deployment can also run `--auth-mode=oauth --gitlab-url=https://gitlab.com --public-url=https://mcp.example.com` (both are required: OAuth needs a fixed instance and the externally reachable origin that RFC 9728 identifies the resource by), where clients discover GitLab as the authorization server through that metadata and authorize in the browser instead of copying tokens — see [OAuth App Setup](docs/guides/oauth-app-setup.md). It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers I maintain, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
+
+It is a personal service, run by one person and offered as-is: no SLA, no support channel, and no promise it is unchanged next week. It adds no quota of its own — every call spends GitLab.com's own limits, under your own token. And it tracks the latest release automatically, so what it serves follows the newest tag rather than a pinned version.
 
 **Then just ask:** open your AI client and try _"List my GitLab projects."_ See the [Getting Started guide](https://jmrp.io/docs/gitlab-mcp-server/getting-started/) for per-client details and [more example prompts](docs/guides/examples/usage-examples.md).
 
@@ -444,18 +450,18 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       995 |     203,321 |
+| Source (`.go`, non-test) |       996 |     203,648 |
 | Unit tests (`_test.go`)  |       554 |     315,810 |
 | End-to-end tests         |       183 |      48,423 |
-| **Total**                | **1,732** | **567,554** |
+| **Total**                | **1,733** | **567,881** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,731 |
+| Source functions                |  7,739 |
 | — exported (public)             |  2,686 |
-| — unexported (private)          |  5,045 |
+| — unexported (private)          |  5,053 |
 | Unit test functions (`TestXxx`) | 12,010 |
 | Subtests (`t.Run(...)`)         |  3,010 |
 | End-to-end test functions       |    453 |
@@ -467,15 +473,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~204 lines |
 | Average test file length           |                 ~570 lines |
-| Comment lines in source            |  24,168 (~11.9% of source) |
+| Comment lines in source            |  24,215 (~11.9% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,751 |
-| `defer` statements                 |   946 |
+| `if err != nil` checks             | 6,760 |
+| `defer` statements                 |   948 |
 | `struct` types defined             | 2,744 |
 | `//nolint` suppressions            |   267 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
@@ -484,7 +490,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   237 |
+| Go packages                    |   238 |
 | Direct dependencies (`go.mod`) |    18 |
 | Indirect dependencies          |    46 |
 
@@ -499,8 +505,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,696 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,744 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,702 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,774 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

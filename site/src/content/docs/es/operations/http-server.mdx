@@ -519,12 +519,12 @@ Hay una instancia lista para usar de este servidor en **`https://mcp.jmrp.io/git
 - **`PRIVATE-TOKEN`** — la cabecera del modo legacy; aquí no se acepta.
 - **`GITLAB-URL`** — se ignora: este despliegue fija la instancia a `https://gitlab.com`.
 
-El endpoint funciona en modo **streamable HTTP sin estado**: `POST` es el transporte, `GET` responde `405` por diseño (no está caído) y `https://mcp.jmrp.io/gitlab/health` responde `ok`. La superficie de herramientas es la `dynamic` por defecto — dos herramientas, `gitlab_find_action` y `gitlab_execute_action`.
+El endpoint funciona en modo **streamable HTTP sin estado**: `POST` es el transporte y un `GET` _autenticado_ responde `405` por diseño; sin credencial, cualquier método responde `401` con el desafío RFC 6750 que sigue un cliente OAuth — un `curl` a secas que recibe `401` es el endpoint funcionando, no fallando. `https://mcp.jmrp.io/gitlab/health` no necesita credencial y responde `200` con `{"status":"ok",…}`. La superficie de herramientas es la `dynamic` por defecto — dos herramientas, `gitlab_find_action` y `gitlab_execute_action`.
 
 Es uno de los servidores listados en **[mcp.jmrp.io](https://mcp.jmrp.io/)**, un directorio de los servidores MCP que mantiene el autor, cada uno accesible en su propio endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) es esa misma lista para clientes automáticos.
 
 :::caution
-Usa un token con el alcance mínimo que necesites. Un endpoint alojado ve todas las peticiones que le envías — para instancias privadas o autogestionadas, es preferible ejecutar el servidor tú mismo con alguno de los despliegues anteriores.
+Usa un token con el alcance mínimo que necesites. Un endpoint alojado ve todas las peticiones que le envías, no añade cuota propia — tus llamadas gastan los límites de GitLab.com con tu propio token — y se ofrece tal cual: sin SLA, sin canal de soporte y sin garantía de que siga ahí la semana que viene. Para instancias privadas o autogestionadas, es preferible ejecutar el servidor tú mismo con alguno de los despliegues anteriores.
 :::
 
 ## ¿Cuánta memoria necesita?

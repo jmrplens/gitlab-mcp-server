@@ -519,12 +519,12 @@ A ready-to-use instance of this server runs at **`https://mcp.jmrp.io/gitlab`** 
 - **`PRIVATE-TOKEN`** — the legacy-mode header, not accepted here.
 - **`GITLAB-URL`** — ignored: this deployment fixes the instance to `https://gitlab.com`.
 
-The endpoint runs in **stateless streamable HTTP** mode: `POST` is the transport, `GET` answers `405` by design (it is not down), and `https://mcp.jmrp.io/gitlab/health` answers `ok`. The tool surface is the default `dynamic` one — two tools, `gitlab_find_action` and `gitlab_execute_action`.
+The endpoint runs in **stateless streamable HTTP** mode: `POST` is the transport and an _authenticated_ `GET` answers `405` by design; with no credential, any method answers `401` carrying the RFC 6750 challenge an OAuth client follows — a bare `curl` that gets `401` is the endpoint working, not failing. `https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",…}`. The tool surface is the default `dynamic` one — two tools, `gitlab_find_action` and `gitlab_execute_action`.
 
 It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers maintained by this author, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
 
 :::caution
-Use a token scoped to what you actually need. A hosted endpoint sees every request you send through it — for private or self-managed GitLab instances, prefer running the server yourself with one of the deployments above.
+Use a token scoped to what you actually need. A hosted endpoint sees every request you send through it, adds no quota of its own — your calls spend GitLab.com's limits under your own token — and is offered as-is: no SLA, no support channel, no promise it is still there next week. For private or self-managed GitLab instances, prefer running the server yourself with one of the deployments above.
 :::
 
 ## How much memory does it need?

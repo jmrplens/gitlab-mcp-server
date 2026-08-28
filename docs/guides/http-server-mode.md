@@ -537,7 +537,9 @@ Both flags or neither: a certificate without its key is a deployment that believ
 
 ## Public Hosted Endpoint
 
-A ready-to-use instance of this server runs at `https://mcp.jmrp.io/gitlab`. It is deployed out of band from the [mcp.jmrp.io](https://github.com/jmrplens/mcp.jmrp.io) host — this repository publishes artifacts only, so nothing here deploys or configures it.
+A ready-to-use instance of this server runs at `https://mcp.jmrp.io/gitlab`. It is deployed out of band from the [mcp.jmrp.io](https://github.com/jmrplens/mcp.jmrp.io) host — this repository publishes artifacts only, so nothing here deploys or configures it. That deployment tracks the latest GitHub release, so what it serves follows the newest tag rather than a pinned version.
+
+It runs `--auth-mode=oauth`, so the credential travels as `Authorization: Bearer`. A client that speaks the OAuth flow needs no header at all: the `401` carries the RFC 6750 challenge pointing at `https://mcp.jmrp.io/.well-known/oauth-protected-resource/gitlab`, from which it discovers `https://gitlab.com` as the authorization server and authorizes in the browser. For anything that cannot open a browser — headless, CI — a GitLab personal access token sent as `Bearer` is verified exactly the same way:
 
 ```json
 {
@@ -545,21 +547,29 @@ A ready-to-use instance of this server runs at `https://mcp.jmrp.io/gitlab`. It 
     "gitlab": {
       "type": "http",
       "url": "https://mcp.jmrp.io/gitlab",
-      "headers": { "PRIVATE-TOKEN": "glpat-xxxxxxxxxxxx" }
+      "headers": { "Authorization": "Bearer glpat-xxxxxxxxxxxx" }
     }
   }
 }
 ```
 
-| Property     | Value                                                             |
-| ------------ | ----------------------------------------------------------------- |
-| Transport    | Stateless streamable HTTP (`--stateless`); `GET`/`DELETE` → `405` |
-| Tool surface | `dynamic` (`gitlab_find_action`, `gitlab_execute_action`)         |
-| Auth mode    | `legacy` — `PRIVATE-TOKEN` per request, never stored server-side  |
-| `GITLAB-URL` | Optional; defaults to `https://gitlab.com`                        |
-| Health       | `GET https://mcp.jmrp.io/gitlab/health` → `ok`                    |
+| Property        | Value                                                                                                                             |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Transport       | Stateless streamable HTTP (`--stateless`); an authenticated `GET`/`DELETE` answers `405`                                          |
+| Tool surface    | `dynamic` (`gitlab_find_action`, `gitlab_execute_action`)                                                                         |
+| Auth mode       | `oauth` — `Authorization: Bearer` per request, never stored server-side                                                           |
+| No credential   | Any method answers `401` with `WWW-Authenticate: Bearer … resource_metadata=…`                                                    |
+| `PRIVATE-TOKEN` | Not accepted — it is the legacy-mode header                                                                                       |
+| `GITLAB-URL`    | Ignored; this deployment fixes the instance to `https://gitlab.com`                                                               |
+| Scopes          | `api` for the full surface; a `read_api` token is admitted and served a read-only one                                             |
+| Health          | `GET https://mcp.jmrp.io/gitlab/health` → `200` with `{"status":"ok",…}`                                                          |
+| Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/) — the catalog and per-client config, unauthenticated |
 
-Because it is multi-tenant, each distinct token+URL pair gets its own pooled MCP server (see [Server Pool](#server-pool)). Self-managed GitLab instances must be reachable from the public internet, and every request traverses a third-party host — for private instances, run one of the deployments described above instead.
+Because it is multi-tenant, each distinct token+URL pair gets its own pooled MCP server (see [Server Pool](#server-pool)). A `read_api` token is admitted and served a read-only surface rather than refused, so a credential that cannot change anything is a supported way to use it.
+
+Try it before configuring anything: the [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) signs in with OAuth and calls the endpoint read-only from a browser tab, and the [server card](https://mcp.jmrp.io/servers/gitlab/) lists the whole catalog with no credential at all.
+
+It is a personal service, run best-effort: no SLA, no support channel, no promise it is unchanged next week, and every request traverses a host you do not control. It adds no quota of its own — every call spends GitLab.com's own limits, under your own token. For a self-managed instance — which this deployment cannot reach, since it fixes the instance to `https://gitlab.com` — or for anything you would rather keep on your own machine, run one of the deployments described above instead.
 
 The endpoint is listed at [mcp.jmrp.io](https://mcp.jmrp.io/), a directory of the MCP servers maintained by this author; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list in machine-readable form.
 
