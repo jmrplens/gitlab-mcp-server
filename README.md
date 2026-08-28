@@ -9,6 +9,7 @@
 <!-- Package -->
 
 [![GitHub Release](https://img.shields.io/github/v/release/jmrplens/gitlab-mcp-server?style=flat&logo=github&label=Release)](https://github.com/jmrplens/gitlab-mcp-server/releases/latest)
+[![npm](https://img.shields.io/npm/v/@jmrp.io/gitlab-mcp-server?style=flat&logo=npm&label=npm)](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/Windows%20%7C%20Linux%20%7C%20macOS-amd64%20%26%20arm64-lightgrey?style=flat&logo=windows-terminal&logoColor=white)
 <!-- Quality -->
@@ -103,6 +104,10 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
 Or install the native binary first, then register it:
 
 ```bash
+# Any platform (npm/pnpm) — downloads only your platform's prebuilt binary
+npx -y @jmrp.io/gitlab-mcp-server          # zero install; clients launch it directly
+npm install -g @jmrp.io/gitlab-mcp-server  # or install globally (npm)
+pnpm add -g @jmrp.io/gitlab-mcp-server     # or globally (pnpm)
 # macOS/Linux (Homebrew)
 brew install jmrplens/tap/gitlab-mcp-server
 # Linux/macOS (script)
@@ -114,6 +119,9 @@ irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/in
 
 claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
 ```
+
+Clients that launch servers with `npx` need no install at all — point them at
+`npx -y @jmrp.io/gitlab-mcp-server`.
 
 Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs).
 

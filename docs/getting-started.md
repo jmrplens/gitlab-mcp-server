@@ -41,6 +41,30 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
 ```
 
+### npm / npx (any platform)
+
+The server is published as [`@jmrp.io/gitlab-mcp-server`](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server). npm downloads only the prebuilt binary for your platform — nothing compiles, nothing runs at install time.
+
+```bash
+npx -y @jmrp.io/gitlab-mcp-server          # zero install; clients launch it directly
+npm install -g @jmrp.io/gitlab-mcp-server  # or install globally (npm)
+pnpm add -g @jmrp.io/gitlab-mcp-server     # or globally (pnpm)
+```
+
+Point any MCP client at `npx` with no install at all:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "npx",
+      "args": ["-y", "@jmrp.io/gitlab-mcp-server"],
+      "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
+    }
+  }
+}
+```
+
 ### One-line installer (native binary)
 
 ```bash

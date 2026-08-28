@@ -119,6 +119,44 @@ jobs:
           sha256sum dist/gitlab-mcp-server.mcpb
           gh release upload "v${VERSION}" dist/gitlab-mcp-server.mcpb --clobber
 
+      # npm publish via OIDC trusted publisher — no stored token. dist/ already
+      # holds the binaries under their release names here, the same spot the
+      # mcpb step reads from. The job's id-token: write permission lets npm mint
+      # the OIDC token; npm >= 11.5.1 performs the exchange, so setup-node's
+      # Node 22 is upgraded to the current npm first. Provenance is attached
+      # automatically under trusted publishing (no --provenance flag), and
+      # publish-npm.sh skips any version already on the registry, so re-running
+      # this job is safe.
+      #
+      # Bootstrap: a package cannot have a trusted publisher configured until it
+      # exists, so v2.7.5's seven packages are created by a one-time tokened
+      # publish; from the next tag on, this runs with no credential. The
+      # trusted publisher on npmjs.com must name this workflow file
+      # (release.yml) and, because this job runs in the `release` environment,
+      # that same environment.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Validate the assembled packages before anything is published. A
+      # published npm version is permanent, so a broken tarball must fail the
+      # release here, not after it is irreversibly on the registry. Runs on the
+      # ephemeral runner (already disposable); `make validate-npm` runs the same
+      # check in Docker for a developer's own machine.
+      - name: Validate npm packages
+        run: make validate-npm-local NPM_BINARIES=dist
+
+      - name: Publish to npm
+        run: |
+          set -euo pipefail
+          # Pinned, not @latest: this CLI runs npm publish under the job's
+          # id-token: write, so a compromised or surprising `latest` could push
+          # altered packages. 11.5.1 is the floor npm trusted publishing
+          # requires; bump deliberately.
+          npm install -g npm@11.5.1
+          bash scripts/publish-npm.sh dist "${GITHUB_REF#refs/tags/v}"
+
       - name: Update Homebrew tap formula
         env:
           TAP_DEPLOY_KEY_B64: ${{ secrets.TAP_DEPLOY_KEY_B64 }}
@@ -212,6 +250,7 @@ jobs:
           [ -f .plugin/plugin.json ] && git add .plugin/plugin.json
           [ -f mcpb/manifest.json ] && git add mcpb/manifest.json
           [ -f lhm.plugin.json ] && git add lhm.plugin.json
+          [ -f npm/gitlab-mcp-server/package.json ] && git add npm/gitlab-mcp-server/package.json
 
           if git diff --cached --quiet; then
             echo "::notice::No manifest changes to commit"
