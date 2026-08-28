@@ -170,6 +170,36 @@ func TestClearStaleSocket_LiveSocketIsRefused(t *testing.T) {
 	}
 }
 
+// TestClearStaleSocket_UnansweredProbeIsRefused verifies that only a definite
+// "nothing is listening" clears the path.
+//
+// A dial can fail for reasons that say nothing about whether a server is
+// there: a permission denial, a timeout, a cancelled context. Treating any
+// failure as proof of death is how a running deployment loses its socket to a
+// racing restart. Here the probe is cancelled before it can complete, which
+// stands in for every unanswered question.
+func TestClearStaleSocket_UnansweredProbeIsRefused(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "unanswered.sock")
+	listener := listenUnixForTest(t, path)
+	defer listener.Close()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // the probe cannot answer
+
+	err := clearStaleSocket(ctx, path)
+	if err == nil {
+		t.Fatal("clearStaleSocket() = nil; an unanswered probe must not authorize a delete")
+	}
+	if !strings.Contains(err.Error(), "could not be probed") {
+		t.Errorf("error = %v, want it to say the socket could not be probed", err)
+	}
+	if _, statErr := os.Lstat(path); statErr != nil {
+		t.Errorf("the socket was removed on an unanswered probe: %v", statErr)
+	}
+}
+
 // TestClearStaleSocket_RegularFileIsRefused verifies that a typo in
 // --http-addr cannot delete an unrelated file.
 func TestClearStaleSocket_RegularFileIsRefused(t *testing.T) {

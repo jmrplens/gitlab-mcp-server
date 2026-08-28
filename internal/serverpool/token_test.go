@@ -427,6 +427,53 @@ func TestResolveRequestOptionsFor_SingleInstanceIgnoresTheHeader(t *testing.T) {
 	}
 }
 
+// TestNormalizeGitLabURL_CanonicalizesEquivalentSpellings verifies RFC 3986
+// section 6.2.2 equivalence: scheme and host are case-insensitive and an
+// explicit default port is equivalent to none.
+//
+// It matters twice. The allow-list compares canonical strings, so without this
+// a header naming "https://GitLab.com" would be refused as an instance the
+// deployment does not publish — while naming the one it does. And the server
+// pool keys on this value, so one instance spelled two ways would build two
+// entries for a single credential.
+func TestNormalizeGitLabURL_CanonicalizesEquivalentSpellings(t *testing.T) {
+	t.Parallel()
+
+	const canonical = "https://gitlab.example.com"
+	equivalent := []string{
+		"https://gitlab.example.com",
+		"https://GitLab.Example.com",
+		"HTTPS://GITLAB.EXAMPLE.COM",
+		"https://gitlab.example.com:443",
+		"https://gitlab.example.com/",
+		"https://GitLab.example.com:443/",
+	}
+	for _, raw := range equivalent {
+		t.Run(raw, func(t *testing.T) {
+			t.Parallel()
+			got, err := normalizeGitLabURL(raw)
+			if err != nil {
+				t.Fatalf("normalizeGitLabURL(%q) error = %v", raw, err)
+			}
+			if got != canonical {
+				t.Errorf("normalizeGitLabURL(%q) = %q, want %q", raw, got, canonical)
+			}
+		})
+	}
+
+	// A non-default port is significant and must survive.
+	if got, err := normalizeGitLabURL("https://gitlab.example.com:8443"); err != nil || got != "https://gitlab.example.com:8443" {
+		t.Errorf("normalizeGitLabURL(:8443) = %q, %v; a non-default port must be kept", got, err)
+	}
+	// http's default is 80, not 443.
+	if got, err := normalizeGitLabURL("http://gitlab.example.com:80"); err != nil || got != "http://gitlab.example.com" {
+		t.Errorf("normalizeGitLabURL(http :80) = %q, %v", got, err)
+	}
+	if got, err := normalizeGitLabURL("http://gitlab.example.com:443"); err != nil || got != "http://gitlab.example.com:443" {
+		t.Errorf("normalizeGitLabURL(http :443) = %q, %v; 443 is not http's default", got, err)
+	}
+}
+
 // TestNormalizeGitLabURLs_DropsBlanksAndDuplicates verifies that the list is
 // canonicalized while keeping order, since the first entry is the
 // deployment's default instance and sorting would silently re-elect it.

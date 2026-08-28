@@ -243,7 +243,7 @@ When the server starts without `--gitlab-url`, clients must specify which GitLab
 GITLAB-URL: https://gitlab.example.com
 ```
 
-When `--gitlab-url` is set, the server always uses the configured URL. If a client still sends `GITLAB-URL`, the header is ignored and logged as a request option overridden by MCP configuration. If both `--gitlab-url` and `GITLAB-URL` are absent, the request is rejected.
+When exactly one instance is pinned with `--gitlab-url`, the server always uses it: a client that still sends `GITLAB-URL` has the header ignored and logged as a request option overridden by MCP configuration. When several are published the header selects among them — see [Publishing more than one instance](#publishing-more-than-one-instance). If both `--gitlab-url` and `GITLAB-URL` are absent, the request is rejected.
 
 ### Publishing more than one instance
 
@@ -256,13 +256,17 @@ gitlab-mcp-server --http --auth-mode=oauth \
   --gitlab-url=https://gitlab.internal.example.com
 ```
 
-| Instances published | No `GITLAB-URL` header | Header naming a published instance | Header naming anything else |
-| ------------------- | ---------------------- | ---------------------------------- | --------------------------- |
-| none                | public `gitlab.com`    | honored                            | honored                     |
-| one                 | that instance          | ignored                            | ignored                     |
-| several             | the first              | honored                            | **refused with `403`**      |
+| Instances published | No `GITLAB-URL` header | Header naming a published instance | Header naming anything else                       |
+| ------------------- | ---------------------- | ---------------------------------- | ------------------------------------------------- |
+| none                | public `gitlab.com`    | honored                            | honored                                           |
+| one                 | that instance          | ignored                            | ignored                                           |
+| several             | the first              | honored                            | **refused**: `403` in OAuth mode, `400` in legacy |
 
-The refusal is the point. In OAuth mode the server **verifies the bearer token against the instance it is about to use**, so a free-form header would let a caller name a host of their own and be handed the token. An allow-list keeps that choice with the operator: the published instances are listed in the RFC 9728 `authorization_servers` array, so a client discovers which ones it may pick, and a token is verified — and cached — per instance, never across them.
+The two statuses differ because the layers differ: OAuth mode refuses in the bearer guard, before the credential is sent anywhere, which is a permission decision (`403`); legacy mode refuses while resolving the request options, which is a malformed request (`400`). Either way the instance is never contacted.
+
+The refusal is the point. In OAuth mode the server **verifies the bearer token against the instance it is about to use**, so a free-form header would let a caller name a host of their own and be handed the token. An allow-list keeps that choice with the operator: the published instances are listed in the RFC 9728 `authorization_servers` array, so a client discovers which ones it may pick, and a token is verified — and cached — per instance, never across them. A rejection is scoped the same way, so a `401` from one published instance never refuses a valid token on another.
+
+An instance is matched after canonicalization, so `https://GitLab.com`, `https://gitlab.com:443` and `https://gitlab.com/` all name the same published instance (RFC 3986 §6.2.2: scheme and host are case-insensitive and a default port is equivalent to none). Every published instance must be `https` in OAuth mode, not just the first — the bearer token is forwarded to whichever one the request selected.
 
 ### Token Headers
 
@@ -527,7 +531,9 @@ For a proxy that does **not** share the machine:
 gitlab-mcp-server --http --http-addr=:8443 --tls-cert=/etc/ssl/mcp.crt --tls-key=/etc/ssl/mcp.key
 ```
 
-Both flags or neither: a certificate without its key is a deployment that believes it is encrypting and is not. The pair is loaded at startup, so a wrong path fails there rather than at the first handshake. TLS 1.2 is the floor. This implies a private CA and `proxy_ssl_verify on` on the proxy side; where the proxy is local, the socket above is less machinery for the same guarantee.
+Both flags or neither: a certificate without its key is a deployment that believes it is encrypting and is not. The pair is loaded at startup, so a wrong path fails there rather than at the first handshake.
+
+**Versions.** TLS 1.2 is the floor, not the ceiling: no maximum is set, so a current client negotiates **TLS 1.3** and 1.2 is only reached by one that cannot go higher. Anything below 1.2 is refused. The floor is 1.2 rather than 1.3 deliberately — this flag exists for a reverse proxy on another machine, and a proxy's `proxy_ssl` stack is not always 1.3-capable. Both properties are pinned by tests that drive the real binary. This implies a private CA and `proxy_ssl_verify on` on the proxy side; where the proxy is local, the socket above is less machinery for the same guarantee.
 
 ## Public Hosted Endpoint
 

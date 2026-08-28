@@ -54,7 +54,7 @@ func TestRejectedTokens_AtCapacity_StaysBounded(t *testing.T) {
 	const capacity = 4
 	r := NewRejectedTokens(capacity, time.Minute)
 	for i := range 50 {
-		r.Record(testInstance, string(rune('a'+i%26)) + string(rune('0'+i/26)))
+		r.Record(testInstance, string(rune('a'+i%26))+string(rune('0'+i/26)))
 	}
 
 	if got := r.Len(); got > capacity {
@@ -82,7 +82,7 @@ func TestRejectedTokens_ExpiredEntriesMakeRoom(t *testing.T) {
 
 	r := NewRejectedTokens(capacity, ttl)
 	for i := range capacity {
-		r.Record(testInstance, "glpat-stale-" + strconv.Itoa(i))
+		r.Record(testInstance, "glpat-stale-"+strconv.Itoa(i))
 	}
 	if got := r.Len(); got != capacity {
 		t.Fatalf("Len() = %d, want %d before anything expires", got, capacity)

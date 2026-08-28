@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
@@ -113,6 +114,18 @@ func clearStaleSocket(ctx context.Context, path string) error {
 	if dialErr == nil {
 		_ = conn.Close()
 		return fmt.Errorf("--http-addr %q is already served by another process", path)
+	}
+	// Only ONE failure proves the socket is dead: the kernel answering that
+	// nothing is listening. Anything else — a permission denial, a timeout, a
+	// cancelled context — means the question went unanswered, and deleting on
+	// an unanswered question is how a live server loses its socket to a
+	// racing restart. Refusing costs an operator one manual `rm`; guessing
+	// costs a running deployment its listener.
+	if !errors.Is(dialErr, syscall.ECONNREFUSED) {
+		return fmt.Errorf(
+			"--http-addr %q exists and could not be probed; refusing to replace it — remove it by hand if you are sure no server is running: %w",
+			path, dialErr,
+		)
 	}
 	if removeErr := os.Remove(path); removeErr != nil {
 		return fmt.Errorf("removing stale socket %q: %w", path, removeErr)

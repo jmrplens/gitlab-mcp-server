@@ -177,6 +177,11 @@ type mcpServerGate struct {
 	trustedProxyHeader string
 	// challenge is the WWW-Authenticate value sent with a 401.
 	challenge string
+	// oauthMode reports whether this gate sits behind the bearer guard, which
+	// decides whether an RFC 6750 error code belongs in the challenge: legacy
+	// mode's challenge advertises no metadata URL and names no error, since
+	// there is no authorization server for the client to go back to.
+	oauthMode bool
 	// bearerOnly restricts credential extraction to Authorization: Bearer
 	// and ignores PRIVATE-TOKEN. Set in oauth mode: the SDK middleware
 	// verifies the Bearer token, so the gate must execute as that same
@@ -319,7 +324,11 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,
 			message: "GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.",
-			header:  newHeader("WWW-Authenticate", g.challenge),
+			// Same verdict as the bearer guard's, so it carries the same RFC
+			// 6750 error code. Without it a client cannot tell this apart
+			// from "you sent no credential", and the two call for different
+			// actions: reauthorize versus authorize.
+			header: newHeader("WWW-Authenticate", g.invalidTokenChallenge()),
 		}
 	}
 	if err != nil {
@@ -360,4 +369,18 @@ func capitalizeFirst(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// invalidTokenChallenge is the gate's challenge for a credential GitLab
+// refused, carrying the RFC 6750 error code that verdict deserves.
+//
+// The bearer guard emits error="invalid_token" for the identical judgement;
+// the gate reaches this only for a pool rejection the guard could not see, and
+// answering the same verdict two different ways leaves a client unable to tell
+// "reauthorize" from "you sent nothing".
+func (g *mcpServerGate) invalidTokenChallenge() string {
+	if !g.oauthMode {
+		return g.challenge
+	}
+	return g.challenge + `, error="invalid_token", error_description="the access token is expired, revoked, or not valid for this GitLab instance"`
 }

@@ -1421,14 +1421,14 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		select {
 		case <-serverCardDone:
 		case <-r.Context().Done():
-			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
+			writeCardUnavailable(w)
 			return
 		case <-ctx.Done():
-			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
+			writeCardUnavailable(w)
 			return
 		}
 		if serverCardJSON == nil {
-			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
+			writeCardUnavailable(w)
 			return
 		}
 		w.Header().Set(hdrContentType, mimeJSON)
@@ -1689,6 +1689,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		// scope and where the metadata lives.
 		challenge:  oauthChallenge(requiredScope, resourceMetadataURL),
 		bearerOnly: true,
+		oauthMode:  true,
 	}
 
 	tokenCache := oauth.NewTokenCache()
@@ -2233,6 +2234,18 @@ func newHealthResponse(startedAt, now time.Time) healthResponse {
 // shutdown-during-build path deterministically instead of racing a sleep
 // against the real build.
 var buildServerCardFn = buildServerCard //nolint:gochecknoglobals // test seam
+
+// writeCardUnavailable answers a card request that could not be served.
+//
+// http.Error would label this JSON body text/plain, and every response here
+// also carries X-Content-Type-Options: nosniff — so a browser would be told
+// not to sniff, and then told the wrong type. The body has always been JSON;
+// only the header was wrong.
+func writeCardUnavailable(w http.ResponseWriter) {
+	w.Header().Set(hdrContentType, mimeJSON)
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = w.Write([]byte(`{"error":"server card unavailable"}` + "\n"))
+}
 
 // serverCardAuthentication describes how a client authenticates against THIS
 // deployment, which is not a property of the binary: the same build serves

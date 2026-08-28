@@ -3899,6 +3899,76 @@ func TestHostValidationMiddleware_BlockedHost(t *testing.T) {
 	}
 }
 
+// TestCorsAllowHeaders_FollowTheAuthMode pins what the preflight actually
+// permits, per mode.
+//
+// Two failures live here. Advertising a credential header a mode ignores tells
+// a browser client to send something that produces a 401 — PRIVATE-TOKEN is
+// legacy-only, and GITLAB-URL means nothing when one instance is pinned.
+// Omitting a header the SDK REQUIRES is worse: from protocol 2026-07-28 a POST
+// without Mcp-Method is rejected before any handler runs, so leaving it out of
+// the preflight made the server refuse the very headers it then demanded, and
+// no browser client could speak the current protocol at all.
+func TestCorsAllowHeaders_FollowTheAuthMode(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		cfg     *config.Config
+		want    []string
+		notWant []string
+	}{
+		{
+			name: "legacy with one pinned instance",
+			cfg:  &config.Config{AuthMode: config.AuthModeLegacy, GitLabURL: "https://gitlab.com"},
+			want: []string{"Authorization", "PRIVATE-TOKEN", "Mcp-Method", "Mcp-Protocol-Version"},
+			// Pinned, so the header is logged as ignored: advertising it
+			// invites a client to send something that silently does nothing.
+			notWant: []string{"GITLAB-URL"},
+		},
+		{
+			name:    "legacy with no instance pinned",
+			cfg:     &config.Config{AuthMode: config.AuthModeLegacy},
+			want:    []string{"PRIVATE-TOKEN", "GITLAB-URL", "Mcp-Method"},
+			notWant: nil,
+		},
+		{
+			name: "oauth pins one instance",
+			cfg:  &config.Config{AuthMode: config.AuthModeOAuth, GitLabURL: "https://gitlab.com"},
+			want: []string{"Authorization", "Mcp-Method", "Mcp-Name"},
+			// OAuth mode reads Authorization: Bearer and nothing else.
+			notWant: []string{"PRIVATE-TOKEN", "GITLAB-URL"},
+		},
+		{
+			name: "oauth publishes several instances",
+			cfg: &config.Config{
+				AuthMode:   config.AuthModeOAuth,
+				GitLabURL:  "https://gitlab.com",
+				GitLabURLs: []string{"https://gitlab.com", "https://gitlab.example.com"},
+			},
+			// Several published instances make the header a real choice again.
+			want:    []string{"Authorization", "GITLAB-URL", "Mcp-Method"},
+			notWant: []string{"PRIVATE-TOKEN"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := corsAllowHeadersFor(tt.cfg)
+			for _, header := range tt.want {
+				if !strings.Contains(got, header) {
+					t.Errorf("Allow-Headers = %q, want it to permit %s", got, header)
+				}
+			}
+			for _, header := range tt.notWant {
+				if strings.Contains(got, header) {
+					t.Errorf("Allow-Headers = %q advertises %s, which this mode does not honor", got, header)
+				}
+			}
+		})
+	}
+}
+
 // TestSecurityHeaders_CoverRejectionsToo verifies that a response written by a
 // middleware that answers instead of forwarding still carries the security
 // headers.
@@ -5747,8 +5817,15 @@ func TestCorsMiddleware_TrustedOriginPreflight_IsAnswered(t *testing.T) {
 	want := map[string]string{
 		"Access-Control-Allow-Origin":  "https://claude.ai",
 		"Access-Control-Allow-Methods": corsAllowMethods,
-		"Access-Control-Allow-Headers": corsAllowHeadersFor(&config.Config{}),
-		"Access-Control-Max-Age":       corsMaxAge,
+		// A literal, not corsAllowHeadersFor(...): comparing the header
+		// against the function that produced it would pass whatever the
+		// function returned. What the list must CONTAIN per mode is pinned by
+		// TestCorsAllowHeaders_FollowTheAuthMode.
+		"Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, " +
+			"Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID, " +
+			"Mcp-Method, Mcp-Name, Mcp-Param-Name, Mcp-Param-Uri, Mcp-Param-Cursor, " +
+			"PRIVATE-TOKEN, GITLAB-URL",
+		"Access-Control-Max-Age": corsMaxAge,
 	}
 	for name, value := range want {
 		if got := rec.Header().Get(name); got != value {

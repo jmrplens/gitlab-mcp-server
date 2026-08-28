@@ -325,7 +325,40 @@ func normalizeGitLabURL(raw string) (string, error) {
 		return "", &InvalidGitLabURLError{URL: raw, Reason: "fragments are not allowed"}
 	}
 	u.Path = strings.TrimRight(u.Path, "/")
+	// RFC 3986 section 6.2.2: scheme and host are case-insensitive, and an
+	// explicit default port is equivalent to none. url.Parse already lowers
+	// the scheme; the host and the port are on us.
+	//
+	// This is not cosmetic in either place it lands. The allow-list compares
+	// canonical strings, so without it "https://GitLab.com" and
+	// "https://gitlab.com:443" would be refused as instances the deployment
+	// does not publish — while naming the very instance it does. And the pool
+	// keys on this value, so the same instance spelled two ways would build
+	// two entries, doubling the upstream probes and the memory for one
+	// credential.
+	u.Host = canonicalHost(u.Scheme, u.Host)
 	return u.String(), nil
+}
+
+// canonicalHost lowercases the host and drops a port that is the scheme's
+// default, so equivalent spellings of one instance compare equal.
+func canonicalHost(scheme, host string) string {
+	lowered := strings.ToLower(host)
+	var defaultPort string
+	switch scheme {
+	case "https":
+		defaultPort = ":443"
+	case "http":
+		defaultPort = ":80"
+	default:
+		return lowered
+	}
+	// Only a trailing :port is a port. An IPv6 literal keeps its brackets,
+	// and "[::1]:443" still ends with the port, so the suffix test holds.
+	if trimmed, found := strings.CutSuffix(lowered, defaultPort); found {
+		return trimmed
+	}
+	return lowered
 }
 
 // InvalidGitLabURLError is returned when the GITLAB-URL header contains an invalid URL.

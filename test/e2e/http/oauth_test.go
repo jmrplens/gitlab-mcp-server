@@ -13,6 +13,7 @@ package httpe2e
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"slices"
 	"strings"
@@ -501,9 +502,7 @@ func TestOAuth_MultiInstanceAllowList(t *testing.T) {
 
 	headers := func(extra map[string]string) map[string]string {
 		h := map[string]string{"Authorization": "Bearer gloas-full"}
-		for k, v := range extra {
-			h[k] = v
-		}
+		maps.Copy(h, extra)
 		return h
 	}
 

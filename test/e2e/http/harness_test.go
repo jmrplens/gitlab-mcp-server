@@ -122,6 +122,20 @@ func freePort(t *testing.T) int {
 type server struct {
 	baseURL string
 	logs    func() string
+	// client reaches this server. It is not always http.DefaultClient: a
+	// server listening on a unix socket needs a dialer that talks to the
+	// path, and one serving TLS needs a root that trusts its certificate.
+	// Both are configurations a deployment can choose, so both must be
+	// reachable from a test.
+	client *http.Client
+}
+
+// httpClient returns the client for this server, defaulting to the shared one.
+func (s *server) httpClient() *http.Client {
+	if s.client != nil {
+		return s.client
+	}
+	return http.DefaultClient
 }
 
 // startServer launches the binary with the given extra flags and environment,
@@ -207,7 +221,7 @@ func waitHealthy(t *testing.T, s *server) {
 		if err != nil {
 			t.Fatalf("building the health request: %v", err)
 		}
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := s.httpClient().Do(req)
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -264,8 +278,8 @@ func (s *server) do(t *testing.T, r request) response {
 		// POST without it before any handler runs. Without this the harness
 		// could only ever observe rejections, so no test here reached a
 		// successful call — which is how a real 200 path went unexercised.
-		if method := jsonRPCMethod(r.body); method != "" {
-			req.Header.Set("Mcp-Method", method)
+		if rpcMethod := jsonRPCMethod(r.body); rpcMethod != "" {
+			req.Header.Set("Mcp-Method", rpcMethod)
 			if name := jsonRPCToolName(r.body); name != "" {
 				req.Header.Set("Mcp-Name", name)
 			}
@@ -275,7 +289,7 @@ func (s *server) do(t *testing.T, r request) response {
 		req.Header.Set(k, v)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient().Do(req)
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
 	}
@@ -446,7 +460,7 @@ func startScopedFakeGitLab(t *testing.T, scopesFor map[string][]string) *fakeGit
 		}
 		body, err := json.Marshal(map[string]any{"id": 1, "scopes": scopes, "active": true})
 		if err != nil {
-			t.Errorf("marshalling the scope response: %v", err)
+			t.Errorf("marshaling the scope response: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
