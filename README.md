@@ -485,8 +485,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Metric                         | Value |
 | ------------------------------ | ----: |
 | Go packages                    |   237 |
-| Direct dependencies (`go.mod`) |    17 |
-| Indirect dependencies          |    47 |
+| Direct dependencies (`go.mod`) |    18 |
+| Indirect dependencies          |    46 |
 
 ### Hall of fame
 

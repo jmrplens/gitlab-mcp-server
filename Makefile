@@ -19,7 +19,9 @@
 BINARY_NAME=gitlab-mcp-server
 CMD_PATH=./cmd/server
 PKGS=./cmd/... ./internal/...
-MCP_PUBLISHER_VERSION=v1.7.9
+# Keep in lockstep with MCP_PUBLISHER_VERSION in .github/workflows/release.yml:
+# this one validates the manifest, that one publishes it.
+MCP_PUBLISHER_VERSION=v1.8.1
 GO_ANALYSIS_PKGS=./...
 GO_ANALYSIS_TAGS=e2e
 PROJECT_GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
