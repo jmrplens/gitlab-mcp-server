@@ -444,10 +444,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       995 |     203,320 |
+| Source (`.go`, non-test) |       995 |     203,321 |
 | Unit tests (`_test.go`)  |       554 |     315,810 |
 | End-to-end tests         |       183 |      48,423 |
-| **Total**                | **1,732** | **567,553** |
+| **Total**                | **1,732** | **567,554** |
 
 ### Functions
 

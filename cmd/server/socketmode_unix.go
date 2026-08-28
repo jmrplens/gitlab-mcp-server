@@ -64,7 +64,8 @@ func bindUnixSocket(ctx context.Context, path string, mode os.FileMode) (net.Lis
 		_ = listener.Close()
 		return nil, fmt.Errorf(
 			"unix socket %q was created with mode %#o, not the requested %#o; refusing to serve on it",
-			path, got, mode.Perm())
+			path, got, mode.Perm(),
+		)
 	}
 	return listener, nil
 }
