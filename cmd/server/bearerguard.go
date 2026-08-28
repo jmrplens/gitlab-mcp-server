@@ -20,7 +20,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -63,10 +62,19 @@ type bearerGuard struct {
 	// metadataURL is the RFC 9728 protected-resource metadata URL every
 	// challenge points at.
 	metadataURL string
-	// requiredScope is the GitLab scope this deployment needs; a token
-	// without it is refused with insufficient_scope rather than executed
-	// and failed later by GitLab.
-	requiredScope string
+	// minimumScope is the least a token must carry to be admitted. A token
+	// without it is refused with insufficient_scope rather than executed and
+	// failed later by GitLab.
+	//
+	// It is deliberately not the deployment's own scope. Admission asks for
+	// what every action needs; whether a given action may write is decided
+	// against the surface the pool built for this token's real authority, so
+	// a read_api token gets a read-only catalog instead of a closed door.
+	minimumScope string
+	// advertisedScope is the scope the challenge recommends: the one that
+	// buys this deployment's full surface. A client asking for less is
+	// served less, not refused, so this is guidance rather than the check.
+	advertisedScope string
 }
 
 // middleware rejects what it can classify and passes everything else on.
@@ -121,20 +129,21 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 		return g.classify(err, ip, token)
 	}
 
-	if g.requiredScope != "" && !slices.Contains(info.Scopes, g.requiredScope) {
+	if !oauth.SatisfiesMinimum(info.Scopes, g.minimumScope) {
 		// Not charged to the limiter: the credential is genuine and the
 		// caller is who they say they are. Counting it would let a client
 		// holding a valid but under-scoped token lock its own address out.
-		slog.Info("request rejected: token lacks the required scope",
-			"required", g.requiredScope, "granted", strings.Join(info.Scopes, " "))
+		slog.Info("request rejected: token cannot read the API",
+			"minimum", g.minimumScope, "granted", strings.Join(info.Scopes, " "))
 		return &gateFailure{
-			status:  http.StatusForbidden,
-			code:    errCodeForbidden,
-			message: "This token does not carry the " + g.requiredScope + " scope that this deployment requires. Reauthorize the application requesting it.",
+			status: http.StatusForbidden,
+			code:   errCodeForbidden,
+			message: "This token carries no GitLab API scope: " + g.minimumScope + " is the least this server can work with. " +
+				"Reauthorize the application requesting it, granting " + g.advertisedScope + " for the full tool surface or " +
+				g.minimumScope + " for a read-only one.",
 			header: newHeader(headerWWWAuthenticate, g.challenge(
 				"error", "insufficient_scope",
-				"error_description", "the token lacks the "+g.requiredScope+" scope",
-				"scope", g.requiredScope,
+				"error_description", "the token lacks the "+g.minimumScope+" scope",
 			)),
 		}
 	}
@@ -208,7 +217,23 @@ func (g *bearerGuard) recordFailure(ip string) {
 // parameters to the resource_metadata pointer every OAuth-mode challenge
 // carries (RFC 9728 section 5.1). Parameters arrive as alternating key and
 // value; an odd trailing key is ignored rather than emitted half-formed.
+//
+// Every challenge also names the scope this deployment requires (RFC 6750
+// section 3), not only the insufficient_scope one. A client that reads the
+// header and stops there would otherwise have to guess, and the guess that
+// costs it is asking the authorization server for everything it advertises:
+// GitLab answers that with invalid_scope. The protected-resource document
+// says the same thing in scopes_supported, but a client is not obliged to
+// fetch it before it authorizes.
 func (g *bearerGuard) challenge(params ...string) string {
+	return oauthChallenge(g.advertisedScope, g.metadataURL, params...)
+}
+
+// oauthChallenge builds an OAuth-mode WWW-Authenticate value. It is a package
+// function rather than a method so the request gate behind the guard emits the
+// identical shape: two builders would drift, and the parameter a client is
+// most likely to act on is the one a rarely-exercised path would forget.
+func oauthChallenge(advertisedScope, metadataURL string, params ...string) string {
 	var b strings.Builder
 	b.WriteString(`Bearer realm="gitlab-mcp-server"`)
 	for i := 0; i+1 < len(params); i += 2 {
@@ -218,9 +243,14 @@ func (g *bearerGuard) challenge(params ...string) string {
 		b.WriteString(quotedStringEscape(params[i+1]))
 		b.WriteString(`"`)
 	}
-	if g.metadataURL != "" {
+	if advertisedScope != "" {
+		b.WriteString(`, scope="`)
+		b.WriteString(quotedStringEscape(advertisedScope))
+		b.WriteString(`"`)
+	}
+	if metadataURL != "" {
 		b.WriteString(`, resource_metadata="`)
-		b.WriteString(quotedStringEscape(g.metadataURL))
+		b.WriteString(quotedStringEscape(metadataURL))
 		b.WriteString(`"`)
 	}
 	return b.String()

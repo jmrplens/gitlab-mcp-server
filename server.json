@@ -1050,22 +1050,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://mcp.jmrp.io/gitlab",
-      "headers": [
-        {
-          "name": "PRIVATE-TOKEN",
-          "description": "GitLab Personal Access Token (glpat-...). Alternatively, send Authorization: Bearer <token>. It travels per request and is never stored server-side.",
-          "isRequired": true,
-          "isSecret": true,
-          "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
-        },
-        {
-          "name": "GITLAB-URL",
-          "description": "Target GitLab instance URL. Optional on the public hosted endpoint, which defaults to https://gitlab.com.",
-          "isRequired": false,
-          "placeholder": "https://gitlab.com"
-        }
-      ]
+      "url": "https://mcp.jmrp.io/gitlab"
     }
   ]
 }

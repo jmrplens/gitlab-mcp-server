@@ -238,6 +238,20 @@ func (p *ServerPool) lifetime() context.Context {
 // gets separate server entries. It is safe for concurrent use.
 // Returns an error if the GitLab client or MCP server cannot be created.
 func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
+	return p.GetOrCreateWithScopes(token, gitlabURL, nil)
+}
+
+// GetOrCreateWithScopes is [ServerPool.GetOrCreate] for a caller that has
+// already resolved the token's scopes.
+//
+// OAuth mode has: verifying the bearer token required reading them. Passing
+// them in spares a second introspection, and more importantly it is the only
+// way the entry learns them at all — the PAT self endpoint the pool would
+// otherwise ask does not answer for an OAuth access token, so a read_api
+// OAuth token would look like "scopes unknown" and be served a catalog it
+// cannot use. A nil slice means "not resolved"; the pool then detects them
+// itself, exactly as before.
+func (p *ServerPool) GetOrCreateWithScopes(token, gitlabURL string, scopes []string) (*mcp.Server, error) {
 	if token == "" {
 		return nil, errors.New("empty token: authentication required")
 	}
@@ -280,7 +294,7 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 	p.metrics.Misses.Add(1)
 
 	built, err, _ := p.building.Do(key, func() (any, error) {
-		entry, buildErr := p.buildEntry(token, gitlabURL)
+		entry, buildErr := p.buildEntry(token, gitlabURL, scopes)
 		if buildErr != nil {
 			return nil, buildErr
 		}
@@ -300,7 +314,7 @@ func (p *ServerPool) GetOrCreate(token, gitlabURL string) (*mcp.Server, error) {
 // and builds the MCP server for a new pool key. It performs network I/O and must
 // be called without holding p.mu. The returned entry has no LRU element or
 // timestamps yet; insertEntry finalizes those under the lock.
-func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
+func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (*poolEntry, error) {
 	if p.factory == nil {
 		return nil, errors.New("creating MCP server for pool: server factory is nil")
 	}
@@ -336,7 +350,7 @@ func (p *ServerPool) buildEntry(token, gitlabURL string) (*poolEntry, error) {
 		return nil, verifyErr
 	}
 
-	entryCfg := p.entryConfig(client, gitlabURL)
+	entryCfg := p.entryConfig(client, gitlabURL, knownScopes)
 	server, err := p.factory(client, entryCfg)
 	if err != nil {
 		return nil, fmt.Errorf("creating MCP server for pool: %w", err)
@@ -515,14 +529,15 @@ const credentialCheckTimeout = 5 * time.Second
 
 // entryConfig builds the per-pool-entry server configuration, applying the
 // resolved GitLab URL plus optional edition and token-scope discovery.
-func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string) *config.ServerConfig {
+func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string, knownScopes []string) *config.ServerConfig {
 	entryCfg := p.cfg.ServerConfig()
 	entryCfg.GitLabURL = gitlabURL
 
 	// Detect the tier from the instance license only when the operator did not
 	// pin it explicitly via --tier/GITLAB_TIER.
 	autoDetectTier := !p.cfg.TierExplicit
-	if autoDetectTier || !p.cfg.IgnoreScopes {
+	needScopes := !p.cfg.IgnoreScopes && knownScopes == nil
+	if autoDetectTier || needScopes {
 		ctx, cancel := context.WithTimeout(p.lifetime(), 10*time.Second)
 		defer cancel()
 
@@ -530,12 +545,45 @@ func (p *ServerPool) entryConfig(client *gitlabclient.Client, gitlabURL string) 
 			entryCfg.Tier = client.DetectTier(ctx)
 		}
 
-		if p.cfg.IgnoreScopes {
-			return entryCfg
+		if needScopes {
+			// The PAT self endpoint does not answer for an OAuth access
+			// token, which is why the caller may hand the scopes in: in
+			// oauth mode they were already resolved to verify the token,
+			// and asking GitLab a second question it cannot answer would
+			// only lose the answer.
+			knownScopes = gitlabclient.DetectScopes(ctx, client.GL())
 		}
-		entryCfg.TokenScopes = gitlabclient.DetectScopes(ctx, client.GL())
 	}
+	if p.cfg.IgnoreScopes {
+		return entryCfg
+	}
+	entryCfg.TokenScopes = knownScopes
+	applyScopeReadOnly(entryCfg)
 	return entryCfg
+}
+
+// applyScopeReadOnly narrows an entry to read-only when its token cannot
+// write, which is what makes the write check a property of the action rather
+// than of the deployment.
+//
+// A deployment that serves writes had to demand a write-capable token from
+// everyone, because the only check ran at the door: a read_api token was
+// refused at initialize, before it could so much as list the tools it was
+// perfectly entitled to call. The tools themselves already carry the
+// distinction — every action declares whether it mutates, and --read-only
+// already projects a catalog from it — so the entry a read-only token gets
+// is simply that catalog. Nothing new decides what may write; the existing
+// decision is moved to where the authority is actually known.
+//
+// The narrowing is per pool entry, and an entry is per token, so one client's
+// read_api token cannot narrow another client's api token.
+func applyScopeReadOnly(entryCfg *config.ServerConfig) {
+	if entryCfg.ReadOnly || gitlabclient.WriteCapable(entryCfg.TokenScopes) {
+		return
+	}
+	entryCfg.ReadOnly = true
+	slog.Info("token cannot write; serving a read-only tool surface for it",
+		"scopes", entryCfg.TokenScopes)
 }
 
 // tierSource returns the label used in logs for how the licensing tier was

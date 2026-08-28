@@ -5529,7 +5529,7 @@ func TestCorsMiddleware_TrustedOriginPreflight_IsAnswered(t *testing.T) {
 	t.Parallel()
 
 	var reached atomic.Bool
-	handler := corsMiddleware([]string{"https://claude.ai"}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	handler := corsMiddleware(&config.Config{TrustedOrigins: []string{"https://claude.ai"}}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		reached.Store(true)
 	}))
 
@@ -5548,7 +5548,7 @@ func TestCorsMiddleware_TrustedOriginPreflight_IsAnswered(t *testing.T) {
 	want := map[string]string{
 		"Access-Control-Allow-Origin":  "https://claude.ai",
 		"Access-Control-Allow-Methods": corsAllowMethods,
-		"Access-Control-Allow-Headers": corsAllowHeaders,
+		"Access-Control-Allow-Headers": corsAllowHeadersFor(&config.Config{}),
 		"Access-Control-Max-Age":       corsMaxAge,
 	}
 	for name, value := range want {
@@ -5574,7 +5574,7 @@ func TestCorsMiddleware_UntrustedOrigin_IsLeftToTheProtection(t *testing.T) {
 	t.Parallel()
 
 	var reached atomic.Bool
-	handler := corsMiddleware([]string{"https://claude.ai"}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := corsMiddleware(&config.Config{TrustedOrigins: []string{"https://claude.ai"}}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		reached.Store(true)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -5601,7 +5601,7 @@ func TestCorsMiddleware_ActualRequest_ExposesTransportHeaders(t *testing.T) {
 	t.Parallel()
 
 	var reached atomic.Bool
-	handler := corsMiddleware([]string{"https://claude.ai"}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := corsMiddleware(&config.Config{TrustedOrigins: []string{"https://claude.ai"}}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		reached.Store(true)
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -5633,7 +5633,7 @@ func TestCorsMiddleware_WildcardAndNoOrigin_BehaveAsConfigured(t *testing.T) {
 
 	t.Run("wildcard trusts any origin", func(t *testing.T) {
 		t.Parallel()
-		handler := corsMiddleware([]string{"*"}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		handler := corsMiddleware(&config.Config{TrustedOrigins: []string{"*"}}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/mcp", http.NoBody)
 		req.Header.Set("Origin", "https://anything.example")
 		req.Header.Set("Access-Control-Request-Method", "POST")
@@ -5651,7 +5651,7 @@ func TestCorsMiddleware_WildcardAndNoOrigin_BehaveAsConfigured(t *testing.T) {
 	t.Run("no origin passes through untouched", func(t *testing.T) {
 		t.Parallel()
 		var reached atomic.Bool
-		handler := corsMiddleware([]string{"https://claude.ai"}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		handler := corsMiddleware(&config.Config{TrustedOrigins: []string{"https://claude.ai"}}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 			reached.Store(true)
 		}))
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
@@ -5669,7 +5669,7 @@ func TestCorsMiddleware_WildcardAndNoOrigin_BehaveAsConfigured(t *testing.T) {
 	t.Run("no trusted origins disables the middleware", func(t *testing.T) {
 		t.Parallel()
 		var reached atomic.Bool
-		handler := corsMiddleware(nil, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		handler := corsMiddleware(&config.Config{}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 			reached.Store(true)
 		}))
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/mcp", http.NoBody)

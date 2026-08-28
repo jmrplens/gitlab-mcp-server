@@ -3,6 +3,7 @@ package gitlab
 import (
 	"context"
 	"log/slog"
+	"slices"
 
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 )
@@ -19,6 +20,30 @@ func DetectScopes(ctx context.Context, client *gl.Client) []string {
 	}
 	slog.Info("detected PAT scopes", "scopes", token.Scopes)
 	return token.Scopes
+}
+
+// ScopeAPI is the GitLab scope that permits writes; ScopeReadAPI permits
+// reads only. A token carrying api can do everything read_api can, but
+// GitLab reports only the granted name, so containment is checked against
+// both rather than assumed.
+const (
+	ScopeAPI     = "api"
+	ScopeReadAPI = "read_api"
+)
+
+// WriteCapable reports whether a token's scopes permit mutating GitLab.
+//
+// Unknown scopes (nil: detection failed, was disabled, or the instance is
+// too old to answer) count as write-capable. Assuming otherwise would
+// silently strip every mutating tool from a deployment whose token is
+// perfectly able to use them, and a wrong "no" is invisible — the tools are
+// simply not there — while a wrong "yes" surfaces as GitLab's own 403 on the
+// call that actually tried to write.
+func WriteCapable(scopes []string) bool {
+	if scopes == nil {
+		return true
+	}
+	return slices.Contains(scopes, ScopeAPI)
 }
 
 // ScopeSatisfied checks whether requiredScopes are all present in the

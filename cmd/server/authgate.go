@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
@@ -180,6 +181,24 @@ type mcpServerGate struct {
 	bearerOnly bool
 }
 
+// verifiedScopes returns the scopes the OAuth layer already resolved for this
+// request, or nil when nothing upstream resolved any.
+//
+// In oauth mode the SDK's bearer middleware runs before the gate and publishes
+// the verified token info, whose scopes came from GitLab's own introspection.
+// Handing them to the pool is what lets a read_api token be served at all: the
+// PAT self endpoint the pool would otherwise ask does not answer for an OAuth
+// access token, so the entry would be built as if the token's authority were
+// unknown. In legacy mode nothing has verified anything yet and nil is the
+// honest answer — the pool detects the PAT's scopes itself.
+func verifiedScopes(r *http.Request) []string {
+	info := auth.TokenInfoFromContext(r.Context())
+	if info == nil {
+		return nil
+	}
+	return info.Scopes
+}
+
 // extractCredential returns the credential the gate authenticates with,
 // honoring bearerOnly.
 func (g *mcpServerGate) extractCredential(r *http.Request) string {
@@ -282,7 +301,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	}
 	logIgnoredRequestOptions(token, options)
 
-	server, err := g.pool.GetOrCreate(token, options.GitLabURL)
+	server, err := g.pool.GetOrCreateWithScopes(token, options.GitLabURL, verifiedScopes(r))
 	if errors.Is(err, serverpool.ErrInvalidCredential) {
 		// GitLab itself rejected the token, so this is an authentication
 		// failure in the full sense: 401, and it does count against the
