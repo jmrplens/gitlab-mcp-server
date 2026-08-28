@@ -32,6 +32,16 @@ fi
 WORKDIR=$(mktemp -d)
 trap 'rm -rf "$WORKDIR"' EXIT
 
+# Every request here talks to a third-party registry, so each one is bounded:
+# a stalled response would otherwise hang this gate until the workflow's own
+# timeout fires, with no indication of which host went quiet. The bundle needs
+# a longer transfer window than the metadata calls because it is tens of MB.
+CURL_CONNECT_TIMEOUT=10
+CURL_MAX_TIME=60
+CURL_DOWNLOAD_MAX_TIME=300
+CURL_META=(--connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" --retry 2 --retry-connrefused)
+CURL_DOWNLOAD=(--connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_DOWNLOAD_MAX_TIME" --retry 2 --retry-connrefused)
+
 failures=0
 checked=0
 
@@ -64,7 +74,7 @@ while read -r identifier; do
   fi
 
   bundle="$WORKDIR/bundle.mcpb"
-  if ! curl -fsSL -o "$bundle" "$identifier"; then
+  if ! curl "${CURL_DOWNLOAD[@]}" -fsSL -o "$bundle" "$identifier"; then
     fail "not downloadable"
     continue
   fi
@@ -137,12 +147,12 @@ while read -r identifier; do
     continue
   fi
 
-  token=$(curl -fsS "https://ghcr.io/token?scope=repository:${repo}:pull" \
+  token=$(curl "${CURL_META[@]}" -fsS "https://ghcr.io/token?scope=repository:${repo}:pull" \
     | jq -r '.token')
   accept='application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json'
 
   # Resolve the digest when there is one — that is what a client installs.
-  if ! index=$(curl -fsS -H "Authorization: Bearer $token" -H "Accept: $accept" \
+  if ! index=$(curl "${CURL_META[@]}" -fsS -H "Authorization: Bearer $token" -H "Accept: $accept" \
     "https://ghcr.io/v2/${repo}/manifests/${digest:-$tag}"); then
     fail "image ${digest:-$tag} not found in the registry"
     continue
@@ -152,7 +162,7 @@ while read -r identifier; do
   # pinned digest, either the tag was re-pushed or the manifest is stale — both
   # mean the reference no longer describes what this release shipped.
   if [[ -n "$digest" && -n "$tag" ]]; then
-    tag_digest=$(curl -fsSI -H "Authorization: Bearer $token" -H "Accept: $accept" \
+    tag_digest=$(curl "${CURL_META[@]}" -fsSI -H "Authorization: Bearer $token" -H "Accept: $accept" \
       "https://ghcr.io/v2/${repo}/manifests/${tag}" \
       | awk 'BEGIN { IGNORECASE = 1 } /^docker-content-digest:/ { print $2 }' | tr -d '\r')
     if [[ -z "$tag_digest" ]]; then
@@ -169,14 +179,14 @@ while read -r identifier; do
   # the labels this checks are identical across them.
   child=$(echo "$index" | jq -r '.manifests[0].digest // ""')
   if [[ -n "$child" ]]; then
-    manifest=$(curl -fsS -H "Authorization: Bearer $token" -H "Accept: $accept" \
+    manifest=$(curl "${CURL_META[@]}" -fsS -H "Authorization: Bearer $token" -H "Accept: $accept" \
       "https://ghcr.io/v2/${repo}/manifests/${child}")
   else
     manifest="$index"
   fi
 
   config_digest=$(echo "$manifest" | jq -r '.config.digest')
-  config=$(curl -fsSL -H "Authorization: Bearer $token" \
+  config=$(curl "${CURL_META[@]}" -fsSL -H "Authorization: Bearer $token" \
     "https://ghcr.io/v2/${repo}/blobs/${config_digest}")
 
   label=$(echo "$config" | jq -r '.config.Labels["io.modelcontextprotocol.server.name"] // ""')
@@ -251,7 +261,7 @@ while IFS=$'\t' read -r identifier version; do
   fi
 
   encoded=${identifier//\//%2F}
-  if ! meta=$(curl -fsSL "https://registry.npmjs.org/${encoded}/${version}"); then
+  if ! meta=$(curl "${CURL_META[@]}" -fsSL "https://registry.npmjs.org/${encoded}/${version}"); then
     fail "version $version not found on registry.npmjs.org"
     continue
   fi

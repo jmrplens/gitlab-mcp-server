@@ -254,7 +254,18 @@ The repository ships an [Agent Plugins](https://agent-plugins.org/) 1.0 manifest
 
 The bundled `mcp.json` runs the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest`, so [Docker](https://docs.docker.com/get-docker/) must be installed. It is configured for stdio MCP clients and passes `--http=false` after the image name to override the Docker image's HTTP default. Keep that override if you copy the Docker configuration into VS Code or another stdio client; otherwise the container will start an HTTP listener and the client will wait forever for a stdio `initialize` response.
 
-The host passes these environment variables through to the container:
+The bundled config forwards these environment variables into the container, but
+the host has to put them in the plugin's environment first. Agent Plugins §9.1
+lets a client "inherit, omit, or sanitize" ambient variables, and the spec
+defines no portable way for a plugin to reference a secret, so `GITLAB_TOKEN`
+cannot travel inside `mcp.json` itself. If the server reports an authorization
+failure, set it the way your host documents, or add it to the `env` block of the
+installed plugin's local `mcp.json`.
+
+Note that Agent Plugins expands only `${PLUGIN_ROOT}` and `${PLUGIN_DATA}`: any
+other `${...}` reaches the process literally, so a placeholder such as
+`"GITLAB_TOKEN": "${GITLAB_TOKEN}"` in a local `mcp.json` hands the server that
+exact string rather than the token.
 
 | Variable                         | Required | Description                                                                                      |
 | -------------------------------- | -------- | ------------------------------------------------------------------------------------------------ |
