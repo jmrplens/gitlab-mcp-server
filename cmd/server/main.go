@@ -397,9 +397,12 @@ FLAGS
   -setup-mode string        Setup UI mode: auto|web|tui|cli (default "auto")
   -tool-search string       Search tools by name/description and exit
   -http                     Run in HTTP transport mode (default: stdio)
-  -http-addr string         HTTP listen address (default ":8080")
-  -gitlab-url string        Fixed GitLab URL; omit to require per-request GITLAB-URL header
-  -skip-tls-verify          Skip TLS certificate verification (default false)
+  -http-addr string         Listen address: host:port, or a path to bind a unix socket (default ":8080")
+  -http-socket-mode str     Octal permission mode for a unix socket (default "0660")
+  -tls-cert string          PEM certificate; serves HTTPS on the listener (requires -tls-key)
+  -tls-key string           PEM private key matching -tls-cert
+  -gitlab-url string        GitLab URL; omit to require per-request GITLAB-URL header. Repeatable to publish several instances
+  -skip-tls-verify          Skip TLS certificate verification when calling GitLab (default false)
   -meta-tools               Legacy boolean tool selector; prefer -tool-surface
   -tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
   -capability-surface str   Capability surface: full|minimal (default full)
@@ -744,11 +747,20 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 		}
 		return nil
 	}
-	if cfg.GitLabURL == "" {
+	instances := cfg.InstanceURLs()
+	if len(instances) == 0 {
 		return errors.New("--auth-mode=oauth requires --gitlab-url")
 	}
-	if err := config.ValidateOAuthGitLabURL(cfg.GitLabURL); err != nil {
-		return err
+	// EVERY published instance, not just the first. The bearer token is
+	// forwarded to whichever instance the request selected, so checking only
+	// cfg.GitLabURL would let `--gitlab-url=https://a --gitlab-url=http://b`
+	// start and then put a live credential on the wire in cleartext for every
+	// request that names b (CWE-319). One cleartext instance in the list is
+	// exactly as bad as a cleartext deployment.
+	for _, instance := range instances {
+		if err := config.ValidateOAuthGitLabURL(instance); err != nil {
+			return err
+		}
 	}
 	if err := config.ValidatePublicURL(cfg.PublicURL); err != nil {
 		return err
@@ -1366,7 +1378,14 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", healthHandler)
+	// Every public route is mounted under the --public-url path prefix too,
+	// for the reverse proxy that forwards its prefix instead of stripping it.
+	// Mounting only the MCP endpoint there left such a deployment answering
+	// 404 for its own health check, server card and RFC 9728 document — the
+	// three things an operator and a scanner reach for first.
+	for _, path := range publicPaths(cfg, "/health") {
+		mux.HandleFunc("GET "+path, healthHandler)
+	}
 	cardPreflight := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(headerAllowOrigin, "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
@@ -1377,7 +1396,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// Echoing allows exactly what was asked for and nothing else.
 		if want := r.Header.Get(headerRequestHeaders); want != "" {
 			w.Header().Set("Access-Control-Allow-Headers", want)
-			w.Header().Set("Vary", headerRequestHeaders)
+			w.Header().Set(headerVary, headerRequestHeaders)
 		}
 		// Without a lifetime the browser preflights again on every fetch,
 		// which for a document that only changes with a release is two
@@ -1412,7 +1431,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(hdrContentType, mimeJSON)
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		_, _ = w.Write(serverCardJSON)
 	}
@@ -1423,7 +1442,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	// .well-known path the earlier draft recommended stays mounted because
 	// scanners written against that draft are already fetching it, and a
 	// card is a public document with nothing to gain from breaking them.
-	for _, path := range []string{serverCardPath, serverCardLegacyPath} {
+	for _, path := range publicPaths(cfg, serverCardPath, serverCardLegacyPath) {
 		mux.HandleFunc("OPTIONS "+path, cardPreflight)
 		mux.HandleFunc("GET "+path, cardHandler)
 	}
@@ -1553,12 +1572,42 @@ func mountMCPEndpoint(cfg *config.Config, mux *http.ServeMux, handler http.Handl
 // on. "/{$}" is the exact root: the bare "/" pattern would be the catch-all
 // this routing exists to remove.
 func mcpEndpointPatterns(cfg *config.Config) []string {
-	patterns := []string{"/{$}", mcpEndpointPath}
+	// The trailing-slash forms are mounted explicitly. The catch-all this
+	// routing replaced served them, so a client or proxy configured with
+	// ".../mcp/" kept working; exact patterns alone would 404 it, which is a
+	// regression dressed up as strictness. ServeMux would redirect "/mcp/" to
+	// "/mcp" on its own only if "/mcp/" were a registered subtree, and that
+	// would swallow every path beneath it — the opposite of what this routing
+	// is for.
+	patterns := []string{"/{$}", mcpEndpointPath, mcpEndpointPath + "/{$}"}
 	prefix := publicURLPath(cfg.PublicURL)
 	if prefix == "" {
 		return patterns
 	}
-	return append(patterns, prefix, prefix+mcpEndpointPath)
+	return append(patterns,
+		prefix,
+		prefix+"/{$}",
+		prefix+mcpEndpointPath,
+		prefix+mcpEndpointPath+"/{$}",
+	)
+}
+
+// publicPaths returns each given path, plus its form under the --public-url
+// path prefix when the deployment publishes one.
+//
+// A proxy that forwards its prefix rather than stripping it reaches this
+// server at /prefix/health, not /health. The prefix is not new configuration:
+// --public-url already tells the server the path it is published under.
+func publicPaths(cfg *config.Config, paths ...string) []string {
+	prefix := publicURLPath(cfg.PublicURL)
+	if prefix == "" {
+		return paths
+	}
+	out := make([]string, 0, len(paths)*2)
+	for _, path := range paths {
+		out = append(out, path, prefix+path)
+	}
+	return out
 }
 
 // publicURLPath extracts the path component of --public-url, normalized to
@@ -1583,7 +1632,7 @@ func publicURLPath(publicURL string) string {
 // who is calling: whether a document exists is not a secret, and pretending
 // otherwise is what made the 401 catch-all misleading.
 func notFoundHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(hdrContentType, mimeJSON)
 	w.WriteHeader(http.StatusNotFound)
 	_, _ = w.Write([]byte(`{"error":"not found"}` + "\n"))
 }
@@ -1951,8 +2000,15 @@ const (
 	// headers a given mode honors are appended by corsAllowHeadersFor:
 	// advertising one a mode ignores tells a browser client to send
 	// something that cannot work.
+	// Mcp-Method, Mcp-Name and the Mcp-Param-* family are REQUIRED by the SDK
+	// from protocol 2026-07-28 onwards — a POST without Mcp-Method is
+	// rejected before any handler runs. Omitting them here meant the
+	// preflight refused the very headers the server then demanded, so no
+	// browser client could speak the current protocol at all, whatever its
+	// origin was allowed to do.
 	corsBaseAllowHeaders = "Authorization, Content-Type, Accept, " +
-		"Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID"
+		"Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID, " +
+		"Mcp-Method, Mcp-Name, Mcp-Param-Name, Mcp-Param-Uri, Mcp-Param-Cursor"
 	// The session and protocol headers are unsafelisted response headers, so
 	// a browser cannot read them unless they are exposed by name.
 	//
@@ -2016,6 +2072,17 @@ const (
 	headerAllowOrigin    = "Access-Control-Allow-Origin"
 	headerRequestMethod  = "Access-Control-Request-Method"
 	headerRequestHeaders = "Access-Control-Request-Headers"
+	headerOrigin         = "Origin"
+	headerVary           = "Vary"
+)
+
+// The content type every hand-written response in this package sends. They
+// live here rather than in the test file that used to hold them: a constant
+// only the tests can see does nothing for the production paths that repeat
+// the literal, which is what SonarCloud flags.
+const (
+	hdrContentType = "Content-Type"
+	mimeJSON       = "application/json"
 )
 
 // corsMiddleware makes trusted origins usable from an actual browser.
@@ -2028,26 +2095,40 @@ const (
 // except the browser clients it exists for, unless a reverse proxy in front
 // answered the preflight on the server's behalf.
 //
-// Only origins the operator has trusted get an answer. An untrusted origin
-// is passed through unchanged and reaches the protection below, which is
-// what refuses it; no header here weakens that decision.
+// Only origins the operator has trusted get PERMISSION. An untrusted origin's
+// ordinary request is passed through unchanged and reaches the protection
+// below, which is what refuses it; no header here weakens that decision.
+//
+// An untrusted origin's preflight is NOT answered here: some routes serve
+// their own (the RFC 9728 metadata document and the server card are public
+// and answer any origin), and swallowing those would make them undiscoverable
+// from a browser. What must not happen is the preflight reaching the
+// authentication layer and being charged there as a failed authentication —
+// that is fixed in the guard and the gate, which let a preflight past
+// untouched.
 func corsMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 	trustedOrigins := cfg.TrustedOrigins
-	if len(trustedOrigins) == 0 {
-		return next
-	}
 	allowHeaders := corsAllowHeadersFor(cfg)
 	allowAll := slices.Contains(trustedOrigins, "*")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin == "" || (!allowAll && !slices.Contains(trustedOrigins, origin)) {
+		origin := r.Header.Get(headerOrigin)
+		preflight := r.Method == http.MethodOptions && r.Header.Get(headerRequestMethod) != ""
+		trusted := origin != "" && (allowAll || slices.Contains(trustedOrigins, origin))
+
+		if !trusted {
+			if preflight {
+				// Vary even when granting nothing: the answer downstream
+				// depends on Origin, and a cache that does not know that
+				// would serve it to a trusted origin.
+				w.Header().Add(headerVary, headerOrigin)
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
 		// Vary regardless of the outcome: the response body for a given URL
 		// does not depend on Origin, but these headers do, and a cache that
 		// does not know that would serve one origin's permission to another.
-		w.Header().Add("Vary", "Origin")
+		w.Header().Add(headerVary, headerOrigin)
 		// The origin is echoed rather than answered with "*" because these
 		// requests carry an Authorization header; "*" is invalid for a
 		// credentialed request and browsers reject it.
@@ -2055,8 +2136,8 @@ func corsMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Expose-Headers", corsExposeHeaders)
 
 		if r.Method == http.MethodOptions && r.Header.Get(headerRequestMethod) != "" {
-			w.Header().Add("Vary", headerRequestMethod)
-			w.Header().Add("Vary", headerRequestHeaders)
+			w.Header().Add(headerVary, headerRequestMethod)
+			w.Header().Add(headerVary, headerRequestHeaders)
 			w.Header().Set("Access-Control-Allow-Methods", corsAllowMethods)
 			w.Header().Set("Access-Control-Allow-Headers", allowHeaders)
 			w.Header().Set("Access-Control-Max-Age", corsMaxAge)
@@ -2114,7 +2195,7 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 // healthHandler responds with HTTP 200 and a JSON body for container healthchecks
 // and load-balancer probes. It does not require authentication.
 func healthHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(hdrContentType, mimeJSON)
 	_ = json.NewEncoder(w).Encode(newHealthResponse(processStartTime, time.Now())) //nolint:errchkjson // healthcheck: client write errors are non-actionable
 }
 

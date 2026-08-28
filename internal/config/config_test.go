@@ -1767,9 +1767,6 @@ func TestValidate_RateLimitBurstRequiredWithRPS(t *testing.T) {
 	}
 }
 
-// TestConfigEnterprise_NilReceivers verifies the nil-receiver guards of
-// Config.Enterprise and ServerConfig.Enterprise return false instead of
-// panicking, so callers can probe unset configurations safely.
 // TestConfig_InstanceURLs_DerivesTheListFromTheSingleURL pins the invariant
 // that keeps the two instance fields from disagreeing.
 //
@@ -1813,6 +1810,9 @@ func TestConfig_InstanceURLs_DerivesTheListFromTheSingleURL(t *testing.T) {
 	}
 }
 
+// TestConfigEnterprise_NilReceivers verifies the nil-receiver guards of
+// Config.Enterprise and ServerConfig.Enterprise return false instead of
+// panicking, so callers can probe unset configurations safely.
 func TestConfigEnterprise_NilReceivers(t *testing.T) {
 	var c *Config
 	if c.Enterprise() {

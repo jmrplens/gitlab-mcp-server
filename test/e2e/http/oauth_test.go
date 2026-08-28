@@ -386,3 +386,203 @@ func TestOAuth_ConfigurableFromTheEnvironmentAlone(t *testing.T) {
 		t.Errorf("TRUSTED_ORIGINS did not reach the cross-origin decision; preflight headers: %v", cors.header)
 	}
 }
+
+// TestOAuth_ReadAPITokenIsAdmitted pins the change this branch exists for, at
+// the only level that proves it: the real binary, over real HTTP.
+//
+// A deployment that can write used to demand `api` at the door, so a token
+// carrying only read_api was refused on the FIRST call — before tools/list,
+// with JSON-RPC code -40300. That is what blocked a read-only OAuth
+// application outright. Admission now asks only for what every action needs.
+//
+// Without this test the fix could be reverted and every other case in this
+// module would still pass, because none of them uses a token whose scopes
+// GitLab actually reports.
+func TestOAuth_ReadAPITokenIsAdmitted(t *testing.T) {
+	gitlab := startScopedFakeGitLab(t, map[string][]string{
+		"gloas-read-only": {"read_api"},
+		"gloas-full":      {"api"},
+		"gloas-no-api":    {"read_user"},
+	})
+	srv := oauthServer(t, gitlab.url)
+
+	tests := []struct {
+		name  string
+		token string
+		want  int
+	}{
+		{name: "read_api is admitted", token: "gloas-read-only", want: http.StatusOK},
+		{name: "api is admitted", token: "gloas-full", want: http.StatusOK},
+		// The only credential still refused: one carrying no GitLab API
+		// scope at all. 403, not 401 — the token is genuine.
+		{name: "no API scope is forbidden", token: "gloas-no-api", want: http.StatusForbidden},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := srv.do(t, mcpPOST(map[string]string{"Authorization": "Bearer " + tt.token}))
+
+			if got.status != tt.want {
+				t.Fatalf("status = %d, want %d: %s", got.status, tt.want, got.body)
+			}
+			if tt.want != http.StatusOK {
+				return
+			}
+			// Admitted means it reached the MCP layer and got a tool list —
+			// not merely that the door opened.
+			if !strings.Contains(got.body, `"tools"`) {
+				t.Errorf("an admitted token must reach tools/list; body: %s", got.body)
+			}
+		})
+	}
+}
+
+// TestOAuth_ReadAPITokenGetsAReadOnlySurface is the other half: admitting the
+// token is only safe because what it may DO is settled per action.
+//
+// The deployment runs the default dynamic surface, where the tool COUNT does
+// not move — there are two tools either way — so the question is which actions
+// each credential can reach through them. An api token must find a mutating
+// action; a read_api token must not. If both found it, the door would have
+// been opened without the office being locked.
+func TestOAuth_ReadAPITokenGetsAReadOnlySurface(t *testing.T) {
+	gitlab := startScopedFakeGitLab(t, map[string][]string{
+		"gloas-read-only": {"read_api"},
+		"gloas-full":      {"api"},
+	})
+	srv := oauthServer(t, gitlab.url)
+
+	findAction := func(token, query string) string {
+		t.Helper()
+		body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_find_action","arguments":{"query":"` + query + `"},"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `","io.modelcontextprotocol/clientCapabilities":{}}}}`
+		got := srv.do(t, request{
+			method:  http.MethodPost,
+			path:    "/mcp",
+			body:    body,
+			headers: map[string]string{"Authorization": "Bearer " + token},
+		})
+		if got.status != http.StatusOK {
+			t.Fatalf("find_action(%q) for %s = %d: %s", query, token, got.status, got.body)
+		}
+		return got.body
+	}
+
+	// A write action, named the way the catalog names it.
+	const mutating = "issue_create"
+
+	full := findAction("gloas-full", "create issue")
+	readOnly := findAction("gloas-read-only", "create issue")
+
+	if !strings.Contains(full, mutating) {
+		t.Fatalf("an api token must be able to find %q; got: %s", mutating, truncate(full))
+	}
+	if strings.Contains(readOnly, mutating) {
+		t.Errorf("a read_api token reached the mutating action %q — the per-action write gate is not applied: %s",
+			mutating, truncate(readOnly))
+	}
+}
+
+// TestOAuth_MultiInstanceAllowList pins the allow-list that makes a
+// per-request instance safe in oauth mode.
+//
+// The server verifies the bearer token AGAINST the instance, so a free-form
+// GITLAB-URL header would let a caller name a host of their own and be handed
+// the token. Publishing several instances turns the header into a choice among
+// them; anything else is refused rather than quietly served from the default.
+func TestOAuth_MultiInstanceAllowList(t *testing.T) {
+	primary := startScopedFakeGitLab(t, map[string][]string{"gloas-full": {"api"}})
+	secondary := startScopedFakeGitLab(t, map[string][]string{"gloas-full": {"api"}})
+
+	srv := startServer(t, nil,
+		"--auth-mode=oauth",
+		"--gitlab-url="+primary.url,
+		"--gitlab-url="+secondary.url,
+		"--public-url="+publicURL,
+	)
+
+	headers := func(extra map[string]string) map[string]string {
+		h := map[string]string{"Authorization": "Bearer gloas-full"}
+		for k, v := range extra {
+			h[k] = v
+		}
+		return h
+	}
+
+	t.Run("no header reaches the first published instance", func(t *testing.T) {
+		before := primary.calls()
+		got := srv.do(t, mcpPOST(headers(nil)))
+		if got.status != http.StatusOK {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusOK, got.body)
+		}
+		if primary.calls() == before {
+			t.Error("the default instance was never contacted")
+		}
+	})
+
+	t.Run("the header selects another published instance", func(t *testing.T) {
+		before := secondary.calls()
+		got := srv.do(t, mcpPOST(headers(map[string]string{"GITLAB-URL": secondary.url})))
+		if got.status != http.StatusOK {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusOK, got.body)
+		}
+		if secondary.calls() == before {
+			t.Error("the selected instance was never contacted; the header was ignored")
+		}
+	})
+
+	t.Run("an unpublished instance is refused, not silently replaced", func(t *testing.T) {
+		hostile := startScopedFakeGitLab(t, map[string][]string{"gloas-full": {"api"}})
+		before := hostile.calls()
+
+		got := srv.do(t, mcpPOST(headers(map[string]string{"GITLAB-URL": hostile.url})))
+		if got.status != http.StatusForbidden {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusForbidden, got.body)
+		}
+		// The point of the refusal: the bearer token must never be sent to
+		// an instance the operator did not publish.
+		if hostile.calls() != before {
+			t.Error("the token was sent to an unpublished instance")
+		}
+	})
+
+	// Both instances are advertised so a client can discover which ones it
+	// may select.
+	t.Run("the metadata publishes every instance", func(t *testing.T) {
+		got := srv.do(t, request{method: http.MethodGet, path: "/.well-known/oauth-protected-resource"})
+		if got.status != http.StatusOK {
+			t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
+		}
+		var meta struct {
+			AuthServers []string `json:"authorization_servers"`
+		}
+		if err := json.Unmarshal([]byte(got.body), &meta); err != nil {
+			t.Fatalf("metadata is not JSON: %v", err)
+		}
+		if !slices.Contains(meta.AuthServers, primary.url) || !slices.Contains(meta.AuthServers, secondary.url) {
+			t.Errorf("authorization_servers = %v, want both published instances", meta.AuthServers)
+		}
+	})
+}
+
+// TestOAuth_PlaintextInstanceIsRefusedAtStartup verifies that the https-only
+// rule covers EVERY published instance, not just the first.
+//
+// The bearer token is forwarded to whichever instance the request selected, so
+// one cleartext entry in the list puts a live credential on the wire (CWE-319)
+// exactly as a cleartext deployment would. Validating only the first entry
+// made the check trivially bypassable by adding a second.
+func TestOAuth_PlaintextInstanceIsRefusedAtStartup(t *testing.T) {
+	out, err := runServerExpectingExit(t, serverBinary(t),
+		"--http", "--http-addr=127.0.0.1:0",
+		"--auth-mode=oauth",
+		"--gitlab-url=https://gitlab.example.com",
+		"--gitlab-url=http://plaintext.example.com",
+		"--public-url="+publicURL,
+	)
+
+	if err == nil {
+		t.Fatalf("the server started with a plaintext instance in the list; output:\n%s", out)
+	}
+	if !strings.Contains(out, "requires an https --gitlab-url") {
+		t.Errorf("a plaintext instance anywhere in the list must stop startup; output:\n%s", out)
+	}
+}

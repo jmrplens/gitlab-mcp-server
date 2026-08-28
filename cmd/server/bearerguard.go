@@ -100,6 +100,16 @@ func (g *bearerGuard) middleware(next http.Handler) http.Handler {
 
 // check returns the failure that stops the request, or nil to let it through.
 func (g *bearerGuard) check(r *http.Request) *gateFailure {
+	// A CORS preflight carries no credential — the browser strips
+	// Authorization from it by definition — so authenticating one means
+	// counting every browser's routine permission question as a failed
+	// authentication. Ten of them locked that client's address out of the
+	// endpoint entirely, for something the user never did. It is let past
+	// here to be answered by whatever serves the route.
+	if isCORSPreflight(r) {
+		return nil
+	}
+
 	ip := clientIP(r, g.trustedProxyHeader)
 
 	// Ordered before everything else on purpose: a blocked caller must cost
@@ -128,8 +138,13 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 		}
 	}
 
+	// The instance this request selected, captured rather than discarded: a
+	// rejection is only meaningful against the GitLab that issued it, so both
+	// the rejected-token cache and the verification are scoped to it.
+	instance := ""
 	if g.resolveInstance != nil {
-		if _, err := g.resolveInstance(r); err != nil {
+		resolved, err := g.resolveInstance(r)
+		if err != nil {
 			// Not charged to the limiter: the caller misaddressed the
 			// request, which says nothing about the credential.
 			slog.Info("request rejected: unpublished GitLab instance requested", "error", err)
@@ -139,9 +154,10 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 				message: "This deployment does not serve the GitLab instance the GITLAB-URL header names. " + err.Error() + ".",
 			}
 		}
+		instance = resolved
 	}
 
-	if g.rejected != nil && g.rejected.Contains(token) {
+	if g.rejected != nil && g.rejected.Contains(instance, token) {
 		g.recordFailure(ip)
 		slog.Info("request rejected: token already known to be invalid", "token_suffix", safeTokenSuffix(token))
 		return g.invalidTokenFailure("GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.")
@@ -149,7 +165,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 
 	info, err := g.verify(r.Context(), token, r)
 	if err != nil {
-		return g.classify(err, ip, token)
+		return g.classify(err, ip, instance, token)
 	}
 
 	if !oauth.SatisfiesMinimum(info.Scopes, g.minimumScope) {
@@ -164,7 +180,16 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 			message: "This token carries no GitLab API scope: " + g.minimumScope + " is the least this server can work with. " +
 				"Reauthorize the application requesting it, granting " + g.advertisedScope + " for the full tool surface or " +
 				g.minimumScope + " for a read-only one.",
-			header: newHeader(headerWWWAuthenticate, g.challenge(
+			// The scope named here is the MINIMUM that satisfies this
+			// request, not the deployment's recommended one. RFC 6750
+			// section 3.1 defines the attribute as "the scope necessary to
+			// access the protected resource", and the MCP specification
+			// says an insufficient_scope challenge should carry "the
+			// minimum scopes needed for the operation". Advertising the
+			// write scope here contradicted this challenge's own
+			// error_description, which names read_api.
+			header: newHeader(headerWWWAuthenticate, oauthChallenge(
+				g.minimumScope, g.metadataURL,
 				"error", "insufficient_scope",
 				"error_description", "the token lacks the "+g.minimumScope+" scope",
 			)),
@@ -176,7 +201,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 
 // classify turns a verification error into the response it deserves, keeping
 // "your credential is bad" and "GitLab could not tell us" apart.
-func (g *bearerGuard) classify(err error, ip, token string) *gateFailure {
+func (g *bearerGuard) classify(err error, ip, instance, token string) *gateFailure {
 	if upstream, ok := errors.AsType[*oauth.UpstreamError](err); ok {
 		// Deliberately not charged to the limiter and never cached: the
 		// token was never judged, so counting this would let a GitLab
@@ -196,7 +221,7 @@ func (g *bearerGuard) classify(err error, ip, token string) *gateFailure {
 
 	if errors.Is(err, auth.ErrInvalidToken) {
 		if g.rejected != nil {
-			g.rejected.Record(token)
+			g.rejected.Record(instance, token)
 		}
 		g.recordFailure(ip)
 		slog.Info("request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
@@ -295,4 +320,11 @@ func quotedStringEscape(s string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+// isCORSPreflight reports whether a request is a CORS preflight rather than a
+// real call: the browser sends OPTIONS with Access-Control-Request-Method and
+// no credential, and expects headers back rather than a resource.
+func isCORSPreflight(r *http.Request) bool {
+	return r.Method == http.MethodOptions && r.Header.Get(headerRequestMethod) != ""
 }

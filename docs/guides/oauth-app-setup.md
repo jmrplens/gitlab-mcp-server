@@ -163,7 +163,7 @@ Expected output:
   "resource": "http://localhost:8080/mcp",
   "authorization_servers": ["https://gitlab.example.com"],
   "bearer_methods_supported": ["header"],
-  "scopes_supported": ["api"]
+  "scopes_supported": ["api", "read_api"]
 }
 ```
 

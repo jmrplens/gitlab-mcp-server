@@ -102,13 +102,9 @@ func TestListenHTTP_UnixSocket_ServesAndAppliesTheMode(t *testing.T) {
 	}
 }
 
-// TestClearStaleSocket_RemovesDeadRefusesLive verifies the distinction that
-// keeps a second instance from stealing a socket the first is still serving.
-//
-// Bind fails on any existing path, so the tempting fix is an unconditional
-// remove — which would let a restart hijack a running server's socket and
-// leave it holding a listener nobody can reach. A successful connect is the
-// proof that somebody is there.
+// TestClearStaleSocket_AbsentPathIsFine verifies the ordinary startup case:
+// nothing is at the path, so there is nothing to clear and no error to
+// report.
 func TestClearStaleSocket_AbsentPathIsFine(t *testing.T) {
 	t.Parallel()
 

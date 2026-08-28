@@ -225,7 +225,7 @@ When running with `--auth-mode=oauth`, the server validates every request's Bear
 - **[RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata** — The `/.well-known/oauth-protected-resource` endpoint advertises the GitLab authorization server URL, enabling compliant OAuth clients to discover the token issuer
 - **PKCE** — The OAuth 2.1 flow uses Proof Key for Code Exchange (PKCE) to protect against authorization code interception attacks. MCP clients generate a code verifier/challenge pair for each authorization request
 - **Cache eviction** — A background goroutine runs every 30 seconds to clean up expired entries. The cache is bounded by TTL, not by size
-- **Least-privilege scope** — the deployment demands `read_api` under `--read-only` or `--safe-mode` and `api` otherwise, advertises that in the metadata's `scopes_supported`, and refuses a token without it. An `api` token satisfies a `read_api` requirement, since `api` is a superset
+- **Least-privilege scope** — admission asks only for `read_api`, the least any action needs, and the write check is applied per action instead. A `read_api` token is therefore accepted by a deployment that writes, and is served the read-only tool surface; the only credential refused at the door is one carrying no GitLab API scope at all. The metadata's `scopes_supported` advertises both `api` and `read_api` so a client can deliberately ask for a credential that cannot mutate anything, and a read-only deployment (`--read-only` or `--safe-mode`) advertises `read_api` alone. An `api` token satisfies the minimum everywhere, since `api` is a superset
 
 ### Rejections are cheap, and they are bounded
 

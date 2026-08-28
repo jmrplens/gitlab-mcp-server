@@ -16,12 +16,12 @@ func TestRejectedTokens_RecordedToken_IsRecognized(t *testing.T) {
 	t.Parallel()
 
 	r := NewRejectedTokens(8, time.Minute)
-	r.Record("gloas-bad")
+	r.Record(testInstance, "gloas-bad")
 
-	if !r.Contains("gloas-bad") {
+	if !r.Contains(testInstance, "gloas-bad") {
 		t.Error("recorded token should be recognized as rejected")
 	}
-	if r.Contains("gloas-other") {
+	if r.Contains(testInstance, "gloas-other") {
 		t.Error("unrecorded token must not be reported as rejected")
 	}
 }
@@ -34,10 +34,10 @@ func TestRejectedTokens_ExpiredEntry_IsForgotten(t *testing.T) {
 	t.Parallel()
 
 	r := NewRejectedTokens(8, time.Nanosecond)
-	r.Record("gloas-bad")
+	r.Record(testInstance, "gloas-bad")
 	time.Sleep(time.Millisecond)
 
-	if r.Contains("gloas-bad") {
+	if r.Contains(testInstance, "gloas-bad") {
 		t.Error("expired rejection should no longer apply")
 	}
 	if got := r.Len(); got != 0 {
@@ -54,7 +54,7 @@ func TestRejectedTokens_AtCapacity_StaysBounded(t *testing.T) {
 	const capacity = 4
 	r := NewRejectedTokens(capacity, time.Minute)
 	for i := range 50 {
-		r.Record(string(rune('a'+i%26)) + string(rune('0'+i/26)))
+		r.Record(testInstance, string(rune('a'+i%26)) + string(rune('0'+i/26)))
 	}
 
 	if got := r.Len(); got > capacity {
@@ -82,21 +82,21 @@ func TestRejectedTokens_ExpiredEntriesMakeRoom(t *testing.T) {
 
 	r := NewRejectedTokens(capacity, ttl)
 	for i := range capacity {
-		r.Record("glpat-stale-" + strconv.Itoa(i))
+		r.Record(testInstance, "glpat-stale-" + strconv.Itoa(i))
 	}
 	if got := r.Len(); got != capacity {
 		t.Fatalf("Len() = %d, want %d before anything expires", got, capacity)
 	}
 
 	time.Sleep(ttl + 50*time.Millisecond)
-	r.Record("glpat-fresh")
+	r.Record(testInstance, "glpat-fresh")
 
 	// Only the new entry survives: all three expired ones were swept, which
 	// is what freed the slot.
 	if got := r.Len(); got != 1 {
 		t.Errorf("Len() = %d, want 1 (three expired entries swept, one admitted)", got)
 	}
-	if !r.Contains("glpat-fresh") {
+	if !r.Contains(testInstance, "glpat-fresh") {
 		t.Error("the newly recorded rejection was not admitted")
 	}
 }
@@ -109,11 +109,11 @@ func TestRejectedTokens_Cleanup_DropsOnlyExpired(t *testing.T) {
 	t.Parallel()
 
 	r := NewRejectedTokens(8, time.Nanosecond)
-	r.Record("stale")
+	r.Record(testInstance, "stale")
 	time.Sleep(time.Millisecond)
 
 	live := NewRejectedTokens(8, time.Hour)
-	live.Record("fresh")
+	live.Record(testInstance, "fresh")
 
 	r.Cleanup()
 	live.Cleanup()
@@ -121,7 +121,7 @@ func TestRejectedTokens_Cleanup_DropsOnlyExpired(t *testing.T) {
 	if got := r.Len(); got != 0 {
 		t.Errorf("expired entries remaining after Cleanup: %d", got)
 	}
-	if !live.Contains("fresh") {
+	if !live.Contains(testInstance, "fresh") {
 		t.Error("Cleanup dropped an entry that had not expired")
 	}
 }
@@ -139,8 +139,8 @@ func TestRejectedTokens_Disabled_NeverReportsAHit(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			r.Record("gloas-bad")
-			if r.Contains("gloas-bad") {
+			r.Record(testInstance, "gloas-bad")
+			if r.Contains(testInstance, "gloas-bad") {
 				t.Error("a disabled cache must never report a hit")
 			}
 			if got := r.Len(); got != 0 {
@@ -161,7 +161,7 @@ func TestRejectedTokens_DoesNotStoreRawTokens(t *testing.T) {
 	// under test is that whatever arrives is hashed, not what it looks like.
 	const secret = "a-credential-typed-into-the-wrong-field"
 	r := NewRejectedTokens(8, time.Minute)
-	r.Record(secret)
+	r.Record(testInstance, secret)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -170,7 +170,35 @@ func TestRejectedTokens_DoesNotStoreRawTokens(t *testing.T) {
 			t.Fatal("raw token stored as a cache key")
 		}
 	}
-	if _, ok := r.entries[rejectedKey(secret)]; !ok {
+	if _, ok := r.entries[rejectedKey(testInstance, secret)]; !ok {
 		t.Error("entry not keyed by the SHA-256 digest")
+	}
+}
+
+// TestRejectedTokens_IsScopedToTheInstance pins why a rejection carries the
+// instance that issued it.
+//
+// Contains makes the guard answer 401 WITHOUT asking GitLab, so a rejection is
+// an admission decision rather than a cached lookup. On a deployment
+// publishing more than one instance, keying by the token alone would let a
+// refusal from one instance refuse a perfectly valid credential on another for
+// the whole TTL, with no upstream call able to correct it.
+func TestRejectedTokens_IsScopedToTheInstance(t *testing.T) {
+	t.Parallel()
+
+	const (
+		instanceA = "https://gitlab.com"
+		instanceB = "https://gitlab.internal.example.com"
+		token     = "gloas-same-string-on-both"
+	)
+
+	r := NewRejectedTokens(8, time.Minute)
+	r.Record(instanceA, token)
+
+	if !r.Contains(instanceA, token) {
+		t.Error("the instance that rejected it must remember the rejection")
+	}
+	if r.Contains(instanceB, token) {
+		t.Error("one instance's rejection must not refuse the token on another")
 	}
 }

@@ -56,7 +56,11 @@ action.**
   mutate. The entry is per token, so one client's `read_api` credential never
   narrows another's.
 - `oauth.RequiredScope` keeps its name but changes role: it is what the
-  `WWW-Authenticate` challenge **recommends**, not what admission requires.
+  `WWW-Authenticate` challenge **recommends** on a 401, not what admission
+  requires. The `insufficient_scope` 403 names `MinimumScope` instead: RFC 6750
+  section 3.1 defines the attribute as the scope necessary to access the
+  resource, and naming the write scope there contradicted the challenge's own
+  `error_description`.
 - OAuth mode hands the pool the scopes the verifier already resolved
   (`GetOrCreateWithScopes`). The PAT self endpoint the pool would otherwise
   query does not answer for an OAuth access token, so without this a
@@ -89,8 +93,10 @@ resource, template and prompt with its schemas.
   touching an authorization rule; its existing classification is what gates
   it.
 - POS-004: A `read_api` token that reaches a legacy-mode deployment as a PAT
-  is narrowed the same way, which reconnects `TokenScopes` — detected since
-  the catalog-first refactor, consumed by nothing.
+  is narrowed the same way, which gives `TokenScopes` a consumer that decides
+  something. The field was already detected and already carried into every
+  pool entry's `ServerConfig`; what it did not do was change the surface the
+  entry was built with.
 
 ### Negative
 

@@ -254,7 +254,7 @@ func TestBearerGuard_UnclassifiedError_IsTreatedAsUpstream(t *testing.T) {
 	if failure == nil || failure.status != http.StatusServiceUnavailable {
 		t.Fatalf("want 503, got %+v", failure)
 	}
-	if g.rejected.Contains("gloas-good") {
+	if g.rejected.Contains("", "gloas-good") {
 		t.Error("an unclassified failure must not be cached as a rejection")
 	}
 }
@@ -277,11 +277,19 @@ func TestBearerGuard_NoAPIScope_IsForbiddenNotUnauthorized(t *testing.T) {
 	if failure == nil || failure.status != http.StatusForbidden {
 		t.Fatalf("want 403, got %+v", failure)
 	}
+	// The scope named is the MINIMUM that satisfies the request, not the
+	// deployment's recommended one: RFC 6750 section 3.1 defines the
+	// attribute as the scope necessary to access the resource, and naming
+	// the write scope here contradicted this challenge's own
+	// error_description.
 	challenge := failure.header.Get("WWW-Authenticate")
-	for _, want := range []string{`error="insufficient_scope"`, `scope="` + oauth.ScopeAPI + `"`} {
+	for _, want := range []string{`error="insufficient_scope"`, `scope="` + oauth.MinimumScope + `"`} {
 		if !strings.Contains(challenge, want) {
 			t.Errorf("challenge %q is missing %s", challenge, want)
 		}
+	}
+	if strings.Contains(challenge, `scope="`+oauth.ScopeAPI+`"`) {
+		t.Errorf("challenge %q demands the write scope for a request that only needs %s", challenge, oauth.MinimumScope)
 	}
 	// Six more attempts would exceed the limiter's budget of three if scope
 	// failures were charged to it.
@@ -300,6 +308,35 @@ func TestBearerGuard_NoAPIScope_IsForbiddenNotUnauthorized(t *testing.T) {
 //
 // Admission now asks only for what every action needs. What the token may DO
 // is settled per action, by the read-only surface the pool builds for it.
+// TestBearerGuard_PreflightIsNotAnAuthenticationFailure pins that a CORS
+// preflight is let past untouched.
+//
+// The browser strips Authorization from a preflight by definition, so
+// authenticating one counted every browser's routine permission question as a
+// failed authentication: the limiter's budget is ten per minute, so ten
+// preflights locked that address out of the endpoint for something the user
+// never did. The preflight must reach the route instead, which may serve its
+// own answer.
+func TestBearerGuard_PreflightIsNotAnAuthenticationFailure(t *testing.T) {
+	t.Parallel()
+
+	g := newTestGuard(okVerifier(oauth.ScopeAPI))
+
+	for range 15 {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/mcp", http.NoBody)
+		req.Header.Set("Origin", "https://claude.ai")
+		req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+		if failure := g.check(req); failure != nil {
+			t.Fatalf("a preflight must pass the guard untouched, got %+v", failure)
+		}
+	}
+
+	// The budget is intact: a real request from the same address still works.
+	if failure := g.check(guardRequest(t, "gloas-good")); failure != nil {
+		t.Errorf("preflights consumed the authentication budget: %+v", failure)
+	}
+}
+
 func TestBearerGuard_ReadAPIToken_IsAdmittedByAWritingDeployment(t *testing.T) {
 	t.Parallel()
 

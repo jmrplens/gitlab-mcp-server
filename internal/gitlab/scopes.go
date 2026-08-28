@@ -22,14 +22,14 @@ func DetectScopes(ctx context.Context, client *gl.Client) []string {
 	return token.Scopes
 }
 
-// ScopeAPI is the GitLab scope that permits writes; ScopeReadAPI permits
-// reads only. A token carrying api can do everything read_api can, but
-// GitLab reports only the granted name, so containment is checked against
-// both rather than assumed.
-const (
-	ScopeAPI     = "api"
-	ScopeReadAPI = "read_api"
-)
+// ScopeAPI is the GitLab scope that permits writes.
+//
+// Only the write scope is named here, and deliberately: this package answers
+// one question — can this token mutate GitLab — and the read scope is not
+// part of that answer. internal/oauth owns the full scope vocabulary for the
+// authorization layer; duplicating it here would be a second place to keep
+// in step with GitLab.
+const ScopeAPI = "api"
 
 // WriteCapable reports whether a token's scopes permit mutating GitLab.
 //

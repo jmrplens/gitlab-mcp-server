@@ -43,8 +43,6 @@ import (
 
 // HTTP header names, MIME types, and test values reused across tests.
 const (
-	hdrContentType  = "Content-Type"
-	mimeJSON        = "application/json"
 	testToken       = "test-token"
 	serverName      = "gitlab-mcp-server"
 	mimeJSONSSE     = "application/json, text/event-stream"
@@ -5769,29 +5767,69 @@ func TestCorsMiddleware_TrustedOriginPreflight_IsAnswered(t *testing.T) {
 
 // TestCorsMiddleware_UntrustedOrigin_IsLeftToTheProtection verifies that this
 // middleware never widens the trust decision: an origin the operator did not
-// list gets no permission headers and is passed down to the cross-origin
-// protection, which is what refuses it.
+// list gets no permission headers, and its ordinary request is passed down to
+// the cross-origin protection, which is what refuses it.
+//
+// Its PREFLIGHT is answered here, though, and that distinction matters. A
+// preflight carries no credential by definition, so forwarding it let the
+// authentication layer count it as a failed authentication: ten of them locked
+// the client's IP out of the whole endpoint, and a browser emits them without
+// the user doing anything wrong. An answer with no Access-Control-Allow-Origin
+// is a refusal the browser already understands.
 func TestCorsMiddleware_UntrustedOrigin_IsLeftToTheProtection(t *testing.T) {
 	t.Parallel()
 
-	var reached atomic.Bool
-	handler := corsMiddleware(&config.Config{TrustedOrigins: []string{"https://claude.ai"}}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		reached.Store(true)
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/mcp", http.NoBody)
-	req.Header.Set("Origin", "https://evil.example")
-	req.Header.Set("Access-Control-Request-Method", "POST")
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if !reached.Load() {
-		t.Error("an untrusted origin must be passed through, not answered here")
+	newHandler := func(reached *atomic.Bool) http.Handler {
+		return corsMiddleware(&config.Config{TrustedOrigins: []string{"https://claude.ai"}}, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			reached.Store(true)
+			w.WriteHeader(http.StatusOK)
+		}))
 	}
-	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
-		t.Errorf("Access-Control-Allow-Origin = %q, want none for an untrusted origin", got)
-	}
+
+	// An untrusted origin's preflight is passed down rather than answered
+	// here, because some routes serve their own — the RFC 9728 metadata
+	// document and the server card are public and answer any origin, and
+	// swallowing those would make them undiscoverable from a browser. What
+	// must not happen is it being CHARGED as a failed authentication; that is
+	// the bearer guard's job, pinned by
+	// TestBearerGuard_PreflightIsNotAnAuthenticationFailure.
+	t.Run("preflight is passed down, with no permission granted", func(t *testing.T) {
+		t.Parallel()
+		var reached atomic.Bool
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/mcp", http.NoBody)
+		req.Header.Set("Origin", "https://evil.example")
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		rec := httptest.NewRecorder()
+		newHandler(&reached).ServeHTTP(rec, req)
+
+		if !reached.Load() {
+			t.Error("a preflight must reach the route, which may serve its own")
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+			t.Errorf("Access-Control-Allow-Origin = %q, want none for an untrusted origin", got)
+		}
+		// The answer downstream depends on Origin, so a cache must not serve
+		// it to a trusted origin.
+		if vary := rec.Header().Values("Vary"); !slices.Contains(vary, "Origin") {
+			t.Errorf("Vary = %v, want it to include Origin", vary)
+		}
+	})
+
+	t.Run("an ordinary request is passed to the protection", func(t *testing.T) {
+		t.Parallel()
+		var reached atomic.Bool
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+		req.Header.Set("Origin", "https://evil.example")
+		rec := httptest.NewRecorder()
+		newHandler(&reached).ServeHTTP(rec, req)
+
+		if !reached.Load() {
+			t.Error("an untrusted origin's real request must be passed through, not answered here")
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+			t.Errorf("Access-Control-Allow-Origin = %q, want none for an untrusted origin", got)
+		}
+	})
 }
 
 // TestCorsMiddleware_ActualRequest_ExposesTransportHeaders verifies the
@@ -5867,7 +5905,10 @@ func TestCorsMiddleware_WildcardAndNoOrigin_BehaveAsConfigured(t *testing.T) {
 		}
 	})
 
-	t.Run("no trusted origins disables the middleware", func(t *testing.T) {
+	// With no trusted origins the middleware grants nothing and answers
+	// nothing: the route below may serve its own preflight, and the
+	// authentication layer is what must not charge it.
+	t.Run("no trusted origins grants nothing and passes the preflight down", func(t *testing.T) {
 		t.Parallel()
 		var reached atomic.Bool
 		handler := corsMiddleware(&config.Config{}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -5880,7 +5921,26 @@ func TestCorsMiddleware_WildcardAndNoOrigin_BehaveAsConfigured(t *testing.T) {
 		handler.ServeHTTP(rec, req)
 
 		if !reached.Load() {
-			t.Error("with no trusted origins configured nothing may be answered here")
+			t.Error("a preflight must reach the route, which may serve its own")
+		}
+		if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+			t.Errorf("Access-Control-Allow-Origin = %q, want none when no origin is trusted", got)
+		}
+	})
+
+	t.Run("no trusted origins passes an ordinary request through", func(t *testing.T) {
+		t.Parallel()
+		var reached atomic.Bool
+		handler := corsMiddleware(&config.Config{}, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			reached.Store(true)
+		}))
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+		req.Header.Set("Origin", "https://claude.ai")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if !reached.Load() {
+			t.Error("with no trusted origins configured an ordinary request must pass through")
 		}
 	})
 }
