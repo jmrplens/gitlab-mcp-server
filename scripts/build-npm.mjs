@@ -51,7 +51,7 @@ function parseArgs(argv) {
     else throw new Error(`unknown argument: ${arg}`);
   }
   if (!out.version) throw new Error("--version <x.y.z> is required");
-  if (!/^\d+\.\d+\.\d+/.test(out.version)) throw new Error(`--version must be semver, got ${out.version}`);
+  if (!/^\d+\.\d+\.\d+$/.test(out.version)) throw new Error(`--version must be semver, got ${out.version}`);
   if (!out.syncOnly && !out.binaries) throw new Error("--binaries <dir> is required (or pass --sync-only)");
   return out;
 }

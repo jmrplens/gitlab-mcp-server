@@ -11,6 +11,7 @@
 "use strict";
 
 const { spawnSync } = require("node:child_process");
+const os = require("node:os");
 
 // platformKey maps Node's platform/arch names to the per-platform package
 // suffix. The suffixes follow Node's vocabulary (win32, x64), not Go's
@@ -99,8 +100,10 @@ if (result.error) {
 // so the launcher dies the same way rather than masking a SIGINT as exit 0.
 if (result.signal) {
   process.kill(process.pid, result.signal);
-  // If the re-raise did not terminate us (signal ignored), fall through to a
-  // conventional 128+signal code so the caller still sees a failure.
-  process.exit(1);
+  // If the re-raise did not terminate us (signal ignored, or no default
+  // disposition), exit with the conventional 128+signal code so the caller
+  // still sees the child's terminating signal rather than a bare failure.
+  const signum = os.constants.signals[result.signal];
+  process.exit(signum ? 128 + signum : 1);
 }
 process.exit(result.status === null ? 1 : result.status);

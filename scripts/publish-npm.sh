@@ -46,7 +46,8 @@ publish() {
   # left to the environment — the workflow's setup-node registry config for the
   # OIDC exchange, or a developer's `npm login` / .npmrc for the bootstrap — so
   # this script never sees a credential.
-  # shellcheck disable=SC2086 -- $DRY_RUN is intentionally word-split
+  # $DRY_RUN is empty or "--dry-run" and must word-split, not stay one argument.
+  # shellcheck disable=SC2086
   npm publish "$dir" --access public $DRY_RUN
 }
 

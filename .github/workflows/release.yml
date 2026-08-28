@@ -150,7 +150,11 @@ jobs:
       - name: Publish to npm
         run: |
           set -euo pipefail
-          npm install -g npm@latest
+          # Pinned, not @latest: this CLI runs npm publish under the job's
+          # id-token: write, so a compromised or surprising `latest` could push
+          # altered packages. 11.5.1 is the floor npm trusted publishing
+          # requires; bump deliberately.
+          npm install -g npm@11.5.1
           bash scripts/publish-npm.sh dist "${GITHUB_REF#refs/tags/v}"
 
       - name: Update Homebrew tap formula
@@ -246,6 +250,7 @@ jobs:
           [ -f .plugin/plugin.json ] && git add .plugin/plugin.json
           [ -f mcpb/manifest.json ] && git add mcpb/manifest.json
           [ -f lhm.plugin.json ] && git add lhm.plugin.json
+          [ -f npm/gitlab-mcp-server/package.json ] && git add npm/gitlab-mcp-server/package.json
 
           if git diff --cached --quiet; then
             echo "::notice::No manifest changes to commit"
