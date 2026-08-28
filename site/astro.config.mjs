@@ -321,6 +321,11 @@ const jsonLd = JSON.stringify({
 				"https://enterprisedna.co/directories/mcp/jmrplens-gitlab-mcp-server",
 				"https://lobehub.com/mcp/jmrplens-gitlab-mcp-server",
 				"https://mcpmarket.com/server/gitlab-32",
+				// VerifyMCP probes ~23,800 servers daily and publishes a scored
+				// page per artifact rather than per project. This is the hosted
+				// endpoint's page: it is the one that reflects a live handshake,
+				// so it is the entity to point at.
+				"https://verifymcp.io/servers/jmrplens-gitlab-mcp-server/gitlab",
 				// Package/registry authorities. These outlast individual MCP
 				// directories and carry entity weight of their own — they matter
 				// more now that the project has no Wikidata item.
