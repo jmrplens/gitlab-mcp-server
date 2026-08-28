@@ -116,11 +116,24 @@ while read -r identifier; do
     continue
   fi
 
-  repo_and_tag="${identifier#*/}"
-  repo="${repo_and_tag%%:*}"
-  tag="${repo_and_tag##*:}"
-  if [[ "$tag" == "$repo_and_tag" ]]; then
-    fail "identifier carries no tag"
+  # The registry accepts repo:tag, repo@digest and repo:tag@digest. This
+  # manifest uses the third form: the tag stays readable, the digest is what a
+  # client resolves.
+  ref="${identifier#*/}"
+  digest=""
+  if [[ "$ref" == *"@"* ]]; then
+    digest="${ref##*@}"
+    ref="${ref%@*}"
+  fi
+  repo="${ref%%:*}"
+  tag=""
+  [[ "$ref" == *":"* ]] && tag="${ref##*:}"
+  if [[ -z "$tag" && -z "$digest" ]]; then
+    fail "identifier carries neither a tag nor a digest"
+    continue
+  fi
+  if [[ -n "$digest" && ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    fail "digest is not a sha256:<64 hex> reference: $digest"
     continue
   fi
 
@@ -128,10 +141,28 @@ while read -r identifier; do
     | jq -r '.token')
   accept='application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json,application/vnd.oci.image.manifest.v1+json'
 
+  # Resolve the digest when there is one — that is what a client installs.
   if ! index=$(curl -fsS -H "Authorization: Bearer $token" -H "Accept: $accept" \
-    "https://ghcr.io/v2/${repo}/manifests/${tag}"); then
-    fail "image tag not found in the registry"
+    "https://ghcr.io/v2/${repo}/manifests/${digest:-$tag}"); then
+    fail "image ${digest:-$tag} not found in the registry"
     continue
+  fi
+
+  # A published version tag must never move. If it no longer resolves to the
+  # pinned digest, either the tag was re-pushed or the manifest is stale — both
+  # mean the reference no longer describes what this release shipped.
+  if [[ -n "$digest" && -n "$tag" ]]; then
+    tag_digest=$(curl -fsSI -H "Authorization: Bearer $token" -H "Accept: $accept" \
+      "https://ghcr.io/v2/${repo}/manifests/${tag}" \
+      | awk 'BEGIN { IGNORECASE = 1 } /^docker-content-digest:/ { print $2 }' | tr -d '\r')
+    if [[ -z "$tag_digest" ]]; then
+      fail "tag $tag does not resolve in the registry"
+      continue
+    fi
+    if [[ "$tag_digest" != "$digest" ]]; then
+      fail "tag $tag resolves to $tag_digest but the manifest pins $digest"
+      continue
+    fi
   fi
 
   # A multi-arch tag resolves to an index; follow it to any one platform, since
@@ -165,7 +196,11 @@ while read -r identifier; do
     continue
   fi
 
-  echo "  OK: ownership label matches, stdio override declared"
+  if [[ -n "$digest" ]]; then
+    echo "  OK: digest resolves, tag agrees, ownership label matches, stdio override declared"
+  else
+    echo "  OK: ownership label matches, stdio override declared"
+  fi
 done < <(jq -r '.packages[] | select(.registryType == "oci") | .identifier' "$SERVER_JSON")
 
 # --- npm packages ------------------------------------------------------------

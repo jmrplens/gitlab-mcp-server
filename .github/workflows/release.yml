@@ -188,8 +188,19 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "v${GITHUB_REF#refs/tags/v}" --draft=false
 
+      # The OCI digest comes from the docker job (a prerequisite of this one),
+      # so server.json pins the exact image this release published rather than a
+      # tag that could later be moved.
       - name: Update server.json with SHA256 hashes
-        run: bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}" dist/gitlab-mcp-server.mcpb
+        env:
+          OCI_DIGEST: ${{ needs.docker.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OCI_DIGEST}" ]; then
+            echo "::error::the docker job published no image digest; server.json cannot be pinned"
+            exit 1
+          fi
+          bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}" dist/gitlab-mcp-server.mcpb "${OCI_DIGEST}"
 
       # npm publish via OIDC trusted publisher — no stored token. The staging
       # step above copied the binaries to dist/<release-name>, which is what
@@ -307,6 +318,7 @@ jobs:
       - name: Commit updated server.json and plugin.json to main
         env:
           RELEASE_DEPLOY_KEY_B64: ${{ secrets.RELEASE_DEPLOY_KEY_B64 }}
+          OCI_DIGEST: ${{ needs.docker.outputs.digest }}
         run: |
           set -euo pipefail
 
@@ -336,7 +348,7 @@ jobs:
           # produces the same result as the artifact built earlier in this
           # job). The .mcpb third argument re-derives that hash from the
           # artifact instead of inheriting it from the dirty working tree.
-          bash scripts/update-server-json-sha.sh dist/checksums.txt "${VERSION}" dist/gitlab-mcp-server.mcpb
+          bash scripts/update-server-json-sha.sh dist/checksums.txt "${VERSION}" dist/gitlab-mcp-server.mcpb "${OCI_DIGEST}"
 
           git add server.json
           [ -f plugin.json ] && git add plugin.json
@@ -399,6 +411,9 @@ jobs:
     name: Docker
     runs-on: ubuntu-latest
     needs: [e2e]
+    # server.json pins the image by digest, and the release job stamps it.
+    outputs:
+      digest: ${{ steps.docker-push.outputs.digest }}
     permissions:
       contents: read # checkout
       packages: write # ghcr.io push via GITHUB_TOKEN login

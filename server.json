@@ -205,7 +205,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:2.7.5",
+      "identifier": "ghcr.io/jmrplens/gitlab-mcp-server:2.7.5@sha256:8eec1825b266712cd544bf1b2144e55c1eb711b4540def40e963a664c4e97168",
       "transport": {
         "type": "stdio"
       },

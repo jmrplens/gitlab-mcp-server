@@ -3,14 +3,17 @@
 # (Open Plugins manifest) with the release version, version-pinned download
 # URLs, and SHA256 hashes from GoReleaser's checksums.txt.
 #
-# Usage: update-server-json-sha.sh <checksums-file> <version> [mcpb-file]
+# Usage: update-server-json-sha.sh <checksums-file> <version> [mcpb-file] [oci-digest]
 #
 # Steps for server.json:
 #   1. Sets top-level .version to the given version
 #   2. Sets .packages[].version to the given version
 #   3. Pins .packages[].identifier URLs to /releases/download/v<version>/,
 #      handling both /releases/latest/download/ and prior /releases/download/vX.Y.Z[-prerelease]/
-#   3b. Pins the OCI image tag to the given version
+#   3b. Pins the OCI image reference to <tag>@<digest>. The digest comes from
+#       the docker job that pushed the image; without it a stamp would leave the
+#       previous release's digest under the new tag, so it is required whenever
+#       the identifier already carries one
 #   4. Sets .fileSha256 for each package matching a checksum entry
 #   4b. Sets .fileSha256 for the .mcpb bundle, hashed from <mcpb-file>. GoReleaser
 #       does not build the bundle, so it is absent from the signed checksums.txt
@@ -28,9 +31,10 @@
 
 set -euo pipefail
 
-CHECKSUMS_FILE="${1:?Usage: $0 <checksums-file> <version> [mcpb-file]}"
-VERSION="${2:?Usage: $0 <checksums-file> <version> [mcpb-file]}"
+CHECKSUMS_FILE="${1:?Usage: $0 <checksums-file> <version> [mcpb-file] [oci-digest]}"
+VERSION="${2:?Usage: $0 <checksums-file> <version> [mcpb-file] [oci-digest]}"
 MCPB_FILE="${3:-}"
+OCI_DIGEST="${4:-}"
 SERVER_JSON="server.json"
 PLUGIN_JSON=".plugin/plugin.json"
 
@@ -68,13 +72,32 @@ jq --arg v "$VERSION" '
 ' "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
 echo "Identifiers pinned to v$VERSION"
 
-# 3b. Pin the OCI image tag. An OCI identifier carries its version in the tag
-# rather than in a version field, so step 3's URL rewrite never reaches it.
-jq --arg v "$VERSION" '
-  (.packages[] | select(.registryType == "oci") | .identifier) |=
-    sub(":[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.]+)?$"; ":" + $v)
-' "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
-echo "OCI image tags pinned to $VERSION"
+# 3b. Pin the OCI image reference. An OCI identifier carries its version in the
+# tag rather than in a version field, so step 3's URL rewrite never reaches it.
+# The reference is <repo>:<tag>@<digest>: the tag stays readable and matches
+# every doc, the digest is what a client actually resolves, so a retag of a
+# published version cannot change what the registry serves.
+oci_current=$(jq -r '[.packages[] | select(.registryType == "oci") | .identifier][0] // ""' "$SERVER_JSON")
+if [[ -n "$oci_current" ]]; then
+  if [[ "$oci_current" == *"@"* && -z "$OCI_DIGEST" ]]; then
+    echo "ERROR: the OCI identifier is digest-pinned but no digest was passed as the" >&2
+    echo "       fourth argument. Stamping the tag alone would leave the previous" >&2
+    echo "       release's image pinned under the new version." >&2
+    exit 1
+  fi
+  if [[ -n "$OCI_DIGEST" && ! "$OCI_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "ERROR: oci-digest must look like sha256:<64 hex chars> (got: $OCI_DIGEST)" >&2
+    exit 1
+  fi
+  oci_repo="${oci_current%%@*}"
+  oci_repo="${oci_repo%:*}"
+  oci_new="${oci_repo}:${VERSION}"
+  [[ -n "$OCI_DIGEST" ]] && oci_new="${oci_new}@${OCI_DIGEST}"
+  jq --arg id "$oci_new" \
+    '(.packages[] | select(.registryType == "oci") | .identifier) = $id' \
+    "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
+  echo "OCI image reference pinned to $oci_new"
+fi
 
 # 4. Update fileSha256 for each entry in checksums
 updated=0
