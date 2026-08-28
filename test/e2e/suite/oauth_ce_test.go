@@ -104,7 +104,11 @@ func testOAuthIdentityPropagation(t *testing.T, cfg e2eOAuthConfig) {
 func testProtectedResourceMetadata(t *testing.T, cfg e2eOAuthConfig) {
 	t.Helper()
 
-	handler := oauth.NewProtectedResourceHandler("https://mcp.example.com", cfg.gitlabURL, oauth.ScopeAPI)
+	handler := oauth.NewProtectedResourceHandler(
+		"https://mcp.example.com",
+		[]string{cfg.gitlabURL},
+		oauth.SupportedScopes(false, false),
+	)
 	ts := httptest.NewServer(handler)
 	defer ts.Close()
 
@@ -151,8 +155,18 @@ func testProtectedResourceMetadata(t *testing.T, cfg e2eOAuthConfig) {
 
 	// The scope a client is told to request is the one the deployment
 	// demands, so a read-only server does not make every user grant api.
+	// A deployment that can write advertises both: api for a client that
+	// wants the whole surface, read_api for one that deliberately wants a
+	// credential which cannot mutate anything — such a token is admitted and
+	// served the read-only surface rather than refused.
 	scopes, ok := meta["scopes_supported"].([]any)
-	if !ok || len(scopes) != 1 || scopes[0] != oauth.ScopeAPI {
-		t.Errorf("scopes_supported = %v, want [%q]", meta["scopes_supported"], oauth.ScopeAPI)
+	want := oauth.SupportedScopes(false, false)
+	if !ok || len(scopes) != len(want) {
+		t.Fatalf("scopes_supported = %v, want %v", meta["scopes_supported"], want)
+	}
+	for i, scope := range want {
+		if scopes[i] != scope {
+			t.Errorf("scopes_supported[%d] = %v, want %q", i, scopes[i], scope)
+		}
 	}
 }
