@@ -19,6 +19,9 @@
 # Steps for .plugin/plugin.json:
 #   5. Sets top-level .version to the given version (if file exists)
 #
+# Steps for plugin.json (Agent Plugins, repo root):
+#   5b. Sets top-level .version to the given version (if file exists)
+#
 # Steps for mcpb/manifest.json (Claude Desktop) and lhm.plugin.json
 # (LobeHub Marketplace):
 #   6-7. Sets top-level .version to the given version (if file exists)
@@ -132,6 +135,15 @@ if [[ -f "$PLUGIN_JSON" ]]; then
   echo "$PLUGIN_JSON version set to $VERSION"
 else
   echo "NOTE: $PLUGIN_JSON not found, skipping Open Plugins manifest update"
+fi
+
+# 5b. Update the Agent Plugins portable manifest version (if present)
+AGENT_PLUGIN_JSON="plugin.json"
+if [[ -f "$AGENT_PLUGIN_JSON" ]]; then
+  jq --arg v "$VERSION" '.version = $v' "$AGENT_PLUGIN_JSON" > tmp.$$.json && mv tmp.$$.json "$AGENT_PLUGIN_JSON"
+  echo "$AGENT_PLUGIN_JSON version set to $VERSION"
+else
+  echo "NOTE: $AGENT_PLUGIN_JSON not found, skipping Agent Plugins manifest update"
 fi
 
 # 6. Update MCPB (Claude Desktop extension) manifest version (if present)

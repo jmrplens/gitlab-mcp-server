@@ -22,6 +22,7 @@ Docker, Node.js, or Python required.
 | Read-only mode               | No       | off                  | `GITLAB_READ_ONLY`       |
 | Safe mode                    | No       | off                  | `GITLAB_SAFE_MODE`       |
 | Skip TLS verification        | No       | off                  | `GITLAB_SKIP_TLS_VERIFY` |
+| Log level                    | No       | `info`               | `LOG_LEVEL`              |
 
    The token is stored in the operating system keychain by Claude Desktop.
 

@@ -168,8 +168,70 @@ while read -r identifier; do
   echo "  OK: ownership label matches, stdio override declared"
 done < <(jq -r '.packages[] | select(.registryType == "oci") | .identifier' "$SERVER_JSON")
 
+# --- npm packages ------------------------------------------------------------
+# The registry validates npm ownership server-side: it fetches the published
+# version's package.json and requires its mcpName to equal the server name; it
+# also requires a version and rejects fileSha256. release.yml publishes npm
+# before mcp-publisher runs, so the committed launcher manifest is the one live
+# at registry-publish time — the lockstep below is therefore the real invariant.
+NPM_MAIN="npm/gitlab-mcp-server/package.json"
+while IFS=$'\t' read -r identifier version; do
+  [[ -z "$identifier" ]] && continue
+  checked=$((checked + 1))
+  echo "npm: $identifier@$version"
+
+  banned=$(jq -r --arg id "$identifier" \
+    '[.packages[] | select(.registryType == "npm" and .identifier == $id) | to_entries[]
+      | select(.key == "fileSha256") | .key] | join(", ")' "$SERVER_JSON")
+  if [[ -n "$banned" ]]; then
+    fail "carries field(s) the registry rejects for npm packages: $banned"
+  fi
+
+  if [[ -z "$version" || "$version" == "null" ]]; then
+    fail "declares no version (the registry requires one for npm entries)"
+    continue
+  fi
+
+  if [[ ! -f "$NPM_MAIN" ]]; then
+    fail "$NPM_MAIN not found"
+    continue
+  fi
+
+  launcher_name=$(jq -r '.name' "$NPM_MAIN")
+  if [[ "$identifier" != "$launcher_name" ]]; then
+    fail "identifier is \"$identifier\" but the committed launcher is \"$launcher_name\""
+    continue
+  fi
+
+  launcher_mcp=$(jq -r '.mcpName // ""' "$NPM_MAIN")
+  if [[ "$launcher_mcp" != "$server_name" ]]; then
+    fail "launcher mcpName is \"$launcher_mcp\", expected \"$server_name\" (the registry's npm ownership check fails without it)"
+    continue
+  fi
+
+  launcher_version=$(jq -r '.version' "$NPM_MAIN")
+  if [[ "$version" != "$launcher_version" ]]; then
+    fail "declared version $version does not match the committed launcher version $launcher_version"
+    continue
+  fi
+
+  encoded=${identifier//\//%2F}
+  if ! meta=$(curl -fsSL "https://registry.npmjs.org/${encoded}/${version}"); then
+    fail "version $version not found on registry.npmjs.org"
+    continue
+  fi
+  published_mcp=$(echo "$meta" | jq -r '.mcpName // ""')
+  if [[ -z "$published_mcp" ]]; then
+    echo "  NOTE: published $version predates mcpName; the registry accepts this entry starting with the release that publishes it"
+  elif [[ "$published_mcp" != "$server_name" ]]; then
+    fail "published mcpName is \"$published_mcp\", expected \"$server_name\""
+  else
+    echo "  OK: name, mcpName and version in lockstep; published mcpName matches"
+  fi
+done < <(jq -r '.packages[] | select(.registryType == "npm") | [.identifier, (.version // "null")] | @tsv' "$SERVER_JSON")
+
 if [[ "$checked" -eq 0 ]]; then
-  echo "ERROR: no mcpb or oci packages found in $SERVER_JSON" >&2
+  echo "ERROR: no mcpb, oci or npm packages found in $SERVER_JSON" >&2
   exit 1
 fi
 

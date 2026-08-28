@@ -49,7 +49,7 @@ jobs:
       - name: Check MCP Registry packages are published
         if: github.event_name == 'push'
         run: make check-server-json-packages
-      - name: Check Open Plugins manifest
+      - name: Check plugin manifests (Agent Plugins + legacy Open Plugins)
         run: make check-openplugin
       - name: Check README repository statistics
         run: make check-stats

@@ -244,9 +244,9 @@ See [Dynamic Tools](concepts/dynamic-tools.md) for the default find/execute work
 
 ---
 
-## Alternative: Open Plugins (Cursor / Claude Code)
+## Alternative: Agent Plugins (Cursor / Claude Code / VS Code)
 
-The repository ships an [Open Plugins](https://open-plugins.com/) v1.0.0 manifest (`.plugin/plugin.json` + `mcp.json`) so the server can be installed in a single step on conformant hosts:
+The repository ships an [Agent Plugins](https://agent-plugins.org/) 1.0 manifest (root `plugin.json` + `mcp.json`), and keeps the legacy Open Plugins manifest (`.plugin/plugin.json`) for older hosts, so the server can be installed in a single step on conformant hosts:
 
 ```bash
 /plugin install jmrplens/gitlab-mcp-server
@@ -274,15 +274,14 @@ The host passes these environment variables through to the container:
 | `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | No       | Extra path-list-separated directories allowed for local GitLab import archives                   |
 | `RATE_LIMIT_RPS`                 | No       | Per-server tools/call rate limit in requests per second; `0` disables it (default `0`)           |
 | `RATE_LIMIT_BURST`               | No       | Token-bucket burst size when `RATE_LIMIT_RPS` is greater than `0` (default `40`)                 |
-| `AUTO_UPDATE`                    | No       | Auto-update mode in the container; default is `false` for Open Plugins installs                  |
-| `AUTO_UPDATE_REPO`               | No       | GitHub repository slug for release assets (default `jmrplens/gitlab-mcp-server`)                 |
-| `AUTO_UPDATE_INTERVAL`           | No       | Periodic update check interval in HTTP mode (default `1h`)                                       |
-| `AUTO_UPDATE_TIMEOUT`            | No       | Startup/background update timeout (default `60s`)                                                |
+| `CLIENT_COMPAT`                  | No       | Per-client response compatibility (default `auto`)                                               |
 | `LOG_LEVEL`                      | No       | `debug`, `info`, `warn`, `error` (default `info`)                                                |
 
-Prefer `TOOL_SURFACE` for new configurations: `dynamic` is the default two-tool low-token find/execute surface, `meta` exposes consolidated domain dispatchers, and `individual` exposes every tool separately. The server still supports the deprecated `META_TOOLS` selector for compatibility, but the Open Plugins config forwards the explicit `TOOL_SURFACE` variable.
+`AUTO_UPDATE` is forced to `false` inside the container: the image channel owns the binary, and Agent Plugins hosts expand no `${VAR:-default}` fallbacks, so the config pins the only value that is correct there.
 
-The Open Plugins spec starts every entry in the referenced MCP config automatically and does not support runtime variants, so the manifest ships with a single Docker stdio entry. To use the native binary instead, locate the installed `gitlab-mcp-server` plugin directory from your host's plugin UI or installation output, then edit its local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`) and replace `command` / `args` with the path to the binary downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest).
+Prefer `TOOL_SURFACE` for new configurations: `dynamic` is the default two-tool low-token find/execute surface, `meta` exposes consolidated domain dispatchers, and `individual` exposes every tool separately. The server still supports the deprecated `META_TOOLS` selector for compatibility, but the plugin config forwards the explicit `TOOL_SURFACE` variable.
+
+The Agent Plugins spec starts every entry in the referenced MCP config automatically and does not support runtime variants, so the manifest ships with a single Docker stdio entry. To use the native binary instead, locate the installed `gitlab-mcp-server` plugin directory from your host's plugin UI or installation output, then edit its local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`) and replace `command` / `args` with the path to the binary downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest).
 
 For detached HTTP deployments, do not use a stdio client entry. Run the Docker image in HTTP mode and configure the MCP client with `type: "http"` and a URL such as `http://localhost:8080/mcp`. See [HTTP Server Mode](guides/http-server-mode.md).
 

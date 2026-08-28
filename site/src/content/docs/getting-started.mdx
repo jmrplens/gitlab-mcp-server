@@ -270,9 +270,9 @@ The wizard will:
 The setup wizard configures stdio clients only. It offers Web, TUI, and CLI interfaces. See [Setup Wizard](/gitlab-mcp-server/setup-wizard/) for modes, supported clients, advanced options, and reconfiguration behavior.
 :::
 
-## Install as an Open Plugin (Cursor / Claude Code)
+## Install as an Agent Plugin (Cursor / Claude Code / VS Code)
 
-This repository ships an [Open Plugins](https://open-plugins.com/) v1.0.0 manifest (`.plugin/plugin.json`) and referenced MCP config (`mcp.json`) so the server can be installed in a single step on any conformant host (Cursor, Claude Code, OpenCode):
+This repository ships an [Agent Plugins](https://agent-plugins.org/) 1.0 manifest (root `plugin.json` and MCP config `mcp.json`) — plus the legacy Open Plugins manifest (`.plugin/plugin.json`) for older hosts — so the server can be installed in a single step on any conformant host (Cursor, Claude Code, VS Code, OpenCode):
 
 ```bash
 # Cursor / Claude Code (when supported by your version)
@@ -302,7 +302,7 @@ The host must provide these variables before enabling the plugin:
 
 ### Prefer a native binary instead of Docker?
 
-The Open Plugins spec runs every entry in the referenced MCP config automatically, so the bundled config uses Docker stdio for portability. For detached HTTP deployments, do not use a stdio client entry; run the Docker image in HTTP mode and configure the MCP client with `type: "http"` and a URL such as `http://localhost:8080/mcp`. See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/).
+The Agent Plugins spec runs every entry in the referenced MCP config automatically, so the bundled config uses Docker stdio for portability. For detached HTTP deployments, do not use a stdio client entry; run the Docker image in HTTP mode and configure the MCP client with `type: "http"` and a URL such as `http://localhost:8080/mcp`. See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/).
 
 If you prefer the native binary, install the plugin, locate the installed `gitlab-mcp-server` plugin directory from your host's plugin UI or installation output, and then edit its local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`) to replace the Docker `command` / `args` with a path to the platform binary you downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
 

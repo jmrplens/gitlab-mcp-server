@@ -75,7 +75,10 @@ if (!binary) {
     `the @jmrp.io/gitlab-mcp-server-${key} package is not installed. ` +
       "It is an optional dependency that carries the binary for this platform; " +
       "reinstall without --no-optional, or delete node_modules and the lockfile " +
-      "and install again.",
+      "and install again. On musl systems (Alpine) the linux packages are " +
+      "skipped on purpose: the prebuilt binaries need the glibc dynamic loader — " +
+      "use the Docker image (musl-based) or build from source instead " +
+      "(https://github.com/jmrplens/gitlab-mcp-server).",
   );
 }
 
