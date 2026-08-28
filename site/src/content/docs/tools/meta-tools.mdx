@@ -10,7 +10,7 @@ faq:
   - q: "How do I find the exact parameters for an action?"
     a: "By default `META_PARAM_SCHEMA=opaque` keeps each meta-tool schema small, so the exact `params` shape is discovered through the tool manifest resources. Read `gitlab://tools` to list visible tools and executable entries for the active surface, then read `gitlab://tools/{id}` — for example `gitlab://tools/gitlab_merge_request.create` — to get the accepted call shape and JSON Schema for one action. These manifest resources stay available even when `CAPABILITY_SURFACE=minimal`. Dynamic deployments can instead use `gitlab_find_action` for inline schemas."
   - q: "How do I enable Enterprise meta-tools?"
-    a: "The Enterprise/Premium catalog enables 16 additional meta-tools for GitLab Premium and Ultimate features. In stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`; in HTTP mode, use `--tier=premium` (or `--tier=ultimate`) to force the catalog, or omit it to allow CE/EE auto-detection per token+URL entry. The legacy `GITLAB_ENTERPRISE=true` and `--enterprise` flags are still honored as a fallback when the tier is unset, but are deprecated. Enabling the tier also adds enterprise-only routes (such as iterations, project mirrors, and SSH certificates) to existing base meta-tools."
+    a: "The Enterprise/Premium catalog raises the meta-tool count from {{meta.base}} to {{meta.self_managed_enterprise}} on a self-managed instance, adding tools for GitLab Premium and Ultimate features. In stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`; in HTTP mode, use `--tier=premium` (or `--tier=ultimate`) to force the catalog, or omit it to allow CE/EE auto-detection per token+URL entry. The legacy `GITLAB_ENTERPRISE=true` and `--enterprise` flags are still honored as a fallback when the tier is unset, but are deprecated. Enabling the tier also adds enterprise-only routes (such as iterations, project mirrors, and SSH certificates) to existing base meta-tools."
   - q: "Why do some clients need meta-tool mode?"
     a: "Some AI clients impose tool-count limits — for example, JetBrains AI Assistant limits MCP servers to 100 tools. Meta-tool mode keeps the visible tool list well within such constraints because it consolidates hundreds of operations into {{meta.base}} base domain tools (or {{meta.self_managed_enterprise}}/{{meta.gitlab_com}} with the Enterprise catalog). If you instead select individual tools with `TOOL_SURFACE=individual`, clients with such limits will only see a subset of the complete individual tool set, hiding some operations."
   - q: "What are meta-tools in GitLab MCP Server?"
@@ -108,7 +108,7 @@ Example resource reads:
 }
 ```
 
-The per-action detail response includes the `params` schema and the final call shape. These resources remain available for meta-tools when `CAPABILITY_SURFACE=minimal` is enabled, while optional GitLab data resources, prompts, and workflow guides are omitted. Dynamic deployments can still use `gitlab_find_action` for inline schemas; meta-tool deployments can keep `META_PARAM_SCHEMA=opaque` and read `gitlab://tools/{id}` instead of inlining schemas in `tools/list`. Current audit metrics show `compact` is 6.5x larger than `opaque`, and `full` is 11.9x larger.
+The per-action detail response includes the `params` schema and the final call shape. These resources remain available for meta-tools when `CAPABILITY_SURFACE=minimal` is enabled, while optional GitLab data resources, prompts, and workflow guides are omitted. Dynamic deployments can still use `gitlab_find_action` for inline schemas; meta-tool deployments can keep `META_PARAM_SCHEMA=opaque` and read `gitlab://tools/{id}` instead of inlining schemas in `tools/list`. As measured today, `compact` is about 8x the size of `opaque` and `full` about 17x; re-measure with `go run ./cmd/audit_tokens --compare-schemas`.
 
 ## Example usage
 
@@ -181,83 +181,80 @@ The per-action detail response includes the `params` schema and the final call s
 
 ## Key meta-tools reference
 
+The action lists below are a representative selection, not the full set. `gitlab://tools` lists every visible tool and executable entry for the active surface, and `gitlab://tools/{id}` returns the complete action list and JSON Schema for one of them.
+
 ### `gitlab_project`
 
-Manages project lifecycle and configuration.
+Project lifecycle and configuration, plus the labels, milestones, members, badges, boards, integrations and uploads scoped to a project.
 
-**Actions**: `list`, `get`, `create`, `update`, `delete`, `archive`, `unarchive`, `fork`, `star`, `unstar`, `transfer`, `languages`, `users`, `forks`, `starrers`, `hooks`, `create_hook`, `update_hook`, `delete_hook`
+**Actions**: `list`, `get`, `create`, `update`, `delete`, `restore`, `archive`, `unarchive`, `fork`, `star`, `unstar`, `transfer`, `languages`, `list_users`, `list_forks`, `list_starrers`, `hook_list`, `hook_add`, `hook_edit`, `hook_delete`, `label_*`, `milestone_*`, `members`, `member_*`, `badge_*`, `board_*`, `upload`
 
 ### `gitlab_issue`
 
-Full issue lifecycle management including labels, assignees, and state transitions.
+Full issue lifecycle, including notes, discussions, links and time tracking.
 
-**Actions**: `list`, `get`, `create`, `update`, `delete`, `close`, `reopen`, `subscribe`, `unsubscribe`, `move`, `clone`, `add_label`, `remove_label`, `set_assignees`, `add_time_spent`, `reset_time_spent`, `set_time_estimate`, `reset_time_estimate`
+**Actions**: `list`, `list_all`, `list_group`, `get`, `create`, `update`, `delete`, `move`, `reorder`, `subscribe`, `unsubscribe`, `create_todo`, `participants`, `time_estimate_set`, `spent_time_add`, `note_*`, `discussion_*`, `link_*`
 
 ### `gitlab_merge_request`
 
 Complete merge request workflow from creation to merge.
 
-**Actions**: `list`, `get`, `create`, `update`, `merge`, `close`, `reopen`, `rebase`, `approve`, `unapprove`, `subscribe`, `unsubscribe`, `add_label`, `remove_label`, `set_assignees`, `set_reviewers`, `add_time_spent`, `reset_time_spent`
+**Actions**: `list`, `list_global`, `list_group`, `get`, `create`, `update`, `merge`, `rebase`, `approve`, `unapprove`, `subscribe`, `unsubscribe`, `commits`, `pipelines`, `reviewers`, `participants`, `cancel_auto_merge`, `approval_*`, `time_estimate_set`, `spent_time_add`
+
+### `gitlab_mr_review`
+
+The merge request review surface: notes, threaded discussions, draft notes and diffs.
+
+**Actions**: `note_list`, `note_get`, `note_create`, `note_update`, `note_delete`, `discussion_list`, `discussion_get`, `discussion_create`, `discussion_reply`, `discussion_resolve`, `draft_note_*`, `changes_get`, `raw_diffs`, `diff_versions_list`, `diff_version_get`
 
 ### `gitlab_pipeline`
 
-Pipeline management and monitoring.
+Pipeline management and monitoring, plus schedules and trigger tokens.
 
-**Actions**: `list`, `get`, `create`, `cancel`, `retry`, `delete`, `variables`, `test_report`, `bridges`, `wait`
+**Actions**: `list`, `get`, `latest`, `create`, `cancel`, `retry`, `delete`, `variables`, `test_report`, `test_report_summary`, `update_metadata`, `wait`, `schedule_*`, `trigger_*`
 
 ### `gitlab_job`
 
 CI/CD job management.
 
-**Actions**: `list`, `get`, `play`, `cancel`, `retry`, `erase`, `trace`, `artifacts`, `download_artifact`, `delete_artifacts`, `delete_project_artifacts`, `wait`
+**Actions**: `list`, `list_project`, `get`, `play`, `cancel`, `retry`, `erase`, `trace`, `artifacts`, `download_artifacts`, `keep_artifacts`, `delete_artifacts`, `delete_project_artifacts`, `list_bridges`, `wait`
 
 ### `gitlab_branch`
 
-Branch operations.
+Branch operations and protection rules.
 
-**Actions**: `list`, `get`, `create`, `delete`, `merged`
+**Actions**: `list`, `get`, `create`, `delete`, `delete_merged`, `protect`, `unprotect`, `list_protected`, `get_protected`, `update_protected`
 
-### `gitlab_commit`
+### `gitlab_repository`
 
-Commit operations and history.
+Repository trees, files, commits, diffs and history. Commits have no dispatcher of their own — commit operations are actions here.
 
-**Actions**: `list`, `get`, `diff`, `refs`, `cherry_pick`, `revert`, `comments`, `create_comment`, `statuses`, `merge_requests`
+**Actions**: `tree`, `compare`, `merge_base`, `contributors`, `blob`, `raw_blob`, `archive`, `changelog_generate`, `changelog_add`, `file_get`, `file_create`, `file_update`, `file_delete`, `file_blame`, `file_raw`, `commit_list`, `commit_get`, `commit_diff`, `commit_refs`, `commit_cherry_pick`, `commit_revert`, `commit_comments`, `commit_comment_create`, `commit_statuses`, `commit_merge_requests`
 
 ### `gitlab_tag`
 
-Tag management.
+Tag management and protection rules.
 
-**Actions**: `list`, `get`, `create`, `delete`
+**Actions**: `list`, `get`, `create`, `delete`, `get_signature`, `protect`, `unprotect`, `list_protected`, `get_protected`
 
 ### `gitlab_release`
 
-Release lifecycle management.
+Release lifecycle management and release asset links.
 
-**Actions**: `list`, `get`, `create`, `update`, `delete`, `evidences`
+**Actions**: `list`, `get`, `get_latest`, `create`, `update`, `delete`, `link_list`, `link_get`, `link_create`, `link_create_batch`, `link_update`, `link_delete`
 
-### `gitlab_label`
+### Labels, milestones and members
 
-Label management for projects and groups.
+Labels, milestones and members have no dispatchers of their own. They are actions on the project and group dispatchers:
 
-**Actions**: `list`, `get`, `create`, `update`, `delete`, `subscribe`, `unsubscribe`
-
-### `gitlab_milestone`
-
-Milestone tracking.
-
-**Actions**: `list`, `get`, `create`, `update`, `delete`, `issues`, `merge_requests`
-
-### `gitlab_member`
-
-Project and group membership.
-
-**Actions**: `list`, `get`, `add`, `update`, `remove`, `all`
+- Through `gitlab_project`: `label_list`, `label_get`, `label_create`, `label_update`, `label_delete`, `label_subscribe`, `label_unsubscribe`, `label_promote`, `milestone_list`, `milestone_get`, `milestone_create`, `milestone_update`, `milestone_delete`, `milestone_issues`, `milestone_merge_requests`, `members`, `member_get`, `member_add`, `member_edit`, `member_delete`
+- Through `gitlab_group`: the same operations with a `group_` prefix — `group_label_*`, `group_milestone_*`, `group_member_*`
 
 ### `gitlab_group`
 
 Group and subgroup management.
 
-**Actions**: `list`, `get`, `create`, `update`, `delete`, `projects`, `subgroups`, `members`, `labels`, `milestones`, `hooks`
+**Actions**: `list`, `get`, `create`, `update`, `delete`, `restore`, `archive`, `unarchive`, `projects`, `subgroups`, `members`, `shared_with`, `invited_groups`, `transfer`, `transfer_project`, `share_with_group`, `unshare_from_group`, `hook_*`
 
 ### `gitlab_search`
 
@@ -267,25 +264,19 @@ Cross-resource search across your GitLab instance.
 
 ### `gitlab_user`
 
-User information and lookup.
+User information and lookup, plus the authenticated user's to-do list, which has no dispatcher of its own.
 
-**Actions**: `get`, `current`, `list`, `status`, `activities`
+**Actions**: `current`, `get`, `list`, `create`, `modify`, `get_status`, `set_status`, `ssh_keys`, `emails`, `contribution_events`, `block`, `unblock`, `ban`, `unban`, `activate`, `deactivate`, `todo_list`, `todo_mark_done`, `todo_mark_all_done`
 
 ### `gitlab_wiki`
 
 Wiki page management.
 
-**Actions**: `list`, `get`, `create`, `update`, `delete`
-
-### `gitlab_todo`
-
-Personal todo/task list.
-
-**Actions**: `list`, `mark_done`, `mark_all_done`
+**Actions**: `list`, `get`, `create`, `update`, `delete`, `upload_attachment`
 
 ## Enterprise mode
 
-The Enterprise/Premium catalog enables 16 additional meta-tools that expose GitLab Premium and Ultimate features. In stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`; in HTTP mode, use `--tier=premium` (or `--tier=ultimate`) to force the catalog, or omit it to allow CE/EE auto-detection per token+URL entry. The legacy boolean `GITLAB_ENTERPRISE=true` (stdio) and `--enterprise` (HTTP) flags are still honored as a fallback when `GITLAB_TIER`/`--tier` is unset, but are deprecated. Tier-gating also prunes per-field schema entries via `pruneSchemaFieldsByTier` (see `internal/tools/action_catalog.go`). Additionally, enterprise-only action routes are added to existing base meta-tools:
+The Enterprise/Premium catalog enables {stats.meta.self_managed_enterprise - stats.meta.base} additional meta-tools that expose GitLab Premium and Ultimate features. In stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`; in HTTP mode, use `--tier=premium` (or `--tier=ultimate`) to force the catalog, or omit it to allow CE/EE auto-detection per token+URL entry. The legacy boolean `GITLAB_ENTERPRISE=true` (stdio) and `--enterprise` (HTTP) flags are still honored as a fallback when `GITLAB_TIER`/`--tier` is unset, but are deprecated. Tier-gating also prunes per-field schema entries via `pruneSchemaFieldsByTier` (see `internal/tools/action_catalog.go`). Additionally, enterprise-only action routes are added to existing base meta-tools:
 
 - **Iterations** → routed through `gitlab_issue`
 - **Project mirrors** → routed through `gitlab_project`

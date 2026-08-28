@@ -214,6 +214,14 @@ type Config struct {
 	// wrong-origin identifiers behind any TLS-terminating proxy.
 	PublicURL string
 
+	// ResourceDocumentation is the RFC 9728 resource_documentation URL the
+	// protected-resource metadata advertises. Empty means this project's
+	// own OAuth setup guide. An operator running their own deployment
+	// points it at a page describing their own OAuth application, which is
+	// the only sanctioned way to lead a client to a client ID: RFC 9728
+	// defines no field for one.
+	ResourceDocumentation string
+
 	TrustedProxyHeader string // HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
 	// TrustedOrigins are absolute origins (scheme://host[:port]) allowed to
 	// make cross-origin browser requests. Empty by default: the server

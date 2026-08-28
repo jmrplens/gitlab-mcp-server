@@ -61,7 +61,24 @@ claude mcp add gitlab \
   https://mcp.jmrp.io/gitlab
 ```
 
-Cursor (`.cursor/mcp.json`) — VS Code (`.vscode/mcp.json`) is the same object with `servers` in place of `mcpServers`:
+VS Code (`.vscode/mcp.json`) — the same object with `servers` in place of `mcpServers`:
+
+```json
+{
+  "servers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.jmrp.io/gitlab",
+      "oauth": {
+        "clientId": "CLIENT_ID_FROM_THE_SERVER_CARD",
+        "scopes": ["api"]
+      }
+    }
+  }
+}
+```
+
+Cursor (`.cursor/mcp.json`) spells the same thing differently — `auth.CLIENT_ID`, not `oauth.clientId`:
 
 ```json
 {
@@ -69,8 +86,8 @@ Cursor (`.cursor/mcp.json`) — VS Code (`.vscode/mcp.json`) is the same object 
     "gitlab": {
       "type": "http",
       "url": "https://mcp.jmrp.io/gitlab",
-      "oauth": {
-        "clientId": "CLIENT_ID_FROM_THE_SERVER_CARD",
+      "auth": {
+        "CLIENT_ID": "CLIENT_ID_FROM_THE_SERVER_CARD",
         "scopes": ["api"]
       }
     }
@@ -350,7 +367,7 @@ Create or edit `.cursor/mcp.json` in your project root:
 
 ### HTTP OAuth Mode
 
-Cursor is a VS Code fork and uses the same MCP configuration format. Add to `.cursor/mcp.json`:
+Cursor is a VS Code fork, but its static OAuth credentials do **not** use VS Code's `oauth.clientId` key — they go under `auth`, with an upper-case field name. Add to `.cursor/mcp.json`:
 
 ```json
 {
@@ -358,8 +375,8 @@ Cursor is a VS Code fork and uses the same MCP configuration format. Add to `.cu
     "gitlab": {
       "type": "http",
       "url": "http://your-server:8080/mcp",
-      "oauth": {
-        "clientId": "YOUR_GITLAB_APPLICATION_ID",
+      "auth": {
+        "CLIENT_ID": "YOUR_GITLAB_APPLICATION_ID",
         "scopes": ["api"]
       }
     }
@@ -367,7 +384,9 @@ Cursor is a VS Code fork and uses the same MCP configuration format. Add to `.cu
 }
 ```
 
-> **Note**: Cursor does not currently support `${input:...}` variables. OAuth support may vary by Cursor version — verify in the Cursor changelog for your installed version.
+Set `scopes` explicitly. Cursor otherwise discovers them from the authorization server's own metadata, which for GitLab advertises every scope it supports rather than the one this server needs.
+
+> **Note**: an `oauth: { clientId }` block — the VS Code spelling — is silently ignored by Cursor. It then falls back to Dynamic Client Registration, and GitLab's DCR mints an `mcp`-scoped token that this server's identity check rejects, so the failure looks like a bad credential rather than a misplaced key. Cursor does not support `${input:...}` variables either; OAuth support varies by version, so check the Cursor changelog for the one you have.
 
 ---
 

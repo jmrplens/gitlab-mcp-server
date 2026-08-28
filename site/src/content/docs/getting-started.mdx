@@ -675,7 +675,7 @@ If you get connection errors, check:
 
 By default, the server runs in **dynamic find/execute mode** with `gitlab_find_action` and `gitlab_execute_action`. Set `TOOL_SURFACE=meta` to use **{stats.meta.base} domain-level meta-tools** ({stats.meta.self_managed_enterprise} on self-managed Enterprise/Premium, {stats.meta.gitlab_com} on GitLab.com Enterprise/Premium with Orbit) that cover the same functionality through consolidated domain dispatchers.
 
-For example, instead of separate `gitlab_list_issues`, `gitlab_create_issue`, `gitlab_close_issue` tools, there's a single `gitlab_issue` tool with an `action` parameter:
+For example, instead of separate `gitlab_issue_list`, `gitlab_issue_create` and `gitlab_issue_update` tools, there's a single `gitlab_issue` tool with an `action` parameter:
 
 ```json
 {
@@ -691,7 +691,7 @@ For example, instead of separate `gitlab_list_issues`, `gitlab_create_issue`, `g
 This is transparent to you — your AI client handles the routing automatically. You just ask naturally: _"create an issue for the login bug"_ and the LLM selects the right meta-tool and action.
 
 :::tip
-Meta-tools reduce token overhead by **96%** while preserving full functionality. See [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) for the complete reference.
+Meta-tools cut the visible tool count by more than 95%, and the tool-schema tokens by roughly three quarters, while preserving full functionality. See [Meta-tools](/gitlab-mcp-server/tools/meta-tools/) for the complete reference.
 
 For the smallest stable catalog, set `TOOL_SURFACE=dynamic`. The server exposes only `gitlab_find_action` and `gitlab_execute_action`, backed by the same canonical GitLab action catalog.
 

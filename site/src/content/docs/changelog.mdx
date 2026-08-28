@@ -8,7 +8,7 @@ faq:
   - q: "How does GitLab MCP Server version its releases?"
     a: "It follows semantic versioning. The patch number changes for fixes and internal work with no interface change. The minor number changes when tools, actions, resources or prompts are added, or when configuration gains an option — additive changes that leave existing calls working. The major number changes only for a breaking change to the MCP surface or to configuration, such as removing an action or changing a required parameter."
   - q: "What does each release publish?"
-    a: "Every release publishes signed binaries for Linux, macOS and Windows on both amd64 and arm64, a macOS universal binary, a container image on GHCR and Docker Hub, a Claude Desktop extension (.mcpb), and checksums with a detached GPG signature. Binary signatures can be verified with Cosign before you run anything."
+    a: "Every release publishes binaries for Linux, macOS and Windows on both amd64 and arm64, a macOS universal binary, a container image on GHCR and Docker Hub, a Claude Desktop extension (.mcpb), the npm packages, and checksums.txt. The checksums are signed keylessly with Cosign/Sigstore, every binary ships an SPDX SBOM, and the release artifacts carry SLSA build provenance attestations, so you can verify what you downloaded before running it."
   - q: "How do I get notified about new GitLab MCP Server releases?"
     a: "Three ways. Watch the repository on GitHub with the Releases filter; subscribe a feed reader to https://github.com/jmrplens/gitlab-mcp-server/releases.atom; or leave the built-in auto-update enabled, which checks GitHub Releases on startup and can apply the update for you. Set AUTO_UPDATE=check to be told about updates without installing them."
   - q: "How do I roll back to an earlier version?"
@@ -37,13 +37,16 @@ Additive releases are the common case. A minor bump can change how many tools yo
 
 ## What each release ships
 
-| Artifact                 | Detail                                                                  |
-| ------------------------ | ----------------------------------------------------------------------- |
-| Binaries                 | Linux, macOS and Windows; amd64 and arm64; plus a macOS universal build |
-| Container image          | GHCR and Docker Hub                                                     |
-| Claude Desktop extension | A one-click `.mcpb` package                                             |
-| Checksums                | `checksums.txt` with a detached GPG signature                           |
-| Signatures               | Cosign, verifiable before you run the binary                            |
+| Artifact                 | Detail                                                                            |
+| ------------------------ | --------------------------------------------------------------------------------- |
+| Binaries                 | Linux, macOS and Windows; amd64 and arm64; plus a macOS universal build           |
+| Container image          | GHCR and Docker Hub                                                               |
+| Claude Desktop extension | A one-click `.mcpb` package                                                       |
+| npm packages             | `@jmrp.io/gitlab-mcp-server` plus a per-platform binary package                   |
+| Checksums                | `checksums.txt` with the SHA-256 hash of every binary                             |
+| Signature                | `checksums.txt.sigstore.json` — a keyless Cosign/Sigstore bundle, no key to fetch |
+| SBOMs                    | One SPDX document per binary (`<asset>.sbom.json`)                                |
+| Provenance               | SLSA build attestations, verifiable with `gh attestation verify`                  |
 
 Verification steps are on the [security page](/gitlab-mcp-server/operations/security/). If verification fails, do not run the binary.
 

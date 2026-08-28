@@ -21,8 +21,23 @@ import (
 // accordingly. A deployment that never mutates lists only read_api, so no
 // user is asked to grant more than it can use.
 //
+// DefaultResourceDocumentation is the RFC 9728 resource_documentation value a
+// deployment publishes when the operator names no page of their own.
+const DefaultResourceDocumentation = "https://jmrp.io/docs/gitlab-mcp-server/guides/oauth-app-setup/"
+
+// documentationURL is the RFC 9728 resource_documentation field. It defaults
+// to this project's OAuth setup guide, but an operator running their own
+// deployment can point it at a page describing their own OAuth application —
+// its client ID and registered redirect URIs. That is as close as RFC 9728
+// permits a resource server to come to telling a client which client to be:
+// the specification defines no field carrying a client identifier, and §5.3
+// leaves establishing one "out of scope".
+//
 // The handler is registered at /.well-known/oauth-protected-resource.
-func NewProtectedResourceHandler(resourceURL string, gitlabURLs, supportedScopes []string) http.Handler {
+func NewProtectedResourceHandler(resourceURL string, gitlabURLs, supportedScopes []string, documentationURL string) http.Handler {
+	if documentationURL == "" {
+		documentationURL = DefaultResourceDocumentation
+	}
 	metadata := &oauthex.ProtectedResourceMetadata{
 		Resource: resourceURL,
 		// RFC 9728 defines authorization_servers as an array, so a
@@ -37,7 +52,7 @@ func NewProtectedResourceHandler(resourceURL string, gitlabURLs, supportedScopes
 		// directory or consent screen label this resource instead of
 		// showing only its URL.
 		ResourceName:          "GitLab MCP Server",
-		ResourceDocumentation: "https://jmrp.io/docs/gitlab-mcp-server/guides/oauth-app-setup/",
+		ResourceDocumentation: documentationURL,
 	}
 	return auth.ProtectedResourceMetadataHandler(metadata)
 }

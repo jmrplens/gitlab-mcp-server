@@ -676,7 +676,7 @@ Si obtienes errores de conexión, comprueba:
 
 Por defecto, el servidor funciona en **modo dinámico find/execute** con `gitlab_find_action` y `gitlab_execute_action`. Establece `TOOL_SURFACE=meta` para usar **{stats.meta.base} meta-herramientas por dominio** ({stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado, {stats.meta.gitlab_com} en GitLab.com Enterprise/Premium con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio.
 
-Por ejemplo, en lugar de herramientas separadas `gitlab_list_issues`, `gitlab_create_issue`, `gitlab_close_issue`, hay una única herramienta `gitlab_issue` con un parámetro `action`:
+Por ejemplo, en lugar de herramientas separadas `gitlab_issue_list`, `gitlab_issue_create` y `gitlab_issue_update`, hay una única herramienta `gitlab_issue` con un parámetro `action`:
 
 ```json
 {
@@ -692,7 +692,7 @@ Por ejemplo, en lugar de herramientas separadas `gitlab_list_issues`, `gitlab_cr
 Esto es transparente para ti — tu cliente de IA maneja el enrutamiento automáticamente. Solo pregunta de forma natural: _"crea un issue para el bug del login"_ y el LLM selecciona la meta-herramienta y acción correctas.
 
 :::tip
-Las meta-herramientas reducen el overhead de tokens en un **96%** mientras preservan la funcionalidad completa. Consulta [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) para la referencia completa.
+Las meta-herramientas reducen el número de herramientas visibles en más de un 95%, y el coste en tokens de los esquemas en torno a tres cuartas partes, sin perder funcionalidad. Consulta [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) para la referencia completa.
 
 Para el catálogo visible estable más pequeño, establece `TOOL_SURFACE=dynamic`. El servidor expone solo `gitlab_find_action` y `gitlab_execute_action`, respaldadas por el mismo catálogo canónico de acciones de GitLab.
 

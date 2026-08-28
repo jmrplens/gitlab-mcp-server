@@ -57,7 +57,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--http-addr`              | `:8080`                      | Dirección de escucha: `host:puerto`, o una ruta del sistema de ficheros para escuchar en un socket unix. El socket es local a la máquina, así que un proxy o cliente del mismo host conecta a través de él y el tramo TCP entre ambos desaparece en vez de cifrarse; los clientes remotos siguen llegando al servidor a través de ese proxy |
 | `--http-socket-mode`       | `0660`                       | Modo de permisos en octal para un socket unix indicado en `--http-addr`; por defecto pueden conectar el propietario y el grupo, nadie más                                                                                                                                                                                                   |
 | `--tls-cert` / `--tls-key` | _(vacío)_                    | Certificado y clave PEM. Sirve HTTPS en el propio listener, para un proxy que no comparte máquina. Ambos o ninguno                                                                                                                                                                                                                          |
-| `--gitlab-url`             | _(opcional)_                 | URL fija de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición                                                                                                                                                                                                                                                     |
+| `--gitlab-url`             | _(opcional)_                 | URL de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición. **Repetible** (o separada por comas) para publicar varias instancias: la primera es la predeterminada, todas se listan en el campo `authorization_servers` de RFC 9728 y `GITLAB-URL` pasa a elegir entre ellas                                         |
 | `--skip-tls-verify`        | `false`                      | Omitir verificación de certificados TLS para certificados autofirmados                                                                                                                                                                                                                                                                      |
 | `--tool-surface`           | `dynamic`                    | Selector canónico del catálogo; consulta [Opciones de superficie de herramientas y capacidades](#opciones-de-superficie-de-herramientas-y-capacidades)                                                                                                                                                                                      |
 | `--meta-tools`             | _(sin definir)_              | Flag de compatibilidad deprecado. Usa `--tool-surface=individual` en lugar de `--meta-tools=false`                                                                                                                                                                                                                                          |
@@ -85,7 +85,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--max-request-body-bytes` | `0`                          | Tamaño máximo del cuerpo de las peticiones HTTP streamable en bytes; `0` usa el valor por defecto del SDK (4 MiB); los valores negativos se rechazan al arrancar. Los cuerpos que lo superan se rechazan con `413`                                                                                                                          |
 
 :::note
-`--gitlab-url` es opcional. Cuando se omite, cada cliente debe proporcionar la cabecera `GITLAB-URL`. Cuando se establece, es autoritativa: cualquier cabecera `GITLAB-URL` enviada por el cliente se ignora, se usa la URL configurada y la petición registra `ignored_options` para ese cliente.
+Lo que significa `GITLAB-URL` depende de cuántas instancias publique el despliegue. **Ninguna**: elige el cliente, con `https://gitlab.com` como último recurso. **Una**: es autoritativa, la cabecera se ignora y se registra en `ignored_options`. **Varias**: la cabecera elige entre las publicadas, y un valor que nombre cualquier otra cosa se **rechaza** —`403` en modo OAuth, `400` en legacy—, nunca se responde en silencio con la instancia de otro. En modo OAuth todas las instancias publicadas deben ser `https`, porque el token bearer se reenvía a la que haya elegido la petición.
 :::
 
 ### Opciones de superficie de herramientas y capacidades
@@ -118,7 +118,7 @@ Cuando el servidor arranca sin `--gitlab-url`, los clientes deben especificar a 
 GITLAB-URL: https://gitlab.ejemplo.com
 ```
 
-Si `--gitlab-url` se estableció al iniciar, esta cabecera se ignora y se registra. Si `--gitlab-url` no se estableció y la cabecera se omite, la solicitud se rechaza.
+Si el despliegue fija exactamente una instancia, esta cabecera se ignora y se registra. Si publica varias, la cabecera elige una de ellas y cualquier otro valor se rechaza. Si no fija ninguna y la cabecera se omite, se usa `https://gitlab.com`.
 
 ### Cabecera private-token (recomendada)
 
@@ -167,7 +167,7 @@ GitLab restringe los clientes OAuth registrados dinámicamente al scope `mcp`, q
   "servers": {
     "gitlab": {
       "type": "http",
-      "url": "http://tu-servidor:8080/mcp",
+      "url": "https://mcp.example.com/mcp",
       "oauth": {
         "clientId": "TU_APPLICATION_ID_DE_GITLAB",
         "scopes": ["api"]
@@ -349,7 +349,7 @@ Añadir a `.vscode/mcp.json`:
   "servers": {
     "gitlab": {
       "type": "http",
-      "url": "http://tu-servidor:8080/mcp",
+      "url": "https://mcp.example.com/mcp",
       "headers": {
         "PRIVATE-TOKEN": "glpat-tu-token"
       }
@@ -365,7 +365,7 @@ Añadir a `.vscode/mcp.json`:
 {
   "mcpServers": {
     "gitlab": {
-      "url": "http://tu-servidor:8080/mcp",
+      "url": "https://mcp.example.com/mcp",
       "headers": {
         "PRIVATE-TOKEN": "glpat-tu-token"
       }

@@ -40,6 +40,8 @@ jobs:
         run: make check-llms
       - name: Check LobeHub manifest
         run: make check-lhm-manifest
+      - name: Check documented tool names exist
+        run: make check-doc-tool-names
       - name: Check MCP Registry manifest
         run: make check-server-json
       # Downloads every declared artifact, so it runs on main only. A pull

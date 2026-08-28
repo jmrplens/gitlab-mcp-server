@@ -158,8 +158,10 @@ Two properties are deliberate:
 ## TLS
 
 - All GitLab API communication uses HTTPS by default
-- Self-signed certificates: set `GITLAB_SKIP_TLS_VERIFY=true` (development only)
-- Production deployments should use valid TLS certificates
+- A self-signed certificate **on the GitLab side**: set `GITLAB_SKIP_TLS_VERIFY=true` (development only)
+- **Serving HTTPS**: in HTTP mode, `--tls-cert` and `--tls-key` terminate TLS on the listener itself. It is both or neither — a certificate without its key is a deployment that thinks it is encrypting and is not, so the server refuses to start. The pair is loaded at startup too, which turns a wrong path into a startup error naming the file instead of a handshake failure nobody sees until a client reports it. TLS 1.2 is the floor, and 1.3 is used with any client that offers it
+- **Or remove the hop instead of encrypting it**: for a reverse proxy on the same machine, `--http-addr=/run/gitlab-mcp.sock` binds a unix socket rather than a TCP port, with `--http-socket-mode` (default `0660`, owner and group only) deciding who may connect. There is no network segment left to read and no certificate to issue or rotate
+- Production deployments should use valid TLS certificates, whether this server presents them or a proxy in front of it does
 
 ## Input Validation
 
@@ -211,12 +213,12 @@ Communication occurs over stdin/stdout within the local process. No network expo
 
 When running with `--http`:
 
-- Binds to `localhost` by default — not exposed to the network
-- No built-in authentication on the HTTP endpoint
-- For production use, place behind a reverse proxy with proper TLS and auth
+- **Binds every interface by default** — `--http-addr` defaults to `:8080`, which is all interfaces, not loopback. Pass `--http-addr=localhost:8080` to keep the listener host-local, or a filesystem path (`--http-addr=/run/gitlab-mcp.sock`, permissions from `--http-socket-mode`, default `0660`) to remove the network hop to a same-machine proxy instead of encrypting it
+- **Authentication is per request, not per deployment** — no credential is configured at startup. In legacy mode each client sends its own GitLab token (`PRIVATE-TOKEN` or `Authorization: Bearer`) and the server's only check is that GitLab accepts it; with `--auth-mode=oauth` every Bearer token is verified against GitLab before the request reaches the MCP handler
+- **TLS can terminate here** — `--tls-cert` and `--tls-key` serve HTTPS on the listener itself, so a reverse proxy is a deployment choice rather than the only way to encrypt. A proxy remains useful for hostname routing, shared certificates and edge caching
 - **Cross-origin request protection** — HTTP mode applies middleware created with the Go standard library `net/http` function `http.NewCrossOriginProtection().Handler`. Browser-originated non-safe cross-site requests are rejected before MCP dispatch, while non-browser MCP clients without `Origin` or `Sec-Fetch-Site` headers continue to work. This satisfies the 2026-07-28 streamable-HTTP requirement that servers validate the `Origin` header against DNS rebinding. Use `--trusted-origins` to allow specific browser origins — see below
 - **Host validation** — When listening on a specific local host, requests with unexpected `Host` headers are rejected to mitigate DNS rebinding attacks. Binding to all interfaces (`0.0.0.0` or `::`) leaves Host validation to the reverse proxy deployment
-- **`GITLAB-URL` header validation** — In multi-instance mode, the server validates client-provided `GITLAB-URL` values and rejects malformed URLs with HTTP 400. When `--gitlab-url` is configured, it is authoritative and any client-provided `GITLAB-URL` value is ignored and logged
+- **`GITLAB-URL` header validation** — What the header may do follows how many instances the deployment published. With none, it selects the instance per request and a malformed value is rejected with HTTP 400. With exactly one (`--gitlab-url` passed once), that instance is authoritative and the header is ignored and logged. With several (`--gitlab-url` repeated, or one comma-separated value), the header selects **among them**, and a value naming anything else is refused — `403` in OAuth mode, `400` in legacy mode — rather than silently served the first instance. The allow-list is what makes a per-request instance safe under OAuth: the bearer token is verified against the instance the request selected, so a free-form header would let a caller name a host of their own and be handed a live credential
 - **Rate limiting** — A per-IP authentication failure rate limiter (10 failures/min) protects against brute-force token guessing. When running behind a reverse proxy, configure `--trusted-proxy-header` (e.g. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) so the rate limiter sees real client IPs. Only enable this flag when the server is reachable exclusively through a trusted proxy that overwrites or strips incoming copies of the header — otherwise clients can spoof it and bypass per-IP rate limiting. For multi-value headers like `X-Forwarded-For` the server uses the rightmost entry (the hop appended by the trusted proxy) to avoid trusting client-supplied values
 
 ### OAuth Mode (`--auth-mode=oauth`)
@@ -275,6 +277,7 @@ The server automatically detects the scopes of the Personal Access Token (PAT) a
 - **Graceful degradation**: If scope detection fails (e.g. older GitLab versions), all tools remain registered
 - **Opt-out**: Set `GITLAB_IGNORE_SCOPES=true` or `--ignore-scopes` to skip detection
 - **Scope map**: Defined in `internal/tools/scope_filter.go` (`MetaToolScopes`)
+- **HTTP mode narrows further, in both auth modes**: a pool entry whose token carries no write scope is served the read-only catalog, exactly as if `--read-only` had been set for that client. The narrowing is per pool entry, and an entry is per token, so one client's `read_api` token cannot narrow another client's `api` token. Unknown scopes (detection failed, or `--ignore-scopes`) count as write-capable — a wrong "no" would silently remove tools, while a wrong "yes" simply surfaces as GitLab's own 403 on the call that tried to write
 
 Tools requiring `admin_mode` (e.g. `gitlab_admin`, `gitlab_geo`, `gitlab_storage_move`) are filtered when the token lacks that scope.
 
@@ -413,7 +416,7 @@ When the bucket is empty the middleware short-circuits the call and returns a
 `CallToolResult` with `IsError: true` and a human-readable hint:
 
 ```text
-Rate limit exceeded for `gitlab_list_merge_requests`. Wait a moment and retry, or raise --rate-limit-rps if this is sustained traffic.
+Rate limit exceeded for `gitlab_mr_list`. Wait a moment and retry, or raise --rate-limit-rps if this is sustained traffic.
 ```
 
 The error is returned as a tool result (not a JSON-RPC error) so the LLM can

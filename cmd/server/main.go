@@ -166,38 +166,39 @@ type httpConfig struct {
 	// setFlags names the flags the operator passed explicitly, which is what
 	// separates "chose the default" from "did not choose", and therefore
 	// whether the environment may supply the value instead.
-	setFlags            map[string]bool
-	toolSurface         string
-	capabilitySurface   string
-	tier                string
-	tierSet             bool
-	readOnly            bool
-	safeMode            bool
-	embeddedResources   bool
-	excludeTools        string
-	ignoreScopes        bool
-	maxHTTPClients      int
-	sessionTimeout      time.Duration
-	autoUpdate          string
-	autoUpdateRepo      string
-	autoUpdateInterval  time.Duration
-	autoUpdateTimeout   time.Duration
-	revalidateInterval  time.Duration
-	poolIdleTimeout     time.Duration
-	authMode            string
-	publicURL           string
-	oauthCacheTTL       time.Duration
-	trustedProxyHeader  string
-	trustedOrigins      string
-	rateLimitRPS        float64
-	rateLimitBurst      int
-	metaParamSchema     string
-	httpIdleTimeout     time.Duration
-	stateless           bool
-	jsonResponse        bool
-	maxRequestBodyBytes int64
-	tlsCert             string
-	tlsKey              string
+	setFlags              map[string]bool
+	toolSurface           string
+	capabilitySurface     string
+	tier                  string
+	tierSet               bool
+	readOnly              bool
+	safeMode              bool
+	embeddedResources     bool
+	excludeTools          string
+	ignoreScopes          bool
+	maxHTTPClients        int
+	sessionTimeout        time.Duration
+	autoUpdate            string
+	autoUpdateRepo        string
+	autoUpdateInterval    time.Duration
+	autoUpdateTimeout     time.Duration
+	revalidateInterval    time.Duration
+	poolIdleTimeout       time.Duration
+	authMode              string
+	publicURL             string
+	resourceDocumentation string
+	oauthCacheTTL         time.Duration
+	trustedProxyHeader    string
+	trustedOrigins        string
+	rateLimitRPS          float64
+	rateLimitBurst        int
+	metaParamSchema       string
+	httpIdleTimeout       time.Duration
+	stateless             bool
+	jsonResponse          bool
+	maxRequestBodyBytes   int64
+	tlsCert               string
+	tlsKey                string
 	// socketMode is the raw --http-socket-mode text; socketModeParsed is
 	// what runHTTP resolved it to, so the octal is rejected at startup with
 	// the flag's name rather than deep inside the listener.
@@ -659,42 +660,43 @@ func resolveHTTPTier(hcfg *httpConfig) (edition.Tier, bool, error) {
 
 func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, tier edition.Tier, tierExplicit bool) *config.Config {
 	return &config.Config{
-		GitLabURL:           hcfg.gitlabURL,
-		GitLabURLs:          hcfg.gitlabURLs,
-		SkipTLSVerify:       hcfg.skipTLSVerify,
-		MetaTools:           metaTools,
-		ToolSurface:         toolSurface,
-		CapabilitySurface:   hcfg.capabilitySurface,
-		Tier:                tier,
-		TierExplicit:        tierExplicit,
-		ReadOnly:            hcfg.readOnly,
-		SafeMode:            hcfg.safeMode,
-		EmbeddedResources:   hcfg.embeddedResources,
-		ExcludeTools:        config.ParseCSV(hcfg.excludeTools),
-		IgnoreScopes:        hcfg.ignoreScopes,
-		MaxHTTPClients:      hcfg.maxHTTPClients,
-		SessionTimeout:      hcfg.sessionTimeout,
-		RevalidateInterval:  hcfg.revalidateInterval,
-		PoolIdleTimeout:     hcfg.poolIdleTimeout,
-		Stateless:           hcfg.stateless,
-		JSONResponse:        hcfg.jsonResponse,
-		MaxRequestBodyBytes: hcfg.maxRequestBodyBytes,
-		UploadMaxFileSize:   config.DefaultMaxFileSize,
-		AutoUpdate:          hcfg.autoUpdate,
-		AutoUpdateRepo:      hcfg.autoUpdateRepo,
-		AutoUpdateInterval:  hcfg.autoUpdateInterval,
-		AutoUpdateTimeout:   hcfg.autoUpdateTimeout,
-		AuthMode:            hcfg.authMode,
-		PublicURL:           hcfg.publicURL,
-		OAuthCacheTTL:       hcfg.oauthCacheTTL,
-		TrustedProxyHeader:  hcfg.trustedProxyHeader,
-		TrustedOrigins:      buildTrustedOrigins(hcfg.trustedOrigins, hcfg.publicURL),
-		RateLimitRPS:        hcfg.rateLimitRPS,
-		RateLimitBurst:      hcfg.rateLimitBurst,
-		MetaParamSchema:     hcfg.metaParamSchema,
-		TLSCertFile:         hcfg.tlsCert,
-		TLSKeyFile:          hcfg.tlsKey,
-		SocketMode:          hcfg.socketModeParsed,
+		GitLabURL:             hcfg.gitlabURL,
+		GitLabURLs:            hcfg.gitlabURLs,
+		SkipTLSVerify:         hcfg.skipTLSVerify,
+		MetaTools:             metaTools,
+		ToolSurface:           toolSurface,
+		CapabilitySurface:     hcfg.capabilitySurface,
+		Tier:                  tier,
+		TierExplicit:          tierExplicit,
+		ReadOnly:              hcfg.readOnly,
+		SafeMode:              hcfg.safeMode,
+		EmbeddedResources:     hcfg.embeddedResources,
+		ExcludeTools:          config.ParseCSV(hcfg.excludeTools),
+		IgnoreScopes:          hcfg.ignoreScopes,
+		MaxHTTPClients:        hcfg.maxHTTPClients,
+		SessionTimeout:        hcfg.sessionTimeout,
+		RevalidateInterval:    hcfg.revalidateInterval,
+		PoolIdleTimeout:       hcfg.poolIdleTimeout,
+		Stateless:             hcfg.stateless,
+		JSONResponse:          hcfg.jsonResponse,
+		MaxRequestBodyBytes:   hcfg.maxRequestBodyBytes,
+		UploadMaxFileSize:     config.DefaultMaxFileSize,
+		AutoUpdate:            hcfg.autoUpdate,
+		AutoUpdateRepo:        hcfg.autoUpdateRepo,
+		AutoUpdateInterval:    hcfg.autoUpdateInterval,
+		AutoUpdateTimeout:     hcfg.autoUpdateTimeout,
+		AuthMode:              hcfg.authMode,
+		PublicURL:             hcfg.publicURL,
+		ResourceDocumentation: hcfg.resourceDocumentation,
+		OAuthCacheTTL:         hcfg.oauthCacheTTL,
+		TrustedProxyHeader:    hcfg.trustedProxyHeader,
+		TrustedOrigins:        buildTrustedOrigins(hcfg.trustedOrigins, hcfg.publicURL),
+		RateLimitRPS:          hcfg.rateLimitRPS,
+		RateLimitBurst:        hcfg.rateLimitBurst,
+		MetaParamSchema:       hcfg.metaParamSchema,
+		TLSCertFile:           hcfg.tlsCert,
+		TLSKeyFile:            hcfg.tlsKey,
+		SocketMode:            hcfg.socketModeParsed,
 	}
 }
 
@@ -1729,7 +1731,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		advertisedScope: requiredScope,
 	}
 	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{oauth.MinimumScope}})
-	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.InstanceURLs(), oauth.SupportedScopes(cfg.ReadOnly, cfg.SafeMode))
+	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.InstanceURLs(), oauth.SupportedScopes(cfg.ReadOnly, cfg.SafeMode), cfg.ResourceDocumentation)
 	// Both derivations of RFC 9728 §3 resolve: the path-less form and the
 	// path-inserted form a client computes from a resource identifier that
 	// carries a path. Mounted without a method restriction so the SDK

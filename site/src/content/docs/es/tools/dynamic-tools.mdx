@@ -158,7 +158,7 @@ El pipeline de ranking:
 
 La recuperación fuzzy está limitada a propósito: permite hasta dos errores de edición en tokens de al menos tres caracteres y suprime coincidencias tipográficas débiles para acciones destructivas. Eso ayuda con prompts como `merje requesy list`, mientras que términos cortos como `mr` siguen apoyándose en alias y sinónimos en lugar de coincidencias tipográficas demasiado permisivas.
 
-Find acepta `explain: true` cuando el asistente necesita razones deterministas de puntuación. La respuesta por defecto sigue siendo compacta. Activar `explain` no cambia el ranking; solo añade metadatos de razonamiento. Las búsquedas sin coincidencias devuelven una lista pequeña de sugerencias, y los flujos curados pueden devolver `related_actions`, como `repository.compare` antes de `analyze.release_notes`.
+Find acepta `explain: true` cuando el asistente necesita razones deterministas de puntuación. La respuesta por defecto sigue siendo compacta. Activar `explain` no cambia el ranking; solo añade metadatos de razonamiento. Las búsquedas sin coincidencias devuelven una lista pequeña de sugerencias, y los flujos curados pueden devolver `related_actions`, como `tag.get` junto a `release.get`.
 
 Algunos límites útiles están fijados dentro del servidor en vez de configurarse por entorno:
 

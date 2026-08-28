@@ -157,7 +157,7 @@ Organize and measure work with labels and milestones. Create scoped labels to ca
 **Prompt**: "Create a scoped label 'priority::critical' with red color in the backend project"
 
 ```text
-gitlab_label → action: create, project_id: "my-group/backend",
+gitlab_project → action: label_create, project_id: "my-group/backend",
   name: "priority::critical", color: "#CC0000"
 ```
 
@@ -166,7 +166,7 @@ gitlab_label → action: create, project_id: "my-group/backend",
 **Prompt**: "Show me the progress of milestone Sprint 15"
 
 ```text
-gitlab_milestone → action: get, project_id: "my-group/backend", milestone_id: 15
+gitlab_project → action: milestone_get, project_id: "my-group/backend", milestone_id: 15
 ```
 
 Returns: completion percentage, open/closed issue counts, start date, due date, and remaining days.

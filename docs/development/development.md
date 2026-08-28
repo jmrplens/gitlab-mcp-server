@@ -451,7 +451,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
             Idempotent:   false,
             OwnerPackage: "branches",
             IndividualTool: toolutil.IndividualToolSpec{
-                Name:        "gitlab_create_branch",
+                Name:        "gitlab_branch_create",
                 Title:       "Create branch",
                 Description: "Create a new branch in a GitLab project.",
             },

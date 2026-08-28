@@ -157,7 +157,7 @@ Organiza y mide el trabajo con etiquetas y milestones. Crea etiquetas con ámbit
 **Prompt**: "Crea una etiqueta con ámbito 'priority::critical' con color rojo en el proyecto backend"
 
 ```text
-gitlab_label → action: create, project_id: "my-group/backend",
+gitlab_project → action: label_create, project_id: "my-group/backend",
   name: "priority::critical", color: "#CC0000"
 ```
 
@@ -166,7 +166,7 @@ gitlab_label → action: create, project_id: "my-group/backend",
 **Prompt**: "Muéstrame el progreso del milestone Sprint 15"
 
 ```text
-gitlab_milestone → action: get, project_id: "my-group/backend", milestone_id: 15
+gitlab_project → action: milestone_get, project_id: "my-group/backend", milestone_id: 15
 ```
 
 Devuelve: porcentaje de completado, conteo de issues abiertos/cerrados, fecha de inicio, fecha límite y días restantes.

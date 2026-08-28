@@ -47,7 +47,7 @@ This directory is a domain-oriented reference, not a one-heading-per-runtime-too
 | Analytics & Compliance                |    12 | `gitlab_group` (enterprise routes), `gitlab_compliance_policy`, `gitlab_project_alias` | [analytics-compliance.md](analytics-compliance.md)       |
 | Geo & Model Registry                  |     9 | `gitlab_geo`, `gitlab_model_registry`                                                  | [geo-model-registry.md](geo-model-registry.md)           |
 | Repository Storage Moves              |    18 | `gitlab_storage_move`                                                                  | [storage-moves.md](storage-moves.md)                     |
-| Epics                                 |    23 | `gitlab_epic`                                                                          | [epics.md](epics.md)                                     |
+| Epics                                 |    23 | `gitlab_group` (enterprise routes)                                                     | [epics.md](epics.md)                                     |
 | Vulnerabilities                       |     8 | `gitlab_vulnerability`                                                                 | [vulnerabilities.md](vulnerabilities.md)                 |
 | Security Attributes                   |     5 | `gitlab_security_attribute`                                                            | [security-attributes.md](security-attributes.md)         |
 | Security Categories                   |     3 | `gitlab_security_category`                                                             | [security-categories.md](security-categories.md)         |

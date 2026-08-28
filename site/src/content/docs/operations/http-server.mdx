@@ -57,7 +57,7 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--http-addr`              | `:8080`                      | Listen address: `host:port`, or a filesystem path to bind a unix socket instead. The socket is host-local, so a same-host proxy or client connects through it and the TCP hop between them disappears rather than being encrypted; remote clients still reach the server through that proxy |
 | `--http-socket-mode`       | `0660`                       | Octal permission mode for a unix socket named by `--http-addr`; the default lets owner and group connect and nobody else                                                                                                                                                                    |
 | `--tls-cert` / `--tls-key` | _(empty)_                    | PEM certificate and key. Serves HTTPS on the listener itself, for a proxy that does not share the machine. Both or neither                                                                                                                                                                  |
-| `--gitlab-url`             | _(optional)_                 | Fixed GitLab instance URL. Omit to require `GITLAB-URL` per request                                                                                                                                                                                                                         |
+| `--gitlab-url`             | _(optional)_                 | GitLab instance URL. Omit to require `GITLAB-URL` per request. **Repeatable** (or comma-separated) to publish several instances: the first is the default, all are listed in the RFC 9728 `authorization_servers` field, and `GITLAB-URL` then selects among them                           |
 | `--skip-tls-verify`        | `false`                      | Skip TLS certificate verification for self-signed certs                                                                                                                                                                                                                                     |
 | `--tool-surface`           | `dynamic`                    | Canonical tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                                                                                                            |
 | `--meta-tools`             | _(unset)_                    | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                                                                                                                              |
@@ -85,7 +85,7 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--max-request-body-bytes` | `0`                          | Maximum streamable HTTP request body size in bytes; `0` uses the SDK default (4 MiB); negative values are rejected at startup. Oversized bodies are rejected with `413`                                                                                                                     |
 
 :::note
-`--gitlab-url` is optional. When omitted, each client must provide the `GITLAB-URL` header. When set, it is authoritative: any client-provided `GITLAB-URL` header is ignored, the configured URL is used, and the request logs `ignored_options` for that client.
+What `GITLAB-URL` means depends on how many instances the deployment publishes. **None**: the client chooses, falling back to `https://gitlab.com`. **One**: it is authoritative, the header is ignored and logged in `ignored_options`. **Several**: the header selects among the published instances, and a value naming anything else is **refused** — `403` in OAuth mode, `400` in legacy — never silently answered with someone else's instance. In OAuth mode every published instance must be `https`, because the bearer token is forwarded to whichever one the request selected.
 :::
 
 ### Tool and capability surface options
@@ -118,7 +118,7 @@ When the server starts without `--gitlab-url`, clients must specify which GitLab
 GITLAB-URL: https://gitlab.example.com
 ```
 
-If `--gitlab-url` was set at startup, this header is ignored and logged. If `--gitlab-url` was not set and the header is omitted, the request is rejected.
+If the deployment pins exactly one instance, this header is ignored and logged. If it publishes several, the header picks one of them and any other value is refused. If it pins none and the header is omitted, `https://gitlab.com` is used.
 
 ### Private-token header (recommended)
 

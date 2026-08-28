@@ -67,6 +67,9 @@ var allowed = map[string]string{
 	"gitlab_list_prompts":   "MCP prompts/list in evaluation docs, not a tool",
 	"gitlab_list_resources": "MCP resources/list in evaluation docs, not a tool",
 	"gitlab_read_resource":  "MCP resources/read in evaluation docs, not a tool",
+	"gitlab_ci_ymls":        "a GitLab template type and API path segment (templates/gitlab_ci_ymls)",
+	"gitlab_duo":            "a docs.gitlab.com URL path segment (user/gitlab_duo/...)",
+	"gitlab_status":         "a JSON struct field (json:\"gitlab_status\") quoted in error-handling docs",
 }
 
 // allowedPrefixes exempts whole families that exist only on a live GitLab.com

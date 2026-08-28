@@ -60,6 +60,20 @@ The `AUTO_UPDATE` variable controls behaviour:
 
 Accepted aliases: `1`/`yes` for true, `0`/`no` for false. The value is case-insensitive.
 
+### What your install method already decided
+
+`true` is the default of the binary. Most install paths change that in practice, because a package manager already owns the file on disk and a self-replacement would desynchronize what it believes is installed:
+
+| Install method                         | Effective `AUTO_UPDATE`                                                                                                  | Who updates the binary  |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
+| Release binary you downloaded yourself | `true`                                                                                                                   | The server itself       |
+| `npx @jmrp.io/gitlab-mcp-server`       | `false` — the launcher sets it unless you set it yourself                                                                | npm                     |
+| Homebrew (`jmrplens/tap`)              | `true`, but the formula's caveats ask you to set `false`                                                                 | `brew upgrade`          |
+| Claude Desktop `.mcpb` bundle          | `false`, pinned in the manifest                                                                                          | Reinstall the extension |
+| Container image                        | `true`, but the update cannot be applied: the container runs as a non-root user and cannot replace the root-owned binary | Pull a new image tag    |
+
+Setting `AUTO_UPDATE` explicitly always wins, including under the npm launcher. When updates are off, the `gitlab_server_check_update` and `gitlab_server_apply_update` tools are not registered at all.
+
 ## Transport-Specific Behaviour
 
 ### Stdio Mode
@@ -309,7 +323,7 @@ The Makefile `release` target generates the binaries and checksum file automatic
 
 ## Security Considerations
 
-- **Token scope**: Auto-update uses a dedicated built-in token (injected at build time), separate from the user's `GITLAB_TOKEN`. The built-in token is a GitHub token that needs read access to releases. No additional permissions are required.
+- **No credential is used, and none is built in**: auto-update talks to the public GitHub Releases API unauthenticated. It never sees `GITLAB_TOKEN`, and no token is baked into the binary. If the process environment defines `GITHUB_TOKEN`, the update client uses it — the supported way to lift GitHub's 60 requests/hour anonymous limit on a shared egress IP or a busy CI runner. Leaving it unset changes nothing else.
 - **TLS verification**: Auto-update always uses TLS verification (hardcoded `SkipTLS: false`) since it connects to GitHub (`github.com`) with a valid certificate. The user's `GITLAB_SKIP_TLS_VERIFY` setting does not affect auto-update.
 - **Binary integrity**: Each downloaded binary is validated against the `checksums.txt` file before replacement. If the checksum does not match, the update is rejected.
 - **Rename-and-rollback**: The old binary is renamed to `.old` before replacement. If the new binary fails to be placed, the `.old` is renamed back to the original path as a rollback.
@@ -317,18 +331,18 @@ The Makefile `release` target generates the binaries and checksum file automatic
 
 ## Troubleshooting
 
-| Symptom                                                                     | Cause                                                 | Solution                                                                               |
-| --------------------------------------------------------------------------- | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `autoupdate: current version is required (binary built without -ldflags?)`  | Binary built without version injection                | Build with `make build` or add `-ldflags "-X main.version=1.2.0"`                      |
-| `autoupdate: repository is required`                                        | `AUTO_UPDATE_REPO` is empty                           | Set `AUTO_UPDATE_REPO` or use the default                                              |
-| `autoupdate: creating GitHub source`                                        | Network error reaching GitHub API                     | Verify network connectivity to `github.com`                                            |
-| `autoupdate: detecting latest release`                                      | No releases in repository, or token lacks permissions | Create a release or check token permissions                                            |
-| `autoupdate: startup background check failed`                               | Network timeout (`AUTO_UPDATE_TIMEOUT`, default 60s)  | Check network connectivity or increase `AUTO_UPDATE_TIMEOUT`; the server keeps running |
-| `autoupdate: could not initialize periodic updater`                         | Missing required config in HTTP mode                  | Verify `--auto-update-repo` flag and network connectivity                              |
-| Update detected but not applied                                             | Mode is `check`                                       | Set `AUTO_UPDATE=true` to enable automatic application                                 |
-| Server still runs old version after background update                       | Binary replaced but current process keeps running     | Restart the server process to use the new binary                                       |
-| `autoupdate: exec-self failed`                                              | `syscall.Exec` failed on Unix                         | Server continues with old code; restart manually                                       |
-| `autoupdate: skipping startup update check (just re-executed after update)` | Normal: re-exec guard preventing loop                 | No action needed                                                                       |
+| Symptom                                                                     | Cause                                                         | Solution                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `autoupdate: current version is required (binary built without -ldflags?)`  | Binary built without version injection                        | Build with `make build` or add `-ldflags "-X main.version=1.2.0"`                                                                                                                                                  |
+| `autoupdate: repository is required`                                        | `AUTO_UPDATE_REPO` is empty                                   | Set `AUTO_UPDATE_REPO` or use the default                                                                                                                                                                          |
+| `autoupdate: creating GitHub source`                                        | Network error reaching GitHub API                             | Verify network connectivity to `github.com`                                                                                                                                                                        |
+| `autoupdate: detecting latest release`                                      | No matching release, or GitHub's anonymous rate limit was hit | Confirm `AUTO_UPDATE_REPO` has releases with assets named `gitlab-mcp-server-{goos}-{goarch}`. On a shared egress IP, set `GITHUB_TOKEN` in the server's environment to lift the 60 requests/hour anonymous budget |
+| `autoupdate: startup background check failed`                               | Network timeout (`AUTO_UPDATE_TIMEOUT`, default 60s)          | Check network connectivity or increase `AUTO_UPDATE_TIMEOUT`; the server keeps running                                                                                                                             |
+| `autoupdate: could not initialize periodic updater`                         | Missing required config in HTTP mode                          | Verify `--auto-update-repo` flag and network connectivity                                                                                                                                                          |
+| Update detected but not applied                                             | Mode is `check`                                               | Set `AUTO_UPDATE=true` to enable automatic application                                                                                                                                                             |
+| Server still runs old version after background update                       | Binary replaced but current process keeps running             | Restart the server process to use the new binary                                                                                                                                                                   |
+| `autoupdate: exec-self failed`                                              | `syscall.Exec` failed on Unix                                 | Server continues with old code; restart manually                                                                                                                                                                   |
+| `autoupdate: skipping startup update check (just re-executed after update)` | Normal: re-exec guard preventing loop                         | No action needed                                                                                                                                                                                                   |
 
 ## Disabling Auto-Update
 

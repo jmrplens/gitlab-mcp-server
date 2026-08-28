@@ -8,7 +8,7 @@ faq:
   - q: "Do I need to know the tool names to use GitLab MCP Server?"
     a: "No. In the default dynamic surface you describe what you want and the assistant calls `gitlab_find_action` to locate the matching action and its exact schema, then `gitlab_execute_action` to run it. Tool names such as `gitlab_issue` only become visible if you switch to `TOOL_SURFACE=meta` or `TOOL_SURFACE=individual`, which trade startup context for a browsable tool list."
   - q: "How do I tell the assistant which GitLab project to use?"
-    a: "Pass the project path in `project_id`, in `group/project` form — for example `my-group/backend`. Numeric project IDs work too. If you are working inside a checked-out repository, `gitlab_resolve_project` maps the git remote URL to the right GitLab project so you do not have to state it at all."
+    a: "Pass the project path in `project_id`, in `group/project` form — for example `my-group/backend`. Numeric project IDs work too. If you are working inside a checked-out repository, `gitlab_discover_project` maps the git remote URL to the right GitLab project so you do not have to state it at all."
   - q: "Will an AI assistant change my GitLab data without asking?"
     a: "Not without a safeguard being turned off. Destructive actions require explicit confirmation before they execute, `GITLAB_READ_ONLY=true` removes every mutating action from the catalog entirely, and `GITLAB_SAFE_MODE=true` intercepts mutations and returns a JSON preview of what would happen instead of applying it. Read operations such as listing and searching are always safe."
 ---
@@ -60,13 +60,13 @@ The server calls `gitlab_issue` with `action: create`, setting the title, descri
 
 **Prompt**: "List all labels in the frontend project and create a new label called 'accessibility' with color #0052CC"
 
-The server first calls `gitlab_label` with `action: list` to show existing labels, then `action: create` to add the new one.
+The server first calls `gitlab_project` with `action: label_list` to show existing labels, then `action: label_create` to add the new one.
 
 ## Track milestones
 
 **Prompt**: "Show me the progress on the Sprint 14 milestone in my-project"
 
-The server calls `gitlab_milestone` with `action: get`, returning completion percentage, open/closed issue counts, and due date.
+The server calls `gitlab_project` with `action: milestone_get`, returning completion percentage, open/closed issue counts, and due date.
 
   </TabItem>
   <TabItem label="Code Review">
@@ -111,7 +111,7 @@ The server calls `gitlab_search` with `action: code`, searching across projects 
 
 **Prompt**: "List all members of the frontend project and their access levels"
 
-The server calls `gitlab_member` with `action: list`, returning team members with their roles and permissions.
+The server calls `gitlab_project` with `action: members`, returning team members with their roles and permissions.
 
 ## Dynamic-first tool flow
 
@@ -122,11 +122,12 @@ gitlab_find_action → query: "list open merge requests"
 gitlab_execute_action → action: "merge_request.list", params: { project_id: "42", state: "opened" }
 ```
 
-For analysis tasks, the same flow discovers canonical `analyze.*` actions before execution:
+When a pipeline fails, the same flow chains two actions — find the failing jobs, then read one job's log:
 
 ```text
-gitlab_find_action → query: "analyze failed pipeline"
-gitlab_execute_action → action: "analyze.pipeline_failure", params: { project_id: "42", pipeline_id: 12345 }
+gitlab_find_action → query: "list failed jobs in a pipeline"
+gitlab_execute_action → action: "job.list", params: { project_id: "42", pipeline_id: 8847, scope: ["failed"] }
+gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_id: 501 }
 ```
 
 ---

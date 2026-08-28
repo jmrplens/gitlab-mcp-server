@@ -8,7 +8,7 @@ faq:
   - q: "¿Cómo versiona GitLab MCP Server sus releases?"
     a: "Sigue versionado semántico. El número de parche cambia con correcciones y trabajo interno que no altera la interfaz. El número menor cambia cuando se añaden herramientas, acciones, recursos o prompts, o cuando la configuración gana una opción: cambios aditivos que dejan funcionando las llamadas existentes. El número mayor solo cambia ante una ruptura de la superficie MCP o de la configuración, como eliminar una acción o cambiar un parámetro obligatorio."
   - q: "¿Qué publica cada release?"
-    a: "Cada release publica binarios firmados para Linux, macOS y Windows en amd64 y arm64, un binario universal de macOS, una imagen de contenedor en GHCR y Docker Hub, una extensión para Claude Desktop (.mcpb), y checksums con firma GPG desprendida. Las firmas de los binarios se pueden verificar con Cosign antes de ejecutar nada."
+    a: "Cada release publica binarios para Linux, macOS y Windows en amd64 y arm64, un binario universal de macOS, una imagen de contenedor en GHCR y Docker Hub, una extensión para Claude Desktop (.mcpb), los paquetes npm y checksums.txt. Los checksums se firman sin claves con Cosign/Sigstore, cada binario lleva su SBOM en formato SPDX y los artefactos del release llevan atestaciones de procedencia SLSA, así que puedes verificar lo que has descargado antes de ejecutarlo."
   - q: "¿Cómo me entero de los nuevos releases?"
     a: "De tres formas. Observa el repositorio en GitHub con el filtro de Releases; suscribe un lector de feeds a https://github.com/jmrplens/gitlab-mcp-server/releases.atom; o deja activada la auto-actualización integrada, que consulta GitHub Releases al arrancar y puede aplicar la actualización por ti. Usa AUTO_UPDATE=check para que te avise sin instalar nada."
   - q: "¿Cómo vuelvo a una versión anterior?"
@@ -37,13 +37,16 @@ Lo habitual son releases aditivos. Un incremento menor puede cambiar cuántas he
 
 ## Qué incluye cada release
 
-| Artefacto                     | Detalle                                                                 |
-| ----------------------------- | ----------------------------------------------------------------------- |
-| Binarios                      | Linux, macOS y Windows; amd64 y arm64; más una build universal de macOS |
-| Imagen de contenedor          | GHCR y Docker Hub                                                       |
-| Extensión para Claude Desktop | Un paquete `.mcpb` de un clic                                           |
-| Checksums                     | `checksums.txt` con firma GPG desprendida                               |
-| Firmas                        | Cosign, verificable antes de ejecutar el binario                        |
+| Artefacto                     | Detalle                                                                                 |
+| ----------------------------- | --------------------------------------------------------------------------------------- |
+| Binarios                      | Linux, macOS y Windows; amd64 y arm64; más una build universal de macOS                 |
+| Imagen de contenedor          | GHCR y Docker Hub                                                                       |
+| Extensión para Claude Desktop | Un paquete `.mcpb` de un clic                                                           |
+| Paquetes npm                  | `@jmrp.io/gitlab-mcp-server` más un paquete de binario por plataforma                   |
+| Checksums                     | `checksums.txt` con el hash SHA-256 de cada binario                                     |
+| Firma                         | `checksums.txt.sigstore.json` — bundle keyless de Cosign/Sigstore, sin claves que traer |
+| SBOM                          | Un documento SPDX por binario (`<artefacto>.sbom.json`)                                 |
+| Procedencia                   | Atestaciones SLSA de build, verificables con `gh attestation verify`                    |
 
 Los pasos de verificación están en la [página de seguridad](/gitlab-mcp-server/operations/security/). Si la verificación falla, no ejecutes el binario.
 

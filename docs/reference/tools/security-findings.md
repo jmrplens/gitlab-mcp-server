@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Security Findings
 > **Individual tools**: 1
-> **Meta-tool**: `gitlab_security` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_security_finding` (`TOOL_SURFACE=meta` catalog; the sibling groups are `gitlab_security_attribute`, `gitlab_security_category` and `gitlab_security_scan_profile`)
 > **GitLab API**: [Pipeline Security Report Findings GraphQL API](https://docs.gitlab.com/ee/api/graphql/reference/#pipelinesecurityreportfindings)
 > **Audience**: 👤 End users, AI assistant users
 > **Requires**: GitLab Ultimate or Premium

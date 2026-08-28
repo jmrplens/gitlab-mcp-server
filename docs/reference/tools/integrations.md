@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Integrations, Badges, Topics, Import
 > **Individual tools**: 29
-> **Meta-tools**: `gitlab_project` (integrations + badges), `gitlab_admin` (topics), `gitlab_import` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tools**: `gitlab_project` (integrations + badges), `gitlab_admin` (topics and imports) (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Integrations API](https://docs.gitlab.com/ee/api/integrations.html), [Badges API](https://docs.gitlab.com/ee/api/project_badges.html), [Topics API](https://docs.gitlab.com/ee/api/topics.html), [Import API](https://docs.gitlab.com/ee/api/import.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The integrations domain covers miscellaneous GitLab tools that don't belong to other major domains: project/group integrations (services), project/group badges, instance-level topics, and repository import from external services (GitHub, Bitbucket).
 
-With `TOOL_SURFACE=meta`, integration and badge tools are consolidated into `gitlab_project`, topic tools into `gitlab_admin`, and import tools into `gitlab_import`.
+With `TOOL_SURFACE=meta`, integration and badge tools are consolidated into `gitlab_project`, and topic and import tools into `gitlab_admin`.
 
 ### Common Questions
 

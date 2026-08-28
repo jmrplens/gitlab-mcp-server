@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Notifications & Events
 > **Individual tools**: 42
-> **Meta-tools**: `gitlab_notification`, `gitlab_resource_event`, `gitlab_award_emoji` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tools**: none of its own — every action on this page belongs to `gitlab_user`, `gitlab_issue`, `gitlab_merge_request`, `gitlab_group` or `gitlab_snippet` (`TOOL_SURFACE=meta` catalog)
 > **GitLab API**: [Notification Settings](https://docs.gitlab.com/ee/api/notification_settings.html) · [Resource Label/Milestone/State Events](https://docs.gitlab.com/ee/api/resource_label_events.html) · [Award Emoji](https://docs.gitlab.com/ee/api/award_emoji.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,14 @@
 
 The notifications & events domain covers notification settings (global, project, group), project and user events, resource-level change events (label, milestone, state), and award emoji reactions on issues, merge requests, snippets, and their notes.
 
-With `TOOL_SURFACE=meta`, the individual tools below are consolidated into four meta-tools that dispatch by `action` parameter.
+With `TOOL_SURFACE=meta`, this page has no meta-tool of its own: it is a documentation grouping, and its actions are dispatched by the meta-tool that owns the resource they act on.
+
+| Sub-domain                      | Owning meta-tool                                               | Example actions                                          |
+| ------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------- |
+| Notification settings           | `gitlab_user`                                                  | `notification_global_get`, `notification_project_update` |
+| Project and contribution events | `gitlab_user`                                                  | `event_list_project`, `event_list_contributions`         |
+| Resource events (label/state/…) | `gitlab_issue`, `gitlab_merge_request`, `gitlab_group` (epics) | `event_issue_label_list`, `event_mr_state_get`           |
+| Award emoji                     | `gitlab_issue`, `gitlab_merge_request`, `gitlab_snippet`       | `emoji_issue_list`, `emoji_mr_note_create`               |
 
 ### Common Questions
 

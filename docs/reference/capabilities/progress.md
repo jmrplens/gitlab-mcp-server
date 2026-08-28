@@ -184,7 +184,7 @@ Four methods: `IsActive()`, `Update()`, `Step()`, and `Done()`. The `Step` conve
 
 ### Does every tool show progress?
 
-No. Only tools with multi-step or streaming operations use progress: file uploads and the 4 elicitation tools. Simple tools (e.g., `gitlab_list_branches`) complete too quickly within a single API call to benefit from progress.
+No. Only tools with multi-step or streaming operations use progress: file uploads and the 4 elicitation tools. Simple tools (e.g., `gitlab_branch_list`) complete too quickly within a single API call to benefit from progress.
 
 ### What if my MCP client doesn't send a progress token?
 

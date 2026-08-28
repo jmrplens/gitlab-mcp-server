@@ -14,7 +14,7 @@ import (
 // returns a valid RFC 9728 Protected Resource Metadata JSON document with
 // the expected resource, authorization server, bearer methods and scopes.
 func TestNewProtectedResourceHandler_ValidResponse(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI})
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI}, "")
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -74,7 +74,7 @@ func TestNewProtectedResourceHandler_AdvertisesTheScopesItAccepts(t *testing.T) 
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, tt.want)
+			handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, tt.want, "")
 
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", http.NoBody)
 			rec := httptest.NewRecorder()
@@ -101,7 +101,7 @@ func TestNewProtectedResourceHandler_AdvertisesTheScopesItAccepts(t *testing.T) 
 // sets Access-Control-Allow-Origin: * so browser-based clients can fetch
 // the metadata document cross-origin.
 func TestNewProtectedResourceHandler_CORSHeaders(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI})
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI}, "")
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -115,7 +115,7 @@ func TestNewProtectedResourceHandler_CORSHeaders(t *testing.T) {
 // TestNewProtectedResourceHandler_OptionsPreflightReturns204 verifies that
 // OPTIONS preflight requests receive 204 No Content for CORS compliance.
 func TestNewProtectedResourceHandler_OptionsPreflightReturns204(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI})
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI}, "")
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -129,7 +129,7 @@ func TestNewProtectedResourceHandler_OptionsPreflightReturns204(t *testing.T) {
 // TestNewProtectedResourceHandler_PostMethodNotAllowed verifies that POST
 // and other non-GET/OPTIONS methods return 405 Method Not Allowed.
 func TestNewProtectedResourceHandler_PostMethodNotAllowed(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI})
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI}, "")
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -137,5 +137,45 @@ func TestNewProtectedResourceHandler_PostMethodNotAllowed(t *testing.T) {
 
 	if rec.Code != http.StatusMethodNotAllowed {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+	}
+}
+
+// TestNewProtectedResourceHandler_ResourceDocumentationIsConfigurable verifies
+// that an operator can point RFC 9728's resource_documentation field at their
+// own page, and that an empty value falls back to this project's guide. The
+// field is the only sanctioned way to lead a client to the OAuth application it
+// should use, since RFC 9728 defines no field carrying a client identifier.
+func TestNewProtectedResourceHandler_ResourceDocumentationIsConfigurable(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		configure string
+		want      string
+	}{
+		{name: "empty falls back to the project guide", configure: "", want: DefaultResourceDocumentation},
+		{name: "operator page is published verbatim", configure: "https://ops.example.com/our-oauth-app", want: "https://ops.example.com/our-oauth-app"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler := NewProtectedResourceHandler("https://mcp.example.com/mcp",
+				[]string{"https://gitlab.example.com"}, []string{ScopeAPI}, tt.configure)
+
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil))
+
+			var metadata struct {
+				ResourceDocumentation string `json:"resource_documentation"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&metadata); err != nil {
+				t.Fatalf("decode metadata: %v", err)
+			}
+			if metadata.ResourceDocumentation != tt.want {
+				t.Errorf("resource_documentation = %q, want %q", metadata.ResourceDocumentation, tt.want)
+			}
+		})
 	}
 }

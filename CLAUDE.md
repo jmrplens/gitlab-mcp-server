@@ -188,7 +188,13 @@ See `docs/reference/output-format.md` for the complete response format specifica
 
 ### Tool naming convention
 
-`gitlab_{action}_{resource}` in snake_case (e.g., `gitlab_create_issue`, `gitlab_list_projects`)
+A tool's runtime name depends on the surface, and on the individual surface it is **declared**, not derived — `IndividualTool.Name` in the domain's `ActionSpec` — so never infer one from a formula.
+
+- **Individual surface** (`TOOL_SURFACE=individual`): the prevailing form is domain-first `gitlab_{domain}_{action}` — `issue.list` is `gitlab_issue_list`, `project.get` is `gitlab_project_get`, `branch.create` is `gitlab_branch_create`. A large legacy set is verb-first instead (`gitlab_list_issue_discussions`, `gitlab_get_issue_statistics`, `gitlab_add_ssh_key`), and both forms are real. New actions take the domain-first form.
+- **Meta surface** (`TOOL_SURFACE=meta`): mostly the bare domain — `gitlab_issue`, `gitlab_project`, `gitlab_group` — with the operation in the `action` argument, alongside a few standalone tools (`gitlab_discover_project`, `gitlab_server`, the `gitlab_interactive_*` elicitation flows). A domain **without** a meta-tool of its own is a set of routes on a base one, not a tool: epics, labels, milestones, boards, members, wikis and releases at group scope are actions on `gitlab_group`; issue discussions and statistics are actions on `gitlab_issue`; todos are actions on `gitlab_user`.
+- **Dynamic surface** (the default): only `gitlab_find_action` and `gitlab_execute_action`, which take the canonical catalog ID directly — `{"action": "issue.list", "params": {…}}`. This is the portable form for an example, because it does not depend on `TOOL_SURFACE`.
+
+Every documentation example must name a tool the surface it shows actually registers, and say which surface that is — an individual-tool example without `TOOL_SURFACE=individual` is wrong twice over, since the default surface registers neither. `go run ./cmd/audit_doc_tool_names/` checks every `gitlab_*` mention across `docs/`, `site/src/content/docs/`, `README.md` and this file against the names the server really registers; `--check` makes it a gate.
 
 ### Error handling in tool handlers
 
@@ -326,7 +332,7 @@ make analyze-report                        # generate LLM-consumable report
 | `META_TOOLS`             | No       | Deprecated compatibility selector; prefer `TOOL_SURFACE` for new configs |
 | `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; default is `dynamic` when unset, unless legacy `META_TOOLS` is explicitly set |
 | `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal`; `minimal` keeps the surface-aware `gitlab://tools` manifest |
-| `META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface |
+| `META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~6.5x), or `full` (~11.9x). Independent of `META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface |
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: removes mutating operations per action; reads keep working on every surface (`false` default) |
 | `GITLAB_SAFE_MODE`       | No       | Safe mode: intercepts mutating operations per action and returns a JSON preview naming the action; reads keep working (`false` default) |
 | `AUTO_UPDATE`            | No       | Enable auto-update: `true` (default), `check`, `false`  |
@@ -356,7 +362,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | --------------------- | ------- | -------------------------------------------------------- |
 | `--gitlab-url`        | —       | GitLab instance URL (optional; omit to require `GITLAB-URL` per request). Repeatable/comma-separated: the first is the default, all are published in RFC 9728 `authorization_servers`, and `GITLAB-URL` then selects among them — anything else is refused with 403 rather than ignored |
 | `--skip-tls-verify`   | `false` | Skip TLS verification for self-signed certs              |
-| `--meta-tools`        | `true`  | Enable meta-tools for tool discovery                     |
+| `--meta-tools`        | `false` _(deprecated)_ | Legacy boolean tool selector, kept for compatibility and ignored when `--tool-surface` is set. Leave it unset for the default dynamic surface; use `--tool-surface=individual` when migrating an old `--meta-tools=false` config |
 | `--tool-surface`      | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
 | `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
 | `--tier`              | _(empty)_ | Force licensing tier: `free`, `ce`, `premium`, or `ultimate`. When set, used verbatim with no license check; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`) |
@@ -373,6 +379,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--tls-cert` / `--tls-key` | — | PEM certificate and key; serves HTTPS on the listener itself, for a proxy that does not share the machine. Both or neither, loaded at startup, TLS 1.2 floor |
 | `--auth-mode`         | `legacy` | Authentication mode: `legacy` or `oauth` (RFC 9728 Bearer verification) |
 | `--public-url`        | _(empty)_ | Externally reachable https origin; required with `--auth-mode=oauth` (RFC 9728 resource identifier and metadata-URL derivation) |
+| `--resource-documentation` | _(empty)_ | https URL published as RFC 9728 `resource_documentation`; point it at a page describing your own OAuth application. Empty publishes this project's OAuth setup guide |
 | `--oauth-cache-ttl`   | `15m`   | OAuth token identity cache TTL (range 1m–2h)             |
 | `--pool-idle-timeout` | `1h` | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h) |
 | `--revalidate-interval` | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |

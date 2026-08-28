@@ -52,7 +52,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#dynamic-mode",
             "name": "Dynamic mode",
-            "description": "The default tool surface, exposing only gitlab_find_action and gitlab_execute_action. The assistant searches the action catalog for the operation it needs, receives that action's exact schema, then executes it. This costs one discovery call per task and keeps startup context roughly 444 times smaller than registering every tool individually.",
+            "description": "The default tool surface, exposing only gitlab_find_action and gitlab_execute_action. The assistant searches the action catalog for the operation it needs, receives that action's exact schema, then executes it. This costs one discovery call per task and keeps startup context orders of magnitude smaller than registering every tool individually.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
           },
           {
@@ -87,7 +87,7 @@ head:
             "@type": "DefinedTerm",
             "@id": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#capability-surface",
             "name": "Capability surface",
-            "description": "Which MCP resources and prompts are registered, selected with CAPABILITY_SURFACE. full registers all of them and advertises resource subscriptions; minimal registers only the gitlab://tools manifest, dropping subscriptions with the resources they apply to, cutting shared startup context from roughly 31,800 tokens to about 1,100 while keeping per-action schema discovery available.",
+            "description": "Which MCP resources and prompts are registered, selected with CAPABILITY_SURFACE. full registers all of them and advertises resource subscriptions; minimal registers only the gitlab://tools manifest, dropping subscriptions with the resources they apply to, cutting shared startup context by about 98% while keeping per-action schema discovery available.",
             "inDefinedTermSet": "https://jmrplens.github.io/gitlab-mcp-server/glossary/#termset"
           },
           {
@@ -181,7 +181,7 @@ A **meta-tool** is a domain-level MCP tool that groups related operations behind
 
 ## Capability surface
 
-The **capability surface** decides which MCP resources and prompts are registered, selected with `CAPABILITY_SURFACE`. `full` registers all of them and advertises [resource subscriptions](/gitlab-mcp-server/capabilities/subscriptions/); `minimal` registers only the `gitlab://tools` manifest — dropping subscriptions with the resources they apply to — cutting shared startup context from roughly 31,800 tokens to about 1,100 while keeping per-action schema discovery available.
+The **capability surface** decides which MCP resources and prompts are registered, selected with `CAPABILITY_SURFACE`. `full` registers all of them and advertises [resource subscriptions](/gitlab-mcp-server/capabilities/subscriptions/); `minimal` registers only the `gitlab://tools` manifest — dropping subscriptions with the resources they apply to — cutting shared startup context from {footprint.shared.full.toLocaleString("en-US")} tokens to {footprint.shared.minimal.toLocaleString("en-US")} while keeping per-action schema discovery available.
 
 ## Tool manifest resource
 

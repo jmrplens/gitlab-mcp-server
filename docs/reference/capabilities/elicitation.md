@@ -39,7 +39,7 @@ Without elicitation:
   AI: "Target branch?" → User: "main"
   AI: "Title?" → User: "Fix login bug"
   AI: "Description?" → User: "Fixes the redirect issue"
-  AI: calls gitlab_create_merge_request with all parameters at once
+  AI: calls gitlab_mr_create with all parameters at once
 
 With elicitation:
   AI: calls gitlab_interactive_mr_create
@@ -299,7 +299,7 @@ The entire flow happens in structured form fields rather than back-and-forth cha
 | **Best for**          | Automation, scripting, batch operations | Interactive creation, first-time users     |
 | **AI context needed** | AI must know all parameters upfront     | AI only needs to decide which tool to call |
 
-Both types coexist in this server. The regular `gitlab_create_issue` tool accepts all parameters at once (better for automation), while `gitlab_interactive_issue_create` guides the user through each field (better for interactive use).
+Both types coexist in this server. The regular issue-creation action accepts all parameters at once (better for automation) — `gitlab_issue_create` on the individual surface, `issue.create` through `gitlab_execute_action` on the default dynamic one — while `gitlab_interactive_issue_create` guides the user through each field (better for interactive use).
 
 ## Graceful Degradation
 
@@ -310,7 +310,7 @@ When the client does not support elicitation:
 3. Tool returns `elicitation.ErrElicitationNotSupported`
 4. Registration handler catches the error and returns an informational result explaining the requirement
 
-The user can then fall back to using the regular parameterized tool (e.g., `gitlab_create_issue` instead of `gitlab_interactive_issue_create`).
+The user can then fall back to using the regular parameterized action (e.g., `gitlab_issue_create` instead of `gitlab_interactive_issue_create`).
 
 ## Frequently Asked Questions
 

@@ -158,7 +158,7 @@ The ranking pipeline:
 
 Fuzzy recovery is bounded on purpose: it allows up to two edit mistakes for tokens of at least three characters and suppresses weak typo matches for destructive actions. That helps with prompts like `merje requesy list`, while short terms such as `mr` still rely on aliases and synonyms instead of loose typo matching.
 
-Find accepts `explain: true` when the assistant needs deterministic scoring reasons. The default response stays compact. Enabling `explain` does not change ranking; it only adds reasoning metadata. No-match searches return a small suggestions list, and curated workflows may return `related_actions`, such as `repository.compare` before `analyze.release_notes`.
+Find accepts `explain: true` when the assistant needs deterministic scoring reasons. The default response stays compact. Enabling `explain` does not change ranking; it only adds reasoning metadata. No-match searches return a small suggestions list, and curated workflows may return `related_actions`, such as `tag.get` alongside `release.get`.
 
 Some useful limits are fixed inside the server rather than configured by operators:
 

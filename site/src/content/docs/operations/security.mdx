@@ -189,7 +189,7 @@ The server maintains a **bounded LRU pool** of client sessions:
 
 ### HTTP mode recommendations
 
-- Deploy behind a reverse proxy with TLS termination
+- Terminate TLS on a reverse proxy, or on the server itself with `--tls-cert`/`--tls-key`; when the proxy shares the machine, `--http-addr=/run/…/server.sock` removes the hop rather than encrypting it
 - Configure `--trusted-proxy-header` to match the header your proxy sets (e.g. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) so the built-in rate limiter sees real client IPs. **Only enable this when the server is reachable exclusively through a trusted proxy** that overwrites (or strips incoming copies of) the configured header; otherwise clients can spoof it and bypass per-IP rate limiting. For `X-Forwarded-For`, the server uses the rightmost entry — the last hop appended by the trusted proxy — to avoid trusting client-supplied values.
 - Enable rate limiting at the proxy level
 - Restrict access to trusted networks
@@ -204,7 +204,7 @@ For production HTTP deployments, consider using OAuth mode (`--auth-mode=oauth`)
 - Token identity is cached for `--oauth-cache-ttl` (default: 15 minutes, range: 1m–2h), keyed by a SHA-256 hash — raw tokens are never stored
 - Granted scopes are introspected from GitLab rather than assumed
 - OAuth mode is **Bearer-only**: `PRIVATE-TOKEN` is rejected with `401`. Clients without OAuth support send a personal access token as `Authorization: Bearer <glpat-...>`, which is verified the same way
-- The scope demanded is the least privilege the deployment can work with: `read_api` under `--read-only` or `--safe-mode`, `api` otherwise, advertised in the metadata's `scopes_supported`. An `api` token satisfies both
+- Admission asks only for `read_api`, the least any action needs; whether a call may write is settled per action, against the surface built for that token. A `read_api` token is therefore accepted by a deployment that can write, and is served the read-only tool surface — the only credential refused at the door is one carrying no GitLab API scope at all. The challenge still _recommends_ the scope that buys the full surface (`api`, or `read_api` under `--read-only` / `--safe-mode`), and `scopes_supported` lists both on a deployment that writes, so a client can deliberately ask for a credential that cannot mutate anything
 - Rejections are cheap and bounded: ten authentication failures from one address in a minute earn a `429`, and a token GitLab has already refused is refused from memory for five minutes rather than asked about again. Neither an outage nor a `429` from GitLab is ever cached — those say nothing about the credential
 - A throttled or unreachable GitLab answers `503` with `Retry-After` and **no** challenge, not `401`. Reporting it as an invalid token would make a well-behaved client discard a good credential and start a fresh authorization flow, adding upstream load exactly when the instance asked for less
 
@@ -228,10 +228,11 @@ Allowing the origin is only half of what a browser needs. Before it sends a cros
 
 ## Verifying release integrity
 
-Every GitHub Release ships with two integrity artifacts:
+Every GitHub Release ships with three integrity artifacts:
 
 - `checksums.txt` — SHA-256 hashes for every binary in the release
 - `checksums.txt.sigstore.json` — keyless [Cosign](https://docs.sigstore.dev/cosign/installation/) / Sigstore signature bundle (GitHub OIDC, no key distribution required)
+- `<asset>.sbom.json` — an SPDX software bill of materials for each binary
 
 The auto-update mechanism verifies binaries against `checksums.txt` automatically before replacing the running process. For manual installs, verify both the signature and the checksum before running the binary.
 
@@ -286,6 +287,16 @@ grep "$(ls gitlab-mcp-server-*)" checksums.txt | shasum -a 256 -c
 
 Expected output: `gitlab-mcp-server-linux-amd64: OK` (or the corresponding filename for your platform).
 
+### 5. Verify build provenance (optional)
+
+Every release artifact carries a SLSA provenance attestation stored by GitHub, tying the file to the workflow run that produced it:
+
+```bash
+gh attestation verify gitlab-mcp-server-linux-amd64 -R jmrplens/gitlab-mcp-server
+```
+
+This is independent of the Cosign signature: the signature says the checksums came from this repository's release pipeline, the attestation says which workflow run built this exact file.
+
 ## Does the token appear in logs?
 
 The server does not log the token. Tool-call logging is structured and writes a fixed set of fields to stderr — the tool name, the call duration, the error when one occurs, and, when the request carries an authenticated identity, the GitLab username and user ID for audit purposes. The token is not one of those fields, and it is sent to GitLab as a request header rather than in a URL, so it does not appear in logged request paths.
@@ -319,7 +330,7 @@ A useful report includes the affected version (`gitlab-mcp-server --version`), t
 
 ### HTTP mode
 
-- ☐ Deploy behind TLS-terminating reverse proxy
+- ☐ Terminate TLS — reverse proxy, `--tls-cert`/`--tls-key`, or a unix socket to a same-host proxy
 - ☐ Configure `--trusted-proxy-header` for accurate rate limiting
 - ☐ Configure appropriate `--session-timeout` and `--max-http-clients`
 - ☐ Enable rate limiting

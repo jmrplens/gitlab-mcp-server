@@ -59,6 +59,10 @@ sequenceDiagram
 
 </Steps>
 
+:::caution
+Do not run the released Linux binary on Alpine. The Linux assets are position-independent executables that use the glibc dynamic loader (`/lib64/ld-linux-x86-64.so.2`), which musl does not provide, so `./gitlab-mcp-server` fails with a misleading `not found` even though the file is there and executable. Use a glibc base image (`debian:stable-slim`, `ubuntu`, `python:3.12-slim`), or the container image `ghcr.io/jmrplens/gitlab-mcp-server`, which is built against musl — it starts in HTTP mode by default, so pass `--http=false` for a stdio job.
+:::
+
 ## Mode 1: Deterministic (No LLM)
 
 Send JSON-RPC messages directly to the server via stdio. Fully deterministic — no LLM or external API needed.
@@ -67,18 +71,20 @@ Send JSON-RPC messages directly to the server via stdio. Fully deterministic —
 
 The server communicates via the [MCP protocol](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#stdio) over stdin/stdout using JSON-RPC 2.0. Each interaction requires an `initialize` handshake, an `initialized` notification, then one or more `tools/call` requests.
 
+Which tool names a job may call depends on the active **tool surface**. The default is `dynamic`: it registers exactly two tools — `gitlab_find_action` and `gitlab_execute_action` — so a script calls `gitlab_execute_action` with a canonical `domain.action` ID and a `params` object. Naming an individual tool on the default surface is answered with `{"code":-32602,"message":"unknown tool ..."}`; because that is a JSON-RPC error and not a tool result, `jq -s '.[1].result.content[0].text'` prints `null` and the job succeeds with no output. If you prefer one tool per operation, set `TOOL_SURFACE=individual` in the job's `variables:` — individual names are domain-first, not verb-first (`gitlab_issue_list`, `gitlab_mr_list`, `gitlab_project_get`); see the [Tools Overview](/gitlab-mcp-server/tools/overview/).
+
 ### GitLab CI example
 
 ```yaml
 # .gitlab-ci.yml
 mcp-list-issues:
   stage: test
-  image: alpine:latest
+  image: debian:stable-slim
   variables:
     GITLAB_URL: ${CI_SERVER_URL}
     GITLAB_TOKEN: ${MCP_PAT}
   before_script:
-    - apk add --no-cache curl jq
+    - apt-get update && apt-get install -y --no-install-recommends ca-certificates curl jq
     - curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64"
       -o gitlab-mcp-server
     - chmod +x gitlab-mcp-server
@@ -87,7 +93,7 @@ mcp-list-issues:
       RESULT=$({
         echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
         echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
-        echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened","per_page":5}},"id":2}'
+        echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"issue.list","params":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened","per_page":5}}},"id":2}'
       } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text')
     - echo "${RESULT}"
 ```
@@ -98,17 +104,17 @@ For pipelines with many tool calls, wrap the protocol in a reusable function:
 
 ```bash
 mcp_call() {
-  local tool="$1"
+  local action="$1"
   local args="$2"
   {
     echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
     echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
-    echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"'"${tool}"'","arguments":'"${args}"'},"id":2}'
+    echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"'"${action}"'","params":'"${args}"'}},"id":2}'
   } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text' -r
 }
 
 # Usage
-ISSUES=$(mcp_call "gitlab_list_issues" '{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}')
+ISSUES=$(mcp_call "issue.list" '{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}')
 ```
 
 ## Mode 2: LLM-driven (Headless MCP client)
@@ -225,7 +231,7 @@ http-mode-pipeline:
       curl -s -X POST http://127.0.0.1:8080/mcp \
         -H "Content-Type: application/json" \
         -H "PRIVATE-TOKEN: ${MCP_PAT}" \
-        -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}},"id":2}' \
+        -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"issue.list","params":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}}},"id":2}' \
         | jq '.result.content[0].text'
 ```
 

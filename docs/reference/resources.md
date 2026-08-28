@@ -17,9 +17,10 @@ template's description ends with a machine-appended marker sentence
 on stateful sessions.`) plus the vendor-namespaced `_meta` key
 `io.github.jmrplens/subscribable: true`, and the full machine-readable list
 ships in two structured places: `subscriptions.subscribable_uri_templates` inside the
-`gitlab://tools` manifest, and the `subscriptions` block of the HTTP
-`/.well-known/mcp/server-card.json` (alongside a `capabilities` object
-mirroring the handshake).
+`gitlab://tools` manifest, and the `subscriptions` block of the HTTP server
+card at `/server-card` — also served at the legacy
+`/.well-known/mcp/server-card.json` path — alongside a `capabilities` object
+mirroring the handshake.
 
 MCP separates fixed resources from URI templates. In default dynamic full mode, `resources/list` exposes 8 fixed URIs: the 3 static resources below and the 5 workflow guides. `resources/templates/list` exposes the remaining 37 URI templates. Registries that only inspect `resources/list` may therefore report 8 resources statically even though the runtime MCP resource surface contains 45 entries in total.
 
@@ -104,7 +105,7 @@ Resource templates use URI variables (e.g., `{project_id}`) that the client fill
 
 | #   | Name          | URI Template          | Description                                                                                                                                                                                                                     |
 | --- | ------------- | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 41  | `tool_detail` | `gitlab://tools/{id}` | Accepted call shape and input schema for one entry from `gitlab://tools`. Replace `{id}` with an entry ID such as `project.get` in dynamic mode, `gitlab_project.get` in meta mode, or `gitlab_get_project` in individual mode. |
+| 41  | `tool_detail` | `gitlab://tools/{id}` | Accepted call shape and input schema for one entry from `gitlab://tools`. Replace `{id}` with an entry ID such as `project.get` in dynamic mode, `gitlab_project.get` in meta mode, or `gitlab_project_get` in individual mode. |
 
 The tool manifest is the public discovery layer for every tool surface. The normal discovery flow is:
 
@@ -112,7 +113,7 @@ The tool manifest is the public discovery layer for every tool surface. The norm
 2. Read `gitlab://tools/{id}` for the chosen entry. The response includes `call`, `input_schema`, destructive metadata, read-only metadata, and required params when they are known.
 3. Call the indicated MCP tool using the returned call shape.
 
-For example, `gitlab://tools/project.get` describes a dynamic action that calls `gitlab_execute_action` with `action="project.get"` and params under `params`. `gitlab://tools/gitlab_project.get` describes a meta-tool action that calls `gitlab_project` with `action="get"` and params under `params`. `gitlab://tools/gitlab_get_project` describes an individual tool call where arguments are passed directly to the tool.
+For example, `gitlab://tools/project.get` describes a dynamic action that calls `gitlab_execute_action` with `action="project.get"` and params under `params`. `gitlab://tools/gitlab_project.get` describes a meta-tool action that calls `gitlab_project` with `action="get"` and params under `params`. `gitlab://tools/gitlab_project_get` describes an individual tool call where arguments are passed directly to the tool.
 
 ## Workflow Guide Resources (5)
 
