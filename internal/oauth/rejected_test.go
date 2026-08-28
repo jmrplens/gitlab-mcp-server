@@ -195,10 +195,31 @@ func TestRejectedTokens_IsScopedToTheInstance(t *testing.T) {
 	r := NewRejectedTokens(8, time.Minute)
 	r.Record(instanceA, token)
 
-	if !r.Contains(instanceA, token) {
-		t.Error("the instance that rejected it must remember the rejection")
+	tests := []struct {
+		name     string
+		instance string
+		want     bool
+		why      string
+	}{
+		{
+			name:     "the instance that rejected it remembers",
+			instance: instanceA,
+			want:     true,
+			why:      "the rejection must still suppress the upstream call it was recorded for",
+		},
+		{
+			name:     "another instance is unaffected",
+			instance: instanceB,
+			want:     false,
+			why:      "one instance's rejection must not refuse a valid token on another",
+		},
 	}
-	if r.Contains(instanceB, token) {
-		t.Error("one instance's rejection must not refuse the token on another")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := r.Contains(tt.instance, token); got != tt.want {
+				t.Errorf("Contains(%q) = %v, want %v — %s", tt.instance, got, tt.want, tt.why)
+			}
+		})
 	}
 }

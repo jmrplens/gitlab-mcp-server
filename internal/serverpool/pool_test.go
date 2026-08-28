@@ -191,30 +191,52 @@ func TestGetOrCreate_ReadOnlyTokenGetsAReadOnlySurface(t *testing.T) {
 
 	cfg := testConfig(srv.URL)
 	cfg.IgnoreScopes = false
-	captured := map[string]bool{}
-	var order []string
+	built := map[string]*config.ServerConfig{}
 	factory := func(_ *gitlabclient.Client, entryCfg *config.ServerConfig) (*mcp.Server, error) {
-		order = append(order, entryCfg.GitLabURL)
-		captured[order[len(order)-1]+"|"+strings.Join(entryCfg.TokenScopes, ",")] = entryCfg.ReadOnly
+		built[strings.Join(entryCfg.TokenScopes, ",")] = entryCfg
 		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
 	}
 	pool := New(cfg, factory)
 
-	if _, err := pool.GetOrCreate("glpat-read", srv.URL); err != nil {
-		t.Fatalf("GetOrCreate(read token) error: %v", err)
+	tests := []struct {
+		name         string
+		token        string
+		scopeKey     string
+		wantReadOnly bool
+	}{
+		{
+			name:         "a token that cannot write gets a read-only surface",
+			token:        "glpat-read",
+			scopeKey:     "read_api",
+			wantReadOnly: true,
+		},
+		{
+			name:         "a write-capable token keeps the full surface",
+			token:        "glpat-api",
+			scopeKey:     "api",
+			wantReadOnly: false,
+		},
 	}
-	if _, err := pool.GetOrCreate("glpat-api", srv.URL); err != nil {
-		t.Fatalf("GetOrCreate(api token) error: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := pool.GetOrCreate(tt.token, srv.URL); err != nil {
+				t.Fatalf("GetOrCreate(%s) error: %v", tt.token, err)
+			}
+			entryCfg, ok := built[tt.scopeKey]
+			if !ok {
+				t.Fatalf("no entry was built for scopes %q; built: %v", tt.scopeKey, built)
+			}
+			if entryCfg.ReadOnly != tt.wantReadOnly {
+				t.Errorf("ReadOnly = %v, want %v for scopes %q", entryCfg.ReadOnly, tt.wantReadOnly, tt.scopeKey)
+			}
+		})
 	}
 
-	if readOnly, ok := captured[srv.URL+"|read_api"]; !ok || !readOnly {
-		t.Errorf("read_api entry ReadOnly = %v (present=%v), want true", readOnly, ok)
-	}
-	if readOnly, ok := captured[srv.URL+"|api"]; !ok || readOnly {
-		t.Errorf("api entry ReadOnly = %v (present=%v), want false", readOnly, ok)
-	}
+	// Narrowing one entry must never reach the shared deployment config: an
+	// entry is per token, so one client's read_api credential cannot narrow
+	// another client's api one.
 	if cfg.ReadOnly {
-		t.Error("narrowing one entry must not mutate the shared deployment config")
+		t.Error("narrowing one entry mutated the shared deployment config")
 	}
 }
 

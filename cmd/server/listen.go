@@ -58,12 +58,8 @@ func listenHTTP(ctx context.Context, addr string, socketMode os.FileMode) (net.L
 	return listenUnix(ctx, addr, socketMode)
 }
 
-// listenUnix binds a unix socket, clearing a stale one first and applying the
-// permission mode the deployment asked for.
-//
-// The mode is applied after bind rather than through umask: umask can only
-// remove bits, it is process-global, and it would make the resulting
-// permissions depend on how the service manager happened to be configured.
+// listenUnix binds a unix socket, clearing a stale one first and creating it
+// under the permission mode the deployment asked for.
 func listenUnix(ctx context.Context, path string, socketMode os.FileMode) (net.Listener, error) {
 	if err := clearStaleSocket(ctx, path); err != nil {
 		return nil, err
@@ -73,20 +69,18 @@ func listenUnix(ctx context.Context, path string, socketMode os.FileMode) (net.L
 			return nil, fmt.Errorf("--http-addr %q: its directory is not usable: %w", path, err)
 		}
 	}
-	listener, err := (&net.ListenConfig{}).Listen(ctx, "unix", path)
-	if err != nil {
-		return nil, fmt.Errorf("listening on unix socket %q: %w", path, err)
-	}
 	if socketMode == 0 {
 		socketMode = config.DefaultSocketMode
 	}
-	// A socket bound but left at the umask's mercy is the failure mode this
-	// whole path exists to avoid: either the proxy cannot reach it, or
-	// everyone can. Failing loudly beats serving on a socket whose
-	// permissions nobody checked.
-	if chmodErr := os.Chmod(path, socketMode); chmodErr != nil {
-		_ = listener.Close()
-		return nil, fmt.Errorf("setting mode %#o on unix socket %q: %w", socketMode, path, chmodErr)
+	// Created WITH the mode rather than chmod'ed into it afterwards: a chmod
+	// takes a path, and a path can change meaning between the bind and the
+	// chmod, so on a directory an untrusted local account can write that
+	// account could swap the socket for a symlink in between and have the
+	// mode land on whatever it points at (CWE-367). See socketmode_unix.go
+	// for why the descriptor-based alternative does not work.
+	listener, err := bindUnixSocket(ctx, path, socketMode)
+	if err != nil {
+		return nil, err
 	}
 	slog.Info("listening on unix socket", "path", path, "mode", fmt.Sprintf("%#o", socketMode))
 	return listener, nil

@@ -310,7 +310,7 @@ make analyze-report                        # generate LLM-consumable report
 
 | Variable                 | Required | Description                                              |
 | ------------------------ | -------- | -------------------------------------------------------- |
-| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode, optional via `--gitlab-url`; when set it fixes the GitLab instance, and when omitted clients must send `GITLAB-URL` per request |
+| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode, optional via `--gitlab-url`, and the count decides the header's meaning: none means clients send `GITLAB-URL` per request, exactly one fixes the instance and the header is ignored, several publish an allow-list the header selects among (anything else refused). A comma-separated value spells the list |
 | `GITLAB_TOKEN`           | Stdio    | Personal Access Token (`glpat-...`)                      |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `META_TOOLS`             | No       | Deprecated compatibility selector; prefer `TOOL_SURFACE` for new configs |
@@ -358,7 +358,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--stateless`         | `true`  | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28; default): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`; synchronous server-initiated requests are unavailable, but protocol 2026-07-28 clients keep elicitation through MRTR. Use `--stateless=false` for legacy stateful sessions |
 | `--json-response`     | `false` | Return `application/json` response bodies instead of `text/event-stream` (SSE) |
 | `--max-request-body-bytes` | `0` | Maximum streamable HTTP request body size in bytes; `0` uses the SDK default (4 MiB) |
-| `--http-addr`         | `:8080` | Listen address. `host:port` binds TCP; a value containing a path separator binds a unix socket instead (removes the proxy hop rather than encrypting it) |
+| `--http-addr`         | `:8080` | Listen address. `host:port` binds TCP; a value containing a path separator binds a unix socket instead. Host-local: a same-host proxy connects through it and the TCP hop between them disappears rather than being encrypted; remote clients still arrive via that proxy |
 | `--http-socket-mode`  | `0660`  | Octal permission mode for a unix socket named by `--http-addr` |
 | `--tls-cert` / `--tls-key` | — | PEM certificate and key; serves HTTPS on the listener itself, for a proxy that does not share the machine. Both or neither, loaded at startup, TLS 1.2 floor |
 | `--auth-mode`         | `legacy` | Authentication mode: `legacy` or `oauth` (RFC 9728 Bearer verification) |

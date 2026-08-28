@@ -335,7 +335,10 @@ func main() {
 		return
 	}
 
-	if forceSetup || (!useHTTP && !showHelp && !showVersion && wizard.IsInteractiveTerminal()) {
+	autoWizard := !useHTTP && !showHelp && !showVersion &&
+		wizard.IsInteractiveTerminal() &&
+		os.Getenv("GITLAB_TOKEN") == "" && os.Getenv("GITLAB_URL") == ""
+	if forceSetup || autoWizard {
 		if err := wizard.Run(version, wizard.UIMode(setupMode), os.Stdin, os.Stdout); err != nil {
 			slog.Error("setup wizard failed", "error", err)
 			os.Exit(1)
