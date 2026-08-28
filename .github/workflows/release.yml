@@ -139,6 +139,14 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
+      # Validate the assembled packages before anything is published. A
+      # published npm version is permanent, so a broken tarball must fail the
+      # release here, not after it is irreversibly on the registry. Runs on the
+      # ephemeral runner (already disposable); `make validate-npm` runs the same
+      # check in Docker for a developer's own machine.
+      - name: Validate npm packages
+        run: make validate-npm-local NPM_BINARIES=dist
+
       - name: Publish to npm
         run: |
           set -euo pipefail

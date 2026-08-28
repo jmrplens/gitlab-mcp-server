@@ -11,7 +11,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-openplugin check-mcpb mcpb gen-npm sync-npm-version publish-npm-dry publish-npm publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-openplugin check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        inspector inspector-stop help
@@ -750,6 +750,23 @@ gen-npm:
 sync-npm-version:
 	@command -v node >/dev/null || { echo "ERROR: Node.js is required"; exit 1; }
 	node scripts/build-npm.mjs --sync-only --version "$$(tr -d '[:space:]' < VERSION)"
+
+## validate-npm: build the npm packages and validate them inside a clean
+## node:22 container, so the check never installs anything on the host. Runs
+## structural checks on all 7 packages plus a real install + MCP handshake for
+## the container's native platform (linux-x64).
+##   make validate-npm NPM_BINARIES=dist
+validate-npm:
+	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-npm-local)"; exit 1; }
+	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
+	@VER=$$(tr -d '[:space:]' < VERSION); 	docker run --rm 		-v "$(CURDIR):/work" -v "$(abspath $(NPM_BINARIES)):/binaries:ro" 		-w /work node:22 sh -euc '			node scripts/build-npm.mjs --binaries /binaries --version '"$$VER"' && 			node scripts/validate-npm.mjs --packages npm/packages --main npm/gitlab-mcp-server --version '"$$VER"
+
+## validate-npm-local: same validation without Docker, for the ephemeral CI
+## runner (already disposable). Builds packages from NPM_BINARIES, then validates.
+validate-npm-local:
+	@command -v node >/dev/null || { echo "ERROR: Node.js is required"; exit 1; }
+	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
+	@VER=$$(tr -d '[:space:]' < VERSION); 	node scripts/build-npm.mjs --binaries "$(NPM_BINARIES)" --version "$$VER" && 	node scripts/validate-npm.mjs --packages npm/packages --main npm/gitlab-mcp-server --version "$$VER"
 
 ## publish-npm-dry: assemble and validate the npm publish set without publishing.
 publish-npm-dry:
