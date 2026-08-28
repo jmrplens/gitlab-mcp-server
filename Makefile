@@ -23,7 +23,9 @@ PKGS=./cmd/... ./internal/...
 # this one validates the manifest, that one publishes it.
 MCP_PUBLISHER_VERSION=v1.8.1
 GO_ANALYSIS_PKGS=./...
-GO_ANALYSIS_TAGS=e2e
+# Both e2e build tags: the HTTP transport suite lives behind `httpe2e` and was
+# invisible to every analysis gate while only `e2e` was listed.
+GO_ANALYSIS_TAGS=e2e,httpe2e
 PROJECT_GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 GO_TOOLCHAIN ?= go$(PROJECT_GO_VERSION)
 export GOTOOLCHAIN := $(GO_TOOLCHAIN)

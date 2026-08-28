@@ -165,7 +165,7 @@ func TestNewProtectedResourceHandler_ResourceDocumentationIsConfigurable(t *test
 				[]string{"https://gitlab.example.com"}, []string{ScopeAPI}, tt.configure)
 
 			rec := httptest.NewRecorder()
-			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil))
+			handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", nil))
 
 			var metadata struct {
 				ResourceDocumentation string `json:"resource_documentation"`

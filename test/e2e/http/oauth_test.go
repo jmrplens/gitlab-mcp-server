@@ -585,3 +585,105 @@ func TestOAuth_PlaintextInstanceIsRefusedAtStartup(t *testing.T) {
 		t.Errorf("a plaintext instance anywhere in the list must stop startup; output:\n%s", out)
 	}
 }
+
+// TestOAuth_SatisfiesRemoteDirectoryAuthProbe pins the contract that external
+// MCP directories verify, in one place, because each half of it is easy to
+// break from a different direction.
+//
+// A directory probes authorization twice: at the `initialize` handshake and at
+// a `tools/call` naming a tool that does not exist. Both must answer 401 with a
+// challenge pointing at reachable metadata. The second probe is the fragile
+// one: authentication currently wraps the MCP handler, so an unknown tool never
+// reaches the dispatcher. Move the gate inside it and that request starts
+// answering 200 with a JSON-RPC "unknown tool" error instead — the server would
+// still be secure for real tools, but every directory would grade it as
+// serving unauthenticated, because the probe it uses to detect authentication
+// no longer sees any.
+func TestOAuth_SatisfiesRemoteDirectoryAuthProbe(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := oauthServer(t, gitlab.url)
+
+	probes := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "initialize handshake",
+			body: `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"directory-probe","version":"0"}}}`,
+		},
+		{
+			name: "tools/call naming a tool that does not exist",
+			body: `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"definitely_not_a_tool","arguments":{}}}`,
+		},
+	}
+
+	for _, probe := range probes {
+		t.Run(probe.name, func(t *testing.T) {
+			got := srv.do(t, request{method: http.MethodPost, path: "/mcp", body: probe.body})
+
+			if got.status != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d — a directory reads anything else as an unauthenticated server", got.status, http.StatusUnauthorized)
+			}
+			challenge := got.header.Get("WWW-Authenticate")
+			if !strings.HasPrefix(challenge, "Bearer") {
+				t.Errorf("challenge %q does not name the Bearer scheme", challenge)
+			}
+			if !strings.Contains(challenge, "resource_metadata=") {
+				t.Errorf("challenge %q carries no resource_metadata pointer", challenge)
+			}
+		})
+	}
+}
+
+// TestOAuth_DirectoryReadableMetadata verifies the metadata document a remote
+// directory fetches after following the challenge, at both locations one may
+// request: the bare well-known path RFC 9728 names for a resource with no path
+// component, and the path-suffixed form for one mounted under a prefix. A
+// deployment serving only the suffixed form answers 404 to the only URL some
+// directories try.
+func TestOAuth_DirectoryReadableMetadata(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := oauthServer(t, gitlab.url)
+
+	paths := []string{
+		"/.well-known/oauth-protected-resource",
+		"/.well-known/oauth-protected-resource/mcp",
+	}
+
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			got := srv.do(t, request{method: http.MethodGet, path: path})
+			if got.status != http.StatusOK {
+				t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
+			}
+			assertDirectoryMetadata(t, got.body)
+		})
+	}
+}
+
+// assertDirectoryMetadata checks the four RFC 9728 fields a directory reads.
+func assertDirectoryMetadata(t *testing.T, body string) {
+	t.Helper()
+
+	var metadata struct {
+		Resource               string   `json:"resource"`
+		AuthorizationServers   []string `json:"authorization_servers"`
+		BearerMethodsSupported []string `json:"bearer_methods_supported"`
+		ScopesSupported        []string `json:"scopes_supported"`
+	}
+	if err := json.Unmarshal([]byte(body), &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata.Resource == "" {
+		t.Error("resource is empty")
+	}
+	if len(metadata.AuthorizationServers) == 0 {
+		t.Error("authorization_servers is empty")
+	}
+	if !slices.Contains(metadata.BearerMethodsSupported, "header") {
+		t.Errorf("bearer_methods_supported = %v, must include \"header\"", metadata.BearerMethodsSupported)
+	}
+	if len(metadata.ScopesSupported) == 0 {
+		t.Error("scopes_supported is empty")
+	}
+}

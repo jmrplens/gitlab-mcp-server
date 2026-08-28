@@ -389,7 +389,7 @@ func TestListener_TLS_RefusesObsoleteVersions(t *testing.T) {
 	)
 
 	obsolete := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{
+		TLSClientConfig: &tls.Config{ //#nosec G402 -- deliberately obsolete: this client exists to prove the server refuses TLS below 1.2
 			RootCAs:    pool,
 			MinVersion: tls.VersionTLS10,
 			MaxVersion: tls.VersionTLS11,
