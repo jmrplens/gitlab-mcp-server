@@ -3,14 +3,18 @@
 # (Open Plugins manifest) with the release version, version-pinned download
 # URLs, and SHA256 hashes from GoReleaser's checksums.txt.
 #
-# Usage: update-server-json-sha.sh <checksums-file> <version>
+# Usage: update-server-json-sha.sh <checksums-file> <version> [mcpb-file]
 #
 # Steps for server.json:
 #   1. Sets top-level .version to the given version
 #   2. Sets .packages[].version to the given version
 #   3. Pins .packages[].identifier URLs to /releases/download/v<version>/,
 #      handling both /releases/latest/download/ and prior /releases/download/vX.Y.Z[-prerelease]/
+#   3b. Pins the OCI image tag to the given version
 #   4. Sets .fileSha256 for each package matching a checksum entry
+#   4b. Sets .fileSha256 for the .mcpb bundle, hashed from <mcpb-file>. GoReleaser
+#       does not build the bundle, so it is absent from the signed checksums.txt
+#       and its hash cannot be appended there without breaking checksums.txt.asc
 #
 # Steps for .plugin/plugin.json:
 #   5. Sets top-level .version to the given version (if file exists)
@@ -21,8 +25,9 @@
 
 set -euo pipefail
 
-CHECKSUMS_FILE="${1:?Usage: $0 <checksums-file> <version>}"
-VERSION="${2:?Usage: $0 <checksums-file> <version>}"
+CHECKSUMS_FILE="${1:?Usage: $0 <checksums-file> <version> [mcpb-file]}"
+VERSION="${2:?Usage: $0 <checksums-file> <version> [mcpb-file]}"
+MCPB_FILE="${3:-}"
 SERVER_JSON="server.json"
 PLUGIN_JSON=".plugin/plugin.json"
 
@@ -60,6 +65,14 @@ jq --arg v "$VERSION" '
 ' "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
 echo "Identifiers pinned to v$VERSION"
 
+# 3b. Pin the OCI image tag. An OCI identifier carries its version in the tag
+# rather than in a version field, so step 3's URL rewrite never reaches it.
+jq --arg v "$VERSION" '
+  (.packages[] | select(.registryType == "oci") | .identifier) |=
+    sub(":[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.]+)?$"; ":" + $v)
+' "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
+echo "OCI image tags pinned to $VERSION"
+
 # 4. Update fileSha256 for each entry in checksums
 updated=0
 while read -r hash filename; do
@@ -78,11 +91,38 @@ while read -r hash filename; do
   fi
 done < "$CHECKSUMS_FILE"
 
+# 4b. Hash the .mcpb bundle. It is built after GoReleaser runs, so it is not in
+# checksums.txt, and appending it there would invalidate the checksums.txt.asc
+# signature. The bundle must therefore exist before this script runs.
+if [[ -n "$MCPB_FILE" ]]; then
+  if [[ ! -f "$MCPB_FILE" ]]; then
+    echo "ERROR: mcpb bundle not found: $MCPB_FILE" >&2
+    exit 1
+  fi
+  mcpb_hash=$(sha256sum "$MCPB_FILE" | cut -d' ' -f1)
+  mcpb_name=$(basename "$MCPB_FILE")
+  mcpb_match=$(jq --arg name "$mcpb_name" \
+    '[.packages[] | select(.identifier | endswith($name))] | length' \
+    "$SERVER_JSON")
+  if [[ "$mcpb_match" -eq 0 ]]; then
+    echo "ERROR: no package identifier ends with $mcpb_name" >&2
+    exit 1
+  fi
+  jq --arg hash "$mcpb_hash" --arg name "$mcpb_name" \
+    '(.packages[] | select(.identifier | endswith($name))).fileSha256 = $hash' \
+    "$SERVER_JSON" > tmp.$$.json && mv tmp.$$.json "$SERVER_JSON"
+  echo "SHA256 for $mcpb_name: ${mcpb_hash:0:16}..."
+  ((updated++)) || true
+else
+  echo "NOTE: no mcpb bundle given, leaving its fileSha256 untouched"
+fi
+
 total=$(jq '.packages | length' "$SERVER_JSON")
 echo "Updated $updated of $total package entries"
 
 if [[ "$updated" -eq 0 ]]; then
-  echo "WARNING: no checksums matched any package identifier" >&2
+  echo "ERROR: no package got a hash. Binary checksums no longer match any" >&2
+  echo "       identifier, and no .mcpb bundle was passed as the third argument." >&2
   exit 1
 fi
 
