@@ -20,13 +20,13 @@ for the fork → branch → fix → test → MR workflow.
 Every entry carries the same five facts, so the state of a contribution is
 readable without opening the tracker:
 
-| Field          | Meaning                                                                                             |
-| -------------- | --------------------------------------------------------------------------------------------------- |
-| **Reported**   | Whether it has been raised upstream at all, with a link to the issue                                |
-| **In review**  | Whether a change is open upstream, with a link to the MR or PR                                      |
-| **Merged**     | Whether it has landed, and **in which version**. Merged implies Reported and In review are both yes |
-| **Blocking**   | Whether it blocks this MCP server, or only costs us a workaround                                    |
-| **Workaround** | Whether we carry one while waiting, where it lives, and what retires it                             |
+| Field          | Meaning                                                                                                                         |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Reported**   | Whether it has been raised upstream at all, with a link to the issue                                                            |
+| **In review**  | Whether an upstream change was opened for review, with a link to the MR or PR. Historical: it stays yes after the change merges |
+| **Merged**     | Whether it has landed, and **in which version**. Merged implies Reported and In review are both yes                             |
+| **Blocking**   | Whether it blocks this MCP server, or only costs us a workaround                                                                |
+| **Workaround** | Whether we carry one while waiting, where it lives, and what retires it                                                         |
 
 ## Summary
 
@@ -128,15 +128,17 @@ Kept here as the record: this is what the round trip looks like when it works.
 - **Workaround**: yes — `internal/tools/groupboards.UpdateGroupBoardList` issues
   the `PUT` directly instead of calling the wrapper. Retire it, and the
   `acceptedMissingMethods` entry in `cmd/audit_1to1/internal/actions/analyze.go`,
-  when this project moves to client-go v3.
+  once the client-go version this project depends on actually contains !2996 —
+  not merely when the v3 bump happens. The MR is still open, so it may land in
+  a later v3 minor, or not at all; check the release before removing either.
 
 **What**: the group-level wrapper declares `[]*BoardList`, while GitLab returns
 the single updated list object, so the wrapper can never unmarshal a successful
 response. The project-level equivalent already returns `*BoardList`.
 
 **Note**: the major-version policy in `CLAUDE.md` ties this project's major to
-client-go's, so the v3 bump is the moment both the raw request and the audit
-exemption go.
+client-go's, so the v3 bump is the moment to *check* — but the condition is the
+fix being present, not the bump having happened.
 
 ### `GetNamespace` cannot decode a path-based lookup
 
