@@ -95,7 +95,7 @@ The user can **decline** at the confirmation step or **cancel** at any step, abo
 
 ### Two Wire Mechanisms, One Flow API
 
-How prompts travel over the wire depends on the negotiated MCP protocol version. The `elicitation.Flow` type selects the mechanism automatically per session, so tool code is written once:
+How prompts travel over the wire depends on the MCP protocol version the client **declares**, which on the legacy handshake is not the same as the one the session negotiates — see the note below the table. The `elicitation.Flow` type selects the mechanism automatically per request, so tool code is written once:
 
 | Session protocol        | Mechanism                                  | Wire shape                                                                                                                 |
 | ----------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |

@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1453,4 +1454,78 @@ func TestSessionBridge_ALegacySubscribeStillFollowsTheLease(t *testing.T) {
 	if demoted := runtime.manager.DemotedCount(); demoted == 0 {
 		t.Error("a silent legacy subscription was never demoted; the lease no longer applies to anything")
 	}
+}
+
+// TestSessionBridge_OneRenewalTickerPerStream pins that a listen carrying
+// several resources starts one renewal ticker rather than one per resource.
+//
+// The SDK calls SubscribeHandler once for every URI a listen names, and
+// RenewAll renews every watch the session holds — so a second ticker wakes up
+// on the same schedule to redo what the first just did. Harmless in ones and
+// twos, and the kind of thing that only shows up as load once a client
+// subscribes to a dozen resources at a time.
+func TestSessionBridge_OneRenewalTickerPerStream(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
+	t.Cleanup(runtime.manager.Close)
+	bridge := newSessionBridge(runtime.manager)
+	session, _ := connectedSessions(t)
+
+	streamCtx, endStream := context.WithCancel(t.Context())
+	defer endStream()
+	stream := &listenStream{cancel: func() {}}
+	ctx := withListenStream(streamCtx, stream)
+
+	// The SDK calls SubscribeHandler once per URI a listen names, so what
+	// decides how many tickers start is how many times Subscribe runs on one
+	// stream — not which URIs they were for. Three calls stand in for a listen
+	// carrying three resources.
+	const uri = "gitlab://project/42/pipeline/99"
+	subscribe := func() {
+		t.Helper()
+		if err := bridge.Subscribe(ctx, &mcp.SubscribeRequest{
+			Session: session,
+			Params:  &mcp.SubscribeParams{URI: uri},
+		}); err != nil {
+			t.Fatalf("Subscribe: %v", err)
+		}
+	}
+
+	subscribe()
+	baseline := goroutinesAfterSettling()
+
+	// Two more, standing in for the rest of a listen's URIs. Neither may add a
+	// ticker: RenewAll already renews every watch the session holds.
+	subscribe()
+	subscribe()
+
+	// Counting goroutines rather than map entries: the bookkeeping records the
+	// stream either way, and what the guard actually prevents is the extra
+	// ticker. Measured against a baseline taken after the first subscribe, so
+	// the manager's own watcher goroutine is not counted as a renewal.
+	settled := goroutinesAfterSettling()
+	if grew := settled - baseline; grew > 0 {
+		t.Errorf("%d extra goroutine(s) started for the second and third subscribe on one stream", grew)
+	}
+
+	// The claim itself is the mechanism, and it must refuse a repeat.
+	if bridge.startRenewing(stream) {
+		t.Error("startRenewing granted a second ticker for a stream that already has one")
+	}
+}
+
+// goroutinesAfterSettling reads the goroutine count once it stops moving, so a
+// ticker that is still starting up is not missed.
+func goroutinesAfterSettling() int {
+	last := runtime.NumGoroutine()
+	for range 20 {
+		time.Sleep(10 * time.Millisecond)
+		now := runtime.NumGoroutine()
+		if now == last {
+			return now
+		}
+		last = now
+	}
+	return last
 }

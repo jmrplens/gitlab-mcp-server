@@ -176,10 +176,10 @@ func TestRequestDigest_IgnoresReserialization(t *testing.T) {
 		t.Error("re-indenting the arguments changed the digest")
 	}
 
-	if same := requestDigest(name, []byte(`{"project_id":"8","title":"a"}`)); first == same {
+	if first == requestDigest(name, []byte(`{"project_id":"8","title":"a"}`)) {
 		t.Error("a different project produced the same digest")
 	}
-	if other := requestDigest("gitlab_interactive_mr_create", []byte(`{"project_id":"7","title":"a"}`)); first == other {
+	if first == requestDigest("gitlab_interactive_mr_create", []byte(`{"project_id":"7","title":"a"}`)) {
 		t.Error("a different tool produced the same digest")
 	}
 }

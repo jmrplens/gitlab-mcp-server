@@ -123,6 +123,9 @@ type sessionBridge struct {
 	// holds records which listen streams are holding each watch, so a watch
 	// outlives the first stream to let go of it. See [sessionBridge.Unsubscribe].
 	holds map[watchHold]map[*listenStream]struct{}
+	// renewing records which streams already have a renewal ticker running, so
+	// a listen carrying several URIs starts one rather than one per URI.
+	renewing map[*listenStream]struct{}
 }
 
 // watchHold identifies one watch as the manager counts it: by session and URI.
@@ -133,9 +136,10 @@ type watchHold struct {
 
 func newSessionBridge(manager *subscriptions.Manager[*mcp.ServerSession]) *sessionBridge {
 	return &sessionBridge{
-		manager: manager,
-		awaited: make(map[*mcp.ServerSession]struct{}),
-		holds:   make(map[watchHold]map[*listenStream]struct{}),
+		manager:  manager,
+		awaited:  make(map[*mcp.ServerSession]struct{}),
+		holds:    make(map[watchHold]map[*listenStream]struct{}),
+		renewing: make(map[*listenStream]struct{}),
 	}
 }
 
@@ -172,7 +176,15 @@ func (b *sessionBridge) Subscribe(ctx context.Context, req *mcp.SubscribeRequest
 // Only the listen path takes this. A legacy resources/subscribe has no stream
 // to be evidence of anything, and its session does see ordinary traffic.
 func (b *sessionBridge) renewWhileStreaming(ctx context.Context, session *mcp.ServerSession) {
-	if listenStreamOf(ctx) == nil {
+	stream := listenStreamOf(ctx)
+	if stream == nil {
+		return
+	}
+	// Once per stream, not once per URI. The SDK calls Subscribe for every
+	// resource a listen carries, and RenewAll already renews every watch the
+	// session holds, so a second ticker would wake up to do work the first one
+	// just did.
+	if !b.startRenewing(stream) {
 		return
 	}
 	// Comfortably inside the lease, so a renewal is never the thing that
@@ -185,6 +197,7 @@ func (b *sessionBridge) renewWhileStreaming(ctx context.Context, session *mcp.Se
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
+		defer b.forgetStream(stream)
 		for {
 			select {
 			case <-ctx.Done():
@@ -230,6 +243,33 @@ func (b *sessionBridge) release(session *mcp.ServerSession, uri string, stream *
 	}
 	delete(b.holds, key)
 	return true
+}
+
+// startRenewing claims the renewal ticker for a stream, reporting whether this
+// caller is the one that should run it.
+//
+// The claim is never released. A stream's renewal ends with its context, and a
+// stream is a pointer that exists for exactly one listen request, so the entry
+// is removed when the stream is forgotten in [sessionBridge.release] and
+// [sessionBridge.releaseSession] along with its holds.
+func (b *sessionBridge) startRenewing(stream *listenStream) bool {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if _, running := b.renewing[stream]; running {
+		return false
+	}
+	b.renewing[stream] = struct{}{}
+	return true
+}
+
+// forgetStream drops the bookkeeping for a stream that is going away.
+func (b *sessionBridge) forgetStream(stream *listenStream) {
+	if stream == nil {
+		return
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	delete(b.renewing, stream)
 }
 
 // releaseSession forgets every hold a session had, for when it disconnects.
