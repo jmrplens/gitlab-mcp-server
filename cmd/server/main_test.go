@@ -175,7 +175,7 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 	t.Helper()
 	cacheable := cfg.ExcludeTools == nil && cfg.TokenScopes == nil && cfg.GitLabURL == ""
 	if !cacheable {
-		server, err := createServer(client, cfg, nil)
+		server, err := createServer(t.Context(), client, cfg, nil)
 		if err != nil {
 			t.Fatalf("createServer() error: %v", err)
 		}
@@ -200,7 +200,7 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 	if server, ok := createdServers[key]; ok {
 		return server
 	}
-	server, err := createServer(sharedCreateServerClient(t), cfg, nil)
+	server, err := createServer(t.Context(), sharedCreateServerClient(t), cfg, nil)
 	if err != nil {
 		t.Fatalf("createServer() error: %v", err)
 	}
@@ -1407,7 +1407,7 @@ func TestCreateServer_DynamicToolSurfaceWithUpdaterIncludesUpdateSchema(t *testi
 		Repository:     "owner/repo",
 		CurrentVersion: "1.0.0",
 	}, autoupdate.EmptySource{})
-	server, err := createServer(client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic}, updater)
+	server, err := createServer(t.Context(), client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic}, updater)
 	if err != nil {
 		t.Fatalf("createServer(dynamic with updater) error = %v", err)
 	}
@@ -2026,7 +2026,7 @@ func TestCreateServer_ToolManifestInspectionError(t *testing.T) {
 
 	// Build directly: the stubbed inspection hook must not be captured into
 	// (or satisfied from) the shared mustCreateServer cache.
-	server, err := createServer(client, &config.ServerConfig{MetaTools: true}, nil)
+	server, err := createServer(t.Context(), client, &config.ServerConfig{MetaTools: true}, nil)
 	if err != nil {
 		t.Fatalf("createServer() error: %v", err)
 	}
@@ -4213,7 +4213,7 @@ func TestRemoveNonReadOnlyTools(t *testing.T) {
 		return &mcp.CallToolResult{}, nil, nil
 	})
 
-	removed := tools.RemoveNonReadOnlyTools(server)
+	removed := tools.RemoveNonReadOnlyTools(t.Context(), server)
 	if removed != 1 {
 		t.Errorf("RemoveNonReadOnlyTools removed %d tools, want 1", removed)
 	}

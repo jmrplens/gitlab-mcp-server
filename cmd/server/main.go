@@ -943,7 +943,7 @@ func runStdio(ctx context.Context) error {
 	}
 
 	updater := newUpdaterForTools(cfg)
-	server, err := createServer(client, serverCfg, updater) //nolint:contextcheck // startup: removeExcludedTools uses ephemeral in-memory MCP transport isolated from request ctx
+	server, err := createServer(ctx, client, serverCfg, updater)
 	if err != nil {
 		return fmt.Errorf("creating MCP server: %w", err)
 	}
@@ -1016,7 +1016,11 @@ func sessionTagOf(sessionID string) (string, bool) {
 	return tag, true
 }
 
+// The context bounds the server's lifetime rather than any one request: it is
+// what tells the subscription runtime to end its open listen streams, which
+// otherwise keep the process alive through shutdown.
 func createServer(
+	ctx context.Context,
 	client *gitlabclient.Client,
 	cfg *config.ServerConfig,
 	updater *autoupdate.Updater,
@@ -1109,7 +1113,7 @@ func createServer(
 		SchemaCache: sharedSchemaCache,
 	})
 
-	subs.attach(server)
+	subs.attach(ctx, server)
 
 	// SEP-2549 cache hints: catalogs and resource reads are token- and
 	// tier-dependent, so every cacheable result is stamped "private". A
@@ -1150,7 +1154,7 @@ func createServer(
 	metaSchemaRoutes = surfaceRegistration.metaSchemaRoutes
 	surfaceCatalog = surfaceRegistration.surfaceCatalog
 
-	applyToolVisibilityConfig(server, cfg, toolSurface, surfaceCatalog)
+	applyToolVisibilityConfig(ctx, server, cfg, toolSurface, surfaceCatalog)
 
 	toolCount, err := countRegisteredTools(server)
 	if err != nil {
@@ -1215,9 +1219,9 @@ func createServer(
 	return server, nil
 }
 
-func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
+func applyToolVisibilityConfig(ctx context.Context, server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
 	if len(cfg.ExcludeTools) > 0 {
-		removed := removeExcludedTools(server, cfg.ExcludeTools)
+		removed := removeExcludedTools(ctx, server, cfg.ExcludeTools)
 		slog.Info("excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
 	}
 	if cfg.TokenScopes != nil {
@@ -1227,7 +1231,7 @@ func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig, too
 		}
 	}
 	if cfg.ReadOnly {
-		removed := gitlabtools.RemoveNonReadOnlyTools(server)
+		removed := gitlabtools.RemoveNonReadOnlyTools(ctx, server)
 		slog.Info("read-only mode: removed write tools", "removed", removed)
 		return
 	}
@@ -1238,7 +1242,7 @@ func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig, too
 		// including tools registered outside the catalog such as the
 		// gitlab_interactive_* utilities.
 		exempt := catalogBackedToolNames(surfaceCatalog, toolSurface)
-		wrapped := gitlabtools.WrapMutatingToolsForSafeModeExcept(server, exempt)
+		wrapped := gitlabtools.WrapMutatingToolsForSafeModeExcept(ctx, server, exempt)
 		slog.Info("safe mode: intercepted mutating operations",
 			"surface", toolSurface, "wrapped_tools", wrapped, "catalog_backed_tools", len(exempt))
 	}
@@ -1590,7 +1594,6 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	// records which tag belongs to which server so the gate can refuse a
 	// session presented with a different credential.
 	var sessionTags sync.Map
-	//nolint:contextcheck // the pool bounds entry construction with its own lifetime context via WithBaseContext below
 	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
 		tag := rand.Text()
 		// No server-initiated keepalive on any HTTP entry, stateful included.
@@ -1601,7 +1604,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// mark for being idle. Liveness on this transport is the SSE
 		// keep-alive comment (see sseAwareWriter), which puts bytes on the
 		// wire without asking the client for anything.
-		srv, err := createServer(client, serverCfg, nil, withSessionTag(tag), withKeepAlive(0))
+		srv, err := createServer(ctx, client, serverCfg, nil, withSessionTag(tag), withKeepAlive(0))
 		if err != nil {
 			return nil, err
 		}
@@ -2839,7 +2842,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 	// createServer's internal tool-exclusion pass runs an ephemeral
 	// in-memory session of its own; the caller's context governs the card
 	// session below, not that registration detail.
-	srv, err := createServer(dummyClient, cfg.ServerConfig(), nil) //nolint:contextcheck // see above
+	srv, err := createServer(ctx, dummyClient, cfg.ServerConfig(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating server-card MCP server: %w", err)
 	}
@@ -3384,7 +3387,7 @@ func countCatalogActions(routes map[string]toolutil.ActionMap) int {
 // removeExcludedTools lists all registered tools and removes those whose name
 // matches any entry in the exclusion list. Matching is exact by tool name.
 // Returns the number of tools removed.
-func removeExcludedTools(server *mcp.Server, exclude []string) int {
+func removeExcludedTools(ctx context.Context, server *mcp.Server, exclude []string) int {
 	if len(exclude) == 0 {
 		return 0
 	}
@@ -3395,7 +3398,6 @@ func removeExcludedTools(server *mcp.Server, exclude []string) int {
 	}
 
 	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
 
 	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {

@@ -21,8 +21,8 @@ type SafeModePreview = toolutil.SafeModePreview
 // (ReadOnlyHint == false) with a handler that returns a
 // [SafeModePreview] instead of executing. Returns the number of tools
 // wrapped. If listing tools fails, logs the error and returns 0.
-func WrapMutatingToolsForSafeMode(server *mcp.Server) int {
-	return WrapMutatingToolsForSafeModeExcept(server, nil)
+func WrapMutatingToolsForSafeMode(ctx context.Context, server *mcp.Server) int {
+	return WrapMutatingToolsForSafeModeExcept(ctx, server, nil)
 }
 
 // WrapMutatingToolsForSafeModeExcept wraps mutating tools as
@@ -33,8 +33,7 @@ func WrapMutatingToolsForSafeMode(server *mcp.Server) int {
 // tool registered outside the catalog — the interactive gitlab_interactive_*
 // utilities, for instance — must still be wrapped here, or safe mode would let
 // it execute for real.
-func WrapMutatingToolsForSafeModeExcept(server *mcp.Server, exempt map[string]struct{}) int {
-	ctx := context.Background()
+func WrapMutatingToolsForSafeModeExcept(ctx context.Context, server *mcp.Server, exempt map[string]struct{}) int {
 	tools, err := toolutil.ListRegisteredTools(ctx, server, "safemode-filter")
 	if err != nil {
 		slog.Error("WrapMutatingToolsForSafeMode: list registered tools failed", "error", err)
@@ -106,8 +105,8 @@ func safeModeHandler(toolName string) mcp.ToolHandler {
 // Dispatcher surfaces (meta-tools, the dynamic execute tool) must not rely on
 // this: one of their tools covers many actions, so read-only filtering happens
 // in the catalog instead — see [actioncatalog.Catalog.FilterReadOnlyActions].
-func RemoveNonReadOnlyTools(server *mcp.Server) int {
-	registered, err := toolutil.ListRegisteredTools(context.Background(), server, "readonly-filter")
+func RemoveNonReadOnlyTools(ctx context.Context, server *mcp.Server) int {
+	registered, err := toolutil.ListRegisteredTools(ctx, server, "readonly-filter")
 	if err != nil {
 		slog.Error("RemoveNonReadOnlyTools: list registered tools failed", "error", err)
 		return 0

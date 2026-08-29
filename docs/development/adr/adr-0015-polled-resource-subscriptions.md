@@ -56,6 +56,19 @@ make the worst case something an operator can predict.
 - **A subscriber is an identity, not a count.** Watches are held by the
   session that asked for them, so subscribing twice is idempotent and one
   session cannot release another's watch.
+  **That identity is the session for the legacy `resources/subscribe` and the
+  listen stream for `subscriptions/listen`.** This decision was written before
+  the 2026-07-28 path existed, and the specification has moved past it: that
+  revision makes the listen request the subscription's identity, and a session
+  may hold several. The SDK unsubscribes every URI a listen carried when the
+  listen ends, so with the session as the only identity, one stream closing
+  released a watch a sibling stream was still holding — leaving that sibling
+  acknowledged, open, and unable to ever fire. The bridge therefore records
+  which streams hold each watch and releases it when the last one goes.
+  Delivery remains per-session: `Server.ResourceUpdated` notifies sessions, not
+  listen requests, and only one request ID per session per URI survives in the
+  SDK's own table, so a session with two listens on a URI sees the notification
+  on one of them. That half is upstream.
 - **The legacy `resources/subscribe` is refused in stateless HTTP mode**,
   where the session ends with the POST that created it and no notification
   could ever be delivered. `subscriptions/listen` still works there.
@@ -67,6 +80,17 @@ make the worst case something an operator can predict.
   shipped dead in the default configuration while the handshake went on
   advertising `resources.subscribe`. The listen path is marked in its
   middleware and the refusal consults that mark.
+- **A torn-down listen stream gets its completion result and no
+  `notifications/cancelled`.** The 2026-07-28 cancellation page says a server
+  "**MUST** send `notifications/cancelled` referencing a `subscriptions/listen`
+  request ID when it tears down that subscription stream". This server does not,
+  and cannot: `SubscriptionsListenResult` embeds an unexported type, so
+  application code cannot construct the message, and the SDK exposes no other
+  way to send one. What a client does get is the graceful completion result the
+  SDK writes when the handler's context ends, which tells a conforming client
+  the stream is over — so the practical gap is small, and it is recorded here
+  rather than left unstated because it is a MUST that nobody in this process
+  satisfies. Raised upstream.
 - **Rate limiting pauses every watcher on the manager**, with exponential
   back-off, because GitLab enforces its limits per user.
 - **A watch that ends for a reason the client did not ask for closes the

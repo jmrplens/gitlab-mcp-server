@@ -35,6 +35,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -300,5 +301,33 @@ func baseEnv(gitlabURL string) map[string]string {
 		"GITLAB_TOKEN": "glpat-stdio-e2e-token",
 		"AUTO_UPDATE":  "false",
 		"LOG_LEVEL":    "info",
+	}
+}
+
+// terminate sends SIGTERM and reports whether the process exited within the
+// given window.
+//
+// Shutdown is a contract too: a client that stops its server expects the
+// process to go away, and a supervisor that waits on it expects the same. A
+// server that has to be killed is a server that may not have finished what it
+// was doing.
+func (s *session) terminate(t *testing.T, within time.Duration) bool {
+	t.Helper()
+
+	if err := s.cmd.Process.Signal(syscall.SIGTERM); err != nil {
+		t.Fatalf("sending SIGTERM: %v", err)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		_, _ = s.cmd.Process.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return true
+	case <-time.After(within):
+		return false
 	}
 }

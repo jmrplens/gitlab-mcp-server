@@ -61,9 +61,10 @@ readable without opening the tracker:
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | No | No | No | No | Yes |
 | 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | No | No | No | Was yes | Yes |
-| 10 | go-sdk | [The keepalive pings a revision that removed `ping`](#the-keepalive-pings-a-session-serving-a-revision-that-removed-ping) | No | No | No | Was yes | Yes |
-| 11 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
-| 12 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
+| 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | No | No | No | No | None possible |
+| 11 | go-sdk | [The keepalive pings a revision that removed `ping`](#the-keepalive-pings-a-session-serving-a-revision-that-removed-ping) | No | No | No | Was yes | Yes |
+| 12 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
+| 13 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
 
 States verified against the upstream trackers on 2026-08-29.
 
@@ -275,6 +276,33 @@ named, which is how this surfaced.
 `test/e2e/stdio`, and `TestResilientStdio_*` in `cmd/server`. The e2e case
 asserts the client-visible contract rather than the workaround, so it keeps
 passing if the SDK ever fixes this and the filter is removed.
+
+### Application code cannot send notifications/cancelled for a listen stream
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. The client still receives the completion result the SDK
+  writes when the stream's handler returns, which tells a conforming client the
+  subscription has ended.
+- **Workaround**: none, and unlike the malformed-message entry this one really
+  has none: the type cannot be constructed at all, so there is nothing to
+  interpose.
+
+**What**: 2026-07-28 says a server "MUST send `notifications/cancelled`
+referencing a `subscriptions/listen` request ID when it tears down that
+subscription stream". `SubscriptionsListenResult` embeds an unexported type, so
+application code cannot build the message, and the SDK offers no method that
+sends one. A server that ends a subscription can therefore satisfy the graceful
+half of the contract and not this one.
+
+**How we found it**: the interaction-pattern specification audit. Reproduced on
+stdio at 2026-07-28: a watcher retired after its resource began returning 404,
+and the only output was the listen request's own result — no
+`notifications/cancelled`, before or after, with the connection still usable.
+
+**Recorded in**: ADR-0015, so the gap is stated where the design is rather than
+only here.
 
 ### The keepalive pings a session serving a revision that removed ping
 

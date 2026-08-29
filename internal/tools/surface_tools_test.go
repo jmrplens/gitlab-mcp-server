@@ -32,7 +32,7 @@ func TestRegisterServerMaintenanceSurfaceTools_SafeModeWrapsMutatingSpec(t *test
 		t.Fatalf("apply update annotations = %#v, want mutating destructive surface tool", applyTool)
 	}
 
-	wrapped := WrapMutatingToolsForSafeMode(server)
+	wrapped := WrapMutatingToolsForSafeMode(t.Context(), server)
 	if wrapped != 1 {
 		t.Fatalf("WrapMutatingToolsForSafeMode() = %d, want 1", wrapped)
 	}

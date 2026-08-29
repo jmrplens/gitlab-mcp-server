@@ -120,12 +120,22 @@ type sessionBridge struct {
 
 	mu      sync.Mutex
 	awaited map[*mcp.ServerSession]struct{}
+	// holds records which listen streams are holding each watch, so a watch
+	// outlives the first stream to let go of it. See [sessionBridge.Unsubscribe].
+	holds map[watchHold]map[*listenStream]struct{}
+}
+
+// watchHold identifies one watch as the manager counts it: by session and URI.
+type watchHold struct {
+	session *mcp.ServerSession
+	uri     string
 }
 
 func newSessionBridge(manager *subscriptions.Manager[*mcp.ServerSession]) *sessionBridge {
 	return &sessionBridge{
 		manager: manager,
 		awaited: make(map[*mcp.ServerSession]struct{}),
+		holds:   make(map[watchHold]map[*listenStream]struct{}),
 	}
 }
 
@@ -135,7 +145,58 @@ func (b *sessionBridge) Subscribe(ctx context.Context, req *mcp.SubscribeRequest
 	// disconnects while the first read is still in flight still has its
 	// interest released.
 	b.awaitEnd(req.Session)
-	return wireSubscribeError(b.manager.Subscribe(ctx, req.Session, req.Params.URI))
+	if err := wireSubscribeError(b.manager.Subscribe(ctx, req.Session, req.Params.URI)); err != nil {
+		return err
+	}
+	b.hold(req.Session, req.Params.URI, listenStreamOf(ctx))
+	return nil
+}
+
+// hold records that a stream is keeping a watch alive. A nil stream is the
+// legacy resources/subscribe, which holds nothing: there is no second holder
+// to protect it from, and the session ending is what releases it.
+func (b *sessionBridge) hold(session *mcp.ServerSession, uri string, stream *listenStream) {
+	if stream == nil {
+		return
+	}
+	key := watchHold{session: session, uri: uri}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.holds[key] == nil {
+		b.holds[key] = make(map[*listenStream]struct{}, 1)
+	}
+	b.holds[key][stream] = struct{}{}
+}
+
+// release drops one stream's hold and reports whether the watch is now
+// unheld, which is when it may actually stop.
+func (b *sessionBridge) release(session *mcp.ServerSession, uri string, stream *listenStream) bool {
+	key := watchHold{session: session, uri: uri}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	holders := b.holds[key]
+	if holders == nil {
+		return true
+	}
+	delete(holders, stream)
+	if len(holders) > 0 {
+		return false
+	}
+	delete(b.holds, key)
+	return true
+}
+
+// releaseSession forgets every hold a session had, for when it disconnects.
+func (b *sessionBridge) releaseSession(session *mcp.ServerSession) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	for key := range b.holds {
+		if key.session == session {
+			delete(b.holds, key)
+		}
+	}
 }
 
 // codeServerBusy is the implementation-defined JSON-RPC server-error code
@@ -198,7 +259,20 @@ func wireSubscribeError(err error) error {
 }
 
 // Unsubscribe drops one session's hold on a URI.
-func (b *sessionBridge) Unsubscribe(_ context.Context, req *mcp.UnsubscribeRequest) error {
+// Unsubscribe releases one holder's interest, stopping the watch only when no
+// other listen stream is still holding it.
+//
+// The manager counts subscribers by session, which is right for the legacy
+// resources/subscribe — there the session really is the subscription. It is
+// wrong for 2026-07-28, where the subscription is the listen request and a
+// session may hold several: the SDK unsubscribes every URI a listen carried
+// when that listen ends, and with the session as the only identity, the first
+// stream to close released a watch its sibling was still waiting on. The
+// sibling's stream stayed open and acknowledged, and could never fire again.
+func (b *sessionBridge) Unsubscribe(ctx context.Context, req *mcp.UnsubscribeRequest) error {
+	if !b.release(req.Session, req.Params.URI, listenStreamOf(ctx)) {
+		return nil
+	}
 	return b.manager.Unsubscribe(req.Session, req.Params.URI)
 }
 
@@ -220,6 +294,7 @@ func (b *sessionBridge) awaitEnd(session *mcp.ServerSession) {
 		b.mu.Lock()
 		delete(b.awaited, session)
 		b.mu.Unlock()
+		b.releaseSession(session)
 		b.manager.UnsubscribeAll(session)
 	}()
 }
@@ -262,8 +337,8 @@ func newListenStreams() *listenStreams {
 }
 
 // arm registers a stream and returns the function that unregisters it.
-func (s *listenStreams) arm(uris []string, cancel context.CancelFunc) func() {
-	stream := &listenStream{cancel: cancel, live: make(map[string]struct{}, len(uris))}
+func (s *listenStreams) arm(uris []string, cancel context.CancelFunc) (stream *listenStream, release func()) {
+	stream = &listenStream{cancel: cancel, live: make(map[string]struct{}, len(uris))}
 	for _, uri := range uris {
 		stream.live[uri] = struct{}{}
 	}
@@ -272,7 +347,7 @@ func (s *listenStreams) arm(uris []string, cancel context.CancelFunc) func() {
 	s.streams[stream] = struct{}{}
 	s.mu.Unlock()
 
-	return func() {
+	return stream, func() {
 		s.mu.Lock()
 		delete(s.streams, stream)
 		s.mu.Unlock()
@@ -304,6 +379,31 @@ func (s *listenStreams) stopped(uri string, _ error) {
 	}
 }
 
+// closeAll ends every open listen stream.
+//
+// Called on shutdown, where the alternative is not exiting: the SDK's listen
+// handler blocks until its context ends, and nothing else ends it, so a server
+// with one open subscription ignored SIGTERM entirely and had to be killed —
+// which is a worse outcome than the missing completion result, since a
+// supervisor's next step is SIGKILL, possibly mid-write.
+//
+// Canceling is also how each stream gets its completion result: the SDK writes
+// one when its handler's context ends, and application code cannot construct
+// that result itself.
+func (s *listenStreams) closeAll() {
+	s.mu.Lock()
+	open := make([]*listenStream, 0, len(s.streams))
+	for stream := range s.streams {
+		open = append(open, stream)
+	}
+	clear(s.streams)
+	s.mu.Unlock()
+
+	for _, stream := range open {
+		stream.cancel()
+	}
+}
+
 // middleware intercepts subscriptions/listen so its handler can be ended
 // from outside.
 func (s *listenStreams) middleware() mcp.Middleware {
@@ -312,45 +412,65 @@ func (s *listenStreams) middleware() mcp.Middleware {
 			if method != methodSubscriptionsListen {
 				return next(ctx, method, req)
 			}
-			// Marked for every listen, including one that also carries
-			// list-changed subscriptions, because the mark is what tells the
-			// subscribe handler which method it is serving. Arming the stream
-			// for closure stays narrower, below.
-			ctx = markListenSubscribe(ctx)
-
-			uris, ok := closableListenURIs(method, req)
-			if !ok {
-				return next(ctx, method, req)
+			// Every listen is armed, not only the ones that can be closed by
+			// their URIs stopping. Registration is what makes a stream
+			// reachable at shutdown, and a stream nobody can reach is one that
+			// blocks the process from exiting. Passing no URIs is what marks a
+			// stream as not closable that way: stopped() only ever looks at
+			// streams waiting on the URI it was given.
+			uris, closableByURI := closableListenURIs(method, req)
+			if !closableByURI {
+				uris = nil
 			}
 			streamCtx, cancel := context.WithCancel(ctx)
 			defer cancel()
-			release := s.arm(uris, cancel)
+			stream, release := s.arm(uris, cancel)
 			defer release()
-			return next(streamCtx, method, req)
+
+			// The stream travels in the context for every listen, including
+			// one that also carries list-changed subscriptions. It answers two
+			// questions further down: which method a subscribe is serving, and
+			// which stream is holding a watch. The SDK's deferred unsubscribe
+			// runs with this same context, so the second answer is still there
+			// when the stream is torn down.
+			return next(withListenStream(streamCtx, stream), method, req)
 		}
 	}
 }
 
-// listenSubscribeKey marks a context as belonging to a subscriptions/listen
-// request, so the subscribe handler can tell the two methods apart.
+// listenStreamKey carries the subscriptions/listen stream a request belongs to.
 //
-// The SDK gives them one handler: subscriptionsListen calls the same
-// SubscribeHandler once per resource URI it carries, and returns that
-// handler's error before it acknowledges anything. So a handler that refuses
-// every subscribe refuses subscriptions/listen too, whatever it meant to say.
-type listenSubscribeKey struct{}
+// It serves two purposes at once, both of which come from the SDK giving
+// subscriptions/listen and resources/subscribe a single handler.
+//
+// The first is telling them apart: subscriptionsListen calls SubscribeHandler
+// once per resource URI it carries and returns that handler's error before it
+// acknowledges anything, so a handler that refuses every subscribe refuses
+// subscriptions/listen too, whatever it meant to say.
+//
+// The second is telling two listens apart. A session may open several, and
+// 2026-07-28 makes the listen request the subscription's identity; the SDK's
+// own table holds one request ID per session per URI, and the session is what
+// the watch manager counts by. So without this, one stream's teardown released
+// a watch another stream was still holding.
+type listenStreamKey struct{}
 
-// markListenSubscribe records that any subscribe reached through this context
-// is the SDK's own, made on behalf of a subscriptions/listen request.
-func markListenSubscribe(ctx context.Context) context.Context {
-	return context.WithValue(ctx, listenSubscribeKey{}, true)
+// withListenStream records which listen stream a request belongs to.
+func withListenStream(ctx context.Context, stream *listenStream) context.Context {
+	return context.WithValue(ctx, listenStreamKey{}, stream)
+}
+
+// listenStreamOf returns the listen stream a request belongs to, or nil for a
+// client's own resources/subscribe.
+func listenStreamOf(ctx context.Context) *listenStream {
+	stream, _ := ctx.Value(listenStreamKey{}).(*listenStream)
+	return stream
 }
 
 // isListenSubscribe reports whether this subscribe came from a
 // subscriptions/listen request rather than a client's resources/subscribe.
 func isListenSubscribe(ctx context.Context) bool {
-	marked, _ := ctx.Value(listenSubscribeKey{}).(bool)
-	return marked
+	return listenStreamOf(ctx) != nil
 }
 
 // closableListenURIs reports the resource URIs of a listen request that
@@ -481,11 +601,19 @@ func (b *sessionBridge) subscribeUnlessStateless(ctx context.Context, req *mcp.S
 
 // attach connects the runtime to the server it notifies through, once that
 // server exists.
-func (r *subscriptionRuntime) attach(server *mcp.Server) {
+func (r *subscriptionRuntime) attach(ctx context.Context, server *mcp.Server) {
 	if r == nil {
 		return
 	}
 	r.notifier.attach(server)
+
+	// Shutdown has to reach the open listen streams, and nothing else does:
+	// their handlers block on contexts derived from each session, which the
+	// SDK does not end while it is waiting for those same handlers to return.
+	go func() {
+		<-ctx.Done()
+		r.streams.closeAll()
+	}()
 	server.AddReceivingMiddleware(
 		// Traffic on a session is the only evidence this server gets that
 		// a subscriber is still there, so it is what holds the watchers at

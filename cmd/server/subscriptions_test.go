@@ -89,7 +89,7 @@ func subscriptionTestServer(t *testing.T, gitlabURL, capabilitySurface string, o
 		CapabilitySurface: capabilitySurface,
 		GitLabURL:         gitlabURL,
 	}
-	server, err := createServer(subscriptionGitLabClient(t, gitlabURL), cfg, nil, opts...)
+	server, err := createServer(t.Context(), subscriptionGitLabClient(t, gitlabURL), cfg, nil, opts...)
 	if err != nil {
 		t.Fatalf("createServer() error: %v", err)
 	}
@@ -881,7 +881,7 @@ func TestListenStreams_EveryURIStops_ClosesTheStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	release := streams.arm([]string{"uri-a", "uri-b"}, cancel)
+	_, release := streams.arm([]string{"uri-a", "uri-b"}, cancel)
 	defer release()
 
 	streams.stopped("uri-a", subscriptions.ErrInaccessible)
@@ -901,7 +901,7 @@ func TestListenStreams_UnrelatedURIStops_LeavesTheStream(t *testing.T) {
 	streams := newListenStreams()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	release := streams.arm([]string{"mine"}, cancel)
+	_, release := streams.arm([]string{"mine"}, cancel)
 	defer release()
 
 	streams.stopped("somebody-elses", subscriptions.ErrEvicted)
@@ -915,7 +915,7 @@ func TestListenStreams_UnrelatedURIStops_LeavesTheStream(t *testing.T) {
 func TestListenStreams_ReleasedStream_IsNotCancelled(t *testing.T) {
 	streams := newListenStreams()
 	cancelled := false
-	release := streams.arm([]string{"uri"}, func() { cancelled = true })
+	_, release := streams.arm([]string{"uri"}, func() { cancelled = true })
 	release()
 
 	streams.stopped("uri", subscriptions.ErrInaccessible)
@@ -1003,7 +1003,7 @@ func TestSubscriptionRuntime_WatchStops_EndsTheStream(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	release := runtime.streams.arm([]string{uri}, cancel)
+	_, release := runtime.streams.arm([]string{uri}, cancel)
 	defer release()
 
 	// The pipeline becomes unreadable: deleted, or this token lost access.
@@ -1263,5 +1263,102 @@ func TestSubscribe_MissingResource_RefusedWithInvalidParamsCode(t *testing.T) {
 	}
 	if runtime.manager.Len() != 0 {
 		t.Errorf("watchers = %d after a refused subscribe, want 0", runtime.manager.Len())
+	}
+}
+
+// TestSessionBridge_OneListenTeardownKeepsAnothersWatch pins the identity a
+// subscription has at protocol 2026-07-28.
+//
+// The manager counts subscribers by session, which is right for the legacy
+// resources/subscribe: there the session really is the subscription, and
+// ADR-0015 says so deliberately. It is wrong for a listen. That revision makes
+// the listen request the subscription's identity, a session may open several,
+// and the SDK unsubscribes every URI a listen carried when that listen ends —
+// so with the session as the only identity, the first stream to close released
+// a watch its sibling was still holding. The sibling's stream stayed open and
+// acknowledged and could never fire again, which is worse than an error.
+//
+// The bridge is driven directly because the SDK's own per-session table would
+// swallow the second subscribe before it reached this server, hiding the case.
+// What a real client reaches is one Subscribe per listen stream, and nothing
+// stops it opening two for one URI.
+func TestSessionBridge_OneListenTeardownKeepsAnothersWatch(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
+	t.Cleanup(runtime.manager.Close)
+	bridge := newSessionBridge(runtime.manager)
+	session, _ := connectedSessions(t)
+
+	const uri = "gitlab://project/42/pipeline/99"
+
+	// Two listen streams, as two subscriptions/listen requests on one session.
+	first := &listenStream{cancel: func() {}}
+	second := &listenStream{cancel: func() {}}
+	for _, stream := range []*listenStream{first, second} {
+		ctx := withListenStream(context.Background(), stream)
+		if err := bridge.Subscribe(ctx, &mcp.SubscribeRequest{
+			Session: session,
+			Params:  &mcp.SubscribeParams{URI: uri},
+		}); err != nil {
+			t.Fatalf("Subscribe: %v", err)
+		}
+	}
+	if got := runtime.manager.Len(); got != 1 {
+		t.Fatalf("watchers = %d, want 1: two listens on one URI share a watcher", got)
+	}
+
+	// The first stream ends. The second is still listening.
+	if err := bridge.Unsubscribe(withListenStream(context.Background(), first),
+		&mcp.UnsubscribeRequest{Session: session, Params: &mcp.UnsubscribeParams{URI: uri}}); err != nil {
+		t.Fatalf("Unsubscribe(first): %v", err)
+	}
+	if got := runtime.manager.Len(); got != 1 {
+		t.Fatalf("watchers = %d after one listen ended, want 1: the surviving stream can never fire", got)
+	}
+
+	// The second ends too, and now nothing is holding it.
+	if err := bridge.Unsubscribe(withListenStream(context.Background(), second),
+		&mcp.UnsubscribeRequest{Session: session, Params: &mcp.UnsubscribeParams{URI: uri}}); err != nil {
+		t.Fatalf("Unsubscribe(second): %v", err)
+	}
+	if got := runtime.manager.Len(); got != 0 {
+		t.Errorf("watchers = %d after every listen ended, want 0: the watch outlived its subscribers", got)
+	}
+}
+
+// TestSessionBridge_LegacySubscribeIsStillSessionScoped checks that the holder
+// tracking did not change the older method's contract.
+//
+// ADR-0015's "a subscriber is an identity, not a count" still governs
+// resources/subscribe, where a session subscribing twice is idempotent and one
+// unsubscribe releases it. Only the listen path needed a finer identity.
+func TestSessionBridge_LegacySubscribeIsStillSessionScoped(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+		subscriptionCfg(config.CapabilitySurfaceFull), fastOptions())
+	t.Cleanup(runtime.manager.Close)
+	bridge := newSessionBridge(runtime.manager)
+	session, _ := connectedSessions(t)
+
+	const uri = "gitlab://project/42/pipeline/99"
+	ctx := context.Background()
+	for range 2 {
+		if err := bridge.Subscribe(ctx, &mcp.SubscribeRequest{
+			Session: session,
+			Params:  &mcp.SubscribeParams{URI: uri},
+		}); err != nil {
+			t.Fatalf("Subscribe: %v", err)
+		}
+	}
+
+	if err := bridge.Unsubscribe(ctx, &mcp.UnsubscribeRequest{
+		Session: session,
+		Params:  &mcp.UnsubscribeParams{URI: uri},
+	}); err != nil {
+		t.Fatalf("Unsubscribe: %v", err)
+	}
+	if got := runtime.manager.Len(); got != 0 {
+		t.Errorf("watchers = %d, want 0: one unsubscribe releases a session's own subscription", got)
 	}
 }
