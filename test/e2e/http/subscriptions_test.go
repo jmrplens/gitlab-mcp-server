@@ -116,12 +116,12 @@ func firstSSEFrame(t *testing.T, srv *server, rpcMethod, protocol, body string) 
 		line := scanner.Text()
 		seen.WriteString(line)
 		seen.WriteString("\n")
-		if strings.HasPrefix(line, "data: ") {
-			return strings.TrimPrefix(line, "data: ")
+		if after, ok := strings.CutPrefix(line, "data: "); ok {
+			return after
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		t.Fatalf("reading the response stream: %v", err)
+	if scanErr := scanner.Err(); scanErr != nil {
+		t.Fatalf("reading the response stream: %v", scanErr)
 	}
 	// A non-SSE body means the request was turned away before the stream
 	// began, so it is the body, not the absence of a frame, that says why.
@@ -135,7 +135,7 @@ func firstSSEFrame(t *testing.T, srv *server, rpcMethod, protocol, body string) 
 // The shared fake answers 404 to everything but /user and /version, which is
 // right for tests about admission and wrong here: a watcher's first act is to
 // read the resource, and a 404 there is refused as an inaccessible resource
-// before the acknowledgment is ever reached. That refusal is correct behaviour,
+// before the acknowledgment is ever reached. That refusal is correct behavior,
 // so the resource has to exist for the acknowledgment to be the thing under
 // test.
 func startFakeGitLabServingAProject(t *testing.T) *httptest.Server {

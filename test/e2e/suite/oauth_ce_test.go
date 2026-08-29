@@ -108,7 +108,7 @@ func testProtectedResourceMetadata(t *testing.T, cfg e2eOAuthConfig) {
 		"https://mcp.example.com",
 		[]string{cfg.gitlabURL},
 		oauth.SupportedScopes(false, false),
-		"",
+		oauth.ResourceLinks{},
 	)
 	ts := httptest.NewServer(handler)
 	defer ts.Close()

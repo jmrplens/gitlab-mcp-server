@@ -20031,7 +20031,7 @@ Add spent time to an issue. Returns: the updated time tracking stats. See also: 
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `summary` (string): Optional summary of work done
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_issue_spent_time_reset
 
@@ -22003,7 +22003,7 @@ Add spent time to a merge request. Returns: the updated time tracking stats (est
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `summary` (string): Optional summary of work done
 
-Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_mr_approval_config
 
