@@ -792,3 +792,55 @@ func TestOAuth_PathCarryingPublicURLIsSelfConsistent(t *testing.T) {
 		t.Errorf("resource = %q, want the --public-url value; a client comparing the two discards this document", metadata.Resource)
 	}
 }
+
+// TestOAuth_ResourceDocumentationIsOperatorConfigurable pins that
+// --resource-documentation reaches the RFC 9728 metadata document.
+//
+// The plumbing existed end to end — a config field, a parameter on
+// NewProtectedResourceHandler, a default — with no flag registering it, so the
+// field was always empty and the documented flag did not exist. Passing it
+// would have killed the process with "flag provided but not defined", which is
+// what makes starting the real binary the test that matters here.
+//
+// It exists because the default points at this project's own OAuth setup guide,
+// and an operator running their own OAuth application needs to point clients at
+// a page describing *their* client ID and redirect URIs.
+func TestOAuth_ResourceDocumentationIsOperatorConfigurable(t *testing.T) {
+	const ownGuide = "https://example.com/our-own-oauth-app"
+
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+
+	t.Run("the operator's page is published", func(t *testing.T) {
+		srv := startServer(t, nil,
+			"--gitlab-url="+gitlab.url,
+			"--auth-mode=oauth",
+			"--public-url="+publicURL,
+			"--resource-documentation="+ownGuide,
+		)
+		got := srv.do(t, request{method: http.MethodGet, path: "/.well-known/oauth-protected-resource"})
+		if got.status != http.StatusOK {
+			t.Fatalf("metadata status = %d, want %d: %s", got.status, http.StatusOK, got.body)
+		}
+		if !strings.Contains(got.body, ownGuide) {
+			t.Errorf("resource_documentation did not carry the operator's page: %s", got.body)
+		}
+	})
+
+	t.Run("omitting it keeps this project's guide", func(t *testing.T) {
+		srv := startServer(t, nil,
+			"--gitlab-url="+gitlab.url,
+			"--auth-mode=oauth",
+			"--public-url="+publicURL,
+		)
+		got := srv.do(t, request{method: http.MethodGet, path: "/.well-known/oauth-protected-resource"})
+		if got.status != http.StatusOK {
+			t.Fatalf("metadata status = %d, want %d: %s", got.status, http.StatusOK, got.body)
+		}
+		if !strings.Contains(got.body, "resource_documentation") {
+			t.Errorf("no resource_documentation published at all: %s", got.body)
+		}
+		if strings.Contains(got.body, ownGuide) {
+			t.Errorf("an unset flag published the test's value: %s", got.body)
+		}
+	})
+}
