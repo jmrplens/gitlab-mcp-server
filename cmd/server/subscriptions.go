@@ -126,6 +126,11 @@ type sessionBridge struct {
 	// renewing records which streams already have a renewal ticker running, so
 	// a listen carrying several URIs starts one rather than one per URI.
 	renewing map[*listenStream]struct{}
+
+	// liveRenewals counts the renewal tickers currently running. It is the
+	// number of open listen streams holding their own watches, which is worth
+	// being able to read directly rather than inferring from goroutine counts.
+	liveRenewals atomic.Int64
 }
 
 // watchHold identifies one watch as the manager counts it: by session and URI.
@@ -194,9 +199,11 @@ func (b *sessionBridge) renewWhileStreaming(ctx context.Context, session *mcp.Se
 		return
 	}
 
+	b.liveRenewals.Add(1)
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
+		defer b.liveRenewals.Add(-1)
 		defer b.forgetStream(stream)
 		for {
 			select {
@@ -260,6 +267,11 @@ func (b *sessionBridge) startRenewing(stream *listenStream) bool {
 	}
 	b.renewing[stream] = struct{}{}
 	return true
+}
+
+// activeRenewals reports how many renewal tickers are running.
+func (b *sessionBridge) activeRenewals() int64 {
+	return b.liveRenewals.Load()
 }
 
 // forgetStream drops the bookkeeping for a stream that is going away.

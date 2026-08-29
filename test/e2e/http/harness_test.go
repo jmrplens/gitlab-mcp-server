@@ -52,7 +52,11 @@ const (
 var (
 	buildOnce   sync.Once
 	builtBinary string
-	errBuild    error
+	// builtDir is recorded separately from builtBinary because a failed build
+	// leaves the directory created and the binary path empty — the one case
+	// where cleanup matters most, since the run is about to end.
+	builtDir string
+	errBuild error
 )
 
 // serverBinary builds cmd/server once for the whole package and returns its
@@ -71,6 +75,7 @@ func serverBinary(t *testing.T) string {
 			errBuild = err
 			return
 		}
+		builtDir = dir
 		out := filepath.Join(dir, "gitlab-mcp-server")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
@@ -590,12 +595,18 @@ func TestMain(m *testing.M) {
 }
 
 // removeBuiltBinary deletes the temporary directory serverBinary created, if it
-// created one. Failure is ignored: this runs after the tests have reported, so
-// there is nobody left to tell, and a leaked temporary file is not worth
-// turning a passing suite red.
+// created one.
+//
+// Keyed on the directory rather than the binary so a build that failed is
+// cleaned up too: MkdirTemp succeeds before the compile does, so the failing
+// case leaves a directory and no binary.
+//
+// Failure is ignored: this runs after the tests have reported, so there is
+// nobody left to tell, and a leaked temporary file is not worth turning a
+// passing suite red.
 func removeBuiltBinary() {
-	if builtBinary == "" {
+	if builtDir == "" {
 		return
 	}
-	_ = os.RemoveAll(filepath.Dir(builtBinary))
+	_ = os.RemoveAll(builtDir)
 }

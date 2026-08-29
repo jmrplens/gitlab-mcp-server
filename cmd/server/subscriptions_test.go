@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1493,39 +1492,32 @@ func TestSessionBridge_OneRenewalTickerPerStream(t *testing.T) {
 	}
 
 	subscribe()
-	baseline := goroutinesAfterSettling()
 
 	// Two more, standing in for the rest of a listen's URIs. Neither may add a
 	// ticker: RenewAll already renews every watch the session holds.
 	subscribe()
 	subscribe()
 
-	// Counting goroutines rather than map entries: the bookkeeping records the
-	// stream either way, and what the guard actually prevents is the extra
-	// ticker. Measured against a baseline taken after the first subscribe, so
-	// the manager's own watcher goroutine is not counted as a renewal.
-	settled := goroutinesAfterSettling()
-	if grew := settled - baseline; grew > 0 {
-		t.Errorf("%d extra goroutine(s) started for the second and third subscribe on one stream", grew)
+	// The bridge counts its own tickers, so this is exact rather than sampled:
+	// a process-wide goroutine count can move for reasons that have nothing to
+	// do with this test, and would both miss a duplicate and invent one.
+	if got := bridge.activeRenewals(); got != 1 {
+		t.Errorf("%d renewal tickers running for one stream, want 1", got)
 	}
 
 	// The claim itself is the mechanism, and it must refuse a repeat.
 	if bridge.startRenewing(stream) {
 		t.Error("startRenewing granted a second ticker for a stream that already has one")
 	}
-}
 
-// goroutinesAfterSettling reads the goroutine count once it stops moving, so a
-// ticker that is still starting up is not missed.
-func goroutinesAfterSettling() int {
-	last := runtime.NumGoroutine()
-	for range 20 {
-		time.Sleep(10 * time.Millisecond)
-		now := runtime.NumGoroutine()
-		if now == last {
-			return now
-		}
-		last = now
+	// And the ticker must end with its stream, or a long-lived server would
+	// accumulate one per subscription it ever served.
+	endStream()
+	deadline := time.Now().Add(5 * time.Second)
+	for bridge.activeRenewals() != 0 && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
 	}
-	return last
+	if got := bridge.activeRenewals(); got != 0 {
+		t.Errorf("%d renewal ticker(s) still running after the stream ended", got)
+	}
 }
