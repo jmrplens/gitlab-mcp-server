@@ -814,8 +814,108 @@ func TestFetchScopes_UnusableEndpoint_ReportsNoAnswer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := fetchScopes(t.Context(), http.DefaultClient, tt.endpoint, "glpat-x", "scopes"); got != nil {
-				t.Errorf("fetchScopes(%s) = %v, want nil", tt.name, got)
+			if got := fetchIntrospection(t.Context(), http.DefaultClient, tt.endpoint, "glpat-x"); got != nil {
+				t.Errorf("fetchIntrospection(%s) = %v, want nil", tt.name, got)
+			}
+		})
+	}
+}
+
+// TestGitLabVerifier_CacheNeverOutlivesTheToken pins that a cached admission
+// expires with the credential it was taken from.
+//
+// The verifier caches a successful verification for the configured TTL — fifteen
+// minutes by default, up to two hours. Keyed on that alone, a token that expired
+// a second after being verified kept being answered 200 for the rest of the
+// window, while the specification requires an expired token to receive 401. The
+// cached lifetime is now the shorter of the configured TTL and the token's own
+// remaining life, which introspection reports.
+func TestGitLabVerifier_CacheNeverOutlivesTheToken(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		endpoint   string
+		payload    string
+		configured time.Duration
+		wantAtMost time.Duration
+	}{
+		{
+			name:       "an OAuth token expiring sooner than the TTL shortens it",
+			endpoint:   "/oauth/token/info",
+			payload:    `{"scope":["api"],"expires_in":30}`,
+			configured: time.Hour,
+			wantAtMost: 31 * time.Second,
+		},
+		{
+			name:       "a non-expiring OAuth token keeps the configured TTL",
+			endpoint:   "/oauth/token/info",
+			payload:    `{"scope":["api"],"expires_in":null}`,
+			configured: time.Minute,
+			wantAtMost: time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id":7,"username":"someone"}`))
+			})
+			// The PAT endpoint must not answer, or introspection stops there.
+			mux.HandleFunc("/api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+			})
+			mux.HandleFunc(tt.endpoint, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tt.payload))
+			})
+			gitlab := httptest.NewServer(mux)
+			defer gitlab.Close()
+
+			verifier := NewGitLabVerifier(gitlab.URL, false, tt.configured, nil)
+			info, err := verifier(t.Context(), "glpat-whatever", nil)
+			if err != nil {
+				t.Fatalf("verify: %v", err)
+			}
+
+			lifetime := time.Until(info.Expiration)
+			if lifetime > tt.wantAtMost {
+				t.Errorf("cached for %s, want at most %s — the admission outlives the token", lifetime, tt.wantAtMost)
+			}
+			if lifetime <= 0 {
+				t.Errorf("cached lifetime is %s; a valid token must still be admitted", lifetime)
+			}
+		})
+	}
+}
+
+// TestExpiryFromDate covers the shape GitLab uses for personal access tokens,
+// which is a calendar date rather than a timestamp. Parsing it as RFC 3339 fails
+// and silently degrades to "never expires", which is the bug worth pinning.
+func TestExpiryFromDate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  any
+		zero bool
+	}{
+		{name: "a GitLab date is understood", raw: "2030-01-02", zero: false},
+		{name: "null means the token does not expire", raw: nil, zero: true},
+		{name: "an RFC 3339 timestamp is not the shape GitLab sends", raw: "2030-01-02T03:04:05Z", zero: true},
+		{name: "an empty string is not a date", raw: "", zero: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := expiryFromDate(tt.raw)
+			if got.IsZero() != tt.zero {
+				t.Errorf("expiryFromDate(%v) zero = %v, want %v", tt.raw, got.IsZero(), tt.zero)
 			}
 		})
 	}

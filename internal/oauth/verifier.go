@@ -263,12 +263,19 @@ func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.
 		// restricted instances), the historical api assumption is kept and
 		// logged, so exotic deployments keep working while mainstream
 		// tokens are checked for what they actually carry.
-		scopes := introspectScopes(ctx, client, gitlabURL, token)
+		scopes, tokenExpiry := introspectToken(ctx, client, gitlabURL, token)
+
+		// The cached admission must not outlive the credential it was taken
+		// from. Caching for the configured TTL alone would keep answering 200
+		// for a token that expired a moment after it was verified, for as long
+		// as fifteen minutes by default — and the specification requires an
+		// expired token to be answered 401.
+		ttl := effectiveCacheTTL(cacheTTL, tokenExpiry)
 
 		info := &auth.TokenInfo{
 			UserID:     strconv.Itoa(user.ID),
 			Scopes:     scopes,
-			Expiration: time.Now().Add(cacheTTL),
+			Expiration: time.Now().Add(ttl),
 			Extra: map[string]any{
 				"username": user.Username,
 				"token":    token,
@@ -276,7 +283,7 @@ func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.
 		}
 
 		if cache != nil {
-			cache.Put(gitlabURL, token, info, cacheTTL)
+			cache.Put(gitlabURL, token, info, ttl)
 		}
 
 		return info, nil
@@ -288,15 +295,93 @@ func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.
 // tokens answer GET /oauth/token/info. Either endpoint failing to yield
 // scopes falls back to the historical {"api"} assumption with a debug log —
 // refusal here would brick instances where introspection is restricted.
-func introspectScopes(ctx context.Context, client *http.Client, gitlabURL, token string) []string {
-	if scopes := fetchScopes(ctx, client, gitlabURL+"/api/v4/personal_access_tokens/self", token, "scopes"); scopes != nil {
-		return expandImpliedScopes(scopes)
+// effectiveCacheTTL is the configured TTL, shortened when the token itself dies
+// sooner. A zero expiry means the token does not expire or the instance did not
+// say, in which case the configured TTL stands. A token already past its expiry
+// gets the smallest useful lifetime rather than a negative one; GitLab will have
+// answered 401 for it anyway, so this only guards the arithmetic.
+func effectiveCacheTTL(configured time.Duration, tokenExpiry time.Time) time.Duration {
+	if tokenExpiry.IsZero() {
+		return configured
 	}
-	if scopes := fetchScopes(ctx, client, gitlabURL+"/oauth/token/info", token, "scope"); scopes != nil {
-		return expandImpliedScopes(scopes)
+	remaining := time.Until(tokenExpiry)
+	if remaining <= 0 {
+		return time.Second
+	}
+	return min(configured, remaining)
+}
+
+// introspectToken returns the token's real scopes and its own expiry.
+//
+// The expiry is what stops a cached admission from outliving the credential it
+// was taken from: the specification requires an expired token to be answered
+// 401, and a cache keyed only on a locally-chosen TTL would keep serving one for
+// up to that TTL after it died. A zero time means the token does not expire, or
+// the instance did not say — the caller then falls back to its own TTL.
+//
+// The two endpoints disagree about how to express it, which is easy to get
+// wrong: /oauth/token/info gives expires_in, a number of seconds from now, while
+// /api/v4/personal_access_tokens/self gives expires_at as a plain YYYY-MM-DD
+// date. Parsing the latter as RFC 3339 fails and silently degrades to "no
+// expiry", which is exactly the bug this exists to prevent.
+func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token string) ([]string, time.Time) {
+	if payload := fetchIntrospection(ctx, client, gitlabURL+"/api/v4/personal_access_tokens/self", token); payload != nil {
+		if scopes := stringSlice(payload["scopes"]); scopes != nil {
+			return expandImpliedScopes(scopes), expiryFromDate(payload["expires_at"])
+		}
+	}
+	if payload := fetchIntrospection(ctx, client, gitlabURL+"/oauth/token/info", token); payload != nil {
+		if scopes := stringSlice(payload["scope"]); scopes != nil {
+			return expandImpliedScopes(scopes), expiryFromSeconds(payload["expires_in"])
+		}
 	}
 	slog.Debug("token scope introspection unavailable; assuming api scope")
-	return expandImpliedScopes([]string{"api"})
+	return expandImpliedScopes([]string{"api"}), time.Time{}
+}
+
+// expiryFromDate reads a GitLab personal access token's expires_at, which is a
+// calendar date rather than a timestamp. The token stays valid through that day,
+// so the date is taken as its end.
+func expiryFromDate(raw any) time.Time {
+	s, ok := raw.(string)
+	if !ok || s == "" {
+		return time.Time{}
+	}
+	day, err := time.Parse(time.DateOnly, s)
+	if err != nil {
+		slog.Debug("token expiry not parsable as a date; treating the token as non-expiring", "value", s)
+		return time.Time{}
+	}
+	return day.AddDate(0, 0, 1)
+}
+
+// expiryFromSeconds reads an OAuth token's expires_in, a count of seconds from
+// now. It is null for a token that does not expire.
+func expiryFromSeconds(raw any) time.Time {
+	seconds, ok := raw.(float64)
+	if !ok || seconds <= 0 {
+		return time.Time{}
+	}
+	return time.Now().Add(time.Duration(seconds) * time.Second)
+}
+
+// stringSlice reads a JSON array of strings, returning nil when the field is
+// absent, not an array, or carries no strings.
+func stringSlice(raw any) []string {
+	items, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(items))
+	for _, v := range items {
+		if text, isString := v.(string); isString {
+			out = append(out, text)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // expandImpliedScopes adds the scopes GitLab grants implicitly. api is a
@@ -314,7 +399,7 @@ func expandImpliedScopes(scopes []string) []string {
 // fetchScopes reads one introspection endpoint and returns the named
 // string-array field, or nil when the endpoint does not answer for this
 // token kind.
-func fetchScopes(ctx context.Context, client *http.Client, endpoint, token, field string) []string {
+func fetchIntrospection(ctx context.Context, client *http.Client, endpoint, token string) map[string]any {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, http.NoBody)
 	if err != nil {
 		return nil
@@ -332,15 +417,5 @@ func fetchScopes(ctx context.Context, client *http.Client, endpoint, token, fiel
 	if json.NewDecoder(resp.Body).Decode(&payload) != nil {
 		return nil
 	}
-	raw, _ := payload[field].([]any)
-	scopes := make([]string, 0, len(raw))
-	for _, v := range raw {
-		if s, ok := v.(string); ok {
-			scopes = append(scopes, s)
-		}
-	}
-	if len(scopes) == 0 {
-		return nil
-	}
-	return scopes
+	return payload
 }
