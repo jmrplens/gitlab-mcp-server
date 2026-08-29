@@ -47,7 +47,8 @@ type flexibleStats struct {
 // Get retrieves current application statistics (admin).
 // Uses a raw HTTP request to work around upstream client-go issue where
 // ApplicationStatistics uses int64 fields but some GitLab versions return
-// string-encoded numbers.
+// string-encoded numbers. Tracked, unreported so far, in
+// docs/development/upstream-bugs.md.
 func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (GetOutput, error) {
 	req, err := client.GL().NewRequest("GET", "application/statistics", nil, nil)
 	if err != nil {

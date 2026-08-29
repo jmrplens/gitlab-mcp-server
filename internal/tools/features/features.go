@@ -166,6 +166,7 @@ func ListDefinitions(ctx context.Context, client *gitlabclient.Client, _ ListDef
 // Uses a raw HTTP request to work around upstream client-go issue where
 // SetFeatureFlagOptions fields lack omitempty, causing GitLab to reject
 // the request with "mutually exclusive" errors for empty string fields.
+// Tracked, unreported so far, in docs/development/upstream-bugs.md.
 func Set(ctx context.Context, client *gitlabclient.Client, input SetInput) (SetOutput, error) {
 	body := map[string]any{"value": input.Value}
 	if input.Force {

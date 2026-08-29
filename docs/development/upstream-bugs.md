@@ -3,7 +3,11 @@
 Defects and missing capabilities found in projects this server depends on, kept
 here so they are contributed back rather than only worked around.
 
-An entry earns its place by being **found from this codebase** — a workaround we
+**This register is permanent.** An entry is never deleted — when a fix lands
+upstream it is marked merged with the version that carries it, and the entry
+stays as the record of why the workaround existed and when it could go.
+
+An entry earns its place by being **found from this codebase**: a workaround we
 carry, a behaviour a test had to accommodate, a spec clause we cannot satisfy
 because the dependency does not expose what it needs. Each one records where the
 evidence is, so a contributor does not have to rediscover it.
@@ -11,85 +15,209 @@ evidence is, so a contributor does not have to rediscover it.
 See the [upstream contribution skill](../../.github/skills/upstream-contribution/)
 for the fork → branch → fix → test → MR workflow.
 
-## Status legend
+## What each entry records
 
-| Status    | Meaning                                                             |
-| --------- | ------------------------------------------------------------------- |
-| Open      | Reported or ready to report; no upstream fix yet                    |
-| Proposed  | We have an MR or issue open                                         |
-| Merged    | Fixed upstream; our workaround can be retired at the stated version |
-| Declined  | Upstream decided against it; the workaround is permanent            |
-| Not a bug | Investigated and found to be correct behaviour                      |
+Every entry carries the same five facts, so the state of a contribution is
+readable without opening the tracker:
+
+| Field          | Meaning                                                                                                                         |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Reported**   | Whether it has been raised upstream at all, with a link to the issue                                                            |
+| **In review**  | Whether an upstream change was opened for review, with a link to the MR or PR. Historical: it stays yes after the change merges |
+| **Merged**     | Whether it has landed, and **in which version**. Merged implies Reported and In review are both yes                             |
+| **Blocking**   | Whether it blocks this MCP server, or only costs us a workaround                                                                |
+| **Workaround** | Whether we carry one while waiting, where it lives, and what retires it                                                         |
+
+## Summary
+
+| # | Project | Issue | Reported | In review | Merged | Blocking | Workaround |
+| - | ------- | ----- | -------- | --------- | ------ | -------- | ---------- |
+| 1 | gitlab-org/gitlab | [403 carries no `WWW-Authenticate`](#403-responses-carry-no-www-authenticate-header) | No | No | No | No | Yes |
+| 2 | gitlab-org/gitlab | [No `resource_indicators_supported`](#no-resource_indicators_supported-in-authorization-server-metadata) | No | No | No | No | Yes |
+| 3 | client-go | [Panic unmarshalling an issue](#panic-unmarshalling-an-issue-with-no-id) | Yes | Yes | **Yes — v2.59.1** | Was yes | Retired |
+| 4 | client-go | [`UpdateIssueBoardList` cannot decode its own response](#updateissueboardlist-cannot-decode-a-successful-response) | Yes | Yes — !2996 | No | No | Yes |
+| 5 | client-go | [`GetNamespace` breaks on a path lookup](#getnamespace-cannot-decode-a-path-based-lookup) | No | No | No | No | Yes |
+| 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | No | No | No | No | Yes |
+| 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
+| 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | No | No | No | No | Yes |
+| 9 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes — #57 | Yes — #58 | No | No | Yes |
+
+States verified against the upstream trackers on 2026-08-29.
 
 ## GitLab (`gitlab-org/gitlab`)
 
 ### 403 responses carry no `WWW-Authenticate` header
 
-- **Status**: Open — not yet reported by us.
-- **Where**: `lib/api/api_guard.rb`, around the `ForbiddenError` handling.
-- **What**: GitLab's own comment states it:
-  `# FIXME: ForbiddenError (inherited from Bearer::Forbidden of Rack::Oauth2)
-  does not include WWW-Authenticate header, which breaks the standard.`
-  RFC 6750 §3 requires a protected resource that refuses a request for
-  insufficient scope to return `WWW-Authenticate: Bearer
-  error="insufficient_scope"`. GitLab returns the error in the JSON body only.
-- **Root cause**: in `rack-oauth2`, only the `Unauthorized` class builds the
-  challenge; `Forbidden` does not. Fixable in GitLab's own handler without
-  changing the gem.
-- **How we found it**: implementing insufficient-scope detection
-  (`internal/oauth.isInsufficientScope`). The obvious implementation — parse
-  `error="insufficient_scope"` out of the challenge — would have compiled,
-  passed a hand-written fake that emitted the header, and never once fired
-  against a real GitLab. We detect on the response body instead.
-- **Effort**: small. Observable API behaviour change, so it needs a maintainer
-  from the authentication area and a changelog entry.
-- **Value to us**: none — our detection does not depend on it. This is a
-  contribution, not a fix we need.
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. Our detection does not depend on the header, so this is a
+  contribution rather than a fix we need.
+- **Workaround**: yes — `internal/oauth.isInsufficientScope` reads the response
+  body instead of the challenge. It is not a stopgap: the body is the only place
+  the distinction appears, so it stays whatever upstream does.
+
+**Where**: `lib/api/api_guard.rb`, around the `ForbiddenError` handling.
+
+**What**: GitLab's own comment states it —
+`# FIXME: ForbiddenError (inherited from Bearer::Forbidden of Rack::Oauth2)
+does not include WWW-Authenticate header, which breaks the standard.`
+RFC 6750 §3 requires a protected resource that refuses a request for
+insufficient scope to return `WWW-Authenticate: Bearer
+error="insufficient_scope"`. GitLab returns the error in the JSON body only.
+
+**Root cause**: in `rack-oauth2`, only the `Unauthorized` class builds the
+challenge; `Forbidden` does not. Fixable in GitLab's own handler without
+changing the gem.
+
+**How we found it**: implementing insufficient-scope detection. The obvious
+implementation — parse `error="insufficient_scope"` out of the challenge —
+would have compiled, passed a hand-written fake that emitted the header, and
+never once fired against a real GitLab.
+
+**Effort**: small. Observable API behaviour change, so it needs a maintainer
+from the authentication area and a changelog entry.
 
 ### No `resource_indicators_supported` in authorization-server metadata
 
-- **Status**: Open — a feature request rather than a defect.
-- **Where**: `/.well-known/oauth-authorization-server`.
-- **What**: verified live on 2026-08-29 against gitlab.com, the document
-  advertises seventeen fields and not this one, so RFC 8707 resource indicators
-  are unavailable and a client cannot request an audience-restricted token.
-- **Consequence for us**: the MCP authorization specification's audience-binding
-  MUST cannot be met by its named mechanism. Recorded as
-  [ADR-0019](adr/adr-0019-audience-binding-unavailable-at-the-authorization-server.md),
-  which implements the specification's "or otherwise verify" alternative.
-- **Effort**: large, and it is a product decision rather than a patch.
+- **Reported**: no. It is a feature request rather than a defect.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes — the specification's own alternative. `--oauth-client-uid`
+  pins the OAuth applications whose tokens are admitted, compared against
+  `application.uid`. Off by default, since enabling it refuses personal access
+  tokens.
+
+**Where**: `/.well-known/oauth-authorization-server`.
+
+**What**: verified live on 2026-08-29 against gitlab.com, the document
+advertises seventeen fields and not this one, so RFC 8707 resource indicators
+are unavailable and a client cannot request an audience-restricted token.
+
+**Consequence for us**: the MCP authorization specification's audience-binding
+MUST cannot be met by its named mechanism. Recorded as
+[ADR-0019](adr/adr-0019-audience-binding-unavailable-at-the-authorization-server.md).
+
+**Effort**: large, and it is a product decision rather than a patch.
 
 ## GitLab client (`gitlab.com/gitlab-org/api/client-go`)
 
-### Panic unmarshalling an issue with a non-object `milestone`
+### Panic unmarshalling an issue with no id
 
-- **Status**: **Merged** — upstream !3006, shipped in v2.59.1.
-- **Retired**: the workaround is gone; the dependency is pinned at v2.60.0.
+- **Reported**: yes.
+- **In review**: yes —
+  [!3006](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/3006).
+- **Merged**: **yes**, on 2026-08-25 into `main`, shipped in **v2.59.1**.
+- **Blocking**: it was — the panic took the process down rather than failing one
+  call.
+- **Workaround**: retired. The dependency is pinned at v2.60.0 and the local
+  guard is gone.
+
+Kept here as the record: this is what the round trip looks like when it works.
+
+### `UpdateIssueBoardList` cannot decode a successful response
+
+- **Reported**: yes.
+- **In review**: yes —
+  [!2996](https://gitlab.com/gitlab-org/api/client-go/-/merge_requests/2996),
+  **still open**, targeting `release-client-3.0`.
+- **Merged**: no. It is accepted for the v3 line, so it will not appear in any
+  v2 release.
+- **Blocking**: no.
+- **Workaround**: yes — `internal/tools/groupboards.UpdateGroupBoardList` issues
+  the `PUT` directly instead of calling the wrapper. Retire it, and the
+  `acceptedMissingMethods` entry in `cmd/audit_1to1/internal/actions/analyze.go`,
+  once the client-go version this project depends on actually contains !2996 —
+  not merely when the v3 bump happens. The MR is still open, so it may land in
+  a later v3 minor, or not at all; check the release before removing either.
+
+**What**: the group-level wrapper declares `[]*BoardList`, while GitLab returns
+the single updated list object, so the wrapper can never unmarshal a successful
+response. The project-level equivalent already returns `*BoardList`.
+
+**Note**: the major-version policy in `CLAUDE.md` ties this project's major to
+client-go's, so the v3 bump is the moment to *check* — but the condition is the
+fix being present, not the bump having happened.
+
+### `GetNamespace` cannot decode a path-based lookup
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes — `internal/tools/namespaces.Get` issues the request
+  directly.
+
+**What**: `GetNamespace` expects a single JSON object, but some GitLab versions
+answer a path-based lookup with an array.
+
+**Before reporting**: establish which GitLab versions return the array, so the
+report names a reproduction rather than a symptom.
+
+### `SetFeatureFlagOptions` fields lack `omitempty`
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes — `internal/tools/features.Set` builds the request body
+  itself.
+
+**What**: the option struct's fields carry no `omitempty`, so empty strings are
+serialized and GitLab rejects the request with a "mutually exclusive" error.
+
+**Effort**: small — struct tags plus a test. A good first contribution.
+
+### `ApplicationStatistics` assumes numeric JSON
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes — `internal/tools/appstatistics.Get` decodes the response
+  itself.
+
+**What**: the struct uses `int64` fields, while some GitLab versions return the
+counts as JSON strings, so decoding fails.
+
+**Before reporting**: as with `GetNamespace`, pin down which versions send
+strings.
 
 ## MCP Go SDK (`github.com/modelcontextprotocol/go-sdk`)
 
 ### No keep-alive interval for SSE streams on `StreamableHTTPOptions`
 
-- **Status**: Open — not yet reported by us.
-- **What**: the SDK emits keep-alives only on the standalone GET stream
-  (`streamable.go`), not on streamed POST responses, and offers no option to
-  configure the interval. An idle SSE response therefore puts no bytes on the
-  wire, and a proxy's read timeout — nginx's `proxy_read_timeout` is 60s by
-  default — severs it. Worse, with nothing written the response headers are not
-  flushed either, so the client hangs before the first read rather than after.
-- **How we found it**: writing `TestSSEKeepAlive_IdleStreamKeepsBytesOnTheWire`.
-  The test hung instead of failing, which is how the header-flush half surfaced.
-- **Our workaround**: `sseAwareWriter` in `cmd/server/main.go` emits a comment
-  frame every 25s on any response that commits to `text/event-stream`, guarding
-  its writes with the same mutex the handler's writes take.
-- **Effort**: small for the option; the behaviour change is opt-in.
-- **Value to us**: low — the workaround is at our own middleware layer and
-  covers every stream, which is more than the requested option would.
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes, and it covers more than the requested option would —
+  `sseAwareWriter` in `cmd/server/main.go` emits a comment frame every 25s on
+  **any** response that commits to `text/event-stream`, guarding its writes with
+  the same mutex the handler's writes take. It would stay even if the option
+  landed.
+
+**What**: the SDK emits keep-alives only on the standalone GET stream, not on
+streamed POST responses, and offers no option to configure the interval. An idle
+SSE response therefore puts no bytes on the wire, and a proxy's read timeout —
+nginx's `proxy_read_timeout` is 60s by default — severs it. Worse, with nothing
+written the response headers are not flushed either, so the client hangs before
+the first read rather than after.
+
+**How we found it**: writing `TestSSEKeepAlive_IdleStreamKeepsBytesOnTheWire`.
+The test hung instead of failing, which is how the header-flush half surfaced.
 
 ## Other
 
 ### `go-selfupdate` depends on the deprecated `x/crypto/openpgp`
 
-- **Status**: **Proposed** — issue #57 and PR #58 open upstream.
-- **Consequence for us**: the `GO-2026-5932` govulncheck allowlist entry stays
-  until it merges. Retire the entry then.
+- **Reported**: yes —
+  [issue #57](https://github.com/creativeprojects/go-selfupdate/issues/57).
+- **In review**: yes —
+  [PR #58](https://github.com/creativeprojects/go-selfupdate/pull/58),
+  still open.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: yes — the `GO-2026-5932` entry in the govulncheck allowlist.
+  Retire it when the PR merges.

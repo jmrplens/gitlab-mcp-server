@@ -513,7 +513,8 @@ func UpdateGroupBoardList(ctx context.Context, client *gitlabclient.Client, inpu
 	// but GitLab returns the single updated list object, so the wrapper can
 	// never unmarshal a successful response. The request is issued directly
 	// until the upstream signature is fixed (the project-level equivalent
-	// already returns *BoardList).
+	// already returns *BoardList). Tracked in docs/development/upstream-bugs.md;
+	// client-go!2996 is open against the v3 line.
 	path := fmt.Sprintf("groups/%s/boards/%d/lists/%d", gl.PathEscape(string(input.GroupID)), input.BoardID, input.ListID)
 	req, err := newRawRequest(ctx, client, http.MethodPut, path, opts)
 	if err != nil {

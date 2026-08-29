@@ -179,9 +179,13 @@ var acceptedMissingMethods = map[string]string{
 	"RepositoryFiles.GetRawFile": "COVERED_VARIANT — same raw-file endpoint; gitlab_file_raw calls the streaming GetRawFileReader (client-go v2.58.0) so UPLOAD_MAX_FILE_SIZE is enforced without buffering the blob",
 	// COVERED_VARIANT — the wrapper's return type ([]*BoardList) cannot decode
 	// the single-object response GitLab actually sends, so the handler issues
-	// the request directly. Fixed upstream in client-go!2996 (ships with v3.0);
-	// retire this entry and the raw request when the /v3 major lands.
-	"GroupIssueBoards.UpdateIssueBoardList": "COVERED_VARIANT — group_board_list_update calls the same PUT endpoint via a raw request because the v2 wrapper declares []*BoardList and can never decode a successful response (client-go!2996, fixed in v3.0)",
+	// the request directly. client-go!2996 is open against release-client-3.0
+	// and has not merged, so no v2 release carries the fix. Retire this entry
+	// and the raw request once the client-go version this project depends on
+	// actually contains !2996 — the v3 bump is when to check, not the condition
+	// itself, since an open MR may land in a later minor or not at all.
+	// Tracked in docs/development/upstream-bugs.md.
+	"GroupIssueBoards.UpdateIssueBoardList": "COVERED_VARIANT — group_board_list_update calls the same PUT endpoint via a raw request because the v2 wrapper declares []*BoardList and can never decode a successful response (client-go!2996, open for v3)",
 
 	// COVERED_GENERIC — method-value passed to a generic helper (not a call.Fun).
 	"AwardEmoji.ListIssuesAwardEmojiOnNote":         "COVERED_GENERIC — method-value -> listNoteAwardEmoji (gitlab_issue_note_emoji_list)",
