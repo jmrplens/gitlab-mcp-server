@@ -39,6 +39,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 )
 
 // HTTP header names, MIME types, and test values reused across tests.
@@ -5823,7 +5824,7 @@ func TestCorsMiddleware_TrustedOriginPreflight_IsAnswered(t *testing.T) {
 		// TestCorsAllowHeaders_FollowTheAuthMode.
 		"Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, " +
 			"Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID, " +
-			"Mcp-Method, Mcp-Name, Mcp-Param-Name, Mcp-Param-Uri, Mcp-Param-Cursor, " +
+			"Mcp-Method, Mcp-Name, Mcp-Param-Action, " +
 			"PRIVATE-TOKEN, GITLAB-URL",
 		"Access-Control-Max-Age": corsMaxAge,
 	}
@@ -6020,4 +6021,35 @@ func TestCorsMiddleware_WildcardAndNoOrigin_BehaveAsConfigured(t *testing.T) {
 			t.Error("with no trusted origins configured an ordinary request must pass through")
 		}
 	})
+}
+
+// TestCorsAllowHeaders_CoversEveryDeclaredParameterHeader pins the CORS
+// allow-list against the x-mcp-header annotations the server actually declares,
+// rather than against a copied list of names.
+//
+// The Mcp-Param-* names are not a fixed family: SEP-2243 derives each one from
+// an annotation on a tool parameter, and this server declares exactly one, on
+// the dynamic surface's `action` property. A hand-written list drifted from it
+// and named three headers no tool declares while omitting the only real one.
+// The consequence is invisible to a curl-based test, which never honors a
+// preflight: a browser drops the unauthorized header, and the server then
+// rejects the call with "header mismatch". Since dynamic is the default
+// surface, that was every tool call from a browser.
+//
+// Asserting containment of the exported constant means the annotation and the
+// allow-list can only be changed together.
+func TestCorsAllowHeaders_CoversEveryDeclaredParameterHeader(t *testing.T) {
+	t.Parallel()
+
+	for _, mode := range []string{config.AuthModeLegacy, config.AuthModeOAuth} {
+		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+
+			got := corsAllowHeadersFor(&config.Config{AuthMode: mode})
+			if !strings.Contains(got, dynamictools.ExecuteActionHeaderName) {
+				t.Errorf("Access-Control-Allow-Headers = %q, missing %q — a browser would drop the header the server then demands",
+					got, dynamictools.ExecuteActionHeaderName)
+			}
+		})
+	}
 }

@@ -243,3 +243,39 @@ func TestCrossOrigin_MalformedTrustedOriginFailsStartup(t *testing.T) {
 		t.Errorf("the startup error should name the flag; got:\n%s", out)
 	}
 }
+
+// TestCrossOrigin_PreflightAuthorizesTheParameterHeader closes the gap between
+// the header the server demands and the one a browser is allowed to send.
+//
+// TestGate_ParamHeaderMatchesTheDocumentedName sets Mcp-Param-Action directly,
+// the way curl does, and so cannot see whether a browser would have been
+// permitted to send it. A browser asks first: it lists the header in
+// Access-Control-Request-Headers, and if the response's
+// Access-Control-Allow-Headers does not cover it, the header is dropped from
+// the real request — after which the server rejects the call with "header
+// mismatch" for the absence of the very thing it refused to authorize.
+//
+// The allow-list once named three Mcp-Param-* headers no tool declares and
+// omitted the only one that exists, which made every gitlab_execute_action call
+// from a browser fail on the default surface while every curl-based test passed.
+func TestCrossOrigin_PreflightAuthorizesTheParameterHeader(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--trusted-origins=https://claude.ai")
+
+	got := srv.do(t, request{
+		method: http.MethodOptions, path: "/mcp",
+		headers: map[string]string{
+			"Origin":                         "https://claude.ai",
+			"Access-Control-Request-Method":  http.MethodPost,
+			"Access-Control-Request-Headers": "mcp-param-action",
+		},
+	})
+
+	if got.status != http.StatusNoContent && got.status != http.StatusOK {
+		t.Fatalf("preflight status = %d, want 204 or 200", got.status)
+	}
+	allowed := got.header.Get("Access-Control-Allow-Headers")
+	if !strings.Contains(strings.ToLower(allowed), "mcp-param-action") {
+		t.Errorf("Access-Control-Allow-Headers = %q; a browser would drop Mcp-Param-Action and the call would then be rejected for its absence", allowed)
+	}
+}

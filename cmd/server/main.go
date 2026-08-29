@@ -32,6 +32,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
 	"encoding/json"
 	"errors"
@@ -937,6 +938,26 @@ func keepAliveFor(cfg *config.ServerConfig) time.Duration {
 	return 30 * time.Second
 }
 
+// sessionIDMinter returns the function the SDK calls to mint a session ID.
+// With no tag — stdio, where sessions cannot be presented by another caller —
+// it returns nil so the SDK keeps its own default.
+func sessionIDMinter(tag string) func() string {
+	if tag == "" {
+		return nil
+	}
+	return func() string { return tag + sessionTagSeparator + rand.Text() }
+}
+
+// sessionTagOf returns the pool tag a session ID was minted under, and whether
+// the ID carries one at all.
+func sessionTagOf(sessionID string) (string, bool) {
+	tag, _, found := strings.Cut(sessionID, sessionTagSeparator)
+	if !found || tag == "" {
+		return "", false
+	}
+	return tag, true
+}
+
 func createServer(
 	client *gitlabclient.Client,
 	cfg *config.ServerConfig,
@@ -984,6 +1005,14 @@ func createServer(
 		Instructions: buildInstructions(toolSurface, capabilitySurface, cfg.Stateless),
 		Logger:       slog.Default(),
 		Capabilities: serverCapabilities,
+		// The SDK asks the RESOLVED server for the session ID, so a tag minted
+		// here is a trustworthy statement about which pooled entry owns the
+		// session. cmd/server/authgate.go checks it on every later request:
+		// without that, the SDK serves any request carrying a known session ID
+		// from the session's own server, discarding the per-credential
+		// resolution entirely (go-sdk streamable.go serveStatefulPOST returns
+		// before getServer is ever called).
+		GetSessionID: sessionIDMinter(settings.sessionTag),
 		CompletionHandler: func(ctx context.Context, req *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
 			return completionHandler.Complete(ctx, req)
 		},
@@ -1333,8 +1362,19 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		slog.Warn("stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
 	}
 
+	// Each pooled entry mints session IDs under its own tag, and sessionTags
+	// records which tag belongs to which server so the gate can refuse a
+	// session presented with a different credential.
+	var sessionTags sync.Map
+	//nolint:contextcheck // the pool bounds entry construction with its own lifetime context via WithBaseContext below
 	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
-		return createServer(client, serverCfg, nil)
+		tag := rand.Text()
+		srv, err := createServer(client, serverCfg, nil, withSessionTag(tag))
+		if err != nil {
+			return nil, err
+		}
+		sessionTags.Store(srv, tag)
+		return srv, nil
 	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
 		serverpool.WithRevalidateInterval(cfg.RevalidateInterval),
 		serverpool.WithIdleTimeout(cfg.PoolIdleTimeout),
@@ -1452,7 +1492,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		mux.HandleFunc("GET "+path, cardHandler)
 	}
 
-	registerHTTPMCPHandlers(ctx, cfg, httpAddr, pool, mux)
+	registerHTTPMCPHandlers(ctx, cfg, httpAddr, pool, &sessionTags, mux)
 
 	var rootHandler http.Handler = mux
 	rootHandler = crossOriginProtectionMiddleware(cfg.TrustedOrigins, rootHandler)
@@ -1542,12 +1582,12 @@ func startServing(
 	return serverErr, nil
 }
 
-func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, mux *http.ServeMux) {
+func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, sessionTags *sync.Map, mux *http.ServeMux) {
 	if cfg.AuthMode == config.AuthModeOAuth {
-		registerOAuthMCPHandlers(ctx, cfg, httpAddr, pool, mux)
+		registerOAuthMCPHandlers(ctx, cfg, httpAddr, pool, sessionTags, mux)
 		return
 	}
-	registerLegacyMCPHandlers(ctx, cfg, pool, mux)
+	registerLegacyMCPHandlers(ctx, cfg, pool, sessionTags, mux)
 }
 
 // mountMCPEndpoint routes the MCP handler to the paths that are the MCP
@@ -1659,7 +1699,7 @@ func streamableHTTPOptions(cfg *config.Config) *mcp.StreamableHTTPOptions {
 	}
 }
 
-func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string, pool *serverpool.ServerPool, mux *http.ServeMux) {
+func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string, pool *serverpool.ServerPool, sessionTags *sync.Map, mux *http.ServeMux) {
 	// The protected-resource identifier is the advertised public origin
 	// (validated at config load: https, no fragment, no trailing slash) —
 	// RFC 9728 §1.2. Deriving it from the bind address produced host-less
@@ -1688,6 +1728,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		gitlabURLs:         cfg.InstanceURLs(),
 		limiter:            authLimiter,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
+		sessionTags:        sessionTags,
 		// The same challenge the guard in front emits, minus its error
 		// parameters: a gate rejection is a pool failure, not a verdict on
 		// the credential, but a client reaching it must still be told the
@@ -1777,7 +1818,7 @@ func oauthCacheTTL(configured time.Duration) time.Duration {
 	return config.DefaultOAuthCacheTTL
 }
 
-func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, mux *http.ServeMux) {
+func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, sessionTags *sync.Map, mux *http.ServeMux) {
 	authLimiter := serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
 	gate := &mcpServerGate{
@@ -1785,6 +1826,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 		gitlabURLs:         cfg.InstanceURLs(),
 		limiter:            authLimiter,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
+		sessionTags:        sessionTags,
 		challenge:          legacyAuthChallenge,
 	}
 	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))
@@ -2006,15 +2048,22 @@ const (
 	// headers a given mode honors are appended by corsAllowHeadersFor:
 	// advertising one a mode ignores tells a browser client to send
 	// something that cannot work.
-	// Mcp-Method, Mcp-Name and the Mcp-Param-* family are REQUIRED by the SDK
-	// from protocol 2026-07-28 onwards — a POST without Mcp-Method is
-	// rejected before any handler runs. Omitting them here meant the
-	// preflight refused the very headers the server then demanded, so no
-	// browser client could speak the current protocol at all, whatever its
-	// origin was allowed to do.
+	// Mcp-Method and Mcp-Name are REQUIRED by the SDK from protocol 2026-07-28
+	// onwards — a POST without Mcp-Method is rejected before any handler runs.
+	// Omitting them here meant the preflight refused the very headers the
+	// server then demanded, so no browser client could speak the current
+	// protocol at all, whatever its origin was allowed to do.
+	//
+	// Mcp-Param-* is not a fixed family: each name is derived from an
+	// x-mcp-header annotation on a tool parameter, so this list is built from
+	// the annotation this server actually declares. Naming ones it does not
+	// declare authorizes nothing, and omitting the one it does reintroduces
+	// the same failure for every call on the default surface — a browser drops
+	// the unauthorized header, and the server rejects the call for its
+	// absence.
 	corsBaseAllowHeaders = "Authorization, Content-Type, Accept, " +
 		"Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID, " +
-		"Mcp-Method, Mcp-Name, Mcp-Param-Name, Mcp-Param-Uri, Mcp-Param-Cursor"
+		"Mcp-Method, Mcp-Name, " + dynamictools.ExecuteActionHeaderName
 	// The session and protocol headers are unsafelisted response headers, so
 	// a browser cannot read them unless they are exposed by name.
 	//
@@ -2066,6 +2115,10 @@ const mcpEndpointPath = "/mcp"
 
 // Paths the server card is published at.
 const (
+	// sessionTagSeparator divides the pool tag from the random part of a
+	// session ID. "." is not produced by rand.Text(), so the split is
+	// unambiguous.
+	sessionTagSeparator = "."
 	// serverCardPath is the location the server-card extension recommends.
 	serverCardPath = "/server-card"
 	// serverCardLegacyPath is the location its earlier draft recommended,

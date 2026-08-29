@@ -2567,8 +2567,8 @@ func TestExecuteActionSchema_XMCPHeader_AnnotatesActionParam(t *testing.T) {
 	// here is what makes the relationship legible: the schema value and the
 	// header are not the same string, and conflating them is the bug this
 	// pair of assertions exists to prevent.
-	if executeActionHeaderName != "Mcp-Param-"+executeActionHeaderSuffix {
-		t.Errorf("wire header = %q, want the annotation prefixed with Mcp-Param-", executeActionHeaderName)
+	if ExecuteActionHeaderName != "Mcp-Param-"+executeActionHeaderSuffix {
+		t.Errorf("wire header = %q, want the annotation prefixed with Mcp-Param-", ExecuteActionHeaderName)
 	}
 	if params, paramsOK := properties["params"].(map[string]any); !paramsOK {
 		t.Fatalf("gitlab_execute_action schema has no params property: %v", properties)

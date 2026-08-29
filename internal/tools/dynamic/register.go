@@ -46,9 +46,13 @@ const (
 	// documented header was answered "header mismatch" — the annotation was
 	// unusable for the one purpose it exists for.
 	executeActionHeaderSuffix = "Action"
-	// executeActionHeaderName is the resulting wire header, for documentation
-	// and for tests that assert what a client must actually send.
-	executeActionHeaderName = "Mcp-Param-" + executeActionHeaderSuffix
+	// ExecuteActionHeaderName is the resulting wire header, for documentation,
+	// for tests that assert what a client must actually send, and for the HTTP
+	// CORS allow-list: a browser drops a request header its preflight did not
+	// authorize, and the server then rejects the call for that header's
+	// absence, so the two must be derived from one another rather than
+	// maintained in parallel.
+	ExecuteActionHeaderName = "Mcp-Param-" + executeActionHeaderSuffix
 	// xMCPHeaderKeyword is the JSON Schema keyword defined by SEP-2243.
 	xMCPHeaderKeyword = "x-mcp-header"
 

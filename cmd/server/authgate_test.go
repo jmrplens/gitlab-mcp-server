@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -421,7 +422,7 @@ func TestRegisterLegacyMCPHandlers_UnauthenticatedPOST_NeverReturnsNoServerAvail
 		Stateless:    true,
 	}
 	mux := http.NewServeMux()
-	registerLegacyMCPHandlers(t.Context(), cfg, newGateTestPool(t, okFactory, cfg.GitLabURL), mux)
+	registerLegacyMCPHandlers(t.Context(), cfg, newGateTestPool(t, okFactory, cfg.GitLabURL), &sync.Map{}, mux)
 
 	srv := httptest.NewServer(mux)
 	defer srv.Close()

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -164,6 +165,11 @@ func (f *gateFailure) write(w http.ResponseWriter) {
 // carry its own status, headers, and machine-readable reason.
 type mcpServerGate struct {
 	pool *serverpool.ServerPool
+	// sessionTags maps each pooled server to the tag prefixing the session
+	// IDs it mints, so a stateful request presenting a session ID can be
+	// checked against the credential that minted it. Nil in tests and in any
+	// mode without a pool, where the check is skipped.
+	sessionTags *sync.Map
 	// gitlabURLs are the instances this deployment publishes. Empty means
 	// the caller chooses freely (legacy, unfixed); one is the pinned
 	// instance every request reaches; several make the GITLAB-URL header a
@@ -234,6 +240,10 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 			failure.write(w)
 			return
 		}
+		if sessionFailure := g.checkSessionOwnership(r, server); sessionFailure != nil {
+			sessionFailure.write(w)
+			return
+		}
 		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, server)
 		ctx = g.withIdentity(ctx, r)
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -272,6 +282,53 @@ func (g *mcpServerGate) withIdentity(ctx context.Context, r *http.Request) conte
 
 // resolve returns the pool server for the request, or the failure that stopped
 // it. Exactly one of the two return values is non-nil.
+// mcpSessionIDHeader is the streamable HTTP session header. The SDK keeps its
+// own copy unexported, so the name is restated here rather than reached for.
+const mcpSessionIDHeader = "Mcp-Session-Id"
+
+// checkSessionOwnership refuses a request that presents a session ID minted for
+// a different credential.
+//
+// The SDK short-circuits a stateful POST carrying Mcp-Session-Id straight to
+// that session's own transport and never calls the server-resolution function,
+// so without this check any credential the pool admits could drive another
+// caller's session — executing against their GitLab instance, with their token,
+// and being recorded in the audit log under their username. The MCP security
+// guidance is explicit that a handle must be bound server-side to the
+// authenticated principal and refused when presented by any other.
+//
+// 404 is the prescribed answer: it is the terminated-session signal, and a
+// conforming client responds by starting a new session without an ID, so the
+// refusal self-heals rather than stranding the caller.
+func (g *mcpServerGate) checkSessionOwnership(r *http.Request, server *mcp.Server) *gateFailure {
+	sessionID := r.Header.Get(mcpSessionIDHeader)
+	if sessionID == "" || g.sessionTags == nil {
+		return nil
+	}
+	presented, ok := sessionTagOf(sessionID)
+	if !ok {
+		// A session ID this deployment never minted. Stateless mode issues
+		// none at all, so anything untagged is either stale or forged.
+		return sessionOwnershipFailure()
+	}
+	owned, found := g.sessionTags.Load(server)
+	if !found || owned != presented {
+		slog.Warn("request rejected: session ID does not belong to the presented credential")
+		return sessionOwnershipFailure()
+	}
+	return nil
+}
+
+// sessionOwnershipFailure is the refusal written for a session that belongs to
+// another credential.
+func sessionOwnershipFailure() *gateFailure {
+	return &gateFailure{
+		status:  http.StatusNotFound,
+		code:    errCodeInvalidRequest,
+		message: "This session does not belong to the presented credential. Start a new session by sending initialize without a session ID.",
+	}
+}
+
 func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	ip := clientIP(r, g.trustedProxyHeader)
 

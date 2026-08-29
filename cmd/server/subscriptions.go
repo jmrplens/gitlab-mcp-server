@@ -501,6 +501,16 @@ type serverOption func(*serverSettings)
 // on: every field falls back to its package's own defaults.
 type serverSettings struct {
 	subscriptions subscriptions.Options
+	// sessionTag prefixes every session ID this server mints, so a stateful
+	// request presenting a session ID can be checked against the credential
+	// that minted it. Empty in stdio mode, where there is no pool and no
+	// session to steal.
+	sessionTag string
+}
+
+// withSessionTag makes this server mint session IDs carrying tag as a prefix.
+func withSessionTag(tag string) serverOption {
+	return func(s *serverSettings) { s.sessionTag = tag }
 }
 
 func newServerSettings(opts []serverOption) serverSettings {

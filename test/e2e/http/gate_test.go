@@ -12,6 +12,7 @@ package httpe2e
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -260,5 +261,89 @@ func TestGate_ParamHeaderMatchesTheDocumentedName(t *testing.T) {
 	}
 	if !strings.Contains(got.body, `"result"`) {
 		t.Errorf("a successful tools/call must carry a JSON-RPC result, got: %s", truncate(got.body))
+	}
+}
+
+// startTokenAwareGitLab is a fake GitLab whose /api/v4/user echoes the
+// presented credential back as the username, so a test can tell which token a
+// request was actually executed with rather than merely which one it carried.
+func startTokenAwareGitLab(t *testing.T) *fakeGitLab {
+	t.Helper()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abcdef"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("PRIVATE-TOKEN")
+		w.Header().Set("Content-Type", "application/json")
+		//#nosec G705 -- a test fake deliberately echoing the presented credential: the assertion is which token executed the call
+		_, _ = w.Write([]byte(`{"id":1,"username":"` + token + `"}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	})
+
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return &fakeGitLab{url: srv.URL}
+}
+
+// TestGate_SessionIsBoundToTheCredentialThatMintedIt proves a session ID cannot
+// be used by a caller other than the one it was issued to.
+//
+// The SDK short-circuits a stateful POST carrying Mcp-Session-Id straight to
+// that session's own transport, without ever calling the server-resolution
+// function (go-sdk streamable.go, serveStatefulPOST returns before getServer).
+// Every pooled server carries its own GitLab client and token, so before the
+// gate bound sessions to the credential that minted them, presenting any
+// admitted credential plus a known session ID executed GitLab calls with the
+// session owner's token — and the audit log recorded them under the owner's
+// username, not the caller's.
+//
+// Only reachable with --stateless=false: the default mints no session IDs.
+func TestGate_SessionIsBoundToTheCredentialThatMintedIt(t *testing.T) {
+	gitlab := startTokenAwareGitLab(t)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--stateless=false")
+
+	const initialize = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}`
+
+	// Sessions exist only on the revisions that predate stateless streamable
+	// HTTP: the SDK refuses both 2026-07-28 and 2025-11-25 unless the handler
+	// is stateless, so this test speaks the newest revision that still has
+	// sessions at all, with a body carrying none of the newer _meta.
+	const statefulVersion = "2025-06-18"
+	const statefulBody = `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`
+
+	first := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp", body: initialize,
+		headers: map[string]string{"PRIVATE-TOKEN": "glpat-owner", "MCP-Protocol-Version": statefulVersion},
+	})
+	sessionID := first.header.Get("Mcp-Session-Id")
+	if sessionID == "" {
+		t.Fatalf("no session ID minted in stateful mode; status=%d body=%s", first.status, first.body)
+	}
+
+	// The owner may keep using it.
+	owner := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp", body: statefulBody,
+		headers: map[string]string{"PRIVATE-TOKEN": "glpat-owner", "Mcp-Session-Id": sessionID, "MCP-Protocol-Version": statefulVersion},
+	})
+	if owner.status != http.StatusOK {
+		t.Errorf("the session owner was refused its own session: status=%d body=%s", owner.status, owner.body)
+	}
+
+	// A different credential presenting the same session must not be served.
+	intruder := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp", body: statefulBody,
+		headers: map[string]string{"PRIVATE-TOKEN": "glpat-intruder", "Mcp-Session-Id": sessionID, "MCP-Protocol-Version": statefulVersion},
+	})
+	if intruder.status == http.StatusOK {
+		t.Fatalf("a different credential drove the session owner's server: status=%d body=%s", intruder.status, intruder.body)
+	}
+	if intruder.status != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 — the terminated-session signal a conforming client recovers from", intruder.status)
 	}
 }
