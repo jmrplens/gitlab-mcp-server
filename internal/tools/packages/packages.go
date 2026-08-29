@@ -84,6 +84,23 @@ func validatePublishInput(ctx context.Context, input PublishInput) error {
 
 // Publish publishes a file to the GitLab Generic Package Registry.
 func Publish(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input PublishInput) (PublishOutput, error) {
+	return publishWithTracker(ctx, client, input, progress.FromRequest(req))
+}
+
+// publishWithTracker is Publish with the progress tracker supplied by the
+// caller.
+//
+// A caller publishing several files in one tool call has to pass its own
+// tracker: building a second one from the same request would give the same
+// progress token two independent monotonic counters, and the sequence the
+// client receives would run backwards as the two interleave. See
+// [progress.Tracker.OnScale].
+func publishWithTracker(
+	ctx context.Context,
+	client *gitlabclient.Client,
+	input PublishInput,
+	tracker progress.Tracker,
+) (PublishOutput, error) {
 	if err := validatePublishInput(ctx, input); err != nil {
 		return PublishOutput{}, err
 	}
@@ -94,7 +111,6 @@ func Publish(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient
 	}
 	defer cleanup()
 
-	tracker := progress.FromRequest(req)
 	if tracker.IsActive() {
 		reader = toolutil.NewProgressReader(ctx, reader, fileSize, tracker)
 	}

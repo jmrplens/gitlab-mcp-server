@@ -37,6 +37,36 @@ type Tracker struct {
 	session *mcp.ServerSession
 	token   any
 	state   *progressState
+
+	// scaled reports that this Tracker rewrites what its callers pass into a
+	// shared scale, set by [Tracker.OnScale]. base is added to every progress
+	// value and outerTotal replaces every total.
+	scaled     bool
+	base       float64
+	outerTotal float64
+}
+
+// OnScale returns a Tracker that reports on a caller-chosen scale while sharing
+// this one's monotonic state.
+//
+// It exists because "the progress value MUST increase with each notification"
+// is a property of one progress token, not of one Tracker, and a token belongs
+// to the whole tool call. A sub-step that measures itself in its own units —
+// bytes of one file, while the step above counts files — cannot be made to
+// satisfy that by guarding each counter separately: the two interleave on the
+// wire and the sequence goes backwards. The guard in Update only ever compared
+// a Tracker against itself, so it could not see it.
+//
+// The fix is one scale rather than one guard. The sub-step keeps reporting its
+// own numbers, and they are placed inside the outer measure here: base is where
+// this sub-step starts, outerTotal is the whole job. The returned Tracker shares
+// the same *progressState, so what the client receives is a single increasing
+// series with a stable total.
+func (t Tracker) OnScale(base, outerTotal float64) Tracker {
+	t.scaled = true
+	t.base = base
+	t.outerTotal = outerTotal
+	return t
 }
 
 // FromRequest extracts the progress token from a CallToolRequest and returns
@@ -81,6 +111,12 @@ func (t Tracker) Update(ctx context.Context, progress, total float64, message st
 	}
 	if err := ctx.Err(); err != nil {
 		return
+	}
+	if t.scaled {
+		// Translated before the monotonic check, so the guard compares what
+		// the client will actually receive.
+		progress += t.base
+		total = t.outerTotal
 	}
 	if t.state != nil {
 		// Hold the mutex across NotifyProgress so concurrent callers cannot
