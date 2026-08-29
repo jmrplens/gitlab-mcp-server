@@ -248,8 +248,12 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 		}
 		if action.Route.Destructive {
 			message := fmt.Sprintf("Confirm %s? This action may be irreversible.", toolName)
-			if result := toolutil.ConfirmDestructiveAction(ctx, req, input, message); result != nil {
-				return result, nil, nil
+			guard, guardErr := toolutil.ConfirmDestructiveAction(ctx, req, input, message)
+			if guardErr != nil {
+				return nil, nil, guardErr
+			}
+			if guard != nil {
+				return guard, nil, nil
 			}
 		}
 		actionCtx := toolutil.ContextWithRequest(ctx, req)

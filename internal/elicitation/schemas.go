@@ -33,7 +33,15 @@ func confirmSchema(message string) map[string]any {
 		"type": "object",
 		"properties": map[string]any{
 			"confirmed": map[string]any{
-				"type":        "boolean",
+				"type": "boolean",
+				// A client that pre-populates from defaults opens this
+				// dialog on "no", so an accidental Enter declines a
+				// destructive action rather than approving one. The
+				// specification offers defaults as a convenience; this is
+				// the one schema here where the safe value is obvious, and
+				// the others deliberately have none, since suggesting an
+				// answer to an open question is not a convenience.
+				"default":     false,
 				"title":       "Confirm",
 				"description": message,
 			},

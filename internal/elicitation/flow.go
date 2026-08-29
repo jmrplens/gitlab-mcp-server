@@ -15,11 +15,13 @@ package elicitation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
 	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -261,7 +263,16 @@ func (f *Flow) GatherData(ctx context.Context, id, message string, schema map[st
 	if !f.IsSupported() {
 		return nil, ErrElicitationNotSupported
 	}
-	return f.exchange(ctx, id, message, schema)
+	content, err := f.exchange(ctx, id, message, schema)
+	if err != nil {
+		return nil, err
+	}
+	// The caller supplied the schema and gets the content back unexamined, so
+	// this is the one prompt where nothing else would check it.
+	if invalid := validateAgainstSchema(schema, content); invalid != nil {
+		return nil, invalid
+	}
+	return content, nil
 }
 
 // ElicitURL sends a URL-mode elicitation request, directing the user to a
@@ -322,4 +333,51 @@ func (f *Flow) InputRequiredResult() *mcp.CallToolResult {
 // for handlers that report outcomes through an error return.
 func (f *Flow) PendingError() error {
 	return &InputRequiredError{result: f.InputRequiredResult()}
+}
+
+// validateAgainstSchema checks an answer against the schema it was asked
+// against.
+//
+// "Servers SHOULD validate received data matches the requested schema." On the
+// legacy path the SDK does this inside Elicit. The multi round-trip path never
+// calls Elicit — the answer arrives as an ordinary field of the next tool call
+// — so nothing validated it there.
+//
+// This is applied to [Flow.GatherData] and not to the typed prompts, which is a
+// deliberate line rather than an oversight. Each typed prompt already validates
+// its own answer, with a message written for the case (an option that is not in
+// the list, a number outside its bounds) rather than a schema path. Two of them
+// also accept more than their schema advertises, on purpose: the 2026-07-28
+// elicitation subset has no integer enum, so an integer choice is offered as
+// decimal strings and parsed back, and a client that answers with the number
+// instead is honored. Validating those strictly would refuse a client that got
+// the answer right, to enforce a schema shape the protocol forced on us.
+//
+// GatherData has no such parser: it takes an arbitrary schema from its caller
+// and hands the content straight back. That is where an unchecked answer can
+// actually reach a handler as the wrong type, so that is where this runs.
+func validateAgainstSchema(schema, content map[string]any) error {
+	if schema == nil || content == nil {
+		return nil
+	}
+	raw, marshalErr := json.Marshal(schema)
+	if marshalErr != nil {
+		return fmt.Errorf("elicitation: cannot encode the requested schema: %w", marshalErr)
+	}
+	var parsed jsonschema.Schema
+	if unmarshalErr := json.Unmarshal(raw, &parsed); unmarshalErr != nil {
+		return fmt.Errorf("elicitation: cannot read the requested schema: %w", unmarshalErr)
+	}
+	resolved, resolveErr := parsed.Resolve(nil)
+	if resolveErr != nil {
+		return fmt.Errorf("elicitation: cannot resolve the requested schema: %w", resolveErr)
+	}
+	if invalid := resolved.Validate(content); invalid != nil {
+		// The same classification a malformed confirmation gets: the client
+		// answered something other than what was asked, which is not a
+		// decision anyone made. The detail is joined rather than wrapped so
+		// callers can still branch on the sentinel.
+		return fmt.Errorf("%w: %w", ErrMalformedAnswer, invalid)
+	}
+	return nil
 }

@@ -76,8 +76,9 @@ readable without opening the tracker:
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | No | No | No | No | Yes |
 | 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | No | No | No | Was yes | Yes |
 | 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | No | No | No | No | None possible |
-| 11 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
-| 12 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
+| 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | No | No | No | No | None taken |
+| 12 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
+| 13 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
 
 States verified against the upstream trackers on 2026-08-29.
 
@@ -289,6 +290,37 @@ named, which is how this surfaced.
 `test/e2e/stdio`, and `TestResilientStdio_*` in `cmd/server`. The e2e case
 asserts the client-visible contract rather than the workaround, so it keeps
 passing if the SDK ever fixes this and the filter is removed.
+
+### The declared protocol version, not the negotiated one, selects MRTR
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: none taken, deliberately. Disagreeing with the SDK here would
+  be worse than matching it: our gate and `clientSupportsMultiRoundTrip` would
+  choose differently for the same session, and the SDK labels the result.
+
+**What**: `initialize` is deprecated in 2026-07-28, so `negotiatedVersion`
+(`mcp/shared.go`) caps that handshake at `2025-11-25` — while
+`InitializeParams.ProtocolVersion` keeps whatever the client asked for.
+`clientSupportsMultiRoundTrip` (`mcp/mrtr.go`) reads the latter, so a client
+that sends `initialize` requesting `2026-07-28` is negotiated down to
+`2025-11-25` and served multi round-trip requests regardless. The negotiated
+version is the one that describes what the session can actually do, and it
+should drive both.
+
+**Blast radius is small.** The SDK's own client middleware fulfills
+`inputRequests` whatever version it negotiated, so an SDK-based client never
+notices. It takes a hand-written client that implements `2025-11-25` strictly,
+claims `2026-07-28` in its handshake, and ignores `inputRequests` to be harmed.
+
+**How we found it**: the interaction-pattern specification audit. Observed on
+stdio: `initialize -> protocolVersion='2025-11-25'`, and the next `tools/call`
+answered `resultType: 'input_required'`.
+
+**Documented in**: `docs/reference/capabilities/elicitation.md`, so the
+behaviour is stated where someone writing a client would look.
 
 ### Application code cannot send notifications/cancelled for a listen stream
 

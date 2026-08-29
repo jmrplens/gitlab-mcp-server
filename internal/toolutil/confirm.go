@@ -39,9 +39,20 @@ func isTruthy(s string) bool {
 //  4. Elicitation unsupported and no confirm param → fail closed: return an
 //     error result prompting the caller to re-send with confirm: true
 //
-// Returns nil if the action should proceed. Returns a non-nil *mcp.CallToolResult
-// if the action was canceled or requires explicit confirmation.
-func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, params map[string]any, message string) *mcp.CallToolResult {
+// Returns nil, nil if the action should proceed. Returns a non-nil
+// *mcp.CallToolResult if the action was canceled or requires explicit
+// confirmation.
+//
+// The error return is for protocol faults rather than tool outcomes: a
+// requestState this server did not issue, one carrying a version it does not
+// know, or an inputResponses value of the wrong type. "Protocol errors
+// (malformed JSON, invalid schema, internal server errors) SHOULD return a
+// JSON-RPC error response with an appropriate error code and message", and none
+// of those three is something the model wrote or can correct — putting them in
+// a tool result asks it to fix a field its client mangled. Everything a caller
+// can act on (declined, cancelled, a client that cannot prompt) stays in the
+// result, which is where MCP wants tool-level failure.
+func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, params map[string]any, message string) (*mcp.CallToolResult, error) {
 	tool := ""
 	if req != nil {
 		tool = req.Params.Name
@@ -49,12 +60,12 @@ func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, par
 
 	if IsYOLOMode() {
 		slog.Debug("destructive action auto-confirmed (YOLO mode)", "tool", tool)
-		return nil
+		return nil, nil //nolint:nilnil // no result and no error is the "proceed" answer; see the doc comment
 	}
 
 	if hasExplicitConfirm(params) {
 		slog.Debug("destructive action confirmed via explicit param", "tool", tool)
-		return nil
+		return nil, nil //nolint:nilnil // no result and no error is the "proceed" answer; see the doc comment
 	}
 
 	// Fail closed when the client cannot prompt: without this, every client
@@ -64,13 +75,13 @@ func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, par
 	flow, err := elicitation.FlowFromRequest(req)
 	if err != nil {
 		slog.Warn("destructive confirmation state invalid", "tool", tool, "error", err)
-		return ErrorResult(err.Error())
+		return nil, InvalidParams(err)
 	}
 	if !flow.IsSupported() {
 		slog.Warn("blocked destructive action without explicit confirmation", "tool", tool)
 		return ErrorResult(message +
 			" The connected client cannot prompt for confirmation." +
-			" Re-send with confirm=true only after the user explicitly approves this operation.")
+			" Re-send with confirm=true only after the user explicitly approves this operation."), nil
 	}
 
 	return ConfirmAction(ctx, req, message)
@@ -103,7 +114,7 @@ func hasExplicitConfirm(params map[string]any) bool {
 // >= 2026-07-28 the confirmation travels as a multi round-trip input request
 // (SEP-2322): the first pass returns an input-required result and the client
 // retries the call with the user's answer attached.
-func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string) *mcp.CallToolResult {
+func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string) (*mcp.CallToolResult, error) {
 	tool := ""
 	if req != nil {
 		tool = req.Params.Name
@@ -112,31 +123,31 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string
 	flow, err := elicitation.FlowFromRequest(req)
 	if err != nil {
 		slog.Warn("destructive confirmation state invalid", "tool", tool, "error", err)
-		return ErrorResult(err.Error())
+		return nil, InvalidParams(err)
 	}
 	if !flow.IsSupported() {
-		return nil
+		return nil, nil //nolint:nilnil // no result and no error is the "proceed" answer; see the doc comment
 	}
 	confirmed, err := flow.Confirm(ctx, elicitation.ConfirmExchangeID, message)
 	switch {
 	case errors.Is(err, elicitation.ErrInputPending):
 		slog.Debug("destructive confirmation pending client input", "tool", tool)
-		return flow.InputRequiredResult()
+		return flow.InputRequiredResult(), nil
 	case errors.Is(err, elicitation.ErrDeclined), errors.Is(err, elicitation.ErrCancelled):
 		slog.Info("destructive action canceled by user", "tool", tool)
-		return CancelledResult("Operation canceled by user.")
+		return CancelledResult("Operation canceled by user."), nil
 	case err != nil:
 		// Fail closed: a destructive action must never proceed on a
 		// malformed or failed confirmation exchange.
 		slog.Warn("destructive confirmation failed", "tool", tool, "error", err)
-		return elicitation.ConfirmFailedResult(err)
+		return elicitation.ConfirmFailedResult(err), nil
 	}
 	if !confirmed {
 		slog.Info("destructive action denied by user", "tool", tool)
-		return CancelledResult("Operation canceled by user.")
+		return CancelledResult("Operation canceled by user."), nil
 	}
 	slog.Debug("destructive action confirmed by user", "tool", tool)
-	return nil
+	return nil, nil //nolint:nilnil // proceed
 }
 
 // CancelledResult returns an error tool result indicating the user canceled.

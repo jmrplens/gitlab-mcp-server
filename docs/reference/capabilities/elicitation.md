@@ -102,6 +102,23 @@ How prompts travel over the wire depends on the negotiated MCP protocol version.
 | `< 2026-07-28` (legacy) | Synchronous server-initiated requests      | The server sends `elicitation/create` requests mid-call and blocks for each answer                                         |
 | `>= 2026-07-28`         | Multi-round-trip requests (MRTR, SEP-2322) | The tool result carries an `inputRequests` map; the client fulfills it and retries the call with `inputResponses` attached |
 
+The version that decides this is the one the client **declared**, not the one the
+session **negotiated**, and on the legacy handshake those differ. `initialize` is
+itself deprecated in 2026-07-28, so go-sdk caps its negotiation at `2025-11-25`
+while `InitializeParams.ProtocolVersion` still holds whatever the client asked
+for. A client that sends `initialize` requesting `2026-07-28` is therefore
+negotiated down and served MRTR anyway.
+
+That is deliberate rather than overlooked. The SDK makes the same choice in
+`clientSupportsMultiRoundTrip`, and its client middleware fulfills
+`inputRequests` regardless of version, so an SDK-based client is unaffected;
+disagreeing with it here would produce a result the SDK then labels
+inconsistently. A hand-written client that strictly implements `2025-11-25`,
+claims `2026-07-28` in its handshake, and does not handle `inputRequests` would
+receive a result it cannot act on — but it would have to do all three. Recorded
+in [upstream-bugs.md](../../development/upstream-bugs.md): the negotiated
+version should drive both sides, and that is the SDK's call to make.
+
 On the multi-round-trip path the handler is **re-invoked from the start on every round**. Answers gathered in earlier rounds are carried in the opaque `requestState` string that the client echoes back, so multi-step wizards replay previously answered prompts from state instead of re-asking the user. From the user's perspective both mechanisms look identical: the same sequential forms in the same order.
 
 ```go

@@ -858,3 +858,151 @@ func TestFlow_MRTR_TwoRounds_CarriesTheAnswerForward(t *testing.T) {
 		t.Errorf("the handler ran %d times, want 2 (queue, then resolve)", rounds)
 	}
 }
+
+// TestGatherData_ValidatesTheAnswerAgainstItsSchema pins the one prompt where
+// nothing else checks what came back.
+//
+// "Servers SHOULD validate received data matches the requested schema." The
+// legacy path gets this from the SDK, inside Elicit. The multi round-trip path
+// never calls Elicit, so on that path an answer reaches the handler exactly as
+// the client sent it.
+//
+// The typed prompts each validate their own answers with better messages, so
+// this is deliberately scoped to GatherData, which takes an arbitrary schema
+// and returns the content untouched.
+func TestGatherData_ValidatesTheAnswerAgainstItsSchema(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"count": map[string]any{"type": "number"},
+			"name":  map[string]any{"type": "string"},
+		},
+		"required": []string{"count", "name"},
+	}
+
+	tests := []struct {
+		name    string
+		content map[string]any
+		wantErr bool
+	}{
+		{
+			name:    "an answer matching the schema",
+			content: map[string]any{"count": 3.0, "name": "ok"},
+		},
+		{
+			name:    "a field of the wrong type",
+			content: map[string]any{"count": "three", "name": "ok"},
+			wantErr: true,
+		},
+		{
+			name:    "a required field missing",
+			content: map[string]any{"count": 3.0},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newMRTRFlow(map[string]answerRecord{
+				"data": {Action: "accept", Content: tt.content},
+			})
+
+			got, err := f.GatherData(context.Background(), "data", "Fill this in", schema)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("an answer that does not satisfy the schema was accepted: %v", got)
+				}
+				if !errors.Is(err, ErrMalformedAnswer) {
+					t.Errorf("err = %v, want it classified as a malformed answer rather than a user decision", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("a conforming answer was refused: %v", err)
+			}
+		})
+	}
+}
+
+// TestTypedPrompts_KeepTheirOwnValidation records the line that schema
+// validation deliberately does not cross.
+//
+// Two typed prompts accept more than their schema advertises, on purpose. The
+// 2026-07-28 elicitation subset has no integer enum — PrimitiveSchemaDefinition
+// is String | Number | Boolean | Enum, and every enum variant is string-typed —
+// so an integer choice is offered as decimal strings and parsed back, and a
+// client that answers with the number instead is honored rather than refused.
+//
+// Validating those against their own schema would reject a client that got the
+// answer right, in order to enforce a shape the protocol forced on us. This
+// test exists so that a later pass which "finishes" schema validation has to
+// decide that deliberately rather than by accident.
+func TestTypedPrompts_KeepTheirOwnValidation(t *testing.T) {
+	t.Run("an integer choice answered as a number is accepted", func(t *testing.T) {
+		f := newMRTRFlow(map[string]answerRecord{
+			"days": {Action: "accept", Content: map[string]any{"selection": 30.0}},
+		})
+		got, err := f.SelectOneInt(context.Background(), "days", "How many days?", []int{7, 30, 90})
+		if err != nil {
+			t.Fatalf("a number answer to a string-typed enum was refused: %v", err)
+		}
+		if got != 30 {
+			t.Errorf("got %d, want 30", got)
+		}
+	})
+
+	t.Run("an option outside the list is still refused, in its own words", func(t *testing.T) {
+		f := newMRTRFlow(map[string]answerRecord{
+			"vis": {Action: "accept", Content: map[string]any{"selection": "hacked"}},
+		})
+		_, err := f.SelectOne(context.Background(), "vis", "Visibility?", []string{"private", "public"})
+		if err == nil {
+			t.Fatal("an option outside the list was accepted")
+		}
+		if !strings.Contains(err.Error(), "allowed options") {
+			t.Errorf("err = %v, want the prompt's own message rather than a schema path", err)
+		}
+	})
+}
+
+// TestConfirmSchema_DefaultsToDeclining pins the one default this package
+// emits.
+//
+// "Clients that support defaults SHOULD pre-populate form fields with these
+// values." For a destructive confirmation the safe starting point is obvious,
+// and a client that pre-populates then opens the dialog on "no", so an
+// accidental Enter declines rather than approves. The other builders carry no
+// default on purpose: suggesting an answer to an open question is not a
+// convenience.
+func TestConfirmSchema_DefaultsToDeclining(t *testing.T) {
+	props, ok := confirmSchema("Delete it?")["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("confirmSchema has no properties")
+	}
+	field, ok := props["confirmed"].(map[string]any)
+	if !ok {
+		t.Fatal("confirmSchema has no 'confirmed' property")
+	}
+	value, present := field["default"]
+	if !present {
+		t.Fatal("the confirmation field carries no default, so a pre-populating client chooses for itself")
+	}
+	if value != false {
+		t.Errorf("default = %v, want false: a destructive dialog must not open pre-approved", value)
+	}
+
+	for _, other := range []map[string]any{
+		textSchema("m", "f"),
+		selectOneSchema("m", []string{"a"}),
+		numberSchema("m", "f", 0, 10),
+	} {
+		otherProps, _ := other["properties"].(map[string]any)
+		for name, raw := range otherProps {
+			if otherField, isMap := raw.(map[string]any); isMap {
+				if _, hasDefault := otherField["default"]; hasDefault {
+					t.Errorf("%q carries a default; only the confirmation is meant to suggest an answer", name)
+				}
+			}
+		}
+	}
+}

@@ -49,9 +49,14 @@ func surfaceToolHandler(toolName string, route ActionRoute, formatResult FormatR
 		start := time.Now()
 		if route.Destructive {
 			message := fmt.Sprintf("Confirm destructive action %q?", toolName)
-			if result := ConfirmDestructiveAction(ctx, req, input, message); result != nil {
+			guard, guardErr := ConfirmDestructiveAction(ctx, req, input, message)
+			if guardErr != nil {
+				LogToolCallAll(ctx, req, toolName, start, guardErr)
+				return nil, nil, guardErr
+			}
+			if guard != nil {
 				LogToolCallAll(ctx, req, toolName, start, nil)
-				return result, nil, nil
+				return guard, nil, nil
 			}
 		}
 		result, err := route.Handler(ContextWithRequest(ctx, req), input)
