@@ -42,11 +42,17 @@ func confirmSchema(message string) map[string]any {
 	}
 }
 
-// parseConfirmContent extracts the boolean confirmation value; a missing or
-// non-boolean field counts as not confirmed.
-func parseConfirmContent(content map[string]any) bool {
-	confirmed, ok := content["confirmed"].(bool)
-	return ok && confirmed
+// parseConfirmContent extracts the boolean confirmation value and reports
+// whether the answer satisfied the schema it was asked against.
+//
+// The two are separate facts and used to be collapsed into one. An answer with
+// no boolean `confirmed` field read as false, which the caller then reported as
+// "Operation canceled by user." — a decision no user made, attributed to them,
+// on the strength of a client-side bug. A destructive action must still not
+// proceed, but what it reports has to be what happened.
+func parseConfirmContent(content map[string]any) (confirmed, wellFormed bool) {
+	confirmed, wellFormed = content["confirmed"].(bool)
+	return confirmed, wellFormed
 }
 
 // textSchema builds the schema for a free-form text prompt.

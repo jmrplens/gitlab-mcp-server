@@ -15,10 +15,10 @@ package elicitation
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -64,13 +64,6 @@ type answerRecord struct {
 	Content map[string]any `json:"content,omitempty"`
 }
 
-// flowState is the JSON payload round-tripped through the opaque
-// RequestState field between rounds of a multi round-trip flow.
-type flowState struct {
-	Version int                     `json:"v"`
-	Answers map[string]answerRecord `json:"answers,omitempty"`
-}
-
 // Flow performs elicitation exchanges for a single tool call, selecting
 // the synchronous path for legacy sessions and the multi round-trip path
 // for protocol >= 2026-07-28 sessions. Prompt methods take a stable id
@@ -81,6 +74,9 @@ type Flow struct {
 	mrtr    bool
 	answers map[string]answerRecord
 	pending mcp.InputRequestMap
+	// digest identifies the call this flow belongs to, so answers given to
+	// one call cannot be presented on another.
+	digest string
 }
 
 // FlowFromRequest builds a Flow for the current tool call. For multi
@@ -104,15 +100,13 @@ func FlowFromRequest(req *mcp.CallToolRequest) (*Flow, error) {
 	if req.Params == nil {
 		return f, nil
 	}
+	f.digest = requestDigest(req.Params.Name, req.Params.Arguments)
 	if state := req.Params.RequestState; state != "" {
-		var st flowState
-		if err := json.Unmarshal([]byte(state), &st); err != nil {
-			return nil, fmt.Errorf("elicitation: invalid requestState: %w", err)
+		answers, err := decodeState(state, f.digest, time.Now())
+		if err != nil {
+			return nil, err
 		}
-		if st.Version != flowStateVersion {
-			return nil, fmt.Errorf("elicitation: unsupported requestState version %d", st.Version)
-		}
-		maps.Copy(f.answers, st.Answers)
+		maps.Copy(f.answers, answers)
 	}
 	for id, resp := range req.Params.InputResponses {
 		er, ok := resp.(*mcp.ElicitResult)
@@ -176,7 +170,11 @@ func (f *Flow) Confirm(ctx context.Context, id, message string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return parseConfirmContent(content), nil
+	confirmed, wellFormed := parseConfirmContent(content)
+	if !wellFormed {
+		return false, ErrMalformedAnswer
+	}
+	return confirmed, nil
 }
 
 // PromptText asks the user for free-form text input. See [Client.PromptText].
@@ -307,16 +305,16 @@ func (f *Flow) ElicitURL(ctx context.Context, id, gitlabBaseURL, targetURL, mess
 // The result must be returned as-is, with no content added: the protocol
 // forbids mixing content and inputRequests in one result.
 func (f *Flow) InputRequiredResult() *mcp.CallToolResult {
-	state, err := json.Marshal(flowState{Version: flowStateVersion, Answers: f.answers})
+	state, err := encodeState(f.answers, f.digest, time.Now())
 	if err != nil {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("elicitation: failed to encode request state: %v", err)}},
+			Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}},
 			IsError: true,
 		}
 	}
 	return &mcp.CallToolResult{
 		InputRequests: f.pending,
-		RequestState:  string(state),
+		RequestState:  state,
 	}
 }
 

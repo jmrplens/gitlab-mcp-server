@@ -41,6 +41,16 @@ var ErrCancelled = errors.New("elicitation: user canceled")
 // form elicitation but not URL mode elicitation.
 var ErrURLElicitationNotSupported = errors.New("elicitation: client does not support URL elicitation")
 
+// ErrMalformedAnswer is returned when a client accepts an elicitation request
+// with content that does not satisfy the schema the request carried.
+//
+// It is deliberately not ErrDeclined or ErrCancelled. Those two mean a person
+// decided something; this means a client sent something the server cannot read.
+// Reporting the second as the first invents a user decision that never
+// happened, which is worse than reporting a failure, because a model acting on
+// "the user cancelled" will not retry and will tell the user they refused.
+var ErrMalformedAnswer = errors.New("elicitation: the answer did not satisfy the requested schema")
+
 // ErrFormElicitationNotSupported is returned when the client declares url mode
 // and not form mode, so a form request would be one "the client has not
 // declared support for".
@@ -126,7 +136,11 @@ func (c Client) Confirm(ctx context.Context, message string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return parseConfirmContent(result), nil
+	confirmed, wellFormed := parseConfirmContent(result)
+	if !wellFormed {
+		return false, ErrMalformedAnswer
+	}
+	return confirmed, nil
 }
 
 // PromptText asks the user for free-form text input and returns the value.

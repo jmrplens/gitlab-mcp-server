@@ -161,12 +161,13 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 
 	tracker.Step(ctx, 3, 4, "Confirming issue creation...")
 
-	summary := fmt.Sprintf("Create issue in project %s?\n\n**Title**: %s", input.ProjectID, title)
+	summary := fmt.Sprintf("Create issue in project %s?\n\n**Title**: %s",
+		toolutil.EscapeConsentValue(string(input.ProjectID)), toolutil.EscapeConsentValue(title))
 	if description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, description)
+		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(description))
 	}
 	if len(labels) > 0 {
-		summary += "\n**Labels**: " + strings.Join(labels, ", ")
+		summary += "\n**Labels**: " + toolutil.EscapeConsentValue(strings.Join(labels, ", "))
 	}
 	if confidential != nil && *confidential {
 		summary += "\n**Confidential**: Yes"
@@ -346,12 +347,13 @@ type mrSummaryParams struct {
 // source branch, and squash values.
 func buildMRSummary(p mrSummaryParams) string {
 	summary := fmt.Sprintf("Create merge request in project %s?\n\n**Title**: %s\n**Source**: %s → **Target**: %s",
-		p.ProjectID, p.Title, p.SourceBranch, p.TargetBranch)
+		toolutil.EscapeConsentValue(string(p.ProjectID)), toolutil.EscapeConsentValue(p.Title),
+		toolutil.EscapeConsentValue(p.SourceBranch), toolutil.EscapeConsentValue(p.TargetBranch))
 	if p.Description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, p.Description)
+		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(p.Description))
 	}
 	if len(p.Labels) > 0 {
-		summary += "\n**Labels**: " + strings.Join(p.Labels, ", ")
+		summary += "\n**Labels**: " + toolutil.EscapeConsentValue(strings.Join(p.Labels, ", "))
 	}
 	if p.RemoveSource != nil && *p.RemoveSource {
 		summary += "\n**Remove source branch**: Yes"
@@ -402,9 +404,9 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	tracker.Step(ctx, 3, 4, "Confirming release creation...")
 
 	summary := fmt.Sprintf("Create release in project %s?\n\n**Tag**: %s\n**Name**: %s",
-		input.ProjectID, tagName, name)
+		toolutil.EscapeConsentValue(string(input.ProjectID)), toolutil.EscapeConsentValue(tagName), toolutil.EscapeConsentValue(name))
 	if description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, description)
+		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(description))
 	}
 
 	if confirmErr := confirmCreation(ctx, fl, summary, "release creation"); confirmErr != nil {
@@ -467,15 +469,16 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 
 	tracker.Step(ctx, 3, 4, "Confirming project creation...")
 
-	summary := fmt.Sprintf("Create new GitLab project?\n\n**Name**: %s\n**Visibility**: %s", name, visibility)
+	summary := fmt.Sprintf("Create new GitLab project?\n\n**Name**: %s\n**Visibility**: %s",
+		toolutil.EscapeConsentValue(name), toolutil.EscapeConsentValue(visibility))
 	if description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, description)
+		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(description))
 	}
 	if initReadme {
 		summary += "\n**README**: Yes"
 	}
 	if defaultBranch != "" {
-		summary += "\n**Default Branch**: " + defaultBranch
+		summary += "\n**Default Branch**: " + toolutil.EscapeConsentValue(defaultBranch)
 	}
 
 	if confirmErr := confirmCreation(ctx, fl, summary, "project creation"); confirmErr != nil {

@@ -50,8 +50,11 @@ func TestFlow_Pending_QueuesInputRequest(t *testing.T) {
 	if req.Message != "Enter title" {
 		t.Errorf("queued message = %q, want 'Enter title'", req.Message)
 	}
-	if !strings.Contains(result.RequestState, `"v":1`) {
-		t.Errorf("RequestState = %q, want versioned state", result.RequestState)
+	// The state is signed now, so its version is readable from the prefix
+	// rather than from the JSON: nothing inside can be trusted before the MAC
+	// has been checked, and the version has to be legible before that.
+	if !strings.HasPrefix(result.RequestState, "v1.") {
+		t.Errorf("RequestState = %q, want state tagged with its version", result.RequestState)
 	}
 }
 
@@ -670,7 +673,11 @@ func TestFlow_MRTR_InvalidRequestState(t *testing.T) {
 // which costs one round trip and cannot corrupt anything.
 func TestFlow_MRTR_UnsupportedStateVersion(t *testing.T) {
 	handler := func(_ context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
-		req.Params.RequestState = `{"v":99,"answers":{}}`
+		// Shaped as this build emits state, with a version it does not know.
+		// The point of the prefix is exactly this: the version is legible
+		// before the signature, so a payload from another build is refused for
+		// what it is rather than for failing a check it was never given.
+		req.Params.RequestState = "v99.eyJ2Ijo5OX0.bm90LWEtdmFsaWQtbWFj"
 		if _, err := FlowFromRequest(req); err != nil {
 			//nolint:nilerr // the rejection is asserted in-band via the result text
 			return textResult("state rejected: " + err.Error()), nil
@@ -689,7 +696,7 @@ func TestFlow_MRTR_UnsupportedStateVersion(t *testing.T) {
 	if !strings.Contains(got, "state rejected") {
 		t.Fatalf("result text = %q, want the state to be rejected", got)
 	}
-	if !strings.Contains(got, "unsupported requestState version 99") {
+	if !strings.Contains(got, `unsupported requestState version "v99"`) {
 		t.Errorf("result text = %q, want the offending version named", got)
 	}
 }
@@ -796,5 +803,58 @@ func urlCapabilities() *mcp.ClientCapabilities {
 			Form: &mcp.FormElicitationCapabilities{},
 			URL:  &mcp.URLElicitationCapabilities{},
 		},
+	}
+}
+
+// TestFlow_MRTR_TwoRounds_CarriesTheAnswerForward is the end-to-end check that
+// binding the state to its call did not break the flow that state exists for.
+//
+// This is the failure the binding could introduce, and it is worse than the one
+// it fixes: if the digest computed in round two disagreed with round one — for
+// any reason, a client re-serializing its own arguments included — the answers
+// would be dropped, the same question re-queued, and the flow would never
+// finish. Tests that only check that foreign state is refused cannot see it,
+// because refusing everything passes them.
+//
+// The SDK client drives both rounds itself: it answers the queued input request
+// through its ElicitationHandler and retries the call with the state echoed
+// back. That is what makes this worth running here rather than hand-rolling the
+// second call — the retry is built the way a real client builds it, not the way
+// this test imagines it.
+func TestFlow_MRTR_TwoRounds_CarriesTheAnswerForward(t *testing.T) {
+	var rounds int
+	handler := func(ctx context.Context, _ *mcp.CallToolRequest, f *Flow) (*mcp.CallToolResult, error) {
+		rounds++
+		title, err := f.PromptText(ctx, "title", "Enter title", "title")
+		if err != nil {
+			if errors.Is(err, ErrInputPending) {
+				return f.InputRequiredResult(), nil
+			}
+			return nil, err
+		}
+		return textResult("got title: " + title), nil
+	}
+	cs := flowTestTool(t, handler, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"title": "the answer"}}, nil
+	})
+
+	result, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "flow_tool",
+		Arguments: map[string]any{"project_id": "7", "title_hint": "something"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if got := resultText(result); !strings.Contains(got, "got title: the answer") {
+		t.Fatalf("the flow did not carry the answer forward: %q", got)
+	}
+	if len(result.InputRequests) != 0 {
+		t.Error("the final result still queues a question that was answered")
+	}
+	// Exactly two: one that queued the request and one that read the answer. A
+	// larger number would mean the state was not being honored and the flow was
+	// going round again.
+	if rounds != 2 {
+		t.Errorf("the handler ran %d times, want 2 (queue, then resolve)", rounds)
 	}
 }

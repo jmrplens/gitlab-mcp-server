@@ -596,15 +596,19 @@ func TestBuildMRSummary_Full(t *testing.T) {
 		RemoveSource: &removeSource,
 		Squash:       &squash,
 	})
+	// The caller-controlled values are backtick-quoted in the dialog, so each
+	// is looked for as it is rendered: a consent prompt has to show what the
+	// action will do, and the quoting is what stops those values from passing
+	// for the server's own words.
 	checks := []struct {
 		name, want string
 	}{
-		{"project", "project 42"},
-		{"title", "feat: new"},
-		{"source", "feature/x"},
-		{"target", "main"},
-		{"description", "Full description text here"},
-		{"labels", "bug, feature"},
+		{"project", "project `42`"},
+		{"title", "`feat: new`"},
+		{"source", "`feature/x`"},
+		{"target", "`main`"},
+		{"description", "`Full description text here`"},
+		{"labels", "`bug, feature`"},
 		{"remove source", "Remove source branch"},
 		{"squash", "Squash commits"},
 	}
@@ -1944,5 +1948,41 @@ func TestResultsForOperationsThatDidNotRun_AreErrorResults(t *testing.T) {
 				t.Error("an error result still has to say what happened")
 			}
 		})
+	}
+}
+
+// TestBuildMRSummary_DefangsInjectedMarkupAndLinks pins the consent dialog
+// against text that arrived from GitLab by way of the model.
+//
+// "MCP servers requesting elicitation SHOULD NOT include URLs intended to be
+// clickable in any field of a form mode elicitation request." The dialog is
+// where a person decides whether to allow an action, so anything in it that can
+// pass for the server's own words is a problem. Interpolating raw values did
+// exactly that: a project path carrying newlines, bold text and an https URL
+// reached the user as a rendered security notice with a link inside the
+// question they were being asked.
+//
+// The values are still shown — a project path the user cannot read is no help
+// to them deciding — they just cannot impersonate the prompt any more.
+func TestBuildMRSummary_DefangsInjectedMarkupAndLinks(t *testing.T) {
+	s := buildMRSummary(mrSummaryParams{
+		ProjectID:    "demo/proj\n\n**SECURITY NOTICE** Verify at https://evil.example/verify to continue",
+		Title:        "Audit <b>title</b> https://evil2.example/x",
+		SourceBranch: "feature/x",
+		TargetBranch: "main",
+	})
+
+	if strings.Contains(s, "https://evil.example") || strings.Contains(s, "https://evil2.example") {
+		t.Errorf("a live URL survived into the consent dialog:\n%s", s)
+	}
+	if strings.Contains(s, "\n\n**SECURITY NOTICE**") {
+		t.Errorf("injected text kept its own paragraph in the dialog:\n%s", s)
+	}
+	// Defanged, not deleted: the user still sees where the value pointed.
+	if !strings.Contains(s, "https[:]//evil.example/verify") {
+		t.Errorf("the URL was not shown in defanged form:\n%s", s)
+	}
+	if !strings.Contains(s, "demo/proj") {
+		t.Errorf("the project path itself was lost, so the user cannot see what they are approving:\n%s", s)
 	}
 }

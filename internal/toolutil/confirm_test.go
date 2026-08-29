@@ -465,3 +465,87 @@ func surfaceToolText(result *mcp.CallToolResult) string {
 	}
 	return b.String()
 }
+
+// TestConfirmAction_MalformedAnswerIsNotAUserDecision pins what a destructive
+// confirmation reports when the client's answer cannot be read.
+//
+// "The server SHOULD treat [an invalid response] as if the input request had
+// not been fulfilled." A client that accepts the confirmation but sends content
+// failing the schema it was handed used to be reported as "Operation canceled
+// by user." The action was correctly stopped; the explanation was invented.
+// That reaches a model as a decision a person made, so the model does not
+// retry, and it tells the user they declined something they were never shown.
+//
+// The guard is called directly rather than through a client session, because
+// the SDK client cannot produce this input: it validates elicitation content
+// against the requested schema and refuses to send a mismatch, and it fulfills
+// input requests itself rather than handing the state back to the caller. With
+// a go-sdk client the case is unreachable. It is reachable from any client that
+// does not validate, which is where it was observed, so the test speaks that
+// client's part directly.
+//
+// Both properties are asserted: the action still does not proceed, and the
+// reason is attributed to the user only when a user actually decided.
+func TestConfirmAction_MalformedAnswerIsNotAUserDecision(t *testing.T) {
+	tests := []struct {
+		name              string
+		content           map[string]any
+		wantsUserDecision bool
+	}{
+		{
+			name:              "an explicit refusal is a user decision",
+			content:           map[string]any{"confirmed": false},
+			wantsUserDecision: true,
+		},
+		{
+			name:              "an answer to a different question is not",
+			content:           map[string]any{"title": "some unrelated field"},
+			wantsUserDecision: false,
+		},
+		{
+			name:              "a non-boolean confirmation is not",
+			content:           map[string]any{"confirmed": "yes"},
+			wantsUserDecision: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &mcp.CallToolRequest{
+				Session: &mcp.ServerSession{},
+				Params: &mcp.CallToolParamsRaw{
+					Name: "guarded",
+					Meta: mcp.Meta{
+						"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+						"io.modelcontextprotocol/clientCapabilities": map[string]any{
+							"elicitation": map[string]any{"form": map[string]any{}},
+						},
+					},
+					InputResponses: mcp.InputResponseMap{
+						"confirm": &mcp.ElicitResult{Action: "accept", Content: tt.content},
+					},
+				},
+			}
+
+			result := ConfirmDestructiveAction(context.Background(), req, nil, testConfirmPrompt)
+			if result == nil {
+				t.Fatal("the guard let the destructive action proceed")
+			}
+
+			var text string
+			if len(result.Content) > 0 {
+				if tc, isText := result.Content[0].(*mcp.TextContent); isText {
+					text = tc.Text
+				}
+			}
+			mentionsUser := strings.Contains(text, "canceled by user") || strings.Contains(text, "cancelled by user")
+			if mentionsUser != tt.wantsUserDecision {
+				t.Errorf("result = %q; attributing this to the user = %v, want %v",
+					text, mentionsUser, tt.wantsUserDecision)
+			}
+			if !result.IsError {
+				t.Error("the result is not marked as an error, so a declared output schema goes unsatisfied")
+			}
+		})
+	}
+}
