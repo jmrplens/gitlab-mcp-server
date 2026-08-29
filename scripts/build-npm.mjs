@@ -32,8 +32,11 @@ const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 // the release filename the binary is copied from. Keep this in lockstep with
 // the launcher's supported set and the main package's optionalDependencies.
 const PLATFORMS = [
-  { key: "linux-x64", os: "linux", cpu: "x64", asset: "gitlab-mcp-server-linux-amd64", exe: false },
-  { key: "linux-arm64", os: "linux", cpu: "arm64", asset: "gitlab-mcp-server-linux-arm64", exe: false },
+  // libc: the release binaries are PIE ELFs linked against the glibc dynamic
+  // loader (CGO_ENABLED=0 + -buildmode=pie), so on musl (Alpine) npm skips
+  // these packages and the launcher points users at the Docker image.
+  { key: "linux-x64", os: "linux", cpu: "x64", libc: "glibc", asset: "gitlab-mcp-server-linux-amd64", exe: false },
+  { key: "linux-arm64", os: "linux", cpu: "arm64", libc: "glibc", asset: "gitlab-mcp-server-linux-arm64", exe: false },
   { key: "darwin-x64", os: "darwin", cpu: "x64", asset: "gitlab-mcp-server-darwin-amd64", exe: false },
   { key: "darwin-arm64", os: "darwin", cpu: "arm64", asset: "gitlab-mcp-server-darwin-arm64", exe: false },
   { key: "win32-x64", os: "win32", cpu: "x64", asset: "gitlab-mcp-server-windows-amd64.exe", exe: true },
@@ -84,11 +87,13 @@ function writePlatformPackage(plat, version, binariesDir, outDir) {
     version,
     description: `gitlab-mcp-server prebuilt binary for ${plat.os} ${plat.cpu}. Installed automatically as an optional dependency of @jmrp.io/gitlab-mcp-server.`,
     license: "MIT",
+    funding: "https://github.com/sponsors/jmrplens",
     author: "José M. Requena Plens",
     homepage: "https://jmrp.io/docs/gitlab-mcp-server",
     repository: mainRepository,
     os: [plat.os],
     cpu: [plat.cpu],
+    ...(plat.libc ? { libc: [plat.libc] } : {}),
     files: [binaryName],
     preferUnplugged: true,
   };

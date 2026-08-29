@@ -90,7 +90,12 @@ signs:
       - ${artifact}
 
 sboms:
-  - artifacts: archive
+  # `binary`, not `archive`: binary-format archives produce Binary-type
+  # artifacts, which the archive filter never matches — with `archive` here
+  # GoReleaser logs "no artifacts matching current filters" and no SBOM ships.
+  - artifacts: binary
+    documents:
+      - "{{ .ArtifactName }}.sbom.json"
     cmd: syft
     args:
       - scan
@@ -104,6 +109,28 @@ release:
   github:
     owner: jmrplens
     name: gitlab-mcp-server
-  draft: false
+  # Draft first: every asset (binaries, checksums.txt + signature, SBOMs, and
+  # the .mcpb attached by the workflow) is in place before the release becomes
+  # visible, so go-selfupdate never observes a partial release. The workflow's
+  # "Publish release" step flips the draft after the last upload.
+  draft: true
+  replace_existing_draft: true
   prerelease: auto
   name_template: "v{{.Version}}"
+  footer: |
+    ---
+
+    **Full changelog**: https://github.com/jmrplens/gitlab-mcp-server/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+    ### Verify the assets
+
+    All binaries are listed in `checksums.txt`, signed keylessly with cosign:
+
+    ```console
+    cosign verify-blob \
+      --bundle checksums.txt.sigstore.json \
+      --certificate-identity "https://github.com/jmrplens/gitlab-mcp-server/.github/workflows/release.yml@refs/tags/{{ .Tag }}" \
+      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+      checksums.txt
+    sha256sum --check --ignore-missing checksums.txt
+    ```

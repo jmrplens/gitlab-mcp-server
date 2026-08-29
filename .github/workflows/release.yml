@@ -1,7 +1,7 @@
 # Release pipeline for gitlab-mcp-server
 #
 # Triggers: tag push matching v*
-# Pipeline: E2E → GoReleaser → Docker → MCP Registry
+# Pipeline: E2E → Docker → GoReleaser (npm, Homebrew, MCP Registry) → Winget
 # If E2E tests fail, nothing is released.
 #
 name: Release
@@ -11,10 +11,16 @@ on:
     tags:
       - "v*"
 
-permissions:
-  contents: write
-  packages: write
-  id-token: write
+# Serialize releases: two close tag pushes would otherwise race on the
+# main manifest commit, npm publish ordering, and the Homebrew tap push.
+# cancel-in-progress stays false — a half-finished release must never be
+# killed between GoReleaser and the registry publishes.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+# Every job declares the minimum it needs; the default is nothing.
+permissions: {}
 
 env:
   GO_VERSION: "1.27.0"
@@ -27,8 +33,24 @@ jobs:
     name: E2E Gate
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
+
+      # The docker job tags ghcr.io from VERSION while everything else uses
+      # the git tag; server.json pins the OCI tag from the git tag and
+      # validate-npm stamps from VERSION. Fail the whole release before
+      # anything publishes if the two disagree.
+      - name: Verify VERSION file matches the release tag
+        run: |
+          set -euo pipefail
+          FILE_V="$(tr -d '[:space:]' < VERSION)"
+          TAG_V="${GITHUB_REF#refs/tags/v}"
+          if [ "${FILE_V}" != "${TAG_V}" ]; then
+            echo "::error::VERSION file says ${FILE_V} but the tag is v${TAG_V} — the docker job would tag ghcr.io:${FILE_V} while server.json pins ghcr.io/jmrplens/gitlab-mcp-server:${TAG_V}"
+            exit 1
+          fi
 
       - uses: actions/setup-go@v7
         with:
@@ -85,7 +107,14 @@ jobs:
     name: GoReleaser
     runs-on: ubuntu-latest
     environment: release
-    needs: [e2e]
+    # docker is a prerequisite because the MCP Registry publish below validates
+    # the server.json OCI entry by fetching ghcr.io for this version's tag —
+    # a tag only the docker job pushes. Racing it 404s the registry publish.
+    needs: [e2e, docker]
+    permissions:
+      contents: write # GoReleaser creates the release; gh uploads/publishes the .mcpb
+      id-token: write # npm trusted publishing + mcp-publisher github-oidc login
+      attestations: write # actions/attest-build-provenance
     steps:
       - uses: actions/checkout@v7
         with:
@@ -101,10 +130,26 @@ jobs:
 
       - uses: goreleaser/goreleaser-action@v7
         with:
-          version: latest
+          # "~> v2": track v2 minors/patches, never auto-adopt a config-breaking
+          # GoReleaser v3 mid-release (.goreleaser.yml is a version: 2 config).
+          version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # GoReleaser leaves binaries only in per-target subdirectories
+      # (dist/gitlab-mcp-server_linux_amd64_v1/gitlab-mcp-server); the release
+      # asset names exist only in dist/artifacts.json. build-npm.mjs and
+      # publish-npm.sh read dist/<release-name> directly, so stage every
+      # uploadable binary at the dist root under its exact asset name.
+      - name: Stage release-named binaries at dist root
+        run: |
+          set -euo pipefail
+          jq -r '.[] | select(.type == "Binary" and (.name | startswith("gitlab-mcp-server-"))) | [.name, .path] | @tsv' dist/artifacts.json \
+            | while IFS=$'\t' read -r name path; do
+                cp "$path" "dist/$name"
+              done
+          ls -1 dist/
 
       # The bundle is built before the stamp because server.json declares it and
       # needs its SHA256. GoReleaser does not produce it, so it is absent from
@@ -119,12 +164,47 @@ jobs:
           sha256sum dist/gitlab-mcp-server.mcpb
           gh release upload "v${VERSION}" dist/gitlab-mcp-server.mcpb --clobber
 
-      - name: Update server.json with SHA256 hashes
-        run: bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}" dist/gitlab-mcp-server.mcpb
+      # SLSA build provenance for every GoReleaser artifact, keyed by the exact
+      # asset names in checksums.txt, plus the .mcpb built outside GoReleaser.
+      # Stored in GitHub's attestation store — no release asset changes.
+      # Verify: gh attestation verify <file> -R jmrplens/gitlab-mcp-server
+      - name: Attest build provenance (release binaries)
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-checksums: dist/checksums.txt
 
-      # npm publish via OIDC trusted publisher — no stored token. dist/ already
-      # holds the binaries under their release names here, the same spot the
-      # mcpb step reads from. The job's id-token: write permission lets npm mint
+      - name: Attest build provenance (Claude Desktop extension)
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/gitlab-mcp-server.mcpb
+
+      # Every asset (binaries, checksums.txt + signature, SBOMs, .mcpb) is
+      # attached before the release becomes visible: go-selfupdate never sees
+      # a partial release, and this is the draft-then-publish flow immutable
+      # releases require. GoReleaser creates the release as a draft
+      # (.goreleaser.yml: draft: true).
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "v${GITHUB_REF#refs/tags/v}" --draft=false
+
+      # The OCI digest comes from the docker job (a prerequisite of this one),
+      # so server.json pins the exact image this release published rather than a
+      # tag that could later be moved.
+      - name: Update server.json with SHA256 hashes
+        env:
+          OCI_DIGEST: ${{ needs.docker.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OCI_DIGEST}" ]; then
+            echo "::error::the docker job published no image digest; server.json cannot be pinned"
+            exit 1
+          fi
+          bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}" dist/gitlab-mcp-server.mcpb "${OCI_DIGEST}"
+
+      # npm publish via OIDC trusted publisher — no stored token. The staging
+      # step above copied the binaries to dist/<release-name>, which is what
+      # build-npm.mjs reads. The job's id-token: write permission lets npm mint
       # the OIDC token; npm >= 11.5.1 performs the exchange, so setup-node's
       # Node 22 is upgraded to the current npm first. Provenance is attached
       # automatically under trusted publishing (no --provenance flag), and
@@ -206,8 +286,26 @@ jobs:
           tar xzf "${TARBALL}" mcp-publisher
           ./mcp-publisher login github-oidc
           set +e
-          ./mcp-publisher publish 2>&1 | tee mcp-publisher-publish.log
-          PUBLISH_STATUS=${PIPESTATUS[0]}
+          PUBLISH_STATUS=1
+          for attempt in 1 2 3 4 5 6 7 8; do
+            ./mcp-publisher publish 2>&1 | tee mcp-publisher-publish.log
+            PUBLISH_STATUS=${PIPESTATUS[0]}
+            [ "${PUBLISH_STATUS}" -eq 0 ] && break
+            if grep -q "invalid version: cannot publish duplicate version" mcp-publisher-publish.log; then
+              break
+            fi
+            # The registry validates the npm entry by fetching the version this
+            # same job published minutes ago, and the oci entry by fetching the
+            # image tag the docker job pushed. Retry only errors the registry
+            # itself labels transient, plus the not-yet-visible npm version,
+            # which is indistinguishable from registry-side propagation lag.
+            if grep -qE "take a moment to appear|retry later|retry shortly|does not exist in the registry" mcp-publisher-publish.log; then
+              echo "::notice::Registry-side validation not yet consistent (attempt ${attempt}); retrying in 60s"
+              sleep 60
+              continue
+            fi
+            break
+          done
           set -e
           if [ "${PUBLISH_STATUS}" -ne 0 ]; then
             if grep -q "invalid version: cannot publish duplicate version" mcp-publisher-publish.log; then
@@ -220,6 +318,7 @@ jobs:
       - name: Commit updated server.json and plugin.json to main
         env:
           RELEASE_DEPLOY_KEY_B64: ${{ secrets.RELEASE_DEPLOY_KEY_B64 }}
+          OCI_DIGEST: ${{ needs.docker.outputs.digest }}
         run: |
           set -euo pipefail
 
@@ -245,11 +344,14 @@ jobs:
           git checkout main
 
           # Re-apply updates on top of latest main (the script is idempotent
-          # and reads checksums.txt + version, so re-running produces the
-          # same result as the artifact built earlier in this job).
-          bash scripts/update-server-json-sha.sh dist/checksums.txt "${VERSION}"
+          # and reads checksums.txt + version + the bundle, so re-running
+          # produces the same result as the artifact built earlier in this
+          # job). The .mcpb third argument re-derives that hash from the
+          # artifact instead of inheriting it from the dirty working tree.
+          bash scripts/update-server-json-sha.sh dist/checksums.txt "${VERSION}" dist/gitlab-mcp-server.mcpb "${OCI_DIGEST}"
 
           git add server.json
+          [ -f plugin.json ] && git add plugin.json
           [ -f .plugin/plugin.json ] && git add .plugin/plugin.json
           [ -f mcpb/manifest.json ] && git add mcpb/manifest.json
           [ -f lhm.plugin.json ] && git add lhm.plugin.json
@@ -264,14 +366,16 @@ jobs:
 
           Updates server.json (MCP Registry) with version ${VERSION} and
           pinned SHA256 hashes, and stamps version ${VERSION} into
-          .plugin/plugin.json (Open Plugins), mcpb/manifest.json (Claude
-          Desktop extension), and lhm.plugin.json (LobeHub Marketplace)."
+          plugin.json (Agent Plugins), .plugin/plugin.json (legacy Open
+          Plugins), mcpb/manifest.json (Claude Desktop extension), and
+          lhm.plugin.json (LobeHub Marketplace)."
           git push origin main
 
   winget:
     name: Winget
     runs-on: windows-latest
     needs: [release]
+    permissions: {} # both steps authenticate with WINGET_TOKEN, not GITHUB_TOKEN
     steps:
       # Publishes a version-update PR to microsoft/winget-pkgs via the
       # jmrplens/winget-pkgs fork. Only works once the initial package
@@ -291,7 +395,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: gh api -X POST repos/jmrplens/winget-pkgs/merge-upstream -f branch=master
-      - uses: vedantmgoyal9/winget-releaser@v2
+      # Pinned to a commit SHA (same policy as dockerhub-description in the
+      # docker job): an individually-maintained action that receives
+      # WINGET_TOKEN — a mutable tag would let a compromised release
+      # exfiltrate it.
+      - uses: vedantmgoyal9/winget-releaser@4ffc7888bffd451b357355dc214d43bb9f23917e # v2
         continue-on-error: true
         with:
           identifier: jmrplens.gitlab-mcp-server
@@ -303,6 +411,13 @@ jobs:
     name: Docker
     runs-on: ubuntu-latest
     needs: [e2e]
+    # server.json pins the image by digest, and the release job stamps it.
+    outputs:
+      digest: ${{ steps.docker-push.outputs.digest }}
+    permissions:
+      contents: read # checkout
+      packages: write # ghcr.io push via GITHUB_TOKEN login
+      id-token: write # cosign keyless signing
     steps:
       - uses: actions/checkout@v7
 
@@ -356,6 +471,22 @@ jobs:
           platforms: linux/amd64,linux/arm64
           provenance: true
           sbom: true
+          # GHCR reads a multi-arch image's package-page description from the
+          # INDEX annotations, not from per-manifest Docker LABELs — without
+          # these the package page shows no description. The description string
+          # is byte-identical to the Dockerfile LABEL; reword both together.
+          annotations: |
+            index:org.opencontainers.image.title=gitlab-mcp-server
+            index:org.opencontainers.image.description=MCP server exposing GitLab REST API v4 and GraphQL operations as Model Context Protocol tools
+            index:org.opencontainers.image.source=https://github.com/jmrplens/gitlab-mcp-server
+            index:org.opencontainers.image.url=https://github.com/jmrplens/gitlab-mcp-server
+            index:org.opencontainers.image.documentation=https://github.com/jmrplens/gitlab-mcp-server/tree/main/docs
+            index:org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            index:org.opencontainers.image.revision=${{ github.sha }}
+            index:org.opencontainers.image.created=${{ steps.build-date.outputs.date }}
+            index:org.opencontainers.image.licenses=MIT
+            index:org.opencontainers.image.vendor=jmrplens
+            index:io.modelcontextprotocol.server.name=io.github.jmrplens/gitlab-mcp-server
           build-args: |
             VERSION=${{ steps.version.outputs.version }}
             COMMIT=${{ github.sha }}

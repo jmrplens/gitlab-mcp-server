@@ -21,6 +21,7 @@
     "directory": "npm/gitlab-mcp-server"
   },
   "license": "MIT",
+  "funding": "https://github.com/sponsors/jmrplens",
   "author": "José M. Requena Plens",
   "type": "commonjs",
   "bin": {

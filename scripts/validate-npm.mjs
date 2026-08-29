@@ -34,8 +34,8 @@ const MAGIC = {
 const MIN_BINARY_BYTES = 5_000_000;
 
 const PLATFORMS = [
-  { key: "linux-x64", os: "linux", cpu: "x64", exe: false },
-  { key: "linux-arm64", os: "linux", cpu: "arm64", exe: false },
+  { key: "linux-x64", os: "linux", cpu: "x64", libc: "glibc", exe: false },
+  { key: "linux-arm64", os: "linux", cpu: "arm64", libc: "glibc", exe: false },
   { key: "darwin-x64", os: "darwin", cpu: "x64", exe: false },
   { key: "darwin-arm64", os: "darwin", cpu: "arm64", exe: false },
   { key: "win32-x64", os: "win32", cpu: "x64", exe: true },
@@ -97,6 +97,8 @@ function validatePlatform(plat, packagesDir, version, workDir) {
   check(pkg.version === version, `${plat.key}: version ${pkg.version}, want ${version}`);
   check(JSON.stringify(pkg.os) === JSON.stringify([plat.os]), `${plat.key}: os ${JSON.stringify(pkg.os)}, want [${plat.os}]`);
   check(JSON.stringify(pkg.cpu) === JSON.stringify([plat.cpu]), `${plat.key}: cpu ${JSON.stringify(pkg.cpu)}, want [${plat.cpu}]`);
+  const wantLibc = plat.libc ? JSON.stringify([plat.libc]) : undefined;
+  check(JSON.stringify(pkg.libc) === wantLibc, `${plat.key}: libc ${JSON.stringify(pkg.libc)}, want ${wantLibc ?? "absent"}`);
 
   const binaryName = plat.exe ? "gitlab-mcp-server.exe" : "gitlab-mcp-server";
   const { tgz, entries } = packAndList(dir, workDir);

@@ -716,7 +716,8 @@ check-server-json:
 check-server-json-packages:
 	scripts/validate-server-json-packages.sh
 
-## check-openplugin: validate Open Plugins manifest and MCP config files.
+## check-openplugin: validate the Agent Plugins manifests (root plugin.json +
+## mcp.json) and the legacy Open Plugins manifest (.plugin/plugin.json).
 check-openplugin:
 	scripts/check-openplugin.sh
 

@@ -1,6 +1,8 @@
 {
+    "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
     "mcpServers": {
         "gitlab": {
+            "type": "stdio",
             "command": "docker",
             "args": [
                 "run",
@@ -39,41 +41,14 @@
                 "-e",
                 "RATE_LIMIT_BURST",
                 "-e",
-                "AUTO_UPDATE",
-                "-e",
-                "AUTO_UPDATE_REPO",
-                "-e",
-                "AUTO_UPDATE_INTERVAL",
-                "-e",
-                "AUTO_UPDATE_TIMEOUT",
+                "CLIENT_COMPAT",
                 "-e",
                 "LOG_LEVEL",
+                "-e",
+                "AUTO_UPDATE=false",
                 "ghcr.io/jmrplens/gitlab-mcp-server:latest",
                 "--http=false"
-            ],
-            "env": {
-                "GITLAB_URL": "${GITLAB_URL:-https://gitlab.com}",
-                "GITLAB_TOKEN": "${GITLAB_TOKEN}",
-                "GITLAB_SKIP_TLS_VERIFY": "${GITLAB_SKIP_TLS_VERIFY:-false}",
-                "TOOL_SURFACE": "${TOOL_SURFACE:-dynamic}",
-                "CAPABILITY_SURFACE": "${CAPABILITY_SURFACE:-full}",
-                "META_PARAM_SCHEMA": "${META_PARAM_SCHEMA:-opaque}",
-                "GITLAB_TIER": "${GITLAB_TIER:-}",
-                "GITLAB_READ_ONLY": "${GITLAB_READ_ONLY:-false}",
-                "GITLAB_SAFE_MODE": "${GITLAB_SAFE_MODE:-false}",
-                "EMBEDDED_RESOURCES": "${EMBEDDED_RESOURCES:-true}",
-                "EXCLUDE_TOOLS": "${EXCLUDE_TOOLS:-}",
-                "GITLAB_IGNORE_SCOPES": "${GITLAB_IGNORE_SCOPES:-false}",
-                "UPLOAD_MAX_FILE_SIZE": "${UPLOAD_MAX_FILE_SIZE:-2147483648}",
-                "GITLAB_MCP_ALLOWED_IMPORT_DIRS": "${GITLAB_MCP_ALLOWED_IMPORT_DIRS:-}",
-                "RATE_LIMIT_RPS": "${RATE_LIMIT_RPS:-0}",
-                "RATE_LIMIT_BURST": "${RATE_LIMIT_BURST:-40}",
-                "AUTO_UPDATE": "${AUTO_UPDATE:-false}",
-                "AUTO_UPDATE_REPO": "${AUTO_UPDATE_REPO:-jmrplens/gitlab-mcp-server}",
-                "AUTO_UPDATE_INTERVAL": "${AUTO_UPDATE_INTERVAL:-1h}",
-                "AUTO_UPDATE_TIMEOUT": "${AUTO_UPDATE_TIMEOUT:-60s}",
-                "LOG_LEVEL": "${LOG_LEVEL:-info}"
-            }
+            ]
         }
     }
 }

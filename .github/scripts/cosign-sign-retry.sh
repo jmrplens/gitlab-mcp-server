@@ -20,7 +20,7 @@ IMAGE_REF="${1:?Usage: $0 <image-ref-with-digest>}"
 ATTEMPTS="${COSIGN_SIGN_ATTEMPTS:-3}"
 
 for attempt in $(seq 1 "$ATTEMPTS"); do
-  if cosign sign --yes "$IMAGE_REF"; then
+  if cosign sign --yes --recursive "$IMAGE_REF"; then
     exit 0
   fi
 

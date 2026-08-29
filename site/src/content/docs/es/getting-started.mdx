@@ -271,9 +271,9 @@ El asistente:
 El asistente configura solo clientes stdio. Ofrece interfaces Web, TUI y CLI. Consulta [Asistente de configuración](/gitlab-mcp-server/es/setup-wizard/) para modos, clientes soportados, opciones avanzadas y comportamiento de reconfiguración.
 :::
 
-## Instalar como Open Plugin (Cursor / Claude Code)
+## Instalar como Agent Plugin (Cursor / Claude Code / VS Code)
 
-Este repositorio incluye un manifest [Open Plugins](https://open-plugins.com/) v1.0.0 (`.plugin/plugin.json`) y una configuración MCP referenciada (`mcp.json`) para que el servidor se pueda instalar en un solo paso en cualquier host compatible (Cursor, Claude Code, OpenCode):
+Este repositorio incluye un manifest [Agent Plugins](https://agent-plugins.org/) 1.0 (`plugin.json` en la raíz y la configuración MCP `mcp.json`) — más el manifest legado de Open Plugins (`.plugin/plugin.json`) para hosts antiguos — para que el servidor se instale en un solo paso en un host compatible (Cursor, Claude Code, VS Code, OpenCode). Suministrar el token es un paso aparte, explicado más abajo:
 
 ```bash
 # Cursor / Claude Code (cuando lo soporte tu versión)
@@ -284,7 +284,7 @@ El plugin usa la imagen Docker publicada `ghcr.io/jmrplens/gitlab-mcp-server:lat
 
 ### Variables de entorno requeridas
 
-El host debe proporcionar estas variables antes de habilitar el plugin:
+La configuración incluida reenvía estas variables al contenedor. **Tu host tiene que ponerlas antes en el entorno del plugin**: la §9.1 de Agent Plugins permite al cliente «heredar, omitir o sanear» las variables del entorno ambiente, y la spec no define ninguna forma portable de que un plugin referencie un secreto, así que el token no puede viajar dentro del propio `mcp.json`. Si el servidor devuelve un fallo de autorización, define `GITLAB_TOKEN` como documente tu host, o añádelo al bloque `env` del `mcp.json` local del plugin instalado.
 
 | Variable                 | Obligatoria | Descripción                                                                                                                                                                         |
 | ------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -303,22 +303,32 @@ El host debe proporcionar estas variables antes de habilitar el plugin:
 
 ### ¿Prefieres binario nativo en lugar de Docker?
 
-La spec de Open Plugins arranca automáticamente cada entrada de la configuración MCP referenciada, así que la configuración incluida usa Docker stdio por portabilidad. Para despliegues HTTP en segundo plano, no uses una entrada de cliente stdio; ejecuta la imagen Docker en modo HTTP y configura el cliente MCP con `type: "http"` y una URL como `http://localhost:8080/mcp`. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/).
+La spec de Agent Plugins arranca automáticamente cada entrada de la configuración MCP referenciada, así que la configuración incluida usa Docker stdio por portabilidad. Para despliegues HTTP en segundo plano, no uses una entrada de cliente stdio; ejecuta la imagen Docker en modo HTTP y configura el cliente MCP con `type: "http"` y una URL como `http://localhost:8080/mcp`. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/).
 
 Si prefieres el binario nativo, instala el plugin, localiza el directorio del plugin instalado `gitlab-mcp-server` desde la interfaz de plugins de tu host o la salida de instalación, y después edita su `mcp.json` local (habitualmente en `.agents/plugins/gitlab-mcp-server/`) para sustituir el `command` / `args` de Docker por la ruta al binario que hayas descargado desde [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
 
 ```json
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
   "mcpServers": {
     "gitlab": {
-      "command": "/usr/local/bin/gitlab-mcp-server",
-      "env": {
-        "GITLAB_TOKEN": "${GITLAB_TOKEN}"
-      }
+      "type": "stdio",
+      "command": "/usr/local/bin/gitlab-mcp-server"
     }
   }
 }
 ```
+
+:::caution[Cómo llega el token al servidor]
+Agent Plugins solo expande `${PLUGIN_ROOT}` y `${PLUGIN_DATA}`; cualquier otro
+`${...}` se queda literal, así que escribir `"GITLAB_TOKEN": "${GITLAB_TOKEN}"`
+le entrega al servidor esa cadena exacta en vez de tu token. La spec no define
+ninguna forma portable de referenciar un secreto, y permite que el cliente
+herede, omita o sanee el entorno ambiente, de modo que cómo llega `GITLAB_TOKEN`
+lo decide tu host: o hace visible la variable al subproceso del plugin, o pones
+tú el valor en el bloque `env` de este fichero local. Ese fichero es tuyo, no
+forma parte del plugin publicado — mantenlo fuera del control de versiones.
+:::
 
 ## Configuración manual
 

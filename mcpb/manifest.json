@@ -33,6 +33,7 @@
         "GITLAB_READ_ONLY": "${user_config.read_only}",
         "GITLAB_SAFE_MODE": "${user_config.safe_mode}",
         "GITLAB_SKIP_TLS_VERIFY": "${user_config.skip_tls_verify}",
+        "LOG_LEVEL": "${user_config.log_level}",
         "AUTO_UPDATE": "false"
       },
       "platform_overrides": {
@@ -125,6 +126,13 @@
       "title": "Skip TLS verification",
       "description": "Allow self-signed certificates on self-managed instances. Leave off unless you need it.",
       "default": false,
+      "required": false
+    },
+    "log_level": {
+      "type": "string",
+      "title": "Log level",
+      "description": "Logging verbosity written to Claude Desktop's MCP log files: \"debug\", \"info\", \"warn\" or \"error\". Set \"debug\" when reporting an issue.",
+      "default": "info",
       "required": false
     }
   }

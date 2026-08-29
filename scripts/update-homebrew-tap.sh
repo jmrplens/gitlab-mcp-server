@@ -44,9 +44,14 @@ cat > "$TAP_DIR/Formula/gitlab-mcp-server.rb" <<EOF
 # https://github.com/jmrplens/gitlab-mcp-server — do not edit by hand.
 class GitlabMcpServer < Formula
   desc "GitLab MCP server: REST v4 + GraphQL as tools for AI assistants"
-  homepage "https://jmrplens.github.io/gitlab-mcp-server/"
+  homepage "https://jmrp.io/docs/gitlab-mcp-server"
   version "${VERSION}"
   license "MIT"
+
+  livecheck do
+    url "https://github.com/jmrplens/gitlab-mcp-server"
+    strategy :github_latest
+  end
 
   on_macos do
     on_arm do
