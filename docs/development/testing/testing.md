@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,461 |
-| Unit test functions                                   | 12,080 |
+| Total test functions                                  | 12,462 |
+| Unit test functions                                   | 12,081 |
 | E2E test functions                                    |    381 |
 | cmd test functions                                    |  1,136 |
 | Test files (internal/)                                |    477 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,790 | 86.6% |
+| `TestFunc_Scenario` (2-part)           | 10,791 | 86.6% |
 | `TestFunc` (no underscore)             |    968 |  7.8% |
 | `TestFunc_Scenario_Expected` (3+ part) |    703 |  5.6% |
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,276 |        114 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,277 |        114 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            291 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (175) |          8,377 |        348 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            381 |        172 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |          1,136 |         81 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,461** |    **730** |                                                                                                 |
+| **Total**               |     **12,462** |    **730** |                                                                                                 |
 
 ### Core Packages
 
@@ -65,7 +65,7 @@
 | completions   |        96 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                          |
 | config        |        85 |    97.1% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                  |
 | edition       |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                     |
-| elicitation   |       121 |    96.5% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                      |
+| elicitation   |       122 |    96.4% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                      |
 | gitlab        |        47 |    98.4% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                           |
 | oauth         |        57 |    89.4% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                           |
 | progress      |        17 |    83.8% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                     |
@@ -76,7 +76,7 @@
 | testutil      |        34 |    88.7% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
 | toolutil      |       728 |    97.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard        |       329 |   100.0% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal**  | **2,276** |          |                                                                                                                                                                                                                   |
+| **Subtotal**  | **2,277** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -349,7 +349,7 @@
 | completions   |   100.0% |
 | config        |    97.1% |
 | edition       |    87.0% |
-| elicitation   |    96.5% |
+| elicitation   |    96.4% |
 | gitlab        |    98.4% |
 | oauth         |    89.4% |
 | progress      |    83.8% |

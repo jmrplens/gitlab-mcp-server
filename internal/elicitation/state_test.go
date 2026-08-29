@@ -288,3 +288,61 @@ func TestRequestDigest_KeepsNumericPrecision(t *testing.T) {
 		}
 	})
 }
+
+// TestRequestDigest_NormalizesEquivalentNumbers pins the other half of the
+// numeric binding.
+//
+// Keeping each number as the text the client sent stops two identifiers above
+// 2^53 from colliding, and on its own it introduces the opposite fault: 1 and
+// 1.0 are one number written two ways, and a client that re-serializes its own
+// arguments between rounds would be told its state belongs to a different call
+// and would lose the answers the user had already given.
+//
+// That is not exotic. Python writes 1.0 where Go writes 1, so it is a
+// difference between two ordinary clients rather than a malformed one.
+//
+// Canonicalizing through big.Rat gives both properties at once: exact for any
+// JSON number, so equal values agree however they were spelled and unequal ones
+// stay apart at any magnitude.
+func TestRequestDigest_NormalizesEquivalentNumbers(t *testing.T) {
+	const tool = "gitlab_interactive_issue_create"
+
+	equivalent := []struct {
+		name string
+		a, b string
+	}{
+		{name: "integer and its decimal form", a: `{"id":1}`, b: `{"id":1.0}`},
+		{name: "trailing zeros", a: `{"id":1.50}`, b: `{"id":1.5}`},
+		{name: "exponent and its expansion", a: `{"id":1e2}`, b: `{"id":100}`},
+		{name: "negative exponent", a: `{"id":1.5e1}`, b: `{"id":15}`},
+		{name: "leading plus in the exponent", a: `{"id":1e+2}`, b: `{"id":100.0}`},
+		{name: "a large integer written with an exponent", a: `{"id":9007199254740993}`, b: `{"id":9.007199254740993e15}`},
+		{name: "nested inside an array", a: `{"ids":[1,2.0]}`, b: `{"ids":[1.0,2]}`},
+	}
+	for _, tt := range equivalent {
+		t.Run("same: "+tt.name, func(t *testing.T) {
+			if requestDigest(tool, []byte(tt.a)) != requestDigest(tool, []byte(tt.b)) {
+				t.Errorf("%s and %s are the same number written differently, but hash differently", tt.a, tt.b)
+			}
+		})
+	}
+
+	distinct := []struct {
+		name string
+		a, b string
+	}{
+		{name: "consecutive integers beyond float64", a: `{"id":9007199254740992}`, b: `{"id":9007199254740993}`},
+		{name: "ordinary neighbors", a: `{"id":7}`, b: `{"id":8}`},
+		{name: "a tiny fractional difference", a: `{"id":1.5}`, b: `{"id":1.5000001}`},
+		// The marker exists for this: without it a number and the string of
+		// the same digits would canonicalize alike.
+		{name: "a number and a string of the same digits", a: `{"id":1}`, b: `{"id":"1"}`},
+	}
+	for _, tt := range distinct {
+		t.Run("differ: "+tt.name, func(t *testing.T) {
+			if requestDigest(tool, []byte(tt.a)) == requestDigest(tool, []byte(tt.b)) {
+				t.Errorf("%s and %s are different, but share a digest", tt.a, tt.b)
+			}
+		})
+	}
+}

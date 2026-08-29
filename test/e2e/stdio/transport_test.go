@@ -205,7 +205,9 @@ func TestMalformedInput_IsAnsweredAndTheSessionSurvives(t *testing.T) {
 		{name: "not JSON at all", body: `{not json`, wantCode: -32700},
 		{name: "a truncated message", body: `{"jsonrpc":"2.0","id":1,"meth`, wantCode: -32700},
 		{name: "JSON carrying no jsonrpc version", body: `{"hello":"world"}`, wantCode: -32600},
-		{name: "a JSON array, which is not a message", body: `["jsonrpc","2.0"]`, wantCode: -32700},
+		// Valid JSON of the wrong shape: the server parsed it, so -32700 would
+		// send the client looking for a syntax error it does not have.
+		{name: "a JSON array, which is not a message", body: `["jsonrpc","2.0"]`, wantCode: -32600},
 		{name: "a blank line is framing, not a message", body: ``, wantCode: 0},
 	}
 

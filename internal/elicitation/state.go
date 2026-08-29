@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 )
@@ -75,16 +76,22 @@ type signedState struct {
 // the call is going to fail its schema check anyway.
 func requestDigest(toolName string, args json.RawMessage) string {
 	canonical := args
-	// UseNumber keeps each number as the text the client sent. Decoding into
-	// plain any would make every number a float64, and two identifiers above
-	// 2^53 would then share a digest — 9007199254740992 and 9007199254740993
-	// are the same float64 — which is exactly the collision this binding exists
-	// to prevent.
+	// UseNumber keeps each number as the text the client sent, because decoding
+	// into plain any makes every number a float64 and two identifiers above 2^53
+	// would then share a digest — 9007199254740992 and 9007199254740993 are the
+	// same float64, which is the collision this binding exists to prevent.
+	//
+	// The text is then normalized by canonicalizeNumbers, because keeping it
+	// raw trades that collision for the opposite problem: 1 and 1.0 are the
+	// same number written two ways, and a client that re-serializes its own
+	// arguments would lose its pending answers. Python writes 1.0 where Go
+	// writes 1, so this is a difference between ordinary clients, not an
+	// exotic case.
 	decoder := json.NewDecoder(bytes.NewReader(args))
 	decoder.UseNumber()
 	var decoded any
 	if decoder.Decode(&decoded) == nil {
-		if reencoded, marshalErr := json.Marshal(decoded); marshalErr == nil {
+		if reencoded, marshalErr := json.Marshal(canonicalizeNumbers(decoded)); marshalErr == nil {
 			canonical = reencoded
 		}
 	}
@@ -178,4 +185,49 @@ func splitState(raw string) (prefix, body, mac string, ok bool) {
 		return "", "", "", false
 	}
 	return parts[0], parts[1], parts[2], true
+}
+
+// numberMarker prefixes a canonicalized number so it cannot collide with a
+// string that happens to look like one: without it, {"a":1} and {"a":"1"} would
+// hash alike.
+const numberMarker = "\x00num:"
+
+// canonicalizeNumbers rewrites every json.Number in a decoded document into one
+// exact textual form, leaving everything else untouched.
+//
+// Two numbers that are equal must hash alike however they were written, and two
+// that differ must not — including beyond float64's range. big.Rat gives both:
+// it is exact for any JSON number, so 1, 1.0 and 1e0 all become "1", 1.5
+// becomes "3/2", and 9007199254740992 stays distinct from its successor.
+//
+// The result is a hashing key rather than a document, so it does not need to be
+// valid JSON on its own; RatString is used because it is canonical, not because
+// anyone reads it.
+//
+// A number big.Rat cannot parse is left as its original text. JSON's grammar
+// admits none, so this is only reachable for input that was going to fail
+// validation anyway, and passing it through unchanged is better than dropping
+// it from the digest.
+func canonicalizeNumbers(v any) any {
+	switch value := v.(type) {
+	case json.Number:
+		if rat, ok := new(big.Rat).SetString(value.String()); ok {
+			return numberMarker + rat.RatString()
+		}
+		return numberMarker + value.String()
+	case map[string]any:
+		out := make(map[string]any, len(value))
+		for k, item := range value {
+			out[k] = canonicalizeNumbers(item)
+		}
+		return out
+	case []any:
+		out := make([]any, len(value))
+		for i, item := range value {
+			out[i] = canonicalizeNumbers(item)
+		}
+		return out
+	default:
+		return v
+	}
 }
