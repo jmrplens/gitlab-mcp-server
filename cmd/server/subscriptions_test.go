@@ -495,9 +495,27 @@ func TestSessionBridge_ForeignUnsubscribe_LeavesTheWatchAlone(t *testing.T) {
 	}
 }
 
-// TestSubscribe_IdleSession_WatcherSlowsDown verifies an unrenewed lease
-// takes the watcher off full speed.
-func TestSubscribe_IdleSession_WatcherSlowsDown(t *testing.T) {
+// TestSubscribe_IdleSession_KeepsWatchingWhileItsStreamIsOpen records that an
+// open subscription stream holds its own lease, whatever the session does.
+//
+// This test used to assert the opposite, and the change is deliberate. The
+// lease is a proxy for "is anyone still there", answered from request traffic
+// on the session. A subscription opened through subscriptions/listen — which is
+// what the SDK client sends, and the only path stateless HTTP has — can answer
+// that question directly: the request is still open, so the subscriber is still
+// connected and still reading. Traffic is the weaker evidence of the two, and on
+// the default transport it does not exist at all, since every stateless POST is
+// its own session and a listen stream's session sees only its own listen.
+//
+// Without this the shipped default would have degraded by a factor of forty
+// half an hour in, while the client sat on a stream it was still reading, and
+// nothing would have said so.
+//
+// The lease is not gone. It still governs the legacy resources/subscribe, which
+// has no stream to speak for it — pinned by
+// TestSessionBridge_ALegacySubscribeStillFollowsTheLease — and MaxLifetime
+// still caps every watch at 24 hours regardless.
+func TestSubscribe_IdleSession_KeepsWatchingWhileItsStreamIsOpen(t *testing.T) {
 	const (
 		lease = 100 * time.Millisecond
 		slow  = 2 * time.Second
@@ -512,12 +530,13 @@ func TestSubscribe_IdleSession_WatcherSlowsDown(t *testing.T) {
 	}
 	waitForPolls(t, backend, 3)
 
+	// Several leases of silence on a session that sends nothing else.
 	time.Sleep(lease + slow/4)
-	demoted := backend.calls()
-	time.Sleep(300 * time.Millisecond) // fifteen full-speed periods, a fraction of a slow one
+	afterLease := backend.calls()
+	time.Sleep(300 * time.Millisecond)
 
-	if grew := backend.calls() - demoted; grew > 2 {
-		t.Errorf("GitLab was called %d more times after the lease ran out, want the watcher slowed down", grew)
+	if grew := backend.calls() - afterLease; grew < 3 {
+		t.Errorf("GitLab was called %d more times while the stream was open, want the watch still at full speed", grew)
 	}
 }
 
@@ -582,41 +601,35 @@ func TestSubscribe_ActiveSession_WatcherStaysFast(t *testing.T) {
 	}
 }
 
-// TestSubscribe_KeepaliveOnly_WatcherStillSlowsDown is the negative half of
-// the renewal contract.
+// TestKeepalive_IsNotRenewalActivity is the negative half of the renewal
+// contract.
 //
-// A ping proves a socket is open, not that anyone is waiting on the other
-// end of it. If keep-alive traffic renewed the lease, the lease would be
-// unreachable for any connected client — which is the same as having no
-// lease at all, and this is the test that would catch that.
-func TestSubscribe_KeepaliveOnly_WatcherStillSlowsDown(t *testing.T) {
-	const (
-		lease = 100 * time.Millisecond
-		slow  = 2 * time.Second
-	)
-	backend, gitlab := newPipelineBackend(t, "running")
-	server := subscriptionTestServer(t, gitlab.URL, config.CapabilitySurfaceFull, leasedPolling(lease, slow))
-	session := connectInMemory(t, server)
-	ctx := context.Background()
-
-	const uri = "gitlab://project/42/pipeline/99"
-	if err := session.Subscribe(ctx, &mcp.SubscribeParams{URI: uri}); err != nil {
-		t.Fatalf("Subscribe: %v", err)
-	}
-	waitForPolls(t, backend, 3)
-
-	for range 6 {
-		if err := session.Ping(ctx, nil); err != nil {
-			t.Fatalf("Ping: %v", err)
+// A ping proves a socket is open, not that anyone is waiting on the other end
+// of it. If keep-alive traffic renewed the lease, the lease would be
+// unreachable for any connected client, which is the same as having no lease.
+//
+// This used to be observed end to end, by pinging a subscribed session and
+// watching the poll rate fall anyway. That observation no longer distinguishes
+// anything: the SDK client subscribes through subscriptions/listen, and an open
+// listen stream now holds its own watch at full speed regardless of what else
+// the session does — see
+// TestSubscribe_IdleSession_KeepsWatchingWhileItsStreamIsOpen. The rule still
+// exists and is still worth pinning; it is pinned where it lives, at the
+// predicate that decides what counts as activity, and the lease itself is
+// exercised through the legacy path in
+// TestSessionBridge_ALegacySubscribeStillFollowsTheLease.
+func TestKeepalive_IsNotRenewalActivity(t *testing.T) {
+	for _, method := range []string{"ping", "notifications/initialized", "notifications/cancelled"} {
+		req := &mcp.ServerRequest[*mcp.CallToolParams]{Session: &mcp.ServerSession{}}
+		if _, ok := activeSession(method, req); ok {
+			t.Errorf("%q was treated as evidence that a subscriber is still there", method)
 		}
-		time.Sleep(lease / 2)
 	}
-	demoted := backend.calls()
-	time.Sleep(300 * time.Millisecond)
 
-	if grew := backend.calls() - demoted; grew > 2 {
-		t.Errorf("GitLab was called %d more times after a lease of nothing but pings; "+
-			"keep-alive traffic must not renew a watch", grew)
+	// The control: something a client only sends because it wants an answer.
+	req := &mcp.ServerRequest[*mcp.CallToolParams]{Session: &mcp.ServerSession{}}
+	if _, ok := activeSession("tools/call", req); !ok {
+		t.Error("a tool call was not treated as session activity; nothing would renew a legacy watch")
 	}
 }
 
@@ -1360,5 +1373,84 @@ func TestSessionBridge_LegacySubscribeIsStillSessionScoped(t *testing.T) {
 	}
 	if got := runtime.manager.Len(); got != 0 {
 		t.Errorf("watchers = %d, want 0: one unsubscribe releases a session's own subscription", got)
+	}
+}
+
+// TestSessionBridge_AnOpenListenKeepsItsWatchAtFullSpeed pins the renewal
+// signal the default transport actually has.
+//
+// The lease asks "is anyone still there", and answers it from request traffic
+// on the session. Under stateless HTTP that evidence does not exist: every POST
+// is its own session, so a listen stream's session sees one request — the
+// listen — and nothing renews it afterwards. The watch would drop to the slow
+// poll half an hour in while the client sat on an open stream it was still
+// reading, and nothing would say so.
+//
+// This became reachable only once subscriptions/listen worked at all, which is
+// why it is fixed alongside: the feature would otherwise have shipped and
+// quietly degraded by a factor of forty after thirty minutes.
+//
+// A short lease is injected so the renewal has to actually happen rather than
+// the test passing because nothing had time to expire.
+func TestSessionBridge_AnOpenListenKeepsItsWatchAtFullSpeed(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	opts := fastOptions()
+	opts.Lease = 150 * time.Millisecond
+	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+		subscriptionCfg(config.CapabilitySurfaceFull), opts)
+	t.Cleanup(runtime.manager.Close)
+	bridge := newSessionBridge(runtime.manager)
+	session, _ := connectedSessions(t)
+
+	streamCtx, endStream := context.WithCancel(t.Context())
+	defer endStream()
+
+	ctx := withListenStream(streamCtx, &listenStream{cancel: func() {}})
+	if err := bridge.Subscribe(ctx, &mcp.SubscribeRequest{
+		Session: session,
+		Params:  &mcp.SubscribeParams{URI: "gitlab://project/42/pipeline/99"},
+	}); err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	// Several leases' worth of silence. With no renewal the watch is demoted
+	// well before this elapses.
+	time.Sleep(700 * time.Millisecond)
+
+	if runtime.manager.Len() != 1 {
+		t.Fatalf("the watch is gone entirely; this test can no longer see what it checks")
+	}
+	if demoted := runtime.manager.DemotedCount(); demoted != 0 {
+		t.Errorf("%d watch(es) demoted while the listen stream was open and being read", demoted)
+	}
+}
+
+// TestSessionBridge_ALegacySubscribeStillFollowsTheLease checks that the stream
+// renewal did not quietly exempt everything from the lease.
+//
+// A resources/subscribe has no stream to stand as evidence, and its session
+// does see ordinary request traffic, so it keeps the original rule: go quiet
+// long enough and the watch slows down.
+func TestSessionBridge_ALegacySubscribeStillFollowsTheLease(t *testing.T) {
+	_, gitlab := newPipelineBackend(t, "running")
+	opts := fastOptions()
+	opts.Lease = 100 * time.Millisecond
+	runtime := newSubscriptionRuntime(subscriptionGitLabClient(t, gitlab.URL),
+		subscriptionCfg(config.CapabilitySurfaceFull), opts)
+	t.Cleanup(runtime.manager.Close)
+	bridge := newSessionBridge(runtime.manager)
+	session, _ := connectedSessions(t)
+
+	if err := bridge.Subscribe(context.Background(), &mcp.SubscribeRequest{
+		Session: session,
+		Params:  &mcp.SubscribeParams{URI: "gitlab://project/42/pipeline/99"},
+	}); err != nil {
+		t.Fatalf("Subscribe: %v", err)
+	}
+
+	time.Sleep(600 * time.Millisecond)
+
+	if demoted := runtime.manager.DemotedCount(); demoted == 0 {
+		t.Error("a silent legacy subscription was never demoted; the lease no longer applies to anything")
 	}
 }

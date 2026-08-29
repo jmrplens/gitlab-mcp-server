@@ -149,7 +149,51 @@ func (b *sessionBridge) Subscribe(ctx context.Context, req *mcp.SubscribeRequest
 		return err
 	}
 	b.hold(req.Session, req.Params.URI, listenStreamOf(ctx))
+	b.renewWhileStreaming(ctx, req.Session)
 	return nil
+}
+
+// renewWhileStreaming keeps a watch at full speed for as long as the
+// subscriptions/listen request holding it stays open.
+//
+// The lease exists to answer "is anyone still there", and request traffic on
+// the session is the evidence it normally uses. That evidence does not exist on
+// the transport this server ships by default: every stateless POST is its own
+// session, so a listen stream's session sees exactly one request — the listen
+// itself — and nothing ever renews it. The watch would drop to the slow poll
+// half an hour in and stay there, while the client sat on an open stream it was
+// still reading.
+//
+// An open listen request is better evidence than traffic anyway: it is the
+// subscriber, still connected, still waiting. So the stream renews the watch
+// itself until its context ends, which happens when the client disconnects, the
+// stream is torn down, or the server shuts down.
+//
+// Only the listen path takes this. A legacy resources/subscribe has no stream
+// to be evidence of anything, and its session does see ordinary traffic.
+func (b *sessionBridge) renewWhileStreaming(ctx context.Context, session *mcp.ServerSession) {
+	if listenStreamOf(ctx) == nil {
+		return
+	}
+	// Comfortably inside the lease, so a renewal is never the thing that
+	// arrives late.
+	interval := b.manager.Lease() / 3
+	if interval <= 0 {
+		return
+	}
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				b.manager.RenewAll(session)
+			}
+		}
+	}()
 }
 
 // hold records that a stream is keeping a watch alive. A nil stream is the

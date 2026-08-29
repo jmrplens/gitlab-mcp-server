@@ -53,6 +53,17 @@ make the worst case something an operator can predict.
   Any request that reaches the server on that session restores it. An
   absolute 24-hour cap is the only deadline that stops a watch on time
   alone.
+  **An open `subscriptions/listen` stream renews its own watch.** Session
+  traffic is a proxy for "is anyone still there"; an open listen request
+  answers that question directly and better, since the subscriber is
+  demonstrably still connected and still reading. It is also the only answer
+  available on the transport this server ships by default: every stateless POST
+  is its own session, so a listen stream's session sees one request — the listen
+  itself — and nothing would ever renew it. Without this the feature would
+  degrade by a factor of forty half an hour in, while the client sat on a stream
+  it was still reading. The lease continues to govern the legacy
+  `resources/subscribe`, which has no stream to speak for it, and `MaxLifetime`
+  still caps every watch regardless.
 - **A subscriber is an identity, not a count.** Watches are held by the
   session that asked for them, so subscribing twice is idempotent and one
   session cannot release another's watch.

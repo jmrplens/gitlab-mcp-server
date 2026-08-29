@@ -592,7 +592,12 @@ func TestConfirmAction_MalformedAnswerIsNotAUserDecision(t *testing.T) {
 					text = tc.Text
 				}
 			}
-			mentionsUser := strings.Contains(text, "canceled by user") || strings.Contains(text, "cancelled by user")
+			// A decision attributed to a person, however it is worded. The
+			// failure this guards against is a client-side schema bug being
+			// reported as something the user did.
+			mentionsUser := strings.Contains(text, "user declined") ||
+				strings.Contains(text, "canceled by user") ||
+				strings.Contains(text, "cancelled by user")
 			if mentionsUser != tt.wantsUserDecision {
 				t.Errorf("result = %q; attributing this to the user = %v, want %v",
 					text, mentionsUser, tt.wantsUserDecision)

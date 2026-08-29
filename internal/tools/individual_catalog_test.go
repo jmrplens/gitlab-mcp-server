@@ -370,7 +370,9 @@ func TestRegisterIndividualCatalogTools_DestructiveConfirmationDeclined(t *testi
 	if called {
 		t.Fatal("destructive handler executed after declined confirmation")
 	}
-	if !strings.Contains(result.Content[0].(*mcp.TextContent).Text, "Operation canceled") {
+	// A decline reads as a decline: the message tells the model the user said
+	// no, which is a different next move from a dialog that was dismissed.
+	if !strings.Contains(result.Content[0].(*mcp.TextContent).Text, "declined") {
 		t.Fatalf("result = %#v, want cancellation", result.Content)
 	}
 }

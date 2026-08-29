@@ -133,9 +133,15 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string
 	case errors.Is(err, elicitation.ErrInputPending):
 		slog.Debug("destructive confirmation pending client input", "tool", tool)
 		return flow.InputRequiredResult(), nil
-	case errors.Is(err, elicitation.ErrDeclined), errors.Is(err, elicitation.ErrCancelled):
-		slog.Info("destructive action canceled by user", "tool", tool)
-		return CancelledResult("Operation canceled by user."), nil
+	case errors.Is(err, elicitation.ErrDeclined):
+		slog.Info("destructive action declined by user", "tool", tool)
+		// Distinct from a dismissal, because the model should act differently:
+		// a decision to say no means stop and offer something else, where a
+		// dialog that was dismissed can reasonably be asked again later.
+		return CancelledResult("The user declined this operation. Do not retry it; ask what they would like instead."), nil
+	case errors.Is(err, elicitation.ErrCancelled):
+		slog.Info("destructive confirmation dismissed", "tool", tool)
+		return CancelledResult("The confirmation was dismissed without an answer. Nothing was changed; you may ask again if the user still wants this."), nil
 	case err != nil:
 		// Fail closed: a destructive action must never proceed on a
 		// malformed or failed confirmation exchange.
