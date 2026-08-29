@@ -57,7 +57,7 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--http-addr`              | `:8080`                      | Listen address: `host:port`, or a filesystem path to bind a unix socket instead. The socket is host-local, so a same-host proxy or client connects through it and the TCP hop between them disappears rather than being encrypted; remote clients still reach the server through that proxy |
 | `--http-socket-mode`       | `0660`                       | Octal permission mode for a unix socket named by `--http-addr`; the default lets owner and group connect and nobody else                                                                                                                                                                    |
 | `--tls-cert` / `--tls-key` | _(empty)_                    | PEM certificate and key. Serves HTTPS on the listener itself, for a proxy that does not share the machine. Both or neither                                                                                                                                                                  |
-| `--gitlab-url`             | _(optional)_                 | Fixed GitLab instance URL. Omit to require `GITLAB-URL` per request                                                                                                                                                                                                                         |
+| `--gitlab-url`             | _(optional)_                 | GitLab instance URL. Omit to require `GITLAB-URL` per request. **Repeatable** (or comma-separated) to publish several instances: the first is the default, all are listed in the RFC 9728 `authorization_servers` field, and `GITLAB-URL` then selects among them                           |
 | `--skip-tls-verify`        | `false`                      | Skip TLS certificate verification for self-signed certs                                                                                                                                                                                                                                     |
 | `--tool-surface`           | `dynamic`                    | Canonical tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                                                                                                            |
 | `--meta-tools`             | _(unset)_                    | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                                                                                                                              |
@@ -74,10 +74,12 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--auto-update-repo`       | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                                                                                                                                                                                                                        |
 | `--auto-update-interval`   | `1h`                         | Periodic update check interval                                                                                                                                                                                                                                                              |
 | `--auth-mode`              | `legacy`                     | Authentication mode: `legacy` or `oauth` (RFC 9728)                                                                                                                                                                                                                                         |
+| `--resource-documentation` | _(empty)_                    | https URL published as RFC 9728 `resource_documentation`; point it at a page describing your own OAuth application (its client ID and registered redirect URIs). Empty publishes this project's OAuth setup guide                                                                           |
 | `--oauth-cache-ttl`        | `15m`                        | OAuth token identity cache TTL (range: 1m–2h)                                                                                                                                                                                                                                               |
+| `--oauth-client-uid`       | _(empty)_                    | Comma-separated GitLab OAuth application uids whose tokens are admitted. Empty admits any credential the instance accepts; setting it also refuses personal access tokens, which belong to no application                                                                                   |
 | `--pool-idle-timeout`      | `1h`                         | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h)                                                                                                                                          |
 | `--revalidate-interval`    | `15m`                        | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                                                                                                             |
-| `--rate-limit-rps`         | `0`                          | Per-server `tools/call` rate limit in req/s (`0` = disabled)                                                                                                                                                                                                                                |
+| `--rate-limit-rps`         | `10`                         | Per-server `tools/call` rate limit in req/s (`0` disables it); on by default because an HTTP deployment is shared                                                                                                                                                                           |
 | `--rate-limit-burst`       | `40`                         | Token-bucket burst size when `--rate-limit-rps > 0`                                                                                                                                                                                                                                         |
 | `--trusted-proxy-header`   | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`)                                                                                                                                                                               |
 | `--stateless`              | `true`                       | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`. Use `--stateless=false` for legacy stateful sessions                                                                                     |
@@ -85,7 +87,7 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--max-request-body-bytes` | `0`                          | Maximum streamable HTTP request body size in bytes; `0` uses the SDK default (4 MiB); negative values are rejected at startup. Oversized bodies are rejected with `413`                                                                                                                     |
 
 :::note
-`--gitlab-url` is optional. When omitted, each client must provide the `GITLAB-URL` header. When set, it is authoritative: any client-provided `GITLAB-URL` header is ignored, the configured URL is used, and the request logs `ignored_options` for that client.
+What `GITLAB-URL` means depends on how many instances the deployment publishes. **None**: the client chooses, falling back to `https://gitlab.com`. **One**: it is authoritative, the header is ignored and logged in `ignored_options`. **Several**: the header selects among the published instances, and a value naming anything else is **refused** — `403` in OAuth mode, `400` in legacy — never silently answered with someone else's instance. In OAuth mode every published instance must be `https`, because the bearer token is forwarded to whichever one the request selected.
 :::
 
 ### Tool and capability surface options
@@ -112,13 +114,13 @@ Server settings resolve in three layers, highest first: a CLI flag passed explic
 
 Clients must provide their GitLab Personal Access Token on every HTTP request using one of two headers.
 
-When the server starts without `--gitlab-url`, clients must specify which GitLab instance to target using the `GITLAB-URL` header:
+When the server starts without `--gitlab-url`, a client selects the GitLab instance to target with the `GITLAB-URL` header. It is optional: a request without it falls back to `https://gitlab.com`.
 
 ```http
 GITLAB-URL: https://gitlab.example.com
 ```
 
-If `--gitlab-url` was set at startup, this header is ignored and logged. If `--gitlab-url` was not set and the header is omitted, the request is rejected.
+If the deployment pins exactly one instance, this header is ignored and logged. If it publishes several, the header picks one of them and any other value is refused. If it pins none and the header is omitted, `https://gitlab.com` is used.
 
 ### Private-token header (recommended)
 
@@ -215,7 +217,7 @@ OAuth mode is **Bearer-only**: the `PRIVATE-TOKEN` header is rejected with `401`
 Stateless is the **default** transport model, following the sessionless design introduced by [SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567) (MCP protocol `2026-07-28`):
 
 - The server neither reads nor sets the `Mcp-Session-Id` header. Every POST is a self-contained JSON-RPC exchange — no `initialize` round-trip is required.
-- GET and DELETE on the MCP endpoint return `405 Method Not Allowed` (`Allow: POST`). `/health` and `/.well-known/*` endpoints are unaffected.
+- GET and DELETE on the MCP endpoint return `405 Method Not Allowed` (`Allow: POST`), with no credential required — there is nothing they can address, so gating them would replace the specified answer with a `401`. Under `--stateless=false` they are authenticated and ownership-checked like a POST instead, because there a GET opens a session's SSE stream and a DELETE terminates the session. `/health` and `/.well-known/*` endpoints are unaffected.
 - Synchronous server-initiated requests are unavailable. Clients on protocol `2026-07-28` keep full elicitation through multi-round-trip requests (MRTR), which travel inside the tool result; only legacy-protocol clients fall back to non-interactive alternatives (e.g. the `confirm` parameter for destructive actions).
 - `--session-timeout` has no effect: no session outlives its request.
 - The per-token-and-URL server pool still applies, so repeated requests reuse a cached server instance.
@@ -302,23 +304,25 @@ Two independent layers govern connection and session lifetime:
 - **HTTP idle connection** (`--http-idle-timeout`, default `0` = disabled): the maximum time the underlying `http.Server` waits for the next request on a keep-alive connection before closing it.
 - **HTTP response write** (fixed `60s`, disabled for SSE): bounds how long a response may take to write.
 
-The server speaks the modern **Streamable HTTP** transport, which uses Server-Sent Events (`text/event-stream`) for streamed responses and the standalone stream that carries server-initiated notifications and keep-alive pings. An active SSE response is bounded by `WriteTimeout` (not `IdleTimeout`, which only limits the wait between requests on an idle connection), and the go-sdk SSE writer never resets the write deadline.
+The server speaks the modern **Streamable HTTP** transport, which uses Server-Sent Events (`text/event-stream`) for streamed responses and for the standalone stream that carries server-initiated notifications. Both are silent for long stretches by design. An active SSE response is bounded by `WriteTimeout` (not `IdleTimeout`, which only limits the wait between requests on an idle connection), and the go-sdk SSE writer never resets the write deadline.
 
-To avoid severing those streams without weakening protection elsewhere, the global `WriteTimeout` stays at a safe `60s` (guarding standard endpoints like `/health` from slow-write attacks) and any request that negotiates SSE (`Accept: text/event-stream`) — both the standalone GET stream and streamed POST responses — disables its own write deadline dynamically. Because `--http-idle-timeout` defaults to `0` (disabled), the HTTP layer also does not close idle connections out of the box, so `--session-timeout` is the effective idle lifetime. Set a low `--http-idle-timeout` only if you want idle connections recycled sooner.
+To avoid severing those streams without weakening protection elsewhere, the global `WriteTimeout` stays at a safe `60s` (guarding standard endpoints like `/health` from slow-write attacks) and any response the server actually answers as `text/event-stream` — both the standalone GET stream and streamed POST responses — disables its own write deadline dynamically and carries `X-Accel-Buffering: no`. The decision comes from the response, not from the request's `Accept` header: a client sending `*/*` or `text/*` is answered with a stream too. Because `--http-idle-timeout` defaults to `0` (disabled), the HTTP layer also does not close idle connections out of the box. Under `--stateless=false` that makes `--session-timeout` the effective idle lifetime; under the default stateless transport there is no MCP session to expire — each POST's session ends with its response — so nothing above the transport bounds a connection at all. Set a low `--http-idle-timeout` only if you want idle connections recycled sooner.
+
+An SSE response that stays silent emits a **keep-alive** every 25 seconds: a comment frame (a line beginning with `:`), which a conforming SSE reader discards without producing an event. Clearing the write deadline settles this end of the connection and nothing in between, and nginx closes an idle upstream response at `proxy_read_timeout` — 60 seconds by default — so the heartbeat is what holds the stream open. A stream that has written recently is skipped rather than padded. This is the server's own behaviour: the go-sdk emits no periodic ping of its own.
 
 :::caution[Behind a reverse proxy]
-When server-side idle closure is disabled, the proxy/edge read or idle timeout becomes the limiting factor. Raise it (e.g. to several minutes) for long-running MCP streams.
+When server-side idle closure is disabled, the proxy/edge read or idle timeout becomes the limiting factor. The 25-second keep-alive holds an idle stream open across a default nginx `proxy_read_timeout`; if your edge is tighter than that, raise it rather than relying on the heartbeat.
 :::
 
 ## Rate limiting
 
-HTTP mode includes an optional **per-server token-bucket rate limiter** that throttles `tools/call` requests. The limiter is **disabled by default** (`--rate-limit-rps=0`) and applies to each pool entry independently — that is, the scope is the same `(token + GitLab URL)` key used by the server pool.
+HTTP mode includes a **per-server token-bucket rate limiter** that throttles `tools/call` requests. It is **on by default** in HTTP mode (`--rate-limit-rps=10`; set `0` to disable) because an HTTP deployment is shared: every call it forwards is charged to its own egress address, so one looping client's volume lands on every other tenant. Stdio leaves it off, having no co-tenant to protect. The limiter applies to each pool entry independently — that is, the scope is the same `(token + GitLab URL)` key used by the server pool.
 
 ### Configuration
 
 | Flag                 | Default | Meaning                                                                 |
 | -------------------- | ------- | ----------------------------------------------------------------------- |
-| `--rate-limit-rps`   | `0`     | Sustained refill rate, in requests per second. `0` disables the limiter |
+| `--rate-limit-rps`   | `10`    | Sustained refill rate, in requests per second. `0` disables the limiter |
 | `--rate-limit-burst` | `40`    | Maximum bucket capacity (peak burst over 1s)                            |
 
 When `--rate-limit-rps > 0`, each pool entry gets its own token bucket sized at `--rate-limit-burst` tokens, refilled at `--rate-limit-rps` per second. Only `tools/call` requests consume tokens; `tools/list`, `resources/*`, `prompts/*`, `initialize`, and other low-cost RPCs are not rate-limited.
@@ -329,7 +333,7 @@ When a request would deplete the bucket, the server returns a `CallToolResult` w
 
 ### Sizing guidance
 
-- **Single-user deployment** (typical local dev): leave disabled (`--rate-limit-rps=0`)
+- **Single-user deployment** (typical local dev): `--rate-limit-rps=0` is a reasonable opt-out; stdio already defaults to it
 - **Shared instance behind a proxy** (Kubernetes, nginx, Cloudflare): start with `--rate-limit-rps=10 --rate-limit-burst=40`. Each token+URL pair gets its own quota, so this protects against a single noisy client without affecting others
 - **Large multi-tenant deployment**: combine with infra-level rate limiting (Cloudflare, Caddy, nginx). The MCP-level limiter is a safety net, not a replacement for edge enforcement
 
@@ -519,12 +523,12 @@ A ready-to-use instance of this server runs at **`https://mcp.jmrp.io/gitlab`** 
 - **`PRIVATE-TOKEN`** — the legacy-mode header, not accepted here.
 - **`GITLAB-URL`** — ignored: this deployment fixes the instance to `https://gitlab.com`.
 
-The endpoint runs in **stateless streamable HTTP** mode: `POST` is the transport, `GET` answers `405` by design (it is not down), and `https://mcp.jmrp.io/gitlab/health` answers `ok`. The tool surface is the default `dynamic` one — two tools, `gitlab_find_action` and `gitlab_execute_action`.
+The endpoint runs in **stateless streamable HTTP** mode: `POST` is the transport and an _authenticated_ `GET` answers `405` by design; with no credential, any method answers `401` carrying the RFC 6750 challenge an OAuth client follows — a bare `curl` that gets `401` is the endpoint working, not failing. `https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",…}`. The tool surface is the default `dynamic` one — two tools, `gitlab_find_action` and `gitlab_execute_action`.
 
 It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers maintained by this author, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
 
 :::caution
-Use a token scoped to what you actually need. A hosted endpoint sees every request you send through it — for private or self-managed GitLab instances, prefer running the server yourself with one of the deployments above.
+Use a token scoped to what you actually need. A hosted endpoint sees every request you send through it, adds no quota of its own — your calls spend GitLab.com's limits under your own token — and is offered as-is: no SLA, no support channel, no promise it is still there next week. For private or self-managed GitLab instances, prefer running the server yourself with one of the deployments above.
 :::
 
 ## How much memory does it need?
@@ -575,6 +579,18 @@ curl -s -X POST http://localhost:8080/mcp \
 ```
 
 A successful response returns a JSON-RPC result with the list of available tools.
+
+### Server card
+
+`GET /server-card` needs no credentials either, and answers with the MCP server-card document: every tool, resource, resource template and prompt this deployment registers, with its schemas, plus the capabilities it advertises.
+
+```bash
+curl -s http://localhost:8080/server-card
+```
+
+The response carries `Content-Type: application/mcp-server-card+json`. The same document is served at the legacy path `/.well-known/mcp/server-card.json` as `application/json`, for clients written against the earlier location. Both are mounted under `--public-url`'s path prefix as well, for a proxy that forwards its prefix rather than stripping it.
+
+This is the sanctioned way to publish the catalog to something holding no credential — a directory, a scanner, a documentation build. `tools/list` stays authenticated, because the MCP authorization specification requires a server that requires authorization to validate the token before processing a request.
 
 :::tip
 For production deployments, place the server behind a reverse proxy (nginx, Caddy) that handles TLS termination. The MCP endpoint at `/mcp` supports standard HTTP load balancing.

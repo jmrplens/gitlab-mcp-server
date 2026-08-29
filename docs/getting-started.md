@@ -65,6 +65,8 @@ Point any MCP client at `npx` with no install at all:
 }
 ```
 
+The launcher forces `AUTO_UPDATE=false` unless you set `AUTO_UPDATE` yourself: npm owns the binary, and self-replacement on disk would desynchronize what npm recorded — update with `npm update -g @jmrp.io/gitlab-mcp-server`. The Linux packages declare `libc: ["glibc"]` because the prebuilt binaries need the glibc dynamic loader, so npm skips them on musl systems such as Alpine; there, run the Docker image (`docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false`) or build from source.
+
 ### One-line installer (native binary)
 
 ```bash
@@ -89,6 +91,26 @@ and open it with Claude Desktop — see the
 
 Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs). Prefer a guided flow with no JSON to edit? Run `gitlab-mcp-server --setup` after installing the binary (see [Step 2](#step-2-run-the-setup-wizard)).
 
+### Try it without installing anything (hosted endpoint)
+
+A public instance runs at `https://mcp.jmrp.io/gitlab` — nothing to install, no account beyond your own GitLab.com token. It runs in OAuth mode: a client that speaks the OAuth flow authorizes in the browser and stores its own token, and anything that cannot open a browser sends a personal access token as `Authorization: Bearer` instead:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.jmrp.io/gitlab",
+      "headers": { "Authorization": "Bearer glpat-xxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+The [server card](https://mcp.jmrp.io/servers/gitlab/) carries copy-paste config for Claude Code, Cursor and VS Code, including the OAuth client ID those clients need — without it they fall back to dynamic registration and receive a scope this server cannot use. The [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) signs in with OAuth and calls the same endpoint read-only, with nothing to install.
+
+It is a personal service run best-effort, with no SLA: your token and every request pass through a machine you do not control, and the instance is fixed to `https://gitlab.com`. For a self-managed GitLab, or for anything you would rather keep on your own computer, use one of the paths above. The full property table is in [HTTP Server Mode — Public Hosted Endpoint](guides/http-server-mode.md#public-hosted-endpoint).
+
 ---
 
 ## Step 1: Download the Binary
@@ -112,6 +134,8 @@ On Linux/macOS, make it executable:
 ```bash
 chmod +x gitlab-mcp-server-linux-amd64
 ```
+
+Every release also ships `checksums.txt`, a keyless Cosign signature (`checksums.txt.sigstore.json`), one SPDX SBOM per binary, and a SLSA build provenance attestation you can check with `gh attestation verify <file> -R jmrplens/gitlab-mcp-server` — steps in [release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity). The `install.sh` and `install.ps1` scripts verify the SHA-256 against `checksums.txt` before installing and abort on a mismatch.
 
 ---
 
@@ -224,7 +248,7 @@ The server handles all GitLab API calls. You do not need to know project IDs, en
 
 ## Tool Modes
 
-By default, the server registers the **dynamic find/execute surface**: `gitlab_find_action` and `gitlab_execute_action`. The same canonical GitLab action catalog remains reachable, and `gitlab_find_action` returns exact schemas before execution. Set `TOOL_SURFACE=meta` to use **32 meta-tools** (48 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit).
+By default, the server registers the **dynamic find/execute surface**: `gitlab_find_action` and `gitlab_execute_action`. The same canonical GitLab action catalog remains reachable, and `gitlab_find_action` returns exact schemas before execution. Set `TOOL_SURFACE=meta` to use **32 meta-tools** (49 on self-managed Enterprise/Premium, 50 on GitLab.com Enterprise/Premium with Orbit).
 
 To register the complete individual tool set instead (one tool per GitLab operation; up to 1071 on GitLab.com Enterprise/Premium with Orbit), set:
 

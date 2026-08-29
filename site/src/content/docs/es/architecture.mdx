@@ -133,7 +133,7 @@ Las entradas del catálogo también son conscientes del nivel: cada acción y ca
 ```mermaid
 graph LR
     catalog[Catálogo de acciones canónico] --> meta["Meta-herramientas<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit en GitLab.com Enterprise"]
-    catalog --> individual["Herramientas individuales<br/>gitlab_list_issues, gitlab_create_project, ...<br/>+ 6 gitlab_orbit_* en GitLab.com Enterprise"]
+    catalog --> individual["Herramientas individuales<br/>gitlab_issue_list, gitlab_project_create, ...<br/>+ 6 gitlab_orbit_* en GitLab.com Enterprise"]
     catalog --> dynamic["Herramientas dinámicas<br/>gitlab_find_action + gitlab_execute_action<br/>+ IDs de dominio orbit.* en GitLab.com Enterprise"]
 ```
 
@@ -173,7 +173,7 @@ Esto reduce el uso de tokens y mejora la precisión de selección de herramienta
 
 ### Modo de herramientas individuales
 
-Con `TOOL_SURFACE=individual`, se exponen todas las herramientas individuales (p. ej., `gitlab_list_issues`, `gitlab_create_issue`): {stats.tools.ultimate_self_managed} en Enterprise/Premium autoalojado, o {stats.tools.gitlab_com} en GitLab.com Enterprise/Premium con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
+Con `TOOL_SURFACE=individual`, se exponen todas las herramientas individuales (p. ej., `gitlab_issue_list`, `gitlab_issue_create`): {stats.tools.ultimate_self_managed} en Enterprise/Premium autoalojado, o {stats.tools.gitlab_com} en GitLab.com Enterprise/Premium con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
 
 ### Conjunto de herramientas dinámico
 
@@ -283,8 +283,8 @@ El [índice completo de ADR](https://github.com/jmrplens/gitlab-mcp-server/blob/
 - [Especificación del Model Context Protocol](https://modelcontextprotocol.io/) — el protocolo que el servidor habla con los clientes de IA
 - [Especificación JSON-RPC 2.0](https://www.jsonrpc.org/specification) — el formato de transporte usado sobre stdio y HTTP
 - [API REST v4 de GitLab](https://docs.gitlab.com/api/rest/) y [API GraphQL](https://docs.gitlab.com/api/graphql/) — las superficies de API de GitLab a las que el servidor traduce las llamadas
-- [`modelcontextprotocol/go-sdk`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp) (v1.7.0) — el SDK oficial de MCP en Go, que implementa el registro de herramientas, recursos y prompts y ambos transportes
-- [`gitlab-org/api/client-go`](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2) (v2.57.0) — el cliente Go oficial de la API de GitLab, usado en cada llamada REST; los dominios que no cubre se emiten como GraphQL en crudo
+- [`modelcontextprotocol/go-sdk`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp) — el SDK oficial de MCP en Go, que implementa el registro de herramientas, recursos y prompts y ambos transportes
+- [`gitlab-org/api/client-go`](https://pkg.go.dev/gitlab.com/gitlab-org/api/client-go/v2) — el cliente Go oficial de la API de GitLab, usado en cada llamada REST; los dominios que no cubre se emiten como GraphQL en crudo
 - [`tiktoken-go/tokenizer`](https://pkg.go.dev/github.com/tiktoken-go/tokenizer) — el tokenizador cl100k_base en Go puro tras las mediciones publicadas de huella de tokens
 
 ## Referencia de la fuente

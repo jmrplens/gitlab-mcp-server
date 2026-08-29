@@ -69,10 +69,21 @@ const (
 
 // DefaultRateLimitBurst is the bucket size used when rps > 0 and the operator
 // did not set RATE_LIMIT_BURST explicitly.
+//
+// DefaultHTTPRateLimitRPS is the tool-call limit an HTTP deployment gets unless
+// the operator says otherwise. The specification requires a server exposing
+// tools to rate limit their invocation, and an HTTP deployment is the shared
+// one: every call it forwards is charged to its own egress address, so one
+// looping client's volume lands on every other tenant and on the instance's
+// limits. The number itself is a judgement call, not a spec value — far above
+// any human-driven session, and still a bound on a retry loop. Stdio keeps 0:
+// a single-user local process has no co-tenant to protect, so a limiter there
+// only costs latency. Explicit 0 remains the opt-out in both.
 const (
-	DefaultRateLimitBurst = 40
-	MaxRateLimitRPS       = 1000
-	MaxRateLimitBurst     = 10000
+	DefaultRateLimitBurst   = 40
+	DefaultHTTPRateLimitRPS = 10
+	MaxRateLimitRPS         = 1000
+	MaxRateLimitBurst       = 10000
 )
 
 // Meta-tool param schema modes.
@@ -207,12 +218,35 @@ type Config struct {
 
 	AuthMode      string        // Auth mode for HTTP: "legacy" (default) or "oauth"
 	OAuthCacheTTL time.Duration // OAuth token cache TTL (HTTP mode, oauth auth mode)
+	// OAuthClientUIDs pins the OAuth applications whose tokens this
+	// deployment admits, by GitLab application uid. Empty — the default —
+	// admits any credential the instance accepts.
+	//
+	// It is the only recipient check available: GitLab's authorization server
+	// publishes no resource_indicators_supported, so RFC 8707 audience
+	// restriction cannot be used, and the specification's "or otherwise verify
+	// that they are the intended recipient" is met by comparing the
+	// application a token was minted for. It is a set because --gitlab-url is
+	// repeatable and every published instance has its own application.
+	//
+	// Off by default because turning it on refuses personal access tokens
+	// outright: a PAT belongs to no application, and it is a supported
+	// credential here.
+	OAuthClientUIDs []string
 	// PublicURL is the externally reachable origin of this deployment
 	// (scheme://host[:port][/path], no trailing slash). Required in oauth
 	// mode: RFC 9728 defines the protected-resource identifier as an https
 	// URL, and deriving it from the bind address produces host-less or
 	// wrong-origin identifiers behind any TLS-terminating proxy.
 	PublicURL string
+
+	// ResourceDocumentation is the RFC 9728 resource_documentation URL the
+	// protected-resource metadata advertises. Empty means this project's
+	// own OAuth setup guide. An operator running their own deployment
+	// points it at a page describing their own OAuth application, which is
+	// the only sanctioned way to lead a client to a client ID: RFC 9728
+	// defines no field for one.
+	ResourceDocumentation string
 
 	TrustedProxyHeader string // HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
 	// TrustedOrigins are absolute origins (scheme://host[:port]) allowed to
@@ -278,14 +312,21 @@ type ServerConfig struct {
 	Tier edition.Tier
 	// TierExplicit mirrors Config.TierExplicit: when true the tier is used
 	// verbatim and the pool performs no per-instance license detection.
-	TierExplicit    bool
-	ReadOnly        bool
-	SafeMode        bool
-	ExcludeTools    []string
-	TokenScopes     []string
-	RateLimitRPS    float64
-	RateLimitBurst  int
-	MetaParamSchema string
+	TierExplicit bool
+	ReadOnly     bool
+	// ReadOnlyFromTokenScope records that ReadOnly was not asked for by the
+	// operator but derived from the credential: this token cannot write, so a
+	// read-only surface was built for it. The two causes need different words
+	// when a withheld action is asked for — "reauthorize with a wider scope"
+	// versus "this deployment does not write" — and only the first is
+	// something the caller can act on.
+	ReadOnlyFromTokenScope bool
+	SafeMode               bool
+	ExcludeTools           []string
+	TokenScopes            []string
+	RateLimitRPS           float64
+	RateLimitBurst         int
+	MetaParamSchema        string
 	// Stateless mirrors Config.Stateless. It reaches the server because a
 	// sessionless transport cannot carry a server-initiated notification
 	// outside an open request, which decides whether the legacy
@@ -418,6 +459,7 @@ func Load() (*Config, error) {
 		AuthMode:           auth.mode,
 		PublicURL:          auth.publicURL,
 		OAuthCacheTTL:      auth.oauthCacheTTL,
+		OAuthClientUIDs:    auth.oauthClientUIDs,
 		ExcludeTools:       ParseCSV(os.Getenv("EXCLUDE_TOOLS")),
 		IgnoreScopes:       bools.ignoreScopes,
 		RateLimitRPS:       rateLimitRPS,
@@ -456,9 +498,10 @@ type autoUpdateEnv struct {
 }
 
 type authEnv struct {
-	mode          string
-	oauthCacheTTL time.Duration
-	publicURL     string
+	mode            string
+	oauthCacheTTL   time.Duration
+	publicURL       string
+	oauthClientUIDs []string
 }
 
 func loadBooleanEnv() (booleanEnv, error) {
@@ -619,7 +662,12 @@ func loadAuthEnv() (authEnv, error) {
 	if err != nil {
 		return authEnv{}, fmt.Errorf("invalid OAUTH_CACHE_TTL value: %w", err)
 	}
-	return authEnv{mode: mode, oauthCacheTTL: oauthCacheTTL, publicURL: strings.TrimSpace(os.Getenv("PUBLIC_URL"))}, nil
+	return authEnv{
+		mode:            mode,
+		oauthCacheTTL:   oauthCacheTTL,
+		publicURL:       strings.TrimSpace(os.Getenv("PUBLIC_URL")),
+		oauthClientUIDs: ParseCSV(os.Getenv("OAUTH_CLIENT_UID")),
+	}, nil
 }
 
 func gitLabURLFromEnv() string {

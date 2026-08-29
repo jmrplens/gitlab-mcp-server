@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Groups
 > **Individual tools**: 104
-> **Meta-tools**: `gitlab_group`, `gitlab_group_member`, `gitlab_group_label`, `gitlab_group_milestone`, `gitlab_group_board`, `gitlab_group_relations_export`, `gitlab_group_markdown_upload`, `gitlab_group_push_rule`, `gitlab_group_protected_branch`, `gitlab_group_protected_environment`, `gitlab_group_release`, `gitlab_group_service_account`, `gitlab_group_wiki` (`TOOL_SURFACE=meta` catalog)
+> **Meta-tool**: `gitlab_group` (`TOOL_SURFACE=meta` catalog) — one tool for the whole domain, including members, labels, milestones, boards, push rules, protected branches and environments, releases, service accounts, wikis, relations export and markdown uploads
 > **GitLab API**: [Groups API](https://docs.gitlab.com/ee/api/groups.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The groups domain covers the full lifecycle of GitLab groups: creation, retrieval, listing, updating, deletion, restoration, archiving, searching, transfers, subgroup management, webhooks (including custom headers, URL variables, and test/resend operations), push rules, protected branches, protected environments, releases, service accounts and their personal access tokens, group wikis, sharing with other groups, label events on group epics, and markdown uploads.
 
-With `TOOL_SURFACE=meta`, the 104 individual tools below are consolidated into domain-specific meta-tools that dispatch by `action` parameter.
+With `TOOL_SURFACE=meta`, the 104 individual tools below collapse into the single `gitlab_group` meta-tool, which dispatches by `action` parameter. Labels, milestones, boards, members, wikis and the rest have no meta-tool of their own — each is a set of actions on `gitlab_group`, such as `group_label_list`, `group_milestone_create`, `group_board_get` and `group_member_add`. Group SCIM is the one exception — it ships as its own `gitlab_group_scim` meta-tool and is documented in [identity-security.md](identity-security.md).
 
 ### Common Questions
 

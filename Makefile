@@ -11,7 +11,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        inspector inspector-stop help
@@ -19,9 +19,13 @@
 BINARY_NAME=gitlab-mcp-server
 CMD_PATH=./cmd/server
 PKGS=./cmd/... ./internal/...
-MCP_PUBLISHER_VERSION=v1.7.9
+# Keep in lockstep with MCP_PUBLISHER_VERSION in .github/workflows/release.yml:
+# this one validates the manifest, that one publishes it.
+MCP_PUBLISHER_VERSION=v1.8.1
 GO_ANALYSIS_PKGS=./...
-GO_ANALYSIS_TAGS=e2e
+# Both e2e build tags: the HTTP transport suite lives behind `httpe2e` and was
+# invisible to every analysis gate while only `e2e` was listed.
+GO_ANALYSIS_TAGS=e2e,httpe2e
 PROJECT_GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 GO_TOOLCHAIN ?= go$(PROJECT_GO_VERSION)
 export GOTOOLCHAIN := $(GO_TOOLCHAIN)
@@ -705,6 +709,14 @@ brand-rasters: brand
 ## Same external-tool requirement as gen-icon-webp.
 check-icon-webp:
 	go run ./cmd/gen_icon_webp/ --check
+
+## audit-doc-tool-names: report documentation that names a tool no surface registers.
+audit-doc-tool-names:
+	go run ./cmd/audit_doc_tool_names/
+
+## check-doc-tool-names: fail when the documentation names a tool that does not exist.
+check-doc-tool-names:
+	go run ./cmd/audit_doc_tool_names/ --check
 
 ## check-server-json: validate server.json with the official MCP Registry publisher.
 check-server-json:

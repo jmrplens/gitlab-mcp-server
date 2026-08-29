@@ -29,6 +29,20 @@ Docker, Node.js, or Python required.
 Auto-update is disabled inside the extension (`AUTO_UPDATE=false`): updates
 arrive as new extension versions rather than in-place binary swaps.
 
+### Verify the bundle you downloaded
+
+The `.mcpb` is built outside GoReleaser, so it is not listed in `checksums.txt`.
+The release workflow attests it on its own instead, which lets you confirm the
+file came from this repository's release run:
+
+```bash
+gh attestation verify gitlab-mcp-server.mcpb -R jmrplens/gitlab-mcp-server
+```
+
+The release binaries are covered by `checksums.txt`, its keyless Cosign
+signature, and their own provenance attestation — see
+[release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity).
+
 ## Build locally
 
 ```bash

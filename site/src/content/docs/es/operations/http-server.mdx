@@ -57,7 +57,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--http-addr`              | `:8080`                      | Dirección de escucha: `host:puerto`, o una ruta del sistema de ficheros para escuchar en un socket unix. El socket es local a la máquina, así que un proxy o cliente del mismo host conecta a través de él y el tramo TCP entre ambos desaparece en vez de cifrarse; los clientes remotos siguen llegando al servidor a través de ese proxy |
 | `--http-socket-mode`       | `0660`                       | Modo de permisos en octal para un socket unix indicado en `--http-addr`; por defecto pueden conectar el propietario y el grupo, nadie más                                                                                                                                                                                                   |
 | `--tls-cert` / `--tls-key` | _(vacío)_                    | Certificado y clave PEM. Sirve HTTPS en el propio listener, para un proxy que no comparte máquina. Ambos o ninguno                                                                                                                                                                                                                          |
-| `--gitlab-url`             | _(opcional)_                 | URL fija de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición                                                                                                                                                                                                                                                     |
+| `--gitlab-url`             | _(opcional)_                 | URL de la instancia de GitLab. Omítela para requerir `GITLAB-URL` en cada petición. **Repetible** (o separada por comas) para publicar varias instancias: la primera es la predeterminada, todas se listan en el campo `authorization_servers` de RFC 9728 y `GITLAB-URL` pasa a elegir entre ellas                                         |
 | `--skip-tls-verify`        | `false`                      | Omitir verificación de certificados TLS para certificados autofirmados                                                                                                                                                                                                                                                                      |
 | `--tool-surface`           | `dynamic`                    | Selector canónico del catálogo; consulta [Opciones de superficie de herramientas y capacidades](#opciones-de-superficie-de-herramientas-y-capacidades)                                                                                                                                                                                      |
 | `--meta-tools`             | _(sin definir)_              | Flag de compatibilidad deprecado. Usa `--tool-surface=individual` en lugar de `--meta-tools=false`                                                                                                                                                                                                                                          |
@@ -74,10 +74,12 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--auto-update-repo`       | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub para assets del release                                                                                                                                                                                                                                                                                               |
 | `--auto-update-interval`   | `1h`                         | Intervalo de verificación periódica de actualizaciones                                                                                                                                                                                                                                                                                      |
 | `--auth-mode`              | `legacy`                     | Modo de autenticación: `legacy` u `oauth` (RFC 9728)                                                                                                                                                                                                                                                                                        |
+| `--resource-documentation` | _(vacío)_                    | URL https publicada como `resource_documentation` de RFC 9728; apúntala a una página que describa tu propia aplicación OAuth (su client ID y sus redirect URIs). Vacío publica la guía de configuración OAuth de este proyecto                                                                                                              |
 | `--oauth-cache-ttl`        | `15m`                        | TTL de caché de identidad de token OAuth (rango: 1m–2h)                                                                                                                                                                                                                                                                                     |
+| `--oauth-client-uid`       | _(vacío)_                    | uids de aplicaciones OAuth de GitLab, separados por comas, cuyos tokens se admiten. Vacío admite cualquier credencial que acepte la instancia; ponerlo rechaza también los tokens de acceso personal, que no pertenecen a ninguna aplicación                                                                                                |
 | `--pool-idle-timeout`      | `1h`                         | Recupera una entrada del pool (token + URL de GitLab) tras este tiempo sin usarse; `0` mantiene las entradas hasta que el límite de tamaño del pool las expulse (límite: 24h)                                                                                                                                                               |
 | `--revalidate-interval`    | `15m`                        | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                                                                                                                                                                                                                                       |
-| `--rate-limit-rps`         | `0`                          | Límite de tasa por servidor para `tools/call` en req/s (`0` = desactivado)                                                                                                                                                                                                                                                                  |
+| `--rate-limit-rps`         | `10`                         | Límite de tasa por servidor para `tools/call` en req/s (`0` lo desactiva); activo por defecto porque un despliegue HTTP es compartido                                                                                                                                                                                                       |
 | `--rate-limit-burst`       | `40`                         | Tamaño máximo del token bucket cuando `--rate-limit-rps > 0`                                                                                                                                                                                                                                                                                |
 | `--trusted-proxy-header`   | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `CF-Connecting-IP`, `X-Forwarded-For`)                                                                                                                                                                                                                   |
 | `--stateless`              | `true`                       | HTTP streamable sin sesiones (SEP-2567 / protocolo 2026-07-28): sin seguimiento de `Mcp-Session-Id`, cada POST es autónomo, GET/DELETE devuelven `405`. Usa `--stateless=false` para sesiones con estado heredadas                                                                                                                          |
@@ -85,7 +87,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--max-request-body-bytes` | `0`                          | Tamaño máximo del cuerpo de las peticiones HTTP streamable en bytes; `0` usa el valor por defecto del SDK (4 MiB); los valores negativos se rechazan al arrancar. Los cuerpos que lo superan se rechazan con `413`                                                                                                                          |
 
 :::note
-`--gitlab-url` es opcional. Cuando se omite, cada cliente debe proporcionar la cabecera `GITLAB-URL`. Cuando se establece, es autoritativa: cualquier cabecera `GITLAB-URL` enviada por el cliente se ignora, se usa la URL configurada y la petición registra `ignored_options` para ese cliente.
+Lo que significa `GITLAB-URL` depende de cuántas instancias publique el despliegue. **Ninguna**: elige el cliente, con `https://gitlab.com` como último recurso. **Una**: es autoritativa, la cabecera se ignora y se registra en `ignored_options`. **Varias**: la cabecera elige entre las publicadas, y un valor que nombre cualquier otra cosa se **rechaza** —`403` en modo OAuth, `400` en legacy—, nunca se responde en silencio con la instancia de otro. En modo OAuth todas las instancias publicadas deben ser `https`, porque el token bearer se reenvía a la que haya elegido la petición.
 :::
 
 ### Opciones de superficie de herramientas y capacidades
@@ -112,13 +114,13 @@ La configuración del servidor se resuelve en tres capas, de mayor a menor prior
 
 Los clientes deben proporcionar su Token de Acceso Personal de GitLab en cada solicitud HTTP usando una de dos cabeceras.
 
-Cuando el servidor arranca sin `--gitlab-url`, los clientes deben especificar a qué instancia de GitLab dirigirse mediante la cabecera `GITLAB-URL`:
+Cuando el servidor arranca sin `--gitlab-url`, el cliente elige a qué instancia de GitLab dirigirse con la cabecera `GITLAB-URL`. Es opcional: una petición sin ella usa `https://gitlab.com`.
 
 ```http
 GITLAB-URL: https://gitlab.ejemplo.com
 ```
 
-Si `--gitlab-url` se estableció al iniciar, esta cabecera se ignora y se registra. Si `--gitlab-url` no se estableció y la cabecera se omite, la solicitud se rechaza.
+Si el despliegue fija exactamente una instancia, esta cabecera se ignora y se registra. Si publica varias, la cabecera elige una de ellas y cualquier otro valor se rechaza. Si no fija ninguna y la cabecera se omite, se usa `https://gitlab.com`.
 
 ### Cabecera private-token (recomendada)
 
@@ -167,7 +169,7 @@ GitLab restringe los clientes OAuth registrados dinámicamente al scope `mcp`, q
   "servers": {
     "gitlab": {
       "type": "http",
-      "url": "http://tu-servidor:8080/mcp",
+      "url": "https://mcp.example.com/mcp",
       "oauth": {
         "clientId": "TU_APPLICATION_ID_DE_GITLAB",
         "scopes": ["api"]
@@ -215,7 +217,7 @@ El modo OAuth es **solo Bearer**: la cabecera `PRIVATE-TOKEN` se rechaza con `40
 El modo sin estado es el **predeterminado** y sigue el diseño sin sesiones introducido por [SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567) (protocolo MCP `2026-07-28`):
 
 - El servidor no lee ni establece la cabecera `Mcp-Session-Id`. Cada POST es un intercambio JSON-RPC autónomo — no se necesita la ronda `initialize`.
-- GET y DELETE sobre el endpoint MCP devuelven `405 Method Not Allowed` (`Allow: POST`). Los endpoints `/health` y `/.well-known/*` no se ven afectados.
+- GET y DELETE sobre el endpoint MCP devuelven `405 Method Not Allowed` (`Allow: POST`), sin necesidad de credencial: no pueden dirigirse a nada, así que exigirla sustituiría la respuesta especificada por un `401`. Con `--stateless=false` sí se autentican y se comprueba su propiedad, igual que un POST, porque ahí un GET abre el stream SSE de una sesión y un DELETE la termina. Los endpoints `/health` y `/.well-known/*` no se ven afectados.
 - Las peticiones síncronas iniciadas por el servidor no están disponibles. Los clientes con protocolo `2026-07-28` conservan la elicitación completa mediante peticiones multi-ronda (MRTR), que viajan dentro del resultado de la herramienta; solo los clientes con protocolo heredado recurren a las alternativas no interactivas (p. ej. el parámetro `confirm` para acciones destructivas).
 - `--session-timeout` no tiene efecto: ninguna sesión sobrevive a su petición.
 - El pool de servidores por token y URL sigue aplicando, así que las peticiones repetidas reutilizan una instancia de servidor cacheada.
@@ -302,23 +304,25 @@ Dos capas independientes gobiernan la vida de la conexión y de la sesión:
 - **Conexión HTTP inactiva** (`--http-idle-timeout`, por defecto `0` = desactivado): el tiempo máximo que el `http.Server` espera la siguiente petición en una conexión keep-alive antes de cerrarla.
 - **Escritura de respuesta HTTP** (fijo `60s`, desactivado para SSE): acota cuánto puede tardar en escribirse una respuesta.
 
-El servidor habla el transporte moderno **Streamable HTTP**, que usa Server-Sent Events (`text/event-stream`) para las respuestas en streaming y el stream independiente que transporta las notificaciones iniciadas por el servidor y los pings de keep-alive. Una respuesta SSE activa está acotada por `WriteTimeout` (no por `IdleTimeout`, que solo limita la espera entre peticiones en una conexión inactiva), y el escritor SSE del go-sdk nunca reinicia el deadline de escritura.
+El servidor habla el transporte moderno **Streamable HTTP**, que usa Server-Sent Events (`text/event-stream`) para las respuestas en streaming y para el stream independiente que transporta las notificaciones iniciadas por el servidor. Ambos permanecen en silencio durante largos periodos por diseño. Una respuesta SSE activa está acotada por `WriteTimeout` (no por `IdleTimeout`, que solo limita la espera entre peticiones en una conexión inactiva), y el escritor SSE del go-sdk nunca reinicia el deadline de escritura.
 
-Para no cortar esos streams sin debilitar la protección del resto, el `WriteTimeout` global se mantiene en unos seguros `60s` (protegiendo endpoints estándar como `/health` de ataques de escritura lenta) y cualquier petición que negocie SSE (`Accept: text/event-stream`) — tanto el stream GET independiente como las respuestas POST en streaming — desactiva dinámicamente su propio deadline de escritura. Como `--http-idle-timeout` vale `0` (desactivado) por defecto, la capa HTTP tampoco cierra las conexiones inactivas de fábrica, así que `--session-timeout` es la vida efectiva de inactividad. Pon un `--http-idle-timeout` bajo solo si quieres reciclar antes las conexiones inactivas.
+Para no cortar esos streams sin debilitar la protección del resto, el `WriteTimeout` global se mantiene en unos seguros `60s` (protegiendo endpoints estándar como `/health` de ataques de escritura lenta) y cualquier respuesta que el servidor conteste realmente como `text/event-stream` — tanto el stream GET independiente como las respuestas POST en streaming — desactiva dinámicamente su propio deadline de escritura y lleva `X-Accel-Buffering: no`. La decisión se toma a partir de la respuesta, no de la cabecera `Accept` de la petición: a un cliente que envía `*/*` o `text/*` también se le responde con un stream. Como `--http-idle-timeout` vale `0` (desactivado) por defecto, la capa HTTP tampoco cierra las conexiones inactivas de fábrica. Con `--stateless=false` eso hace que `--session-timeout` sea la vida efectiva de inactividad; con el transporte stateless por defecto no hay sesión MCP que expirar —la sesión de cada POST termina con su respuesta—, así que nada por encima del transporte acota una conexión. Pon un `--http-idle-timeout` bajo solo si quieres reciclar antes las conexiones inactivas.
+
+Una respuesta SSE que se queda en silencio emite un **keep-alive** cada 25 segundos: un frame de comentario (una línea que empieza por `:`), que un lector SSE conforme descarta sin producir ningún evento. Limpiar el deadline de escritura resuelve este extremo de la conexión y ninguno de los saltos intermedios, y nginx cierra una respuesta upstream inactiva en `proxy_read_timeout` — 60 segundos por defecto — así que el latido es lo que mantiene el stream abierto. Un stream que ha escrito hace poco se omite en lugar de rellenarse. Es comportamiento propio del servidor: el go-sdk no emite ningún ping periódico.
 
 :::caution[Detrás de un proxy inverso]
-Cuando el cierre por inactividad del servidor está desactivado, el timeout de lectura o de inactividad del proxy/edge pasa a ser el factor limitante. Auméntalo (por ejemplo, a varios minutos) para streams MCP de larga duración.
+Cuando el cierre por inactividad del servidor está desactivado, el timeout de lectura o de inactividad del proxy/edge pasa a ser el factor limitante. El keep-alive de 25 segundos mantiene abierto un stream inactivo frente a un `proxy_read_timeout` de nginx por defecto; si tu edge es más estricto, súbelo en lugar de confiar en el latido.
 :::
 
 ## Rate limiting
 
-El modo HTTP incluye un **rate limiter por servidor con token bucket** opcional que regula las solicitudes `tools/call`. El limitador está **desactivado por defecto** (`--rate-limit-rps=0`) y se aplica a cada entrada del pool de forma independiente — es decir, el ámbito es la misma clave `(token + URL de GitLab)` que usa el pool de servidores.
+El modo HTTP incluye un **rate limiter por servidor con token bucket** que regula las solicitudes `tools/call`. En modo HTTP está **activado por defecto** (`--rate-limit-rps=10`; pon `0` para desactivarlo) porque un despliegue HTTP es compartido: cada llamada que reenvía se carga a su propia dirección de salida, así que el volumen de un cliente en bucle recae sobre todos los demás inquilinos. Stdio lo deja apagado, al no tener con quién compartir. El limitador se aplica a cada entrada del pool de forma independiente — es decir, el ámbito es la misma clave `(token + URL de GitLab)` que usa el pool de servidores.
 
 ### Configuración
 
 | Flag                 | Por defecto | Significado                                                                       |
 | -------------------- | ----------- | --------------------------------------------------------------------------------- |
-| `--rate-limit-rps`   | `0`         | Tasa sostenida de relleno, en solicitudes por segundo. `0` desactiva el limitador |
+| `--rate-limit-rps`   | `10`        | Tasa sostenida de relleno, en solicitudes por segundo. `0` desactiva el limitador |
 | `--rate-limit-burst` | `40`        | Capacidad máxima del bucket (pico de ráfaga durante 1s)                           |
 
 Cuando `--rate-limit-rps > 0`, cada entrada del pool obtiene su propio token bucket dimensionado en `--rate-limit-burst` tokens, rellenado a `--rate-limit-rps` por segundo. Solo las solicitudes `tools/call` consumen tokens; `tools/list`, `resources/*`, `prompts/*`, `initialize` y otras RPCs de bajo coste no están limitadas.
@@ -329,7 +333,7 @@ Cuando una solicitud agotaría el bucket, el servidor devuelve un `CallToolResul
 
 ### Guía de dimensionado
 
-- **Despliegue de un solo usuario** (dev local típico): déjalo desactivado (`--rate-limit-rps=0`)
+- **Despliegue de un solo usuario** (dev local típico): `--rate-limit-rps=0` es una desactivación razonable; stdio ya viene así por defecto
 - **Instancia compartida tras un proxy** (Kubernetes, nginx, Cloudflare): empieza con `--rate-limit-rps=10 --rate-limit-burst=40`. Cada par token+URL obtiene su propia cuota, lo que protege frente a un único cliente ruidoso sin afectar a los demás
 - **Despliegue multi-tenant grande**: combina con rate limiting a nivel de infraestructura (Cloudflare, Caddy, nginx). El limitador a nivel MCP es una red de seguridad, no un sustituto del control en el edge
 
@@ -349,7 +353,7 @@ Añadir a `.vscode/mcp.json`:
   "servers": {
     "gitlab": {
       "type": "http",
-      "url": "http://tu-servidor:8080/mcp",
+      "url": "https://mcp.example.com/mcp",
       "headers": {
         "PRIVATE-TOKEN": "glpat-tu-token"
       }
@@ -365,7 +369,7 @@ Añadir a `.vscode/mcp.json`:
 {
   "mcpServers": {
     "gitlab": {
-      "url": "http://tu-servidor:8080/mcp",
+      "url": "https://mcp.example.com/mcp",
       "headers": {
         "PRIVATE-TOKEN": "glpat-tu-token"
       }
@@ -519,12 +523,12 @@ Hay una instancia lista para usar de este servidor en **`https://mcp.jmrp.io/git
 - **`PRIVATE-TOKEN`** — la cabecera del modo legacy; aquí no se acepta.
 - **`GITLAB-URL`** — se ignora: este despliegue fija la instancia a `https://gitlab.com`.
 
-El endpoint funciona en modo **streamable HTTP sin estado**: `POST` es el transporte, `GET` responde `405` por diseño (no está caído) y `https://mcp.jmrp.io/gitlab/health` responde `ok`. La superficie de herramientas es la `dynamic` por defecto — dos herramientas, `gitlab_find_action` y `gitlab_execute_action`.
+El endpoint funciona en modo **streamable HTTP sin estado**: `POST` es el transporte y un `GET` _autenticado_ responde `405` por diseño; sin credencial, cualquier método responde `401` con el desafío RFC 6750 que sigue un cliente OAuth — un `curl` a secas que recibe `401` es el endpoint funcionando, no fallando. `https://mcp.jmrp.io/gitlab/health` no necesita credencial y responde `200` con `{"status":"ok",…}`. La superficie de herramientas es la `dynamic` por defecto — dos herramientas, `gitlab_find_action` y `gitlab_execute_action`.
 
 Es uno de los servidores listados en **[mcp.jmrp.io](https://mcp.jmrp.io/)**, un directorio de los servidores MCP que mantiene el autor, cada uno accesible en su propio endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) es esa misma lista para clientes automáticos.
 
 :::caution
-Usa un token con el alcance mínimo que necesites. Un endpoint alojado ve todas las peticiones que le envías — para instancias privadas o autogestionadas, es preferible ejecutar el servidor tú mismo con alguno de los despliegues anteriores.
+Usa un token con el alcance mínimo que necesites. Un endpoint alojado ve todas las peticiones que le envías, no añade cuota propia — tus llamadas gastan los límites de GitLab.com con tu propio token — y se ofrece tal cual: sin SLA, sin canal de soporte y sin garantía de que siga ahí la semana que viene. Para instancias privadas o autogestionadas, es preferible ejecutar el servidor tú mismo con alguno de los despliegues anteriores.
 :::
 
 ## ¿Cuánta memoria necesita?
@@ -575,6 +579,18 @@ curl -s -X POST http://localhost:8080/mcp \
 ```
 
 Una respuesta exitosa devuelve un resultado JSON-RPC con la lista de herramientas disponibles.
+
+### Ficha del servidor
+
+`GET /server-card` tampoco necesita credenciales, y responde con el documento server-card de MCP: cada herramienta, recurso, plantilla de recurso y prompt que registra este despliegue, con sus esquemas, más las capacidades que anuncia.
+
+```bash
+curl -s http://localhost:8080/server-card
+```
+
+La respuesta lleva `Content-Type: application/mcp-server-card+json`. El mismo documento se sirve en la ruta heredada `/.well-known/mcp/server-card.json` como `application/json`, para clientes escritos contra la ubicación anterior. Ambas se montan también bajo el prefijo de ruta de `--public-url`, para un proxy que reenvía su prefijo en lugar de quitarlo.
+
+Es la vía sancionada para publicar el catálogo a algo que no tiene credencial — un directorio, un escáner, una compilación de documentación. `tools/list` sigue autenticado, porque la especificación de autorización de MCP exige que un servidor que requiere autorización valide el token antes de procesar la petición.
 
 :::tip
 Para despliegues en producción, coloca el servidor detrás de un proxy inverso (nginx, Caddy) que maneje la terminación TLS. El endpoint MCP en `/mcp` soporta balanceo de carga HTTP estándar.

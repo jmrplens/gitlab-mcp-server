@@ -2567,8 +2567,8 @@ func TestExecuteActionSchema_XMCPHeader_AnnotatesActionParam(t *testing.T) {
 	// here is what makes the relationship legible: the schema value and the
 	// header are not the same string, and conflating them is the bug this
 	// pair of assertions exists to prevent.
-	if executeActionHeaderName != "Mcp-Param-"+executeActionHeaderSuffix {
-		t.Errorf("wire header = %q, want the annotation prefixed with Mcp-Param-", executeActionHeaderName)
+	if ExecuteActionHeaderName != "Mcp-Param-"+executeActionHeaderSuffix {
+		t.Errorf("wire header = %q, want the annotation prefixed with Mcp-Param-", ExecuteActionHeaderName)
 	}
 	if params, paramsOK := properties["params"].(map[string]any); !paramsOK {
 		t.Fatalf("gitlab_execute_action schema has no params property: %v", properties)
@@ -6008,4 +6008,83 @@ func TestRegistrySearch_ProjectListSearchQuery_RanksSearchProjectsFirst(t *testi
 			}
 		})
 	}
+}
+
+// TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown pins that an
+// action removed from the catalog by a narrowing filter is reported as withheld
+// rather than as unknown.
+//
+// A read_api token asking for a write action used to get the generic
+// unknown-action answer, complete with five real read-only near misses. The
+// reply is authoritative-looking and wrong in the one way that matters: the
+// reader concludes the server cannot do the thing, when the truth is that the
+// credential is narrow and reauthorizing would fix it. The two causes carry
+// different remedies, so they get different sentences, and the control case
+// keeps the old message where it is still correct.
+func TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown(t *testing.T) {
+	narrowedCatalog := func(t *testing.T) *actioncatalog.Catalog {
+		t.Helper()
+		routes := testRoutes(t)
+		delete(routes["gitlab_project"], "hook_add")
+		return actioncatalog.FromActionMaps(routes)
+	}
+	executeText := func(t *testing.T, registry *Registry, action string) string {
+		t.Helper()
+		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: action})
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+		if result == nil || !result.IsError {
+			t.Fatalf("Execute() result = %+v, want tool error", result)
+		}
+		if output != nil {
+			t.Fatalf("Execute() output = %+v, want nil", output)
+		}
+		return textContent(result)
+	}
+
+	t.Run("token scope says reauthorize", func(t *testing.T) {
+		registry := newCatalogRegistry(narrowedCatalog(t),
+			WithWithheldActions([]string{"project.hook_add"}, nil))
+		text := executeText(t, registry, "project.hook_add")
+		for _, want := range []string{"exists but is not available", "credential in use", "api scope"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("Execute() error text = %q, want it to contain %q", text, want)
+			}
+		}
+		for _, unwanted := range []string{"unknown action", "Did you mean"} {
+			if strings.Contains(text, unwanted) {
+				t.Errorf("Execute() error text = %q, must not contain %q: the action is not unknown", text, unwanted)
+			}
+		}
+	})
+
+	t.Run("operator setting says ask the operator", func(t *testing.T) {
+		registry := newCatalogRegistry(narrowedCatalog(t),
+			WithWithheldActions(nil, []string{"project.hook_add"}))
+		text := executeText(t, registry, "project.hook_add")
+		if !strings.Contains(text, "Ask the operator") {
+			t.Errorf("Execute() error text = %q, want it to name the operator as the remedy", text)
+		}
+		if strings.Contains(text, "Reauthorize") {
+			t.Errorf("Execute() error text = %q, must not tell a client to reauthorize a credential that is not the cause", text)
+		}
+	})
+
+	t.Run("an alias of a withheld action is withheld too", func(t *testing.T) {
+		registry := newCatalogRegistry(narrowedCatalog(t),
+			WithWithheldActions([]string{"project.hook_add", "add project hook"}, nil))
+		text := executeText(t, registry, "Add Project Hook")
+		if !strings.Contains(text, "exists but is not available") {
+			t.Errorf("Execute() error text = %q, want the withheld explanation for an alias", text)
+		}
+	})
+
+	t.Run("nothing withheld keeps the unknown-action answer", func(t *testing.T) {
+		registry := newCatalogRegistry(narrowedCatalog(t))
+		text := executeText(t, registry, "project.hook_add")
+		if !strings.Contains(text, "unknown action") {
+			t.Errorf("Execute() error text = %q, want the unknown-action message when nothing was withheld", text)
+		}
+	})
 }

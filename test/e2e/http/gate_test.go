@@ -12,6 +12,7 @@ package httpe2e
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -261,4 +262,210 @@ func TestGate_ParamHeaderMatchesTheDocumentedName(t *testing.T) {
 	if !strings.Contains(got.body, `"result"`) {
 		t.Errorf("a successful tools/call must carry a JSON-RPC result, got: %s", truncate(got.body))
 	}
+}
+
+// startTokenAwareGitLab is a fake GitLab whose /api/v4/user echoes the
+// presented credential back as the username, so a test can tell which token a
+// request was actually executed with rather than merely which one it carried.
+func startTokenAwareGitLab(t *testing.T) *fakeGitLab {
+	t.Helper()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abcdef"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("PRIVATE-TOKEN")
+		w.Header().Set("Content-Type", "application/json")
+		//#nosec G705 -- a test fake deliberately echoing the presented credential: the assertion is which token executed the call
+		_, _ = w.Write([]byte(`{"id":1,"username":"` + token + `"}`))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	})
+
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return &fakeGitLab{url: srv.URL}
+}
+
+// TestGate_SessionIsBoundToTheCredentialThatMintedIt proves a session ID cannot
+// be used by a caller other than the one it was issued to.
+//
+// The SDK short-circuits a stateful POST carrying Mcp-Session-Id straight to
+// that session's own transport, without ever calling the server-resolution
+// function (go-sdk streamable.go, serveStatefulPOST returns before getServer).
+// Every pooled server carries its own GitLab client and token, so before the
+// gate bound sessions to the credential that minted them, presenting any
+// admitted credential plus a known session ID executed GitLab calls with the
+// session owner's token — and the audit log recorded them under the owner's
+// username, not the caller's.
+//
+// Only reachable with --stateless=false: the default mints no session IDs.
+func TestGate_SessionIsBoundToTheCredentialThatMintedIt(t *testing.T) {
+	gitlab := startTokenAwareGitLab(t)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--stateless=false")
+
+	const initialize = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}`
+
+	// Sessions exist only on the revisions that predate stateless streamable
+	// HTTP: the SDK refuses both 2026-07-28 and 2025-11-25 unless the handler
+	// is stateless, so this test speaks the newest revision that still has
+	// sessions at all, with a body carrying none of the newer _meta.
+	const statefulVersion = "2025-06-18"
+	const statefulBody = `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`
+
+	first := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp", body: initialize,
+		headers: map[string]string{"PRIVATE-TOKEN": "glpat-owner", "MCP-Protocol-Version": statefulVersion},
+	})
+	sessionID := first.header.Get("Mcp-Session-Id")
+	if sessionID == "" {
+		t.Fatalf("no session ID minted in stateful mode; status=%d body=%s", first.status, first.body)
+	}
+
+	// The owner may keep using it.
+	owner := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp", body: statefulBody,
+		headers: map[string]string{"PRIVATE-TOKEN": "glpat-owner", "Mcp-Session-Id": sessionID, "MCP-Protocol-Version": statefulVersion},
+	})
+	if owner.status != http.StatusOK {
+		t.Errorf("the session owner was refused its own session: status=%d body=%s", owner.status, owner.body)
+	}
+
+	// A different credential presenting the same session must not be served.
+	intruder := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp", body: statefulBody,
+		headers: map[string]string{"PRIVATE-TOKEN": "glpat-intruder", "Mcp-Session-Id": sessionID, "MCP-Protocol-Version": statefulVersion},
+	})
+	if intruder.status == http.StatusOK {
+		t.Fatalf("a different credential drove the session owner's server: status=%d body=%s", intruder.status, intruder.body)
+	}
+	if intruder.status != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 — the terminated-session signal a conforming client recovers from", intruder.status)
+	}
+}
+
+// TestProtocolVersion_UnsupportedGetsTheSpecifiedError pins the answer to a
+// version this server does not implement.
+//
+// The transport spec requires 400 with an UnsupportedProtocolVersionError
+// listing the supported versions. The SDK produces that only for versions
+// sorting at or above 2026-07-28; anything older got a plain-text 400. That is
+// not a cosmetic difference: the spec's backward-compatibility rule tells a
+// client that a 400 whose body is not a recognizable JSON-RPC error means an
+// initialization-era server, so it downgrades to the withdrawn HTTP+SSE
+// transport, issues a GET, and a stateless deployment answers 405 — leaving it
+// with no transport instead of one actionable retry.
+func TestProtocolVersion_UnsupportedGetsTheSpecifiedError(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	for _, version := range []string{"2024-01-01", "1999-12-31", "not-a-version"} {
+		t.Run(version, func(t *testing.T) {
+			got := srv.do(t, request{
+				method: http.MethodPost, path: "/mcp", body: toolsListBody,
+				headers: map[string]string{
+					"PRIVATE-TOKEN":        "glpat-whatever",
+					"MCP-Protocol-Version": version,
+				},
+			})
+
+			if got.status != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", got.status)
+			}
+			if ct := got.header.Get("Content-Type"); !strings.Contains(ct, "application/json") {
+				t.Fatalf("Content-Type = %q; a non-JSON body makes a client conclude the server is initialization-era", ct)
+			}
+
+			var body struct {
+				Error struct {
+					Code int `json:"code"`
+					Data struct {
+						Supported []string `json:"supported"`
+						Requested string   `json:"requested"`
+					} `json:"data"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(got.body), &body); err != nil {
+				t.Fatalf("decode error body %q: %v", got.body, err)
+			}
+			if body.Error.Code != -32022 {
+				t.Errorf("error code = %d, want -32022 (UnsupportedProtocolVersionError)", body.Error.Code)
+			}
+			if len(body.Error.Data.Supported) == 0 {
+				t.Error("the error names no supported versions, so a client cannot retry")
+			}
+			if body.Error.Data.Requested != version {
+				t.Errorf("requested = %q, want %q", body.Error.Data.Requested, version)
+			}
+		})
+	}
+}
+
+// TestProtocolVersion_SupportedVersionsStillWork guards against the middleware
+// rejecting a version the server does implement.
+func TestProtocolVersion_SupportedVersionsStillWork(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	for _, version := range []string{"2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"} {
+		t.Run(version, func(t *testing.T) {
+			body := strings.ReplaceAll(toolsListBody, protocolVersion, version)
+			got := srv.do(t, request{
+				method: http.MethodPost, path: "/mcp", body: body,
+				headers: map[string]string{
+					"PRIVATE-TOKEN":        "glpat-whatever",
+					"MCP-Protocol-Version": version,
+				},
+			})
+			if got.status == http.StatusBadRequest && strings.Contains(got.body, "-32022") {
+				t.Errorf("version %s was rejected as unsupported: %s", version, got.body)
+			}
+		})
+	}
+}
+
+// TestGate_StatefulGETAndDELETEAreAuthenticated pins that the two methods the
+// gate used to wave through are protected when they can actually do something.
+//
+// The bypass exists for a good reason: on a stateless deployment the SDK
+// answers GET and DELETE with 405 whatever they carry, so authenticating them
+// would only replace the specified answer with a 401. On a stateful deployment
+// they are not inert — GET opens a session's standalone SSE stream and reads
+// the server-initiated messages meant for its owner, DELETE terminates the
+// session — so anyone who learned a session ID could read another client's
+// traffic or end their session with no credential at all.
+func TestGate_StatefulGETAndDELETEAreAuthenticated(t *testing.T) {
+	gitlab := startTokenAwareGitLab(t)
+
+	t.Run("stateful refuses them without a credential", func(t *testing.T) {
+		srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--stateless=false")
+		for _, method := range []string{http.MethodGet, http.MethodDelete} {
+			t.Run(method, func(t *testing.T) {
+				got := srv.do(t, request{method: method, path: "/mcp"})
+				if got.status == http.StatusOK {
+					t.Errorf("%s reached the session layer with no credential: %s", method, got.body)
+				}
+				if got.status != http.StatusUnauthorized {
+					t.Errorf("%s status = %d, want %d", method, got.status, http.StatusUnauthorized)
+				}
+			})
+		}
+	})
+
+	t.Run("stateless still answers the specified 405", func(t *testing.T) {
+		srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+		for _, method := range []string{http.MethodGet, http.MethodDelete} {
+			t.Run(method, func(t *testing.T) {
+				got := srv.do(t, request{method: method, path: "/mcp"})
+				if got.status != http.StatusMethodNotAllowed {
+					t.Errorf("%s status = %d, want %d — a stateless deployment must keep emitting the specified answer, not a 401",
+						method, got.status, http.StatusMethodNotAllowed)
+				}
+			})
+		}
+	})
 }

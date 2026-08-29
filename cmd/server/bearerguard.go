@@ -40,6 +40,16 @@ const (
 	rejectedTokenMaxSize = 4096
 )
 
+// Cadence for sweeping expired entries out of the verified-token cache, as a
+// fraction of the configured TTL with a floor. A quarter keeps a dead entry
+// from outliving its usefulness by much; the floor keeps a 1-minute TTL — the
+// lowest --oauth-cache-ttl accepts — from turning the sweep into a hot loop on
+// a map that every authenticated request reads.
+const (
+	tokenCacheSweepDivisor     = 4
+	tokenCacheSweepMinInterval = 30 * time.Second
+)
+
 // upstreamRetryAfter is the delay advertised when GitLab throttled or failed
 // the verification without saying when to come back.
 const upstreamRetryAfter = 30 * time.Second
@@ -216,6 +226,31 @@ func (g *bearerGuard) classify(err error, ip, instance, token string) *gateFailu
 			code:    errCodeUpstreamUnavailable,
 			message: "GitLab could not verify this token right now; the instance is unreachable or throttling. Retry shortly — the token itself has not been rejected.",
 			header:  newHeader(headerRetryAfter, strconv.Itoa(int(delay.Seconds()))),
+		}
+	}
+
+	// A credential GitLab accepts as genuine but under-scoped is the same
+	// condition the scope check above handles locally, noticed one layer
+	// later — so it gets the same answer, for the same reasons: the client is
+	// told to ask for the named scope rather than to discard a working token,
+	// and neither the token nor the caller's address is penalized. Charging it
+	// would let a client holding a valid token lock its own address out, and
+	// caching it as rejected would keep refusing that token for five minutes
+	// after the user granted the missing scope.
+	if errors.Is(err, oauth.ErrInsufficientScope) {
+		slog.Info("request rejected: gitlab says the token lacks the required scope",
+			"minimum", g.minimumScope, "token_suffix", safeTokenSuffix(token))
+		return &gateFailure{
+			status: http.StatusForbidden,
+			code:   errCodeForbidden,
+			message: "GitLab rejected this token for lacking the scope this request needs. " +
+				"Reauthorize granting " + g.advertisedScope + " for the full tool surface, or " +
+				g.minimumScope + " for a read-only one. The token itself is valid.",
+			header: newHeader(headerWWWAuthenticate, oauthChallenge(
+				g.minimumScope, g.metadataURL,
+				"error", "insufficient_scope",
+				"error_description", "the token lacks the "+g.minimumScope+" scope",
+			)),
 		}
 	}
 

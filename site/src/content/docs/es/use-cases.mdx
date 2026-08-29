@@ -6,11 +6,11 @@ faq:
   - q: "¿Qué puedo hacer con GitLab MCP Server?"
     a: 'GitLab MCP Server permite a un asistente de IA manejar GitLab mediante lenguaje natural en ocho flujos de trabajo comunes: revisión de código, automatización CI/CD, gestión de issues, gestión de releases, gestión de equipo, búsqueda de código, informes y analítica, y revisión de seguridad. En lugar de cambiar a la interfaz web de GitLab, describes el resultado — por ejemplo, _"Resume los cambios del MR !42 y comprueba problemas de seguridad"_ — y el asistente llama a las herramientas de GitLab correspondientes, las ejecuta y devuelve el resultado. Cada flujo de trabajo se corresponde con operaciones REST y GraphQL reales de GitLab expuestas como herramientas MCP.'
   - q: "¿GitLab MCP Server puede revisar merge requests y dejar comentarios?"
-    a: 'Sí. El flujo de revisión de código usa las herramientas `gitlab_merge_request`, `gitlab_mr_changes` y `gitlab_mr_discussion` para que un asistente pueda listar MRs pendientes de revisión, resumir diffs, ejecutar un análisis de seguridad, publicar comentarios de revisión y aprobar. Una conversación típica es: _"Muestra los MRs abiertos en my-app que necesitan revisión"_, luego _"Resume los cambios del MR !42"_, _"Comprueba el MR !42 por problemas de seguridad"_, _"Deja un comentario sugiriendo añadir validación de entrada"_ y _"Aprueba el MR !42"_. Cada paso es una llamada de herramienta separada contra la API de GitLab.'
+    a: 'Sí. El flujo de revisión de código usa las herramientas `gitlab_merge_request` y `gitlab_mr_review` para que un asistente pueda listar MRs pendientes de revisión, resumir diffs, ejecutar un análisis de seguridad, publicar comentarios de revisión y aprobar. Una conversación típica es: _"Muestra los MRs abiertos en my-app que necesitan revisión"_, luego _"Resume los cambios del MR !42"_, _"Comprueba el MR !42 por problemas de seguridad"_, _"Deja un comentario sugiriendo añadir validación de entrada"_ y _"Aprueba el MR !42"_. Cada paso es una llamada de herramienta separada contra la API de GitLab.'
   - q: "¿Cómo ayuda GitLab MCP Server a depurar pipelines CI/CD?"
     a: 'El flujo CI/CD usa `gitlab_pipeline`, `gitlab_job` y `gitlab_ci_variable` para inspeccionar y recuperar pipelines con fallos sin salir del editor. Puedes pedir el estado del último pipeline, listar los jobs fallidos de un pipeline concreto, obtener los logs de un job para encontrar el error, comprobar las variables CI del proyecto y reintentar los jobs fallidos. Por ejemplo, _"¿Por qué falló el último pipeline en la rama feature/auth?"_ devuelve la etapa y el job con fallos para que el asistente explique el error y sugiera una solución.'
   - q: "¿GitLab MCP Server puede generar informes y notas de release?"
-    a: 'Sí. El flujo de informes se apoya en prompts MCP predefinidos como standup, risk-assessment, workload y milestone-report para producir resúmenes de standup diarios, evaluaciones de riesgo, informes de progreso de hitos y análisis de carga de trabajo del equipo. La gestión de releases combina `gitlab_release`, `gitlab_tag` y `gitlab_release_link` para crear releases, gestionar tags y subir assets — por ejemplo, _"Genera notas de release comparando v1.0 con v2.0"_ ensambla un changelog a partir de los commits entre dos refs.'
+    a: 'Sí. El flujo de informes se apoya en prompts MCP predefinidos como standup, risk-assessment, workload y milestone-report para producir resúmenes de standup diarios, evaluaciones de riesgo, informes de progreso de hitos y análisis de carga de trabajo del equipo. La gestión de releases combina `gitlab_release` (cuyas acciones `link_*` gestionan los assets del release) con `gitlab_tag` para crear releases, gestionar tags y subir assets — por ejemplo, _"Genera notas de release comparando v1.0 con v2.0"_ ensambla un changelog a partir de los commits entre dos refs.'
 ---
 
 import { Card, CardGrid } from "@astrojs/starlight/components";
@@ -24,7 +24,7 @@ Con GitLab MCP Server puedes revisar merge requests, depurar pipelines CI/CD con
  <Card title="🔀 Revisión de código" icon="pencil">
   Revisa merge requests, analiza cambios, comprueba problemas de seguridad y deja comentarios — todo mediante lenguaje natural.
 
-     **Herramientas clave:** `gitlab_merge_request`, `gitlab_mr_changes`, `gitlab_mr_discussion`
+     **Herramientas clave:** `gitlab_merge_request`, `gitlab_mr_review`
 
      **Prueba:** _"Resume los cambios del MR !42 y comprueba problemas de seguridad"_
     </Card>
@@ -40,7 +40,7 @@ Con GitLab MCP Server puedes revisar merge requests, depurar pipelines CI/CD con
     <Card title="📋 Gestión de issues" icon="list-format">
      Crea, actualiza y haz seguimiento de issues. Gestiona etiquetas, hitos y asignaciones mediante conversación.
 
-     **Herramientas clave:** `gitlab_issue`, `gitlab_label`, `gitlab_milestone`
+     **Herramientas clave:** `gitlab_issue`, `gitlab_project` (acciones `label_*` y `milestone_*`)
 
      **Prueba:** _"Crea un bug report titulado 'Arreglar página de login' con etiqueta 'bug' y asignar a @alice"_
     </Card>
@@ -48,7 +48,7 @@ Con GitLab MCP Server puedes revisar merge requests, depurar pipelines CI/CD con
     <Card title="📦 Gestión de releases" icon="rocket">
      Crea releases, genera changelogs, gestiona tags y sube assets de release.
 
-     **Herramientas clave:** `gitlab_release`, `gitlab_tag`, `gitlab_release_link`
+     **Herramientas clave:** `gitlab_release` (con sus acciones `link_*`), `gitlab_tag`
 
      **Prueba:** _"Genera notas de release comparando v1.0 con v2.0"_
     </Card>
@@ -56,7 +56,7 @@ Con GitLab MCP Server puedes revisar merge requests, depurar pipelines CI/CD con
     <Card title="👥 Gestión de equipo" icon="seti:ignored-vscode">
      Gestiona miembros de proyecto, membresías de grupo y niveles de acceso.
 
-     **Herramientas clave:** `gitlab_user`, `gitlab_group`, `gitlab_member`
+     **Herramientas clave:** `gitlab_user`, `gitlab_group`, `gitlab_project` (acciones `members` y `member_*`)
 
      **Prueba:** _"Añade a @bob como developer en el proyecto my-app"_
     </Card>
@@ -64,7 +64,7 @@ Con GitLab MCP Server puedes revisar merge requests, depurar pipelines CI/CD con
     <Card title="🔍 Búsqueda de código" icon="magnifier">
      Busca en código, issues, merge requests y wikis. Explora el árbol del repositorio y compara ramas.
 
-     **Herramientas clave:** `gitlab_search`, `gitlab_repository`, `gitlab_file`
+     **Herramientas clave:** `gitlab_search`, `gitlab_repository` (acciones `tree` y `file_*`)
 
      **Prueba:** _"Busca todos los comentarios TODO en el proyecto my-app"_
     </Card>

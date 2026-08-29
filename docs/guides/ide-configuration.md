@@ -42,8 +42,71 @@ Per-IDE MCP client configuration examples for gitlab-mcp-server, covering both s
 | **HTTP Legacy** | HTTP         | `PRIVATE-TOKEN` header per-request                                                               | Multi-user, simple setup                   |
 | **HTTP OAuth**  | HTTP         | Automatic OAuth 2.1 flow via [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) discovery | Multi-user, production, zero-config tokens |
 
-> **Tip**: In HTTP modes, clients send a `GITLAB-URL` header only when the server was started without `--gitlab-url`. If `--gitlab-url` is configured, it is authoritative and client-provided `GITLAB-URL` values are ignored and logged.
+> **Tip**: In HTTP modes, what a `GITLAB-URL` header does depends on how many instances the deployment publishes. With no `--gitlab-url`, the header chooses the instance per request. With exactly one, that instance is authoritative and the header is ignored and logged — this is the public endpoint's case, fixed to `https://gitlab.com`. With several, they form an allow-list the header selects among (the first is the default when no header is sent), and a value outside it is refused rather than ignored: `403` in OAuth mode, `400` in legacy mode.
 > **Docker note**: The published Docker image starts in HTTP mode by default. If an IDE launches Docker as a stdio MCP process, pass `--http=false` after the image name and keep `docker run -i`; do not publish port 8080 in that mode.
+
+---
+
+## Public Hosted Endpoint (mcp.jmrp.io)
+
+Every example in this file configures a server you run yourself. To use the public instance at `https://mcp.jmrp.io/gitlab` instead, the shapes are identical with two differences: the URL is fixed, and the GitLab OAuth Application already exists — you do not create one, you point your client at its Application ID. The [server card](https://mcp.jmrp.io/servers/gitlab/) publishes that ID next to a copy button in each snippet; it is not repeated here, because this repository publishes artifacts only and does not operate that deployment.
+
+Claude Code:
+
+```bash
+claude mcp add gitlab \
+  --transport http \
+  --client-id CLIENT_ID_FROM_THE_SERVER_CARD \
+  --callback-port 8090 \
+  https://mcp.jmrp.io/gitlab
+```
+
+VS Code (`.vscode/mcp.json`) — the same object with `servers` in place of `mcpServers`:
+
+```json
+{
+  "servers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.jmrp.io/gitlab",
+      "oauth": {
+        "clientId": "CLIENT_ID_FROM_THE_SERVER_CARD",
+        "scopes": ["api"]
+      }
+    }
+  }
+}
+```
+
+Cursor (`.cursor/mcp.json`) spells the same thing differently — `auth.CLIENT_ID`, not `oauth.clientId`:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.jmrp.io/gitlab",
+      "auth": {
+        "CLIENT_ID": "CLIENT_ID_FROM_THE_SERVER_CARD",
+        "scopes": ["api"]
+      }
+    }
+  }
+}
+```
+
+Use `"scopes": ["read_api"]` for a credential that cannot change anything: it is admitted and served a read-only tool surface, not refused.
+
+Claude Desktop has no JSON path for remote OAuth servers — add `https://mcp.jmrp.io/gitlab` as a Custom Connector exactly as described under **Claude Desktop → HTTP OAuth Mode** below, using the card's Application ID under **Advanced settings**.
+
+For a client with no OAuth flow, or for headless use, send the credential yourself; a gitlab.com personal access token is verified exactly like an OAuth one:
+
+```bash
+claude mcp add --transport http gitlab https://mcp.jmrp.io/gitlab \
+  --header "Authorization: Bearer <your token>"
+```
+
+`PRIVATE-TOKEN` is the legacy-mode header and is not accepted there, and `GITLAB-URL` is ignored: the deployment fixes the instance to `https://gitlab.com`. Its full property table and caveats are in [HTTP Server Mode — Public Hosted Endpoint](http-server-mode.md#public-hosted-endpoint).
 
 ---
 
@@ -200,7 +263,7 @@ Edit `claude_desktop_config.json`:
 Claude Desktop supports remote MCP servers with OAuth via the **Custom Connectors** UI:
 
 1. Go to [claude.ai/settings/connectors](https://claude.ai/settings/connectors)
-2. Click **Add Connector** and enter the server URL: `https://mcp.example.com/mcp` (the same origin as `--public-url`)
+2. Click **Add Connector** and enter the server URL: `https://mcp.example.com/mcp` — which must be the value the server was started with as `--public-url`, not merely the same origin. RFC 9728 makes a client discard metadata whose `resource` is not identical to the URL it used, so `--public-url=https://mcp.example.com` with clients on `.../mcp` fails discovery. See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode)
 3. Under **Advanced settings**, set the **Client ID** to your GitLab Application ID — without it Claude falls back to Dynamic Client Registration, which on GitLab yields an `mcp`-scoped token this server cannot use
 4. Claude handles OAuth discovery and authorization through the browser
 
@@ -304,7 +367,7 @@ Create or edit `.cursor/mcp.json` in your project root:
 
 ### HTTP OAuth Mode
 
-Cursor is a VS Code fork and uses the same MCP configuration format. Add to `.cursor/mcp.json`:
+Cursor is a VS Code fork, but its static OAuth credentials do **not** use VS Code's `oauth.clientId` key — they go under `auth`, with an upper-case field name. Add to `.cursor/mcp.json`:
 
 ```json
 {
@@ -312,8 +375,8 @@ Cursor is a VS Code fork and uses the same MCP configuration format. Add to `.cu
     "gitlab": {
       "type": "http",
       "url": "http://your-server:8080/mcp",
-      "oauth": {
-        "clientId": "YOUR_GITLAB_APPLICATION_ID",
+      "auth": {
+        "CLIENT_ID": "YOUR_GITLAB_APPLICATION_ID",
         "scopes": ["api"]
       }
     }
@@ -321,7 +384,9 @@ Cursor is a VS Code fork and uses the same MCP configuration format. Add to `.cu
 }
 ```
 
-> **Note**: Cursor does not currently support `${input:...}` variables. OAuth support may vary by Cursor version — verify in the Cursor changelog for your installed version.
+Set `scopes` explicitly. Cursor otherwise discovers them from the authorization server's own metadata, which for GitLab advertises every scope it supports rather than the one this server needs.
+
+> **Note**: an `oauth: { clientId }` block — the VS Code spelling — is silently ignored by Cursor. It then falls back to Dynamic Client Registration, and GitLab's DCR mints an `mcp`-scoped token that this server's identity check rejects, so the failure looks like a bad credential rather than a misplaced key. Cursor does not support `${input:...}` variables either; OAuth support varies by version, so check the Cursor changelog for the one you have.
 
 ---
 
@@ -636,6 +701,7 @@ Codex-specific notes:
 - [OAuth App Setup](oauth-app-setup.md) — creating GitLab OAuth applications
 - [Configuration](../reference/configuration.md) — environment variables and config loading order
 - [HTTP Server Mode](http-server-mode.md) — HTTP transport architecture and deployment
+- [HTTP Server Mode — Public Hosted Endpoint](http-server-mode.md#public-hosted-endpoint) — the public instance's properties and caveats
 
 ### External
 

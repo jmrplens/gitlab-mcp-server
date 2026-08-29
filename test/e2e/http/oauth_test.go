@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"maps"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -584,4 +585,262 @@ func TestOAuth_PlaintextInstanceIsRefusedAtStartup(t *testing.T) {
 	if !strings.Contains(out, "requires an https --gitlab-url") {
 		t.Errorf("a plaintext instance anywhere in the list must stop startup; output:\n%s", out)
 	}
+}
+
+// TestOAuth_SatisfiesRemoteDirectoryAuthProbe pins the contract that external
+// MCP directories verify, in one place, because each half of it is easy to
+// break from a different direction.
+//
+// A directory probes authorization twice: at the `initialize` handshake and at
+// a `tools/call` naming a tool that does not exist. Both must answer 401 with a
+// challenge pointing at reachable metadata. The second probe is the fragile
+// one: authentication currently wraps the MCP handler, so an unknown tool never
+// reaches the dispatcher. Move the gate inside it and that request starts
+// answering 200 with a JSON-RPC "unknown tool" error instead — the server would
+// still be secure for real tools, but every directory would grade it as
+// serving unauthenticated, because the probe it uses to detect authentication
+// no longer sees any.
+func TestOAuth_SatisfiesRemoteDirectoryAuthProbe(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := oauthServer(t, gitlab.url)
+
+	probes := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "initialize handshake",
+			body: `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"directory-probe","version":"0"}}}`,
+		},
+		{
+			name: "tools/call naming a tool that does not exist",
+			body: `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"definitely_not_a_tool","arguments":{}}}`,
+		},
+	}
+
+	for _, probe := range probes {
+		t.Run(probe.name, func(t *testing.T) {
+			got := srv.do(t, request{method: http.MethodPost, path: "/mcp", body: probe.body})
+
+			if got.status != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d — a directory reads anything else as an unauthenticated server", got.status, http.StatusUnauthorized)
+			}
+			challenge := got.header.Get("WWW-Authenticate")
+			if !strings.HasPrefix(challenge, "Bearer") {
+				t.Errorf("challenge %q does not name the Bearer scheme", challenge)
+			}
+			if !strings.Contains(challenge, "resource_metadata=") {
+				t.Errorf("challenge %q carries no resource_metadata pointer", challenge)
+			}
+		})
+	}
+}
+
+// TestOAuth_DirectoryReadableMetadata verifies the metadata document a remote
+// directory fetches after following the challenge, at both locations one may
+// request: the bare well-known path RFC 9728 names for a resource with no path
+// component, and the path-suffixed form for one mounted under a prefix. A
+// deployment serving only the suffixed form answers 404 to the only URL some
+// directories try.
+func TestOAuth_DirectoryReadableMetadata(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := oauthServer(t, gitlab.url)
+
+	paths := []string{
+		"/.well-known/oauth-protected-resource",
+		"/.well-known/oauth-protected-resource/mcp",
+	}
+
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			got := srv.do(t, request{method: http.MethodGet, path: path})
+			if got.status != http.StatusOK {
+				t.Fatalf("status = %d, want %d", got.status, http.StatusOK)
+			}
+			assertDirectoryMetadata(t, got.body)
+		})
+	}
+}
+
+// assertDirectoryMetadata checks the four RFC 9728 fields a directory reads.
+func assertDirectoryMetadata(t *testing.T, body string) {
+	t.Helper()
+
+	var metadata struct {
+		Resource               string   `json:"resource"`
+		AuthorizationServers   []string `json:"authorization_servers"`
+		BearerMethodsSupported []string `json:"bearer_methods_supported"`
+		ScopesSupported        []string `json:"scopes_supported"`
+	}
+	if err := json.Unmarshal([]byte(body), &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata.Resource == "" {
+		t.Error("resource is empty")
+	}
+	if len(metadata.AuthorizationServers) == 0 {
+		t.Error("authorization_servers is empty")
+	}
+	if !slices.Contains(metadata.BearerMethodsSupported, "header") {
+		t.Errorf("bearer_methods_supported = %v, must include \"header\"", metadata.BearerMethodsSupported)
+	}
+	if len(metadata.ScopesSupported) == 0 {
+		t.Error("scopes_supported is empty")
+	}
+}
+
+// TestOAuth_UnderScopedTokenIsForbiddenNotInvalid pins the answer to a token
+// GitLab accepts as genuine but rejects for lacking a scope.
+//
+// Reporting it as an invalid token tells the client to discard a working
+// credential and re-run its authorization flow, which returns the same
+// under-scoped token and loops. Worse, the invalid-token path charges the
+// caller's address an authentication failure and caches the token as rejected,
+// so a client retrying with its genuine credential can lock its own address out
+// of the endpoint. The server already answers this exact condition correctly
+// when it notices the missing scope itself; this is the same fact arriving from
+// GitLab instead.
+//
+// The distinction is only in the body — GitLab sends no WWW-Authenticate on a
+// 403 — so the fake reproduces rack-oauth2's JSON error document.
+func TestOAuth_UnderScopedTokenIsForbiddenNotInvalid(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abcdef"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":"insufficient_scope","error_description":"requires higher privileges","scope":"api"}`))
+	})
+	gitlab := httptest.NewServer(mux)
+	defer gitlab.Close()
+
+	srv := oauthServer(t, gitlab.URL)
+
+	// More attempts than the authentication-failure budget allows. If any of
+	// them were charged, the address would be locked out and the status would
+	// turn into 429 partway through.
+	for attempt := range 12 {
+		got := srv.do(t, request{
+			method: http.MethodPost, path: "/mcp", body: toolsListBody,
+			headers: map[string]string{"Authorization": "Bearer glpat-under-scoped"},
+		})
+
+		if got.status == http.StatusTooManyRequests {
+			t.Fatalf("attempt %d was rate limited: a genuine token was charged against the address", attempt+1)
+		}
+		if got.status != http.StatusForbidden {
+			t.Fatalf("attempt %d: status = %d, want 403 — an under-scoped token is not an invalid one", attempt+1, got.status)
+		}
+		challenge := got.header.Get("WWW-Authenticate")
+		if !strings.Contains(challenge, `error="insufficient_scope"`) {
+			t.Errorf("challenge %q does not say the scope is what is missing", challenge)
+		}
+		if strings.Contains(challenge, `error="invalid_token"`) {
+			t.Errorf("challenge %q tells the client to discard a working credential", challenge)
+		}
+	}
+}
+
+// TestOAuth_PathCarryingPublicURLIsSelfConsistent pins discovery for a
+// deployment whose resource identifier carries a path — the shape a server
+// mounted behind a prefix actually has, and the one the suite never exercised
+// because every other case here uses the bare origin.
+//
+// RFC 9728 §3.3 tells a client to discard metadata whose `resource` value is not
+// identical to the URL it used, so the three things a client sees must agree:
+// the metadata URL named in the challenge, the path that URL is served on, and
+// the `resource` inside the document. If they drift, the official Go SDK falls
+// back to treating the MCP host itself as the authorization server and opens a
+// metadata URL that does not exist — a failure that looks like a broken
+// authorization server rather than a misconfigured identifier.
+func TestOAuth_PathCarryingPublicURLIsSelfConsistent(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.url,
+		"--auth-mode=oauth",
+		"--public-url=https://mcp.example.com/gitlab",
+	)
+
+	got := srv.do(t, mcpPOST(nil))
+	if got.status != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", got.status)
+	}
+
+	challenge := got.header.Get("WWW-Authenticate")
+	const wantMetadata = "https://mcp.example.com/.well-known/oauth-protected-resource/gitlab"
+	if !strings.Contains(challenge, `resource_metadata="`+wantMetadata+`"`) {
+		t.Fatalf("challenge %q does not point at %s — the well-known segment goes between host and path", challenge, wantMetadata)
+	}
+
+	// The document must be served on the path the challenge named, and must
+	// claim exactly the identifier the deployment was started with.
+	doc := srv.do(t, request{method: http.MethodGet, path: "/.well-known/oauth-protected-resource/gitlab"})
+	if doc.status != http.StatusOK {
+		t.Fatalf("metadata status = %d, want 200 — the challenge points at a path that is not served", doc.status)
+	}
+
+	var metadata struct {
+		Resource string `json:"resource"`
+	}
+	if err := json.Unmarshal([]byte(doc.body), &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata.Resource != "https://mcp.example.com/gitlab" {
+		t.Errorf("resource = %q, want the --public-url value; a client comparing the two discards this document", metadata.Resource)
+	}
+}
+
+// TestOAuth_ResourceDocumentationIsOperatorConfigurable pins that
+// --resource-documentation reaches the RFC 9728 metadata document.
+//
+// The plumbing existed end to end — a config field, a parameter on
+// NewProtectedResourceHandler, a default — with no flag registering it, so the
+// field was always empty and the documented flag did not exist. Passing it
+// would have killed the process with "flag provided but not defined", which is
+// what makes starting the real binary the test that matters here.
+//
+// It exists because the default points at this project's own OAuth setup guide,
+// and an operator running their own OAuth application needs to point clients at
+// a page describing *their* client ID and redirect URIs.
+func TestOAuth_ResourceDocumentationIsOperatorConfigurable(t *testing.T) {
+	const ownGuide = "https://example.com/our-own-oauth-app"
+
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+
+	t.Run("the operator's page is published", func(t *testing.T) {
+		srv := startServer(t, nil,
+			"--gitlab-url="+gitlab.url,
+			"--auth-mode=oauth",
+			"--public-url="+publicURL,
+			"--resource-documentation="+ownGuide,
+		)
+		got := srv.do(t, request{method: http.MethodGet, path: "/.well-known/oauth-protected-resource"})
+		if got.status != http.StatusOK {
+			t.Fatalf("metadata status = %d, want %d: %s", got.status, http.StatusOK, got.body)
+		}
+		if !strings.Contains(got.body, ownGuide) {
+			t.Errorf("resource_documentation did not carry the operator's page: %s", got.body)
+		}
+	})
+
+	t.Run("omitting it keeps this project's guide", func(t *testing.T) {
+		srv := startServer(t, nil,
+			"--gitlab-url="+gitlab.url,
+			"--auth-mode=oauth",
+			"--public-url="+publicURL,
+		)
+		got := srv.do(t, request{method: http.MethodGet, path: "/.well-known/oauth-protected-resource"})
+		if got.status != http.StatusOK {
+			t.Fatalf("metadata status = %d, want %d: %s", got.status, http.StatusOK, got.body)
+		}
+		if !strings.Contains(got.body, "resource_documentation") {
+			t.Errorf("no resource_documentation published at all: %s", got.body)
+		}
+		if strings.Contains(got.body, ownGuide) {
+			t.Errorf("an unset flag published the test's value: %s", got.body)
+		}
+	})
 }

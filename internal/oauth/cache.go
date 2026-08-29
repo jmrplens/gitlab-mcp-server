@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"sync"
@@ -101,6 +102,32 @@ func (c *TokenCache) Cleanup() {
 		}
 	}
 	c.mu.Unlock()
+}
+
+// RunCleanup sweeps expired entries every interval until ctx is done. It blocks,
+// so callers run it in their own goroutine.
+//
+// Reads already evict lazily, which is enough for a token that comes back: its
+// own entry is dropped the next time it is looked up. It is not enough for one
+// that does not. Every distinct bearer this deployment has ever verified holds a
+// map entry for the lifetime of the process — a scanner walking an endpoint with
+// fresh credentials, or a fleet whose tokens rotate, leaves entries nothing will
+// ever read again. The sweep is what makes the TTL a bound on memory and not
+// only on staleness.
+func (c *TokenCache) RunCleanup(ctx context.Context, interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			c.Cleanup()
+		}
+	}
 }
 
 // tokenKey returns the SHA-256 hex digest of an instance URL and a raw token.

@@ -238,7 +238,7 @@ gitlab://tools/{id}
 The manifest payload adapts to the active surface selected at startup. Dynamic
 entries use canonical `domain.action` IDs such as `project.get`; meta entries
 use `{tool}.{action}` IDs such as `gitlab_project.get`; individual entries use
-the direct tool name such as `gitlab_get_project`. Compatibility helpers for
+the direct tool name such as `gitlab_project_get`. Compatibility helpers for
 older `gitlab://schema/*` resources remain isolated in package tests, but they
 are not registered by the production server.
 
@@ -256,16 +256,19 @@ Current baseline for delegated meta ownership:
 | Delegated `RegisterMeta` calls referenced from `internal/tools/register_meta.go` |     0 |
 | Apparent legacy `RegisterMeta` definitions requiring verification                |     0 |
 
-Historical names still handled as compatibility aliases:
+Historical group names and the surface that absorbed them. The left column is
+written without its `gitlab_` prefix on purpose: none of these is a registered
+tool name today, so a client that calls one gets `unknown tool` — only the name
+in the right column exists.
 
-| Historical name              | Current visible surface |
-| ---------------------------- | ----------------------- |
-| `gitlab_feature_flag`        | `gitlab_feature_flags`  |
-| `gitlab_ff_user_list`        | `gitlab_feature_flags`  |
-| `gitlab_registry`            | `gitlab_package`        |
-| `gitlab_registry_protection` | `gitlab_package`        |
-| `gitlab_access_request`      | `gitlab_access`         |
-| `gitlab_project_snippet`     | `gitlab_snippet`        |
+| Historical group name | Current visible surface |
+| --------------------- | ----------------------- |
+| `feature_flag`        | `gitlab_feature_flags`  |
+| `ff_user_list`        | `gitlab_feature_flags`  |
+| `registry`            | `gitlab_package`        |
+| `registry_protection` | `gitlab_package`        |
+| `access_request`      | `gitlab_access`         |
+| `project_snippet`     | `gitlab_snippet`        |
 
 Package-level `RegisterMeta` functions are now treated as audit violations.
 Former delegated groups such as `gitlab_search`, `gitlab_runner`,
@@ -318,7 +321,7 @@ func ProjectSpecs(client *gitlabclient.Client, _ bool) []toolutil.ActionSpec {
       Idempotent:     true,
       OpenWorld:      true,
       OwnerPackage:   "projects",
-      IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_list_projects"},
+      IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_project_list"},
       ContentKind:    "list",
     }),
   }

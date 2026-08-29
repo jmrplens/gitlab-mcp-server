@@ -79,7 +79,7 @@ head:
             "@type": "ListItem",
             "position": 8,
             "name": "Descubrimiento y utilidades",
-            "description": "Feature flags, registro de modelos, catálogo CI/CD, emoji personalizados y resolución de proyecto desde el remoto git: gitlab_feature_flags, gitlab_model_registry, gitlab_ci_catalog, gitlab_custom_emoji, gitlab_resolve_project.",
+            "description": "Feature flags, registro de modelos, catálogo CI/CD, emoji personalizados y movimientos de almacenamiento de repositorios, más las herramientas independientes de resolución de proyecto y de creación interactiva: gitlab_feature_flags, gitlab_model_registry, gitlab_ci_catalog, gitlab_custom_emoji, gitlab_storage_move, gitlab_discover_project, gitlab_interactive_*.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/es/tools/overview/#descubrimiento-y-utilidades"
           }
         ]
@@ -253,7 +253,7 @@ Como las meta-herramientas y el modo dinámico comparten el catálogo canónico 
 
 Todas las herramientas siguen un patrón de nombres coherente:
 
-- **Herramientas individuales**: `gitlab_{action}_{resource}` (p. ej., `gitlab_create_issue`, `gitlab_list_projects`)
+- **Herramientas individuales**: `gitlab_{domain}_{action}` (p. ej., `gitlab_issue_create`, `gitlab_project_list`) — primero el dominio, no el verbo
 - **Meta-herramientas**: `gitlab_{domain}` (p. ej., `gitlab_issue`, `gitlab_project`)
 - **Acciones dinámicas**: IDs canónicos `domain.action` ejecutados mediante `gitlab_execute_action` (p. ej., `issue.create`, `merge_request.list`)
 
@@ -261,13 +261,13 @@ Todas las herramientas siguen un patrón de nombres coherente:
 
 ### Gestión de proyectos
 
-| Meta-herramienta | Descripción                                                                                                                          | Acciones clave                                                                                               |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `gitlab_project` | CRUD de proyectos, configuración, hooks, etiquetas, hitos, miembros, badges, tokens de acceso, todo, subida y más                    | list, get, create, update, delete, fork, star, archive, label\_\*, milestone\_\*, members, badge\_\*, upload |
-| `gitlab_issue`   | Ciclo de vida de incidencias, notas, discusiones, enlaces, work items (incluidos sus tipos), seguimiento de tiempo, emojis y eventos | list, get, create, update, delete, note\_\*, link\_\*, discussion\_\*, work_item\_\*, time\_\*               |
-| `gitlab_group`   | CRUD de grupos, subgrupos, miembros, badges, hooks, etiquetas, hitos, transferencia y proyectos descendientes                        | list, get, create, update, delete, label\_\*, milestone\_\*, member\_\*, badge\_\*, hook\_\*                 |
-| `gitlab_user`    | Información de usuario, estado, claves SSH, claves GPG, correos, actividad, preferencias y cuentas de servicio (Enterprise)          | get, current, list, ssh_key\_\*, gpg_key\_\*, email\_\*, status\_\*, service_account\_\*                     |
-| `gitlab_wiki`    | Gestión de páginas wiki y adjuntos                                                                                                   | list, get, create, update, delete, upload_attachment                                                         |
+| Meta-herramienta | Descripción                                                                                                                                    | Acciones clave                                                                                               |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `gitlab_project` | CRUD de proyectos, configuración, hooks, etiquetas, hitos, miembros, badges, boards, integraciones, Pages y subidas                            | list, get, create, update, delete, fork, star, archive, label\_\*, milestone\_\*, members, badge\_\*, upload |
+| `gitlab_issue`   | Ciclo de vida de incidencias, notas, discusiones, enlaces, work items (incluidos sus tipos), seguimiento de tiempo, emojis y eventos           | list, get, create, update, delete, note\_\*, link\_\*, discussion\_\*, work_item\_\*, time\_\*               |
+| `gitlab_group`   | CRUD de grupos, subgrupos, miembros, badges, hooks, etiquetas, hitos, transferencia y proyectos descendientes                                  | list, get, create, update, delete, group_label\_\*, group_milestone\_\*, group_member\_\*, badge\_\*         |
+| `gitlab_user`    | Información de usuario, estado, claves SSH, claves GPG, correos, actividad, preferencias, tareas pendientes y cuentas de servicio (Enterprise) | get, current, list, ssh_key\_\*, gpg_key\_\*, email\_\*, status\_\*, todo\_\*, service_account\_\*           |
+| `gitlab_wiki`    | Gestión de páginas wiki y adjuntos                                                                                                             | list, get, create, update, delete, upload_attachment                                                         |
 
 ### Código y repositorio
 
@@ -318,23 +318,33 @@ Todas las herramientas siguen un patrón de nombres coherente:
 
 ### Descubrimiento y utilidades
 
-| Meta-herramienta         | Descripción                                                             | Acciones clave                                   |
-| ------------------------ | ----------------------------------------------------------------------- | ------------------------------------------------ |
-| `gitlab_feature_flags`   | Gestión de feature flags y listas de usuarios de feature flags          | list, get, create, update, delete, user_list\_\* |
-| `gitlab_model_registry`  | Descarga de archivos de paquetes de modelos ML del Model Registry       | download                                         |
-| `gitlab_ci_catalog`      | Descubrimiento de recursos del Catálogo CI/CD (componentes, plantillas) | list, get                                        |
-| `gitlab_custom_emoji`    | Gestión de emojis personalizados a nivel de grupo vía GraphQL           | list, get, create, delete                        |
-| `gitlab_resolve_project` | Resolución de URLs de remoto Git a IDs de proyecto de GitLab            | resolve                                          |
+| Meta-herramienta        | Descripción                                                                           | Acciones clave                                   |
+| ----------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `gitlab_feature_flags`  | Gestión de feature flags y listas de usuarios de feature flags                        | list, get, create, update, delete, user_list\_\* |
+| `gitlab_model_registry` | Descarga de archivos de paquetes de modelos ML del Model Registry                     | download                                         |
+| `gitlab_ci_catalog`     | Descubrimiento de recursos del Catálogo CI/CD (componentes, plantillas)               | list, get                                        |
+| `gitlab_custom_emoji`   | Gestión de emojis personalizados a nivel de grupo vía GraphQL                         | list, get, create, delete                        |
+| `gitlab_storage_move`   | Movimientos de almacenamiento de repositorios de proyectos, snippets y grupos (admin) | retrieve\_\*, get\_\*, schedule\_\*              |
+
+Se registran cinco herramientas más junto a las meta-herramientas de dominio. Reciben sus parámetros directamente, sin envoltorio `action`, y conservan el mismo nombre en el modo individual:
+
+| Herramienta                         | Descripción                                                                         |
+| ----------------------------------- | ----------------------------------------------------------------------------------- |
+| `gitlab_discover_project`           | Resuelve una URL completa de remoto git al ID de proyecto de GitLab y sus metadatos |
+| `gitlab_interactive_issue_create`   | Creación guiada de incidencias mediante elicitation de MCP                          |
+| `gitlab_interactive_mr_create`      | Creación guiada de merge requests mediante elicitation de MCP                       |
+| `gitlab_interactive_project_create` | Creación guiada de proyectos mediante elicitation de MCP                            |
+| `gitlab_interactive_release_create` | Creación guiada de releases mediante elicitation de MCP                             |
 
 :::note
-Dos herramientas independientes adicionales (`gitlab_server_check_update`, `gitlab_server_apply_update`) se registran en los modos meta e individual cuando la autoactualización está habilitada. El modo dinámico expone las mismas acciones de actualización a través del catálogo canónico de acciones.
+La autoactualización del servidor se registra aparte cuando está habilitada y no cuenta en la cifra de {stats.meta.base} anterior. El modo meta añade una meta-herramienta `gitlab_server` cuyas acciones incluyen `status`, `health_check`, `check_update` y `apply_update`; el modo individual registra `gitlab_server_status`, `gitlab_server_check_update` y `gitlab_server_apply_update`; el modo dinámico alcanza esas mismas acciones a través del catálogo canónico de acciones.
 :::
 
 ## Herramientas exclusivas de Enterprise
 
-Cuando el catálogo Enterprise/Premium está habilitado, el servidor registra 16 meta-herramientas autoalojadas adicionales para funciones de GitLab Premium y Ultimate:
+Cuando el catálogo Enterprise/Premium está habilitado, el servidor registra {stats.meta.self_managed_enterprise - stats.meta.base} meta-herramientas autoalojadas adicionales para funciones de GitLab Premium y Ultimate:
 
-`gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_vulnerability`, `gitlab_security_attribute`, `gitlab_security_category`, `gitlab_security_finding`
+`gitlab_merge_train`, `gitlab_audit_event`, `gitlab_dora_metrics`, `gitlab_dependency`, `gitlab_external_status_check`, `gitlab_group_scim`, `gitlab_member_role`, `gitlab_enterprise_user`, `gitlab_attestation`, `gitlab_compliance_policy`, `gitlab_project_alias`, `gitlab_geo`, `gitlab_vulnerability`, `gitlab_security_attribute`, `gitlab_security_category`, `gitlab_security_finding`, `gitlab_security_scan_profile`
 
 En GitLab.com Enterprise/Premium, el catálogo también registra `gitlab_orbit` con seis acciones de solo lectura del Knowledge Graph: `status`, `schema`, `tools`, `dsl`, `query` y `graph_status`.
 

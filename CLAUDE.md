@@ -188,7 +188,13 @@ See `docs/reference/output-format.md` for the complete response format specifica
 
 ### Tool naming convention
 
-`gitlab_{action}_{resource}` in snake_case (e.g., `gitlab_create_issue`, `gitlab_list_projects`)
+A tool's runtime name depends on the surface, and on the individual surface it is **declared**, not derived — `IndividualTool.Name` in the domain's `ActionSpec` — so never infer one from a formula.
+
+- **Individual surface** (`TOOL_SURFACE=individual`): the prevailing form is domain-first `gitlab_{domain}_{action}` — `issue.list` is `gitlab_issue_list`, `project.get` is `gitlab_project_get`, `branch.create` is `gitlab_branch_create`. A large legacy set is verb-first instead (`gitlab_list_issue_discussions`, `gitlab_get_issue_statistics`, `gitlab_add_ssh_key`), and both forms are real. New actions take the domain-first form.
+- **Meta surface** (`TOOL_SURFACE=meta`): mostly the bare domain — `gitlab_issue`, `gitlab_project`, `gitlab_group` — with the operation in the `action` argument, alongside a few standalone tools (`gitlab_discover_project`, `gitlab_server`, the `gitlab_interactive_*` elicitation flows). A domain **without** a meta-tool of its own is a set of routes on a base one, not a tool: epics, labels, milestones, boards, members, wikis and releases at group scope are actions on `gitlab_group`; issue discussions and statistics are actions on `gitlab_issue`; todos are actions on `gitlab_user`.
+- **Dynamic surface** (the default): only `gitlab_find_action` and `gitlab_execute_action`, which take the canonical catalog ID directly — `{"action": "issue.list", "params": {…}}`. This is the portable form for an example, because it does not depend on `TOOL_SURFACE`.
+
+Every documentation example must name a tool the surface it shows actually registers, and say which surface that is — an individual-tool example without `TOOL_SURFACE=individual` is wrong twice over, since the default surface registers neither. `go run ./cmd/audit_doc_tool_names/` checks every `gitlab_*` mention across `docs/`, `site/src/content/docs/`, `README.md` and this file against the names the server really registers; `--check` makes it a gate.
 
 ### Error handling in tool handlers
 
@@ -320,13 +326,13 @@ make analyze-report                        # generate LLM-consumable report
 
 | Variable                 | Required | Description                                              |
 | ------------------------ | -------- | -------------------------------------------------------- |
-| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode, optional via `--gitlab-url`, and the count decides the header's meaning: none means clients send `GITLAB-URL` per request, exactly one fixes the instance and the header is ignored, several publish an allow-list the header selects among (anything else refused). A comma-separated value spells the list |
+| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode, optional via `--gitlab-url`, and the count decides the header's meaning: none lets `GITLAB-URL` select freely per request, falling back to `https://gitlab.com` when it is absent; exactly one fixes the instance and the header is ignored; several publish an allow-list the header selects among (anything else refused). A comma-separated value spells the list |
 | `GITLAB_TOKEN`           | Stdio    | Personal Access Token (`glpat-...`)                      |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `META_TOOLS`             | No       | Deprecated compatibility selector; prefer `TOOL_SURFACE` for new configs |
 | `TOOL_SURFACE`           | No       | Explicit tool catalog selector: `dynamic`, `meta`, or `individual`; default is `dynamic` when unset, unless legacy `META_TOOLS` is explicitly set |
 | `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal`; `minimal` keeps the surface-aware `gitlab://tools` manifest |
-| `META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface |
+| `META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~6.5x), or `full` (~11.9x). Independent of `META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface |
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: removes mutating operations per action; reads keep working on every surface (`false` default) |
 | `GITLAB_SAFE_MODE`       | No       | Safe mode: intercepts mutating operations per action and returns a JSON preview naming the action; reads keep working (`false` default) |
 | `AUTO_UPDATE`            | No       | Enable auto-update: `true` (default), `check`, `false`  |
@@ -339,6 +345,7 @@ make analyze-report                        # generate LLM-consumable report
 | `PUBLIC_URL`             | No       | Externally reachable https origin; required with `AUTH_MODE=oauth` (RFC 9728 resource identifier; flag `--public-url`) |
 | `TRUSTED_ORIGINS`        | No       | Comma-separated absolute origins allowed to make cross-origin browser requests; `*` accepts any origin and disables the protection; empty adds none, though a configured `PUBLIC_URL` origin is trusted regardless (flag `--trusted-origins`) |
 | `OAUTH_CACHE_TTL`        | No       | OAuth token identity cache TTL (`15m` default, range 1m–2h) |
+| `OAUTH_CLIENT_UID`       | No       | Comma-separated GitLab OAuth application uids whose tokens are admitted (flag `--oauth-client-uid`). Empty (default) admits any credential the instance accepts; setting it refuses personal access tokens, which belong to no application. RFC 8707 audience binding is unavailable — GitLab publishes no `resource_indicators_supported` — so this is the specification's "otherwise verify" alternative (ADR-0019) |
 | `POOL_IDLE_TIMEOUT`      | No       | HTTP mode: reclaim a pooled per-token-and-URL server entry after this long unused (`1h` default, `0` disables, max 24h) |
 | `RATE_LIMIT_RPS`         | No       | Per-server tools/call rate limit in req/s (`0` = disabled) |
 | `RATE_LIMIT_BURST`       | No       | Token-bucket burst size when RPS > 0 (`40` default)       |
@@ -356,14 +363,14 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | --------------------- | ------- | -------------------------------------------------------- |
 | `--gitlab-url`        | —       | GitLab instance URL (optional; omit to require `GITLAB-URL` per request). Repeatable/comma-separated: the first is the default, all are published in RFC 9728 `authorization_servers`, and `GITLAB-URL` then selects among them — anything else is refused with 403 rather than ignored |
 | `--skip-tls-verify`   | `false` | Skip TLS verification for self-signed certs              |
-| `--meta-tools`        | `true`  | Enable meta-tools for tool discovery                     |
+| `--meta-tools`        | `false` _(deprecated)_ | Legacy boolean tool selector, kept for compatibility and ignored when `--tool-surface` is set. Leave it unset for the default dynamic surface; use `--tool-surface=individual` when migrating an old `--meta-tools=false` config |
 | `--tool-surface`      | _(empty)_ | Explicit tool catalog selector: `meta`, `individual`, or `dynamic`; overrides `--meta-tools` when set |
 | `--capability-surface` | `full` | Resource and prompt catalog selector: `full` or `minimal` |
 | `--tier`              | _(empty)_ | Force licensing tier: `free`, `ce`, `premium`, or `ultimate`. When set, used verbatim with no license check; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`) |
 | `--read-only`         | `false` | Read-only mode: removes mutating operations per action; reads keep working |
 | `--safe-mode`         | `false` | Safe mode: intercepts mutating operations per action, returns preview |
-| `--max-http-clients`  | `100`   | Maximum concurrent client sessions                       |
-| `--session-timeout`   | `30m`   | Idle session timeout                                     |
+| `--max-http-clients`  | `100`   | Maximum unique (token, GitLab URL) server entries kept in the pool; bounds pooled entries, not sessions or concurrent requests |
+| `--session-timeout`   | `30m`   | Idle MCP session timeout; applies to `--stateless=false` only — under the default stateless transport each POST's session ends with its response |
 | `--http-idle-timeout` | `0` (disabled) | HTTP server idle connection timeout; `0` (default) disables idle closure so `--session-timeout` is the effective lifetime; set a positive duration to recycle idle connections sooner |
 | `--stateless`         | `true`  | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28; default): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`; synchronous server-initiated requests are unavailable, but protocol 2026-07-28 clients keep elicitation through MRTR. Use `--stateless=false` for legacy stateful sessions |
 | `--json-response`     | `false` | Return `application/json` response bodies instead of `text/event-stream` (SSE) |
@@ -373,14 +380,16 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--tls-cert` / `--tls-key` | — | PEM certificate and key; serves HTTPS on the listener itself, for a proxy that does not share the machine. Both or neither, loaded at startup, TLS 1.2 floor |
 | `--auth-mode`         | `legacy` | Authentication mode: `legacy` or `oauth` (RFC 9728 Bearer verification) |
 | `--public-url`        | _(empty)_ | Externally reachable https origin; required with `--auth-mode=oauth` (RFC 9728 resource identifier and metadata-URL derivation) |
+| `--resource-documentation` | _(empty)_ | https URL published as RFC 9728 `resource_documentation`; point it at a page describing your own OAuth application. Empty publishes this project's OAuth setup guide |
 | `--oauth-cache-ttl`   | `15m`   | OAuth token identity cache TTL (range 1m–2h)             |
+| `--oauth-client-uid`  | _(empty)_ | Comma-separated GitLab OAuth application uids whose tokens are admitted; empty admits any credential the instance accepts |
 | `--pool-idle-timeout` | `1h` | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h) |
 | `--revalidate-interval` | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |
 | `--trusted-proxy-header` | _(empty)_ | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`) |
 | `--auto-update`       | `true`  | Enable auto-update (`true`, `check`, `false`)            |
 | `--auto-update-repo`  | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
 | `--auto-update-interval` | `1h` | Periodic update check interval                           |
-| `--rate-limit-rps` | `0` | Per-server tools/call rate limit in req/s (0 = disabled) |
+| `--rate-limit-rps` | `10` | Per-server tools/call rate limit in req/s (`0` disables it). On by default in HTTP mode; the `RATE_LIMIT_RPS` env var used by stdio still defaults to `0` |
 | `--rate-limit-burst` | `40` | Token-bucket burst size when --rate-limit-rps > 0        |
 | `--auto-update-timeout` | `60s` | Startup/background update timeout (range 5s–10m)         |
 
@@ -605,8 +614,8 @@ Plus enterprise-only routes injected into 3 base meta-tools:
 
 Three invariants of HTTP mode that are easy to break by touching the wrong layer:
 
-- **Admission asks for the minimum, not the deployment's scope.** `oauth.MinimumScope` (`read_api`) is what the door checks; `oauth.RequiredScope` is only what the challenge _recommends_ and the first entry of `oauth.SupportedScopes`. A `read_api` token is admitted by a deployment that writes and is served a read-only surface: `serverpool.applyScopeReadOnly` sets `ServerConfig.ReadOnly` when `gitlabclient.WriteCapable` says the token cannot write, so the write check is the per-action one the catalog already carries. Do not reintroduce a deployment-wide scope demand at the door — that is what refused a read-only OAuth application at `initialize`. Unknown scopes (`nil`) mean write-capable: a wrong "no" silently removes tools, a wrong "yes" surfaces as GitLab's own 403.
-- **Routing happens before authentication.** `mountMCPEndpoint` mounts the MCP handler on `/{$}`, `/mcp`, and the `--public-url` path prefix (for a proxy that forwards its prefix instead of stripping it); everything else is an unauthenticated 404. A catch-all auth gate told every scanner that `/.well-known/oauth-authorization-server` was a protected document that is not there. `securityHeadersMiddleware` is the outermost wrapper so even a middleware that answers instead of forwarding (host validation's 403) carries `nosniff`, CSP, `X-Frame-Options` and `Referrer-Policy`.
+- **Admission asks for the minimum, not the deployment's scope.** `oauth.MinimumScope` (`read_api`) is what the door checks; `oauth.RequiredScope` is only what the challenge _recommends_ and the first entry of `oauth.SupportedScopes`. A `read_api` token is admitted by a deployment that writes and is served a read-only surface: `serverpool.applyScopeReadOnly` sets `ServerConfig.ReadOnly` when `gitlabclient.WriteCapable` says the token cannot write, so the write check is the per-action one the catalog already carries. Do not reintroduce a deployment-wide scope demand at the door — that is what refused a read-only OAuth application at `initialize`. Unknown scopes (`nil`) mean write-capable: a wrong "no" silently removes tools, a wrong "yes" surfaces as GitLab's own 403. **A narrowed surface must say it is narrowed.** `filterActionCatalog` returns what each filter removed, split into `byTokenScope` and `byOperator`, and the dynamic registry answers a request for one of those with the cause (`dynamic.WithWithheldActions`) instead of `unknown action … Did you mean …`. The suggestions in that older message were all real read-only actions, so a model reading it concluded the server lacked the capability rather than that the credential was narrow. Tools removed by name through `--exclude-tools` stay out of both lists: the operator asked for them not to exist.
+- **Routing happens before authentication, but only stateless GET/DELETE skip the gate.** `mountMCPEndpoint` mounts the MCP handler on `/{$}`, `/mcp`, and the `--public-url` path prefix (for a proxy that forwards its prefix instead of stripping it); everything else is an unauthenticated 404. Non-POST methods bypass the credential check **only when `--stateless`**, where the SDK answers 405 whatever they carry: on `--stateless=false` a GET opens a session's standalone SSE stream and a DELETE terminates the session, so both are resolved and ownership-checked like a POST. The SDK's own server-initiated keepalive ping is off for every HTTP pool entry (`withKeepAlive(0)`), stateful included — it closes a session on the first unanswered ping, which idle clients fail. Liveness is the SSE keep-alive comment in `sseAwareWriter` instead, which puts bytes on the wire without asking the client for anything. A catch-all auth gate told every scanner that `/.well-known/oauth-authorization-server` was a protected document that is not there. `securityHeadersMiddleware` is the outermost wrapper so even a middleware that answers instead of forwarding (host validation's 403) carries `nosniff`, CSP, `X-Frame-Options` and `Referrer-Policy`.
 - **The instance is chosen from an allow-list, and verification follows it.** `--gitlab-url` is repeatable; `serverpool.ResolveRequestOptionsFor` refuses a `GITLAB-URL` header naming an unpublished instance instead of ignoring it, `oauth.NewGitLabVerifierFor` verifies against the instance the request selected, and `oauth.TokenCache` keys on instance **and** token. Keying that cache on the token alone would let a credential verified against one published instance pass as identity on another.
 
 Nothing here should need a reverse proxy to be correct: the binary answers its own CORS preflights, its own 404s, its own security headers, and can terminate TLS or listen on a unix socket itself.
@@ -640,7 +649,7 @@ LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log
 
 # HTTP mode for easier debugging with curl
 ./gitlab-mcp-server --http --http-addr=localhost:8080
-curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "GITLAB-URL: $GITLAB_URL" -H "PRIVATE-TOKEN: $GITLAB_TOKEN" -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
 ### Common issues

@@ -39,7 +39,7 @@ Without elicitation:
   AI: "Target branch?" → User: "main"
   AI: "Title?" → User: "Fix login bug"
   AI: "Description?" → User: "Fixes the redirect issue"
-  AI: calls gitlab_create_merge_request with all parameters at once
+  AI: calls gitlab_mr_create with all parameters at once
 
 With elicitation:
   AI: calls gitlab_interactive_mr_create
@@ -119,12 +119,13 @@ Handlers that report outcomes through an error return use `flow.PendingError()` 
 
 HTTP mode is stateless by default (see [HTTP Server Mode](../../guides/http-server-mode.md#stateless-mode)), which decides which of the two mechanisms is available:
 
-| Transport                          | Session protocol        | Elicitation                                                                                             |
-| ---------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------- |
-| stdio, or HTTP `--stateless=false` | `< 2026-07-28` (legacy) | Full: synchronous `elicitation/create` requests                                                         |
-| stdio, or HTTP `--stateless=false` | `>= 2026-07-28`         | Full: MRTR                                                                                              |
-| HTTP stateless (default)           | `>= 2026-07-28`         | Full: MRTR travels inside the tool result, so no session or server-initiated channel is required        |
-| HTTP stateless (default)           | `< 2026-07-28` (legacy) | Unavailable: wizards return their non-interactive error hints and destructive actions require `confirm` |
+| Transport                          | Session protocol        | Elicitation                                                                                                                                                               |
+| ---------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| stdio, or HTTP `--stateless=false` | `< 2026-07-28` (legacy) | Full: synchronous `elicitation/create` requests                                                                                                                           |
+| stdio                              | `>= 2026-07-28`         | Full: MRTR                                                                                                                                                                |
+| HTTP `--stateless=false`           | `>= 2026-07-28`         | Unavailable: the transport refuses the revision outright, because SEP-2575 has no session to fall back on. The server answers `400` naming the revisions it can negotiate |
+| HTTP stateless (default)           | `>= 2026-07-28`         | Full: MRTR travels inside the tool result, so no session or server-initiated channel is required                                                                          |
+| HTTP stateless (default)           | `< 2026-07-28` (legacy) | Unavailable: wizards return their non-interactive error hints and destructive actions require `confirm`                                                                   |
 
 ## API
 
@@ -299,7 +300,7 @@ The entire flow happens in structured form fields rather than back-and-forth cha
 | **Best for**          | Automation, scripting, batch operations | Interactive creation, first-time users     |
 | **AI context needed** | AI must know all parameters upfront     | AI only needs to decide which tool to call |
 
-Both types coexist in this server. The regular `gitlab_create_issue` tool accepts all parameters at once (better for automation), while `gitlab_interactive_issue_create` guides the user through each field (better for interactive use).
+Both types coexist in this server. The regular issue-creation action accepts all parameters at once (better for automation) — `gitlab_issue_create` on the individual surface, `issue.create` through `gitlab_execute_action` on the default dynamic one — while `gitlab_interactive_issue_create` guides the user through each field (better for interactive use).
 
 ## Graceful Degradation
 
@@ -310,7 +311,7 @@ When the client does not support elicitation:
 3. Tool returns `elicitation.ErrElicitationNotSupported`
 4. Registration handler catches the error and returns an informational result explaining the requirement
 
-The user can then fall back to using the regular parameterized tool (e.g., `gitlab_create_issue` instead of `gitlab_interactive_issue_create`).
+The user can then fall back to using the regular parameterized action (e.g., `gitlab_issue_create` instead of `gitlab_interactive_issue_create`).
 
 ## Frequently Asked Questions
 

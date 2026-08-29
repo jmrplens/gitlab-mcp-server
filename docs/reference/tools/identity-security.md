@@ -3,7 +3,7 @@
 > **Diátaxis type**: Reference
 > **Domain**: Identity & Security
 > **Individual tools**: 30
-> **Meta-tools**: `gitlab_group_scim`, `gitlab_member_role` (with `TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled); `gitlab_group_ssh_certificate`, `gitlab_security_settings`, `gitlab_group_credential` are now enterprise-only routes inside `gitlab_group`/`gitlab_project`
+> **Meta-tools**: `gitlab_group_scim` and `gitlab_member_role` (with `TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled); SSH certificates, security settings, group credentials, LDAP links and SAML links have no meta-tool of their own and are enterprise-only routes inside `gitlab_group` / `gitlab_project`
 > **GitLab API**: [SCIM API](https://docs.gitlab.com/ee/api/scim.html) · [Group SSH Certificates API](https://docs.gitlab.com/ee/api/group_ssh_certificates.html) · [Security Settings API](https://docs.gitlab.com/ee/api/project_security_settings.html) · [Member Roles API](https://docs.gitlab.com/ee/api/member_roles.html) · [Group Credentials API](https://docs.gitlab.com/ee/api/group_credentials.html) · [LDAP Group Links API](https://docs.gitlab.com/ee/api/group_level_mr_approvals.html) · [SAML Group Links API](https://docs.gitlab.com/ee/api/groups.html#saml-group-links)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -13,7 +13,7 @@
 
 The identity & security domain covers SCIM identity management for groups, SSH certificate management, project and group security settings (secret push protection), custom member roles at instance and group level, group credential inventory (personal access tokens and SSH keys), LDAP group link management, and SAML group link management.
 
-With `TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled, the 20 individual tools below are consolidated into meta-tools. `gitlab_group_scim` and `gitlab_member_role` are standalone enterprise meta-tools, while SSH certificates, security settings, and group credentials are routes inside `gitlab_group`/`gitlab_project`.
+With `TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled, the 30 individual tools below are reached through meta-tools. Only `gitlab_group_scim` and `gitlab_member_role` are meta-tools of their own; everything else is a route on `gitlab_group` or `gitlab_project` — `ssh_cert_list`, `credential_list_pats` and the group-scoped LDAP and SAML actions on `gitlab_group`, and `security_settings_get` / `security_settings_update` on both, each scoped by the identifier it is given.
 
 ### Common Questions
 

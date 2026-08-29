@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/auth"
@@ -33,11 +34,15 @@ const (
 // reserved range (-32768 to -32000), so the gate's own codes mirror their HTTP
 // status multiplied by -100, well below -32768.
 const (
-	errCodeInvalidRequest      = -32600 // standard JSON-RPC "Invalid Request"
-	errCodeUnauthorized        = -40100 // mirrors HTTP 401
-	errCodeForbidden           = -40300 // mirrors HTTP 403
-	errCodeTooManyRequests     = -42900 // mirrors HTTP 429
-	errCodeUpstreamUnavailable = -50300 // mirrors HTTP 503
+	errCodeInvalidRequest = -32600 // standard JSON-RPC "Invalid Request"
+	// codeUnsupportedProtocolVersion is defined by the MCP specification, not
+	// by this server, so it sits inside the reserved range where the spec put
+	// it rather than following the mirrored-status convention below.
+	codeUnsupportedProtocolVersion = -32022
+	errCodeUnauthorized            = -40100 // mirrors HTTP 401
+	errCodeForbidden               = -40300 // mirrors HTTP 403
+	errCodeTooManyRequests         = -42900 // mirrors HTTP 429
+	errCodeUpstreamUnavailable     = -50300 // mirrors HTTP 503
 )
 
 // legacyAuthChallenge is the WWW-Authenticate challenge for --auth-mode=legacy.
@@ -164,6 +169,11 @@ func (f *gateFailure) write(w http.ResponseWriter) {
 // carry its own status, headers, and machine-readable reason.
 type mcpServerGate struct {
 	pool *serverpool.ServerPool
+	// sessionTags maps each pooled server to the tag prefixing the session
+	// IDs it mints, so a stateful request presenting a session ID can be
+	// checked against the credential that minted it. Nil in tests and in any
+	// mode without a pool, where the check is skipped.
+	sessionTags *sync.Map
 	// gitlabURLs are the instances this deployment publishes. Empty means
 	// the caller chooses freely (legacy, unfixed); one is the pinned
 	// instance every request reaches; several make the GITLAB-URL header a
@@ -188,6 +198,17 @@ type mcpServerGate struct {
 	// identity — never as an unverified PRIVATE-TOKEN a request might also
 	// carry, which ExtractToken would otherwise prefer.
 	bearerOnly bool
+	// stateless mirrors Config.Stateless, and decides whether GET and DELETE
+	// may skip authentication.
+	//
+	// On a stateless deployment the SDK answers both with 405 whatever they
+	// carry, so there is nothing to protect and letting them through is how
+	// the specified answer gets emitted. On a stateful one they are live
+	// operations on a session someone else created — GET opens that session's
+	// standalone SSE stream and reads its server-initiated messages, DELETE
+	// terminates it — so they must present the credential that owns it, like
+	// every POST does.
+	stateless bool
 }
 
 // verifiedScopes returns the scopes the OAuth layer already resolved for this
@@ -221,10 +242,26 @@ func (g *mcpServerGate) extractCredential(r *http.Request) string {
 // with the server attached, or writes the classified rejection.
 func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Only POST carries MCP messages. GET and DELETE must keep reaching the
-		// SDK so it answers 405 Method Not Allowed, which is what protocol
-		// 2026-07-28 prescribes for them on a stateless endpoint.
-		if r.Method != http.MethodPost {
+		// POST always carries an MCP message, so it is always gated. GET and
+		// DELETE depend on the transport:
+		//
+		// On a stateless deployment the SDK answers both with 405 Method Not
+		// Allowed — what protocol 2026-07-28 prescribes — whatever they carry.
+		// They address nothing, so gating them would only replace a correct
+		// answer with a 401.
+		//
+		// On a stateful one they are not inert: GET opens a session's
+		// standalone SSE stream and reads the server-initiated messages meant
+		// for its owner, and DELETE terminates the session. Waving them through
+		// would make a session ID sufficient to read or end someone else's
+		// session, so they take the same resolution and ownership check a POST
+		// takes.
+		//
+		// Every other method passes through unconditionally. OPTIONS is the one
+		// that matters: it is a CORS preflight, which a browser sends without
+		// credentials by definition, so gating it would refuse the request that
+		// exists to ask whether the real request is allowed.
+		if r.Method != http.MethodPost && !g.addressesSession(r.Method) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -234,10 +271,23 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 			failure.write(w)
 			return
 		}
+		if sessionFailure := g.checkSessionOwnership(r, server); sessionFailure != nil {
+			sessionFailure.write(w)
+			return
+		}
 		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, server)
 		ctx = g.withIdentity(ctx, r)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// addressesSession reports whether a non-POST method can act on a live MCP
+// session in this deployment's transport mode.
+func (g *mcpServerGate) addressesSession(method string) bool {
+	if g.stateless {
+		return false
+	}
+	return method == http.MethodGet || method == http.MethodDelete
 }
 
 // withIdentity attaches the GitLab user behind the request's credential to
@@ -272,6 +322,53 @@ func (g *mcpServerGate) withIdentity(ctx context.Context, r *http.Request) conte
 
 // resolve returns the pool server for the request, or the failure that stopped
 // it. Exactly one of the two return values is non-nil.
+// mcpSessionIDHeader is the streamable HTTP session header. The SDK keeps its
+// own copy unexported, so the name is restated here rather than reached for.
+const mcpSessionIDHeader = "Mcp-Session-Id"
+
+// checkSessionOwnership refuses a request that presents a session ID minted for
+// a different credential.
+//
+// The SDK short-circuits a stateful POST carrying Mcp-Session-Id straight to
+// that session's own transport and never calls the server-resolution function,
+// so without this check any credential the pool admits could drive another
+// caller's session — executing against their GitLab instance, with their token,
+// and being recorded in the audit log under their username. The MCP security
+// guidance is explicit that a handle must be bound server-side to the
+// authenticated principal and refused when presented by any other.
+//
+// 404 is the prescribed answer: it is the terminated-session signal, and a
+// conforming client responds by starting a new session without an ID, so the
+// refusal self-heals rather than stranding the caller.
+func (g *mcpServerGate) checkSessionOwnership(r *http.Request, server *mcp.Server) *gateFailure {
+	sessionID := r.Header.Get(mcpSessionIDHeader)
+	if sessionID == "" || g.sessionTags == nil {
+		return nil
+	}
+	presented, ok := sessionTagOf(sessionID)
+	if !ok {
+		// A session ID this deployment never minted. Stateless mode issues
+		// none at all, so anything untagged is either stale or forged.
+		return sessionOwnershipFailure()
+	}
+	owned, found := g.sessionTags.Load(server)
+	if !found || owned != presented {
+		slog.Warn("request rejected: session ID does not belong to the presented credential")
+		return sessionOwnershipFailure()
+	}
+	return nil
+}
+
+// sessionOwnershipFailure is the refusal written for a session that belongs to
+// another credential.
+func sessionOwnershipFailure() *gateFailure {
+	return &gateFailure{
+		status:  http.StatusNotFound,
+		code:    errCodeInvalidRequest,
+		message: "This session does not belong to the presented credential. Start a new session by sending initialize without a session ID.",
+	}
+}
+
 func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	ip := clientIP(r, g.trustedProxyHeader)
 
@@ -305,7 +402,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		return nil, &gateFailure{
 			status:  http.StatusBadRequest,
 			code:    errCodeInvalidRequest,
-			message: invalidURLMessage(r, err),
+			message: g.invalidURLMessage(r, err),
 		}
 	}
 	logIgnoredRequestOptions(token, options)
@@ -355,9 +452,20 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 // a misconfigured server-side --gitlab-url is never reflected back. The
 // underlying error already names the header, so it is returned verbatim rather
 // than prefixed.
-func invalidURLMessage(r *http.Request, err error) string {
+func (g *mcpServerGate) invalidURLMessage(r *http.Request, err error) string {
 	if r.Header.Get(serverpool.RequestOptionGitLabURL) == "" {
 		return "The server's configured GitLab instance URL is invalid; contact the operator."
+	}
+	// Naming the published instances is a help to a client that guessed wrong,
+	// and it is safe exactly when that list is already public — which is oauth
+	// mode, where the same set is served unauthenticated as RFC 9728
+	// authorization_servers. Legacy mode publishes no metadata document, and
+	// this rejection is reached before the credential is validated, so echoing
+	// the list there would let any non-empty token enumerate the operator's
+	// instance hostnames.
+	var disallowed *serverpool.DisallowedGitLabURLError
+	if errors.As(err, &disallowed) && !g.oauthMode {
+		return "The GITLAB-URL header names an instance this deployment does not serve. Ask the operator which instances it publishes."
 	}
 	return capitalizeFirst(err.Error())
 }

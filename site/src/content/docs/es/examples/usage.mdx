@@ -8,7 +8,7 @@ faq:
   - q: "¿Necesito conocer los nombres de las herramientas para usar GitLab MCP Server?"
     a: "No. En la superficie dinámica predeterminada describes lo que quieres y el asistente llama a `gitlab_find_action` para localizar la acción y su esquema exacto, y después a `gitlab_execute_action` para ejecutarla. Los nombres como `gitlab_issue` solo se hacen visibles si cambias a `TOOL_SURFACE=meta` o `TOOL_SURFACE=individual`, que intercambian contexto de arranque por una lista navegable de herramientas."
   - q: "¿Cómo le indico al asistente qué proyecto de GitLab usar?"
-    a: "Pasa la ruta del proyecto en `project_id`, con la forma `grupo/proyecto` — por ejemplo `mi-grupo/backend`. Los IDs numéricos también funcionan. Si trabajas dentro de un repositorio clonado, `gitlab_resolve_project` traduce la URL del remoto git al proyecto correcto de GitLab, así que no necesitas indicarlo."
+    a: "Pasa la ruta del proyecto en `project_id`, con la forma `grupo/proyecto` — por ejemplo `mi-grupo/backend`. Los IDs numéricos también funcionan. Si trabajas dentro de un repositorio clonado, `gitlab_discover_project` traduce la URL del remoto git al proyecto correcto de GitLab, así que no necesitas indicarlo."
   - q: "¿Un asistente de IA puede modificar mis datos de GitLab sin preguntar?"
     a: "No sin desactivar antes alguna salvaguarda. Las acciones destructivas exigen confirmación explícita antes de ejecutarse, `GITLAB_READ_ONLY=true` elimina del catálogo todas las acciones de escritura, y `GITLAB_SAFE_MODE=true` intercepta las mutaciones y devuelve una previsualización JSON de lo que ocurriría en vez de aplicarlo. Las operaciones de lectura, como listar y buscar, son siempre seguras."
 ---
@@ -60,13 +60,13 @@ El servidor llama a `gitlab_issue` con `action: create`, estableciendo el títul
 
 **Prompt**: "Lista todas las etiquetas en el proyecto frontend y crea una nueva etiqueta llamada 'accessibility' con color #0052CC"
 
-El servidor primero llama a `gitlab_label` con `action: list` para mostrar las etiquetas existentes, luego `action: create` para añadir la nueva.
+El servidor primero llama a `gitlab_project` con `action: label_list` para mostrar las etiquetas existentes, y luego `action: label_create` para añadir la nueva.
 
 ## Seguir milestones
 
 **Prompt**: "Muéstrame el progreso del milestone Sprint 14 en my-project"
 
-El servidor llama a `gitlab_milestone` con `action: get`, devolviendo el porcentaje de completado, conteos de issues abiertos/cerrados y fecha límite.
+El servidor llama a `gitlab_project` con `action: milestone_get`, devolviendo el porcentaje de completado, conteos de issues abiertos/cerrados y fecha límite.
 
   </TabItem>
   <TabItem label="Revisión de Código">
@@ -111,7 +111,7 @@ El servidor llama a `gitlab_search` con `action: code`, buscando en todos los pr
 
 **Prompt**: "Lista todos los miembros del proyecto frontend y sus niveles de acceso"
 
-El servidor llama a `gitlab_member` con `action: list`, devolviendo los miembros del equipo con sus roles y permisos.
+El servidor llama a `gitlab_project` con `action: members`, devolviendo los miembros del equipo con sus roles y permisos.
 
 ## Flujo de herramientas dinámico primero
 
@@ -122,11 +122,12 @@ gitlab_find_action → query: "listar merge requests abiertas"
 gitlab_execute_action → action: "merge_request.list", params: { project_id: "42", state: "opened" }
 ```
 
-Para tareas de análisis, el mismo flujo descubre acciones canónicas `analyze.*` antes de ejecutar:
+Cuando falla un pipeline, el mismo flujo encadena dos acciones — localizar los jobs fallidos y leer el log de uno de ellos:
 
 ```text
-gitlab_find_action → query: "analizar pipeline fallido"
-gitlab_execute_action → action: "analyze.pipeline_failure", params: { project_id: "42", pipeline_id: 12345 }
+gitlab_find_action → query: "listar jobs fallidos de un pipeline"
+gitlab_execute_action → action: "job.list", params: { project_id: "42", pipeline_id: 8847, scope: ["failed"] }
+gitlab_execute_action → action: "job.trace", params: { project_id: "42", job_id: 501 }
 ```
 
 ---

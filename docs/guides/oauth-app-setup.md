@@ -5,6 +5,8 @@ How to create a GitLab OAuth Application for use with gitlab-mcp-server in OAuth
 > **Diátaxis type**: How-to
 > **Audience**: 🔧 Server administrators, team leads
 > **Prerequisites**: GitLab admin or group owner access; server running with `--auth-mode=oauth` over an **https** GitLab URL (bearer tokens are forwarded upstream on every call, so cleartext is refused; `http` is allowed only for loopback development)
+>
+> **Arrived here from `https://mcp.jmrp.io/gitlab`?** You do not need any of this. That endpoint's RFC 9728 metadata names this page as its documentation, but its GitLab OAuth Application is already registered — the [server card](https://mcp.jmrp.io/servers/gitlab/) publishes the client ID and a ready-made snippet per client, and [IDE Configuration](ide-configuration.md#public-hosted-endpoint-mcpjmrpio) carries the same snippets. Everything below is for a deployment you run yourself.
 
 ---
 
@@ -110,19 +112,19 @@ Each MCP client has its own redirect URI scheme. Configure **all** redirect URIs
 
 ### Redirect URIs per IDE
 
-| IDE / Client                  | Redirect URI                                       | Notes                                                                                   |
-| ----------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| VS Code / GitHub Copilot      | `http://127.0.0.1:33418`                           | Loopback IP literals match on host only, so the port is not significant                 |
-| VS Code (Remote / vscode.dev) | `https://vscode.dev/redirect`                      | For remote development environments                                                     |
-| Cursor (desktop)              | `http://localhost:8787/callback`                   | Fixed callback — the exact path is required                                             |
-| Cursor (web / Cloud Agents)   | `https://www.cursor.com/agents/mcp/oauth/callback` | Only needed for Cursor's hosted surfaces                                                |
-| Claude Code (CLI)             | `http://localhost`                                 | Random ephemeral port by default; pin with `--callback-port` and register the exact URI |
-| Claude Desktop / claude.ai    | `https://claude.ai/api/mcp/auth_callback`          | All hosted Claude surfaces share this callback                                          |
-| OpenAI Codex CLI              | `http://localhost:1455/auth/callback`              | Only when using `--oauth-client-id`; the bearer-token path needs no redirect URI        |
-| Gemini CLI                    | Pinned in `settings.json` (`oauth.redirectUri`)    | Register whatever you pin                                                               |
-| LM Studio                     | `http://localhost:33389/callback`                  | Fixed callback                                                                          |
+| IDE / Client                  | Redirect URI                                       | Notes                                                                                |
+| ----------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| VS Code / GitHub Copilot      | `http://127.0.0.1:33418`                           | Loopback IP literals match on host only, so the port is not significant              |
+| VS Code (Remote / vscode.dev) | `https://vscode.dev/redirect`                      | For remote development environments                                                  |
+| Cursor (desktop)              | `http://localhost:8787/callback`                   | Fixed callback — the exact path is required                                          |
+| Cursor (web / Cloud Agents)   | `https://www.cursor.com/agents/mcp/oauth/callback` | Only needed for Cursor's hosted surfaces                                             |
+| Claude Code (CLI)             | `http://localhost:8090/callback`                   | Pin the port with `--callback-port` and register that exact URI — see the note below |
+| Claude Desktop / claude.ai    | `https://claude.ai/api/mcp/auth_callback`          | All hosted Claude surfaces share this callback                                       |
+| OpenAI Codex CLI              | `http://localhost:1455/auth/callback`              | Only when using `--oauth-client-id`; the bearer-token path needs no redirect URI     |
+| Gemini CLI                    | Pinned in `settings.json` (`oauth.redirectUri`)    | Register whatever you pin                                                            |
+| LM Studio                     | `http://localhost:33389/callback`                  | Fixed callback                                                                       |
 
-> **`localhost` vs `127.0.0.1`**: GitLab (Doorkeeper) ignores the port only for **loopback IP literals**. A `http://localhost` entry is matched exactly, port included — which is why Claude Code with a random port registers the bare `http://localhost` form, and why pinning `--callback-port` means registering that exact URI.
+> **`localhost` vs `127.0.0.1`**: GitLab (Doorkeeper) ignores the port only for **loopback IP literals** — `IPAddr.new("localhost")` raises, so a `http://localhost` entry is matched exactly, port and path included. Claude Code's callback is `http://localhost:<port>/callback`, so a bare `http://localhost` registration can never match it: `--callback-port` is required, not optional, and the registered URI must carry that port and the `/callback` path.
 >
 > **Multiple URIs**: GitLab allows multiple redirect URIs separated by newlines in the application form. Add all URIs your team needs.
 
@@ -131,12 +133,12 @@ Each MCP client has its own redirect URI scheme. Configure **all** redirect URIs
 In the GitLab OAuth Application "Redirect URI" field, enter:
 
 ```text
-http://localhost
 https://insiders.vscode.dev/redirect
 http://localhost:8090/callback
+http://localhost:8787/callback
 ```
 
-> **Note**: Claude Code with `--callback-port 8090` requires the exact redirect URI `http://localhost:8090/callback`. If you omit `--callback-port`, Claude Code defaults to `http://localhost`.
+> **Note**: every entry must match a client's callback exactly. `http://localhost:8090/callback` is Claude Code run with `--callback-port 8090`; `http://localhost:8787/callback` is Cursor's fixed desktop callback. Omitting `--callback-port` leaves Claude Code on a random port, which no registered entry can match — pin it.
 
 ---
 
@@ -189,6 +191,15 @@ The server answers both the bare and the path-suffixed form, so no rewriting is 
 
 Two more things the deployment must get right:
 
+- **`--public-url` is published verbatim, and clients compare it exactly.**
+  Whatever string you pass becomes the RFC 9728 `resource` field as written,
+  and [RFC 9728 §3.3](https://datatracker.ietf.org/doc/html/rfc9728#section-3.3)
+  has a client compare it code point by code point against the URL it was
+  configured with. Configure clients with that exact string — not an alias, not
+  the same host with a trailing slash added or removed, not `www.` prepended.
+  `--public-url=https://mcp.example.com/gitlab` means clients use
+  `https://mcp.example.com/gitlab`, and a client pointed at
+  `https://mcp.example.com/gitlab/` will reject the metadata it fetches.
 - **`Host` must reach the server as the public host.** The cross-origin check compares a browser's `Origin` against the request `Host` when `Sec-Fetch-Site` is absent, so forwarding an internal host name breaks legitimate same-origin browser calls. `proxy_set_header Host $host;` is the correct form.
 - **Browser clients need `--trusted-origins`.** Cross-origin browser `POST`s are refused before authentication; list the origins that should be allowed (the `--public-url` origin is trusted automatically). See [Security — Cross-Origin Protection](../concepts/security.md#cross-origin-protection).
 

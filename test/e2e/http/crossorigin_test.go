@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 )
 
 const trustedOrigin = "https://client.example"
@@ -241,5 +243,112 @@ func TestCrossOrigin_MalformedTrustedOriginFailsStartup(t *testing.T) {
 	}
 	if !strings.Contains(out, "trusted-origins") {
 		t.Errorf("the startup error should name the flag; got:\n%s", out)
+	}
+}
+
+// TestCrossOrigin_PreflightAuthorizesTheParameterHeader closes the gap between
+// the header the server demands and the one a browser is allowed to send.
+//
+// TestGate_ParamHeaderMatchesTheDocumentedName sets Mcp-Param-Action directly,
+// the way curl does, and so cannot see whether a browser would have been
+// permitted to send it. A browser asks first: it lists the header in
+// Access-Control-Request-Headers, and if the response's
+// Access-Control-Allow-Headers does not cover it, the header is dropped from
+// the real request — after which the server rejects the call with "header
+// mismatch" for the absence of the very thing it refused to authorize.
+//
+// The allow-list once named three Mcp-Param-* headers no tool declares and
+// omitted the only one that exists, which made every gitlab_execute_action call
+// from a browser fail on the default surface while every curl-based test passed.
+func TestCrossOrigin_PreflightAuthorizesTheParameterHeader(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--trusted-origins=https://claude.ai")
+
+	got := srv.do(t, request{
+		method: http.MethodOptions, path: "/mcp",
+		headers: map[string]string{
+			"Origin":                         "https://claude.ai",
+			"Access-Control-Request-Method":  http.MethodPost,
+			"Access-Control-Request-Headers": "mcp-param-action",
+		},
+	})
+
+	if got.status != http.StatusNoContent && got.status != http.StatusOK {
+		t.Fatalf("preflight status = %d, want 204 or 200", got.status)
+	}
+	// Compared token by token, not as a substring: a header list carrying
+	// x-mcp-param-action contains the substring and authorizes nothing, and a
+	// browser matches the header name itself.
+	allowed := got.header.Get("Access-Control-Allow-Headers")
+	authorized := false
+	for header := range strings.SplitSeq(allowed, ",") {
+		if strings.EqualFold(strings.TrimSpace(header), dynamictools.ExecuteActionHeaderName) {
+			authorized = true
+			break
+		}
+	}
+	if !authorized {
+		t.Errorf("Access-Control-Allow-Headers = %q; a browser would drop %s and the call would then be rejected for its absence",
+			allowed, dynamictools.ExecuteActionHeaderName)
+	}
+}
+
+// TestCrossOrigin_MCPEndpointRefusesUntrustedOriginOnEveryMethod pins the
+// requirement that Origin is validated on all incoming connections to the MCP
+// endpoint, not only on the methods a browser treats as unsafe.
+//
+// The process-wide guard delegates to the standard library, which exempts GET,
+// HEAD and OPTIONS as safe methods. That exemption is deliberate and is what
+// keeps /health and the server card publicly fetchable —
+// TestCrossOrigin_SafeMethodsStayReachable pins it — but on the MCP endpoint it
+// meant a cross-origin GET opened a real SSE stream against a stateful session
+// instead of being refused. The two intents are separate, so they are pinned
+// separately: this test asserts the endpoint refuses, that one asserts the
+// public routes do not.
+func TestCrossOrigin_MCPEndpointRefusesUntrustedOriginOnEveryMethod(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--stateless=false")
+
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodHead} {
+		t.Run(method, func(t *testing.T) {
+			got := srv.do(t, request{
+				method: method, path: "/mcp",
+				headers: map[string]string{
+					"Origin":         "https://evil.example",
+					"Sec-Fetch-Site": "cross-site",
+					"PRIVATE-TOKEN":  "glpat-whatever",
+					"Accept":         "application/json, text/event-stream",
+				},
+			})
+			if got.status != http.StatusForbidden {
+				t.Errorf("%s with an untrusted Origin: status = %d, want 403", method, got.status)
+			}
+		})
+	}
+
+	// A preflight must still be answered rather than refused: the browser
+	// strips credentials from it, and a 403 here is not something a client can
+	// interpret.
+	preflight := srv.do(t, request{
+		method: http.MethodOptions, path: "/mcp",
+		headers: map[string]string{
+			"Origin":                        "https://evil.example",
+			"Access-Control-Request-Method": http.MethodPost,
+		},
+	})
+	if preflight.status == http.StatusForbidden {
+		t.Error("a preflight was refused on its Origin; the browser cannot interpret that")
+	}
+
+	// And the deployment's own host is still same-origin.
+	same := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp", body: toolsListBody,
+		headers: map[string]string{
+			"Origin":        srv.baseURL,
+			"PRIVATE-TOKEN": "glpat-whatever",
+		},
+	})
+	if same.status == http.StatusForbidden {
+		t.Errorf("a same-origin request was refused: status = %d", same.status)
 	}
 }

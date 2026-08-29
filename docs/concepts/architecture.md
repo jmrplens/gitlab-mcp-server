@@ -67,11 +67,11 @@ graph TD
         MAIN[main.go<br/>Entry point]
         CFG[config<br/>Environment loading]
         GL[gitlab<br/>API client wrapper]
-        SPECS[domain ActionSpecs<br/>~175 internal/tools packages<br/>(166 with action_specs.go)]
+        SPECS[domain ActionSpecs<br/>176 internal/tools packages<br/>(168 with action_specs.go)]
         CATALOG[action catalog<br/>canonical ActionRoute registry]
         STANDALONE[standalone surface specs<br/>project discovery + interactive flows]
-        IND[individual projection<br/>1061 self-managed / 1067 GitLab.com Premium/Ultimate tools]
-        META[meta projection<br/>32 base / 48 self-managed enterprise / 49 GitLab.com Premium/Ultimate tools]
+        IND[individual projection<br/>1065 self-managed / 1071 GitLab.com Premium/Ultimate tools]
+        META[meta projection<br/>32 base / 49 self-managed enterprise / 50 GitLab.com Premium/Ultimate tools]
         DYN[dynamic projection<br/>2 visible find / execute tools]
         ELIC[elicitation support<br/>4 interactive actions]
         RES[resources<br/>45 resource handlers]
@@ -168,7 +168,7 @@ Thin wrapper around the official `gitlab.com/gitlab-org/api/client-go/v2` librar
 
 ### Tools (`internal/tools`)
 
-The largest package family — contains 1061 self-managed Enterprise/Premium MCP tool implementations, plus 6 GitLab.com-only Orbit handlers for 1067 total in that catalog, organized across 175 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
+The largest package family — contains 1065 self-managed Enterprise/Premium MCP tool implementations, plus 6 GitLab.com-only Orbit handlers for 1071 total in that catalog, organized across 176 packages under `internal/tools/`. Each sub-package owns its types, handlers, Markdown formatters, and ActionSpecs; root surface registration is catalog-backed. Tool-surface counts come from `go run ./cmd/audit_metrics/`; package counts can be verified with `go list ./internal/tools/...`.
 
 For the detailed relationship between individual tools, meta-tools, dynamic mode, and the canonical action catalog, see [Tool Surfaces And Canonical Action Core](../development/tool-surfaces-and-action-core.md).
 
@@ -187,7 +187,7 @@ For the detailed relationship between individual tools, meta-tools, dynamic mode
 | `errors.go`         | Error helpers (`wrapErr`, `handleGitLabError`)                                                                                              |
 | `logging.go`        | `logToolCall` helper                                                                                                                        |
 
-**Representative `internal/tools` package groups** (175 packages total):
+**Representative `internal/tools` package groups** (176 packages total):
 
 | Category          | Representative packages                                                                    |
 | ----------------- | ------------------------------------------------------------------------------------------ |
@@ -258,7 +258,7 @@ Shared helpers for unit testing with httptest mocks:
 
 ### Meta-Tool Dispatcher (`internal/tools/metatool.go`)
 
-The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 32 base GitLab/interactive tools total. The Enterprise/Premium catalog adds 16 enterprise inline meta-tools, bringing the self-managed total to 48; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 49. The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in these GitLab action catalog counts. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`, while HTTP mode can force the tier with `--tier` or detect it per token+URL pool entry from the instance license (fallback `free`).
+The meta-tool pattern groups related tools under a single MCP endpoint with an `action` parameter. 28 catalog-backed meta-tools are registered, plus 4 standalone interactive elicitation tools — 32 base GitLab/interactive tools total. The Enterprise/Premium catalog adds 17 enterprise inline meta-tools, bringing the self-managed total to 49; GitLab.com Enterprise/Premium also registers `gitlab_orbit`, bringing that catalog to 50. The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in these GitLab action catalog counts. Stdio mode enables the Enterprise/Premium catalog with `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`, while HTTP mode can force the tier with `--tier` or detect it per token+URL pool entry from the instance license (fallback `free`).
 
 Visible meta-tools are registered from the same canonical action catalog used by dynamic mode. The catalog is built from route definitions and carries each action's handler, input schema, output schema, destructive classification, read-only status, icons, and Markdown formatter. This keeps meta-tool execution, dynamic execution, the `gitlab://tools` manifest, generated `llms*.txt` files, and audit commands aligned without duplicating action metadata.
 
@@ -267,7 +267,7 @@ Orbit is projected through the same catalog as every other domain. In meta mode 
 ```mermaid
 graph LR
     catalog[Canonical action catalog] --> meta["Meta-tools<br/>gitlab_issue, gitlab_project, ...<br/>+ gitlab_orbit on GitLab.com Premium/Ultimate"]
-    catalog --> individual["Individual tools<br/>gitlab_list_issues, gitlab_create_project, ...<br/>+ 6 gitlab_orbit_* on GitLab.com Premium/Ultimate"]
+    catalog --> individual["Individual tools<br/>gitlab_issue_list, gitlab_project_create, ...<br/>+ 6 gitlab_orbit_* on GitLab.com Premium/Ultimate"]
     catalog --> dynamic["Dynamic tools<br/>gitlab_find_action + gitlab_execute_action<br/>+ orbit.* domain IDs on GitLab.com Premium/Ultimate"]
 ```
 
@@ -452,7 +452,7 @@ The meta-tool pattern applies the **Strategy pattern** — a single endpoint dis
 ```go
 spec := toolutil.NewActionSpec("create", toolutil.RouteAction(client, Create), toolutil.ActionSpecOptions{
     OwnerPackage: "projects",
-    IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_create_project"},
+    IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_project_create"},
 })
 ```
 
@@ -573,18 +573,18 @@ sequenceDiagram
 
 ## Key Design Decisions
 
-| Decision                           | Rationale                                                                                                         | ADR                                                                  |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| Go with official MCP SDK           | Type safety, single binary, cross-compilation                                                                     | —                                                                    |
-| Official GitLab client library     | Maintained by GitLab, complete API coverage                                                                       | —                                                                    |
-| Modular tools sub-packages         | Domain isolation, independent testing, clean imports                                                              | [ADR-0004](../development/adr/adr-0004-modular-tools-subpackages.md) |
-| Meta-tool consolidation (32/48/49) | Reduce tool count for LLM token efficiency; enterprise tier adds 16 self-managed tools plus GitLab.com-only Orbit | [ADR-0005](../development/adr/adr-0005-meta-tool-consolidation.md)   |
-| Struct-based I/O                   | Type safety + automatic JSON Schema generation                                                                    | Go SDK convention                                                    |
-| Dual response format               | JSON for LLM tool-chaining + Markdown for display                                                                 | See [Output Format](../reference/output-format.md)                   |
-| Content annotations                | Audience targeting + priority for display optimization                                                            | See [Output Format](../reference/output-format.md)                   |
-| `next_steps` JSON enrichment       | Hints in structuredContent for JSON-only clients                                                                  | See [Output Format](../reference/output-format.md)                   |
-| Tool annotations                   | readOnlyHint, destructiveHint for client safety hints                                                             | MCP spec compliance                                                  |
-| YOLO_MODE for automation           | Skip confirmations in CI/scripted environments                                                                    | —                                                                    |
+| Decision                           | Rationale                                                                                                                                                         | ADR                                                                  |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| Go with official MCP SDK           | Type safety, single binary, cross-compilation                                                                                                                     | —                                                                    |
+| Official GitLab client library     | Maintained by GitLab, complete API coverage                                                                                                                       | —                                                                    |
+| Modular tools sub-packages         | Domain isolation, independent testing, clean imports                                                                                                              | [ADR-0004](../development/adr/adr-0004-modular-tools-subpackages.md) |
+| Meta-tool consolidation (32/49/50) | Reduce tool count for LLM token efficiency; the Enterprise/Premium catalog adds 17 self-managed meta-tools, and GitLab.com adds the experimental Orbit one on top | [ADR-0005](../development/adr/adr-0005-meta-tool-consolidation.md)   |
+| Struct-based I/O                   | Type safety + automatic JSON Schema generation                                                                                                                    | Go SDK convention                                                    |
+| Dual response format               | JSON for LLM tool-chaining + Markdown for display                                                                                                                 | See [Output Format](../reference/output-format.md)                   |
+| Content annotations                | Audience targeting + priority for display optimization                                                                                                            | See [Output Format](../reference/output-format.md)                   |
+| `next_steps` JSON enrichment       | Hints in structuredContent for JSON-only clients                                                                                                                  | See [Output Format](../reference/output-format.md)                   |
+| Tool annotations                   | readOnlyHint, destructiveHint for client safety hints                                                                                                             | MCP spec compliance                                                  |
+| YOLO_MODE for automation           | Skip confirmations in CI/scripted environments                                                                                                                    | —                                                                    |
 
 ## Cross-Cutting Concerns
 

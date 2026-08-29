@@ -1851,3 +1851,78 @@ func TestStartIdleEviction_NilContextAndDisabled_DoesNotPanic(t *testing.T) {
 		t.Errorf("Size() = %d, want 1", pool.Size())
 	}
 }
+
+// TestPool_OnEvictFiresOnEveryRemovalPath pins that a caller keeping its own
+// per-server state is told about every way an entry can leave the pool.
+//
+// cmd/server maps each pooled server to the tag its session IDs carry. That map
+// had no cleanup path, so it grew past --max-http-clients on credential churn
+// and every stale key kept a whole server — its GitLab client and its
+// registered tool surface — reachable. The pool's size bound only means
+// something if every removal path reports itself, which is why dropEntry is now
+// the single place an entry leaves the map.
+func TestPool_OnEvictFiresOnEveryRemovalPath(t *testing.T) {
+	newRecordingPool := func(evicted *[]*mcp.Server, mu *sync.Mutex, opts ...Option) *ServerPool {
+		record := WithOnEvict(func(srv *mcp.Server) {
+			mu.Lock()
+			defer mu.Unlock()
+			*evicted = append(*evicted, srv)
+		})
+		return New(testConfig(stubGitLabBase), testFactory(), append([]Option{record}, opts...)...)
+	}
+
+	t.Run("LRU pressure", func(t *testing.T) {
+		var mu sync.Mutex
+		var evicted []*mcp.Server
+
+		pool := newRecordingPool(&evicted, &mu, WithMaxSize(1))
+		first, err := pool.GetOrCreate("glpat-one", stubGitLabBase)
+		if err != nil {
+			t.Fatalf("first entry: %v", err)
+		}
+		if _, secondErr := pool.GetOrCreate("glpat-two", stubGitLabBase); secondErr != nil {
+			t.Fatalf("second entry: %v", secondErr)
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		if len(evicted) != 1 {
+			t.Fatalf("onEvict fired %d times, want 1", len(evicted))
+		}
+		if evicted[0] != first {
+			t.Error("onEvict named a server other than the one the pool dropped")
+		}
+	})
+
+	t.Run("Close", func(t *testing.T) {
+		var mu sync.Mutex
+		var evicted []*mcp.Server
+
+		pool := newRecordingPool(&evicted, &mu)
+		for _, token := range []string{"glpat-a", "glpat-b"} {
+			if _, err := pool.GetOrCreate(token, stubGitLabBase); err != nil {
+				t.Fatalf("entry %s: %v", token, err)
+			}
+		}
+		pool.Close()
+
+		mu.Lock()
+		defer mu.Unlock()
+		if len(evicted) != 2 {
+			t.Errorf("onEvict fired %d times on Close, want 2 — shutdown must release the caller's state too", len(evicted))
+		}
+	})
+
+	t.Run("no callback registered", func(t *testing.T) {
+		pool := New(testConfig(stubGitLabBase), testFactory(), WithMaxSize(1))
+		if _, err := pool.GetOrCreate("glpat-one", stubGitLabBase); err != nil {
+			t.Fatalf("first entry: %v", err)
+		}
+		if _, err := pool.GetOrCreate("glpat-two", stubGitLabBase); err != nil {
+			t.Fatalf("second entry: %v", err)
+		}
+		if got := pool.Size(); got != 1 {
+			t.Errorf("Size() = %d, want 1 — eviction must work with no callback registered", got)
+		}
+	})
+}

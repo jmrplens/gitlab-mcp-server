@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/fs"
 	"math/big"
+	"mime"
 	"net"
 	"net/http"
 	"os"
@@ -389,7 +390,7 @@ func TestListener_TLS_RefusesObsoleteVersions(t *testing.T) {
 	)
 
 	obsolete := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{
+		TLSClientConfig: &tls.Config{ //#nosec G402 -- deliberately obsolete: this client exists to prove the server refuses TLS below 1.2
 			RootCAs:    pool,
 			MinVersion: tls.VersionTLS10,
 			MaxVersion: tls.VersionTLS11,
@@ -455,4 +456,45 @@ func writeSelfSignedCert(t *testing.T) (certFile, keyFile string, pool *x509.Cer
 		t.Fatal("the generated certificate was not accepted into a pool")
 	}
 	return certFile, keyFile, pool
+}
+
+// TestServerCard_MediaTypeMatchesThePath pins what each card location answers
+// with.
+//
+// The extension registers `application/mcp-server-card+json`, and the path it
+// recommends serves it. The legacy `.well-known` location keeps
+// `application/json`: its own `.json` suffix promises that, and the scanners
+// still fetching it were written against the draft that used it.
+//
+// Both paths used to answer `application/json`, which the documentation
+// contradicted. The public deployment looked correct only because a reverse
+// proxy in front of it rewrote the header — and this server is meant to be
+// correct on its own, without one.
+func TestServerCard_MediaTypeMatchesThePath(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	tests := []struct {
+		path string
+		want string
+	}{
+		{path: "/server-card", want: "application/mcp-server-card+json"},
+		{path: "/.well-known/mcp/server-card.json", want: "application/json"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			got := srv.do(t, request{method: http.MethodGet, path: tt.path})
+			if got.status != http.StatusOK {
+				t.Fatalf("status = %d, want %d: %s", got.status, http.StatusOK, got.body)
+			}
+			mediaType, _, err := mime.ParseMediaType(got.header.Get("Content-Type"))
+			if err != nil {
+				t.Fatalf("Content-Type %q: %v", got.header.Get("Content-Type"), err)
+			}
+			if mediaType != tt.want {
+				t.Errorf("Content-Type = %q, want %q", mediaType, tt.want)
+			}
+		})
+	}
 }

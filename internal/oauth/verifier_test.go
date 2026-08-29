@@ -814,9 +814,375 @@ func TestFetchScopes_UnusableEndpoint_ReportsNoAnswer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if got := fetchScopes(t.Context(), http.DefaultClient, tt.endpoint, "glpat-x", "scopes"); got != nil {
-				t.Errorf("fetchScopes(%s) = %v, want nil", tt.name, got)
+			if got := fetchIntrospection(t.Context(), http.DefaultClient, tt.endpoint, "glpat-x"); got != nil {
+				t.Errorf("fetchIntrospection(%s) = %v, want nil", tt.name, got)
 			}
 		})
 	}
+}
+
+// TestGitLabVerifier_CacheNeverOutlivesTheToken pins that a cached admission
+// expires with the credential it was taken from.
+//
+// The verifier caches a successful verification for the configured TTL — fifteen
+// minutes by default, up to two hours. Keyed on that alone, a token that expired
+// a second after being verified kept being answered 200 for the rest of the
+// window, while the specification requires an expired token to receive 401. The
+// cached lifetime is now the shorter of the configured TTL and the token's own
+// remaining life, which introspection reports.
+func TestGitLabVerifier_CacheNeverOutlivesTheToken(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		endpoint   string
+		payload    string
+		configured time.Duration
+		wantAtMost time.Duration
+	}{
+		{
+			name:       "an OAuth token expiring sooner than the TTL shortens it",
+			endpoint:   "/oauth/token/info",
+			payload:    `{"scope":["api"],"expires_in":30}`,
+			configured: time.Hour,
+			wantAtMost: 31 * time.Second,
+		},
+		{
+			name:       "a non-expiring OAuth token keeps the configured TTL",
+			endpoint:   "/oauth/token/info",
+			payload:    `{"scope":["api"],"expires_in":null}`,
+			configured: time.Minute,
+			wantAtMost: time.Minute,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"id":7,"username":"someone"}`))
+			})
+			// The PAT endpoint must not answer, or introspection stops there.
+			mux.HandleFunc("/api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusNotFound)
+			})
+			mux.HandleFunc(tt.endpoint, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(tt.payload))
+			})
+			gitlab := httptest.NewServer(mux)
+			defer gitlab.Close()
+
+			verifier := NewGitLabVerifier(gitlab.URL, false, tt.configured, nil)
+			info, err := verifier(t.Context(), "glpat-whatever", nil)
+			if err != nil {
+				t.Fatalf("verify: %v", err)
+			}
+
+			lifetime := time.Until(info.Expiration)
+			if lifetime > tt.wantAtMost {
+				t.Errorf("cached for %s, want at most %s — the admission outlives the token", lifetime, tt.wantAtMost)
+			}
+			if lifetime <= 0 {
+				t.Errorf("cached lifetime is %s; a valid token must still be admitted", lifetime)
+			}
+		})
+	}
+}
+
+// TestExpiryFromDate covers the shape GitLab uses for personal access tokens,
+// which is a calendar date rather than a timestamp. Parsing it as RFC 3339 fails
+// and silently degrades to "never expires", which is the bug worth pinning.
+func TestExpiryFromDate(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  any
+		zero bool
+	}{
+		{name: "a GitLab date is understood", raw: "2030-01-02", zero: false},
+		{name: "null means the token does not expire", raw: nil, zero: true},
+		{name: "an RFC 3339 timestamp is not the shape GitLab sends", raw: "2030-01-02T03:04:05Z", zero: true},
+		{name: "an empty string is not a date", raw: "", zero: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := expiryFromDate(tt.raw)
+			if got.IsZero() != tt.zero {
+				t.Errorf("expiryFromDate(%v) zero = %v, want %v", tt.raw, got.IsZero(), tt.zero)
+			}
+		})
+	}
+
+	// The instant matters, not just that one was produced. GitLab expires a
+	// personal access token at 00:00:00 UTC on the stated date, so the date is
+	// when the token dies and not the last day it works. Reading it as
+	// "valid through" put the expiry 24 hours late, which would let a cached
+	// admission outlive the credential it was taken from.
+	t.Run("the date is midnight UTC on that day, not the day after", func(t *testing.T) {
+		t.Parallel()
+		got := expiryFromDate("2030-01-02")
+		want := time.Date(2030, time.January, 2, 0, 0, 0, 0, time.UTC)
+		if !got.Equal(want) {
+			t.Errorf("expiryFromDate(\"2030-01-02\") = %s, want %s", got.Format(time.RFC3339), want.Format(time.RFC3339))
+		}
+	})
+}
+
+// TestNewGitLabVerifier_ForbiddenDistinguishesScope covers the two very
+// different things a GitLab 403 can mean.
+//
+// A token that is genuine but under-scoped must be reported as such, so the
+// caller is told to request the missing scope rather than to throw a working
+// credential away — and so the gate does not charge the attempt against the
+// caller's authentication-failure budget. Anything else 403 means the caller may
+// not do this at all, which keeps being treated as an invalid credential.
+//
+// The distinction lives only in the body: GitLab does not send WWW-Authenticate
+// on a 403, so a check reading the challenge would never fire.
+func TestNewGitLabVerifier_ForbiddenDistinguishesScope(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		body           string
+		contentType    string
+		wantScopeError bool
+	}{
+		{
+			name:           "rack-oauth2 insufficient_scope",
+			body:           `{"error":"insufficient_scope","error_description":"requires higher privileges","scope":"api"}`,
+			contentType:    "application/json",
+			wantScopeError: true,
+		},
+		{
+			name:           "granular personal access token scope",
+			body:           `{"error":"insufficient_granular_scope"}`,
+			contentType:    "application/json",
+			wantScopeError: true,
+		},
+		{
+			name:           "a Grape forbidden carries message, not error",
+			body:           `{"message":"403 Forbidden - Your account has been blocked"}`,
+			contentType:    "application/json",
+			wantScopeError: false,
+		},
+		{
+			name:           "a plain-text rejection is not a scope problem",
+			body:           "forbidden",
+			contentType:    "text/plain",
+			wantScopeError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", tt.contentType)
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer srv.Close()
+
+			verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
+			_, err := verifier(t.Context(), "some-token", nil)
+			if err == nil {
+				t.Fatal("expected an error for a 403 response")
+			}
+
+			gotScope := errors.Is(err, ErrInsufficientScope)
+			if gotScope != tt.wantScopeError {
+				t.Errorf("ErrInsufficientScope = %v, want %v (err: %v)", gotScope, tt.wantScopeError, err)
+			}
+			// Whatever the shape, it must never be reported as an upstream
+			// failure: GitLab answered, and it answered about the credential.
+			if !gotScope && !isErrInvalidToken(err) {
+				t.Errorf("a non-scope 403 should wrap auth.ErrInvalidToken, got: %v", err)
+			}
+		})
+	}
+}
+
+// TestAcceptedRecipient_PinRefusesEverythingItCannotVouchFor pins the one place
+// in this file whose fail-open default is deliberately inverted.
+//
+// GitLab's authorization server publishes no `resource_indicators_supported`,
+// so RFC 8707 audience restriction is unavailable and the specification's
+// alternative — "or otherwise verify that they are the intended recipient" — is
+// the only route left: compare the OAuth application a token was minted for
+// against the ones the operator pinned.
+//
+// Scope introspection around it is fail-open on purpose, falling back to `api`
+// with a debug log when neither endpoint answers, so that restricted instances
+// keep working. Reusing that shape here would make breaking introspection the
+// way around the pin, so an unanswered introspection, an absent uid and an
+// unmatched uid are all refusals.
+func TestAcceptedRecipient_PinRefusesEverythingItCannotVouchFor(t *testing.T) {
+	t.Parallel()
+
+	const ours = "5a4f1c0e"
+
+	tests := []struct {
+		name    string
+		pinned  []string
+		result  introspection
+		wantErr bool
+	}{
+		{
+			name:   "no pin admits a personal access token",
+			result: introspection{scopes: []string{"api"}, answered: true},
+		},
+		{
+			name:   "no pin admits another application's token",
+			result: introspection{scopes: []string{"api"}, applicationUID: "somebody-else", answered: true},
+		},
+		{
+			name:   "pinned application is admitted",
+			pinned: []string{"another", ours},
+			result: introspection{scopes: []string{"api"}, applicationUID: ours, answered: true},
+		},
+		{
+			name:    "another application is refused",
+			pinned:  []string{ours},
+			result:  introspection{scopes: []string{"api"}, applicationUID: "somebody-else", answered: true},
+			wantErr: true,
+		},
+		{
+			name:    "a personal access token is refused under a pin",
+			pinned:  []string{ours},
+			result:  introspection{scopes: []string{"api"}, answered: true},
+			wantErr: true,
+		},
+		{
+			name:    "an unanswered introspection is refused, not waved through",
+			pinned:  []string{ours},
+			result:  introspection{scopes: []string{"api"}},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := acceptedRecipient(tt.pinned, tt.result)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("acceptedRecipient() = nil, want a refusal")
+				}
+				if !errors.Is(err, auth.ErrInvalidToken) {
+					t.Errorf("acceptedRecipient() error = %v, want it to wrap auth.ErrInvalidToken so the guard answers 401", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("acceptedRecipient() = %v, want admission", err)
+			}
+		})
+	}
+}
+
+// TestApplicationUID_ReadsTheNestedObjectAndNothingElse covers the shapes
+// /oauth/token/info can produce. A misread here is silent: it would look like a
+// personal access token, which under a pin is a refusal of a legitimate client.
+func TestApplicationUID_ReadsTheNestedObjectAndNothingElse(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		raw  any
+		want string
+	}{
+		{name: "absent", raw: nil, want: ""},
+		{name: "not an object", raw: "5a4f1c0e", want: ""},
+		{name: "object without uid", raw: map[string]any{"name": "app"}, want: ""},
+		{name: "uid not a string", raw: map[string]any{"uid": 42.0}, want: ""},
+		{name: "uid", raw: map[string]any{"uid": "5a4f1c0e"}, want: "5a4f1c0e"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := applicationUID(tt.raw); got != tt.want {
+				t.Errorf("applicationUID(%v) = %q, want %q", tt.raw, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestGitLabVerifier_RecipientPinIsEnforcedBeforeAnythingIsCached wires the pin
+// end to end: a token minted for a pinned application is admitted, one minted
+// for another is refused, and the refusal leaves nothing behind in the cache.
+//
+// The cache order matters on its own. Caching first and checking after would
+// make the second request to a refused token answer from cache — which is to
+// say, admit it.
+func TestGitLabVerifier_RecipientPinIsEnforcedBeforeAnythingIsCached(t *testing.T) {
+	t.Parallel()
+
+	const ours = "5a4f1c0e"
+
+	newGitLab := func(t *testing.T, uid string) *httptest.Server {
+		t.Helper()
+		mux := http.NewServeMux()
+		mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"id":7,"username":"someone"}`))
+		})
+		// A PAT answer here would end introspection before the OAuth endpoint,
+		// which is the endpoint that names the application.
+		mux.HandleFunc("/api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+		})
+		mux.HandleFunc("/oauth/token/info", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"scope":["api"],"expires_in":null,"application":{"uid":%q}}`, uid)
+		})
+		gitlab := httptest.NewServer(mux)
+		t.Cleanup(gitlab.Close)
+		return gitlab
+	}
+
+	t.Run("a token from the pinned application is admitted", func(t *testing.T) {
+		t.Parallel()
+		gitlab := newGitLab(t, ours)
+		verifier := NewGitLabVerifier(gitlab.URL, false, time.Minute, nil, ours)
+		if _, err := verifier(t.Context(), "oauth-token", nil); err != nil {
+			t.Fatalf("verify: %v, want admission", err)
+		}
+	})
+
+	t.Run("a token from another application is refused and not cached", func(t *testing.T) {
+		t.Parallel()
+		gitlab := newGitLab(t, "somebody-else")
+		cache := NewTokenCache()
+		verifier := NewGitLabVerifier(gitlab.URL, false, time.Minute, cache, ours)
+
+		_, err := verifier(t.Context(), "oauth-token", nil)
+		if err == nil {
+			t.Fatal("verify() = nil, want a refusal for a token minted for another application")
+		}
+		if !errors.Is(err, auth.ErrInvalidToken) {
+			t.Errorf("verify() error = %v, want it to wrap auth.ErrInvalidToken", err)
+		}
+		if got := cache.Len(); got != 0 {
+			t.Errorf("cache holds %d entries after a refusal; a refused token must never become a cached identity", got)
+		}
+	})
+
+	t.Run("no pin admits the same token", func(t *testing.T) {
+		t.Parallel()
+		gitlab := newGitLab(t, "somebody-else")
+		verifier := NewGitLabVerifier(gitlab.URL, false, time.Minute, nil)
+		if _, err := verifier(t.Context(), "oauth-token", nil); err != nil {
+			t.Fatalf("verify: %v — an unpinned deployment must keep admitting every credential the instance accepts", err)
+		}
+	})
 }

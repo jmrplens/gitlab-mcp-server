@@ -10,9 +10,9 @@ faq:
   - q: "¿GitLab MCP Server funciona con GitLab Community Edition?"
     a: "Sí. GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise Edition (EE). En CE expone el catálogo base completo — {{meta.base}} meta-herramientas base, {{resources}} recursos y {{prompts}} prompts — que cubre proyectos, issues, merge requests, pipelines, CI/CD, wikis, releases, usuarios, grupos, búsqueda, despliegues, entornos y paquetes. Las funcionalidades exclusivas de Enterprise como merge trains, métricas DORA, gestión de vulnerabilidades, eventos de auditoría y políticas de cumplimiento requieren una licencia Premium o Ultimate y no están disponibles en CE."
   - q: "¿Cómo habilito las herramientas Enterprise?"
-    a: "Define el tier de licencia explícitamente o deja que el servidor lo autodetecte. En modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`; en modo HTTP pasa `--tier=premium` o `--tier=ultimate`. Cuando se omite el tier, el servidor autodetecta la edición desde `GET /license` por entrada token+URL, con valor por defecto `free`. Forzar el catálogo Enterprise/Premium añade 16 meta-herramientas exclusivas de Enterprise. Los flags heredados `GITLAB_ENTERPRISE=true` (stdio) y `--enterprise` (HTTP) siguen respetándose por compatibilidad, pero están deprecados."
+    a: "Define el tier de licencia explícitamente o deja que el servidor lo autodetecte. En modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`; en modo HTTP pasa `--tier=premium` o `--tier=ultimate`. Cuando se omite el tier, el servidor autodetecta la edición desde `GET /license` por entrada token+URL, con valor por defecto `free`. Forzar el catálogo Enterprise/Premium lleva el número de meta-herramientas de {{meta.base}} a {{meta.self_managed_enterprise}}. La variable de entorno `GITLAB_ENTERPRISE=true`, ya deprecada, se sigue respetando cuando `GITLAB_TIER` no está definida (equivale a `ultimate`) y deja un aviso en el log. En modo HTTP no existe ningún flag `--enterprise`: pasarlo aborta el arranque; usa `--tier`."
   - q: "¿Qué sistemas operativos y arquitecturas se admiten?"
-    a: "Hay binarios precompilados disponibles para Linux, macOS y Windows en amd64 y arm64 — seis binarios en total. macOS ofrece compilaciones separadas para Intel (amd64) y Apple Silicon (arm64). Cada plataforma es un binario estático único sin dependencias en tiempo de ejecución."
+    a: "Hay binarios precompilados disponibles para Linux, macOS y Windows en amd64 y arm64 — seis binarios en total. macOS ofrece compilaciones separadas para Intel (amd64) y Apple Silicon (arm64). Cada plataforma se distribuye como un único binario autocontenido: no hay que instalar runtime de Go, intérprete ni bibliotecas aparte. Los binarios de Linux son ejecutables independientes de posición que usan el cargador dinámico de glibc, así que necesitan un userland con glibc; en distribuciones musl como Alpine, usa la imagen de contenedor `ghcr.io/jmrplens/gitlab-mcp-server`, compilada contra musl."
   - q: "¿Funciona GitLab MCP Server con OpenAI Codex?"
     a: 'Sí. El servidor detecta las sesiones de Codex automáticamente y aplica un perfil de compatibilidad: las prioridades de las anotaciones de contenido se redondean a valores enteros, que es lo que exigen las builds de Codex incluidas en ChatGPT.app, mientras que el resto de campos se entrega sin cambios. Configura el servidor en ~/.codex/config.toml con default_tools_approval_mode = "approve" para que las ejecuciones no interactivas puedan usar herramientas de escritura, y mantén la superficie de herramientas dynamic por defecto. Usa CLIENT_COMPAT=off para desactivar la reescritura por cliente.'
   - q: "¿Qué clientes MCP son compatibles con GitLab MCP Server?"
@@ -25,24 +25,24 @@ import stats from "../../../data/stats.json";
 
 ## Compatibilidad con ediciones de GitLab
 
-GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise Edition (EE). El catálogo Enterprise/Premium desbloquea 16 meta-herramientas adicionales exclusivas de Enterprise: establece `GITLAB_TIER=premium` (o `GITLAB_TIER=ultimate`) en modo stdio, usa `--tier=premium`/`--tier=ultimate` en modo HTTP, o confía en la autodetección desde `GET /license` (por defecto `free`). Los flags heredados `GITLAB_ENTERPRISE=true` (stdio) y `--enterprise` (HTTP) siguen respetándose por compatibilidad, pero están deprecados.
+GitLab MCP Server funciona tanto con Community Edition (CE) como con Enterprise Edition (EE). El catálogo Enterprise/Premium desbloquea {stats.meta.self_managed_enterprise - stats.meta.base} meta-herramientas adicionales exclusivas de Enterprise: establece `GITLAB_TIER=premium` (o `GITLAB_TIER=ultimate`) en modo stdio, usa `--tier=premium`/`--tier=ultimate` en modo HTTP, o confía en la autodetección desde `GET /license` (por defecto `free`). La variable de entorno `GITLAB_ENTERPRISE=true`, ya deprecada, se sigue respetando cuando `GITLAB_TIER` no está definida (equivale a `ultimate`) y deja un aviso en el log. En modo HTTP no existe ningún flag `--enterprise`: pasarlo aborta el arranque; usa `--tier`.
 
-| Funcionalidad                                       | Community (CE) | Enterprise (EE) |
-| --------------------------------------------------- | :------------: | :-------------: |
-| Proyectos, Issues, MRs, Pipelines, CI/CD            |       ✅        |        ✅        |
-| Wikis, Etiquetas, Hitos, Releases                   |       ✅        |        ✅        |
-| Usuarios, Grupos, Miembros, Búsqueda                |       ✅        |        ✅        |
-| Despliegues, Entornos, Paquetes                     |       ✅        |        ✅        |
-| {stats.meta.base} meta-herramientas base            |       ✅        |        ✅        |
-| {stats.resources} recursos, {stats.prompts} prompts |       ✅        |        ✅        |
-| Merge Trains                                        |       ❌        |        ✅        |
-| Métricas DORA                                       |       ❌        |        ✅        |
-| Gestión de vulnerabilidades                         |       ❌        |        ✅        |
-| Eventos de auditoría                                |       ❌        |        ✅        |
-| Políticas de cumplimiento                           |       ❌        |        ✅        |
-| +16 meta-herramientas enterprise                    |       ❌        |        ✅        |
+| Funcionalidad                                                                        | Community (CE) | Enterprise (EE) |
+| ------------------------------------------------------------------------------------ | :------------: | :-------------: |
+| Proyectos, Issues, MRs, Pipelines, CI/CD                                             |       ✅        |        ✅        |
+| Wikis, Etiquetas, Hitos, Releases                                                    |       ✅        |        ✅        |
+| Usuarios, Grupos, Miembros, Búsqueda                                                 |       ✅        |        ✅        |
+| Despliegues, Entornos, Paquetes                                                      |       ✅        |        ✅        |
+| {stats.meta.base} meta-herramientas base                                             |       ✅        |        ✅        |
+| {stats.resources} recursos, {stats.prompts} prompts                                  |       ✅        |        ✅        |
+| Merge Trains                                                                         |       ❌        |        ✅        |
+| Métricas DORA                                                                        |       ❌        |        ✅        |
+| Gestión de vulnerabilidades                                                          |       ❌        |        ✅        |
+| Eventos de auditoría                                                                 |       ❌        |        ✅        |
+| Políticas de cumplimiento                                                            |       ❌        |        ✅        |
+| +{stats.meta.self_managed_enterprise - stats.meta.base} meta-herramientas enterprise |       ❌        |        ✅        |
 
-Para habilitar funcionalidades enterprise en modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`. En modo HTTP, configura `--tier=premium`/`--tier=ultimate` para forzar el catálogo Enterprise/Premium, u omítelo para que el servidor autodetecte CE/EE por entrada token+URL cuando GitLab informe la edición. Los flags heredados `GITLAB_ENTERPRISE=true` (stdio) y `--enterprise` (HTTP) siguen respetándose por compatibilidad.
+Para habilitar funcionalidades enterprise en modo stdio, establece `GITLAB_TIER=premium` o `GITLAB_TIER=ultimate`. En modo HTTP, configura `--tier=premium`/`--tier=ultimate` para forzar el catálogo Enterprise/Premium, u omítelo para que el servidor autodetecte CE/EE por entrada token+URL cuando GitLab informe la edición. La variable deprecada `GITLAB_ENTERPRISE=true` sigue funcionando cuando `GITLAB_TIER` no está definida; no existe ningún flag `--enterprise`, usa `--tier`.
 
 ## Soporte de plataformas
 
@@ -56,6 +56,8 @@ Hay binarios precompilados disponibles para todas las plataformas principales:
 | macOS   | arm64 (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`      |
 | Windows | amd64                 | `gitlab-mcp-server-windows-amd64.exe` |
 | Windows | arm64                 | `gitlab-mcp-server-windows-arm64.exe` |
+
+Los binarios de Linux son ejecutables independientes de posición enlazados dinámicamente y requieren glibc. En sistemas musl (Alpine), usa la imagen de contenedor `ghcr.io/jmrplens/gitlab-mcp-server`, que se compila contra musl dentro de la propia imagen. Los paquetes npm de Linux declaran `libc: glibc` por la misma razón y se omiten sobre musl a propósito.
 
 ## Compatibilidad con clientes MCP
 

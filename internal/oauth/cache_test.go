@@ -3,6 +3,7 @@
 package oauth
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -232,4 +233,88 @@ func TestTokenCache_ConcurrentAccess(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
+}
+
+// TestRunCleanup_EvictsEntriesNobodyComesBackFor pins that the token cache is
+// bounded by time and not by how many distinct credentials have ever arrived.
+//
+// Get evicts lazily, which handles a token that returns: its entry is dropped
+// the next time it is looked up. It does nothing for one that does not. Every
+// bearer a deployment has ever verified held a map entry for the process's
+// lifetime, so a scanner walking a public endpoint with fresh credentials, or a
+// fleet whose tokens rotate, grew the map without bound. Two documentation
+// pages described a background sweep — at 30 seconds on one and 5 minutes on
+// the other — and neither existed.
+func TestRunCleanup_EvictsEntriesNobodyComesBackFor(t *testing.T) {
+	t.Parallel()
+
+	cache := NewTokenCache()
+	cache.Put("https://gitlab.example.com", "expired-token", &auth.TokenInfo{}, time.Millisecond)
+	cache.Put("https://gitlab.example.com", "live-token", &auth.TokenInfo{}, time.Hour)
+	if got := cache.Len(); got != 2 {
+		t.Fatalf("Len() = %d, want 2", got)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		cache.RunCleanup(ctx, time.Millisecond)
+	}()
+
+	deadline := time.After(5 * time.Second)
+	for cache.Len() > 1 {
+		select {
+		case <-deadline:
+			t.Fatal("the expired entry was never swept; nothing but a repeat lookup would ever remove it")
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+
+	if _, ok := cache.Get("https://gitlab.example.com", "live-token"); !ok {
+		t.Error("the sweep removed an entry that had not expired")
+	}
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Error("RunCleanup ignored context cancellation")
+	}
+}
+
+// TestRunCleanup_NonPositiveIntervalReturns verifies the guard against a ticker
+// built from a zero or negative period, which panics in the standard library.
+//
+// Both shapes are covered because they arrive differently: zero is what a
+// caller passes to mean "disabled", while a negative value is what arithmetic
+// on a misconfigured TTL produces.
+func TestRunCleanup_NonPositiveIntervalReturns(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		interval time.Duration
+	}{
+		{name: "zero", interval: 0},
+		{name: "negative", interval: -time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				NewTokenCache().RunCleanup(t.Context(), tt.interval)
+			}()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatalf("RunCleanup did not return for interval %v", tt.interval)
+			}
+		})
+	}
 }

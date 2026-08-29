@@ -66,16 +66,37 @@ protected-resource metadata is served from the identifier derived from
 credential entrusted to this proxy, scoped as narrowly as the workload
 allows.
 
+The specification's alternative to RFC 8707 — "or otherwise verify that they
+are the intended recipient of the token" — is available opt-in.
+`--oauth-client-uid` (env `OAUTH_CLIENT_UID`, comma-separated) pins the GitLab
+OAuth applications whose tokens the deployment admits, compared against
+`application.uid` from `/oauth/token/info`. It is off by default because
+turning it on refuses personal access tokens outright: a PAT belongs to no
+application, and it is the credential every non-browser client uses. When it is
+on, an absent, unreadable or unmatched uid is a refusal, and so is an
+introspection that never answered — the surrounding fail-open behaviour is
+deliberately inverted there, or breaking introspection would be the way around
+the pin. The full reasoning, with the live evidence that GitLab publishes no
+`resource_indicators_supported`, is
+[ADR-0019](../development/adr/adr-0019-audience-binding-unavailable-at-the-authorization-server.md).
+
 ## Cross-Origin Protection
 
 Every non-safe request (`POST`, `DELETE`) that a **browser** makes from another origin is rejected with `403` before authentication or MCP dispatch:
 
 ```text
 HTTP/1.1 403 Forbidden
-Content-Type: text/plain; charset=utf-8
+Content-Type: application/json
 
-cross-origin request detected from Sec-Fetch-Site header
+{"jsonrpc":"2.0","id":null,"error":{"code":-40300,
+ "message":"Cross-origin request refused: the Origin header names an origin this deployment does not trust."}}
 ```
+
+The body is a JSON-RPC error rather than plain text on purpose: the Streamable
+HTTP specification tells a client that receives a `4xx` whose body is not a
+recognized JSON-RPC error to conclude the server predates version negotiation,
+so an opaque refusal would report a policy decision as a protocol generation.
+Host validation answers the same way.
 
 Non-browser clients are unaffected: a request carrying neither `Origin` nor `Sec-Fetch-Site` — every CLI, IDE and SDK client — always passes. Safe methods (`GET`, `HEAD`) are exempt too, so the server card, `/health` and the OAuth metadata endpoint are readable cross-origin.
 
@@ -158,8 +179,10 @@ Two properties are deliberate:
 ## TLS
 
 - All GitLab API communication uses HTTPS by default
-- Self-signed certificates: set `GITLAB_SKIP_TLS_VERIFY=true` (development only)
-- Production deployments should use valid TLS certificates
+- A self-signed certificate **on the GitLab side**: set `GITLAB_SKIP_TLS_VERIFY=true` (development only)
+- **Serving HTTPS**: in HTTP mode, `--tls-cert` and `--tls-key` terminate TLS on the listener itself. It is both or neither — a certificate without its key is a deployment that thinks it is encrypting and is not, so the server refuses to start. The pair is loaded at startup too, which turns a wrong path into a startup error naming the file instead of a handshake failure nobody sees until a client reports it. TLS 1.2 is the floor, and 1.3 is used with any client that offers it
+- **Or remove the hop instead of encrypting it**: for a reverse proxy on the same machine, `--http-addr=/run/gitlab-mcp.sock` binds a unix socket rather than a TCP port, with `--http-socket-mode` (default `0660`, owner and group only) deciding who may connect. There is no network segment left to read and no certificate to issue or rotate
+- Production deployments should use valid TLS certificates, whether this server presents them or a proxy in front of it does
 
 ## Input Validation
 
@@ -211,12 +234,12 @@ Communication occurs over stdin/stdout within the local process. No network expo
 
 When running with `--http`:
 
-- Binds to `localhost` by default — not exposed to the network
-- No built-in authentication on the HTTP endpoint
-- For production use, place behind a reverse proxy with proper TLS and auth
-- **Cross-origin request protection** — HTTP mode applies middleware created with the Go standard library `net/http` function `http.NewCrossOriginProtection().Handler`. Browser-originated non-safe cross-site requests are rejected before MCP dispatch, while non-browser MCP clients without `Origin` or `Sec-Fetch-Site` headers continue to work. This satisfies the 2026-07-28 streamable-HTTP requirement that servers validate the `Origin` header against DNS rebinding. Use `--trusted-origins` to allow specific browser origins — see below
+- **Binds every interface by default** — `--http-addr` defaults to `:8080`, which is all interfaces, not loopback. Pass `--http-addr=localhost:8080` to keep the listener host-local, or a filesystem path (`--http-addr=/run/gitlab-mcp.sock`, permissions from `--http-socket-mode`, default `0660`) to remove the network hop to a same-machine proxy instead of encrypting it
+- **Authentication is per request, not per deployment** — no credential is configured at startup. In legacy mode each client sends its own GitLab token (`PRIVATE-TOKEN` or `Authorization: Bearer`) and the server's only check is that GitLab accepts it; with `--auth-mode=oauth` every Bearer token is verified against GitLab before the request reaches the MCP handler
+- **TLS can terminate here** — `--tls-cert` and `--tls-key` serve HTTPS on the listener itself, so a reverse proxy is a deployment choice rather than the only way to encrypt. A proxy remains useful for hostname routing, shared certificates and edge caching
+- **Cross-origin request protection** — two layers, because the routes have different jobs. Every route is wrapped in middleware from the Go standard library's `http.NewCrossOriginProtection().Handler`, which rejects browser-originated cross-site requests on non-safe methods while leaving `GET`, `HEAD` and `OPTIONS` alone — that exemption is what keeps `/health` and the server card publicly fetchable. The MCP endpoint itself is additionally wrapped in a guard that refuses an untrusted `Origin` on **every** method with `403`, since the safe-method exemption would otherwise let a cross-origin `GET` open an SSE stream against a stateful session. Together these satisfy the 2026-07-28 streamable-HTTP requirement that servers validate `Origin` on all incoming connections against DNS rebinding. Non-browser clients, which send no `Origin`, are unaffected; a CORS preflight is answered rather than refused, because a browser strips credentials from it. Use `--trusted-origins` to allow specific browser origins — see below
 - **Host validation** — When listening on a specific local host, requests with unexpected `Host` headers are rejected to mitigate DNS rebinding attacks. Binding to all interfaces (`0.0.0.0` or `::`) leaves Host validation to the reverse proxy deployment
-- **`GITLAB-URL` header validation** — In multi-instance mode, the server validates client-provided `GITLAB-URL` values and rejects malformed URLs with HTTP 400. When `--gitlab-url` is configured, it is authoritative and any client-provided `GITLAB-URL` value is ignored and logged
+- **`GITLAB-URL` header validation** — What the header may do follows how many instances the deployment published. With none, it selects the instance per request and a malformed value is rejected with HTTP 400. With exactly one (`--gitlab-url` passed once), that instance is authoritative and the header is ignored and logged. With several (`--gitlab-url` repeated, or one comma-separated value), the header selects **among them**, and a value naming anything else is refused — `403` in OAuth mode, `400` in legacy mode — rather than silently served the first instance. The allow-list is what makes a per-request instance safe under OAuth: the bearer token is verified against the instance the request selected, so a free-form header would let a caller name a host of their own and be handed a live credential
 - **Rate limiting** — A per-IP authentication failure rate limiter (10 failures/min) protects against brute-force token guessing. When running behind a reverse proxy, configure `--trusted-proxy-header` (e.g. `CF-Connecting-IP`, `X-Real-IP`, `X-Forwarded-For`) so the rate limiter sees real client IPs. Only enable this flag when the server is reachable exclusively through a trusted proxy that overwrites or strips incoming copies of the header — otherwise clients can spoof it and bypass per-IP rate limiting. For multi-value headers like `X-Forwarded-For` the server uses the rightmost entry (the hop appended by the trusted proxy) to avoid trusting client-supplied values
 
 ### OAuth Mode (`--auth-mode=oauth`)
@@ -228,7 +251,7 @@ When running with `--auth-mode=oauth`, the server validates every request's Bear
 - **Bearer only** — only the standard `Authorization: Bearer` scheme is accepted; the legacy `PRIVATE-TOKEN` header is rejected with HTTP 401 in this mode (it remains accepted in legacy mode)
 - **[RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata** — The `/.well-known/oauth-protected-resource` endpoint advertises the GitLab authorization server URL, enabling compliant OAuth clients to discover the token issuer
 - **PKCE** — The OAuth 2.1 flow uses Proof Key for Code Exchange (PKCE) to protect against authorization code interception attacks. MCP clients generate a code verifier/challenge pair for each authorization request
-- **Cache eviction** — A background goroutine runs every 30 seconds to clean up expired entries. The cache is bounded by TTL, not by size
+- **Cache eviction** — Entries are evicted lazily when read after expiry, and a background sweep removes the ones nothing reads again. The sweep runs at a quarter of `--oauth-cache-ttl`, with a 30-second floor, so the cache is bounded by time rather than by how many distinct credentials have arrived
 - **Least-privilege scope** — admission asks only for `read_api`, the least any action needs, and the write check is applied per action instead. A `read_api` token is therefore accepted by a deployment that writes, and is served the read-only tool surface; the only credential refused at the door is one carrying no GitLab API scope at all. The metadata's `scopes_supported` advertises both `api` and `read_api` so a client can deliberately ask for a credential that cannot mutate anything, and a read-only deployment (`--read-only` or `--safe-mode`) advertises `read_api` alone. An `api` token satisfies the minimum everywhere, since `api` is a superset
 
 ### Rejections are cheap, and they are bounded
@@ -275,6 +298,7 @@ The server automatically detects the scopes of the Personal Access Token (PAT) a
 - **Graceful degradation**: If scope detection fails (e.g. older GitLab versions), all tools remain registered
 - **Opt-out**: Set `GITLAB_IGNORE_SCOPES=true` or `--ignore-scopes` to skip detection
 - **Scope map**: Defined in `internal/tools/scope_filter.go` (`MetaToolScopes`)
+- **HTTP mode narrows further, in both auth modes**: a pool entry whose token carries no write scope is served the read-only catalog, exactly as if `--read-only` had been set for that client. The narrowing is per pool entry, and an entry is per token, so one client's `read_api` token cannot narrow another client's `api` token. Unknown scopes (detection failed, or `--ignore-scopes`) count as write-capable — a wrong "no" would silently remove tools, while a wrong "yes" simply surfaces as GitLab's own 403 on the call that tried to write
 
 Tools requiring `admin_mode` (e.g. `gitlab_admin`, `gitlab_geo`, `gitlab_storage_move`) are filtered when the token lacks that scope.
 
@@ -377,20 +401,36 @@ The `newGitHubSource` HTTP client (`internal/autoupdate/github_source.go`):
 
 ## Rate Limiting Model
 
-The server ships an **optional** token-bucket rate limiter that gates `tools/call`
-invocations. It is **disabled by default** because GitLab itself is the canonical
-rate-limit authority — the limiter exists to protect operators against runaway
-agents and noisy clients, not to replace upstream throttling.
+The server ships a token-bucket rate limiter that gates `tools/call`
+invocations. It exists to protect operators against runaway agents and noisy
+clients, not to replace upstream throttling: GitLab itself remains the canonical
+rate-limit authority.
+
+Whether it is on out of the box depends on the transport. **HTTP mode enables it
+by default** (`--rate-limit-rps=10`), because that deployment is shared — every
+call it forwards is charged to its own egress address, so one looping client's
+volume lands on every other tenant. **Stdio leaves it off** (`RATE_LIMIT_RPS=0`):
+a single-user local process has no co-tenant to protect, and a limiter there only
+costs latency. Setting `0` explicitly is the opt-out in either mode.
 
 ### Configuration
 
-| Setting         | Env var            | Flag (HTTP mode)     | Default        |
-| --------------- | ------------------ | -------------------- | -------------- |
-| Requests/second | `RATE_LIMIT_RPS`   | `--rate-limit-rps`   | `0` (disabled) |
-| Burst capacity  | `RATE_LIMIT_BURST` | `--rate-limit-burst` | `40`           |
+| Setting         | Env var            | Flag (HTTP mode)     | Default (stdio) | Default (HTTP) |
+| --------------- | ------------------ | -------------------- | --------------- | -------------- |
+| Requests/second | `RATE_LIMIT_RPS`   | `--rate-limit-rps`   | `0` (disabled)  | `10`           |
+| Burst capacity  | `RATE_LIMIT_BURST` | `--rate-limit-burst` | `40`            | `40`           |
 
-When `RATE_LIMIT_RPS = 0` the middleware is not attached and there is zero
-overhead on the hot path. Setting any value `> 0` activates a `golang.org/x/time/rate`
+The defaults differ because the deployments differ. The MCP specification
+requires a server exposing tools to rate limit their invocation, and an HTTP
+deployment is the shared one: every call it forwards is charged to its own
+egress address, so one looping client's volume lands on every other tenant and
+on the instance's own limits. A stdio process serves one user on their own
+machine, has no co-tenant to protect, and a limiter there only costs latency.
+
+`10` is a judgement call rather than a specification value — far above any
+human-driven session, and still a bound on a retry loop. Setting `0` explicitly
+is the supported opt-out in either mode: the middleware is then not attached and
+there is zero overhead on the hot path. Setting any value `> 0` activates a `golang.org/x/time/rate`
 limiter scoped to **one MCP server instance**:
 
 - **stdio mode** — one process, one bucket → effectively per-user.
@@ -405,7 +445,8 @@ limiter scoped to **one MCP server instance**:
 | GitLab.com (authenticated user) | `20`               | Stays well under the published ~33 rps authenticated quota with headroom for pagination loops. |
 | Self-hosted (default config)    | `8`                | Matches the typical 600 req/min default in `application_settings`.                             |
 | CI / batch automation           | `2`–`4`            | Conservative; pipelines that invoke many tools per job.                                        |
-| Disabled (default)              | `0`                | Trust GitLab's own throttle; useful when you have not measured traffic patterns yet.           |
+| HTTP default                    | `10`               | On unless you say otherwise; bounds a looping client without touching normal use.              |
+| Disabled (stdio default)        | `0`                | Trust GitLab's own throttle; the right answer for a single-user local process.                 |
 
 ### Behavior on excess
 
@@ -413,7 +454,7 @@ When the bucket is empty the middleware short-circuits the call and returns a
 `CallToolResult` with `IsError: true` and a human-readable hint:
 
 ```text
-Rate limit exceeded for `gitlab_list_merge_requests`. Wait a moment and retry, or raise --rate-limit-rps if this is sustained traffic.
+Rate limit exceeded for `gitlab_mr_list`. Wait a moment and retry, or raise --rate-limit-rps if this is sustained traffic.
 ```
 
 The error is returned as a tool result (not a JSON-RPC error) so the LLM can
@@ -429,8 +470,9 @@ The local limiter complements but does not replace:
 - HTTP-mode bounded server pool (`MAX_HTTP_CLIENTS`) which caps concurrency.
 - Reverse-proxy/WAF policies in front of public deployments.
 
-Disable it again by setting `RATE_LIMIT_RPS=0` (or omitting the flag). No state
-is persisted between restarts.
+Disable it by setting the value to `0` explicitly — `RATE_LIMIT_RPS=0` in stdio,
+`--rate-limit-rps=0` in HTTP mode. Omitting the flag no longer disables it in
+HTTP mode, where `10` is the default. No state is persisted between restarts.
 
 ---
 

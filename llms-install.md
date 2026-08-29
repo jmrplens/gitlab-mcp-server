@@ -88,6 +88,32 @@ The binary also ships an interactive setup wizard
 (`gitlab-mcp-server --setup`) that auto-detects VS Code, Claude Desktop,
 Claude Code, Cursor, and Windsurf and writes the config for the user.
 
+### Method C: npm / npx (no Docker, no download step)
+
+Use this when Docker is unavailable and you would rather not manage a binary.
+The package carries prebuilt binaries for Linux, macOS and Windows on x64 and
+arm64; npm installs only the one matching the user's platform and nothing runs
+at install time.
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "npx",
+      "args": ["-y", "@jmrp.io/gitlab-mcp-server"],
+      "env": {
+        "GITLAB_URL": "https://gitlab.com",
+        "GITLAB_TOKEN": "<USER_TOKEN_HERE>"
+      }
+    }
+  }
+}
+```
+
+Node.js 18 or newer is required. Self-update is off on this path (npm owns the
+binary), so updates come from `npm update -g @jmrp.io/gitlab-mcp-server`. The
+Linux packages need glibc: on musl systems such as Alpine, use Method A.
+
 ## Step 3 — Optional environment variables
 
 Add these to the `env` block (and, for Docker, a matching `-e NAME` in
@@ -125,8 +151,8 @@ Full reference: <https://jmrp.io/docs/gitlab-mcp-server/configuration/>
 - **Only two tools visible** — expected: the default `dynamic` surface
   exposes `gitlab_find_action` and `gitlab_execute_action`, which route to
   every action. Set `TOOL_SURFACE=meta` for visible per-domain tools.
-- **Docker: `docker: command not found`** — fall back to Method B (native
-  binary).
+- **Docker: `docker: command not found`** — fall back to Method C (npm/npx,
+  needs only Node 18+) or Method B (native binary).
 
 ## More documentation
 

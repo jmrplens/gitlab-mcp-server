@@ -29,6 +29,20 @@ La variable `AUTO_UPDATE` controla cómo se manejan las actualizaciones:
 
 Alias aceptados: `1`/`yes` para true, `0`/`no` para false. El valor no distingue mayúsculas de minúsculas.
 
+### Lo que ya decidió tu método de instalación
+
+`true` es el valor por defecto del binario. En la práctica, casi todas las formas de instalación lo cambian: hay un gestor de paquetes que ya es dueño del archivo en disco y una auto-sustitución lo dejaría desincronizado con lo que ese gestor cree tener instalado.
+
+| Método de instalación                | `AUTO_UPDATE` efectivo                                                                                                                                  | Quién actualiza el binario                |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Binario de release descargado a mano | `true`                                                                                                                                                  | El propio servidor                        |
+| `npx @jmrp.io/gitlab-mcp-server`     | `false`: lo fija el lanzador salvo que lo definas tú                                                                                                    | npm                                       |
+| Homebrew (`jmrplens/tap`)            | `true`, pero los caveats de la fórmula piden ponerlo a `false`                                                                                          | `brew upgrade`                            |
+| Paquete `.mcpb` de Claude Desktop    | `false`, fijado en el manifiesto                                                                                                                        | Reinstalar la extensión                   |
+| Imagen de contenedor                 | `true`, pero la actualización no llega a aplicarse: el contenedor corre como usuario sin privilegios y no puede reemplazar un binario propiedad de root | Descargar una etiqueta nueva de la imagen |
+
+Definir `AUTO_UPDATE` de forma explícita siempre gana, incluido bajo el lanzador de npm. Cuando las actualizaciones están desactivadas, las herramientas `gitlab_server_check_update` y `gitlab_server_apply_update` ni siquiera se registran.
+
 ## Cómo funciona
 
 ```mermaid

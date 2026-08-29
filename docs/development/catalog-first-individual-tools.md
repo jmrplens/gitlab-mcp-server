@@ -67,7 +67,7 @@ func ActionSpecs(client *gitlabclient.Client, enterprise bool) []toolutil.Action
       Idempotent:   true,
       OwnerPackage: "projects",
       IndividualTool: toolutil.IndividualToolSpec{
-        Name:        "gitlab_get_project",
+        Name:        "gitlab_project_get",
         Title:       "Get project",
         Description: "Get a single GitLab project by ID or path.",
       },

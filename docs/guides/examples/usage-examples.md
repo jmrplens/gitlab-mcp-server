@@ -54,7 +54,7 @@ The AI calls the `my_pending_reviews` prompt and returns a list of MRs assigned 
 
 ### "Create an issue about fixing the login timeout"
 
-The AI calls `gitlab_create_issue` with a title derived from your request. It may ask you for the project name and any labels before creating the issue.
+The AI finds and runs the `issue.create` action with a title derived from your request. It may ask you for the project name and any labels before creating the issue.
 
 ### "Generate release notes from v1.1 to v1.2"
 
@@ -64,21 +64,23 @@ The AI calls the `generate_release_notes` prompt which collects commits and MRs 
 
 ## Common Workflows
 
+The individual tool names below assume `TOOL_SURFACE=individual`. On the default `dynamic` surface the same operations are reached through `gitlab_execute_action` with the matching canonical action ID — `branch.create`, `merge_request.create`, `issue.update`, `job.trace` — as shown under [Dynamic Discovery and Execution](#dynamic-discovery-and-execution).
+
 ### 1. Project Discovery
 
-Use meta-tools for guided tool discovery:
+Discover what a meta-tool covers through the `gitlab://tools` manifest:
 
 ```text
 User: "What tools are available for merge requests?"
-→ Call gitlab_merge_request with action "help"
-→ Returns: list of all MR-related tools with descriptions
+→ Read the resource gitlab://tools/gitlab_merge_request
+→ Returns: every MR action with its guidance; gitlab://tools/gitlab_merge_request.<action> has the per-action schema
 ```
 
 Individual tool approach:
 
 ```text
 User: "List my projects"
-→ Call gitlab_list_projects with owned=true
+→ Call gitlab_project_list with owned=true
 → Returns: paginated list of projects with IDs and paths
 ```
 
@@ -87,16 +89,16 @@ User: "List my projects"
 #### Create a Branch and MR
 
 ```text
-1. gitlab_create_branch(project_id="42", branch="feature/new-login", ref="main")
-2. gitlab_create_or_update_file(project_id="42", branch="feature/new-login", ...)
-3. gitlab_create_merge_request(project_id="42", source_branch="feature/new-login", target_branch="main", title="Add new login page")
+1. gitlab_branch_create(project_id="42", branch="feature/new-login", ref="main")
+2. gitlab_file_create(project_id="42", branch="feature/new-login", ...)
+3. gitlab_mr_create(project_id="42", source_branch="feature/new-login", target_branch="main", title="Add new login page")
 ```
 
 #### Review a Merge Request
 
 ```text
-1. gitlab_get_merge_request(project_id="42", merge_request_iid=15)
-2. gitlab_list_mr_changes(project_id="42", merge_request_iid=15)
+1. gitlab_mr_get(project_id="42", merge_request_iid=15)
+2. gitlab_mr_changes_get(project_id="42", merge_request_iid=15)
 3. Prompt: review_mr(project_id="42", merge_request_iid="15")
    → Returns structured code review with risk categorization
 ```
@@ -104,17 +106,17 @@ User: "List my projects"
 #### Approve and Merge
 
 ```text
-1. gitlab_approve_merge_request(project_id="42", merge_request_iid=15)
-2. gitlab_accept_merge_request(project_id="42", merge_request_iid=15, squash=true)
+1. gitlab_mr_approve(project_id="42", merge_request_iid=15)
+2. gitlab_mr_merge(project_id="42", merge_request_iid=15, squash=true)
 ```
 
 ### 3. Issue Management
 
 ```text
-1. gitlab_create_issue(project_id="42", title="Fix login bug", labels=["bug", "P1"])
-2. gitlab_update_issue(project_id="42", issue_iid=10, assignee_ids=[5])
-3. gitlab_create_issue_note(project_id="42", issue_iid=10, body="Investigating...")
-4. gitlab_close_issue(project_id="42", issue_iid=10)
+1. gitlab_issue_create(project_id="42", title="Fix login bug", labels=["bug", "P1"])
+2. gitlab_issue_update(project_id="42", issue_iid=10, assignee_ids=[5])
+3. gitlab_issue_note_create(project_id="42", issue_iid=10, body="Investigating...")
+4. gitlab_issue_update(project_id="42", issue_iid=10, state_event="close")
 ```
 
 ### 4. CI/CD Pipeline Monitoring
@@ -122,16 +124,16 @@ User: "List my projects"
 ```text
 1. Resource: gitlab://project/42/pipelines/latest
    → Returns latest pipeline status
-2. gitlab_list_pipeline_jobs(project_id="42", pipeline_id=100)
-3. gitlab_get_job_log(project_id="42", job_id=500)
+2. gitlab_job_list(project_id="42", pipeline_id=100, scope=["failed"])
+3. gitlab_job_trace(project_id="42", job_id=500)
    → Returns job console output for debugging
 ```
 
 ### 5. Release Management
 
 ```text
-1. gitlab_create_tag(project_id="42", tag_name="v1.2.0", ref="main", message="Release 1.2.0")
-2. gitlab_create_release(project_id="42", tag_name="v1.2.0", name="Version 1.2.0", description="...")
+1. gitlab_tag_create(project_id="42", tag_name="v1.2.0", ref="main", message="Release 1.2.0")
+2. gitlab_release_create(project_id="42", tag_name="v1.2.0", name="Version 1.2.0", description="...")
 3. Prompt: generate_release_notes(project_id="42", from="v1.1.0", to="v1.2.0")
    → Returns structured release notes from commits between tags
 ```
@@ -213,14 +215,16 @@ Use this flow when startup context or visible tool count matters. It reaches the
 With `TOOL_SURFACE=meta`, 32 domain-level meta-tools (48 on self-managed Enterprise/Premium, 49 on GitLab.com Enterprise/Premium with Orbit) provide domain dispatcher tools:
 
 ```text
-Call: gitlab_project(action="help")
-→ Returns: all project-related tools with descriptions and parameters
+Resource: gitlab://tools/gitlab_project
+→ Returns: every project action with its guidance (the tool's own description carries the same text)
 
-Call: gitlab_merge_request(action="list", project_id="42")
-→ Dispatches to gitlab_list_merge_requests with the given parameters
+Call: gitlab_merge_request(action="list", params={project_id:"42"})
+→ Dispatches to the merge_request.list route with the given parameters
 ```
 
-Available meta-tool domains: `project`, `branch`, `tag`, `release`, `merge_request`, `mr_review`, `repository`, `group`, `issue`, `pipeline`, `job`, `user`, `wiki`, `environment`, `ci_variable`, `template`, `admin`, `access`, `package`, `snippet`, `feature_flags`, `search`, `runner`, `analyze`.
+A meta-tool accepts only the top-level keys `action` and `params`; anything else is rejected as an unknown property.
+
+Available meta-tool domains: `access`, `admin`, `branch`, `ci_catalog`, `ci_variable`, `custom_emoji`, `environment`, `feature_flags`, `group`, `issue`, `job`, `merge_request`, `model_registry`, `mr_review`, `package`, `pipeline`, `project`, `release`, `repository`, `runner`, `search`, `server`, `snippet`, `storage_move`, `tag`, `template`, `user`, `wiki` — plus `discover_project` and the four `interactive_*` creation flows, which are standalone tools rather than domain dispatchers. Labels, milestones and members are actions on `gitlab_project` and `gitlab_group` (`label_list`, `milestone_get`, `members`); MR diffs and discussions are actions on `gitlab_mr_review` (`changes_get`, `discussion_list`); CI lint is `gitlab_template` with `action: lint`.
 
 ## Error Handling
 
@@ -231,7 +235,7 @@ All tools return actionable error messages that guide toward solutions:
   "isError": true,
   "content": [{
     "type": "text",
-    "text": "Project not found: '999'. Verify the project ID exists and your token has access. Use gitlab_list_projects to find valid project IDs."
+    "text": "Project not found: '999'. Verify the project ID exists and your token has access. Use gitlab_project_list to find valid project IDs."
   }]
 }
 ```

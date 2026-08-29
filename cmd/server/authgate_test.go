@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -302,28 +303,56 @@ func TestMCPServerGate_RepeatedAuthFailures_Returns429WithRetryAfter(t *testing.
 	}
 }
 
-// TestMCPServerGate_NonPOSTMethods_ReachTheHandler guards a regression the gate
-// could easily cause: GET and DELETE must still reach the SDK so it answers 405,
-// which is what protocol 2026-07-28 prescribes for them. Gating them as 401
-// would replace a correct answer with a misleading one.
+// TestMCPServerGate_NonPOSTMethods_ReachTheHandler guards both halves of the
+// non-POST rule.
+//
+// On the default stateless transport, GET and DELETE must still reach the SDK
+// so it answers 405, which is what protocol 2026-07-28 prescribes for them;
+// gating them as 401 would replace a correct answer with a misleading one.
+//
+// On a stateful deployment they are live operations on a session — GET opens
+// its standalone SSE stream, DELETE terminates it — so they are gated there.
+// OPTIONS is exempt in both modes: it is a CORS preflight, which a browser
+// sends without credentials by definition, so refusing it for lacking one would
+// refuse the request that exists to ask whether the real request is allowed.
 func TestMCPServerGate_NonPOSTMethods_ReachTheHandler(t *testing.T) {
+	passesThrough := func(t *testing.T, gate *mcpServerGate, method string) bool {
+		t.Helper()
+		var reached atomic.Bool
+		handler := gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			reached.Store(true)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), method, "/", nil))
+		if reached.Load() && rec.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s reached the handler but the status was %d", method, rec.Code)
+		}
+		return reached.Load()
+	}
+
 	for _, method := range []string{http.MethodGet, http.MethodDelete, http.MethodOptions} {
-		t.Run(method, func(t *testing.T) {
+		t.Run("stateless/"+method, func(t *testing.T) {
 			gate := newGate(t, okFactory)
-			var reached atomic.Bool
-			handler := gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				reached.Store(true)
-				w.WriteHeader(http.StatusMethodNotAllowed)
-			}))
-
-			rec := httptest.NewRecorder()
-			handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), method, "/", nil))
-
-			if !reached.Load() {
+			gate.stateless = true
+			if !passesThrough(t, gate, method) {
 				t.Errorf("%s was gated; it must pass through so the SDK can answer 405", method)
 			}
-			if rec.Code != http.StatusMethodNotAllowed {
-				t.Errorf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+		})
+	}
+
+	t.Run("stateful/OPTIONS", func(t *testing.T) {
+		gate := newGate(t, okFactory)
+		if !passesThrough(t, gate, http.MethodOptions) {
+			t.Error("a CORS preflight was gated; a browser sends it without credentials")
+		}
+	})
+
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		t.Run("stateful/"+method, func(t *testing.T) {
+			gate := newGate(t, okFactory)
+			if passesThrough(t, gate, method) {
+				t.Errorf("%s reached the session layer unauthenticated; a session ID would be enough to read or end someone else's session", method)
 			}
 		})
 	}
@@ -421,7 +450,7 @@ func TestRegisterLegacyMCPHandlers_UnauthenticatedPOST_NeverReturnsNoServerAvail
 		Stateless:    true,
 	}
 	mux := http.NewServeMux()
-	registerLegacyMCPHandlers(t.Context(), cfg, newGateTestPool(t, okFactory, cfg.GitLabURL), mux)
+	registerLegacyMCPHandlers(t.Context(), cfg, newGateTestPool(t, okFactory, cfg.GitLabURL), &sync.Map{}, mux)
 
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
@@ -522,4 +551,69 @@ func TestMcpServerGate_WithIdentity_UnknownTokenLeavesContextAlone(t *testing.T)
 	if identity := toolutil.IdentityFromContext(gate.withIdentity(t.Context(), req)); identity.IsAuthenticated() {
 		t.Errorf("identity = %+v, want the zero value for a token the pool never built", identity)
 	}
+}
+
+// TestGate_AllowListIsOnlyNamedWhereItIsAlreadyPublic pins who gets to see the
+// set of instances a deployment publishes.
+//
+// Naming them helps a client that guessed wrong, and it costs nothing in oauth
+// mode: the same list is served unauthenticated as RFC 9728
+// `authorization_servers`, and the bearer guard has already verified the caller
+// before the gate runs. Legacy mode has neither property — no metadata document
+// publishes the list, and this rejection is reached before the credential is
+// validated — so any non-empty token would have enumerated the operator's
+// instance hostnames, internal ones included.
+func TestGate_AllowListIsOnlyNamedWhereItIsAlreadyPublic(t *testing.T) {
+	t.Parallel()
+
+	const published = "https://gitlab.internal.example"
+
+	newRequest := func(t *testing.T) *http.Request {
+		t.Helper()
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+		req.Header.Set("PRIVATE-TOKEN", "glpat-anything")
+		req.Header.Set(serverpool.RequestOptionGitLabURL, "https://gitlab.attacker.example")
+		return req
+	}
+
+	// Two published instances, because with exactly one the header is ignored
+	// by design and never reaches the rejection under test.
+	withAllowList := func(t *testing.T) *mcpServerGate {
+		t.Helper()
+		gate := newGateAgainst(t, okFactory, published)
+		gate.gitlabURLs = []string{published, "https://gitlab.other.example"}
+		return gate
+	}
+
+	t.Run("legacy mode redacts it", func(t *testing.T) {
+		t.Parallel()
+		gate := withAllowList(t)
+		rec := httptest.NewRecorder()
+		gate.middleware(http.NotFoundHandler()).ServeHTTP(rec, newRequest(t))
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+		if strings.Contains(rec.Body.String(), "gitlab.internal.example") {
+			t.Errorf("the published instance leaked to an unverified caller: %s", rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "does not serve") {
+			t.Errorf("the caller was not told what went wrong: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("oauth mode names it", func(t *testing.T) {
+		t.Parallel()
+		gate := withAllowList(t)
+		gate.oauthMode = true
+		rec := httptest.NewRecorder()
+		gate.middleware(http.NotFoundHandler()).ServeHTTP(rec, newRequest(t))
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+		if !strings.Contains(rec.Body.String(), "gitlab.internal.example") {
+			t.Errorf("oauth mode must keep naming the list it already publishes: %s", rec.Body.String())
+		}
+	})
 }

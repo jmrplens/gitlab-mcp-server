@@ -132,6 +132,19 @@ Validate a deployment with `make validate-http-stateless` (compiled binary) or
 `make validate-http-stateless-docker` (Docker image), both backed by
 `scripts/validate-http-stateless.sh`.
 
+#### Protocol revisions this server negotiates
+
+Stateless mode accepts `2026-07-28`, `2025-11-25`, `2025-06-18`, `2025-03-26`
+and `2024-11-05`. `--stateless=false` accepts the same set **minus**
+`2026-07-28`: the SDK's streamable transport serves that revision only when the
+transport is stateless, because SEP-2575 has no session concept to fall back
+on. Either way, an `MCP-Protocol-Version` header naming anything else is
+answered `400` with a JSON-RPC `-32022` error whose `data.supported` lists what
+this deployment can negotiate — so a client gets one retry that works rather
+than a bare 400 it must interpret. The elicitation table in
+[Elicitation](../reference/capabilities/elicitation.md#elicitation-over-stateless-http)
+follows the same split.
+
 #### Legacy stateful mode
 
 `--stateless=false` restores the session-based transport: the server issues
@@ -332,7 +345,9 @@ Verifying is what stops an unauthenticated caller from obtaining a working sessi
 
 Every other outcome — a transport error, a `5xx`, a `404` from an instance that does not expose the endpoint — means no verdict was obtained, and the session is admitted. Failing closed whenever GitLab is unreachable would turn an instance outage into a total denial of service. The probe does not retry and is bounded at 5 seconds.
 
-Codes are allocated outside the JSON-RPC reserved range (`-32768` to `-32000`), as the MCP specification requires for application-defined errors, and mirror their HTTP status. `GET` and `DELETE` are not gated: they continue to receive `405 Method Not Allowed`, the answer protocol 2026-07-28 prescribes for them.
+Codes are allocated outside the JSON-RPC reserved range (`-32768` to `-32000`), as the MCP specification requires for application-defined errors, and mirror their HTTP status.
+
+`GET` and `DELETE` skip the credential check **only under the default `--stateless`**, where they receive `405 Method Not Allowed` whatever they carry — the answer protocol 2026-07-28 prescribes for them, and gating them would replace it with a `401`. Under `--stateless=false` they are not inert: a `GET` opens a session's standalone SSE stream and reads the server-initiated messages meant for its owner, and a `DELETE` terminates the session. There they are authenticated and ownership-checked exactly like a `POST`, so learning a session ID is not enough to read or end someone else's session.
 
 ## Authentication Modes
 
@@ -365,6 +380,22 @@ gitlab-mcp-server --http \
   --public-url=https://mcp.example.com/gitlab \
   --oauth-cache-ttl=15m
 ```
+
+> **`--public-url` must be byte-identical to the URL clients are configured
+> with.** It is the RFC 9728 _resource identifier_, and §3.3 of that RFC tells a
+> client to **discard** metadata whose `resource` value is not identical to the
+> URL it used. So a deployment started with `--public-url=https://mcp.example.com`
+> whose clients point at `https://mcp.example.com/mcp` fails discovery: the
+> challenge and the metadata both name the origin, the client wanted the `/mcp`
+> URL, and it must throw the document away. With the official Go SDK that
+> degrades quietly to treating the MCP host itself as the authorization server,
+> so the browser flow opens a metadata URL that does not exist.
+>
+> The server answers MCP on several paths as a convenience — the root, `/mcp`,
+> and the `--public-url` path prefix — but only one of them can be the published
+> identifier. Pick the URL you hand to clients and pass exactly that:
+> clients at `https://mcp.example.com/mcp` → `--public-url=https://mcp.example.com/mcp`
+> → metadata at `https://mcp.example.com/.well-known/oauth-protected-resource/mcp`.
 
 **How it works:**
 
@@ -421,7 +452,7 @@ curl http://localhost:8080/.well-known/oauth-protected-resource
 - Cache key: SHA-256 hash of the token (raw token never stored)
 - Default TTL: 15 minutes (configurable via `--oauth-cache-ttl`)
 - Bounds: minimum 1 minute, maximum 2 hours
-- Expired entries are evicted by a background goroutine every 5 minutes
+- Expired entries are evicted on the next lookup, and a background sweep at a quarter of `--oauth-cache-ttl` (30-second floor) removes the ones that are never looked up again
 
 ## Client Configuration Examples
 
@@ -497,6 +528,7 @@ VS Code discovers the GitLab authorization server via `/.well-known/oauth-protec
 # Initialize a session
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "PRIVATE-TOKEN: glpat-your-token" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
@@ -516,6 +548,21 @@ gitlab-mcp-server --http --http-addr=/run/gitlab-mcp/server.sock --gitlab-url=ht
 ```nginx
 upstream gitlab_mcp {
     server unix:/run/gitlab-mcp/server.sock;
+}
+
+location /mcp {
+    proxy_pass http://gitlab_mcp;
+    # An SSE stream must not be held: buffering turns a live stream into one
+    # delivery at the end, which is what X-Accel-Buffering: no asks nginx to
+    # stop doing — set it here too so the intent survives a config that
+    # ignores the header.
+    proxy_buffering off;
+    # A subscriptions/listen stream, and a standalone GET, are silent between
+    # notifications. The server's 25-second keep-alive holds them open across
+    # the 60-second default; raise the timeout if you expect quiet periods
+    # longer than your clients tolerate reconnecting through.
+    proxy_read_timeout 1h;
+    proxy_http_version 1.1;
 }
 ```
 
@@ -537,7 +584,9 @@ Both flags or neither: a certificate without its key is a deployment that believ
 
 ## Public Hosted Endpoint
 
-A ready-to-use instance of this server runs at `https://mcp.jmrp.io/gitlab`. It is deployed out of band from the [mcp.jmrp.io](https://github.com/jmrplens/mcp.jmrp.io) host — this repository publishes artifacts only, so nothing here deploys or configures it.
+A ready-to-use instance of this server runs at `https://mcp.jmrp.io/gitlab`. It is deployed out of band from the [mcp.jmrp.io](https://github.com/jmrplens/mcp.jmrp.io) host — this repository publishes artifacts only, so nothing here deploys or configures it. That deployment tracks the latest GitHub release, so what it serves follows the newest tag rather than a pinned version.
+
+It runs `--auth-mode=oauth`, so the credential travels as `Authorization: Bearer`. A client that speaks the OAuth flow needs no header at all: the `401` carries the RFC 6750 challenge pointing at `https://mcp.jmrp.io/.well-known/oauth-protected-resource/gitlab`, from which it discovers `https://gitlab.com` as the authorization server and authorizes in the browser. For anything that cannot open a browser — headless, CI — a GitLab personal access token sent as `Bearer` is verified exactly the same way:
 
 ```json
 {
@@ -545,21 +594,30 @@ A ready-to-use instance of this server runs at `https://mcp.jmrp.io/gitlab`. It 
     "gitlab": {
       "type": "http",
       "url": "https://mcp.jmrp.io/gitlab",
-      "headers": { "PRIVATE-TOKEN": "glpat-xxxxxxxxxxxx" }
+      "headers": { "Authorization": "Bearer glpat-xxxxxxxxxxxx" }
     }
   }
 }
 ```
 
-| Property     | Value                                                             |
-| ------------ | ----------------------------------------------------------------- |
-| Transport    | Stateless streamable HTTP (`--stateless`); `GET`/`DELETE` → `405` |
-| Tool surface | `dynamic` (`gitlab_find_action`, `gitlab_execute_action`)         |
-| Auth mode    | `legacy` — `PRIVATE-TOKEN` per request, never stored server-side  |
-| `GITLAB-URL` | Optional; defaults to `https://gitlab.com`                        |
-| Health       | `GET https://mcp.jmrp.io/gitlab/health` → `ok`                    |
+| Property        | Value                                                                                                                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transport       | Stateless streamable HTTP (`--stateless`); an authenticated `GET`/`DELETE` answers `405`                                                                                                                |
+| Tool surface    | `dynamic` (`gitlab_find_action`, `gitlab_execute_action`)                                                                                                                                               |
+| Auth mode       | `oauth` — `Authorization: Bearer` per request, never stored server-side                                                                                                                                 |
+| No credential   | Any method answers `401` with `WWW-Authenticate: Bearer … resource_metadata=…`                                                                                                                          |
+| `PRIVATE-TOKEN` | Not accepted — it is the legacy-mode header                                                                                                                                                             |
+| `GITLAB-URL`    | Ignored; this deployment fixes the instance to `https://gitlab.com`                                                                                                                                     |
+| Scopes          | `api` for the full surface; a `read_api` token is admitted and served a read-only one                                                                                                                   |
+| Health          | `GET https://mcp.jmrp.io/gitlab/health` → `200` with `{"status":"ok",…}`                                                                                                                                |
+| Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/) — the catalog and per-client config, unauthenticated                                                                       |
+| MCP server card | `GET https://mcp.jmrp.io/gitlab/server-card` → `200 application/mcp-server-card+json`, unauthenticated; the same document is served at `/gitlab/.well-known/mcp/server-card.json` as `application/json` |
 
-Because it is multi-tenant, each distinct token+URL pair gets its own pooled MCP server (see [Server Pool](#server-pool)). Self-managed GitLab instances must be reachable from the public internet, and every request traverses a third-party host — for private instances, run one of the deployments described above instead.
+Because it is multi-tenant, each distinct token+URL pair gets its own pooled MCP server (see [Server Pool](#server-pool)). A `read_api` token is admitted and served a read-only surface rather than refused, so a credential that cannot change anything is a supported way to use it.
+
+Try it before configuring anything: the [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) signs in with OAuth and calls the endpoint read-only from a browser tab, and the [server card](https://mcp.jmrp.io/servers/gitlab/) lists the whole catalog with no credential at all.
+
+It is a personal service, run best-effort: no SLA, no support channel, no promise it is unchanged next week, and every request traverses a host you do not control. It adds no quota of its own — every call spends GitLab.com's own limits, under your own token. For a self-managed instance — which this deployment cannot reach, since it fixes the instance to `https://gitlab.com` — or for anything you would rather keep on your own machine, run one of the deployments described above instead.
 
 The endpoint is listed at [mcp.jmrp.io](https://mcp.jmrp.io/), a directory of the MCP servers maintained by this author; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list in machine-readable form.
 
@@ -609,26 +667,44 @@ Two independent layers govern how long a connection and a session live:
 | HTTP response write  | fixed / disabled      | `60s` / disabled | Maximum write time for a response; kept at `60s` for standard endpoints and disabled for SSE streams    |
 
 The server speaks the modern **Streamable HTTP** transport, which uses Server-Sent
-Events (`text/event-stream`) for streamed POST responses and the standalone GET
-stream that carries server-initiated notifications and 30s keep-alive pings. An
-active SSE response is bounded by `WriteTimeout` (not `IdleTimeout`, which only
-limits the wait between requests on an idle keep-alive connection) — and the
-go-sdk SSE writer never resets the write deadline.
+Events (`text/event-stream`) for streamed POST responses and for the standalone GET
+stream that carries server-initiated notifications. Both are silent for long
+stretches by design — the GET stream until something happens, a streamed POST for
+as long as GitLab takes to answer — and an active SSE response is bounded by
+`WriteTimeout` (not `IdleTimeout`, which only limits the wait between requests on
+an idle keep-alive connection), while the go-sdk SSE writer never resets the write
+deadline.
 
 To avoid severing those streams without weakening protection for everything else,
 the global `WriteTimeout` is kept at a safe `60s` (guarding standard endpoints such
-as `/health` from slow-write attacks), and any request that negotiates SSE
-(`Accept: text/event-stream`) — both the standalone GET stream and streamed POST
-responses — disables its own write deadline dynamically. Because the default
+as `/health` from slow-write attacks), and any response the server actually
+answers as `text/event-stream` — both the standalone GET stream and streamed POST
+responses — disables its own write deadline dynamically and carries
+`X-Accel-Buffering: no` so a buffering proxy streams it rather than holding it.
+The decision is taken from the response, not from the request's `Accept` header:
+a client sending `*/*` or `text/*` is answered with a stream too. Because the default
 `--http-idle-timeout` is `0`
-(disabled), the HTTP layer also does not close idle connections, so `--session-timeout`
-is the effective idle lifetime. If you set a low `--http-idle-timeout`, expect
-long-lived MCP sessions to drop when the connection idles past that value.
+(disabled), the HTTP layer also does not close idle connections. Under
+`--stateless=false` that makes `--session-timeout` the effective idle lifetime;
+under the default stateless transport there is no MCP session to expire — each
+POST's session ends with its response — so nothing above the transport bounds a
+connection at all. If you set a low `--http-idle-timeout`, expect long-lived
+MCP sessions to drop when the connection idles past that value.
+
+**Keep-alives.** Clearing the write deadline settles this end of the connection
+and nothing in between. An SSE response that stays silent therefore emits a
+comment frame — a line beginning with `:`, which a conforming SSE reader discards
+without producing an event — every 25 seconds while it has nothing else to say.
+The interval sits under nginx's default `proxy_read_timeout` of 60 seconds with
+room for two frames, and a stream that has written recently is skipped rather
+than padded. This is the server's own behaviour, not the SDK's: the go-sdk emits
+no periodic ping of its own.
 
 > **Behind a reverse proxy / edge**: when idle closure is disabled on the server, the
-> proxy's own read/idle timeout becomes the limiting factor. Raise it (e.g. to a few
-> minutes or more) for long-running MCP streams. See
-> [Troubleshooting](troubleshooting.md).
+> proxy's own read/idle timeout becomes the limiting factor. The 25-second
+> keep-alive is what holds an idle stream open across a default nginx
+> `proxy_read_timeout`; if your edge is tighter than that, raise it rather than
+> relying on the heartbeat. See [Troubleshooting](troubleshooting.md).
 
 ### 4. Pool Eviction
 
@@ -674,7 +750,7 @@ The following settings are **server-wide** — they apply to all clients regardl
 
 | Setting                     | Source                                                   | Description                                                                                                                                                                            |
 | --------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fixed GitLab URL            | `--gitlab-url`                                           | Authoritative GitLab instance for all clients when set. If omitted, clients must send `GITLAB-URL`                                                                                     |
+| Fixed GitLab URL            | `--gitlab-url`                                           | Authoritative GitLab instance for all clients when set. If omitted, `GITLAB-URL` selects the instance per request, and a request without it falls back to `https://gitlab.com`         |
 | TLS verification            | `--skip-tls-verify`                                      | Applied to all GitLab client connections                                                                                                                                               |
 | Tool and capability surface | `--meta-tools`, `--tool-surface`, `--capability-surface` | Same tool catalog and resource/prompt exposure for all clients (`meta`/`individual`/`dynamic`; `full`/`minimal` capabilities); scope and CE/EE filtering still happen per server entry |
 | Upload limits               | Compile-time defaults                                    | Max file size                                                                                                                                                                          |
@@ -743,10 +819,33 @@ Liveness is reported both ways on purpose. `started_at` is the stable fact — i
 curl -s -o /dev/null -w "%{http_code}" \
   -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "PRIVATE-TOKEN: glpat-your-token" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 # Expected: 200
 ```
+
+### Server Card
+
+`GET /server-card` needs no credentials either, and answers with the MCP
+server-card document: every tool, resource, resource template and prompt this
+deployment registers, with its schemas, plus the capabilities it advertises.
+
+```bash
+curl -s http://localhost:8080/server-card
+```
+
+The response carries `Content-Type: application/mcp-server-card+json`. The same
+document is served at the legacy path `/.well-known/mcp/server-card.json` as
+`application/json`, for clients written against the earlier location.
+
+This is the sanctioned way to publish the catalog to something holding no
+credential — a directory, a scanner, a documentation build. `tools/list` stays
+authenticated, because the MCP authorization specification requires a server
+that requires authorization to validate the token before processing a request;
+see [ADR-0018](../development/adr/adr-0018-authorization-admits-per-action-gating.md).
+Both paths are mounted under `--public-url`'s path prefix as well, for a proxy
+that forwards its prefix rather than stripping it.
 
 ## Security Considerations
 

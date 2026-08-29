@@ -45,6 +45,8 @@ curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.1.
 chmod +x gitlab-mcp-server
 ```
 
+> **Do not run the released Linux binary on Alpine.** The Linux assets are position-independent executables that use the glibc dynamic loader (`/lib64/ld-linux-x86-64.so.2`), which musl does not provide, so `./gitlab-mcp-server` fails with a misleading `not found` even though the file is there and executable. Use a glibc base image (`debian:stable-slim`, `ubuntu`, `python:3.12-slim`), or run the container image `ghcr.io/jmrplens/gitlab-mcp-server`, which is built against musl inside the image — it starts in HTTP mode by default, so pass `--http=false` after the image name for a stdio job.
+
 ### 2. Create an Access Token
 
 Create a **Project Access Token** (recommended over personal PATs for CI):
@@ -79,6 +81,8 @@ The server communicates via the [MCP protocol](https://modelcontextprotocol.io/s
 2. An `initialized` notification
 3. One or more `tools/call` requests
 
+Which tool names a job may call depends on the active **tool surface**. The default is `dynamic`: it registers exactly two tools — `gitlab_find_action` and `gitlab_execute_action` — so a script calls `gitlab_execute_action` with a canonical `domain.action` ID and a `params` object. Naming an individual tool on the default surface is answered with `{"code":-32602,"message":"unknown tool ..."}`; because that is a JSON-RPC error and not a tool result, `jq -s '.[1].result.content[0].text'` prints `null` and the job succeeds with no output. If you prefer one tool per operation, set `TOOL_SURFACE=individual` in the job's `variables:` — individual names are domain-first, not verb-first (`gitlab_issue_list`, `gitlab_mr_list`, `gitlab_project_get`); see the [Tool Reference](../reference/tools/README.md).
+
 ### Basic Example
 
 ```bash
@@ -95,7 +99,7 @@ export GITLAB_TOKEN="${MCP_PAT}"
   # 2. Initialized notification
   echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
   # 3. Call a tool
-  echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened","per_page":10}},"id":2}'
+  echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"issue.list","params":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened","per_page":10}}},"id":2}'
 } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1]'
 ```
 
@@ -107,12 +111,12 @@ The `jq -s '.[1]'` selects the second JSON response (the tool result, skipping t
 # .gitlab-ci.yml
 mcp-list-issues:
   stage: test
-  image: alpine:latest
+  image: debian:stable-slim
   variables:
     GITLAB_URL: ${CI_SERVER_URL}
     GITLAB_TOKEN: ${MCP_PAT}
   before_script:
-    - apk add --no-cache curl jq
+    - apt-get update && apt-get install -y --no-install-recommends ca-certificates curl jq
     - curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64"
         -o gitlab-mcp-server
     - chmod +x gitlab-mcp-server
@@ -121,7 +125,7 @@ mcp-list-issues:
       RESULT=$({
         echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
         echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
-        echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened","per_page":5}},"id":2}'
+        echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"issue.list","params":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened","per_page":5}}},"id":2}'
       } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text')
     - echo "${RESULT}"
 ```
@@ -142,10 +146,10 @@ export GITLAB_TOKEN="${MCP_PAT}"
   echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
 
   # List open MRs
-  echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_merge_requests","arguments":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}},"id":2}'
+  echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"merge_request.list","params":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}}},"id":2}'
 
   # Get project details
-  echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_get_project","arguments":{"project_id":"'"${CI_PROJECT_ID}"'"}},"id":3}'
+  echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"project.get","params":{"project_id":"'"${CI_PROJECT_ID}"'"}}},"id":3}'
 } | ./gitlab-mcp-server 2>/dev/null | jq -s '.'
 ```
 
@@ -161,22 +165,36 @@ export GITLAB_URL="${CI_SERVER_URL}"
 export GITLAB_TOKEN="${MCP_PAT}"
 
 mcp_call() {
-  local tool="$1"
+  local action="$1"
   local args="$2"
   local id="${3:-2}"
 
-  {
+  local response
+  response=$({
     echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
     echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
-    echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"'"${tool}"'","arguments":'"${args}"'},"id":'"${id}"'}'
-  } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text' -r
+    echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"'"${action}"'","params":'"${args}"'}},"id":'"${id}"'}'
+  } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1]')
+
+  # A JSON-RPC error and a tool error are different failures, and neither
+  # reaches the exit status of the pipeline above: without these checks the
+  # function prints "null" and the job succeeds.
+  if jq -e 'has("error")' >/dev/null <<<"${response}"; then
+    echo "MCP ${action} failed: $(jq -r '.error.message' <<<"${response}")" >&2
+    return 1
+  fi
+  if jq -e '.result.isError == true' >/dev/null <<<"${response}"; then
+    echo "MCP ${action} returned a tool error: $(jq -r '.result.content[0].text' <<<"${response}")" >&2
+    return 1
+  fi
+  jq -r '.result.content[0].text' <<<"${response}"
 }
 
 # Usage
-ISSUES=$(mcp_call "gitlab_list_issues" '{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}')
+ISSUES=$(mcp_call "issue.list" '{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}')
 echo "Open issues: ${ISSUES}"
 
-MR_DETAILS=$(mcp_call "gitlab_get_merge_request" '{"project_id":"'"${CI_PROJECT_ID}"'","merge_request_iid":"'"${CI_MERGE_REQUEST_IID}"'"}')
+MR_DETAILS=$(mcp_call "merge_request.get" '{"project_id":"'"${CI_PROJECT_ID}"'","merge_request_iid":"'"${CI_MERGE_REQUEST_IID}"'"}')
 echo "MR details: ${MR_DETAILS}"
 ```
 
@@ -361,11 +379,11 @@ For pipelines that make many tool calls, the HTTP transport avoids process start
 # .gitlab-ci.yml
 http-mode-pipeline:
   stage: test
-  image: alpine:latest
+  image: debian:stable-slim
   variables:
     MCP_PAT: ${MCP_PAT}
   before_script:
-    - apk add --no-cache curl jq
+    - apt-get update && apt-get install -y --no-install-recommends ca-certificates curl jq
     - curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64"
         -o gitlab-mcp-server
     - chmod +x gitlab-mcp-server
@@ -389,7 +407,7 @@ http-mode-pipeline:
       curl -s -X POST http://127.0.0.1:8080/mcp \
         -H "Content-Type: application/json" \
         -H "PRIVATE-TOKEN: ${MCP_PAT}" \
-        -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}},"id":2}' \
+        -d '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"issue.list","params":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened"}}},"id":2}' \
         | jq '.result.content[0].text'
 ```
 
@@ -424,7 +442,7 @@ jobs:
           RESULT=$({
             echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
             echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
-            echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_list_issues","arguments":{"project_id":"12345","state":"opened","per_page":5}},"id":2}'
+            echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"issue.list","params":{"project_id":"12345","state":"opened","per_page":5}}},"id":2}'
           } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text' -r)
           echo "${RESULT}"
 ```
@@ -519,7 +537,7 @@ For multi-project workflows, use a **Group Access Token** instead of creating pe
 /bin/sh: ./gitlab-mcp-server: not found
 ```
 
-Ensure the binary is downloaded for the correct platform and has execute permissions:
+Two different causes produce this message. If the job runs on an Alpine (musl) image, the released binary cannot start at all — it needs the glibc dynamic loader; switch to a glibc base image or to `ghcr.io/jmrplens/gitlab-mcp-server` (add `--http=false` for stdio). Otherwise, check that the asset matches the runner's platform and that the execute bit is set:
 
 ```bash
 curl -sSL "https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64" \
@@ -558,7 +576,7 @@ variables:
 For tools that return large datasets (e.g., listing hundreds of issues), add `per_page` to limit results:
 
 ```json
-{"name": "gitlab_list_issues", "arguments": {"project_id": "123", "per_page": 20}}
+{"name": "gitlab_execute_action", "arguments": {"action": "issue.list", "params": {"project_id": "123", "per_page": 20}}}
 ```
 
 ### mcp-cli Provider Errors

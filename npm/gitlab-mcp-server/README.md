@@ -44,7 +44,7 @@ gitlab-mcp-server --help
 `GITLAB_URL` and `GITLAB_TOKEN` are the two required environment variables in
 stdio mode. Every flag and variable — HTTP mode, OAuth, read-only and safe
 modes, tool surfaces, tiers — is documented in the
-[configuration reference](https://jmrp.io/docs/gitlab-mcp-server/reference/configuration).
+[configuration reference](https://jmrp.io/docs/gitlab-mcp-server/configuration/).
 
 ## Auto-update is off under npm
 
@@ -56,8 +56,12 @@ effect if you have a reason to override it.
 
 ## Supported platforms
 
-Linux, macOS and Windows, on x64 and arm64. On any other platform the launcher
-exits with a message pointing to the
+Linux, macOS and Windows, on x64 and arm64. The Linux packages declare
+`libc: ["glibc"]`: the prebuilt binaries are PIE ELF executables that need the
+glibc dynamic loader, so npm skips them on musl distributions such as Alpine.
+Run the [Docker image](https://github.com/jmrplens/gitlab-mcp-server/pkgs/container/gitlab-mcp-server)
+there, which is musl-based, or build from source. On any other platform the
+launcher exits with a message pointing to the
 [release binaries](https://github.com/jmrplens/gitlab-mcp-server/releases) and
 the option to build from source.
 

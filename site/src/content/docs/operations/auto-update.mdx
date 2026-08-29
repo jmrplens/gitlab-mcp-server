@@ -29,6 +29,20 @@ The `AUTO_UPDATE` variable controls how updates are handled:
 
 Accepted aliases: `1`/`yes` for true, `0`/`no` for false. The value is case-insensitive.
 
+### What your install method already decided
+
+`true` is the default of the binary. Most install paths change that in practice, because a package manager already owns the file on disk and a self-replacement would desynchronize what it believes is installed:
+
+| Install method                         | Effective `AUTO_UPDATE`                                                                                                  | Who updates the binary  |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------- |
+| Release binary you downloaded yourself | `true`                                                                                                                   | The server itself       |
+| `npx @jmrp.io/gitlab-mcp-server`       | `false` — the launcher sets it unless you set it yourself                                                                | npm                     |
+| Homebrew (`jmrplens/tap`)              | `true`, but the formula's caveats ask you to set `false`                                                                 | `brew upgrade`          |
+| Claude Desktop `.mcpb` bundle          | `false`, pinned in the manifest                                                                                          | Reinstall the extension |
+| Container image                        | `true`, but the update cannot be applied: the container runs as a non-root user and cannot replace the root-owned binary | Pull a new image tag    |
+
+Setting `AUTO_UPDATE` explicitly always wins, including under the npm launcher. When updates are off, the `gitlab_server_check_update` and `gitlab_server_apply_update` tools are not registered at all.
+
 ## How it works
 
 ```mermaid
