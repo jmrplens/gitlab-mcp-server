@@ -2,6 +2,7 @@
 package serverpool
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -344,5 +345,147 @@ func TestExtractBearerToken_IgnoresPrivateToken(t *testing.T) {
 				t.Errorf("ExtractBearerToken() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestResolveRequestOptionsFor_MultipleInstances pins the allow-list, which is
+// what lets one oauth deployment serve gitlab.com and a self-managed instance
+// without reopening the hole a free-form GITLAB-URL header would be.
+//
+// The last case is the point: an unlisted instance is REFUSED, not quietly
+// replaced by the default. Serving the default would answer a question the
+// client did not ask, with another instance's data.
+func TestResolveRequestOptionsFor_MultipleInstances(t *testing.T) {
+	const (
+		primary   = "https://gitlab.com"
+		secondary = "https://gitlab.example.com"
+	)
+	allowed := []string{primary, secondary}
+
+	tests := []struct {
+		name    string
+		header  string
+		want    string
+		wantErr bool
+	}{
+		{name: "no header selects the first published instance", want: primary},
+		{name: "header selects the default explicitly", header: primary, want: primary},
+		{name: "header selects another published instance", header: secondary, want: secondary},
+		{name: "header selects a trailing-slash spelling of one", header: secondary + "/", want: secondary},
+		{name: "header naming an unpublished instance is refused", header: "https://evil.example.com", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+			if tt.header != "" {
+				req.Header.Set(RequestOptionGitLabURL, tt.header)
+			}
+
+			options, err := ResolveRequestOptionsFor(req, allowed)
+			if tt.wantErr {
+				var disallowed *DisallowedGitLabURLError
+				if !errors.As(err, &disallowed) {
+					t.Fatalf("error = %v, want a *DisallowedGitLabURLError", err)
+				}
+				if !strings.Contains(disallowed.Error(), primary) {
+					t.Errorf("error %q does not name the allowed instances", disallowed)
+				}
+				if strings.Contains(disallowed.Error(), "evil.example.com") {
+					t.Error("the rejected value is caller-controlled and must not be echoed back")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ResolveRequestOptionsFor() error = %v", err)
+			}
+			if options.GitLabURL != tt.want {
+				t.Errorf("GitLabURL = %q, want %q", options.GitLabURL, tt.want)
+			}
+		})
+	}
+}
+
+// TestResolveRequestOptionsFor_SingleInstanceIgnoresTheHeader verifies that
+// pinning exactly one instance behaves as --gitlab-url always has: the header
+// is recorded as ignored rather than honored or refused, so no existing
+// deployment changes behavior when the list gains its plural form.
+func TestResolveRequestOptionsFor_SingleInstanceIgnoresTheHeader(t *testing.T) {
+	const fixed = "https://gitlab.example.com"
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+	req.Header.Set(RequestOptionGitLabURL, "https://elsewhere.example.com")
+
+	options, err := ResolveRequestOptionsFor(req, []string{fixed})
+	if err != nil {
+		t.Fatalf("ResolveRequestOptionsFor() error = %v", err)
+	}
+	if options.GitLabURL != fixed {
+		t.Errorf("GitLabURL = %q, want %q", options.GitLabURL, fixed)
+	}
+	if !slices.Contains(options.IgnoredOptions, RequestOptionGitLabURL) {
+		t.Errorf("IgnoredOptions = %v, want it to name %s", options.IgnoredOptions, RequestOptionGitLabURL)
+	}
+}
+
+// TestNormalizeGitLabURL_CanonicalizesEquivalentSpellings verifies RFC 3986
+// section 6.2.2 equivalence: scheme and host are case-insensitive and an
+// explicit default port is equivalent to none.
+//
+// It matters twice. The allow-list compares canonical strings, so without this
+// a header naming "https://GitLab.com" would be refused as an instance the
+// deployment does not publish — while naming the one it does. And the server
+// pool keys on this value, so one instance spelled two ways would build two
+// entries for a single credential.
+func TestNormalizeGitLabURL_CanonicalizesEquivalentSpellings(t *testing.T) {
+	t.Parallel()
+
+	const canonical = "https://gitlab.example.com"
+	equivalent := []string{
+		"https://gitlab.example.com",
+		"https://GitLab.Example.com",
+		"HTTPS://GITLAB.EXAMPLE.COM",
+		"https://gitlab.example.com:443",
+		"https://gitlab.example.com/",
+		"https://GitLab.example.com:443/",
+	}
+	for _, raw := range equivalent {
+		t.Run(raw, func(t *testing.T) {
+			t.Parallel()
+			got, err := normalizeGitLabURL(raw)
+			if err != nil {
+				t.Fatalf("normalizeGitLabURL(%q) error = %v", raw, err)
+			}
+			if got != canonical {
+				t.Errorf("normalizeGitLabURL(%q) = %q, want %q", raw, got, canonical)
+			}
+		})
+	}
+
+	// A non-default port is significant and must survive.
+	if got, err := normalizeGitLabURL("https://gitlab.example.com:8443"); err != nil || got != "https://gitlab.example.com:8443" {
+		t.Errorf("normalizeGitLabURL(:8443) = %q, %v; a non-default port must be kept", got, err)
+	}
+	// http's default is 80, not 443.
+	if got, err := normalizeGitLabURL("http://gitlab.example.com:80"); err != nil || got != "http://gitlab.example.com" {
+		t.Errorf("normalizeGitLabURL(http :80) = %q, %v", got, err)
+	}
+	if got, err := normalizeGitLabURL("http://gitlab.example.com:443"); err != nil || got != "http://gitlab.example.com:443" {
+		t.Errorf("normalizeGitLabURL(http :443) = %q, %v; 443 is not http's default", got, err)
+	}
+}
+
+// TestNormalizeGitLabURLs_DropsBlanksAndDuplicates verifies that the list is
+// canonicalized while keeping order, since the first entry is the
+// deployment's default instance and sorting would silently re-elect it.
+func TestNormalizeGitLabURLs_DropsBlanksAndDuplicates(t *testing.T) {
+	got, err := NormalizeGitLabURLs([]string{
+		"https://gitlab.com/", "  ", "https://gitlab.example.com", "https://gitlab.com",
+	})
+	if err != nil {
+		t.Fatalf("NormalizeGitLabURLs() error = %v", err)
+	}
+	want := []string{"https://gitlab.com", "https://gitlab.example.com"}
+	if !slices.Equal(got, want) {
+		t.Errorf("NormalizeGitLabURLs() = %v, want %v", got, want)
 	}
 }

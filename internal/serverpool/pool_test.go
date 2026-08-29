@@ -161,6 +161,128 @@ func TestGetOrCreate_DetectsScopesPerToken(t *testing.T) {
 	}
 }
 
+// TestGetOrCreate_ReadOnlyTokenGetsAReadOnlySurface verifies the half of the
+// per-action write gate that actually protects GitLab: a token whose scopes
+// cannot write is served a read-only entry, whatever the deployment's own
+// mode is.
+//
+// This is what makes admitting a read_api token safe. The door no longer
+// demands the deployment's scope, so the narrowing has to happen here — and
+// per entry, since an entry is per token: one client's read_api credential
+// must not narrow another client's api credential.
+func TestGetOrCreate_ReadOnlyTokenGetsAReadOnlySurface(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("PRIVATE-TOKEN")
+		if token == "" {
+			if bearer, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+				token = bearer
+			}
+		}
+		scopes := []string{"api"}
+		if token == "glpat-read" {
+			scopes = []string{"read_api"}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": 1, "scopes": scopes, "active": true})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := testConfig(srv.URL)
+	cfg.IgnoreScopes = false
+	built := map[string]*config.ServerConfig{}
+	factory := func(_ *gitlabclient.Client, entryCfg *config.ServerConfig) (*mcp.Server, error) {
+		built[strings.Join(entryCfg.TokenScopes, ",")] = entryCfg
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	}
+	pool := New(cfg, factory)
+
+	tests := []struct {
+		name         string
+		token        string
+		scopeKey     string
+		wantReadOnly bool
+	}{
+		{
+			name:         "a token that cannot write gets a read-only surface",
+			token:        "glpat-read",
+			scopeKey:     "read_api",
+			wantReadOnly: true,
+		},
+		{
+			name:         "a write-capable token keeps the full surface",
+			token:        "glpat-api",
+			scopeKey:     "api",
+			wantReadOnly: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := pool.GetOrCreate(tt.token, srv.URL); err != nil {
+				t.Fatalf("GetOrCreate(%s) error: %v", tt.token, err)
+			}
+			entryCfg, ok := built[tt.scopeKey]
+			if !ok {
+				t.Fatalf("no entry was built for scopes %q; built: %v", tt.scopeKey, built)
+			}
+			if entryCfg.ReadOnly != tt.wantReadOnly {
+				t.Errorf("ReadOnly = %v, want %v for scopes %q", entryCfg.ReadOnly, tt.wantReadOnly, tt.scopeKey)
+			}
+		})
+	}
+
+	// Narrowing one entry must never reach the shared deployment config: an
+	// entry is per token, so one client's read_api credential cannot narrow
+	// another client's api one.
+	if cfg.ReadOnly {
+		t.Error("narrowing one entry mutated the shared deployment config")
+	}
+}
+
+// TestGetOrCreate_UsesScopesTheCallerAlreadyResolved verifies that scopes
+// handed in are used as-is, without asking GitLab again.
+//
+// OAuth mode depends on this: verifying the bearer token already read the
+// scopes, and the PAT self endpoint the pool would otherwise ask does not
+// answer for an OAuth access token at all — so a read_api OAuth token would
+// look like "authority unknown" and be served the full catalog.
+func TestGetOrCreate_UsesScopesTheCallerAlreadyResolved(t *testing.T) {
+	var selfCalls atomic.Int64
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v4/personal_access_tokens/self", func(w http.ResponseWriter, _ *http.Request) {
+		selfCalls.Add(1)
+		w.WriteHeader(http.StatusNotFound)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := testConfig(srv.URL)
+	cfg.IgnoreScopes = false
+	var gotReadOnly bool
+	var gotScopes []string
+	factory := func(_ *gitlabclient.Client, entryCfg *config.ServerConfig) (*mcp.Server, error) {
+		gotReadOnly = entryCfg.ReadOnly
+		gotScopes = append([]string(nil), entryCfg.TokenScopes...)
+		return mcp.NewServer(&mcp.Implementation{Name: "test-server", Version: "0.0.0"}, nil), nil
+	}
+	pool := New(cfg, factory)
+
+	if _, err := pool.GetOrCreateWithScopes("gloas-read", srv.URL, []string{"read_api"}); err != nil {
+		t.Fatalf("GetOrCreateWithScopes() error: %v", err)
+	}
+
+	if !gotReadOnly {
+		t.Error("an entry built from read_api scopes must be read-only")
+	}
+	if len(gotScopes) != 1 || gotScopes[0] != "read_api" {
+		t.Errorf("TokenScopes = %v, want [read_api]", gotScopes)
+	}
+	if n := selfCalls.Load(); n != 0 {
+		t.Errorf("the PAT self endpoint was called %d times; supplied scopes must not be re-detected", n)
+	}
+}
+
 // licenseMux returns a mux that serves /version plus a /license endpoint whose
 // plan depends on the token, so DetectTier can resolve a per-token tier.
 func licenseMux(planForToken func(token string) (status int, plan string)) *http.ServeMux {

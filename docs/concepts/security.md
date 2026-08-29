@@ -118,12 +118,16 @@ A preflight from a trusted origin is now answered directly:
 HTTP/1.1 204 No Content
 Access-Control-Allow-Origin: https://claude.ai
 Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
-Access-Control-Allow-Headers: Authorization, Content-Type, Accept, PRIVATE-TOKEN, GITLAB-URL, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID
+Access-Control-Allow-Headers: Authorization, Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID, Mcp-Method, Mcp-Name, Mcp-Param-Name, Mcp-Param-Uri, Mcp-Param-Cursor
 Access-Control-Max-Age: 86400
 Vary: Origin
 ```
 
-The actual response then carries `Access-Control-Allow-Origin` and `Access-Control-Expose-Headers: Mcp-Session-Id, Mcp-Protocol-Version` — without the latter a browser cannot read either header, since neither is CORS-safelisted.
+The allowed headers follow the deployment rather than being a constant. `Mcp-Method`, `Mcp-Name` and the `Mcp-Param-*` family are **required** by protocol 2026-07-28 — a `POST` without `Mcp-Method` is rejected before any handler runs — so a preflight that omitted them refused the very headers the server then demanded. `PRIVATE-TOKEN` is added only in legacy mode, which is the only mode that reads it, and `GITLAB-URL` only when the header can actually change which instance a request reaches: never when exactly one instance is pinned, always when several are published.
+
+The actual response then carries `Access-Control-Allow-Origin` and `Access-Control-Expose-Headers: Mcp-Session-Id, Mcp-Protocol-Version, WWW-Authenticate, Retry-After` — a browser cannot read any of them otherwise, since none is CORS-safelisted. `WWW-Authenticate` is what makes automatic discovery work at all: without it a cross-origin client receives the `401` but cannot see the `resource_metadata` URL it points at. `Retry-After` is what lets it honor the backoff a `429` or `503` asks for.
+
+An untrusted origin's preflight is passed down rather than answered here, because some routes serve their own — the RFC 9728 metadata document and the server card are public and answer any origin. What it is never charged with is a failed authentication: a preflight carries no credential by definition, so counting one would let ten routine browser questions lock that address out of the endpoint.
 
 ### Do not let a reverse proxy answer CORS as well
 
@@ -225,7 +229,7 @@ When running with `--auth-mode=oauth`, the server validates every request's Bear
 - **[RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata** — The `/.well-known/oauth-protected-resource` endpoint advertises the GitLab authorization server URL, enabling compliant OAuth clients to discover the token issuer
 - **PKCE** — The OAuth 2.1 flow uses Proof Key for Code Exchange (PKCE) to protect against authorization code interception attacks. MCP clients generate a code verifier/challenge pair for each authorization request
 - **Cache eviction** — A background goroutine runs every 30 seconds to clean up expired entries. The cache is bounded by TTL, not by size
-- **Least-privilege scope** — the deployment demands `read_api` under `--read-only` or `--safe-mode` and `api` otherwise, advertises that in the metadata's `scopes_supported`, and refuses a token without it. An `api` token satisfies a `read_api` requirement, since `api` is a superset
+- **Least-privilege scope** — admission asks only for `read_api`, the least any action needs, and the write check is applied per action instead. A `read_api` token is therefore accepted by a deployment that writes, and is served the read-only tool surface; the only credential refused at the door is one carrying no GitLab API scope at all. The metadata's `scopes_supported` advertises both `api` and `read_api` so a client can deliberately ask for a credential that cannot mutate anything, and a read-only deployment (`--read-only` or `--safe-mode`) advertises `read_api` alone. An `api` token satisfies the minimum everywhere, since `api` is a superset
 
 ### Rejections are cheap, and they are bounded
 

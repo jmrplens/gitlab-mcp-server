@@ -1767,6 +1767,49 @@ func TestValidate_RateLimitBurstRequiredWithRPS(t *testing.T) {
 	}
 }
 
+// TestConfig_InstanceURLs_DerivesTheListFromTheSingleURL pins the invariant
+// that keeps the two instance fields from disagreeing.
+//
+// GitLabURLs is the full list and GitLabURL its first entry, but only the flag
+// layer fills both. Every other constructor sets GitLabURL alone, and reading
+// the slice directly there yields "no instance fixed" — which resolves to the
+// public GitLab and sends the request to an instance nobody configured. That
+// is not hypothetical: it broke an HTTP-mode test the moment the request gate
+// started reading the list.
+func TestConfig_InstanceURLs_DerivesTheListFromTheSingleURL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		cfg  *Config
+		want []string
+	}{
+		{name: "nil config", cfg: nil},
+		{name: "nothing configured", cfg: &Config{}},
+		{
+			name: "only the single URL is set",
+			cfg:  &Config{GitLabURL: "https://gitlab.example.com"},
+			want: []string{"https://gitlab.example.com"},
+		},
+		{
+			name: "the list wins when both are set",
+			cfg: &Config{
+				GitLabURL:  "https://gitlab.com",
+				GitLabURLs: []string{"https://gitlab.com", "https://gitlab.example.com"},
+			},
+			want: []string{"https://gitlab.com", "https://gitlab.example.com"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := tt.cfg.InstanceURLs(); !slices.Equal(got, tt.want) {
+				t.Errorf("InstanceURLs() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestConfigEnterprise_NilReceivers verifies the nil-receiver guards of
 // Config.Enterprise and ServerConfig.Enterprise return false instead of
 // panicking, so callers can probe unset configurations safely.

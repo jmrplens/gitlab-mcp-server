@@ -103,6 +103,26 @@ const (
 	DefaultToolSurface = ToolSurfaceDynamic
 )
 
+// DefaultSocketMode is the permission mode a unix listening socket is created
+// with: owner and group may connect, nobody else. A reverse proxy therefore
+// reaches the server by sharing a group with it, which is the grant an
+// operator makes deliberately — 0666 would let every local account reach an
+// endpoint whose whole point is that it is not exposed.
+const DefaultSocketMode os.FileMode = 0o660
+
+// Authentication modes select how HTTP mode authenticates a request.
+const (
+	// AuthModeLegacy accepts a GitLab personal access token supplied per
+	// request, in either the PRIVATE-TOKEN header or Authorization: Bearer.
+	AuthModeLegacy = "legacy"
+	// AuthModeOAuth accepts only Authorization: Bearer, verified against the
+	// GitLab instance, and advertises discovery through RFC 9728.
+	AuthModeOAuth = "oauth"
+	// DefaultAuthMode preserves the static-token behavior for deployments
+	// that set no mode at all.
+	DefaultAuthMode = AuthModeLegacy
+)
+
 // Capability surface modes select which non-tool MCP capabilities are exposed.
 const (
 	// CapabilitySurfaceFull exposes the current resource and prompt catalog.
@@ -115,7 +135,17 @@ const (
 
 // Config holds all configuration values for the MCP server.
 type Config struct {
-	GitLabURL         string
+	GitLabURL string
+	// GitLabURLs is the full set of instances an HTTP deployment publishes,
+	// in the order they were configured; GitLabURL is its first entry.
+	//
+	// More than one turns the per-request GITLAB-URL header from a free
+	// choice into a selection among published instances, which is what makes
+	// it safe in oauth mode: the server validates the bearer token against
+	// the instance it is about to use, so a caller naming a host of their own
+	// would be handed the token. Empty or single-valued behaves exactly as
+	// GitLabURL alone always has.
+	GitLabURLs        []string
 	GitLabToken       string
 	SkipTLSVerify     bool
 	DisableRetries    bool // Disable GitLab client retries for unit tests.
@@ -160,6 +190,16 @@ type Config struct {
 	// validation (HTTP mode only).
 	MaxRequestBodyBytes int64
 
+	// TLSCertFile and TLSKeyFile enable TLS on the listener itself, for a
+	// deployment where the proxy does not share a machine with the server
+	// and the hop between them crosses a network. They are set together or
+	// not at all (HTTP mode only).
+	TLSCertFile string
+	TLSKeyFile  string
+	// SocketMode is the permission bits applied to a unix socket named by
+	// the listen address. 0 means the default, [DefaultSocketMode].
+	SocketMode os.FileMode
+
 	AutoUpdate         string        // Auto-update mode: "true" (auto), "check" (log-only), "false" (disabled)
 	AutoUpdateRepo     string        // GitLab project path for update checks
 	AutoUpdateInterval time.Duration // How often to check for updates (HTTP mode)
@@ -192,6 +232,27 @@ type Config struct {
 	// shape of the `params` object. Allowed values: "opaque" (default),
 	// "compact", "full". See [DefaultMetaParamSchema] and constants.
 	MetaParamSchema string
+}
+
+// InstanceURLs returns the GitLab instances this configuration publishes.
+//
+// GitLabURLs is the full list and GitLabURL its first entry, but only the
+// flag layer fills both. Every other constructor — a test, a stdio load, any
+// caller that predates the list — sets GitLabURL alone, and reading the slice
+// directly there yields "no instance fixed", which resolves to the public
+// GitLab and sends the request somewhere nobody asked for. Deriving one from
+// the other here means the two cannot disagree.
+func (c *Config) InstanceURLs() []string {
+	if c == nil {
+		return nil
+	}
+	if len(c.GitLabURLs) > 0 {
+		return c.GitLabURLs
+	}
+	if c.GitLabURL == "" {
+		return nil
+	}
+	return []string{c.GitLabURL}
 }
 
 // Enterprise reports whether the resolved tier is an Enterprise (Premium or
@@ -617,10 +678,10 @@ func (c *Config) validateLimits() error {
 }
 
 func (c *Config) validateModeEnums() error {
-	if c.AuthMode != "" && c.AuthMode != "legacy" && c.AuthMode != "oauth" {
+	if c.AuthMode != "" && c.AuthMode != AuthModeLegacy && c.AuthMode != AuthModeOAuth {
 		return fmt.Errorf("AUTH_MODE must be 'legacy' or 'oauth' (got %q)", c.AuthMode)
 	}
-	if c.AuthMode == "oauth" {
+	if c.AuthMode == AuthModeOAuth {
 		if err := validatePublicURL(c.PublicURL); err != nil {
 			return err
 		}

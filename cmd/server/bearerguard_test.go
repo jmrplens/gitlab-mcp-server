@@ -26,11 +26,12 @@ const testMetadataURL = "https://mcp.example.com/.well-known/oauth-protected-res
 // live rejection and limiter state the test can inspect afterwards.
 func newTestGuard(verify auth.TokenVerifier) *bearerGuard {
 	return &bearerGuard{
-		verify:        verify,
-		rejected:      oauth.NewRejectedTokens(16, time.Minute),
-		limiter:       serverpool.NewAuthRateLimiter(3, time.Minute),
-		metadataURL:   testMetadataURL,
-		requiredScope: oauth.ScopeAPI,
+		verify:          verify,
+		rejected:        oauth.NewRejectedTokens(16, time.Minute),
+		limiter:         serverpool.NewAuthRateLimiter(3, time.Minute),
+		metadataURL:     testMetadataURL,
+		minimumScope:    oauth.MinimumScope,
+		advertisedScope: oauth.ScopeAPI,
 	}
 }
 
@@ -253,37 +254,97 @@ func TestBearerGuard_UnclassifiedError_IsTreatedAsUpstream(t *testing.T) {
 	if failure == nil || failure.status != http.StatusServiceUnavailable {
 		t.Fatalf("want 503, got %+v", failure)
 	}
-	if g.rejected.Contains("gloas-good") {
+	if g.rejected.Contains("", "gloas-good") {
 		t.Error("an unclassified failure must not be cached as a rejection")
 	}
 }
 
-// TestBearerGuard_InsufficientScope_IsForbiddenNotUnauthorized verifies that
-// a genuine credential lacking the deployment's scope is refused with 403 and
-// the RFC 6750 insufficient_scope code naming what is required — not 401,
-// which would tell the client its token is bad, and not a limiter charge,
-// which would let a valid token lock its own address out.
-func TestBearerGuard_InsufficientScope_IsForbiddenNotUnauthorized(t *testing.T) {
+// TestBearerGuard_NoAPIScope_IsForbiddenNotUnauthorized verifies that a
+// genuine credential carrying no GitLab API scope at all is refused with 403
+// and the RFC 6750 insufficient_scope code — not 401, which would tell the
+// client its token is bad, and not a limiter charge, which would let a valid
+// token lock its own address out.
+//
+// The bar is "no API scope", not "not the deployment's scope". A read_api
+// token on a deployment that writes is admitted and served a read-only
+// surface; see TestBearerGuard_ReadAPIToken_IsAdmittedByAWritingDeployment.
+func TestBearerGuard_NoAPIScope_IsForbiddenNotUnauthorized(t *testing.T) {
 	t.Parallel()
 
-	g := newTestGuard(okVerifier(oauth.ScopeReadAPI))
-	failure := g.check(guardRequest(t, "gloas-read-only"))
+	g := newTestGuard(okVerifier("read_user"))
+	failure := g.check(guardRequest(t, "gloas-no-api"))
 
 	if failure == nil || failure.status != http.StatusForbidden {
 		t.Fatalf("want 403, got %+v", failure)
 	}
+	// The scope named is the MINIMUM that satisfies the request, not the
+	// deployment's recommended one: RFC 6750 section 3.1 defines the
+	// attribute as the scope necessary to access the resource, and naming
+	// the write scope here contradicted this challenge's own
+	// error_description.
 	challenge := failure.header.Get("WWW-Authenticate")
-	for _, want := range []string{`error="insufficient_scope"`, `scope="` + oauth.ScopeAPI + `"`} {
+	for _, want := range []string{`error="insufficient_scope"`, `scope="` + oauth.MinimumScope + `"`} {
 		if !strings.Contains(challenge, want) {
 			t.Errorf("challenge %q is missing %s", challenge, want)
 		}
 	}
+	if strings.Contains(challenge, `scope="`+oauth.ScopeAPI+`"`) {
+		t.Errorf("challenge %q demands the write scope for a request that only needs %s", challenge, oauth.MinimumScope)
+	}
 	// Six more attempts would exceed the limiter's budget of three if scope
 	// failures were charged to it.
 	for range 6 {
-		if next := g.check(guardRequest(t, "gloas-read-only")); next == nil || next.status != http.StatusForbidden {
+		if next := g.check(guardRequest(t, "gloas-no-api")); next == nil || next.status != http.StatusForbidden {
 			t.Fatalf("a scope failure must not be rate limited, got %+v", next)
 		}
+	}
+}
+
+// TestBearerGuard_ReadAPIToken_IsAdmittedByAWritingDeployment pins the fix for
+// the case that blocked a read-only OAuth application outright: a deployment
+// serving writes advertises api, and used to refuse a read_api token at the
+// door — the rejection landed on initialize, so the client could not even
+// list the tools it was entitled to call.
+//
+// Admission now asks only for what every action needs. What the token may DO
+// is settled per action, by the read-only surface the pool builds for it.
+// TestBearerGuard_PreflightIsNotAnAuthenticationFailure pins that a CORS
+// preflight is let past untouched.
+//
+// The browser strips Authorization from a preflight by definition, so
+// authenticating one counted every browser's routine permission question as a
+// failed authentication: the limiter's budget is ten per minute, so ten
+// preflights locked that address out of the endpoint for something the user
+// never did. The preflight must reach the route instead, which may serve its
+// own answer.
+func TestBearerGuard_PreflightIsNotAnAuthenticationFailure(t *testing.T) {
+	t.Parallel()
+
+	g := newTestGuard(okVerifier(oauth.ScopeAPI))
+
+	for range 15 {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodOptions, "/mcp", http.NoBody)
+		req.Header.Set("Origin", "https://claude.ai")
+		req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+		if failure := g.check(req); failure != nil {
+			t.Fatalf("a preflight must pass the guard untouched, got %+v", failure)
+		}
+	}
+
+	// The budget is intact: a real request from the same address still works.
+	if failure := g.check(guardRequest(t, "gloas-good")); failure != nil {
+		t.Errorf("preflights consumed the authentication budget: %+v", failure)
+	}
+}
+
+func TestBearerGuard_ReadAPIToken_IsAdmittedByAWritingDeployment(t *testing.T) {
+	t.Parallel()
+
+	g := newTestGuard(okVerifier(oauth.ScopeReadAPI))
+	g.advertisedScope = oauth.ScopeAPI
+
+	if failure := g.check(guardRequest(t, "gloas-read-only")); failure != nil {
+		t.Fatalf("a read_api token must be admitted, got %+v", failure)
 	}
 }
 
@@ -302,13 +363,17 @@ func TestBearerGuard_SufficientScope_PassesThrough(t *testing.T) {
 		{"exact scope", oauth.ScopeAPI, []string{oauth.ScopeAPI}},
 		{"read-only deployment with api token", oauth.ScopeReadAPI, []string{oauth.ScopeAPI, oauth.ScopeReadAPI}},
 		{"read-only deployment with read_api token", oauth.ScopeReadAPI, []string{oauth.ScopeReadAPI}},
+		// The case this whole split exists for: a writing deployment
+		// admitting a read_api token, which it used to answer 403 at
+		// initialize. What it may then DO is settled per action.
+		{"writing deployment with read_api token", oauth.MinimumScope, []string{oauth.ScopeReadAPI}},
 		{"no scope required", "", []string{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			g := newTestGuard(okVerifier(tt.granted...))
-			g.requiredScope = tt.required
+			g.minimumScope = tt.required
 			if failure := g.check(guardRequest(t, "gloas-good")); failure != nil {
 				t.Errorf("request should pass, got %+v", failure)
 			}

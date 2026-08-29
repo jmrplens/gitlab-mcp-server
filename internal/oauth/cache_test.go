@@ -10,6 +10,10 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 )
 
+// testInstance is the GitLab instance these cache entries belong to. The
+// cache keys on instance and token together, so every call names one.
+const testInstance = "https://gitlab.example.com"
+
 // TestTokenCache_PutAndGet verifies that a token stored via Put is returned
 // by Get with the same UserID and Extra fields intact.
 func TestTokenCache_PutAndGet(t *testing.T) {
@@ -17,9 +21,9 @@ func TestTokenCache_PutAndGet(t *testing.T) {
 
 	cache := NewTokenCache()
 	info := &auth.TokenInfo{UserID: "42", Extra: map[string]any{"username": "test"}}
-	cache.Put("token-abc", info, 5*time.Minute)
+	cache.Put(testInstance, "token-abc", info, 5*time.Minute)
 
-	got, ok := cache.Get("token-abc")
+	got, ok := cache.Get(testInstance, "token-abc")
 	if !ok {
 		t.Fatal("expected cache hit")
 	}
@@ -38,7 +42,7 @@ func TestTokenCache_GetMiss(t *testing.T) {
 
 	cache := NewTokenCache()
 
-	_, ok := cache.Get("nonexistent")
+	_, ok := cache.Get(testInstance, "nonexistent")
 	if ok {
 		t.Fatal("expected cache miss for nonexistent key")
 	}
@@ -53,9 +57,9 @@ func TestTokenCache_GetExpired(t *testing.T) {
 	info := &auth.TokenInfo{UserID: "42"}
 
 	// Use a TTL of zero so the entry is immediately expired.
-	cache.Put("expired-token", info, 0)
+	cache.Put(testInstance, "expired-token", info, 0)
 
-	_, ok := cache.Get("expired-token")
+	_, ok := cache.Get(testInstance, "expired-token")
 	if ok {
 		t.Fatal("expected cache miss for expired entry")
 	}
@@ -71,13 +75,49 @@ func TestTokenCache_Evict(t *testing.T) {
 	t.Parallel()
 
 	cache := NewTokenCache()
-	cache.Put("to-evict", &auth.TokenInfo{UserID: "1"}, 5*time.Minute)
+	cache.Put(testInstance, "to-evict", &auth.TokenInfo{UserID: "1"}, 5*time.Minute)
 
-	cache.Evict("to-evict")
+	cache.Evict(testInstance, "to-evict")
 
-	_, ok := cache.Get("to-evict")
+	_, ok := cache.Get(testInstance, "to-evict")
 	if ok {
 		t.Fatal("expected cache miss after eviction")
+	}
+}
+
+// TestTokenCache_IsScopedToTheInstance is the reason the key carries the
+// instance URL at all.
+//
+// A token is only ever valid for the GitLab that issued it. A cache keyed by
+// the token alone would let a deployment publishing more than one instance
+// accept a credential verified against the first as a verified identity on
+// the second — the same string, a different account, no upstream call to
+// notice.
+func TestTokenCache_IsScopedToTheInstance(t *testing.T) {
+	t.Parallel()
+
+	const (
+		instanceA = "https://gitlab.com"
+		instanceB = "https://gitlab.internal.example.com"
+		token     = "glpat-same-string-on-both"
+	)
+
+	cache := NewTokenCache()
+	cache.Put(instanceA, token, &auth.TokenInfo{UserID: "1"}, 5*time.Minute)
+
+	if _, ok := cache.Get(instanceB, token); ok {
+		t.Error("a token verified against one instance must not answer for another")
+	}
+	if _, ok := cache.Get(instanceA, token); !ok {
+		t.Error("the instance it was verified against must still hit")
+	}
+
+	// Eviction is scoped the same way, or one instance's revocation would
+	// silently drop another's still-valid entry.
+	cache.Put(instanceB, token, &auth.TokenInfo{UserID: "2"}, 5*time.Minute)
+	cache.Evict(instanceA, token)
+	if _, ok := cache.Get(instanceB, token); !ok {
+		t.Error("evicting one instance's entry must leave the other's alone")
 	}
 }
 
@@ -87,9 +127,9 @@ func TestTokenCache_Cleanup(t *testing.T) {
 	t.Parallel()
 
 	cache := NewTokenCache()
-	cache.Put("expired-1", &auth.TokenInfo{UserID: "1"}, 0)
-	cache.Put("expired-2", &auth.TokenInfo{UserID: "2"}, 0)
-	cache.Put("valid", &auth.TokenInfo{UserID: "3"}, 5*time.Minute)
+	cache.Put(testInstance, "expired-1", &auth.TokenInfo{UserID: "1"}, 0)
+	cache.Put(testInstance, "expired-2", &auth.TokenInfo{UserID: "2"}, 0)
+	cache.Put(testInstance, "valid", &auth.TokenInfo{UserID: "3"}, 5*time.Minute)
 
 	cache.Cleanup()
 
@@ -97,7 +137,7 @@ func TestTokenCache_Cleanup(t *testing.T) {
 		t.Errorf("Len() = %d after cleanup, want 1", cache.Len())
 	}
 
-	_, ok := cache.Get("valid")
+	_, ok := cache.Get(testInstance, "valid")
 	if !ok {
 		t.Fatal("expected valid entry to survive cleanup")
 	}
@@ -109,14 +149,14 @@ func TestTokenCache_SHA256Isolation(t *testing.T) {
 	t.Parallel()
 
 	cache := NewTokenCache()
-	cache.Put("token-A", &auth.TokenInfo{UserID: "100"}, 5*time.Minute)
-	cache.Put("token-B", &auth.TokenInfo{UserID: "200"}, 5*time.Minute)
+	cache.Put(testInstance, "token-A", &auth.TokenInfo{UserID: "100"}, 5*time.Minute)
+	cache.Put(testInstance, "token-B", &auth.TokenInfo{UserID: "200"}, 5*time.Minute)
 
-	gotA, ok := cache.Get("token-A")
+	gotA, ok := cache.Get(testInstance, "token-A")
 	if !ok {
 		t.Fatal("expected hit for token-A")
 	}
-	gotB, ok := cache.Get("token-B")
+	gotB, ok := cache.Get(testInstance, "token-B")
 	if !ok {
 		t.Fatal("expected hit for token-B")
 	}
@@ -132,11 +172,11 @@ func TestTokenCache_Delete(t *testing.T) {
 	t.Parallel()
 
 	cache := NewTokenCache()
-	cache.Put("del-token", &auth.TokenInfo{UserID: "99"}, 5*time.Minute)
+	cache.Put(testInstance, "del-token", &auth.TokenInfo{UserID: "99"}, 5*time.Minute)
 
-	cache.Delete("del-token")
+	cache.Delete(testInstance, "del-token")
 
-	_, ok := cache.Get("del-token")
+	_, ok := cache.Get(testInstance, "del-token")
 	if ok {
 		t.Fatal("expected cache miss after Delete")
 	}
@@ -148,9 +188,9 @@ func TestTokenCache_Len_NonEmpty(t *testing.T) {
 	t.Parallel()
 
 	cache := NewTokenCache()
-	cache.Put("a", &auth.TokenInfo{UserID: "1"}, 5*time.Minute)
-	cache.Put("b", &auth.TokenInfo{UserID: "2"}, 5*time.Minute)
-	cache.Put("c", &auth.TokenInfo{UserID: "3"}, 0) // expired
+	cache.Put(testInstance, "a", &auth.TokenInfo{UserID: "1"}, 5*time.Minute)
+	cache.Put(testInstance, "b", &auth.TokenInfo{UserID: "2"}, 5*time.Minute)
+	cache.Put(testInstance, "c", &auth.TokenInfo{UserID: "3"}, 0) // expired
 
 	if got := cache.Len(); got != 3 {
 		t.Errorf("Len() = %d, want 3 (includes expired)", got)
@@ -181,10 +221,10 @@ func TestTokenCache_ConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			token := "concurrent-token"
 			info := &auth.TokenInfo{UserID: "42"}
-			cache.Put(token, info, 5*time.Minute)
-			cache.Get(token)
+			cache.Put(testInstance, token, info, 5*time.Minute)
+			cache.Get(testInstance, token)
 			if n%3 == 0 {
-				cache.Evict(token)
+				cache.Evict(testInstance, token)
 			}
 			if n%5 == 0 {
 				cache.Cleanup()

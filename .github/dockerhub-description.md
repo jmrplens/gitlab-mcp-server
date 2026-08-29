@@ -44,7 +44,7 @@ Images are multi-arch (`linux/amd64`, `linux/arm64`), published for every releas
 
 ## Try it without installing anything
 
-A public instance runs at **`https://mcp.jmrp.io/gitlab`** — nothing to install, no account beyond your own GitLab token (`PRIVATE-TOKEN` header, sent per request and never stored). It is stateless streamable HTTP: `POST` is the transport, a `GET` answers `405` by design. For private self-managed instances, run the container locally so your credentials never leave your machine.
+A public instance runs at **`https://mcp.jmrp.io/gitlab`** — nothing to install, no account beyond your own GitLab token (`Authorization: Bearer <token>`, sent per request and never stored; it runs in OAuth mode, so a client that speaks the OAuth flow needs no header at all). It is stateless streamable HTTP: `POST` is the transport, a `GET` answers `405` by design. For private self-managed instances, run the container locally so your credentials never leave your machine.
 
 ## Documentation
 

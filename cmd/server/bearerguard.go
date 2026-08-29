@@ -20,7 +20,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -63,10 +62,29 @@ type bearerGuard struct {
 	// metadataURL is the RFC 9728 protected-resource metadata URL every
 	// challenge points at.
 	metadataURL string
-	// requiredScope is the GitLab scope this deployment needs; a token
-	// without it is refused with insufficient_scope rather than executed
-	// and failed later by GitLab.
-	requiredScope string
+	// resolveInstance reports which published GitLab instance a request
+	// selected, or an error when it named one this deployment does not
+	// serve. Nil means "one fixed instance", the single-instance case.
+	//
+	// The guard runs it before verifying, so a request naming an instance
+	// that is not published is refused here rather than several layers later —
+	// and, more to the point, before the bearer token is sent anywhere. The
+	// verifier runs the same resolver again for the URL to verify against;
+	// it is a pure function of the request, so the two cannot disagree.
+	resolveInstance oauth.InstanceResolver
+	// minimumScope is the least a token must carry to be admitted. A token
+	// without it is refused with insufficient_scope rather than executed and
+	// failed later by GitLab.
+	//
+	// It is deliberately not the deployment's own scope. Admission asks for
+	// what every action needs; whether a given action may write is decided
+	// against the surface the pool built for this token's real authority, so
+	// a read_api token gets a read-only catalog instead of a closed door.
+	minimumScope string
+	// advertisedScope is the scope the challenge recommends: the one that
+	// buys this deployment's full surface. A client asking for less is
+	// served less, not refused, so this is guidance rather than the check.
+	advertisedScope string
 }
 
 // middleware rejects what it can classify and passes everything else on.
@@ -82,6 +100,16 @@ func (g *bearerGuard) middleware(next http.Handler) http.Handler {
 
 // check returns the failure that stops the request, or nil to let it through.
 func (g *bearerGuard) check(r *http.Request) *gateFailure {
+	// A CORS preflight carries no credential — the browser strips
+	// Authorization from it by definition — so authenticating one means
+	// counting every browser's routine permission question as a failed
+	// authentication. Ten of them locked that client's address out of the
+	// endpoint entirely, for something the user never did. It is let past
+	// here to be answered by whatever serves the route.
+	if isCORSPreflight(r) {
+		return nil
+	}
+
 	ip := clientIP(r, g.trustedProxyHeader)
 
 	// Ordered before everything else on purpose: a blocked caller must cost
@@ -110,7 +138,26 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 		}
 	}
 
-	if g.rejected != nil && g.rejected.Contains(token) {
+	// The instance this request selected, captured rather than discarded: a
+	// rejection is only meaningful against the GitLab that issued it, so both
+	// the rejected-token cache and the verification are scoped to it.
+	instance := ""
+	if g.resolveInstance != nil {
+		resolved, err := g.resolveInstance(r)
+		if err != nil {
+			// Not charged to the limiter: the caller misaddressed the
+			// request, which says nothing about the credential.
+			slog.Info("request rejected: unpublished GitLab instance requested", "error", err)
+			return &gateFailure{
+				status:  http.StatusForbidden,
+				code:    errCodeForbidden,
+				message: "This deployment does not serve the GitLab instance the GITLAB-URL header names. " + err.Error() + ".",
+			}
+		}
+		instance = resolved
+	}
+
+	if g.rejected != nil && g.rejected.Contains(instance, token) {
 		g.recordFailure(ip)
 		slog.Info("request rejected: token already known to be invalid", "token_suffix", safeTokenSuffix(token))
 		return g.invalidTokenFailure("GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.")
@@ -118,23 +165,33 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 
 	info, err := g.verify(r.Context(), token, r)
 	if err != nil {
-		return g.classify(err, ip, token)
+		return g.classify(err, ip, instance, token)
 	}
 
-	if g.requiredScope != "" && !slices.Contains(info.Scopes, g.requiredScope) {
+	if !oauth.SatisfiesMinimum(info.Scopes, g.minimumScope) {
 		// Not charged to the limiter: the credential is genuine and the
 		// caller is who they say they are. Counting it would let a client
 		// holding a valid but under-scoped token lock its own address out.
-		slog.Info("request rejected: token lacks the required scope",
-			"required", g.requiredScope, "granted", strings.Join(info.Scopes, " "))
+		slog.Info("request rejected: token cannot read the API",
+			"minimum", g.minimumScope, "granted", strings.Join(info.Scopes, " "))
 		return &gateFailure{
-			status:  http.StatusForbidden,
-			code:    errCodeForbidden,
-			message: "This token does not carry the " + g.requiredScope + " scope that this deployment requires. Reauthorize the application requesting it.",
-			header: newHeader(headerWWWAuthenticate, g.challenge(
+			status: http.StatusForbidden,
+			code:   errCodeForbidden,
+			message: "This token carries no GitLab API scope: " + g.minimumScope + " is the least this server can work with. " +
+				"Reauthorize the application requesting it, granting " + g.advertisedScope + " for the full tool surface or " +
+				g.minimumScope + " for a read-only one.",
+			// The scope named here is the MINIMUM that satisfies this
+			// request, not the deployment's recommended one. RFC 6750
+			// section 3.1 defines the attribute as "the scope necessary to
+			// access the protected resource", and the MCP specification
+			// says an insufficient_scope challenge should carry "the
+			// minimum scopes needed for the operation". Advertising the
+			// write scope here contradicted this challenge's own
+			// error_description, which names read_api.
+			header: newHeader(headerWWWAuthenticate, oauthChallenge(
+				g.minimumScope, g.metadataURL,
 				"error", "insufficient_scope",
-				"error_description", "the token lacks the "+g.requiredScope+" scope",
-				"scope", g.requiredScope,
+				"error_description", "the token lacks the "+g.minimumScope+" scope",
 			)),
 		}
 	}
@@ -144,7 +201,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 
 // classify turns a verification error into the response it deserves, keeping
 // "your credential is bad" and "GitLab could not tell us" apart.
-func (g *bearerGuard) classify(err error, ip, token string) *gateFailure {
+func (g *bearerGuard) classify(err error, ip, instance, token string) *gateFailure {
 	if upstream, ok := errors.AsType[*oauth.UpstreamError](err); ok {
 		// Deliberately not charged to the limiter and never cached: the
 		// token was never judged, so counting this would let a GitLab
@@ -164,7 +221,7 @@ func (g *bearerGuard) classify(err error, ip, token string) *gateFailure {
 
 	if errors.Is(err, auth.ErrInvalidToken) {
 		if g.rejected != nil {
-			g.rejected.Record(token)
+			g.rejected.Record(instance, token)
 		}
 		g.recordFailure(ip)
 		slog.Info("request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
@@ -208,7 +265,23 @@ func (g *bearerGuard) recordFailure(ip string) {
 // parameters to the resource_metadata pointer every OAuth-mode challenge
 // carries (RFC 9728 section 5.1). Parameters arrive as alternating key and
 // value; an odd trailing key is ignored rather than emitted half-formed.
+//
+// Every challenge also names the scope this deployment requires (RFC 6750
+// section 3), not only the insufficient_scope one. A client that reads the
+// header and stops there would otherwise have to guess, and the guess that
+// costs it is asking the authorization server for everything it advertises:
+// GitLab answers that with invalid_scope. The protected-resource document
+// says the same thing in scopes_supported, but a client is not obliged to
+// fetch it before it authorizes.
 func (g *bearerGuard) challenge(params ...string) string {
+	return oauthChallenge(g.advertisedScope, g.metadataURL, params...)
+}
+
+// oauthChallenge builds an OAuth-mode WWW-Authenticate value. It is a package
+// function rather than a method so the request gate behind the guard emits the
+// identical shape: two builders would drift, and the parameter a client is
+// most likely to act on is the one a rarely-exercised path would forget.
+func oauthChallenge(advertisedScope, metadataURL string, params ...string) string {
 	var b strings.Builder
 	b.WriteString(`Bearer realm="gitlab-mcp-server"`)
 	for i := 0; i+1 < len(params); i += 2 {
@@ -218,9 +291,14 @@ func (g *bearerGuard) challenge(params ...string) string {
 		b.WriteString(quotedStringEscape(params[i+1]))
 		b.WriteString(`"`)
 	}
-	if g.metadataURL != "" {
+	if advertisedScope != "" {
+		b.WriteString(`, scope="`)
+		b.WriteString(quotedStringEscape(advertisedScope))
+		b.WriteString(`"`)
+	}
+	if metadataURL != "" {
 		b.WriteString(`, resource_metadata="`)
-		b.WriteString(quotedStringEscape(g.metadataURL))
+		b.WriteString(quotedStringEscape(metadataURL))
 		b.WriteString(`"`)
 	}
 	return b.String()
@@ -242,4 +320,11 @@ func quotedStringEscape(s string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
+}
+
+// isCORSPreflight reports whether a request is a CORS preflight rather than a
+// real call: the browser sends OPTIONS with Access-Control-Request-Method and
+// no credential, and expects headers back rather than a resource.
+func isCORSPreflight(r *http.Request) bool {
+	return r.Method == http.MethodOptions && r.Header.Get(headerRequestMethod) != ""
 }

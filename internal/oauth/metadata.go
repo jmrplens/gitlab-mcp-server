@@ -13,18 +13,26 @@ import (
 // Protected Resource Metadata. MCP clients use this endpoint to discover
 // the GitLab authorization server associated with this resource.
 //
-// requiredScope is the GitLab scope this deployment actually needs, which a
-// client reads from scopes_supported to build its authorization request. It
-// is the least privilege that works: a server that can only read asks for
-// read_api rather than making every user grant full api.
+// supportedScopes are the scopes a client may authorize with, most capable
+// first, which it reads from scopes_supported to build its authorization
+// request. A deployment that can write lists api and read_api: the first for
+// a client that wants the whole surface, the second for one that wants a
+// credential which cannot mutate anything and is served a read-only surface
+// accordingly. A deployment that never mutates lists only read_api, so no
+// user is asked to grant more than it can use.
 //
 // The handler is registered at /.well-known/oauth-protected-resource.
-func NewProtectedResourceHandler(resourceURL, gitlabURL, requiredScope string) http.Handler {
+func NewProtectedResourceHandler(resourceURL string, gitlabURLs, supportedScopes []string) http.Handler {
 	metadata := &oauthex.ProtectedResourceMetadata{
-		Resource:               resourceURL,
-		AuthorizationServers:   []string{gitlabURL},
+		Resource: resourceURL,
+		// RFC 9728 defines authorization_servers as an array, so a
+		// deployment publishing several GitLab instances lists them all and
+		// a client picks the one it holds an account on. That is what makes
+		// one endpoint able to serve gitlab.com and a self-managed instance
+		// without a free-form header choosing where tokens get sent.
+		AuthorizationServers:   gitlabURLs,
 		BearerMethodsSupported: []string{"header"},
-		ScopesSupported:        []string{requiredScope},
+		ScopesSupported:        supportedScopes,
 		// RFC 9728 RECOMMENDED fields: a human name and a docs URL let a
 		// directory or consent screen label this resource instead of
 		// showing only its URL.

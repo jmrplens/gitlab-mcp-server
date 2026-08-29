@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
@@ -162,8 +163,12 @@ func (f *gateFailure) write(w http.ResponseWriter) {
 // protocol negotiation. Resolving ahead of the handler lets each condition
 // carry its own status, headers, and machine-readable reason.
 type mcpServerGate struct {
-	pool      *serverpool.ServerPool
-	gitlabURL string
+	pool *serverpool.ServerPool
+	// gitlabURLs are the instances this deployment publishes. Empty means
+	// the caller chooses freely (legacy, unfixed); one is the pinned
+	// instance every request reaches; several make the GITLAB-URL header a
+	// selection among them, refused when it names anything else.
+	gitlabURLs []string
 	// limiter blocks IPs with repeated authentication failures. In OAuth
 	// mode it is the same limiter [bearerGuard] uses, so the two layers
 	// share one per-address budget and a caller cannot earn a fresh
@@ -172,12 +177,35 @@ type mcpServerGate struct {
 	trustedProxyHeader string
 	// challenge is the WWW-Authenticate value sent with a 401.
 	challenge string
+	// oauthMode reports whether this gate sits behind the bearer guard, which
+	// decides whether an RFC 6750 error code belongs in the challenge: legacy
+	// mode's challenge advertises no metadata URL and names no error, since
+	// there is no authorization server for the client to go back to.
+	oauthMode bool
 	// bearerOnly restricts credential extraction to Authorization: Bearer
 	// and ignores PRIVATE-TOKEN. Set in oauth mode: the SDK middleware
 	// verifies the Bearer token, so the gate must execute as that same
 	// identity — never as an unverified PRIVATE-TOKEN a request might also
 	// carry, which ExtractToken would otherwise prefer.
 	bearerOnly bool
+}
+
+// verifiedScopes returns the scopes the OAuth layer already resolved for this
+// request, or nil when nothing upstream resolved any.
+//
+// In oauth mode the SDK's bearer middleware runs before the gate and publishes
+// the verified token info, whose scopes came from GitLab's own introspection.
+// Handing them to the pool is what lets a read_api token be served at all: the
+// PAT self endpoint the pool would otherwise ask does not answer for an OAuth
+// access token, so the entry would be built as if the token's authority were
+// unknown. In legacy mode nothing has verified anything yet and nil is the
+// honest answer — the pool detects the PAT's scopes itself.
+func verifiedScopes(r *http.Request) []string {
+	info := auth.TokenInfoFromContext(r.Context())
+	if info == nil {
+		return nil
+	}
+	return info.Scopes
 }
 
 // extractCredential returns the credential the gate authenticates with,
@@ -228,7 +256,7 @@ func (g *mcpServerGate) withIdentity(ctx context.Context, r *http.Request) conte
 	if g.pool == nil {
 		return ctx
 	}
-	options, err := serverpool.ResolveRequestOptions(r, g.gitlabURL)
+	options, err := serverpool.ResolveRequestOptionsFor(r, g.gitlabURLs)
 	if err != nil {
 		return ctx
 	}
@@ -271,7 +299,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		}
 	}
 
-	options, err := serverpool.ResolveRequestOptions(r, g.gitlabURL)
+	options, err := serverpool.ResolveRequestOptionsFor(r, g.gitlabURLs)
 	if err != nil {
 		slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
 		return nil, &gateFailure{
@@ -282,7 +310,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	}
 	logIgnoredRequestOptions(token, options)
 
-	server, err := g.pool.GetOrCreate(token, options.GitLabURL)
+	server, err := g.pool.GetOrCreateWithScopes(token, options.GitLabURL, verifiedScopes(r))
 	if errors.Is(err, serverpool.ErrInvalidCredential) {
 		// GitLab itself rejected the token, so this is an authentication
 		// failure in the full sense: 401, and it does count against the
@@ -296,7 +324,11 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,
 			message: "GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.",
-			header:  newHeader("WWW-Authenticate", g.challenge),
+			// Same verdict as the bearer guard's, so it carries the same RFC
+			// 6750 error code. Without it a client cannot tell this apart
+			// from "you sent no credential", and the two call for different
+			// actions: reauthorize versus authorize.
+			header: newHeader("WWW-Authenticate", g.invalidTokenChallenge()),
 		}
 	}
 	if err != nil {
@@ -337,4 +369,18 @@ func capitalizeFirst(s string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// invalidTokenChallenge is the gate's challenge for a credential GitLab
+// refused, carrying the RFC 6750 error code that verdict deserves.
+//
+// The bearer guard emits error="invalid_token" for the identical judgement;
+// the gate reaches this only for a pool rejection the guard could not see, and
+// answering the same verdict two different ways leaves a client unable to tell
+// "reauthorize" from "you sent nothing".
+func (g *mcpServerGate) invalidTokenChallenge() string {
+	if !g.oauthMode {
+		return g.challenge
+	}
+	return g.challenge + `, error="invalid_token", error_description="the access token is expired, revoked, or not valid for this GitLab instance"`
 }

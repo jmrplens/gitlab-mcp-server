@@ -93,7 +93,11 @@ The three types differ only in who owns and can revoke the application — the O
 ### Scopes: pick `api`, avoid `mcp`
 
 - **`api`** — what this server needs. Every action it exposes is a REST v4 or GraphQL call made with the user's token.
-- **`read_api`** — the right choice for a deployment that cannot write. The server asks for it rather than `api` whenever `--read-only` or `--safe-mode` is set, and advertises it in the RFC 9728 `scopes_supported` field, so a client that follows discovery requests exactly the privilege the deployment can use. A token granted `api` is accepted everywhere `read_api` is required, since `api` is a superset; the reverse is not true, and a `read_api` token on a writable deployment is refused with `403 insufficient scope` rather than failing later on the first write.
+- **`read_api`** — the right choice for any client that should not be able to change anything: a browser-based inspector, a dashboard, a read-only integration. **A `read_api` token is accepted by every deployment, including one that serves writes**, and is served a read-only tool surface — the same catalog `--read-only` projects, with the mutating actions absent. The write check is per action, not per deployment.
+
+  A deployment that can never write (`--read-only` or `--safe-mode`) asks for `read_api` in its challenge and advertises only that scope, so no user is made to grant more than the server can use. One that can write advertises `api` first and lists both in the RFC 9728 `scopes_supported` field, so a client chooses how much authority to hand over.
+
+  A token granted `api` is accepted everywhere `read_api` is, since `api` is a superset. The only credential refused at the door is one carrying **no** GitLab API scope at all — a `read_user` token, say — which gets `403 insufficient_scope`.
 - **`mcp`** — do **not** pick this one. Despite the name it is scoped to *GitLab's own built-in MCP server*, and a credential minted for it grants no general REST or GraphQL access, so every action here would fail. See [Dynamic Client Registration and the `mcp` scope](#dynamic-client-registration-and-the-mcp-scope).
 
 > **Device authorization grant**: leave the checkbox unchecked. No MCP client uses RFC 8628 — the MCP authorization flow is authorization code + PKCE with a browser redirect — and enabling an unused grant only adds device-code phishing surface. It can be enabled later without recreating the app.
@@ -159,7 +163,7 @@ Expected output:
   "resource": "http://localhost:8080/mcp",
   "authorization_servers": ["https://gitlab.example.com"],
   "bearer_methods_supported": ["header"],
-  "scopes_supported": ["api"]
+  "scopes_supported": ["api", "read_api"]
 }
 ```
 
@@ -197,7 +201,9 @@ HTTP/1.1 401 Unauthorized
 WWW-Authenticate: Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource/gitlab", scope="api"
 ```
 
-The `scope` hint tells well-behaved clients which scope to request — clients that instead ask for every scope the authorization server advertises get rejected by GitLab with `invalid_scope`.
+The `scope` hint tells well-behaved clients which scope to request — clients that instead ask for every scope the authorization server advertises get rejected by GitLab with `invalid_scope`. It is a recommendation, not the admission bar: it names the scope that buys the deployment's **full** surface, while a client that deliberately asks for `read_api` is admitted and served the read-only surface.
+
+Every challenge carries it, not only the `insufficient_scope` one, so a client that reads the header and never fetches the metadata document still knows what to ask for.
 
 ---
 

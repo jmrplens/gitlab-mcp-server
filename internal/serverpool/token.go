@@ -12,6 +12,12 @@ import (
 // RequestOptionGitLabURL identifies the per-request GitLab URL header option.
 const RequestOptionGitLabURL = "GITLAB-URL"
 
+// RequestOptionPrivateToken names the GitLab-standard credential header that
+// legacy mode accepts alongside Authorization: Bearer. It is exported so the
+// CORS layer advertises exactly the header this package reads, rather than a
+// second copy of the string that could drift from it.
+const RequestOptionPrivateToken = "PRIVATE-TOKEN"
+
 // requestOptionAlias maps one canonical server-managed option name to all
 // accepted HTTP header spellings for compatibility diagnostics.
 type requestOptionAlias struct {
@@ -83,7 +89,7 @@ func (o RequestOptions) HasDeprecatedOptions() bool {
 //
 // Returns the token string, or empty string if no token is found.
 func ExtractToken(r *http.Request) string {
-	if token := r.Header.Get("PRIVATE-TOKEN"); token != "" {
+	if token := r.Header.Get(RequestOptionPrivateToken); token != "" {
 		return token
 	}
 
@@ -134,22 +140,64 @@ func ExtractGitLabURL(r *http.Request, defaultURL string) (string, error) {
 // default so HTTP clients may omit the URL entirely. Effective URLs are
 // normalized so equivalent values hash to the same server-pool session key.
 func ResolveRequestOptions(r *http.Request, defaultURL string) (RequestOptions, error) {
+	if strings.TrimSpace(defaultURL) == "" {
+		return ResolveRequestOptionsFor(r, nil)
+	}
+	return ResolveRequestOptionsFor(r, []string{defaultURL})
+}
+
+// ResolveRequestOptionsFor is [ResolveRequestOptions] for a deployment that
+// published more than one instance.
+//
+// The three cases are distinct on purpose:
+//
+//   - No allowed instances: the header selects freely, falling back to the
+//     public GitLab. This is the unfixed legacy deployment.
+//   - Exactly one: it is authoritative and the header is ignored, which is
+//     what a deployment pinning --gitlab-url has always done.
+//   - More than one: the header selects among them, and a value that is not
+//     on the list is refused rather than ignored. Silently serving the first
+//     instance would answer a question the client did not ask, with someone
+//     else's data.
+//
+// An allow-list is what makes a per-request instance safe in oauth mode. The
+// server validates the bearer token against the instance it is about to use,
+// so a free-form header would let a caller name a host of their own and be
+// handed the token — the list keeps the choice with the operator while still
+// letting one deployment serve gitlab.com and a self-managed instance.
+func ResolveRequestOptionsFor(r *http.Request, allowed []string) (RequestOptions, error) {
 	header := strings.TrimSpace(r.Header.Get(RequestOptionGitLabURL))
-	trimmedDefault := strings.TrimSpace(defaultURL)
 	ignoredOptions, deprecatedOptions := ignoredServerManagedOptions(r)
 
-	if trimmedDefault != "" {
-		normalizedDefault, err := normalizeGitLabURL(trimmedDefault)
-		if err != nil {
-			return RequestOptions{}, err
-		}
+	normalizedAllowed, err := NormalizeGitLabURLs(allowed)
+	if err != nil {
+		return RequestOptions{}, err
+	}
 
-		options := RequestOptions{GitLabURL: normalizedDefault, IgnoredOptions: ignoredOptions, DeprecatedOptions: deprecatedOptions}
+	if len(normalizedAllowed) == 1 {
+		options := RequestOptions{GitLabURL: normalizedAllowed[0], IgnoredOptions: ignoredOptions, DeprecatedOptions: deprecatedOptions}
 		if header == "" {
 			return options, nil
 		}
 		options.IgnoredOptions = appendOptionName(options.IgnoredOptions, RequestOptionGitLabURL)
 		return options, nil
+	}
+
+	if len(normalizedAllowed) > 1 {
+		if header == "" {
+			// The first published instance is the deployment's default, so a
+			// client that does not care which instance it reaches keeps
+			// working unchanged.
+			return RequestOptions{GitLabURL: normalizedAllowed[0], IgnoredOptions: ignoredOptions, DeprecatedOptions: deprecatedOptions}, nil
+		}
+		normalizedHeader, headerErr := normalizeGitLabURL(header)
+		if headerErr != nil {
+			return RequestOptions{}, headerErr
+		}
+		if !slices.Contains(normalizedAllowed, normalizedHeader) {
+			return RequestOptions{}, &DisallowedGitLabURLError{Allowed: normalizedAllowed}
+		}
+		return RequestOptions{GitLabURL: normalizedHeader, IgnoredOptions: ignoredOptions, DeprecatedOptions: deprecatedOptions}, nil
 	}
 
 	if header == "" {
@@ -213,6 +261,46 @@ func appendOptionName(options []string, name string) []string {
 	return options
 }
 
+// NormalizeGitLabURLs canonicalizes a list of GitLab base URLs, dropping
+// blanks and duplicates while preserving order. The first entry is the
+// deployment's default instance, so order is meaningful and is not sorted.
+func NormalizeGitLabURLs(raw []string) ([]string, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	normalized := make([]string, 0, len(raw))
+	for _, candidate := range raw {
+		trimmed := strings.TrimSpace(candidate)
+		if trimmed == "" {
+			continue
+		}
+		canonical, err := normalizeGitLabURL(trimmed)
+		if err != nil {
+			return nil, err
+		}
+		if !slices.Contains(normalized, canonical) {
+			normalized = append(normalized, canonical)
+		}
+	}
+	return normalized, nil
+}
+
+// DisallowedGitLabURLError reports a GITLAB-URL header naming an instance the
+// deployment does not publish.
+//
+// It names the allowed instances in its message: they are already public in
+// the deployment's RFC 9728 metadata, and a client that guessed wrong needs
+// to know what it may ask for. The rejected value is deliberately not echoed
+// — it is caller-controlled text.
+type DisallowedGitLabURLError struct {
+	Allowed []string
+}
+
+func (e *DisallowedGitLabURLError) Error() string {
+	return "the GITLAB-URL header names an instance this deployment does not serve; allowed: " +
+		strings.Join(e.Allowed, ", ")
+}
+
 // normalizeGitLabURL validates and canonicalizes a GitLab base URL. The
 // returned string has trailing slashes stripped, no credentials, no query or
 // fragment, and a guaranteed http/https scheme with non-empty host.
@@ -237,7 +325,40 @@ func normalizeGitLabURL(raw string) (string, error) {
 		return "", &InvalidGitLabURLError{URL: raw, Reason: "fragments are not allowed"}
 	}
 	u.Path = strings.TrimRight(u.Path, "/")
+	// RFC 3986 section 6.2.2: scheme and host are case-insensitive, and an
+	// explicit default port is equivalent to none. url.Parse already lowers
+	// the scheme; the host and the port are on us.
+	//
+	// This is not cosmetic in either place it lands. The allow-list compares
+	// canonical strings, so without it "https://GitLab.com" and
+	// "https://gitlab.com:443" would be refused as instances the deployment
+	// does not publish — while naming the very instance it does. And the pool
+	// keys on this value, so the same instance spelled two ways would build
+	// two entries, doubling the upstream probes and the memory for one
+	// credential.
+	u.Host = canonicalHost(u.Scheme, u.Host)
 	return u.String(), nil
+}
+
+// canonicalHost lowercases the host and drops a port that is the scheme's
+// default, so equivalent spellings of one instance compare equal.
+func canonicalHost(scheme, host string) string {
+	lowered := strings.ToLower(host)
+	var defaultPort string
+	switch scheme {
+	case "https":
+		defaultPort = ":443"
+	case "http":
+		defaultPort = ":80"
+	default:
+		return lowered
+	}
+	// Only a trailing :port is a port. An IPv6 literal keeps its brackets,
+	// and "[::1]:443" still ends with the port, so the suffix test holds.
+	if trimmed, found := strings.CutSuffix(lowered, defaultPort); found {
+		return trimmed
+	}
+	return lowered
 }
 
 // InvalidGitLabURLError is returned when the GITLAB-URL header contains an invalid URL.

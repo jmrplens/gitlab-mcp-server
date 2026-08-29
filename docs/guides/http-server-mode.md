@@ -45,9 +45,11 @@ gitlab-mcp-server --http \
 | Flag                       | Default        | Description                                                                                                                                                                                                                                    |
 | -------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--http`                   | _(off)_        | Enable HTTP transport mode                                                                                                                                                                                                                     |
-| `--gitlab-url`             | _(optional)_   | Fixed GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request                                                                                                                                                     |
-| `--http-addr`              | `:8080`        | HTTP listen address (host:port)                                                                                                                                                                                                                |
-| `--skip-tls-verify`        | `false`        | Skip TLS certificate verification for self-signed certs                                                                                                                                                                                        |
+| `--gitlab-url`             | _(optional)_   | GitLab instance URL. Omit it to require each client to send `GITLAB-URL` per request. Repeatable (or comma-separated) to publish several instances; see [Publishing more than one instance](#publishing-more-than-one-instance)                |
+| `--http-addr`              | `:8080`        | Listen address. `host:port` binds TCP; a path (e.g. `/run/gitlab-mcp.sock`) binds a unix socket instead                                                                                                                                        |
+| `--http-socket-mode`       | `0660`         | Permission mode, in octal, for a unix socket named by `--http-addr`                                                                                                                                                                            |
+| `--tls-cert` / `--tls-key` | _(empty)_      | PEM certificate and key. Serves HTTPS on the listener itself, for a proxy that does not share the machine. Both or neither                                                                                                                     |
+| `--skip-tls-verify`        | `false`        | Skip TLS certificate verification when calling GitLab (outbound; unrelated to `--tls-cert`)                                                                                                                                                    |
 | `--tool-surface`           | `dynamic`      | Canonical tool catalog selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                                                               |
 | `--meta-tools`             | _(unset)_      | Deprecated compatibility flag. Use `--tool-surface=individual` instead of `--meta-tools=false`                                                                                                                                                 |
 | `--capability-surface`     | `full`         | Resource and prompt selector; see [Tool and capability surface options](#tool-and-capability-surface-options)                                                                                                                                  |
@@ -241,7 +243,30 @@ When the server starts without `--gitlab-url`, clients must specify which GitLab
 GITLAB-URL: https://gitlab.example.com
 ```
 
-When `--gitlab-url` is set, the server always uses the configured URL. If a client still sends `GITLAB-URL`, the header is ignored and logged as a request option overridden by MCP configuration. If both `--gitlab-url` and `GITLAB-URL` are absent, the request is rejected.
+When exactly one instance is pinned with `--gitlab-url`, the server always uses it: a client that still sends `GITLAB-URL` has the header ignored and logged as a request option overridden by MCP configuration. When several are published the header selects among them — see [Publishing more than one instance](#publishing-more-than-one-instance). If both `--gitlab-url` and `GITLAB-URL` are absent, the request is rejected.
+
+### Publishing more than one instance
+
+`--gitlab-url` may be given more than once (or once, comma-separated). The first entry is the deployment's default, and `GITLAB-URL` becomes a choice **among the published instances**:
+
+```bash
+gitlab-mcp-server --http --auth-mode=oauth \
+  --public-url=https://mcp.example.com \
+  --gitlab-url=https://gitlab.com \
+  --gitlab-url=https://gitlab.internal.example.com
+```
+
+| Instances published | No `GITLAB-URL` header | Header naming a published instance | Header naming anything else                       |
+| ------------------- | ---------------------- | ---------------------------------- | ------------------------------------------------- |
+| none                | public `gitlab.com`    | honored                            | honored                                           |
+| one                 | that instance          | ignored                            | ignored                                           |
+| several             | the first              | honored                            | **refused**: `403` in OAuth mode, `400` in legacy |
+
+The two statuses differ because the layers differ: OAuth mode refuses in the bearer guard, before the credential is sent anywhere, which is a permission decision (`403`); legacy mode refuses while resolving the request options, which is a malformed request (`400`). Either way the instance is never contacted.
+
+The refusal is the point. In OAuth mode the server **verifies the bearer token against the instance it is about to use**, so a free-form header would let a caller name a host of their own and be handed the token. An allow-list keeps that choice with the operator: the published instances are listed in the RFC 9728 `authorization_servers` array, so a client discovers which ones it may pick, and a token is verified — and cached — per instance, never across them. A rejection is scoped the same way, so a `401` from one published instance never refuses a valid token on another.
+
+An instance is matched after canonicalization, so `https://GitLab.com`, `https://gitlab.com:443` and `https://gitlab.com/` all name the same published instance (RFC 3986 §6.2.2: scheme and host are case-insensitive and a default port is equivalent to none). Every published instance must be `https` in OAuth mode, not just the first — the bearer token is forwarded to whichever one the request selected.
 
 ### Token Headers
 
@@ -475,6 +500,40 @@ curl -X POST http://localhost:8080/mcp \
   -H "PRIVATE-TOKEN: glpat-your-token" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
+
+## Listening on a unix socket, or on TLS
+
+Behind a reverse proxy on the same machine, the hop between proxy and server is usually described as "just loopback". Under Docker it is not: the path runs `nginx → 127.0.0.1:8821 (docker-proxy) → 172.19.0.2:8080`, and that second leg is a bridge network. There are two ways to make it unreadable, and the cheaper one removes it rather than encrypting it.
+
+### Unix socket (preferred where the proxy shares the machine)
+
+Give `--http-addr` a filesystem path instead of `host:port`:
+
+```bash
+gitlab-mcp-server --http --http-addr=/run/gitlab-mcp/server.sock --gitlab-url=https://gitlab.com
+```
+
+```nginx
+upstream gitlab_mcp {
+    server unix:/run/gitlab-mcp/server.sock;
+}
+```
+
+No bridge, no docker-proxy, no certificate to issue or rotate. A value is read as a path when it contains a path separator, so `:8080` and `127.0.0.1:8080` still bind TCP, and a bare `mcp.sock` is treated as a **hostname** — it is indistinguishable from one, and guessing would silently bind something other than what you wrote.
+
+The socket is created `0660`, so the proxy reaches it by sharing a group with the server; `--http-socket-mode` changes that (octal, e.g. `--http-socket-mode=0600`). A socket left behind by a process that did not shut down cleanly is removed on startup, but only after a connect proves nothing is listening — a live socket is refused rather than stolen, and a path that is not a socket is never deleted.
+
+### TLS on the listener
+
+For a proxy that does **not** share the machine:
+
+```bash
+gitlab-mcp-server --http --http-addr=:8443 --tls-cert=/etc/ssl/mcp.crt --tls-key=/etc/ssl/mcp.key
+```
+
+Both flags or neither: a certificate without its key is a deployment that believes it is encrypting and is not. The pair is loaded at startup, so a wrong path fails there rather than at the first handshake.
+
+**Versions.** TLS 1.2 is the floor, not the ceiling: no maximum is set, so a current client negotiates **TLS 1.3** and 1.2 is only reached by one that cannot go higher. Anything below 1.2 is refused. The floor is 1.2 rather than 1.3 deliberately — this flag exists for a reverse proxy on another machine, and a proxy's `proxy_ssl` stack is not always 1.3-capable. Both properties are pinned by tests that drive the real binary. This implies a private CA and `proxy_ssl_verify on` on the proxy side; where the proxy is local, the socket above is less machinery for the same guarantee.
 
 ## Public Hosted Endpoint
 

@@ -14,7 +14,7 @@ import (
 // returns a valid RFC 9728 Protected Resource Metadata JSON document with
 // the expected resource, authorization server, bearer methods and scopes.
 func TestNewProtectedResourceHandler_ValidResponse(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com", ScopeAPI)
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI})
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -57,15 +57,24 @@ func TestNewProtectedResourceHandler_ValidResponse(t *testing.T) {
 	}
 }
 
-// TestNewProtectedResourceHandler_AdvertisesTheScopeItRequires verifies that
-// scopes_supported carries the scope the deployment was built with rather
-// than a constant. A client reads this field to decide what to ask GitLab
-// for, so a read-only server advertising "api" would make every user grant
-// write access the server can never use.
-func TestNewProtectedResourceHandler_AdvertisesTheScopeItRequires(t *testing.T) {
-	for _, want := range []string{ScopeAPI, ScopeReadAPI} {
-		t.Run(want, func(t *testing.T) {
-			handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com", want)
+// TestNewProtectedResourceHandler_AdvertisesTheScopesItAccepts verifies that
+// scopes_supported carries what the deployment was built with rather than a
+// constant. A client reads this field to decide what to ask GitLab for, so a
+// read-only server advertising "api" would make every user grant write access
+// the server can never use — and a writing server advertising only "api"
+// would leave a client that deliberately wants a read-only credential no
+// documented way to ask for one.
+func TestNewProtectedResourceHandler_AdvertisesTheScopesItAccepts(t *testing.T) {
+	tests := []struct {
+		name string
+		want []string
+	}{
+		{name: "writing deployment offers both", want: []string{ScopeAPI, ScopeReadAPI}},
+		{name: "read-only deployment offers read_api alone", want: []string{ScopeReadAPI}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, tt.want)
 
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", http.NoBody)
 			rec := httptest.NewRecorder()
@@ -76,8 +85,13 @@ func TestNewProtectedResourceHandler_AdvertisesTheScopeItRequires(t *testing.T) 
 				t.Fatalf("failed to decode JSON: %v", err)
 			}
 			scopes, ok := body["scopes_supported"].([]any)
-			if !ok || len(scopes) != 1 || scopes[0] != want {
-				t.Errorf("scopes_supported = %v, want [%q]", body["scopes_supported"], want)
+			if !ok || len(scopes) != len(tt.want) {
+				t.Fatalf("scopes_supported = %v, want %v", body["scopes_supported"], tt.want)
+			}
+			for i, want := range tt.want {
+				if scopes[i] != want {
+					t.Errorf("scopes_supported[%d] = %v, want %q", i, scopes[i], want)
+				}
 			}
 		})
 	}
@@ -87,7 +101,7 @@ func TestNewProtectedResourceHandler_AdvertisesTheScopeItRequires(t *testing.T) 
 // sets Access-Control-Allow-Origin: * so browser-based clients can fetch
 // the metadata document cross-origin.
 func TestNewProtectedResourceHandler_CORSHeaders(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com", ScopeAPI)
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI})
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -101,7 +115,7 @@ func TestNewProtectedResourceHandler_CORSHeaders(t *testing.T) {
 // TestNewProtectedResourceHandler_OptionsPreflightReturns204 verifies that
 // OPTIONS preflight requests receive 204 No Content for CORS compliance.
 func TestNewProtectedResourceHandler_OptionsPreflightReturns204(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com", ScopeAPI)
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI})
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -115,7 +129,7 @@ func TestNewProtectedResourceHandler_OptionsPreflightReturns204(t *testing.T) {
 // TestNewProtectedResourceHandler_PostMethodNotAllowed verifies that POST
 // and other non-GET/OPTIONS methods return 405 Method Not Allowed.
 func TestNewProtectedResourceHandler_PostMethodNotAllowed(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", "https://gitlab.example.com", ScopeAPI)
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI})
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()

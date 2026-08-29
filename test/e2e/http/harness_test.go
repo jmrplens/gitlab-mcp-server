@@ -18,6 +18,7 @@ package httpe2e
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -121,6 +122,20 @@ func freePort(t *testing.T) int {
 type server struct {
 	baseURL string
 	logs    func() string
+	// client reaches this server. It is not always http.DefaultClient: a
+	// server listening on a unix socket needs a dialer that talks to the
+	// path, and one serving TLS needs a root that trusts its certificate.
+	// Both are configurations a deployment can choose, so both must be
+	// reachable from a test.
+	client *http.Client
+}
+
+// httpClient returns the client for this server, defaulting to the shared one.
+func (s *server) httpClient() *http.Client {
+	if s.client != nil {
+		return s.client
+	}
+	return http.DefaultClient
 }
 
 // startServer launches the binary with the given extra flags and environment,
@@ -206,7 +221,7 @@ func waitHealthy(t *testing.T, s *server) {
 		if err != nil {
 			t.Fatalf("building the health request: %v", err)
 		}
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := s.httpClient().Do(req)
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -259,12 +274,22 @@ func (s *server) do(t *testing.T, r request) response {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Accept", acceptHeader)
 		req.Header.Set("MCP-Protocol-Version", protocolVersion)
+		// Protocol 2026-07-28 makes Mcp-Method REQUIRED: the SDK rejects a
+		// POST without it before any handler runs. Without this the harness
+		// could only ever observe rejections, so no test here reached a
+		// successful call — which is how a real 200 path went unexercised.
+		if rpcMethod := jsonRPCMethod(r.body); rpcMethod != "" {
+			req.Header.Set("Mcp-Method", rpcMethod)
+			if name := jsonRPCToolName(r.body); name != "" {
+				req.Header.Set("Mcp-Name", name)
+			}
+		}
 	}
 	for k, v := range r.headers {
 		req.Header.Set(k, v)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient().Do(req)
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
 	}
@@ -275,6 +300,35 @@ func (s *server) do(t *testing.T, r request) response {
 		t.Fatalf("reading the response body: %v", err)
 	}
 	return response{status: resp.StatusCode, header: resp.Header, body: string(raw)}
+}
+
+// jsonRPCMethod reads the "method" out of a JSON-RPC request body so the
+// harness can send the Mcp-Method header a real client sends. A body that is
+// not JSON-RPC yields "", leaving the header unset — which is itself a case
+// some tests want.
+func jsonRPCMethod(body string) string {
+	var msg struct {
+		Method string `json:"method"`
+	}
+	if err := json.Unmarshal([]byte(body), &msg); err != nil {
+		return ""
+	}
+	return msg.Method
+}
+
+// jsonRPCToolName reads params.name out of a tools/call body, which protocol
+// 2026-07-28 also carries in a header.
+func jsonRPCToolName(body string) string {
+	var msg struct {
+		Method string `json:"method"`
+		Params struct {
+			Name string `json:"name"`
+		} `json:"params"`
+	}
+	if err := json.Unmarshal([]byte(body), &msg); err != nil || msg.Method != "tools/call" {
+		return ""
+	}
+	return msg.Params.Name
 }
 
 // mcpPOST is the common case: a tools/list call with the headers a real client
@@ -341,6 +395,79 @@ func startFakeGitLab(t *testing.T, userStatus int, userBody string) *fakeGitLab 
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		// Scope and tier probes hit other paths; answering 404 means
 		// "unavailable", which every caller handles.
+		w.WriteHeader(http.StatusNotFound)
+	})
+
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	return &fakeGitLab{
+		url: srv.URL,
+		calls: func() int {
+			mu.Lock()
+			defer mu.Unlock()
+			return calls
+		},
+	}
+}
+
+// startScopedFakeGitLab serves a GitLab that reports each token's real scopes,
+// which is what the server introspects to decide how much authority a
+// credential carries.
+//
+// startFakeGitLab answers 404 for the introspection endpoints, so every token
+// there looks equally authoritative — which is exactly why the read_api
+// admission could not be tested with it. scopesFor maps a bearer token to the
+// scopes GitLab reports for it; a token it does not know gets 404, the
+// "instance would not say" case.
+func startScopedFakeGitLab(t *testing.T, scopesFor map[string][]string) *fakeGitLab {
+	t.Helper()
+
+	var mu sync.Mutex
+	calls := 0
+
+	bearer := func(r *http.Request) string {
+		value := r.Header.Get("Authorization")
+		if token, ok := strings.CutPrefix(value, "Bearer "); ok {
+			return token
+		}
+		return r.Header.Get("PRIVATE-TOKEN")
+	}
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abcdef"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		calls++
+		mu.Unlock()
+		if _, known := scopesFor[bearer(r)]; !known {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":1,"username":"scoped"}`))
+	})
+	// The PAT introspection endpoint. The server tries this one first, then
+	// /oauth/token/info; either answering is enough.
+	mux.HandleFunc("/api/v4/personal_access_tokens/self", func(w http.ResponseWriter, r *http.Request) {
+		scopes, known := scopesFor[bearer(r)]
+		if !known {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+		body, err := json.Marshal(map[string]any{"id": 1, "scopes": scopes, "active": true})
+		if err != nil {
+			t.Errorf("marshaling the scope response: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 

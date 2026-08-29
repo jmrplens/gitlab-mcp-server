@@ -1,6 +1,8 @@
 package oauth
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"sync"
 	"time"
 )
@@ -42,11 +44,11 @@ func NewRejectedTokens(capacity int, ttl time.Duration) *RejectedTokens {
 // Contains reports whether the token was rejected recently enough to answer
 // from memory. An expired entry is dropped on the way out, so a caller never
 // sees a stale rejection.
-func (r *RejectedTokens) Contains(token string) bool {
+func (r *RejectedTokens) Contains(gitlabURL, token string) bool {
 	if r.max <= 0 || r.ttl <= 0 {
 		return false
 	}
-	key := tokenKey(token)
+	key := rejectedKey(gitlabURL, token)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -67,11 +69,11 @@ func (r *RejectedTokens) Contains(token string) bool {
 // Only a definitive rejection belongs here. An upstream failure — a timeout,
 // a 5xx, a 429 — says nothing about the credential, and caching one would
 // lock out a valid token for the whole TTL over a transient outage.
-func (r *RejectedTokens) Record(token string) {
+func (r *RejectedTokens) Record(gitlabURL, token string) {
 	if r.max <= 0 || r.ttl <= 0 {
 		return
 	}
-	key := tokenKey(token)
+	key := rejectedKey(gitlabURL, token)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -131,4 +133,19 @@ func (r *RejectedTokens) Cleanup() {
 			delete(r.entries, key)
 		}
 	}
+}
+
+// rejectedKey returns the SHA-256 hex digest of an instance URL and a raw
+// token, matching [tokenKey].
+//
+// A rejection is scoped to the instance that issued it because a rejection is
+// an admission DECISION, not merely a cached lookup: [RejectedTokens.Contains]
+// makes the guard answer 401 without asking GitLab at all. A token GitLab.com
+// refused says nothing about the same string on a self-managed instance — and
+// on a deployment publishing both, keying by the token alone would refuse a
+// perfectly valid credential for the whole TTL, with no upstream call able to
+// correct it.
+func rejectedKey(gitlabURL, token string) string {
+	h := sha256.Sum256([]byte(gitlabURL + "\x00" + token))
+	return hex.EncodeToString(h[:])
 }

@@ -32,6 +32,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -151,8 +152,14 @@ const (
 // without requiring a GITLAB_TOKEN — each client must provide its own token
 // via PRIVATE-TOKEN header or Authorization: Bearer.
 type httpConfig struct {
-	addr          string
-	gitlabURL     string
+	addr string
+	// gitlabURL is the deployment's default instance: the first entry of
+	// gitlabURLs, kept as its own field because every consumer that only
+	// ever handled one instance still reads exactly that.
+	gitlabURL string
+	// gitlabURLs is every instance --gitlab-url published, in order. More
+	// than one turns the GITLAB-URL header into a choice among them.
+	gitlabURLs    repeatedFlag
 	skipTLSVerify bool
 	metaTools     bool
 	metaToolsSet  bool
@@ -189,6 +196,13 @@ type httpConfig struct {
 	stateless           bool
 	jsonResponse        bool
 	maxRequestBodyBytes int64
+	tlsCert             string
+	tlsKey              string
+	// socketMode is the raw --http-socket-mode text; socketModeParsed is
+	// what runHTTP resolved it to, so the octal is rejected at startup with
+	// the flag's name rather than deep inside the listener.
+	socketMode       string
+	socketModeParsed os.FileMode
 }
 
 // HTTP server timeout defaults. These bound the standard library [http.Server]
@@ -244,7 +258,7 @@ func main() {
 	flag.StringVar(&toolSearch, "tool-search", "", "Search tools by name/description and exit")
 	flag.BoolVar(&useHTTP, "http", false, "Run MCP server in HTTP mode")
 	flag.StringVar(&hcfg.addr, "http-addr", ":8080", "HTTP listen address")
-	flag.StringVar(&hcfg.gitlabURL, "gitlab-url", "", "Fixed GitLab instance URL; omit to require per-request GITLAB-URL header")
+	flag.Var(&hcfg.gitlabURLs, "gitlab-url", "GitLab instance URL; omit to require a per-request GITLAB-URL header. Repeat (or comma-separate) to publish several instances, the first being the default; a GITLAB-URL header is then honored only if it names one of them")
 	flag.BoolVar(&hcfg.skipTLSVerify, "skip-tls-verify", false, "Skip TLS certificate verification")
 	flag.BoolVar(&hcfg.metaTools, "meta-tools", false, "Legacy boolean tool selector; prefer --tool-surface")
 	flag.StringVar(&hcfg.toolSurface, "tool-surface", "", "Tool surface: dynamic (default), meta, individual")
@@ -274,6 +288,9 @@ func main() {
 	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so --session-timeout is the effective lifetime; set a positive duration to recycle idle connections sooner")
 	flag.BoolVar(&hcfg.stateless, "stateless", true, "Stateless streamable HTTP (default; required for MCP protocol 2026-07-28 over HTTP): no Mcp-Session-Id tracking, each POST is self-contained, GET/DELETE return 405. Use -stateless=false to restore legacy stateful sessions")
 	flag.BoolVar(&hcfg.jsonResponse, "json-response", false, "Return application/json responses instead of text/event-stream (SSE)")
+	flag.StringVar(&hcfg.tlsCert, "tls-cert", "", "PEM certificate file; serves HTTPS on the listener itself (requires --tls-key)")
+	flag.StringVar(&hcfg.tlsKey, "tls-key", "", "PEM private key file matching --tls-cert")
+	flag.StringVar(&hcfg.socketMode, "http-socket-mode", "", "Permission mode for a unix socket named by --http-addr, in octal (default 0660)")
 	flag.Int64Var(&hcfg.maxRequestBodyBytes, "max-request-body-bytes", 0, "Maximum streamable HTTP request body size in bytes; 0 uses the SDK default (4 MiB)")
 	flag.Parse()
 	hcfg.setFlags = make(map[string]bool)
@@ -318,7 +335,10 @@ func main() {
 		return
 	}
 
-	if forceSetup || (!useHTTP && !showHelp && !showVersion && wizard.IsInteractiveTerminal()) {
+	autoWizard := !useHTTP && !showHelp && !showVersion &&
+		wizard.IsInteractiveTerminal() &&
+		os.Getenv("GITLAB_TOKEN") == "" && os.Getenv("GITLAB_URL") == ""
+	if forceSetup || autoWizard {
 		if err := wizard.Run(version, wizard.UIMode(setupMode), os.Stdin, os.Stdout); err != nil {
 			slog.Error("setup wizard failed", "error", err)
 			os.Exit(1)
@@ -380,9 +400,12 @@ FLAGS
   -setup-mode string        Setup UI mode: auto|web|tui|cli (default "auto")
   -tool-search string       Search tools by name/description and exit
   -http                     Run in HTTP transport mode (default: stdio)
-  -http-addr string         HTTP listen address (default ":8080")
-  -gitlab-url string        Fixed GitLab URL; omit to require per-request GITLAB-URL header
-  -skip-tls-verify          Skip TLS certificate verification (default false)
+  -http-addr string         Listen address: host:port, or a path to bind a unix socket (default ":8080")
+  -http-socket-mode str     Octal permission mode for a unix socket (default "0660")
+  -tls-cert string          PEM certificate; serves HTTPS on the listener (requires -tls-key)
+  -tls-key string           PEM private key matching -tls-cert
+  -gitlab-url string        GitLab URL; omit to require per-request GITLAB-URL header. Repeatable to publish several instances
+  -skip-tls-verify          Skip TLS certificate verification when calling GitLab (default false)
   -meta-tools               Legacy boolean tool selector; prefer -tool-surface
   -tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
   -capability-surface str   Capability surface: full|minimal (default full)
@@ -541,6 +564,9 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	if hcfg.httpIdleTimeout < 0 {
 		return fmt.Errorf("invalid --http-idle-timeout %s: must be non-negative", hcfg.httpIdleTimeout)
 	}
+	if err := parseSocketMode(hcfg); err != nil {
+		return err
+	}
 
 	toolSurface, metaTools, err := config.ParseToolSurface(hcfg.toolSurface, legacyMetaToolsFlagValue(hcfg))
 	if err != nil {
@@ -563,11 +589,49 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	return serveHTTP(ctx, cfg, hcfg.addr, hcfg.httpIdleTimeout)
 }
 
+// normalizeFixedGitLabURL canonicalizes every published instance and elects
+// the first as the deployment default.
+//
+// One instance is the shape this has always had; the list is what lets a
+// single oauth deployment serve gitlab.com and a self-managed instance at
+// once without reopening the hole a free-form GITLAB-URL header would be —
+// see [serverpool.ResolveRequestOptionsFor].
 func normalizeFixedGitLabURL(hcfg *httpConfig) error {
-	if hcfg.gitlabURL == "" {
+	// Both fields are inputs, not just outputs. The flag parser fills the
+	// list, but a caller that predates it — a test, anything constructing
+	// httpConfig directly — sets the singular field, and reading only the
+	// list there silently DISCARDS the URL along with its validation: an
+	// unusable --gitlab-url stopped being rejected and the server started
+	// anyway, serving nothing anyone configured.
+	configured := hcfg.gitlabURLs
+	if len(configured) == 0 && strings.TrimSpace(hcfg.gitlabURL) != "" {
+		configured = []string{hcfg.gitlabURL}
+	}
+	// Validated here rather than by NormalizeGitLabURLs alone, whose errors
+	// name the GITLAB-URL *header*: the operator is looking at a flag, and
+	// being told a header is wrong sends them to the wrong file.
+	for _, candidate := range configured {
+		if err := validateFixedGitLabURL(candidate); err != nil {
+			return err
+		}
+	}
+	normalized, err := serverpool.NormalizeGitLabURLs(configured)
+	if err != nil {
+		return fmt.Errorf("--gitlab-url is not a valid URL: %w", err)
+	}
+	hcfg.gitlabURLs = normalized
+	if len(normalized) == 0 {
+		hcfg.gitlabURL = ""
 		return nil
 	}
-	u, err := url.Parse(hcfg.gitlabURL)
+	hcfg.gitlabURL = normalized[0]
+	return nil
+}
+
+// validateFixedGitLabURL rejects a --gitlab-url value with a message naming
+// the flag the operator actually typed.
+func validateFixedGitLabURL(raw string) error {
+	u, err := url.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("--gitlab-url is not a valid URL: %w", err)
 	}
@@ -577,7 +641,6 @@ func normalizeFixedGitLabURL(hcfg *httpConfig) error {
 	if u.Host == "" {
 		return errors.New("--gitlab-url must include a host")
 	}
-	hcfg.gitlabURL = strings.TrimRight(hcfg.gitlabURL, "/")
 	return nil
 }
 
@@ -597,6 +660,7 @@ func resolveHTTPTier(hcfg *httpConfig) (edition.Tier, bool, error) {
 func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, tier edition.Tier, tierExplicit bool) *config.Config {
 	return &config.Config{
 		GitLabURL:           hcfg.gitlabURL,
+		GitLabURLs:          hcfg.gitlabURLs,
 		SkipTLSVerify:       hcfg.skipTLSVerify,
 		MetaTools:           metaTools,
 		ToolSurface:         toolSurface,
@@ -628,6 +692,9 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		RateLimitRPS:        hcfg.rateLimitRPS,
 		RateLimitBurst:      hcfg.rateLimitBurst,
 		MetaParamSchema:     hcfg.metaParamSchema,
+		TLSCertFile:         hcfg.tlsCert,
+		TLSKeyFile:          hcfg.tlsKey,
+		SocketMode:          hcfg.socketModeParsed,
 	}
 }
 
@@ -639,6 +706,9 @@ func validateHTTPRuntimeConfig(cfg *config.Config) error {
 		return err
 	}
 	if err := validateHTTPDurationConfig(cfg); err != nil {
+		return err
+	}
+	if err := validateTLSFiles(cfg); err != nil {
 		return err
 	}
 	if rateErr := toolutil.ValidateRateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst); rateErr != nil {
@@ -680,11 +750,20 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 		}
 		return nil
 	}
-	if cfg.GitLabURL == "" {
+	instances := cfg.InstanceURLs()
+	if len(instances) == 0 {
 		return errors.New("--auth-mode=oauth requires --gitlab-url")
 	}
-	if err := config.ValidateOAuthGitLabURL(cfg.GitLabURL); err != nil {
-		return err
+	// EVERY published instance, not just the first. The bearer token is
+	// forwarded to whichever instance the request selected, so checking only
+	// cfg.GitLabURL would let `--gitlab-url=https://a --gitlab-url=http://b`
+	// start and then put a live credential on the wire in cleartext for every
+	// request that names b (CWE-319). One cleartext instance in the list is
+	// exactly as bad as a cleartext deployment.
+	for _, instance := range instances {
+		if err := config.ValidateOAuthGitLabURL(instance); err != nil {
+			return err
+		}
 	}
 	if err := config.ValidatePublicURL(cfg.PublicURL); err != nil {
 		return err
@@ -1302,8 +1381,15 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /health", healthHandler)
-	mux.HandleFunc("OPTIONS /.well-known/mcp/server-card.json", func(w http.ResponseWriter, r *http.Request) {
+	// Every public route is mounted under the --public-url path prefix too,
+	// for the reverse proxy that forwards its prefix instead of stripping it.
+	// Mounting only the MCP endpoint there left such a deployment answering
+	// 404 for its own health check, server card and RFC 9728 document — the
+	// three things an operator and a scanner reach for first.
+	for _, path := range publicPaths(cfg, "/health") {
+		mux.HandleFunc("GET "+path, healthHandler)
+	}
+	cardPreflight := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(headerAllowOrigin, "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		// A plain fetch of the card is a simple request and never
@@ -1313,15 +1399,15 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// Echoing allows exactly what was asked for and nothing else.
 		if want := r.Header.Get(headerRequestHeaders); want != "" {
 			w.Header().Set("Access-Control-Allow-Headers", want)
-			w.Header().Set("Vary", headerRequestHeaders)
+			w.Header().Set(headerVary, headerRequestHeaders)
 		}
 		// Without a lifetime the browser preflights again on every fetch,
 		// which for a document that only changes with a release is two
 		// round-trips where one would do.
 		w.Header().Set("Access-Control-Max-Age", "3600")
 		w.WriteHeader(http.StatusNoContent)
-	})
-	mux.HandleFunc("GET /.well-known/mcp/server-card.json", func(w http.ResponseWriter, r *http.Request) {
+	}
+	cardHandler := func(w http.ResponseWriter, r *http.Request) {
 		// The card's audience is browser-based registry scanners; without
 		// CORS they cannot fetch it cross-origin (the SDK's OAuth metadata
 		// handler on this same server already sends the header).
@@ -1338,50 +1424,61 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		select {
 		case <-serverCardDone:
 		case <-r.Context().Done():
-			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
+			writeCardUnavailable(w)
 			return
 		case <-ctx.Done():
-			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
+			writeCardUnavailable(w)
 			return
 		}
 		if serverCardJSON == nil {
-			http.Error(w, `{"error":"server card unavailable"}`, http.StatusServiceUnavailable)
+			writeCardUnavailable(w)
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set(hdrContentType, mimeJSON)
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		_, _ = w.Write(serverCardJSON)
-	})
+	}
+	// /server-card is the location the server-card extension recommends: a
+	// card is application-level metadata about one server, not the
+	// site-wide metadata /.well-known is reserved for, and the extension
+	// says so in writing since commit 10e958fa (2026-06-08). The
+	// .well-known path the earlier draft recommended stays mounted because
+	// scanners written against that draft are already fetching it, and a
+	// card is a public document with nothing to gain from breaking them.
+	for _, path := range publicPaths(cfg, serverCardPath, serverCardLegacyPath) {
+		mux.HandleFunc("OPTIONS "+path, cardPreflight)
+		mux.HandleFunc("GET "+path, cardHandler)
+	}
 
 	registerHTTPMCPHandlers(ctx, cfg, httpAddr, pool, mux)
 
 	var rootHandler http.Handler = mux
 	rootHandler = crossOriginProtectionMiddleware(cfg.TrustedOrigins, rootHandler)
-	rootHandler = corsMiddleware(cfg.TrustedOrigins, rootHandler)
-	rootHandler = securityHeadersMiddleware(rootHandler)
+	rootHandler = corsMiddleware(cfg, rootHandler)
 	if hosts := allowedHosts(httpAddr); len(hosts) > 0 {
 		rootHandler = hostValidationMiddleware(hosts, rootHandler)
 	}
+	// Outermost, so that EVERY response carries the security headers —
+	// including the ones written by a middleware that answers instead of
+	// forwarding. Host validation used to sit outside this and its 403 went
+	// out bare: no nosniff, no CSP, no X-Frame-Options, no Referrer-Policy.
+	// A header policy with a hole in it is not a policy, and the hole was in
+	// a rejection, which is exactly the response an attacker gets to see.
+	rootHandler = securityHeadersMiddleware(rootHandler)
 
 	httpServer := newHTTPServer(httpAddr, rootHandler, httpIdleTimeout)
+	if cfg.TLSCertFile != "" {
+		// Stated rather than inherited: the standard library's default
+		// floor has moved before and may move again, and a deployment that
+		// turned TLS on to satisfy an auditor should be able to read the
+		// floor off this line.
+		httpServer.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
 
-	serverErr := make(chan error, 1)
-	go func() {
-		// A pre-bound listener wins over the address. This is what lets a
-		// caller — the tests, above all — reserve the port and hand over
-		// the live socket, instead of closing a probe listener and racing
-		// everything else on the machine to re-bind the same address.
-		var err error
-		if listener != nil {
-			err = httpServer.Serve(listener)
-		} else {
-			err = httpServer.ListenAndServe()
-		}
-		if err != nil && err != http.ErrServerClosed {
-			serverErr <- err
-		}
-		close(serverErr)
-	}()
+	serverErr, startErr := startServing(ctx, cfg, httpServer, httpAddr, listener)
+	if startErr != nil {
+		return startErr
+	}
 
 	select {
 	case <-ctx.Done():
@@ -1397,12 +1494,150 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	}
 }
 
+// startServing binds the listener if the caller did not supply one and serves
+// on it in the background, returning the channel that reports a serve failure.
+//
+// A pre-bound listener wins over the address. This is what lets a caller — the
+// tests, above all — reserve the port and hand over the live socket, instead
+// of closing a probe listener and racing everything else on the machine to
+// re-bind the same address.
+//
+// Binding here rather than inside the goroutine means a bind failure (a port
+// already in use, a socket path that is not writable) is returned as a startup
+// error rather than raced against the shutdown select.
+func startServing(
+	ctx context.Context,
+	cfg *config.Config,
+	httpServer *http.Server,
+	httpAddr string,
+	listener net.Listener,
+) (<-chan error, error) {
+	if listener == nil {
+		bound, err := listenHTTP(ctx, httpAddr, cfg.SocketMode)
+		if err != nil {
+			return nil, fmt.Errorf("binding %q: %w", httpAddr, err)
+		}
+		listener = bound
+	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		// ServeTLS with empty filenames would demand a certificate from
+		// TLSConfig, so the plain path stays plain: TLS is only reached when
+		// the operator supplied a pair, which validateTLSFiles has already
+		// loaded once to prove it parses.
+		var err error
+		if cfg.TLSCertFile != "" {
+			err = httpServer.ServeTLS(listener, cfg.TLSCertFile, cfg.TLSKeyFile)
+		} else {
+			err = httpServer.Serve(listener)
+		}
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+		close(serverErr)
+	}()
+	return serverErr, nil
+}
+
 func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr string, pool *serverpool.ServerPool, mux *http.ServeMux) {
-	if cfg.AuthMode == "oauth" {
+	if cfg.AuthMode == config.AuthModeOAuth {
 		registerOAuthMCPHandlers(ctx, cfg, httpAddr, pool, mux)
 		return
 	}
 	registerLegacyMCPHandlers(ctx, cfg, pool, mux)
+}
+
+// mountMCPEndpoint routes the MCP handler to the paths that are the MCP
+// endpoint, and answers every other path 404 — unauthenticated.
+//
+// The endpoint used to be a catch-all: any path, known or not, went through
+// the authentication layer, so a probe for a document this server does not
+// serve came back 401. That is a lie a scanner believes. Directories that
+// sweep /.well-known/oauth-authorization-server and /.well-known/mcp were
+// recording those as protected metadata documents when they simply are not
+// there, and nothing could tell "exists but needs a token" apart from "does
+// not exist". Routing before authenticating is what makes 404 possible.
+//
+// Which paths count as the endpoint: the root, /mcp, and — when --public-url
+// carries a path — that path and its /mcp form. The last two exist for a
+// reverse proxy that forwards its prefix instead of stripping it: such a
+// deployment already tells the server its public path, so it does not need a
+// second flag to say the same thing.
+func mountMCPEndpoint(cfg *config.Config, mux *http.ServeMux, handler http.Handler) {
+	for _, pattern := range mcpEndpointPatterns(cfg) {
+		mux.Handle(pattern, handler)
+	}
+	mux.HandleFunc("/", notFoundHandler)
+}
+
+// mcpEndpointPatterns lists the ServeMux patterns the MCP handler is mounted
+// on. "/{$}" is the exact root: the bare "/" pattern would be the catch-all
+// this routing exists to remove.
+func mcpEndpointPatterns(cfg *config.Config) []string {
+	// The trailing-slash forms are mounted explicitly. The catch-all this
+	// routing replaced served them, so a client or proxy configured with
+	// ".../mcp/" kept working; exact patterns alone would 404 it, which is a
+	// regression dressed up as strictness. ServeMux would redirect "/mcp/" to
+	// "/mcp" on its own only if "/mcp/" were a registered subtree, and that
+	// would swallow every path beneath it — the opposite of what this routing
+	// is for.
+	patterns := []string{"/{$}", mcpEndpointPath, mcpEndpointPath + "/{$}"}
+	prefix := publicURLPath(cfg.PublicURL)
+	if prefix == "" {
+		return patterns
+	}
+	return append(patterns,
+		prefix,
+		prefix+"/{$}",
+		prefix+mcpEndpointPath,
+		prefix+mcpEndpointPath+"/{$}",
+	)
+}
+
+// publicPaths returns each given path, plus its form under the --public-url
+// path prefix when the deployment publishes one.
+//
+// A proxy that forwards its prefix rather than stripping it reaches this
+// server at /prefix/health, not /health. The prefix is not new configuration:
+// --public-url already tells the server the path it is published under.
+func publicPaths(cfg *config.Config, paths ...string) []string {
+	prefix := publicURLPath(cfg.PublicURL)
+	if prefix == "" {
+		return paths
+	}
+	out := make([]string, 0, len(paths)*2)
+	for _, path := range paths {
+		out = append(out, path, prefix+path)
+	}
+	return out
+}
+
+// publicURLPath extracts the path component of --public-url, normalized to
+// have no trailing slash. It returns "" for a path-less origin, whose
+// requests already arrive at the root.
+func publicURLPath(publicURL string) string {
+	if publicURL == "" {
+		return ""
+	}
+	u, err := url.Parse(publicURL)
+	if err != nil {
+		return ""
+	}
+	path := strings.TrimSuffix(u.Path, "/")
+	if path == "" || path == mcpEndpointPath {
+		return ""
+	}
+	return path
+}
+
+// notFoundHandler answers a path this server does not serve, without asking
+// who is calling: whether a document exists is not a secret, and pretending
+// otherwise is what made the 401 catch-all misleading.
+func notFoundHandler(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set(hdrContentType, mimeJSON)
+	w.WriteHeader(http.StatusNotFound)
+	_, _ = w.Write([]byte(`{"error":"not found"}` + "\n"))
 }
 
 // streamableHTTPOptions builds the StreamableHTTPOptions shared by the legacy
@@ -1435,6 +1670,12 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	resourceMetadataURL := oauth.MetadataURLFor(resourceID)
 	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))
 
+	// The scope demanded is the least privilege this deployment can work
+	// with, not a constant: the verifier reports a token's real scopes, and
+	// the SDK requires every listed scope to be present, so a hardcoded
+	// "api" would 403 a read_api token on a server that cannot write.
+	requiredScope := oauth.RequiredScope(cfg.ReadOnly, cfg.SafeMode)
+
 	// The limiter is shared with the guard in front: both charge failures to
 	// the same per-address budget, so a caller cannot get a fresh allowance
 	// by failing at a different layer. The gate reaches it only for the pool
@@ -1442,32 +1683,53 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	authLimiter := serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
 	gate := &mcpServerGate{
 		pool:               pool,
-		gitlabURL:          cfg.GitLabURL,
+		gitlabURLs:         cfg.InstanceURLs(),
 		limiter:            authLimiter,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
-		challenge:          `Bearer resource_metadata="` + resourceMetadataURL + `"`,
-		bearerOnly:         true,
+		// The same challenge the guard in front emits, minus its error
+		// parameters: a gate rejection is a pool failure, not a verdict on
+		// the credential, but a client reaching it must still be told the
+		// scope and where the metadata lives.
+		challenge:  oauthChallenge(requiredScope, resourceMetadataURL),
+		bearerOnly: true,
+		oauthMode:  true,
 	}
 
 	tokenCache := oauth.NewTokenCache()
 	rejectedTokens := oauth.NewRejectedTokens(rejectedTokenMaxSize, rejectedTokenTTL)
 	cacheTTL := oauthCacheTTL(cfg.OAuthCacheTTL)
-	verifier := oauth.NewGitLabVerifier(cfg.GitLabURL, cfg.SkipTLSVerify, cacheTTL, tokenCache)
-	// The scope demanded is the least privilege this deployment can work
-	// with, not a constant: the verifier reports a token's real scopes, and
-	// the SDK requires every listed scope to be present, so a hardcoded
-	// "api" would 403 a read_api token on a server that cannot write.
-	requiredScope := oauth.RequiredScope(cfg.ReadOnly, cfg.SafeMode)
+	// The token is verified against the instance the request selected, not
+	// against a single instance fixed at startup: a token is only ever valid
+	// for the GitLab that issued it. The resolver is the operator's
+	// allow-list, so a caller cannot name an instance of their own and be
+	// handed the bearer token — which is what made a free-form GITLAB-URL
+	// header unacceptable in oauth mode in the first place.
+	resolveInstance := func(r *http.Request) (string, error) {
+		if r == nil {
+			return cfg.GitLabURL, nil
+		}
+		options, err := serverpool.ResolveRequestOptionsFor(r, cfg.InstanceURLs())
+		if err != nil {
+			return "", err
+		}
+		return options.GitLabURL, nil
+	}
+	verifier := oauth.NewGitLabVerifierFor(resolveInstance, cfg.SkipTLSVerify, cacheTTL, tokenCache)
 	guard := &bearerGuard{
 		verify:             verifier,
+		resolveInstance:    resolveInstance,
 		rejected:           rejectedTokens,
 		limiter:            authLimiter,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		metadataURL:        resourceMetadataURL,
-		requiredScope:      requiredScope,
+		// The door asks only for what every action needs. Whether a
+		// particular action may write is settled per action, against the
+		// surface the pool built for this token's real authority.
+		minimumScope:    oauth.MinimumScope,
+		advertisedScope: requiredScope,
 	}
-	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{requiredScope}})
-	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.GitLabURL, requiredScope)
+	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{oauth.MinimumScope}})
+	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.InstanceURLs(), oauth.SupportedScopes(cfg.ReadOnly, cfg.SafeMode))
 	// Both derivations of RFC 9728 §3 resolve: the path-less form and the
 	// path-inserted form a client computes from a resource identifier that
 	// carries a path. Mounted without a method restriction so the SDK
@@ -1485,7 +1747,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	// SDK can publish the token info its streamable handler reads back, so
 	// it stays, and its verification is a cache hit on what the guard has
 	// already resolved.
-	mux.Handle("/", guard.middleware(authMiddleware(gate.middleware(mcpHandler))))
+	mountMCPEndpoint(cfg, mux, guard.middleware(authMiddleware(gate.middleware(mcpHandler))))
 	startPeriodicCleanup(ctx, tokenCache.Cleanup)
 	startPeriodicCleanup(ctx, rejectedTokens.Cleanup)
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
@@ -1518,13 +1780,13 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
 	gate := &mcpServerGate{
 		pool:               pool,
-		gitlabURL:          cfg.GitLabURL,
+		gitlabURLs:         cfg.InstanceURLs(),
 		limiter:            authLimiter,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		challenge:          legacyAuthChallenge,
 	}
 	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))
-	mux.Handle("/", gate.middleware(mcpHandler))
+	mountMCPEndpoint(cfg, mux, gate.middleware(mcpHandler))
 }
 
 func startPeriodicCleanup(ctx context.Context, cleanup func()) {
@@ -1738,12 +2000,75 @@ func buildTrustedOrigins(csv, publicURL string) []string {
 // a browser client silently cannot use.
 const (
 	corsAllowMethods = "GET, POST, DELETE, OPTIONS"
-	corsAllowHeaders = "Authorization, Content-Type, Accept, PRIVATE-TOKEN, GITLAB-URL, " +
-		"Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID"
+	// corsBaseAllowHeaders is what every mode accepts. The credential
+	// headers a given mode honors are appended by corsAllowHeadersFor:
+	// advertising one a mode ignores tells a browser client to send
+	// something that cannot work.
+	// Mcp-Method, Mcp-Name and the Mcp-Param-* family are REQUIRED by the SDK
+	// from protocol 2026-07-28 onwards — a POST without Mcp-Method is
+	// rejected before any handler runs. Omitting them here meant the
+	// preflight refused the very headers the server then demanded, so no
+	// browser client could speak the current protocol at all, whatever its
+	// origin was allowed to do.
+	corsBaseAllowHeaders = "Authorization, Content-Type, Accept, " +
+		"Mcp-Session-Id, Mcp-Protocol-Version, Last-Event-ID, " +
+		"Mcp-Method, Mcp-Name, Mcp-Param-Name, Mcp-Param-Uri, Mcp-Param-Cursor"
 	// The session and protocol headers are unsafelisted response headers, so
 	// a browser cannot read them unless they are exposed by name.
-	corsExposeHeaders = "Mcp-Session-Id, Mcp-Protocol-Version"
+	//
+	// WWW-Authenticate is in that same category, and leaving it out defeated
+	// the discovery the challenge exists for: a cross-origin browser client
+	// got the 401 but could not read the header, so it could not learn the
+	// resource_metadata URL and could not start the OAuth flow. The one
+	// audience CORS serves was the one audience automatic discovery did not
+	// reach.
+	corsExposeHeaders = "Mcp-Session-Id, Mcp-Protocol-Version, WWW-Authenticate"
 	corsMaxAge        = "86400"
+)
+
+// corsAllowHeadersFor lists the request headers a browser may send to this
+// deployment: the base set plus only the credential headers this mode
+// actually honors.
+//
+// PRIVATE-TOKEN is a legacy-mode credential; in oauth mode the request gate
+// reads Authorization: Bearer and nothing else, so a browser told it may send
+// PRIVATE-TOKEN would send a header that produces a 401. GITLAB-URL is
+// honored only when the deployment did not fix an instance with --gitlab-url,
+// which is what makes the header meaningful in the first place.
+func corsAllowHeadersFor(cfg *config.Config) string {
+	allowed := corsBaseAllowHeaders
+	if cfg.AuthMode != config.AuthModeOAuth {
+		allowed += ", " + serverpool.RequestOptionPrivateToken
+	}
+	if gitLabURLHeaderHonored(cfg) {
+		allowed += ", " + serverpool.RequestOptionGitLabURL
+	}
+	return allowed
+}
+
+// gitLabURLHeaderHonored reports whether a per-request GITLAB-URL header can
+// change which instance a request reaches.
+//
+// It cannot when the deployment pinned exactly one instance: the header is
+// logged as ignored, so advertising it would be a standing invitation to send
+// something that silently does nothing. It can with none (the caller chooses
+// freely) and with several (the caller selects among the published ones).
+func gitLabURLHeaderHonored(cfg *config.Config) bool {
+	return len(cfg.InstanceURLs()) != 1
+}
+
+// mcpEndpointPath is the named path the MCP endpoint answers on, alongside
+// the root. Clients configured with a bare origin reach the root; the named
+// form is what the guides and the debugging recipes use.
+const mcpEndpointPath = "/mcp"
+
+// Paths the server card is published at.
+const (
+	// serverCardPath is the location the server-card extension recommends.
+	serverCardPath = "/server-card"
+	// serverCardLegacyPath is the location its earlier draft recommended,
+	// kept mounted for scanners already fetching it.
+	serverCardLegacyPath = "/.well-known/mcp/server-card.json"
 )
 
 // CORS response and request header names, each used on more than one path.
@@ -1751,6 +2076,17 @@ const (
 	headerAllowOrigin    = "Access-Control-Allow-Origin"
 	headerRequestMethod  = "Access-Control-Request-Method"
 	headerRequestHeaders = "Access-Control-Request-Headers"
+	headerOrigin         = "Origin"
+	headerVary           = "Vary"
+)
+
+// The content type every hand-written response in this package sends. They
+// live here rather than in the test file that used to hold them: a constant
+// only the tests can see does nothing for the production paths that repeat
+// the literal, which is what SonarCloud flags.
+const (
+	hdrContentType = "Content-Type"
+	mimeJSON       = "application/json"
 )
 
 // corsMiddleware makes trusted origins usable from an actual browser.
@@ -1763,24 +2099,40 @@ const (
 // except the browser clients it exists for, unless a reverse proxy in front
 // answered the preflight on the server's behalf.
 //
-// Only origins the operator has trusted get an answer. An untrusted origin
-// is passed through unchanged and reaches the protection below, which is
-// what refuses it; no header here weakens that decision.
-func corsMiddleware(trustedOrigins []string, next http.Handler) http.Handler {
-	if len(trustedOrigins) == 0 {
-		return next
-	}
+// Only origins the operator has trusted get PERMISSION. An untrusted origin's
+// ordinary request is passed through unchanged and reaches the protection
+// below, which is what refuses it; no header here weakens that decision.
+//
+// An untrusted origin's preflight is NOT answered here: some routes serve
+// their own (the RFC 9728 metadata document and the server card are public
+// and answer any origin), and swallowing those would make them undiscoverable
+// from a browser. What must not happen is the preflight reaching the
+// authentication layer and being charged there as a failed authentication —
+// that is fixed in the guard and the gate, which let a preflight past
+// untouched.
+func corsMiddleware(cfg *config.Config, next http.Handler) http.Handler {
+	trustedOrigins := cfg.TrustedOrigins
+	allowHeaders := corsAllowHeadersFor(cfg)
 	allowAll := slices.Contains(trustedOrigins, "*")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin == "" || (!allowAll && !slices.Contains(trustedOrigins, origin)) {
+		origin := r.Header.Get(headerOrigin)
+		preflight := r.Method == http.MethodOptions && r.Header.Get(headerRequestMethod) != ""
+		trusted := origin != "" && (allowAll || slices.Contains(trustedOrigins, origin))
+
+		if !trusted {
+			if preflight {
+				// Vary even when granting nothing: the answer downstream
+				// depends on Origin, and a cache that does not know that
+				// would serve it to a trusted origin.
+				w.Header().Add(headerVary, headerOrigin)
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
 		// Vary regardless of the outcome: the response body for a given URL
 		// does not depend on Origin, but these headers do, and a cache that
 		// does not know that would serve one origin's permission to another.
-		w.Header().Add("Vary", "Origin")
+		w.Header().Add(headerVary, headerOrigin)
 		// The origin is echoed rather than answered with "*" because these
 		// requests carry an Authorization header; "*" is invalid for a
 		// credentialed request and browsers reject it.
@@ -1788,10 +2140,10 @@ func corsMiddleware(trustedOrigins []string, next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Expose-Headers", corsExposeHeaders)
 
 		if r.Method == http.MethodOptions && r.Header.Get(headerRequestMethod) != "" {
-			w.Header().Add("Vary", headerRequestMethod)
-			w.Header().Add("Vary", headerRequestHeaders)
+			w.Header().Add(headerVary, headerRequestMethod)
+			w.Header().Add(headerVary, headerRequestHeaders)
 			w.Header().Set("Access-Control-Allow-Methods", corsAllowMethods)
-			w.Header().Set("Access-Control-Allow-Headers", corsAllowHeaders)
+			w.Header().Set("Access-Control-Allow-Headers", allowHeaders)
 			w.Header().Set("Access-Control-Max-Age", corsMaxAge)
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -1847,7 +2199,7 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 // healthHandler responds with HTTP 200 and a JSON body for container healthchecks
 // and load-balancer probes. It does not require authentication.
 func healthHandler(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(hdrContentType, mimeJSON)
 	_ = json.NewEncoder(w).Encode(newHealthResponse(processStartTime, time.Now())) //nolint:errchkjson // healthcheck: client write errors are non-actionable
 }
 
@@ -1885,6 +2237,52 @@ func newHealthResponse(startedAt, now time.Time) healthResponse {
 // shutdown-during-build path deterministically instead of racing a sleep
 // against the real build.
 var buildServerCardFn = buildServerCard //nolint:gochecknoglobals // test seam
+
+// writeCardUnavailable answers a card request that could not be served.
+//
+// http.Error would label this JSON body text/plain, and every response here
+// also carries X-Content-Type-Options: nosniff — so a browser would be told
+// not to sniff, and then told the wrong type. The body has always been JSON;
+// only the header was wrong.
+func writeCardUnavailable(w http.ResponseWriter) {
+	w.Header().Set(hdrContentType, mimeJSON)
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = w.Write([]byte(`{"error":"server card unavailable"}` + "\n"))
+}
+
+// serverCardAuthentication describes how a client authenticates against THIS
+// deployment, which is not a property of the binary: the same build serves
+// static tokens in legacy mode and Bearer-only OAuth in oauth mode.
+//
+// The card used to state header-token unconditionally. A deployment running
+// --auth-mode=oauth therefore published a card contradicting its own 401
+// challenge, and a directory rendering the card told users to send a header
+// the endpoint refuses. Deriving it from the mode is the whole fix.
+//
+// In oauth mode the card also points at the RFC 9728 document rather than
+// restating what it contains: that document is the authority on the
+// authorization servers and scopes, and a copy here would be a second place
+// to keep in sync.
+func serverCardAuthentication(cfg *config.Config) map[string]any {
+	if cfg.AuthMode == config.AuthModeOAuth {
+		authInfo := map[string]any{
+			"required": true,
+			"schemes":  []string{"oauth2"},
+			// Named as the RFC 9728 field a client already knows, so a
+			// consumer that understands protected-resource metadata can
+			// follow it without a card-specific convention.
+			"scopes": []string{oauth.RequiredScope(cfg.ReadOnly, cfg.SafeMode)},
+		}
+		if cfg.PublicURL != "" {
+			authInfo["resourceMetadata"] = oauth.MetadataURLFor(cfg.PublicURL)
+		}
+		return authInfo
+	}
+	return map[string]any{
+		"required": true,
+		"schemes":  []string{"header-token"},
+	}
+}
 
 func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 	// Use configured URL or a placeholder — the dummy client only needs a
@@ -2073,12 +2471,9 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 	// primitives, but this card already enumerates tools and resources, so
 	// it is a SEP-1649-lineage document and states capabilities structurally.
 	card := map[string]any{
-		"serverInfo":   session.InitializeResult().ServerInfo,
-		"capabilities": session.InitializeResult().Capabilities,
-		"authentication": map[string]any{
-			"required": true,
-			"schemes":  []string{"header-token"},
-		},
+		"serverInfo":        session.InitializeResult().ServerInfo,
+		"capabilities":      session.InitializeResult().Capabilities,
+		"authentication":    serverCardAuthentication(cfg),
 		"tools":             cardTools,
 		"resources":         cardResources,
 		"resourceTemplates": cardTemplates,

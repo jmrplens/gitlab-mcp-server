@@ -1053,17 +1053,11 @@
       "url": "https://mcp.jmrp.io/gitlab",
       "headers": [
         {
-          "name": "PRIVATE-TOKEN",
-          "description": "GitLab Personal Access Token (glpat-...). Alternatively, send Authorization: Bearer <token>. It travels per request and is never stored server-side.",
-          "isRequired": true,
-          "isSecret": true,
-          "placeholder": "glpat-xxxxxxxxxxxxxxxxxxxx"
-        },
-        {
-          "name": "GITLAB-URL",
-          "description": "Target GitLab instance URL. Optional on the public hosted endpoint, which defaults to https://gitlab.com.",
+          "name": "Authorization",
+          "description": "Bearer <token>. The endpoint runs in OAuth mode: a client that speaks the OAuth flow needs no header at all and discovers the authorization server from the 401 challenge. A GitLab personal access token also works here, sent as 'Bearer glpat-...', which keeps clients with no OAuth flow working. It travels per request and is never stored server-side.",
           "isRequired": false,
-          "placeholder": "https://gitlab.com"
+          "isSecret": true,
+          "placeholder": "Bearer glpat-xxxxxxxxxxxxxxxxxxxx"
         }
       ]
     }

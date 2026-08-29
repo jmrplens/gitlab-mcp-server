@@ -30,9 +30,21 @@
 // about the credential.
 //
 // [NewProtectedResourceHandler] serves OAuth Protected Resource Metadata so MCP
-// clients can discover the GitLab authorization server associated with the
-// requested resource URL, and advertises the scope the deployment actually
-// requires — see [RequiredScope].
+// clients can discover the GitLab authorization servers this deployment
+// publishes — plural: a deployment may serve more than one instance, and the
+// RFC 9728 field is an array. It advertises the scopes a client may authorize
+// with, most capable first; see [SupportedScopes].
+//
+// Admission and recommendation are separate. [MinimumScope] is what a token
+// must carry to be served at all, checked with [SatisfiesMinimum], which
+// treats api as covering read_api. [RequiredScope] is only what the challenge
+// recommends for this deployment's full surface — a client asking for less is
+// served less, not refused, because whether a given action may write is
+// settled per action rather than at the door.
+//
+// Both caches key on the instance as well as the token. A token means nothing
+// away from the GitLab that issued it, so neither a verified identity nor a
+// rejection may cross from one published instance to another.
 //
 // Legacy PRIVATE-TOKEN headers are not normalized into Authorization here.
 // OAuth mode is Bearer-only, so that what the WWW-Authenticate challenge
