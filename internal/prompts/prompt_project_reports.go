@@ -70,7 +70,7 @@ func handleBranchMRSummary(ctx context.Context, client *gitlabclient.Client, req
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MRs targeting %s in %s (%d %s)\n\n", targetBranch, projectID, len(mrs), state)
+	fmt.Fprintf(&b, "# MRs targeting %s in %s (%d %s)\n\n", toolutil.EscapeMdHeading(targetBranch), toolutil.EscapeMdHeading(projectID), len(mrs), state)
 
 	if len(mrs) == 0 {
 		b.WriteString("No merge requests found matching the criteria.\n")
@@ -155,7 +155,7 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Activity Report — %s (last %d days)\n\n", projectID, days)
+	fmt.Fprintf(&b, "# Project Activity Report — %s (last %d days)\n\n", toolutil.EscapeMdHeading(projectID), days)
 
 	// Summary
 	b.WriteString(mdSummaryHeader)
@@ -234,7 +234,7 @@ func handleMRDiscussionHealth(ctx context.Context, client *gitlabclient.Client, 
 	infos := collectMRDiscussionInfos(ctx, client, projectID, mrs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MR Discussion Health — %s (%d open MRs)\n\n", projectID, len(mrs))
+	fmt.Fprintf(&b, "# MR Discussion Health — %s (%d open MRs)\n\n", toolutil.EscapeMdHeading(projectID), len(mrs))
 
 	if len(infos) == 0 {
 		b.WriteString("No open merge requests found.\n")
@@ -347,7 +347,7 @@ func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Unassigned Items — %s\n\n", projectID)
+	fmt.Fprintf(&b, "# Unassigned Items — %s\n\n", toolutil.EscapeMdHeading(projectID))
 
 	b.WriteString(mdSummaryHeader)
 	b.WriteString(mdCategoryTableHeader)
@@ -416,7 +416,7 @@ func handleStaleItemsReport(ctx context.Context, client *gitlabclient.Client, re
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Stale Items Report — %s (no updates in %d+ days)\n\n", projectID, staleDays)
+	fmt.Fprintf(&b, "# Stale Items Report — %s (no updates in %d+ days)\n\n", toolutil.EscapeMdHeading(projectID), staleDays)
 
 	b.WriteString(mdSummaryHeader)
 	b.WriteString(mdCategoryTableHeader)

@@ -162,11 +162,17 @@ func wireSubscribeError(err error) error {
 	if err == nil {
 		return nil
 	}
-	if _, ok := errors.AsType[*jsonrpc.Error](err); ok {
-		// Already deliberate (the stateless refusal builds its own).
-		return err
-	}
-	code := int64(jsonrpc.CodeInternalError)
+	// The subscription sentinels are checked first, before any code the error
+	// already carries.
+	//
+	// That order matters since resource reads began carrying a JSON-RPC code of
+	// their own: internal/resources marks an upstream failure -32603 so it does
+	// not reach a client as code 0, and an inaccessible resource arrives here
+	// wrapped in ErrInaccessible around exactly such an error. Honoring the
+	// carried code first would answer -32603 for a subscription the caller
+	// simply may not have, which is -32602 and is what the caller has to act
+	// on. The sentinel is the more specific fact, so it wins.
+	var code int64
 	switch {
 	case errors.Is(err, subscriptions.ErrNotSubscribable):
 		code = jsonrpc.CodeInvalidParams
@@ -179,6 +185,14 @@ func wireSubscribeError(err error) error {
 		errors.Is(err, subscriptions.ErrTooManySubscriptions),
 		errors.Is(err, subscriptions.ErrClosed):
 		code = codeServerBusy
+	default:
+		// No sentinel applies. A code chosen deliberately further down, such as
+		// the stateless refusal building its own, is then the best answer there
+		// is.
+		if _, ok := errors.AsType[*jsonrpc.Error](err); ok {
+			return err
+		}
+		code = jsonrpc.CodeInternalError
 	}
 	return &jsonrpc.Error{Code: code, Message: err.Error()}
 }

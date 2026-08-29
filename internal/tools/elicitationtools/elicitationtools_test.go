@@ -48,13 +48,16 @@ const (
 
 // CancelledResult / UnsupportedResult tests.
 
-// TestCancelledResult verifies the CancelledResult handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestCancelledResult verifies the result a cancelled interactive flow returns.
+//
+// It is an error result: the tool did not run, so it produced none of the
+// output its schema declares, and a tool declaring an outputSchema must return
+// structured results conforming to it. The message is what tells the model the
+// user canceled, so it is asserted below rather than left to the flag.
 func TestCancelledResult(t *testing.T) {
 	result := CancelledResult("Operation canceled by user.")
-	if result.IsError {
-		t.Error("CancelledResult.IsError = true, want false")
+	if !result.IsError {
+		t.Error("CancelledResult.IsError = false; a tool declaring an outputSchema returned neither structured content nor an error")
 	}
 	if len(result.Content) != 1 {
 		t.Fatalf("CancelledResult content len = %d, want 1", len(result.Content))

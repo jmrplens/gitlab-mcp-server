@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -468,4 +469,75 @@ func TestGate_StatefulGETAndDELETEAreAuthenticated(t *testing.T) {
 			})
 		}
 	})
+}
+
+// TestDiscover_AnswersTheStatelessDeployment pins that server/discover is
+// routed and describes this deployment.
+//
+// It is the method 2026-07-28 put in place of the initialize handshake, and
+// nothing in this repository exercised it: the only references anywhere are in
+// internal/cachehints, whose test constructs a DiscoverResult by hand through
+// the middleware and so proves the cache table, never that the method is
+// reachable. No audit gate can see it either, because they all inspect
+// []*mcp.Tool rather than driving a session.
+//
+// That matters because availability is not ours to control. The go-sdk decides
+// whether the method exists at all, and the streamable transport serves the
+// revision only when stateless, so an SDK bump or a transport change could
+// remove a MUST-implement method and every gate in the repository would still
+// pass.
+func TestDiscover_AnswersTheStatelessDeployment(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	const discoverBody = `{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}`
+
+	got := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp", body: discoverBody,
+		headers: map[string]string{"PRIVATE-TOKEN": "glpat-whatever"},
+	})
+	if got.status != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", got.status, http.StatusOK, got.body)
+	}
+
+	var decoded struct {
+		Result struct {
+			ResultType        string   `json:"resultType"`
+			SupportedVersions []string `json:"supportedVersions"`
+			Capabilities      struct {
+				Tools     *struct{} `json:"tools"`
+				Resources *struct{} `json:"resources"`
+				Prompts   *struct{} `json:"prompts"`
+				Logging   *struct{} `json:"logging"`
+			} `json:"capabilities"`
+		} `json:"result"`
+		Error *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(jsonRPCPayload(t, got.body)), &decoded); err != nil {
+		t.Fatalf("body is not JSON: %v (%s)", err, got.body)
+	}
+	if decoded.Error != nil {
+		t.Fatalf("server/discover is not routed: %d %s", decoded.Error.Code, decoded.Error.Message)
+	}
+
+	if decoded.Result.ResultType != "complete" {
+		t.Errorf("resultType = %q, want \"complete\"", decoded.Result.ResultType)
+	}
+	if !slices.Contains(decoded.Result.SupportedVersions, "2026-07-28") {
+		t.Errorf("supportedVersions = %v, want it to include the revision this deployment serves", decoded.Result.SupportedVersions)
+	}
+	// The capabilities have to match the surface that was started, or a client
+	// discovers something the server will then refuse.
+	if decoded.Result.Capabilities.Tools == nil {
+		t.Error("capabilities omit tools, which this deployment registers")
+	}
+	if decoded.Result.Capabilities.Resources == nil {
+		t.Error("capabilities omit resources, which the full capability surface registers")
+	}
+	if decoded.Result.Capabilities.Logging != nil {
+		t.Error("capabilities advertise logging, which this server does not implement")
+	}
 }

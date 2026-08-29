@@ -85,7 +85,7 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 	assignedOnlyCount = len(allMRs) - authoredCount
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Open Merge Requests for @%s\n\n", username)
+	fmt.Fprintf(&b, "# Open Merge Requests for @%s\n\n", toolutil.EscapeMdHeading(username))
 
 	b.WriteString("## Summary\n")
 	b.WriteString(tableCategoryHeader)
@@ -144,14 +144,14 @@ func handleMyPendingReviews(ctx context.Context, client *gitlabclient.Client, re
 	grouped := groupMRsByProject(mrs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Pending Reviews for @%s (%d MRs)\n\n", username, len(mrs))
+	fmt.Fprintf(&b, "# Pending Reviews for @%s (%d MRs)\n\n", toolutil.EscapeMdHeading(username), len(mrs))
 
 	if len(mrs) == 0 {
 		b.WriteString("No pending reviews found. You're all caught up! " + toolutil.EmojiParty + "\n")
 	} else {
 		for _, project := range sortedKeys(grouped) {
 			projectMRs := grouped[project]
-			fmt.Fprintf(&b, "## %s (%d MRs)\n\n", project, len(projectMRs))
+			fmt.Fprintf(&b, "## %s (%d MRs)\n\n", toolutil.EscapeMdHeading(project), len(projectMRs))
 			writeMRTable(&b, projectMRs)
 			b.WriteString("\n")
 		}
@@ -214,7 +214,7 @@ func handleMyIssues(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Issues Assigned to @%s (%d issues, state: %s)\n\n", username, len(issues), state)
+	fmt.Fprintf(&b, "# Issues Assigned to @%s (%d issues, state: %s)\n\n", toolutil.EscapeMdHeading(username), len(issues), state)
 
 	b.WriteString("## Summary\n")
 	b.WriteString(tableCategoryHeader)
@@ -290,7 +290,7 @@ func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, r
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Activity Summary for @%s (last %d days)\n\n", username, days)
+	fmt.Fprintf(&b, "# Activity Summary for @%s (last %d days)\n\n", toolutil.EscapeMdHeading(username), days)
 
 	// Event breakdown
 	b.WriteString("## Contribution Events\n")

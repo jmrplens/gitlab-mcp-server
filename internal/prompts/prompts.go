@@ -217,7 +217,7 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 	m := computeDiffMetrics(diffs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Code Review: %s (MR !%d)\n\n", mr.Title, mr.IID)
+	fmt.Fprintf(&b, "# Code Review: %s (MR !%d)\n\n", toolutil.EscapeMdHeading(mr.Title), mr.IID)
 	fmt.Fprintf(&b, "**Branch**: %s → %s\n", mr.SourceBranch, mr.TargetBranch)
 	if mr.Description != "" {
 		fmt.Fprintf(&b, "**Description**: %s\n", mr.Description)
@@ -301,7 +301,7 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Pipeline #%d Status: %s\n\n", pipeline.ID, strings.ToUpper(pipeline.Status))
+	fmt.Fprintf(&b, "# Pipeline #%d Status: %s\n\n", pipeline.ID, toolutil.EscapeMdHeading(strings.ToUpper(pipeline.Status)))
 	fmt.Fprintf(&b, "**Ref**: %s | **SHA**: %s\n", pipeline.Ref, shortSHA(pipeline.SHA))
 	fmt.Fprintf(&b, "**URL**: %s\n\n", pipeline.WebURL)
 
@@ -377,7 +377,7 @@ func handleSuggestMRReviewers(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Reviewer Suggestions for MR !%d: %s\n\n", mr.IID, mr.Title)
+	fmt.Fprintf(&b, "# Reviewer Suggestions for MR !%d: %s\n\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
 
 	fmt.Fprintf(&b, "## Changed Files (%d)\n", len(diffs))
 	for _, d := range diffs {
@@ -441,7 +441,7 @@ func handleGenerateReleaseNotes(ctx context.Context, client *gitlabclient.Client
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Release Notes: %s → %s\n\n", from, to)
+	fmt.Fprintf(&b, "# Release Notes: %s → %s\n\n", toolutil.EscapeMdHeading(from), toolutil.EscapeMdHeading(to))
 
 	// Fetch merged MRs in the commit date range.
 	mergedMRs := fetchMergedMRsForRange(ctx, client, projectID, comparison.Commits)
@@ -601,7 +601,7 @@ func handleSummarizeOpenMRs(ctx context.Context, client *gitlabclient.Client, re
 			author = mr.Author.Username
 		}
 		age := time.Since(*mr.CreatedAt).Hours() / 24
-		fmt.Fprintf(&b, "## !%d: %s\n", mr.IID, mr.Title)
+		fmt.Fprintf(&b, "## !%d: %s\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
 		fmt.Fprintf(&b, "- **Author**: %s | **Branch**: %s → %s\n", author, mr.SourceBranch, mr.TargetBranch)
 		fmt.Fprintf(&b, "- **Age**: %.0f days | **Status**: %s\n", age, mr.DetailedMergeStatus)
 		if mr.Description != "" {
@@ -648,7 +648,7 @@ func handleProjectHealthCheck(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Health Check: %s\n\n", project.PathWithNamespace)
+	fmt.Fprintf(&b, "# Project Health Check: %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
 
 	writePipelineSection(ctx, &b, client, projectID)
 	writeOpenMRsSection(ctx, &b, client, projectID)
@@ -666,7 +666,7 @@ func writePipelineSection(ctx context.Context, b *strings.Builder, client *gitla
 		b.WriteString("## Latest Pipeline: N/A\n\n")
 		return
 	}
-	fmt.Fprintf(b, "## Latest Pipeline: %s\n", strings.ToUpper(pipeline.Status))
+	fmt.Fprintf(b, "## Latest Pipeline: %s\n", toolutil.EscapeMdHeading(strings.ToUpper(pipeline.Status)))
 	fmt.Fprintf(b, "- **Ref**: %s | **SHA**: %s\n", pipeline.Ref, shortSHA(pipeline.SHA))
 	fmt.Fprintf(b, "- **URL**: %s\n\n", pipeline.WebURL)
 }
@@ -753,7 +753,7 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Branch Comparison: %s → %s\n\n", from, to)
+	fmt.Fprintf(&b, "# Branch Comparison: %s → %s\n\n", toolutil.EscapeMdHeading(from), toolutil.EscapeMdHeading(to))
 
 	if comparison.CompareSameRef {
 		b.WriteString("Both refs point to the same commit. No differences.\n")
@@ -859,7 +859,7 @@ func handleDailyStandup(ctx context.Context, client *gitlabclient.Client, req *m
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Daily Standup for @%s\n\n", username)
+	fmt.Fprintf(&b, "# Daily Standup for @%s\n\n", toolutil.EscapeMdHeading(username))
 
 	// Events section
 	fmt.Fprintf(&b, "## Recent Activity (last 24h)\n")
@@ -1034,7 +1034,7 @@ func handleTeamMemberWorkload(ctx context.Context, client *gitlabclient.Client, 
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Workload Summary for @%s (last %d days)\n\n", username, days)
+	fmt.Fprintf(&b, "# Workload Summary for @%s (last %d days)\n\n", toolutil.EscapeMdHeading(username), days)
 
 	// Activity summary
 	b.WriteString("## Contribution Events\n")
@@ -1184,7 +1184,7 @@ func handleUserStats(ctx context.Context, client *gitlabclient.Client, req *mcp.
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# User Statistics for @%s (last %d days)\n\n", username, days)
+	fmt.Fprintf(&b, "# User Statistics for @%s (last %d days)\n\n", toolutil.EscapeMdHeading(username), days)
 
 	// Activity summary
 	b.WriteString("## Activity Summary\n")
@@ -1344,7 +1344,7 @@ func handleMRRiskAssessment(ctx context.Context, client *gitlabclient.Client, re
 	m := computeDiffMetrics(diffs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MR Risk Assessment: !%d — %s\n\n", mr.IID, mr.Title)
+	fmt.Fprintf(&b, "# MR Risk Assessment: !%d — %s\n\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
 	fmt.Fprintf(&b, "## Metrics\n")
 	fmt.Fprintf(&b, fmtFilesChanged, len(diffs))
 	fmt.Fprintf(&b, "- **Lines added**: %d\n", m.additions)
@@ -1469,7 +1469,7 @@ func writeDiffGroup(b *strings.Builder, heading string, diffs []*gl.MergeRequest
 	fmt.Fprintf(b, "\n## %s (%d)\n\n", heading, len(diffs))
 	for _, d := range diffs {
 		add, del := countDiffLines(d.Diff)
-		fmt.Fprintf(b, "### %s (%s) — +%d / -%d lines\n", d.NewPath, changeType(d), add, del)
+		fmt.Fprintf(b, "### %s (%s) — +%d / -%d lines\n", toolutil.EscapeMdHeading(d.NewPath), toolutil.EscapeMdHeading(changeType(d)), add, del)
 		if d.Diff != "" {
 			fmt.Fprintf(b, "```diff\n%s\n```\n\n", d.Diff)
 		}

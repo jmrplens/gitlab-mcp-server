@@ -78,7 +78,7 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Settings Audit — %s\n\n", project.PathWithNamespace)
+	fmt.Fprintf(&b, "# Project Settings Audit — %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
 
 	// General info
 	b.WriteString("## General\n\n")
@@ -182,7 +182,7 @@ func handleAuditBranchProtection(ctx context.Context, client *gitlabclient.Clien
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Branch Protection Audit — %s\n\n", project.PathWithNamespace)
+	fmt.Fprintf(&b, "# Branch Protection Audit — %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
 	fmt.Fprintf(&b, "**Default branch**: %s\n\n", project.DefaultBranch)
 
 	defaultProtected := isDefaultBranchProtected(protectedBranches, project.DefaultBranch)
@@ -215,7 +215,7 @@ func writeBranchDetail(b *strings.Builder, pb *gl.ProtectedBranch, defaultBranch
 	if pb.Name == defaultBranch {
 		suffix = " (default)"
 	}
-	fmt.Fprintf(b, "### %s%s\n\n", pb.Name, suffix)
+	fmt.Fprintf(b, "### %s%s\n\n", toolutil.EscapeMdHeading(pb.Name), toolutil.EscapeMdHeading(suffix))
 
 	writeAccessLevelLine(b, "Push access", pb.PushAccessLevels)
 	writeAccessLevelLine(b, "Merge access", pb.MergeAccessLevels)
@@ -323,7 +323,7 @@ func handleAuditProjectAccess(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Access Audit — %s\n\n", project.PathWithNamespace)
+	fmt.Fprintf(&b, "# Project Access Audit — %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
 
 	g := classifyMembers(members)
 
@@ -416,7 +416,7 @@ func handleAuditProjectWorkflow(ctx context.Context, client *gitlabclient.Client
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Workflow Audit — %s\n\n", project.PathWithNamespace)
+	fmt.Fprintf(&b, "# Workflow Audit — %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
 
 	labels, _, labelsErr := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{
 		PerPage: maxListItems,
@@ -607,7 +607,7 @@ func handleAuditProjectFull(ctx context.Context, client *gitlabclient.Client, re
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Full Project Audit — %s\n\n", project.PathWithNamespace)
+	fmt.Fprintf(&b, "# Full Project Audit — %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
 
 	writeFullScorecard(&b, scorecardData{
 		project:    project,

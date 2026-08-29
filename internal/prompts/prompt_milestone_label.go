@@ -100,7 +100,7 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Milestone Progress — %s\n\n", projectID)
+	fmt.Fprintf(&b, "# Milestone Progress — %s\n\n", toolutil.EscapeMdHeading(projectID))
 
 	if len(milestones) == 0 {
 		b.WriteString("No active milestones found.\n")
@@ -108,7 +108,7 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 	}
 
 	for _, ms := range milestones {
-		fmt.Fprintf(&b, "## %s\n\n", ms.Title)
+		fmt.Fprintf(&b, "## %s\n\n", toolutil.EscapeMdHeading(ms.Title))
 
 		issues, _, _ := client.GL().Milestones.GetMilestoneIssues(projectID, ms.ID, &gl.GetMilestoneIssuesOptions{
 			PerPage: maxListItems,
@@ -172,7 +172,7 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Label Distribution — %s (%d labels)\n\n", projectID, len(labels))
+	fmt.Fprintf(&b, "# Label Distribution — %s (%d labels)\n\n", toolutil.EscapeMdHeading(projectID), len(labels))
 
 	if len(labels) == 0 {
 		b.WriteString("No labels found in this project.\n")
@@ -253,7 +253,7 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Group Milestone Progress — %s\n\n", groupID)
+	fmt.Fprintf(&b, "# Group Milestone Progress — %s\n\n", toolutil.EscapeMdHeading(groupID))
 
 	if len(milestones) == 0 {
 		b.WriteString("No active group milestones found.\n")
@@ -261,7 +261,7 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 	}
 
 	for _, ms := range milestones {
-		fmt.Fprintf(&b, "## %s\n\n", ms.Title)
+		fmt.Fprintf(&b, "## %s\n\n", toolutil.EscapeMdHeading(ms.Title))
 
 		issues, _, _ := client.GL().GroupMilestones.GetGroupMilestoneIssues(groupID, ms.ID, &gl.GetGroupMilestoneIssuesOptions{
 			PerPage: maxListItems,
@@ -321,7 +321,7 @@ func handleProjectContributors(ctx context.Context, client *gitlabclient.Client,
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Contributors — %s (%d contributors)\n\n", projectID, len(contributors))
+	fmt.Fprintf(&b, "# Project Contributors — %s (%d contributors)\n\n", toolutil.EscapeMdHeading(projectID), len(contributors))
 
 	if len(contributors) == 0 {
 		b.WriteString("No contributors found.\n")
