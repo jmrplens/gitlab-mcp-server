@@ -69,9 +69,25 @@ func TestResilientStdio_AnswersUnreadableInput(t *testing.T) {
 			wantID:   "null",
 		},
 		{
-			name:     "a JSON array is not a message",
+			// Well-formed JSON that is not a Request object. -32700 would be
+			// wrong here: the server parsed it fine, it is the shape that is
+			// unusable, and a client told "parse error" looks for a syntax
+			// problem it does not have.
+			name:     "a JSON array is valid JSON and an invalid request",
 			line:     `["jsonrpc","2.0"]`,
-			wantCode: -32700,
+			wantCode: -32600,
+			wantID:   "null",
+		},
+		{
+			name:     "a bare JSON string is the same case",
+			line:     `"hello"`,
+			wantCode: -32600,
+			wantID:   "null",
+		},
+		{
+			name:     "a bare number is the same case",
+			line:     `42`,
+			wantCode: -32600,
 			wantID:   "null",
 		},
 		{

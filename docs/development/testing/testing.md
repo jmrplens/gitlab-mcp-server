@@ -18,8 +18,8 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,458 |
-| Unit test functions                                   | 12,077 |
+| Total test functions                                  | 12,460 |
+| Unit test functions                                   | 12,079 |
 | E2E test functions                                    |    381 |
 | cmd test functions                                    |  1,135 |
 | Test files (internal/)                                |    477 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,787 | 86.6% |
+| `TestFunc_Scenario` (2-part)           | 10,789 | 86.6% |
 | `TestFunc` (no underscore)             |    968 |  7.8% |
 | `TestFunc_Scenario_Expected` (3+ part) |    703 |  5.6% |
 
@@ -45,12 +45,12 @@
 
 | Layer                   | Test Functions | Test Files | Description                                                                                     |
 | ----------------------- | -------------: | ---------: | ----------------------------------------------------------------------------------------------- |
-| Core packages           |          2,275 |        114 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
+| Core packages           |          2,276 |        114 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            291 |         15 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
-| Tool sub-packages (175) |          8,376 |        348 | domain-specific GitLab tool handlers                                                            |
+| Tool sub-packages (175) |          8,377 |        348 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            381 |        172 | build-tagged real GitLab integration suite                                                      |
 | cmd packages            |          1,135 |         81 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,458** |    **730** |                                                                                                 |
+| **Total**               |     **12,460** |    **730** |                                                                                                 |
 
 ### Core Packages
 
@@ -63,9 +63,9 @@
 | clientcompat  |        18 |   100.0% | Package clientcompat applies per-client response compatibility profiles to MCP results.                                                                                                                           |
 | cmdutil       |         6 |   100.0% | Package cmdutil provides shared helpers for repository command utilities.                                                                                                                                         |
 | completions   |        96 |   100.0% | Package completions provides a CompletionHandler for GitLab-aware autocomplete of prompt arguments and resource URI template parameters.                                                                          |
-| config        |        84 |    97.1% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                  |
+| config        |        85 |    97.1% | Package config loads, normalizes, and validates runtime configuration for the GitLab MCP server.                                                                                                                  |
 | edition       |         5 |    87.0% | Package edition defines the GitLab licensing tier model used to gate tool availability across the MCP server.                                                                                                     |
-| elicitation   |       120 |    96.5% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                      |
+| elicitation   |       121 |    96.5% | Package elicitation provides a Client for requesting structured user input via the MCP elicitation protocol.                                                                                                      |
 | gitlab        |        47 |    98.4% | Package gitlab provides a wrapper around the GitLab REST API v4 client.                                                                                                                                           |
 | oauth         |        57 |    89.4% | Package oauth provides GitLab-specific OAuth 2.0 support for HTTP mode.                                                                                                                                           |
 | progress      |        17 |    83.8% | Package progress provides a Tracker for sending MCP progress notifications to the client during long-running tool operations.                                                                                     |
@@ -74,9 +74,9 @@
 | serverpool    |        73 |    98.3% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                   |
 | subscriptions |        85 |    98.4% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                          |
 | testutil      |        34 |    88.7% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                     |
-| toolutil      |       729 |    97.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
+| toolutil      |       728 |    97.8% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                     |
 | wizard        |       329 |   100.0% | Package wizard implements the setup wizard that configures GitLab MCP Server credentials, binary installation, and IDE client configuration when the binary runs interactively instead of as an MCP stdio server. |
-| **Subtotal**  | **2,275** |          |                                                                                                                                                                                                                   |
+| **Subtotal**  | **2,276** |          |                                                                                                                                                                                                                   |
 
 ### Tool Sub-Packages (Top Domains by Test Count)
 
@@ -155,7 +155,7 @@
 | dockerfiletemplates     |        15 |          1 |   100.0% |         2 |
 | dorametrics             |        11 |          2 |   100.0% |         2 |
 | dynamic                 |       161 |          8 |    99.9% |         2 |
-| elicitationtools        |        64 |          2 |    98.7% |         4 |
+| elicitationtools        |        65 |          2 |    98.7% |         4 |
 | enterpriseusers         |        35 |          3 |   100.0% |         4 |
 | environments            |        56 |          2 |   100.0% |         6 |
 | epicdiscussions         |        16 |          2 |   100.0% |         6 |
@@ -290,7 +290,7 @@
 | waitpoll                |        13 |          1 |    99.2% |         0 |
 | wikis                   |        60 |          2 |   100.0% |         6 |
 | workitems               |        93 |          3 |   100.0% |         6 |
-| **Total**               | **8,376** |    **348** |          | **1,169** |
+| **Total**               | **8,377** |    **348** |          | **1,169** |
 
 </details>
 

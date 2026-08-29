@@ -1958,3 +1958,48 @@ func TestValidate_OAuthModeRejectsInvalidPublicURLThroughValidate(t *testing.T) 
 		t.Errorf("validate() error = %v, want it to mention --public-url", err)
 	}
 }
+
+// TestValidateMetadataURL_RejectsWhatTheFlagsPromise checks the URLs this
+// deployment publishes in its protected-resource metadata.
+//
+// The flag descriptions say https, and nothing enforced it. These links are
+// followed by consent screens and directories, so a bad value does not fail
+// where an operator would see it: it produces a document a client rejects, or
+// renders a link nobody can use, long after startup succeeded.
+//
+// http on a loopback host is allowed, matching --public-url, so a developer can
+// point one at a local page while trying things out.
+func TestValidateMetadataURL_RejectsWhatTheFlagsPromise(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		wantErr bool
+	}{
+		{name: "empty is fine; the field is simply omitted", value: ""},
+		{name: "an https URL", value: "https://example.com/privacy"},
+		{name: "https with a path and query", value: "https://example.com/a/b?c=d"},
+		{name: "http on loopback, for local development", value: "http://127.0.0.1:8080/privacy"},
+		{name: "http on localhost", value: "http://localhost:8080/privacy"},
+
+		{name: "plain http on a public host", value: "http://example.com/privacy", wantErr: true},
+		{name: "not a URL at all", value: "not a url", wantErr: true},
+		{name: "a path with no host", value: "/privacy", wantErr: true},
+		{name: "a scheme that is not http(s)", value: "ftp://example.com/privacy", wantErr: true},
+		{name: "a mailto link", value: "mailto:someone@example.com", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateMetadataURL("--resource-policy-uri", tt.value)
+			if tt.wantErr && err == nil {
+				t.Errorf("ValidateMetadataURL(%q) = nil, want an error", tt.value)
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("ValidateMetadataURL(%q) = %v, want nil", tt.value, err)
+			}
+			if err != nil && !strings.Contains(err.Error(), "--resource-policy-uri") {
+				t.Errorf("err = %v, want it to name the flag the operator set", err)
+			}
+		})
+	}
+}

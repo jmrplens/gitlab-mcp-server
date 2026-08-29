@@ -230,3 +230,61 @@ func TestEncodeState_RoundTripsThroughJSON(t *testing.T) {
 		t.Errorf("got %d answers after the round trip, want 1", len(answers))
 	}
 }
+
+// TestRequestDigest_KeepsNumericPrecision pins that two calls differing only in
+// a large integer do not share a digest.
+//
+// Canonicalization decodes and re-encodes the arguments so a client may
+// re-serialize them between rounds. Decoding into a plain any made every JSON
+// number a float64, and float64 cannot tell 9007199254740992 from
+// 9007199254740993 — so two different projects produced the same digest, and
+// answers given for one would have been accepted for the other. That is the
+// precise failure the binding exists to prevent, so losing it here would have
+// made the binding decorative for large identifiers.
+//
+// json.Decoder.UseNumber keeps each number as the text the client sent, which
+// costs nothing and removes the whole class.
+func TestRequestDigest_KeepsNumericPrecision(t *testing.T) {
+	const tool = "gitlab_interactive_issue_create"
+
+	tests := []struct {
+		name string
+		a, b string
+	}{
+		{
+			name: "consecutive integers beyond float64 precision",
+			a:    `{"project_id":9007199254740992}`,
+			b:    `{"project_id":9007199254740993}`,
+		},
+		{
+			name: "large integers differing in the last digit",
+			a:    `{"project_id":18014398509481984}`,
+			b:    `{"project_id":18014398509481985}`,
+		},
+		{
+			name: "small integers still differ, as they always did",
+			a:    `{"project_id":7}`,
+			b:    `{"project_id":8}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if requestDigest(tool, []byte(tt.a)) == requestDigest(tool, []byte(tt.b)) {
+				t.Errorf("%s and %s share a digest, so answers given for one would be accepted for the other", tt.a, tt.b)
+			}
+		})
+	}
+
+	t.Run("a large identifier survives re-serialization", func(t *testing.T) {
+		// The tolerance that has to hold alongside the precision: a client may
+		// re-encode its own arguments between rounds, and doing so must not
+		// change the digest, or a legitimate retry would lose its answers.
+		// Keeping the number as text is what makes both true at once.
+		compact := requestDigest(tool, []byte(`{"project_id":9007199254740993,"title":"t"}`))
+		spaced := requestDigest(tool, []byte(`{ "title" : "t", "project_id" : 9007199254740993 }`))
+		if compact != spaced {
+			t.Error("re-indenting and re-ordering changed the digest, so a well-behaved retry would lose its answers")
+		}
+	})
+}

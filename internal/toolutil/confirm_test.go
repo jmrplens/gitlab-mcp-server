@@ -248,51 +248,53 @@ func TestConfirmDestructiveAction_MRTRRoundTrip(t *testing.T) {
 	}
 }
 
-// TestConfirmDestructiveAction_InvalidRequestStateFailsClosed verifies a
-// corrupted client-echoed request state stops the destructive action, and does
-// so as a protocol error rather than as tool output.
+// TestInvalidRequestState_FailsClosedAsAProtocolError covers both entry points
+// into the confirmation guard with a corrupted client-echoed request state.
 //
-// The failing-closed half is the one that must never change. The shape did:
-// this used to be an isError tool result, which told a model that a field its
-// own client mangled was something it could correct. It is invalid params, and
-// the assertion follows the wire rather than the internals — a client sees an
-// error response, not a successful call carrying a complaint.
-func TestConfirmDestructiveAction_InvalidRequestStateFailsClosed(t *testing.T) {
-	session := confirmGuardServer(t)
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "corrupt", Arguments: map[string]any{}})
-	if err == nil {
-		t.Fatalf("result = %+v, want a protocol error for an invalid request state", result)
-	}
-	if !strings.Contains(err.Error(), "requestState") {
-		t.Errorf("err = %v, want it to name the offending field", err)
-	}
-
-	var rpcErr *jsonrpc.Error
-	if !errors.As(err, &rpcErr) {
-		t.Fatalf("the error carries no JSON-RPC code: %v", err)
-	}
-	if rpcErr.Code != jsonrpc.CodeInvalidParams {
-		t.Errorf("code = %d, want %d (invalid params)", rpcErr.Code, jsonrpc.CodeInvalidParams)
-	}
-}
-
-// TestConfirmAction_InvalidRequestStateFailsClosed verifies ConfirmAction's
-// own defensive flow-state check (reached when a caller invokes it without
-// the ConfirmDestructiveAction pre-check) rejects a corrupted request state,
-// with the same classification as the guarded path.
-func TestConfirmAction_InvalidRequestStateFailsClosed(t *testing.T) {
-	session := confirmGuardServer(t)
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "corrupt_confirm", Arguments: map[string]any{}})
-	if err == nil {
-		t.Fatalf("result = %+v, want a protocol error for an invalid request state", result)
+// The failing-closed half must never change: a state this server did not issue
+// stops the destructive action. The shape did change. It used to be an isError
+// tool result, which told a model that a field its own client mangled was
+// something it could correct; it is invalid params, and the assertion follows
+// the wire — a client sees an error response, not a successful call carrying a
+// complaint.
+//
+// Both paths are here because ConfirmAction has its own defensive check,
+// reached when a caller invokes it without the ConfirmDestructiveAction
+// pre-check, and the two must classify the same input the same way.
+func TestInvalidRequestState_FailsClosedAsAProtocolError(t *testing.T) {
+	tests := []struct {
+		name string
+		tool string
+		// namesTheField is true where the message should still identify what
+		// the client got wrong.
+		namesTheField bool
+	}{
+		{name: "through the destructive guard", tool: "corrupt", namesTheField: true},
+		{name: "through ConfirmAction directly", tool: "corrupt_confirm"},
 	}
 
-	var rpcErr *jsonrpc.Error
-	if !errors.As(err, &rpcErr) {
-		t.Fatalf("the error carries no JSON-RPC code: %v", err)
-	}
-	if rpcErr.Code != jsonrpc.CodeInvalidParams {
-		t.Errorf("code = %d, want %d (invalid params)", rpcErr.Code, jsonrpc.CodeInvalidParams)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := confirmGuardServer(t)
+			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+				Name:      tt.tool,
+				Arguments: map[string]any{},
+			})
+			if err == nil {
+				t.Fatalf("result = %+v, want a protocol error for an invalid request state", result)
+			}
+			if tt.namesTheField && !strings.Contains(err.Error(), "requestState") {
+				t.Errorf("err = %v, want it to name the offending field", err)
+			}
+
+			var rpcErr *jsonrpc.Error
+			if !errors.As(err, &rpcErr) {
+				t.Fatalf("the error carries no JSON-RPC code: %v", err)
+			}
+			if rpcErr.Code != jsonrpc.CodeInvalidParams {
+				t.Errorf("code = %d, want %d (invalid params)", rpcErr.Code, jsonrpc.CodeInvalidParams)
+			}
+		})
 	}
 }
 

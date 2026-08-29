@@ -2373,14 +2373,15 @@ func TestGetPrompt_CarriesTheDescriptionTheCatalogDeclares(t *testing.T) {
 		}
 		checked++
 
-		got, getErr := session.GetPrompt(context.Background(), &mcp.GetPromptParams{Name: p.Name})
-		if getErr != nil {
-			t.Errorf("%s: %v", p.Name, getErr)
-			continue
-		}
-		if got.Description != p.Description {
-			t.Errorf("%s: description = %q, want the catalog's %q", p.Name, got.Description, p.Description)
-		}
+		t.Run(p.Name, func(t *testing.T) {
+			got, getErr := session.GetPrompt(context.Background(), &mcp.GetPromptParams{Name: p.Name})
+			if getErr != nil {
+				t.Fatalf("prompts/get: %v", getErr)
+			}
+			if got.Description != p.Description {
+				t.Errorf("description = %q, want the catalog's %q", got.Description, p.Description)
+			}
+		})
 	}
 
 	if checked == 0 {

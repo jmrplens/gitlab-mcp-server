@@ -53,6 +53,7 @@ make the worst case something an operator can predict.
   Any request that reaches the server on that session restores it. An
   absolute 24-hour cap is the only deadline that stops a watch on time
   alone.
+
   **An open `subscriptions/listen` stream renews its own watch.** Session
   traffic is a proxy for "is anyone still there"; an open listen request
   answers that question directly and better, since the subscriber is
@@ -67,6 +68,7 @@ make the worst case something an operator can predict.
 - **A subscriber is an identity, not a count.** Watches are held by the
   session that asked for them, so subscribing twice is idempotent and one
   session cannot release another's watch.
+
   **That identity is the session for the legacy `resources/subscribe` and the
   listen stream for `subscriptions/listen`.** This decision was written before
   the 2026-07-28 path existed, and the specification has moved past it: that
@@ -83,6 +85,7 @@ make the worst case something an operator can predict.
 - **The legacy `resources/subscribe` is refused in stateless HTTP mode**,
   where the session ends with the POST that created it and no notification
   could ever be delivered. `subscriptions/listen` still works there.
+
   **The refusal must be scoped by request path, not by transport.** The SDK
   routes both methods through the one `SubscribeHandler`: `subscriptions/listen`
   calls it once per resource URI it carries and returns the first error before

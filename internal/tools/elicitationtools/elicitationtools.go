@@ -22,7 +22,13 @@ const (
 	// labelCollectingDesc identifies the description-collection step in wrapped errors.
 	labelCollectingDesc = "collecting description"
 	// fmtDescSummary identifies the fmt desc summary constant used by this package.
-	fmtDescSummary = "\n**Description**: %.100s..."
+	//
+	// The value is truncated by [summaryExcerpt] before it is escaped, not by a
+	// width verb here. Escaping wraps the text in a fence, so cutting the
+	// escaped form at a byte count would drop the closing delimiter and let the
+	// fence swallow every field printed after it — turning a length limit into
+	// a rendering bug in the dialog a person reads to decide.
+	fmtDescSummary = "\n**Description**: %s"
 )
 
 // Input types.
@@ -74,6 +80,26 @@ func UnsupportedResult(toolName string) *mcp.CallToolResult {
 		},
 		IsError: true,
 	}
+}
+
+// summaryExcerptRunes is how much of a description a consent dialog shows.
+const summaryExcerptRunes = 100
+
+// summaryExcerpt shortens a description for the confirmation dialog.
+//
+// It runs before escaping, not after. Escaping fences the value, so trimming
+// the escaped form would cut the closing delimiter off and let the fence
+// swallow every field printed after it — a length limit turning into a
+// rendering bug in the dialog someone reads to decide.
+//
+// Counting runes rather than bytes keeps a multi-byte character from being
+// split in half, which would put an invalid sequence in front of the user.
+func summaryExcerpt(s string) string {
+	runes := []rune(s)
+	if len(runes) <= summaryExcerptRunes {
+		return s
+	}
+	return string(runes[:summaryExcerptRunes]) + "..."
 }
 
 // parseCSVLabels splits a comma-separated string into trimmed, non-empty labels.
@@ -164,7 +190,7 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 	summary := fmt.Sprintf("Create issue in project %s?\n\n**Title**: %s",
 		toolutil.EscapeConsentValue(string(input.ProjectID)), toolutil.EscapeConsentValue(title))
 	if description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(description))
+		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(summaryExcerpt(description)))
 	}
 	if len(labels) > 0 {
 		summary += "\n**Labels**: " + toolutil.EscapeConsentValue(strings.Join(labels, ", "))
@@ -363,7 +389,7 @@ func buildMRSummary(p mrSummaryParams) string {
 		toolutil.EscapeConsentValue(string(p.ProjectID)), toolutil.EscapeConsentValue(p.Title),
 		toolutil.EscapeConsentValue(p.SourceBranch), toolutil.EscapeConsentValue(p.TargetBranch))
 	if p.Description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(p.Description))
+		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(summaryExcerpt(p.Description)))
 	}
 	if len(p.Labels) > 0 {
 		summary += "\n**Labels**: " + toolutil.EscapeConsentValue(strings.Join(p.Labels, ", "))
@@ -419,7 +445,7 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	summary := fmt.Sprintf("Create release in project %s?\n\n**Tag**: %s\n**Name**: %s",
 		toolutil.EscapeConsentValue(string(input.ProjectID)), toolutil.EscapeConsentValue(tagName), toolutil.EscapeConsentValue(name))
 	if description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(description))
+		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(summaryExcerpt(description)))
 	}
 
 	if confirmErr := confirmCreation(ctx, fl, summary, "release creation"); confirmErr != nil {
@@ -490,7 +516,7 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	summary := fmt.Sprintf("Create new GitLab project?\n\n**Name**: %s\n**Visibility**: %s",
 		toolutil.EscapeConsentValue(name), toolutil.EscapeConsentValue(visibility))
 	if description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(description))
+		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(summaryExcerpt(description)))
 	}
 	if initReadme {
 		summary += "\n**README**: Yes"

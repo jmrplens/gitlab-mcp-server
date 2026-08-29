@@ -3,6 +3,7 @@
 package elicitation
 
 import (
+	"bytes"
 	"crypto/hmac"
 	cryptorand "crypto/rand"
 	"crypto/sha256"
@@ -74,8 +75,15 @@ type signedState struct {
 // the call is going to fail its schema check anyway.
 func requestDigest(toolName string, args json.RawMessage) string {
 	canonical := args
+	// UseNumber keeps each number as the text the client sent. Decoding into
+	// plain any would make every number a float64, and two identifiers above
+	// 2^53 would then share a digest — 9007199254740992 and 9007199254740993
+	// are the same float64 — which is exactly the collision this binding exists
+	// to prevent.
+	decoder := json.NewDecoder(bytes.NewReader(args))
+	decoder.UseNumber()
 	var decoded any
-	if json.Unmarshal(args, &decoded) == nil {
+	if decoder.Decode(&decoded) == nil {
 		if reencoded, marshalErr := json.Marshal(decoded); marshalErr == nil {
 			canonical = reencoded
 		}

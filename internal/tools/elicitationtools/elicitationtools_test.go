@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -1984,5 +1985,63 @@ func TestBuildMRSummary_DefangsInjectedMarkupAndLinks(t *testing.T) {
 	}
 	if !strings.Contains(s, "demo/proj") {
 		t.Errorf("the project path itself was lost, so the user cannot see what they are approving:\n%s", s)
+	}
+}
+
+// TestBuildMRSummary_LongDescriptionKeepsItsFenceClosed pins the interaction
+// between truncating a description and escaping it.
+//
+// Escaping wraps a value in a backtick fence. Truncating the escaped form at a
+// fixed width — which is what the format verb used to do — cuts the closing
+// delimiter off whenever the escaped text is longer than the limit, so the
+// fence stays open and swallows every field printed after it. The consent
+// dialog then shows the labels, the branches and the confirmation question as
+// one run of code, in the prompt a person reads to decide.
+//
+// So the excerpt is taken first and escaped second. The boundary is checked
+// either side of the limit, and a following field is always present, because a
+// dangling fence is only visible in what comes after it.
+func TestBuildMRSummary_LongDescriptionKeepsItsFenceClosed(t *testing.T) {
+	tests := []struct {
+		name        string
+		description string
+	}{
+		{name: "just under the limit", description: strings.Repeat("a", summaryExcerptRunes-1)},
+		{name: "exactly at the limit", description: strings.Repeat("a", summaryExcerptRunes)},
+		{name: "just over the limit", description: strings.Repeat("a", summaryExcerptRunes+1)},
+		{name: "far over the limit", description: strings.Repeat("a", 500)},
+		// Multi-byte text: a rune split in half would put an invalid sequence
+		// in front of the user.
+		{name: "multi-byte characters over the limit", description: strings.Repeat("ñ", 300)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := buildMRSummary(mrSummaryParams{
+				ProjectID:    "42",
+				Title:        "a title",
+				SourceBranch: "feature/x",
+				TargetBranch: "main",
+				Description:  tt.description,
+				// Printed after the description, so an unclosed fence shows up
+				// here rather than staying invisible.
+				Labels: []string{"bug", "urgent"},
+			})
+
+			if strings.Count(s, "`")%2 != 0 {
+				t.Errorf("odd number of backticks, so a fence is left open:\n%s", s)
+			}
+			if !strings.Contains(s, "**Labels**") {
+				t.Fatalf("the labels field is missing from the summary:\n%s", s)
+			}
+			// The label values must still read as their own escaped field
+			// rather than as part of the description's fence.
+			if !strings.Contains(s, "`bug, urgent`") {
+				t.Errorf("the labels were absorbed by the description's fence:\n%s", s)
+			}
+			if !utf8.ValidString(s) {
+				t.Error("the summary is not valid UTF-8; a character was split")
+			}
+		})
 	}
 }

@@ -59,6 +59,11 @@ func TestPublishDirectory_ProgressSequenceOnlyIncreases(t *testing.T) {
 		}
 	}
 
+	var wantTotal float64
+	for _, size := range files {
+		wantTotal += float64(size)
+	}
+
 	got := progressOfOneCall(t, func(ctx context.Context, req *mcp.CallToolRequest) error {
 		_, err := PublishDirectory(ctx, req, client, PublishDirInput{
 			ProjectID:      "42",
@@ -67,15 +72,14 @@ func TestPublishDirectory_ProgressSequenceOnlyIncreases(t *testing.T) {
 			DirectoryPath:  dir,
 		})
 		return err
+	}, func(seen []mcp.ProgressNotificationParams) bool {
+		// The job is done when the last frame reports the whole total, which
+		// is the same thing the assertions below check for.
+		return len(seen) > 0 && seen[len(seen)-1].Progress == wantTotal
 	})
 
 	if len(got) < 2 {
 		t.Fatalf("got %d progress notifications, want several: the call reported almost nothing", len(got))
-	}
-
-	var wantTotal float64
-	for _, size := range files {
-		wantTotal += float64(size)
 	}
 
 	prev := -1.0
@@ -105,7 +109,11 @@ func TestPublishDirectory_ProgressSequenceOnlyIncreases(t *testing.T) {
 // each notification" is a property of the series a client observes on one
 // token, so a test that inspects notifications one at a time, or that reads the
 // tracker's own state, cannot check it.
-func progressOfOneCall(t *testing.T, handler func(context.Context, *mcp.CallToolRequest) error) []mcp.ProgressNotificationParams {
+func progressOfOneCall(
+	t *testing.T,
+	handler func(context.Context, *mcp.CallToolRequest) error,
+	complete func([]mcp.ProgressNotificationParams) bool,
+) []mcp.ProgressNotificationParams {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -149,44 +157,45 @@ func progressOfOneCall(t *testing.T, handler func(context.Context, *mcp.CallTool
 		t.Fatalf("CallTool: %v", callErr)
 	}
 
-	// Progress notifications are one-way messages, so the call can return
-	// before the last of them has been delivered. Waiting for the stream to go
-	// quiet is what makes the sequence assertions deterministic; without it the
-	// final frame is sometimes missing and the test fails claiming the job
-	// never finished.
-	settle(t, &mu, &got)
+	// Progress notifications are one-way messages: the client queues them for
+	// its handler while CallTool waits only for the tool response, so the call
+	// can return before the last of them has been delivered. Waiting for the
+	// caller's completion condition is what makes the sequence assertions
+	// deterministic — a quiet period would only be a guess at how long delivery
+	// takes, and a slow machine would make it wrong.
+	waitFor(t, &mu, &got, complete)
 
 	mu.Lock()
 	defer mu.Unlock()
 	return append([]mcp.ProgressNotificationParams(nil), got...)
 }
 
-// settle waits until no new notification has arrived for a short quiet period,
-// or until a deadline that is generous enough that reaching it means something
-// is actually wrong.
-func settle(t *testing.T, mu *sync.Mutex, got *[]mcp.ProgressNotificationParams) {
+// waitFor blocks until the notifications received satisfy complete, or fails
+// the test with what it did see.
+//
+// Naming the terminal condition rather than waiting out a silence is the
+// difference between a deterministic test and one that passes on a fast machine.
+func waitFor(
+	t *testing.T,
+	mu *sync.Mutex,
+	got *[]mcp.ProgressNotificationParams,
+	complete func([]mcp.ProgressNotificationParams) bool,
+) {
 	t.Helper()
 
-	const quiet = 100 * time.Millisecond
 	deadline := time.Now().Add(10 * time.Second)
-
-	count := func() int {
-		mu.Lock()
-		defer mu.Unlock()
-		return len(*got)
-	}
-
-	last := count()
-	stable := time.Now()
 	for time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-		if n := count(); n != last {
-			last, stable = n, time.Now()
-			continue
-		}
-		if time.Since(stable) >= quiet {
+		mu.Lock()
+		snapshot := append([]mcp.ProgressNotificationParams(nil), *got...)
+		mu.Unlock()
+
+		if complete(snapshot) {
 			return
 		}
+		time.Sleep(5 * time.Millisecond)
 	}
-	t.Fatalf("progress notifications never stopped arriving; last count %d", last)
+
+	mu.Lock()
+	defer mu.Unlock()
+	t.Fatalf("the expected final progress notification never arrived; received %d: %+v", len(*got), *got)
 }

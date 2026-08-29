@@ -761,6 +761,18 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 	if cfg.AuthMode != "legacy" && cfg.AuthMode != "oauth" {
 		return fmt.Errorf("--auth-mode must be 'legacy' or 'oauth', got %q", cfg.AuthMode)
 	}
+	// Checked in both modes: these are published the moment oauth is enabled,
+	// and an operator who sets them while running legacy should hear about a
+	// bad value now rather than the first time they switch.
+	for _, link := range []struct{ flag, value string }{
+		{"--resource-documentation", cfg.ResourceDocumentation},
+		{"--resource-policy-uri", cfg.ResourcePolicyURI},
+		{"--resource-tos-uri", cfg.ResourceTermsURI},
+	} {
+		if err := config.ValidateMetadataURL(link.flag, link.value); err != nil {
+			return err
+		}
+	}
 	if cfg.AuthMode != "oauth" {
 		// In legacy mode --public-url is optional, but when set it now has
 		// an effect (its origin seeds the trusted-origins list), so a

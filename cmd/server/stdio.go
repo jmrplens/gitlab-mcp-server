@@ -109,8 +109,16 @@ func refuseUnreadable(line string) (refusal []byte, refuse bool) {
 		ID      json.RawMessage `json:"id"`
 	}
 	if err := json.Unmarshal([]byte(trimmed), &probe); err != nil {
-		// Not JSON at all. The id is unknowable, so it is null, which is what
-		// JSON-RPC 2.0 prescribes for a parse error.
+		// Unmarshal into a struct also fails for well-formed JSON that is not
+		// an object — an array, a bare string, a number — and those are not
+		// parse errors. -32700 means the server could not parse JSON at all;
+		// telling a client that about valid JSON sends it looking for a
+		// syntax problem it does not have.
+		if json.Valid([]byte(trimmed)) {
+			return errorLine(nil, -32600, "Invalid Request"), true
+		}
+		// Genuinely not JSON. The id is unknowable, so it is null, which is
+		// what JSON-RPC 2.0 prescribes for a parse error.
 		return errorLine(nil, -32700, "Parse error"), true
 	}
 	if probe.JSONRPC != "2.0" {
