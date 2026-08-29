@@ -6053,3 +6053,34 @@ func TestCorsAllowHeaders_CoversEveryDeclaredParameterHeader(t *testing.T) {
 		})
 	}
 }
+
+// TestProtocolVersions_MatchTheSDK keeps our mirrored list honest.
+//
+// The SDK's supportedProtocolVersions is unexported, so this server restates it
+// to answer an unsupported version with the error the spec requires. Restating
+// it invites drift: an SDK bump that adds a revision would leave this server
+// rejecting a version the SDK is happy to serve. The SDK names its own list in
+// the plain-text rejection it emits for an old unknown version, so driving that
+// path is a way to read it back without importing an unexported symbol.
+func TestProtocolVersions_MatchTheSDK(t *testing.T) {
+	t.Parallel()
+
+	handler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return nil }, nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.Header.Set("MCP-Protocol-Version", "1999-01-01")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	const marker = "supported versions: "
+	idx := strings.Index(rec.Body.String(), marker)
+	if idx < 0 {
+		t.Skipf("the SDK no longer names its versions in that rejection: %q", rec.Body.String())
+	}
+	named := strings.TrimSpace(strings.TrimSuffix(rec.Body.String()[idx+len(marker):], ")\n"))
+	named = strings.TrimSuffix(named, ")")
+
+	want := strings.Join(supportedProtocolVersions, ",")
+	if named != want {
+		t.Errorf("the SDK supports %q but this server mirrors %q — update supportedProtocolVersions", named, want)
+	}
+}

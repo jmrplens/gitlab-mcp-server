@@ -34,11 +34,15 @@ const (
 // reserved range (-32768 to -32000), so the gate's own codes mirror their HTTP
 // status multiplied by -100, well below -32768.
 const (
-	errCodeInvalidRequest      = -32600 // standard JSON-RPC "Invalid Request"
-	errCodeUnauthorized        = -40100 // mirrors HTTP 401
-	errCodeForbidden           = -40300 // mirrors HTTP 403
-	errCodeTooManyRequests     = -42900 // mirrors HTTP 429
-	errCodeUpstreamUnavailable = -50300 // mirrors HTTP 503
+	errCodeInvalidRequest = -32600 // standard JSON-RPC "Invalid Request"
+	// codeUnsupportedProtocolVersion is defined by the MCP specification, not
+	// by this server, so it sits inside the reserved range where the spec put
+	// it rather than following the mirrored-status convention below.
+	codeUnsupportedProtocolVersion = -32022
+	errCodeUnauthorized            = -40100 // mirrors HTTP 401
+	errCodeForbidden               = -40300 // mirrors HTTP 403
+	errCodeTooManyRequests         = -42900 // mirrors HTTP 429
+	errCodeUpstreamUnavailable     = -50300 // mirrors HTTP 503
 )
 
 // legacyAuthChallenge is the WWW-Authenticate challenge for --auth-mode=legacy.

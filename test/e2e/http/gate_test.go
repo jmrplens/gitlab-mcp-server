@@ -347,3 +347,83 @@ func TestGate_SessionIsBoundToTheCredentialThatMintedIt(t *testing.T) {
 		t.Errorf("status = %d, want 404 — the terminated-session signal a conforming client recovers from", intruder.status)
 	}
 }
+
+// TestProtocolVersion_UnsupportedGetsTheSpecifiedError pins the answer to a
+// version this server does not implement.
+//
+// The transport spec requires 400 with an UnsupportedProtocolVersionError
+// listing the supported versions. The SDK produces that only for versions
+// sorting at or above 2026-07-28; anything older got a plain-text 400. That is
+// not a cosmetic difference: the spec's backward-compatibility rule tells a
+// client that a 400 whose body is not a recognizable JSON-RPC error means an
+// initialization-era server, so it downgrades to the withdrawn HTTP+SSE
+// transport, issues a GET, and a stateless deployment answers 405 — leaving it
+// with no transport instead of one actionable retry.
+func TestProtocolVersion_UnsupportedGetsTheSpecifiedError(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	for _, version := range []string{"2024-01-01", "1999-12-31", "not-a-version"} {
+		t.Run(version, func(t *testing.T) {
+			got := srv.do(t, request{
+				method: http.MethodPost, path: "/mcp", body: toolsListBody,
+				headers: map[string]string{
+					"PRIVATE-TOKEN":        "glpat-whatever",
+					"MCP-Protocol-Version": version,
+				},
+			})
+
+			if got.status != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400", got.status)
+			}
+			if ct := got.header.Get("Content-Type"); !strings.Contains(ct, "application/json") {
+				t.Fatalf("Content-Type = %q; a non-JSON body makes a client conclude the server is initialization-era", ct)
+			}
+
+			var body struct {
+				Error struct {
+					Code int `json:"code"`
+					Data struct {
+						Supported []string `json:"supported"`
+						Requested string   `json:"requested"`
+					} `json:"data"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(got.body), &body); err != nil {
+				t.Fatalf("decode error body %q: %v", got.body, err)
+			}
+			if body.Error.Code != -32022 {
+				t.Errorf("error code = %d, want -32022 (UnsupportedProtocolVersionError)", body.Error.Code)
+			}
+			if len(body.Error.Data.Supported) == 0 {
+				t.Error("the error names no supported versions, so a client cannot retry")
+			}
+			if body.Error.Data.Requested != version {
+				t.Errorf("requested = %q, want %q", body.Error.Data.Requested, version)
+			}
+		})
+	}
+}
+
+// TestProtocolVersion_SupportedVersionsStillWork guards against the middleware
+// rejecting a version the server does implement.
+func TestProtocolVersion_SupportedVersionsStillWork(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	for _, version := range []string{"2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"} {
+		t.Run(version, func(t *testing.T) {
+			body := strings.ReplaceAll(toolsListBody, protocolVersion, version)
+			got := srv.do(t, request{
+				method: http.MethodPost, path: "/mcp", body: body,
+				headers: map[string]string{
+					"PRIVATE-TOKEN":        "glpat-whatever",
+					"MCP-Protocol-Version": version,
+				},
+			})
+			if got.status == http.StatusBadRequest && strings.Contains(got.body, "-32022") {
+				t.Errorf("version %s was rejected as unsupported: %s", version, got.body)
+			}
+		})
+	}
+}

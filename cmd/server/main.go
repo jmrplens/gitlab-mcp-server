@@ -1652,10 +1652,81 @@ func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr s
 // deployment already tells the server its public path, so it does not need a
 // second flag to say the same thing.
 func mountMCPEndpoint(cfg *config.Config, mux *http.ServeMux, handler http.Handler) {
+	guarded := protocolVersionMiddleware(handler)
 	for _, pattern := range mcpEndpointPatterns(cfg) {
-		mux.Handle(pattern, handler)
+		mux.Handle(pattern, guarded)
 	}
 	mux.HandleFunc("/", notFoundHandler)
+}
+
+// supportedProtocolVersions mirrors the SDK's own list, which is unexported.
+// TestProtocolVersions_MatchTheSDK drives the SDK with an unknown version and
+// compares this against the list it names, so an SDK bump that adds or drops a
+// revision fails loudly instead of silently making this stale.
+var supportedProtocolVersions = []string{
+	"2026-07-28",
+	"2025-11-25",
+	"2025-06-18",
+	"2025-03-26",
+	"2024-11-05",
+}
+
+// protocolVersionMiddleware answers an unsupported MCP-Protocol-Version with the
+// error the transport specification requires.
+//
+// The spec says a server that does not implement the requested version MUST
+// respond 400 with an UnsupportedProtocolVersionError listing what it does
+// support. The SDK produces that only for versions sorting at or above
+// 2026-07-28; anything older gets a plain-text 400. That matters because the
+// spec's own backward-compatibility rule tells a client that a 400 whose body is
+// not a recognizable JSON-RPC error means it is talking to an initialization-era
+// server, so it falls back to the withdrawn HTTP+SSE transport — issuing a GET,
+// which a stateless deployment answers 405. The client ends with no transport at
+// all instead of the single retry the supported list would have told it to make.
+func protocolVersionMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requested := r.Header.Get("MCP-Protocol-Version")
+		if requested == "" || slices.Contains(supportedProtocolVersions, requested) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		writeUnsupportedProtocolVersion(w, requested)
+	})
+}
+
+// unsupportedVersionError is the wire shape of the error the transport
+// specification names for a protocol version the server does not implement. It
+// is a typed struct rather than a map so the JSON encoding cannot fail, which
+// is what lets the write below be total.
+type unsupportedVersionError struct {
+	JSONRPC string  `json:"jsonrpc"`
+	ID      *string `json:"id"`
+	Error   struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    struct {
+			Supported []string `json:"supported"`
+			Requested string   `json:"requested"`
+		} `json:"data"`
+	} `json:"error"`
+}
+
+// writeUnsupportedProtocolVersion emits the JSON-RPC error body the spec names,
+// carrying the versions this server does support so the client can retry once
+// with one of them rather than guessing or downgrading its transport.
+func writeUnsupportedProtocolVersion(w http.ResponseWriter, requested string) {
+	var body unsupportedVersionError
+	body.JSONRPC = "2.0"
+	body.Error.Code = codeUnsupportedProtocolVersion
+	body.Error.Message = "unsupported protocol version"
+	body.Error.Data.Supported = supportedProtocolVersions
+	body.Error.Data.Requested = requested
+
+	w.Header().Set(hdrContentType, mimeJSON)
+	w.WriteHeader(http.StatusBadRequest)
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		slog.Error("failed to write unsupported-protocol-version response", "error", err)
+	}
 }
 
 // mcpEndpointPatterns lists the ServeMux patterns the MCP handler is mounted
