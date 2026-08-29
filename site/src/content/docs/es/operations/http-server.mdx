@@ -77,7 +77,7 @@ El servidor comienza a escuchar en el puerto 8080 por defecto. El endpoint MCP e
 | `--oauth-cache-ttl`        | `15m`                        | TTL de caché de identidad de token OAuth (rango: 1m–2h)                                                                                                                                                                                                                                                                                     |
 | `--pool-idle-timeout`      | `1h`                         | Recupera una entrada del pool (token + URL de GitLab) tras este tiempo sin usarse; `0` mantiene las entradas hasta que el límite de tamaño del pool las expulse (límite: 24h)                                                                                                                                                               |
 | `--revalidate-interval`    | `15m`                        | Intervalo de revalidación de token; `0` para desactivar (límite: 24h)                                                                                                                                                                                                                                                                       |
-| `--rate-limit-rps`         | `0`                          | Límite de tasa por servidor para `tools/call` en req/s (`0` = desactivado)                                                                                                                                                                                                                                                                  |
+| `--rate-limit-rps`         | `10`                         | Límite de tasa por servidor para `tools/call` en req/s (`0` lo desactiva); activo por defecto porque un despliegue HTTP es compartido                                                                                                                                                                                                       |
 | `--rate-limit-burst`       | `40`                         | Tamaño máximo del token bucket cuando `--rate-limit-rps > 0`                                                                                                                                                                                                                                                                                |
 | `--trusted-proxy-header`   | —                            | Cabecera HTTP con la IP real del cliente para rate limiting detrás de proxies (ej. `CF-Connecting-IP`, `X-Forwarded-For`)                                                                                                                                                                                                                   |
 | `--stateless`              | `true`                       | HTTP streamable sin sesiones (SEP-2567 / protocolo 2026-07-28): sin seguimiento de `Mcp-Session-Id`, cada POST es autónomo, GET/DELETE devuelven `405`. Usa `--stateless=false` para sesiones con estado heredadas                                                                                                                          |
@@ -302,23 +302,25 @@ Dos capas independientes gobiernan la vida de la conexión y de la sesión:
 - **Conexión HTTP inactiva** (`--http-idle-timeout`, por defecto `0` = desactivado): el tiempo máximo que el `http.Server` espera la siguiente petición en una conexión keep-alive antes de cerrarla.
 - **Escritura de respuesta HTTP** (fijo `60s`, desactivado para SSE): acota cuánto puede tardar en escribirse una respuesta.
 
-El servidor habla el transporte moderno **Streamable HTTP**, que usa Server-Sent Events (`text/event-stream`) para las respuestas en streaming y el stream independiente que transporta las notificaciones iniciadas por el servidor y los pings de keep-alive. Una respuesta SSE activa está acotada por `WriteTimeout` (no por `IdleTimeout`, que solo limita la espera entre peticiones en una conexión inactiva), y el escritor SSE del go-sdk nunca reinicia el deadline de escritura.
+El servidor habla el transporte moderno **Streamable HTTP**, que usa Server-Sent Events (`text/event-stream`) para las respuestas en streaming y para el stream independiente que transporta las notificaciones iniciadas por el servidor. Ambos permanecen en silencio durante largos periodos por diseño. Una respuesta SSE activa está acotada por `WriteTimeout` (no por `IdleTimeout`, que solo limita la espera entre peticiones en una conexión inactiva), y el escritor SSE del go-sdk nunca reinicia el deadline de escritura.
 
-Para no cortar esos streams sin debilitar la protección del resto, el `WriteTimeout` global se mantiene en unos seguros `60s` (protegiendo endpoints estándar como `/health` de ataques de escritura lenta) y cualquier petición que negocie SSE (`Accept: text/event-stream`) — tanto el stream GET independiente como las respuestas POST en streaming — desactiva dinámicamente su propio deadline de escritura. Como `--http-idle-timeout` vale `0` (desactivado) por defecto, la capa HTTP tampoco cierra las conexiones inactivas de fábrica, así que `--session-timeout` es la vida efectiva de inactividad. Pon un `--http-idle-timeout` bajo solo si quieres reciclar antes las conexiones inactivas.
+Para no cortar esos streams sin debilitar la protección del resto, el `WriteTimeout` global se mantiene en unos seguros `60s` (protegiendo endpoints estándar como `/health` de ataques de escritura lenta) y cualquier respuesta que el servidor conteste realmente como `text/event-stream` — tanto el stream GET independiente como las respuestas POST en streaming — desactiva dinámicamente su propio deadline de escritura y lleva `X-Accel-Buffering: no`. La decisión se toma a partir de la respuesta, no de la cabecera `Accept` de la petición: a un cliente que envía `*/*` o `text/*` también se le responde con un stream. Como `--http-idle-timeout` vale `0` (desactivado) por defecto, la capa HTTP tampoco cierra las conexiones inactivas de fábrica, así que `--session-timeout` es la vida efectiva de inactividad. Pon un `--http-idle-timeout` bajo solo si quieres reciclar antes las conexiones inactivas.
+
+Una respuesta SSE que se queda en silencio emite un **keep-alive** cada 25 segundos: un frame de comentario (una línea que empieza por `:`), que un lector SSE conforme descarta sin producir ningún evento. Limpiar el deadline de escritura resuelve este extremo de la conexión y ninguno de los saltos intermedios, y nginx cierra una respuesta upstream inactiva en `proxy_read_timeout` — 60 segundos por defecto — así que el latido es lo que mantiene el stream abierto. Un stream que ha escrito hace poco se omite en lugar de rellenarse. Es comportamiento propio del servidor: el go-sdk no emite ningún ping periódico.
 
 :::caution[Detrás de un proxy inverso]
-Cuando el cierre por inactividad del servidor está desactivado, el timeout de lectura o de inactividad del proxy/edge pasa a ser el factor limitante. Auméntalo (por ejemplo, a varios minutos) para streams MCP de larga duración.
+Cuando el cierre por inactividad del servidor está desactivado, el timeout de lectura o de inactividad del proxy/edge pasa a ser el factor limitante. El keep-alive de 25 segundos mantiene abierto un stream inactivo frente a un `proxy_read_timeout` de nginx por defecto; si tu edge es más estricto, súbelo en lugar de confiar en el latido.
 :::
 
 ## Rate limiting
 
-El modo HTTP incluye un **rate limiter por servidor con token bucket** opcional que regula las solicitudes `tools/call`. El limitador está **desactivado por defecto** (`--rate-limit-rps=0`) y se aplica a cada entrada del pool de forma independiente — es decir, el ámbito es la misma clave `(token + URL de GitLab)` que usa el pool de servidores.
+El modo HTTP incluye un **rate limiter por servidor con token bucket** que regula las solicitudes `tools/call`. En modo HTTP está **activado por defecto** (`--rate-limit-rps=10`; pon `0` para desactivarlo) porque un despliegue HTTP es compartido: cada llamada que reenvía se carga a su propia dirección de salida, así que el volumen de un cliente en bucle recae sobre todos los demás inquilinos. Stdio lo deja apagado, al no tener con quién compartir. El limitador se aplica a cada entrada del pool de forma independiente — es decir, el ámbito es la misma clave `(token + URL de GitLab)` que usa el pool de servidores.
 
 ### Configuración
 
 | Flag                 | Por defecto | Significado                                                                       |
 | -------------------- | ----------- | --------------------------------------------------------------------------------- |
-| `--rate-limit-rps`   | `0`         | Tasa sostenida de relleno, en solicitudes por segundo. `0` desactiva el limitador |
+| `--rate-limit-rps`   | `10`        | Tasa sostenida de relleno, en solicitudes por segundo. `0` desactiva el limitador |
 | `--rate-limit-burst` | `40`        | Capacidad máxima del bucket (pico de ráfaga durante 1s)                           |
 
 Cuando `--rate-limit-rps > 0`, cada entrada del pool obtiene su propio token bucket dimensionado en `--rate-limit-burst` tokens, rellenado a `--rate-limit-rps` por segundo. Solo las solicitudes `tools/call` consumen tokens; `tools/list`, `resources/*`, `prompts/*`, `initialize` y otras RPCs de bajo coste no están limitadas.
@@ -329,7 +331,7 @@ Cuando una solicitud agotaría el bucket, el servidor devuelve un `CallToolResul
 
 ### Guía de dimensionado
 
-- **Despliegue de un solo usuario** (dev local típico): déjalo desactivado (`--rate-limit-rps=0`)
+- **Despliegue de un solo usuario** (dev local típico): `--rate-limit-rps=0` es una desactivación razonable; stdio ya viene así por defecto
 - **Instancia compartida tras un proxy** (Kubernetes, nginx, Cloudflare): empieza con `--rate-limit-rps=10 --rate-limit-burst=40`. Cada par token+URL obtiene su propia cuota, lo que protege frente a un único cliente ruidoso sin afectar a los demás
 - **Despliegue multi-tenant grande**: combina con rate limiting a nivel de infraestructura (Cloudflare, Caddy, nginx). El limitador a nivel MCP es una red de seguridad, no un sustituto del control en el edge
 
@@ -575,6 +577,18 @@ curl -s -X POST http://localhost:8080/mcp \
 ```
 
 Una respuesta exitosa devuelve un resultado JSON-RPC con la lista de herramientas disponibles.
+
+### Ficha del servidor
+
+`GET /server-card` tampoco necesita credenciales, y responde con el documento server-card de MCP: cada herramienta, recurso, plantilla de recurso y prompt que registra este despliegue, con sus esquemas, más las capacidades que anuncia.
+
+```bash
+curl -s http://localhost:8080/server-card
+```
+
+La respuesta lleva `Content-Type: application/mcp-server-card+json`. El mismo documento se sirve en la ruta heredada `/.well-known/mcp/server-card.json` como `application/json`, para clientes escritos contra la ubicación anterior. Ambas se montan también bajo el prefijo de ruta de `--public-url`, para un proxy que reenvía su prefijo en lugar de quitarlo.
+
+Es la vía sancionada para publicar el catálogo a algo que no tiene credencial — un directorio, un escáner, una compilación de documentación. `tools/list` sigue autenticado, porque la especificación de autorización de MCP exige que un servidor que requiere autorización valide el token antes de procesar la petición.
 
 :::tip
 Para despliegues en producción, coloca el servidor detrás de un proxy inverso (nginx, Caddy) que maneje la terminación TLS. El endpoint MCP en `/mcp` soporta balanceo de carga HTTP estándar.

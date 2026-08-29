@@ -40,6 +40,16 @@ const (
 	rejectedTokenMaxSize = 4096
 )
 
+// Cadence for sweeping expired entries out of the verified-token cache, as a
+// fraction of the configured TTL with a floor. A quarter keeps a dead entry
+// from outliving its usefulness by much; the floor keeps a 1-minute TTL — the
+// lowest --oauth-cache-ttl accepts — from turning the sweep into a hot loop on
+// a map that every authenticated request reads.
+const (
+	tokenCacheSweepDivisor     = 4
+	tokenCacheSweepMinInterval = 30 * time.Second
+)
+
 // upstreamRetryAfter is the delay advertised when GitLab throttled or failed
 // the verification without saying when to come back.
 const upstreamRetryAfter = 30 * time.Second

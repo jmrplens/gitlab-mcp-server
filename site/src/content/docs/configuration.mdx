@@ -98,7 +98,7 @@ For deployments using the dynamic tool surface where resources and prompts domin
 | `YOLO_MODE`                      | `false` | Skip destructive action confirmations (not recommended)                                                                            |
 | `AUTOPILOT`                      | `false` | Same as `YOLO_MODE` — skip destructive confirmations                                                                               |
 | `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | —       | Additional OS path-list-separated directories allowed for local project/group import archives                                      |
-| `RATE_LIMIT_RPS`                 | `0`     | Per-server tools/call rate limit in req/s (`0` = disabled)                                                                         |
+| `RATE_LIMIT_RPS`                 | `0`     | Per-server tools/call rate limit in req/s (`0` disables it). Stdio only; HTTP mode defaults to `10` via `--rate-limit-rps`         |
 | `RATE_LIMIT_BURST`               | `40`    | Token-bucket burst size when `RATE_LIMIT_RPS` > 0                                                                                  |
 
 ## Example .env file
@@ -318,7 +318,7 @@ In HTTP mode (`--http`), settings resolve in three layers, highest first: a CLI 
 | `--trusted-origins`        | _(empty)_                    | Comma-separated origins allowed to make cross-origin browser requests; `*` accepts any origin. Empty adds none, though a configured `--public-url` origin is trusted regardless. Env: `TRUSTED_ORIGINS` |
 | `--pool-idle-timeout`      | `1h`                         | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h)                                                      |
 | `--revalidate-interval`    | `15m`                        | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                         |
-| `--rate-limit-rps`         | `0`                          | Per-server `tools/call` rate limit in req/s (`0` = disabled)                                                                                                                                            |
+| `--rate-limit-rps`         | `10`                         | Per-server `tools/call` rate limit in req/s (`0` disables it); on by default because an HTTP deployment is shared                                                                                       |
 | `--rate-limit-burst`       | `40`                         | Token-bucket burst size when `--rate-limit-rps > 0`                                                                                                                                                     |
 | `--trusted-proxy-header`   | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`)                                                                                           |
 

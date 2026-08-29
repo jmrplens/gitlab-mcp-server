@@ -582,6 +582,7 @@ func applyScopeReadOnly(entryCfg *config.ServerConfig) {
 		return
 	}
 	entryCfg.ReadOnly = true
+	entryCfg.ReadOnlyFromTokenScope = true
 	slog.Info("token cannot write; serving a read-only tool surface for it",
 		"scopes", entryCfg.TokenScopes)
 }

@@ -72,10 +72,17 @@ Every non-safe request (`POST`, `DELETE`) that a **browser** makes from another 
 
 ```text
 HTTP/1.1 403 Forbidden
-Content-Type: text/plain; charset=utf-8
+Content-Type: application/json
 
-cross-origin request detected from Sec-Fetch-Site header
+{"jsonrpc":"2.0","id":null,"error":{"code":-40300,
+ "message":"Cross-origin request refused: the Origin header names an origin this deployment does not trust."}}
 ```
+
+The body is a JSON-RPC error rather than plain text on purpose: the Streamable
+HTTP specification tells a client that receives a `4xx` whose body is not a
+recognized JSON-RPC error to conclude the server predates version negotiation,
+so an opaque refusal would report a policy decision as a protocol generation.
+Host validation answers the same way.
 
 Non-browser clients are unaffected: a request carrying neither `Origin` nor `Sec-Fetch-Site` — every CLI, IDE and SDK client — always passes. Safe methods (`GET`, `HEAD`) are exempt too, so the server card, `/health` and the OAuth metadata endpoint are readable cross-origin.
 
@@ -230,7 +237,7 @@ When running with `--auth-mode=oauth`, the server validates every request's Bear
 - **Bearer only** — only the standard `Authorization: Bearer` scheme is accepted; the legacy `PRIVATE-TOKEN` header is rejected with HTTP 401 in this mode (it remains accepted in legacy mode)
 - **[RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) metadata** — The `/.well-known/oauth-protected-resource` endpoint advertises the GitLab authorization server URL, enabling compliant OAuth clients to discover the token issuer
 - **PKCE** — The OAuth 2.1 flow uses Proof Key for Code Exchange (PKCE) to protect against authorization code interception attacks. MCP clients generate a code verifier/challenge pair for each authorization request
-- **Cache eviction** — A background goroutine runs every 30 seconds to clean up expired entries. The cache is bounded by TTL, not by size
+- **Cache eviction** — Entries are evicted lazily when read after expiry, and a background sweep removes the ones nothing reads again. The sweep runs at a quarter of `--oauth-cache-ttl`, with a 30-second floor, so the cache is bounded by time rather than by how many distinct credentials have arrived
 - **Least-privilege scope** — admission asks only for `read_api`, the least any action needs, and the write check is applied per action instead. A `read_api` token is therefore accepted by a deployment that writes, and is served the read-only tool surface; the only credential refused at the door is one carrying no GitLab API scope at all. The metadata's `scopes_supported` advertises both `api` and `read_api` so a client can deliberately ask for a credential that cannot mutate anything, and a read-only deployment (`--read-only` or `--safe-mode`) advertises `read_api` alone. An `api` token satisfies the minimum everywhere, since `api` is a superset
 
 ### Rejections are cheap, and they are bounded

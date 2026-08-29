@@ -297,14 +297,21 @@ type ServerConfig struct {
 	Tier edition.Tier
 	// TierExplicit mirrors Config.TierExplicit: when true the tier is used
 	// verbatim and the pool performs no per-instance license detection.
-	TierExplicit    bool
-	ReadOnly        bool
-	SafeMode        bool
-	ExcludeTools    []string
-	TokenScopes     []string
-	RateLimitRPS    float64
-	RateLimitBurst  int
-	MetaParamSchema string
+	TierExplicit bool
+	ReadOnly     bool
+	// ReadOnlyFromTokenScope records that ReadOnly was not asked for by the
+	// operator but derived from the credential: this token cannot write, so a
+	// read-only surface was built for it. The two causes need different words
+	// when a withheld action is asked for — "reauthorize with a wider scope"
+	// versus "this deployment does not write" — and only the first is
+	// something the caller can act on.
+	ReadOnlyFromTokenScope bool
+	SafeMode               bool
+	ExcludeTools           []string
+	TokenScopes            []string
+	RateLimitRPS           float64
+	RateLimitBurst         int
+	MetaParamSchema        string
 	// Stateless mirrors Config.Stateless. It reaches the server because a
 	// sessionless transport cannot carry a server-initiated notification
 	// outside an open request, which decides whether the legacy

@@ -437,7 +437,7 @@ curl http://localhost:8080/.well-known/oauth-protected-resource
 - Cache key: SHA-256 hash of the token (raw token never stored)
 - Default TTL: 15 minutes (configurable via `--oauth-cache-ttl`)
 - Bounds: minimum 1 minute, maximum 2 hours
-- Expired entries are evicted by a background goroutine every 5 minutes
+- Expired entries are evicted on the next lookup, and a background sweep at a quarter of `--oauth-cache-ttl` (30-second floor) removes the ones that are never looked up again
 
 ## Client Configuration Examples
 
@@ -569,17 +569,18 @@ It runs `--auth-mode=oauth`, so the credential travels as `Authorization: Bearer
 }
 ```
 
-| Property        | Value                                                                                                                             |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Transport       | Stateless streamable HTTP (`--stateless`); an authenticated `GET`/`DELETE` answers `405`                                          |
-| Tool surface    | `dynamic` (`gitlab_find_action`, `gitlab_execute_action`)                                                                         |
-| Auth mode       | `oauth` — `Authorization: Bearer` per request, never stored server-side                                                           |
-| No credential   | Any method answers `401` with `WWW-Authenticate: Bearer … resource_metadata=…`                                                    |
-| `PRIVATE-TOKEN` | Not accepted — it is the legacy-mode header                                                                                       |
-| `GITLAB-URL`    | Ignored; this deployment fixes the instance to `https://gitlab.com`                                                               |
-| Scopes          | `api` for the full surface; a `read_api` token is admitted and served a read-only one                                             |
-| Health          | `GET https://mcp.jmrp.io/gitlab/health` → `200` with `{"status":"ok",…}`                                                          |
-| Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/) — the catalog and per-client config, unauthenticated |
+| Property        | Value                                                                                                                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transport       | Stateless streamable HTTP (`--stateless`); an authenticated `GET`/`DELETE` answers `405`                                                                                                                |
+| Tool surface    | `dynamic` (`gitlab_find_action`, `gitlab_execute_action`)                                                                                                                                               |
+| Auth mode       | `oauth` — `Authorization: Bearer` per request, never stored server-side                                                                                                                                 |
+| No credential   | Any method answers `401` with `WWW-Authenticate: Bearer … resource_metadata=…`                                                                                                                          |
+| `PRIVATE-TOKEN` | Not accepted — it is the legacy-mode header                                                                                                                                                             |
+| `GITLAB-URL`    | Ignored; this deployment fixes the instance to `https://gitlab.com`                                                                                                                                     |
+| Scopes          | `api` for the full surface; a `read_api` token is admitted and served a read-only one                                                                                                                   |
+| Health          | `GET https://mcp.jmrp.io/gitlab/health` → `200` with `{"status":"ok",…}`                                                                                                                                |
+| Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/) — the catalog and per-client config, unauthenticated                                                                       |
+| MCP server card | `GET https://mcp.jmrp.io/gitlab/server-card` → `200 application/mcp-server-card+json`, unauthenticated; the same document is served at `/gitlab/.well-known/mcp/server-card.json` as `application/json` |
 
 Because it is multi-tenant, each distinct token+URL pair gets its own pooled MCP server (see [Server Pool](#server-pool)). A `read_api` token is admitted and served a read-only surface rather than refused, so a credential that cannot change anything is a supported way to use it.
 
@@ -635,11 +636,13 @@ Two independent layers govern how long a connection and a session live:
 | HTTP response write  | fixed / disabled      | `60s` / disabled | Maximum write time for a response; kept at `60s` for standard endpoints and disabled for SSE streams    |
 
 The server speaks the modern **Streamable HTTP** transport, which uses Server-Sent
-Events (`text/event-stream`) for streamed POST responses and the standalone GET
-stream that carries server-initiated notifications and 30s keep-alive pings. An
-active SSE response is bounded by `WriteTimeout` (not `IdleTimeout`, which only
-limits the wait between requests on an idle keep-alive connection) — and the
-go-sdk SSE writer never resets the write deadline.
+Events (`text/event-stream`) for streamed POST responses and for the standalone GET
+stream that carries server-initiated notifications. Both are silent for long
+stretches by design — the GET stream until something happens, a streamed POST for
+as long as GitLab takes to answer — and an active SSE response is bounded by
+`WriteTimeout` (not `IdleTimeout`, which only limits the wait between requests on
+an idle keep-alive connection), while the go-sdk SSE writer never resets the write
+deadline.
 
 To avoid severing those streams without weakening protection for everything else,
 the global `WriteTimeout` is kept at a safe `60s` (guarding standard endpoints such
@@ -654,10 +657,20 @@ a client sending `*/*` or `text/*` is answered with a stream too. Because the de
 is the effective idle lifetime. If you set a low `--http-idle-timeout`, expect
 long-lived MCP sessions to drop when the connection idles past that value.
 
+**Keep-alives.** Clearing the write deadline settles this end of the connection
+and nothing in between. An SSE response that stays silent therefore emits a
+comment frame — a line beginning with `:`, which a conforming SSE reader discards
+without producing an event — every 25 seconds while it has nothing else to say.
+The interval sits under nginx's default `proxy_read_timeout` of 60 seconds with
+room for two frames, and a stream that has written recently is skipped rather
+than padded. This is the server's own behaviour, not the SDK's: the go-sdk emits
+no periodic ping of its own.
+
 > **Behind a reverse proxy / edge**: when idle closure is disabled on the server, the
-> proxy's own read/idle timeout becomes the limiting factor. Raise it (e.g. to a few
-> minutes or more) for long-running MCP streams. See
-> [Troubleshooting](troubleshooting.md).
+> proxy's own read/idle timeout becomes the limiting factor. The 25-second
+> keep-alive is what holds an idle stream open across a default nginx
+> `proxy_read_timeout`; if your edge is tighter than that, raise it rather than
+> relying on the heartbeat. See [Troubleshooting](troubleshooting.md).
 
 ### 4. Pool Eviction
 
@@ -776,6 +789,28 @@ curl -s -o /dev/null -w "%{http_code}" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 # Expected: 200
 ```
+
+### Server Card
+
+`GET /server-card` needs no credentials either, and answers with the MCP
+server-card document: every tool, resource, resource template and prompt this
+deployment registers, with its schemas, plus the capabilities it advertises.
+
+```bash
+curl -s http://localhost:8080/server-card
+```
+
+The response carries `Content-Type: application/mcp-server-card+json`. The same
+document is served at the legacy path `/.well-known/mcp/server-card.json` as
+`application/json`, for clients written against the earlier location.
+
+This is the sanctioned way to publish the catalog to something holding no
+credential — a directory, a scanner, a documentation build. `tools/list` stays
+authenticated, because the MCP authorization specification requires a server
+that requires authorization to validate the token before processing a request;
+see [ADR-0018](../development/adr/adr-0018-authorization-admits-per-action-gating.md).
+Both paths are mounted under `--public-url`'s path prefix as well, for a proxy
+that forwards its prefix rather than stripping it.
 
 ## Security Considerations
 

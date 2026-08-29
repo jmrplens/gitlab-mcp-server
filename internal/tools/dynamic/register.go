@@ -237,14 +237,65 @@ type Registry struct {
 	ambiguousAliases map[string][]string
 	handlers         map[string]toolHandler
 	SearchIndex      searchIndex
+	// withheldByScope and withheldByOperator name actions the catalog carries
+	// but this session may not execute, so asking for one can be answered with
+	// the reason instead of with "unknown action". Both are empty when nothing
+	// was filtered. They are separate because only the first is something the
+	// caller can resolve: a narrow credential can be reauthorized, an operator
+	// running the deployment read-only cannot be argued with by the client.
+	withheldByScope    map[string]struct{}
+	withheldByOperator map[string]struct{}
+}
+
+// RegistryOption configures the dynamic registry at registration time.
+type RegistryOption func(*Registry)
+
+// WithWithheldActions tells the registry which action keys were filtered out of
+// the catalog before it was handed over, split by cause: byTokenScope for
+// actions the credential itself cannot reach, byOperator for actions a
+// deployment-wide setting removed. A key is a canonical action ID or any alias
+// that used to resolve to one.
+//
+// Without this the dynamic surface answers a withheld action with "unknown
+// action" plus near-miss suggestions, which reads as "this server cannot do
+// that" — so a model concludes the capability is absent instead of reporting
+// that the credential needs widening.
+func WithWithheldActions(byTokenScope, byOperator []string) RegistryOption {
+	return func(r *Registry) {
+		r.withheldByScope = withheldKeySet(byTokenScope)
+		r.withheldByOperator = withheldKeySet(byOperator)
+	}
+}
+
+func withheldKeySet(keys []string) map[string]struct{} {
+	if len(keys) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		if normalized := strings.ToLower(strings.TrimSpace(key)); normalized != "" {
+			set[normalized] = struct{}{}
+		}
+	}
+	return set
 }
 
 // RegisterCatalogFindExecuteTools registers the dynamic find and execute tools
 // from the canonical action catalog.
-func RegisterCatalogFindExecuteTools(server *mcp.Server, catalog *actioncatalog.Catalog) {
-	registry := NewRegistryFromCatalog(catalog)
+func RegisterCatalogFindExecuteTools(server *mcp.Server, catalog *actioncatalog.Catalog, opts ...RegistryOption) {
+	registry := newCatalogRegistry(catalog, opts...)
 	addFindTool(server, registry)
 	addExecuteActionTool(server, registry)
+}
+
+// newCatalogRegistry builds the registry the dynamic surface dispatches
+// through, applying registration options in order.
+func newCatalogRegistry(catalog *actioncatalog.Catalog, opts ...RegistryOption) *Registry {
+	registry := NewRegistryFromCatalog(catalog)
+	for _, opt := range opts {
+		opt(registry)
+	}
+	return registry
 }
 
 func addFindTool(server *mcp.Server, registry *Registry) {
@@ -2228,6 +2279,9 @@ func (r *Registry) resolveAction(id string) (actionEntry, bool) {
 }
 
 func (r *Registry) unknownActionMessage(toolName, action string) string {
+	if msg, ok := r.withheldActionMessage(toolName, action); ok {
+		return msg
+	}
 	if targets := r.ambiguousAliasTargets(action); len(targets) > 0 {
 		return fmt.Sprintf("%s: action alias %q is ambiguous. Use one canonical action ID explicitly: %s.", toolName, action, strings.Join(backtickStrings(targets), ", "))
 	}
@@ -2236,6 +2290,24 @@ func (r *Registry) unknownActionMessage(toolName, action string) string {
 		return fmt.Sprintf("%s: unknown action %q. Use the registered discovery tool for this surface to find canonical action IDs.", toolName, action)
 	}
 	return fmt.Sprintf("%s: unknown action %q. Did you mean %s? Use canonical action IDs with gitlab_execute_action.", toolName, action, strings.Join(suggestions, ", "))
+}
+
+// withheldActionMessage explains an action the catalog knows about but this
+// session may not run, rather than calling it unknown.
+//
+// Reporting a scope narrowing as a typo is actively misleading: the suggestions
+// are all real read-only actions, so the answer looks authoritative, and the
+// reader concludes the server lacks the capability instead of learning that the
+// credential is what is narrow.
+func (r *Registry) withheldActionMessage(toolName, action string) (string, bool) {
+	key := strings.ToLower(strings.TrimSpace(action))
+	if _, ok := r.withheldByScope[key]; ok {
+		return fmt.Sprintf("%s: action %q exists but is not available to this session: the credential in use does not carry a GitLab scope that covers it, so a narrowed action surface was built for it. Reauthorize with the api scope to use it; do not report the capability as missing.", toolName, action), true
+	}
+	if _, ok := r.withheldByOperator[key]; ok {
+		return fmt.Sprintf("%s: action %q exists but is not available: this deployment is configured to withhold it, so a narrowed action surface was built. Ask the operator to enable it; do not report the capability as missing.", toolName, action), true
+	}
+	return "", false
 }
 
 func (r *Registry) ambiguousAliasTargets(action string) []string {

@@ -39,6 +39,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 )
 
@@ -116,11 +117,17 @@ type createdServerKey struct {
 	tier              edition.Tier
 	tierExplicit      bool
 	readOnly          bool
-	safeMode          bool
-	metaParamSchema   string
-	rateLimitRPS      float64
-	rateLimitBurst    int
-	clientCompat      bool
+	// readOnlyFromTokenScope belongs in the key because it does not change
+	// which actions are registered, only what the surface says about the ones
+	// it withheld. Two configs that differ solely here build genuinely
+	// different servers, so a cache that ignored it handed one test the other's
+	// wording.
+	readOnlyFromTokenScope bool
+	safeMode               bool
+	metaParamSchema        string
+	rateLimitRPS           float64
+	rateLimitBurst         int
+	clientCompat           bool
 }
 
 var (
@@ -175,17 +182,18 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 		return server
 	}
 	key := createdServerKey{
-		metaTools:         cfg.MetaTools,
-		toolSurface:       cfg.ToolSurface,
-		capabilitySurface: cfg.CapabilitySurface,
-		tier:              cfg.Tier,
-		tierExplicit:      cfg.TierExplicit,
-		readOnly:          cfg.ReadOnly,
-		safeMode:          cfg.SafeMode,
-		metaParamSchema:   cfg.MetaParamSchema,
-		rateLimitRPS:      cfg.RateLimitRPS,
-		rateLimitBurst:    cfg.RateLimitBurst,
-		clientCompat:      clientcompat.Enabled(),
+		metaTools:              cfg.MetaTools,
+		toolSurface:            cfg.ToolSurface,
+		capabilitySurface:      cfg.CapabilitySurface,
+		tier:                   cfg.Tier,
+		tierExplicit:           cfg.TierExplicit,
+		readOnly:               cfg.ReadOnly,
+		readOnlyFromTokenScope: cfg.ReadOnlyFromTokenScope,
+		safeMode:               cfg.SafeMode,
+		metaParamSchema:        cfg.MetaParamSchema,
+		rateLimitRPS:           cfg.RateLimitRPS,
+		rateLimitBurst:         cfg.RateLimitBurst,
+		clientCompat:           clientcompat.Enabled(),
 	}
 	createdServersMu.Lock()
 	defer createdServersMu.Unlock()
@@ -5578,7 +5586,9 @@ func TestCreateServer_ReadOnly_DynamicSurfaceRunsReadsAndRejectsWrites(t *testin
 		"action": "issue.create",
 		"params": map[string]any{"project_id": "1", "title": "should not exist"},
 	})
-	if !strings.Contains(write, "unknown action") {
+	// Withheld, not unknown: the surface names the action and the decision
+	// that removed it, so a caller is not told the capability is missing.
+	if !strings.Contains(write, "exists but is not available") {
 		t.Errorf("mutating action was routable in read-only mode: %s", write)
 	}
 }
@@ -5670,8 +5680,14 @@ func TestCreateServer_ReadOnly_TakesPrecedenceOverSafeMode(t *testing.T) {
 	if safeModeBlocked(t, write, "issue.create") {
 		t.Errorf("read-only must remove mutating actions, not preview them: %s", write)
 	}
-	if !strings.Contains(write, "unknown action") {
+	// Not "unknown action": the action is known, it was withheld. The old
+	// wording came with read-only near misses, which reads as a capability the
+	// server lacks rather than one this deployment turned off.
+	if !strings.Contains(write, "exists but is not available") {
 		t.Errorf("mutating action was routable with read-only + safe mode: %s", write)
+	}
+	if !strings.Contains(write, "Ask the operator") {
+		t.Errorf("read-only imposed by the operator must name the operator as the remedy: %s", write)
 	}
 
 	read := callModeTool(t, session, "gitlab_execute_action", map[string]any{
@@ -6140,5 +6156,394 @@ func TestRateLimit_StdioLeavesItOffUnlessAsked(t *testing.T) {
 	}
 	if cfg.RateLimitRPS != 0 {
 		t.Errorf("stdio RateLimitRPS = %v, want 0 — a local process has no co-tenant to protect", cfg.RateLimitRPS)
+	}
+}
+
+// TestFilterActionCatalog_ReportsWhatItWithheldAndWhy pins that narrowing the
+// catalog records what was removed, split by whose decision the caller can act
+// on.
+//
+// The dynamic surface answers an action it cannot find with "unknown action"
+// plus near misses. That is correct for a typo and a misdiagnosis for a
+// narrowed credential: the near misses are all real read-only actions, so the
+// answer reads as "this server cannot write" rather than "this token cannot".
+// Splitting the two causes is what lets the surface say "reauthorize" only when
+// reauthorizing would actually help.
+//
+// Tools removed by name through --exclude-tools stay out of both lists on
+// purpose: the operator asked for them not to exist, so naming them in an error
+// would leak the configuration and contradict it.
+func TestFilterActionCatalog_ReportsWhatItWithheldAndWhy(t *testing.T) {
+	t.Parallel()
+
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{
+		Tier:       edition.Free,
+		IncludeMCP: true,
+	})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+
+	t.Run("a read-only token gets the reauthorize half", func(t *testing.T) {
+		t.Parallel()
+		assertWithheldByTokenScope(t, catalog)
+	})
+
+	t.Run("an operator-imposed read-only mode gets the other half", func(t *testing.T) {
+		t.Parallel()
+		assertWithheldByOperator(t, catalog)
+	})
+
+	t.Run("an excluded tool is not withheld, it is absent", func(t *testing.T) {
+		t.Parallel()
+		assertExcludedToolIsNotWithheld(t, catalog)
+	})
+
+	t.Run("nothing is withheld when nothing is narrowed", func(t *testing.T) {
+		t.Parallel()
+		assertNothingWithheld(t, catalog)
+	})
+}
+
+// withheldWriteAction and withheldReadAction are the two catalog actions the
+// withheld-bookkeeping assertions below are written against: one that read-only
+// mode removes and one it must keep.
+const (
+	withheldWriteAction = "issue.create"
+	withheldReadAction  = "issue.list"
+)
+
+// mustFilterCatalog runs the catalog filter and fails on error, returning both
+// the narrowed catalog and the bookkeeping under test.
+func mustFilterCatalog(t *testing.T, catalog *actioncatalog.Catalog, cfg *config.ServerConfig) (*actioncatalog.Catalog, withheldActions) {
+	t.Helper()
+	filtered, withheld, err := filterActionCatalog(catalog, cfg)
+	if err != nil {
+		t.Fatalf("filterActionCatalog() error = %v", err)
+	}
+	return filtered, withheld
+}
+
+func assertWithheldByTokenScope(t *testing.T, catalog *actioncatalog.Catalog) {
+	t.Helper()
+	filtered, withheld := mustFilterCatalog(t, catalog, &config.ServerConfig{
+		ReadOnly:               true,
+		ReadOnlyFromTokenScope: true,
+	})
+	if _, ok := filtered.Action(withheldWriteAction); ok {
+		t.Fatalf("filterActionCatalog() kept %q in a read-only catalog", withheldWriteAction)
+	}
+	if !slices.Contains(withheld.byTokenScope, withheldWriteAction) {
+		t.Errorf("withheld.byTokenScope does not name %q; a narrowed credential would be reported as a missing capability", withheldWriteAction)
+	}
+	if slices.Contains(withheld.byOperator, withheldWriteAction) {
+		t.Errorf("withheld.byOperator names %q, but the token is the cause here", withheldWriteAction)
+	}
+	if slices.Contains(withheld.byTokenScope, withheldReadAction) {
+		t.Errorf("withheld.byTokenScope names %q, which is still reachable", withheldReadAction)
+	}
+}
+
+func assertWithheldByOperator(t *testing.T, catalog *actioncatalog.Catalog) {
+	t.Helper()
+	_, withheld := mustFilterCatalog(t, catalog, &config.ServerConfig{ReadOnly: true})
+	if !slices.Contains(withheld.byOperator, withheldWriteAction) {
+		t.Errorf("withheld.byOperator does not name %q", withheldWriteAction)
+	}
+	if slices.Contains(withheld.byTokenScope, withheldWriteAction) {
+		t.Errorf("withheld.byTokenScope names %q, but no credential narrowed this deployment", withheldWriteAction)
+	}
+}
+
+func assertExcludedToolIsNotWithheld(t *testing.T, catalog *actioncatalog.Catalog) {
+	t.Helper()
+	_, withheld := mustFilterCatalog(t, catalog, &config.ServerConfig{
+		ReadOnly:     true,
+		ExcludeTools: []string{"gitlab_issue"},
+	})
+	for _, keys := range [][]string{withheld.byTokenScope, withheld.byOperator} {
+		if slices.Contains(keys, withheldWriteAction) {
+			t.Errorf("an excluded tool's action %q was reported as withheld; exclusion means it does not exist here", withheldWriteAction)
+		}
+	}
+}
+
+func assertNothingWithheld(t *testing.T, catalog *actioncatalog.Catalog) {
+	t.Helper()
+	_, withheld := mustFilterCatalog(t, catalog, &config.ServerConfig{})
+	if len(withheld.byTokenScope) != 0 || len(withheld.byOperator) != 0 {
+		t.Errorf("withheld = %+v, want empty for an unnarrowed catalog", withheld)
+	}
+}
+
+// TestDynamicSurface_ScopeNarrowedWriteReportsTheCredential wires the whole
+// path: a token that cannot write narrows the pool entry, the catalog filter
+// records what that removed, and the dynamic surface says so when the action is
+// asked for.
+//
+// The unit tests either side of this cover the filter's bookkeeping and the
+// registry's wording; what only an assembled server can prove is that the two
+// are actually connected — the registration call is a single line, and a
+// catalog built without it produces a fluent, confident, wrong answer.
+func TestDynamicSurface_ScopeNarrowedWriteReportsTheCredential(t *testing.T) {
+	session := modeTestSession(t, &config.ServerConfig{
+		ToolSurface:            config.ToolSurfaceDynamic,
+		ReadOnly:               true,
+		ReadOnlyFromTokenScope: true,
+	})
+
+	text := callModeTool(t, session, "gitlab_execute_action", map[string]any{
+		"action": "issue.create",
+		"params": map[string]any{"project_id": 1, "title": "irrelevant"},
+	})
+
+	if !strings.Contains(text, "exists but is not available") {
+		t.Fatalf("gitlab_execute_action(issue.create) = %q, want it reported as withheld", text)
+	}
+	if !strings.Contains(text, "api scope") {
+		t.Errorf("gitlab_execute_action(issue.create) = %q, want the remedy to name the scope to reauthorize with", text)
+	}
+	if strings.Contains(text, "Did you mean") {
+		t.Errorf("gitlab_execute_action(issue.create) = %q, must not offer read-only near misses for an action the credential simply cannot reach", text)
+	}
+}
+
+// TestCorsExposeHeaders_ARateLimitedBrowserClientCanReadRetryAfter pins that a
+// header the server sets on a throttled response is one a cross-origin client
+// can actually read.
+//
+// Retry-After is an unsafelisted response header: without naming it in
+// Access-Control-Expose-Headers the browser strips it, so a client that is being
+// asked to slow down cannot see for how long and falls back to its own guess.
+// That turns a rate limit into a retry storm aimed at the limit that caused it.
+// The 429 here is the auth-failure lockout, but the same header carries the
+// tool-call limiter's backoff and GitLab's own throttle passed through as 503.
+//
+// The assertion runs against the real gate rather than the constant alone, so
+// dropping Retry-After from either side fails.
+func TestCorsExposeHeaders_ARateLimitedBrowserClientCanReadRetryAfter(t *testing.T) {
+	gate := newGate(t, okFactory)
+	handler := corsMiddleware(
+		&config.Config{TrustedOrigins: []string{"https://claude.ai"}},
+		gate.middleware(http.NotFoundHandler()),
+	)
+
+	newRequest := func() *http.Request {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+		req.Header.Set("Origin", "https://claude.ai")
+		return req
+	}
+	for range authFailureLimit {
+		handler.ServeHTTP(httptest.NewRecorder(), newRequest())
+	}
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, newRequest())
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d after %d failures", rec.Code, http.StatusTooManyRequests, authFailureLimit)
+	}
+	if rec.Header().Get(headerRetryAfter) == "" {
+		t.Fatal("429 without Retry-After leaves the client guessing")
+	}
+
+	exposed := strings.Split(rec.Header().Get("Access-Control-Expose-Headers"), ",")
+	for i, name := range exposed {
+		exposed[i] = http.CanonicalHeaderKey(strings.TrimSpace(name))
+	}
+	if !slices.Contains(exposed, http.CanonicalHeaderKey(headerRetryAfter)) {
+		t.Errorf("Access-Control-Expose-Headers = %v, want it to name %q so the browser does not strip the backoff",
+			exposed, headerRetryAfter)
+	}
+}
+
+// TestTransportRejections_AreJSONRPCErrorsNotPlainText pins that the two
+// remaining transport-level refusals answer in the shape every other refusal in
+// this binary uses.
+//
+// The Streamable HTTP specification tells a client that receives a 4xx whose
+// body is not a recognized JSON-RPC error to conclude the server predates
+// version negotiation and downgrade. Host validation used http.Error's plain
+// "forbidden", and the standard library's cross-origin protection writes its own
+// plain-text refusal, so a rebinding guard and an origin guard — both of which
+// fire on perfectly ordinary misconfiguration — were reporting themselves as a
+// protocol generation rather than as a policy decision.
+func TestTransportRejections_AreJSONRPCErrorsNotPlainText(t *testing.T) {
+	t.Parallel()
+
+	reached := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }
+
+	tests := []struct {
+		name    string
+		handler http.Handler
+		request func(context.Context) *http.Request
+	}{
+		{
+			name:    "host validation",
+			handler: hostValidationMiddleware(map[string]bool{"localhost": true}, http.HandlerFunc(reached)),
+			request: func(ctx context.Context) *http.Request {
+				req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/mcp", strings.NewReader("{}"))
+				req.Host = "rebound.example"
+				return req
+			},
+		},
+		{
+			name:    "cross-origin protection",
+			handler: crossOriginProtectionMiddleware(nil, http.HandlerFunc(reached)),
+			request: func(ctx context.Context) *http.Request {
+				req := httptest.NewRequestWithContext(ctx, http.MethodPost, "/mcp", strings.NewReader("{}"))
+				req.Header.Set("Sec-Fetch-Site", "cross-site")
+				req.Header.Set("Origin", "https://evil.example")
+				return req
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			rec := httptest.NewRecorder()
+			tt.handler.ServeHTTP(rec, tt.request(t.Context()))
+
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+			}
+			if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+				t.Errorf("Content-Type = %q, want application/json", got)
+			}
+			decoded := decodeJSONRPCError(t, rec.Body.String())
+			if decoded.Error.Code != errCodeForbidden {
+				t.Errorf("error.code = %d, want %d", decoded.Error.Code, errCodeForbidden)
+			}
+			if decoded.Error.Message == "" {
+				t.Error("a refusal with no message tells the operator nothing about which guard fired")
+			}
+		})
+	}
+}
+
+// TestSSEKeepAlive_IdleStreamKeepsBytesOnTheWire pins the heartbeat on
+// long-lived SSE responses.
+//
+// Clearing the write deadline stops this end of the connection from timing out
+// and does nothing about the hops in between: nginx closes an idle upstream
+// response at proxy_read_timeout (60s by default), and carrier NATs are
+// tighter. The two streams this transport depends on are silent by design — the
+// standalone GET carrying server-initiated messages, and a POST held open for
+// the length of a tool call — so they are precisely what an idle timer collects.
+//
+// A comment frame is the cheapest legal thing to send: a line starting with ':'
+// carries no field, so a conforming reader discards it without producing an
+// event.
+func TestSSEKeepAlive_IdleStreamKeepsBytesOnTheWire(t *testing.T) {
+	restore := sseKeepAliveInterval
+	sseKeepAliveInterval = 10 * time.Millisecond
+	t.Cleanup(func() { sseKeepAliveInterval = restore })
+
+	release := make(chan struct{})
+	handler := sseWriteDeadlineMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		// A stream that says nothing at all, which is the ordinary state of a
+		// standalone GET between server-initiated messages.
+		<-release
+	}))
+
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	// Released on every exit path, and before the cleanup that waits for the
+	// handler: a defer runs ahead of t.Cleanup, so a failed assertion reports
+	// itself instead of deadlocking Close.
+	defer close(release)
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, http.NoBody)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	// A bounded request: with no heartbeat this stream is so silent that even
+	// the response header never reaches the wire, so an unbounded Do would
+	// report a missing feature as a stuck suite.
+	client := server.Client()
+	client.Timeout = 5 * time.Second
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v — an idle SSE response never flushed, so a proxy's read timeout would sever it", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	buf := make([]byte, len(sseKeepAliveFrame))
+	if _, readErr := io.ReadFull(resp.Body, buf); readErr != nil {
+		t.Fatalf("reading the idle stream: %v — an idle SSE response sent nothing", readErr)
+	}
+
+	if got := string(buf); got != string(sseKeepAliveFrame) {
+		t.Errorf("idle stream wrote %q, want the keep-alive comment %q", got, sseKeepAliveFrame)
+	}
+}
+
+// TestSSEKeepAlive_LeavesNonStreamingResponsesAlone verifies the heartbeat is
+// scoped to SSE. Injecting a comment into a JSON body would corrupt it, and
+// --json-response is a supported mode, so the Content-Type check is what keeps
+// the two apart.
+func TestSSEKeepAlive_LeavesNonStreamingResponsesAlone(t *testing.T) {
+	restore := sseKeepAliveInterval
+	sseKeepAliveInterval = 5 * time.Millisecond
+	t.Cleanup(func() { sseKeepAliveInterval = restore })
+
+	handler := sseWriteDeadlineMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		time.Sleep(25 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{}}`))
+	}))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody))
+
+	if got := rec.Body.String(); got != `{"jsonrpc":"2.0","id":1,"result":{}}` {
+		t.Errorf("body = %q, want the JSON response untouched by a keep-alive", got)
+	}
+}
+
+// TestSSEKeepAlive_StopsBeforeTheHandlerReturns verifies the heartbeat never
+// touches a ResponseWriter the handler has finished with.
+//
+// net/http reuses and invalidates the writer once ServeHTTP returns, so a
+// ticker goroutine outliving the handler is a use-after-free in all but name.
+// Run under -race, this also covers the other half: the keep-alive and the
+// handler write to the same writer from two goroutines, which is only safe
+// because both take the same lock.
+func TestSSEKeepAlive_StopsBeforeTheHandlerReturns(t *testing.T) {
+	restore := sseKeepAliveInterval
+	sseKeepAliveInterval = time.Millisecond
+	t.Cleanup(func() { sseKeepAliveInterval = restore })
+
+	var writer *sseAwareWriter
+	handler := sseWriteDeadlineMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writer = w.(*sseAwareWriter)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		for range 20 {
+			_, _ = w.Write([]byte("data: {}\n\n"))
+			time.Sleep(time.Millisecond)
+		}
+	}))
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/mcp", http.NoBody))
+
+	if writer == nil {
+		t.Fatal("handler did not receive the wrapping writer")
+	}
+	writer.mu.Lock()
+	stopped := writer.stopped
+	writer.mu.Unlock()
+	if !stopped {
+		t.Error("the keep-alive was still running after ServeHTTP returned")
+	}
+	select {
+	case <-writer.done:
+	default:
+		t.Error("stopKeepAlive returned without waiting for the heartbeat goroutine")
 	}
 }

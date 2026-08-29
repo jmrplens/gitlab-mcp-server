@@ -134,7 +134,10 @@ func TestReadOnlyMode(t *testing.T) {
 		})
 		_, isPreview := modeSafePreview(text)
 		requireTruef(t, !isPreview, "read-only must remove mutating actions, not preview them: %s", text)
-		requireTruef(t, strings.Contains(strings.ToLower(text), "unknown action"),
+		// Not "unknown action": a withheld write is reported as existing but
+		// unavailable, naming the decision that removed it, so a model does
+		// not record the capability as missing from the server.
+		requireTruef(t, strings.Contains(text, "exists but is not available"),
 			"mutating action was routable in read-only mode: %s", text)
 	})
 

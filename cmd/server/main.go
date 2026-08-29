@@ -1233,14 +1233,16 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 	switch toolSurface {
 	case config.ToolSurfaceDynamic:
 		actionCatalog := prebuiltCatalog
+		var withheld withheldActions
 		if actionCatalog == nil {
 			var catalogErr error
-			actionCatalog, catalogErr = buildDynamicActionCatalog(client, cfg, updater)
+			actionCatalog, withheld, catalogErr = buildDynamicActionCatalog(client, cfg, updater)
 			if catalogErr != nil {
 				return serverSurfaceRegistration{}, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
 			}
 		}
-		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog)
+		dynamictools.RegisterCatalogFindExecuteTools(server, actionCatalog,
+			dynamictools.WithWithheldActions(withheld.byTokenScope, withheld.byOperator))
 		return serverSurfaceRegistration{metaSchemaRoutes: actionCatalog.ActionMaps(), surfaceCatalog: actionCatalog}, nil
 	case config.ToolSurfaceMeta:
 		filteredCatalog := prebuiltCatalog
@@ -1251,7 +1253,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 				actionCatalog = actioncatalog.NewCatalog()
 			}
 			var filterErr error
-			filteredCatalog, filterErr = filterActionCatalog(actionCatalog, cfg)
+			filteredCatalog, _, filterErr = filterActionCatalog(actionCatalog, cfg)
 			if filterErr != nil {
 				return serverSurfaceRegistration{}, fmt.Errorf("filter meta action catalog: %w", filterErr)
 			}
@@ -1312,27 +1314,72 @@ func effectiveIdleTimeout(d time.Duration) time.Duration {
 // middleware exists to keep.
 func sseWriteDeadlineMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		next.ServeHTTP(&sseAwareWriter{ResponseWriter: w}, r)
+		writer := &sseAwareWriter{ResponseWriter: w, ctx: r.Context()}
+		defer writer.stopKeepAlive()
+		next.ServeHTTP(writer, r)
 	})
 }
 
-// sseAwareWriter clears the write deadline and sets X-Accel-Buffering the moment
-// a response commits to text/event-stream.
+// sseKeepAliveInterval is how long an SSE stream may stay silent before the
+// server emits a comment frame.
+//
+// Clearing the write deadline keeps this end of the connection from timing out;
+// it does nothing about the hops in between. nginx closes an idle upstream
+// response at proxy_read_timeout, 60 seconds by default, and load balancers and
+// mobile carrier NATs are less generous still. A standalone GET stream is silent
+// by design until something happens, and a streamed POST is silent for as long
+// as GitLab takes, so the streams this transport depends on are exactly the ones
+// an idle timer collects. 25 seconds leaves room for two frames inside the
+// tightest of those windows.
+//
+// A var, not a const, only so tests can shorten it; nothing at runtime writes it.
+var sseKeepAliveInterval = 25 * time.Second
+
+// sseKeepAliveFrame is a comment: a line beginning with ':' carries no field, so
+// a conforming SSE reader — the MCP go-sdk client's included — discards it
+// without producing an event. It exists to put bytes on the wire.
+var sseKeepAliveFrame = []byte(": keep-alive\n\n")
+
+// sseAwareWriter clears the write deadline, sets X-Accel-Buffering, and starts a
+// keep-alive the moment a response commits to text/event-stream.
 type sseAwareWriter struct {
 	http.ResponseWriter
+	ctx         context.Context
 	wroteHeader bool
+
+	// mu serializes the handler's writes with the keep-alive goroutine's. An
+	// http.ResponseWriter is not safe for concurrent use, and the SDK emits one
+	// event per Write, so holding this around each write is what keeps a
+	// keep-alive from landing inside an event.
+	mu        sync.Mutex
+	lastWrite time.Time
+	stopped   bool
+	stop      chan struct{}
+	done      chan struct{}
 }
 
 // Unwrap exposes the underlying writer so [http.NewResponseController] — which
-// the SDK uses to flush and to set deadlines — reaches the real connection
-// rather than stopping at this wrapper.
+// the SDK uses to set deadlines — reaches the real connection rather than
+// stopping at this wrapper.
+//
+// Flush deliberately does not unwrap: this type implements it, so the
+// controller finds it here and the flush takes the same lock the writes do.
 func (w *sseAwareWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// Flush pushes buffered bytes under the write lock.
+func (w *sseAwareWriter) Flush() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	_ = http.NewResponseController(w.ResponseWriter).Flush()
+}
 
 // WriteHeader applies the SSE treatment once, when the status is committed.
 func (w *sseAwareWriter) WriteHeader(code int) {
+	streaming := false
 	if !w.wroteHeader {
 		w.wroteHeader = true
 		if isEventStream(w.Header().Get("Content-Type")) {
+			streaming = true
 			// Zero time clears the deadline. Best-effort: ignore on transports
 			// that do not support it (e.g. HTTP/2 manages deadlines itself).
 			_ = http.NewResponseController(w.ResponseWriter).SetWriteDeadline(time.Time{})
@@ -1343,6 +1390,9 @@ func (w *sseAwareWriter) WriteHeader(code int) {
 		}
 	}
 	w.ResponseWriter.WriteHeader(code)
+	if streaming {
+		w.startKeepAlive()
+	}
 }
 
 // Write covers the streamed POST response, which never calls WriteHeader
@@ -1351,7 +1401,72 @@ func (w *sseAwareWriter) Write(b []byte) (int, error) {
 	if !w.wroteHeader {
 		w.WriteHeader(http.StatusOK)
 	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.lastWrite = time.Now()
 	return w.ResponseWriter.Write(b)
+}
+
+// startKeepAlive runs the idle-stream heartbeat until the handler returns or
+// the client goes away. It is called from the handler goroutine, once, after
+// the header is on the wire.
+func (w *sseAwareWriter) startKeepAlive() {
+	w.stop = make(chan struct{})
+	w.done = make(chan struct{})
+	stop, done := w.stop, w.done
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(sseKeepAliveInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-w.ctx.Done():
+				return
+			case <-ticker.C:
+				if !w.writeKeepAlive() {
+					return
+				}
+			}
+		}
+	}()
+}
+
+// writeKeepAlive emits one comment frame, and reports whether the heartbeat
+// should continue. A stream that has written recently is not idle, so it is
+// skipped rather than padded.
+func (w *sseAwareWriter) writeKeepAlive() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.stopped {
+		return false
+	}
+	if !w.lastWrite.IsZero() && time.Since(w.lastWrite) < sseKeepAliveInterval {
+		return true
+	}
+	if _, err := w.ResponseWriter.Write(sseKeepAliveFrame); err != nil {
+		return false
+	}
+	w.lastWrite = time.Now()
+	_ = http.NewResponseController(w.ResponseWriter).Flush()
+	return true
+}
+
+// stopKeepAlive ends the heartbeat and waits for it, so no write reaches a
+// ResponseWriter the handler has already finished with.
+func (w *sseAwareWriter) stopKeepAlive() {
+	w.mu.Lock()
+	if w.stopped || w.stop == nil {
+		w.stopped = true
+		w.mu.Unlock()
+		return
+	}
+	w.stopped = true
+	close(w.stop)
+	done := w.done
+	w.mu.Unlock()
+	<-done
 }
 
 // isEventStream reports whether a Content-Type names the SSE media type,
@@ -1902,6 +2017,14 @@ func streamableHTTPOptions(cfg *config.Config) *mcp.StreamableHTTPOptions {
 	}
 }
 
+// tokenCacheSweepInterval derives the expired-entry sweep cadence from the
+// cache TTL: often enough that a dead entry does not outlive its usefulness by
+// much, rarely enough that the sweep's write lock is not a recurring cost on a
+// map that is read on every authenticated request.
+func tokenCacheSweepInterval(ttl time.Duration) time.Duration {
+	return max(ttl/tokenCacheSweepDivisor, tokenCacheSweepMinInterval)
+}
+
 func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string, pool *serverpool.ServerPool, sessionTags *sync.Map, mux *http.ServeMux) {
 	// The protected-resource identifier is the advertised public origin
 	// (validated at config load: https, no fragment, no trailing slash) —
@@ -1944,6 +2067,10 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	tokenCache := oauth.NewTokenCache()
 	rejectedTokens := oauth.NewRejectedTokens(rejectedTokenMaxSize, rejectedTokenTTL)
 	cacheTTL := oauthCacheTTL(cfg.OAuthCacheTTL)
+	// A token that never returns is never read, so lazy eviction never reaches
+	// it. Sweeping on a fraction of the TTL keeps the cache bounded by time
+	// rather than by how many distinct credentials have ever arrived.
+	go tokenCache.RunCleanup(ctx, tokenCacheSweepInterval(cacheTTL))
 	// The token is verified against the instance the request selected, not
 	// against a single instance fixed at startup: a token is only ever valid
 	// for the GitLab that issued it. The resolver is the operator's
@@ -2276,7 +2403,13 @@ const (
 	// resource_metadata URL and could not start the OAuth flow. The one
 	// audience CORS serves was the one audience automatic discovery did not
 	// reach.
-	corsExposeHeaders = "Mcp-Session-Id, Mcp-Protocol-Version, WWW-Authenticate"
+	//
+	// Retry-After is the same shape of omission one status code over. The
+	// server answers 429 and 503 with it — an auth-failure lockout, the
+	// tool-call limiter, and GitLab's own throttle passed through — and a
+	// browser client that cannot read it has to guess a backoff, which is how
+	// a rate limit turns into a retry storm against the limit that caused it.
+	corsExposeHeaders = "Mcp-Session-Id, Mcp-Protocol-Version, WWW-Authenticate, Retry-After"
 	corsMaxAge        = "86400"
 )
 
@@ -2438,6 +2571,12 @@ func crossOriginProtectionMiddleware(trustedOrigins []string, next http.Handler)
 		// skips validation still cannot silently trust nothing.
 		_ = protection.AddTrustedOrigin(origin)
 	}
+	// The standard library's own refusal is plain text, which is the one body
+	// shape a Streamable HTTP client must not be handed: a client that gets a
+	// 4xx whose body is not a recognized JSON-RPC error is told to conclude the
+	// server predates version negotiation. Every other rejection this binary
+	// emits is a JSON-RPC error, so this one is too.
+	protection.SetDenyHandler(http.HandlerFunc(writeUntrustedOrigin))
 	return protection.Handler(next)
 }
 
@@ -2451,7 +2590,14 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 		}
 		if !allowed[host] {
 			slog.Warn("request blocked: invalid Host header", "host", r.Host) //#nosec G706 -- slog structured args are not interpolated
-			http.Error(w, "forbidden", http.StatusForbidden)
+			// JSON-RPC rather than http.Error's plain text, for the same
+			// reason the cross-origin refusal is: an unparseable 4xx body
+			// reads to a Streamable HTTP client as a pre-negotiation server.
+			(&gateFailure{
+				status:  http.StatusForbidden,
+				code:    errCodeForbidden,
+				message: "Request refused: the Host header names a host this deployment does not serve.",
+			}).write(w)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -2991,41 +3137,61 @@ func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.Acti
 // buildDynamicActionCatalog builds the executable catalog for low-token dynamic
 // mode. Filters run before standalone tools are added so configured exclusions,
 // token scopes, and read-only mode cannot leave hidden catalog actions behind.
-func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) (*actioncatalog.Catalog, error) {
+func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) (*actioncatalog.Catalog, withheldActions, error) {
 	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
 		Tier:       cfg.Tier,
 		IncludeMCP: true,
 		Updater:    updater,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("build action catalog: %w", err)
+		return nil, withheldActions{}, fmt.Errorf("build action catalog: %w", err)
 	}
-	filtered, filterErr := filterActionCatalog(catalog, cfg)
+	filtered, withheld, filterErr := filterActionCatalog(catalog, cfg)
 	if filterErr != nil {
-		return nil, fmt.Errorf("filter dynamic action catalog: %w", filterErr)
+		return nil, withheldActions{}, fmt.Errorf("filter dynamic action catalog: %w", filterErr)
 	}
 	withStandalone, standaloneErr := dynamictools.AddStandaloneCatalog(filtered, client, dynamictools.StandaloneOptions{
 		ReadOnly:     cfg.ReadOnly,
 		ExcludeTools: cfg.ExcludeTools,
 	})
 	if standaloneErr != nil {
-		return nil, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
+		return nil, withheldActions{}, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
 	}
-	return withStandalone, nil
+	return withStandalone, withheld, nil
 }
 
-func filterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfig) (*actioncatalog.Catalog, error) {
+// withheldActions records the catalog actions a filter removed, split by whose
+// decision it was. Only the token-scope half is something the caller can act
+// on, so the two must not be merged into one message.
+type withheldActions struct {
+	byTokenScope []string
+	byOperator   []string
+}
+
+func filterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfig) (*actioncatalog.Catalog, withheldActions, error) {
+	var withheld withheldActions
+	// Tools the operator excluded by name are not "withheld": the point of the
+	// exclusion is that they do not exist for this deployment, so naming them
+	// in an error would both leak the configuration and contradict it.
 	filtered := catalog.FilterExcludedTools(cfg.ExcludeTools)
-	var err error
-	filtered, err = gitlabtools.FilterScopeFilteredCatalog(filtered, cfg.TokenScopes)
+	scoped, err := gitlabtools.FilterScopeFilteredCatalog(filtered, cfg.TokenScopes)
 	if err != nil {
-		return nil, err
+		return nil, withheldActions{}, err
 	}
+	withheld.byTokenScope = removedActionKeys(filtered, scoped)
+	filtered = scoped
 	if cfg.ReadOnly {
 		// Filter at action granularity, not group granularity: a domain that
 		// mixes reads and writes must keep its read actions reachable instead
 		// of disappearing with them.
-		filtered = filtered.FilterReadOnlyActions()
+		readable := filtered.FilterReadOnlyActions()
+		removed := removedActionKeys(filtered, readable)
+		if cfg.ReadOnlyFromTokenScope {
+			withheld.byTokenScope = append(withheld.byTokenScope, removed...)
+		} else {
+			withheld.byOperator = append(withheld.byOperator, removed...)
+		}
+		filtered = readable
 	}
 	if cfg.SafeMode {
 		// Same granularity argument: dispatcher tools cover reads and writes
@@ -3033,7 +3199,33 @@ func filterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfi
 		// by intercepting whole tools.
 		filtered = filtered.WithSafeModePreviews()
 	}
-	return filtered, nil
+	return filtered, withheld, nil
+}
+
+// removedActionKeys lists every canonical action ID, and every alias resolving
+// to one, that `before` carried and `after` does not.
+//
+// Aliases count because a caller who asked find for an action before the
+// narrowing, or who is working from documentation, names the action the way the
+// catalog used to: answering only the canonical form leaves the alias reported
+// as a typo, which is the misdiagnosis this exists to prevent.
+func removedActionKeys(before, after *actioncatalog.Catalog) []string {
+	if before == nil || after == nil {
+		return nil
+	}
+	kept := make(map[actioncatalog.ActionID]struct{})
+	for _, action := range after.Actions() {
+		kept[action.ID] = struct{}{}
+	}
+	var keys []string
+	for _, action := range before.Actions() {
+		if _, ok := kept[action.ID]; ok {
+			continue
+		}
+		keys = append(keys, string(action.ID))
+		keys = append(keys, action.Aliases...)
+	}
+	return keys
 }
 
 // countCatalogActions sums actions across catalog route maps for startup logs.

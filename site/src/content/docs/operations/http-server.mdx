@@ -77,7 +77,7 @@ The server starts listening on port 8080 by default. The MCP endpoint is availab
 | `--oauth-cache-ttl`        | `15m`                        | OAuth token identity cache TTL (range: 1m–2h)                                                                                                                                                                                                                                               |
 | `--pool-idle-timeout`      | `1h`                         | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h)                                                                                                                                          |
 | `--revalidate-interval`    | `15m`                        | Token re-validation interval; `0` to disable (upper bound: 24h)                                                                                                                                                                                                                             |
-| `--rate-limit-rps`         | `0`                          | Per-server `tools/call` rate limit in req/s (`0` = disabled)                                                                                                                                                                                                                                |
+| `--rate-limit-rps`         | `10`                         | Per-server `tools/call` rate limit in req/s (`0` disables it); on by default because an HTTP deployment is shared                                                                                                                                                                           |
 | `--rate-limit-burst`       | `40`                         | Token-bucket burst size when `--rate-limit-rps > 0`                                                                                                                                                                                                                                         |
 | `--trusted-proxy-header`   | —                            | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`)                                                                                                                                                                               |
 | `--stateless`              | `true`                       | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`. Use `--stateless=false` for legacy stateful sessions                                                                                     |
@@ -302,23 +302,25 @@ Two independent layers govern connection and session lifetime:
 - **HTTP idle connection** (`--http-idle-timeout`, default `0` = disabled): the maximum time the underlying `http.Server` waits for the next request on a keep-alive connection before closing it.
 - **HTTP response write** (fixed `60s`, disabled for SSE): bounds how long a response may take to write.
 
-The server speaks the modern **Streamable HTTP** transport, which uses Server-Sent Events (`text/event-stream`) for streamed responses and the standalone stream that carries server-initiated notifications and keep-alive pings. An active SSE response is bounded by `WriteTimeout` (not `IdleTimeout`, which only limits the wait between requests on an idle connection), and the go-sdk SSE writer never resets the write deadline.
+The server speaks the modern **Streamable HTTP** transport, which uses Server-Sent Events (`text/event-stream`) for streamed responses and for the standalone stream that carries server-initiated notifications. Both are silent for long stretches by design. An active SSE response is bounded by `WriteTimeout` (not `IdleTimeout`, which only limits the wait between requests on an idle connection), and the go-sdk SSE writer never resets the write deadline.
 
-To avoid severing those streams without weakening protection elsewhere, the global `WriteTimeout` stays at a safe `60s` (guarding standard endpoints like `/health` from slow-write attacks) and any request that negotiates SSE (`Accept: text/event-stream`) — both the standalone GET stream and streamed POST responses — disables its own write deadline dynamically. Because `--http-idle-timeout` defaults to `0` (disabled), the HTTP layer also does not close idle connections out of the box, so `--session-timeout` is the effective idle lifetime. Set a low `--http-idle-timeout` only if you want idle connections recycled sooner.
+To avoid severing those streams without weakening protection elsewhere, the global `WriteTimeout` stays at a safe `60s` (guarding standard endpoints like `/health` from slow-write attacks) and any response the server actually answers as `text/event-stream` — both the standalone GET stream and streamed POST responses — disables its own write deadline dynamically and carries `X-Accel-Buffering: no`. The decision comes from the response, not from the request's `Accept` header: a client sending `*/*` or `text/*` is answered with a stream too. Because `--http-idle-timeout` defaults to `0` (disabled), the HTTP layer also does not close idle connections out of the box, so `--session-timeout` is the effective idle lifetime. Set a low `--http-idle-timeout` only if you want idle connections recycled sooner.
+
+An SSE response that stays silent emits a **keep-alive** every 25 seconds: a comment frame (a line beginning with `:`), which a conforming SSE reader discards without producing an event. Clearing the write deadline settles this end of the connection and nothing in between, and nginx closes an idle upstream response at `proxy_read_timeout` — 60 seconds by default — so the heartbeat is what holds the stream open. A stream that has written recently is skipped rather than padded. This is the server's own behaviour: the go-sdk emits no periodic ping of its own.
 
 :::caution[Behind a reverse proxy]
-When server-side idle closure is disabled, the proxy/edge read or idle timeout becomes the limiting factor. Raise it (e.g. to several minutes) for long-running MCP streams.
+When server-side idle closure is disabled, the proxy/edge read or idle timeout becomes the limiting factor. The 25-second keep-alive holds an idle stream open across a default nginx `proxy_read_timeout`; if your edge is tighter than that, raise it rather than relying on the heartbeat.
 :::
 
 ## Rate limiting
 
-HTTP mode includes an optional **per-server token-bucket rate limiter** that throttles `tools/call` requests. The limiter is **disabled by default** (`--rate-limit-rps=0`) and applies to each pool entry independently — that is, the scope is the same `(token + GitLab URL)` key used by the server pool.
+HTTP mode includes a **per-server token-bucket rate limiter** that throttles `tools/call` requests. It is **on by default** in HTTP mode (`--rate-limit-rps=10`; set `0` to disable) because an HTTP deployment is shared: every call it forwards is charged to its own egress address, so one looping client's volume lands on every other tenant. Stdio leaves it off, having no co-tenant to protect. The limiter applies to each pool entry independently — that is, the scope is the same `(token + GitLab URL)` key used by the server pool.
 
 ### Configuration
 
 | Flag                 | Default | Meaning                                                                 |
 | -------------------- | ------- | ----------------------------------------------------------------------- |
-| `--rate-limit-rps`   | `0`     | Sustained refill rate, in requests per second. `0` disables the limiter |
+| `--rate-limit-rps`   | `10`    | Sustained refill rate, in requests per second. `0` disables the limiter |
 | `--rate-limit-burst` | `40`    | Maximum bucket capacity (peak burst over 1s)                            |
 
 When `--rate-limit-rps > 0`, each pool entry gets its own token bucket sized at `--rate-limit-burst` tokens, refilled at `--rate-limit-rps` per second. Only `tools/call` requests consume tokens; `tools/list`, `resources/*`, `prompts/*`, `initialize`, and other low-cost RPCs are not rate-limited.
@@ -329,7 +331,7 @@ When a request would deplete the bucket, the server returns a `CallToolResult` w
 
 ### Sizing guidance
 
-- **Single-user deployment** (typical local dev): leave disabled (`--rate-limit-rps=0`)
+- **Single-user deployment** (typical local dev): `--rate-limit-rps=0` is a reasonable opt-out; stdio already defaults to it
 - **Shared instance behind a proxy** (Kubernetes, nginx, Cloudflare): start with `--rate-limit-rps=10 --rate-limit-burst=40`. Each token+URL pair gets its own quota, so this protects against a single noisy client without affecting others
 - **Large multi-tenant deployment**: combine with infra-level rate limiting (Cloudflare, Caddy, nginx). The MCP-level limiter is a safety net, not a replacement for edge enforcement
 
@@ -575,6 +577,18 @@ curl -s -X POST http://localhost:8080/mcp \
 ```
 
 A successful response returns a JSON-RPC result with the list of available tools.
+
+### Server card
+
+`GET /server-card` needs no credentials either, and answers with the MCP server-card document: every tool, resource, resource template and prompt this deployment registers, with its schemas, plus the capabilities it advertises.
+
+```bash
+curl -s http://localhost:8080/server-card
+```
+
+The response carries `Content-Type: application/mcp-server-card+json`. The same document is served at the legacy path `/.well-known/mcp/server-card.json` as `application/json`, for clients written against the earlier location. Both are mounted under `--public-url`'s path prefix as well, for a proxy that forwards its prefix rather than stripping it.
+
+This is the sanctioned way to publish the catalog to something holding no credential — a directory, a scanner, a documentation build. `tools/list` stays authenticated, because the MCP authorization specification requires a server that requires authorization to validate the token before processing a request.
 
 :::tip
 For production deployments, place the server behind a reverse proxy (nginx, Caddy) that handles TLS termination. The MCP endpoint at `/mcp` supports standard HTTP load balancing.
