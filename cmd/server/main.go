@@ -1291,29 +1291,74 @@ func effectiveIdleTimeout(d time.Duration) time.Duration {
 }
 
 // sseWriteDeadlineMiddleware disables the per-connection write deadline for any
-// request that negotiates Server-Sent Events (`Accept: text/event-stream`). In
-// Streamable HTTP these are long-lived: the standalone GET stream that carries
-// server-initiated notifications and keep-alive pings, and the streamed POST
-// responses to client requests (which can stay open for the duration of a tool
-// call, e.g. while awaiting an elicitation/sampling round-trip). The MCP go-sdk
-// SSE writer never resets the write deadline, so without this the server's
-// WriteTimeout would sever those streams. Requests that do not negotiate SSE
-// (e.g. /health, the unauthenticated server-card endpoint) keep WriteTimeout as a
-// slow-write (Slowloris) guard, so disabling it globally is unnecessary and unsafe.
+// response the server actually answers as Server-Sent Events. In Streamable HTTP
+// these are long-lived: the standalone GET stream that carries server-initiated
+// notifications and keep-alive pings, and the streamed POST responses to client
+// requests (which can stay open for the duration of a tool call, e.g. while
+// awaiting an elicitation/sampling round-trip). The MCP go-sdk SSE writer never
+// resets the write deadline, so without this the server's WriteTimeout would
+// sever those streams. Responses that are not SSE (e.g. /health, the
+// unauthenticated server-card endpoint) keep WriteTimeout as a slow-write
+// (Slowloris) guard, so disabling it globally is unnecessary and unsafe.
+//
+// The decision is taken from the response, not from the request's Accept header.
+// The SDK treats `*/*` and `text/*` as accepting a stream and then answers
+// text/event-stream, so matching the literal "text/event-stream" in Accept
+// missed exactly the clients that send curl's and several HTTP libraries'
+// default: they received a real SSE stream with no anti-buffering header and
+// with the 60-second write deadline still armed, which severed any stream that
+// outlived it. Widening the Accept test instead would strip the deadline from
+// every ordinary route for those same clients, which is the guard this
+// middleware exists to keep.
 func sseWriteDeadlineMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		next.ServeHTTP(&sseAwareWriter{ResponseWriter: w}, r)
+	})
+}
+
+// sseAwareWriter clears the write deadline and sets X-Accel-Buffering the moment
+// a response commits to text/event-stream.
+type sseAwareWriter struct {
+	http.ResponseWriter
+	wroteHeader bool
+}
+
+// Unwrap exposes the underlying writer so [http.NewResponseController] — which
+// the SDK uses to flush and to set deadlines — reaches the real connection
+// rather than stopping at this wrapper.
+func (w *sseAwareWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// WriteHeader applies the SSE treatment once, when the status is committed.
+func (w *sseAwareWriter) WriteHeader(code int) {
+	if !w.wroteHeader {
+		w.wroteHeader = true
+		if isEventStream(w.Header().Get("Content-Type")) {
 			// Zero time clears the deadline. Best-effort: ignore on transports
 			// that do not support it (e.g. HTTP/2 manages deadlines itself).
-			_ = http.NewResponseController(w).SetWriteDeadline(time.Time{})
+			_ = http.NewResponseController(w.ResponseWriter).SetWriteDeadline(time.Time{})
 			// The transport spec says SSE responses SHOULD carry
-			// X-Accel-Buffering: no, or nginx-class proxies may buffer
-			// events instead of streaming them. Harmless when the response
-			// negotiates down to application/json.
+			// X-Accel-Buffering: no, or nginx-class proxies may buffer events
+			// instead of streaming them.
 			w.Header().Set("X-Accel-Buffering", "no")
 		}
-		next.ServeHTTP(w, r)
-	})
+	}
+	w.ResponseWriter.WriteHeader(code)
+}
+
+// Write covers the streamed POST response, which never calls WriteHeader
+// explicitly — so this is the only hook that fires for a long tool call.
+func (w *sseAwareWriter) Write(b []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.ResponseWriter.Write(b)
+}
+
+// isEventStream reports whether a Content-Type names the SSE media type,
+// ignoring any parameters and case.
+func isEventStream(contentType string) bool {
+	base, _, _ := strings.Cut(contentType, ";")
+	return strings.EqualFold(strings.TrimSpace(base), "text/event-stream")
 }
 
 // newHTTPServer builds the HTTP-mode [http.Server] with the timeout policy.

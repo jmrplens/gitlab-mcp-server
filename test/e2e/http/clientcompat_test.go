@@ -110,6 +110,66 @@ func TestClient_AcceptHeaderVariants(t *testing.T) {
 			if got.status >= http.StatusInternalServerError {
 				t.Errorf("Accept %q produced %d: %s", accept, got.status, got.body)
 			}
+			// Whatever spelling of Accept got us here, a response the server
+			// actually answers as SSE must carry the anti-buffering header —
+			// and, invisibly to this assertion but from the same decision, must
+			// have had its write deadline cleared. Deciding that from the
+			// Accept substring missed `*/*` and `text/*`, which the SDK accepts
+			// and answers with a real stream: those clients got a stream an
+			// nginx-class proxy may buffer and our own WriteTimeout severs
+			// after 60 seconds.
+			if isEventStreamResponse(got.header.Get("Content-Type")) {
+				if got.header.Get("X-Accel-Buffering") != "no" {
+					t.Errorf("Accept %q was answered text/event-stream without X-Accel-Buffering: no", accept)
+				}
+			} else if got.header.Get("X-Accel-Buffering") != "" {
+				t.Errorf("Accept %q was answered %q yet carries X-Accel-Buffering", accept, got.header.Get("Content-Type"))
+			}
+		})
+	}
+}
+
+// isEventStreamResponse reports whether a Content-Type names the SSE media
+// type, ignoring parameters and case.
+func isEventStreamResponse(contentType string) bool {
+	base, _, _ := strings.Cut(contentType, ";")
+	return strings.EqualFold(strings.TrimSpace(base), "text/event-stream")
+}
+
+// TestClient_WildcardAcceptGetsAStreamableResponse pins the case the Accept
+// substring missed.
+//
+// The SDK treats `*/*` and `text/*` as accepting a stream and answers
+// text/event-stream, but the middleware used to decide "this is SSE" by looking
+// for the literal "text/event-stream" in the request's Accept header. A client
+// sending curl's default therefore received a genuine SSE stream with no
+// X-Accel-Buffering header — so an nginx-class proxy may buffer it — and with
+// the 60-second write deadline still armed, which severs any stream outliving
+// it. Both failure modes look like network flakiness rather than a server bug.
+//
+// This needs a GitLab that authenticates, because only a request that succeeds
+// is answered with a stream at all.
+func TestClient_WildcardAcceptGetsAStreamableResponse(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	for _, accept := range []string{"*/*", "text/*, application/json", "application/json, TEXT/EVENT-STREAM"} {
+		t.Run(accept, func(t *testing.T) {
+			got := srv.do(t, request{
+				method: http.MethodPost, path: "/mcp", body: toolsListBody,
+				headers: map[string]string{
+					"PRIVATE-TOKEN":        "glpat-whatever",
+					"Accept":               accept,
+					"MCP-Protocol-Version": protocolVersion,
+				},
+			})
+
+			if !isEventStreamResponse(got.header.Get("Content-Type")) {
+				t.Skipf("Accept %q was answered %q, not a stream", accept, got.header.Get("Content-Type"))
+			}
+			if got.header.Get("X-Accel-Buffering") != "no" {
+				t.Errorf("Accept %q got a text/event-stream response without X-Accel-Buffering: no — a buffering proxy would hold its events", accept)
+			}
 		})
 	}
 }

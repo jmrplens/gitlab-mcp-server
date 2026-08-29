@@ -627,9 +627,12 @@ go-sdk SSE writer never resets the write deadline.
 
 To avoid severing those streams without weakening protection for everything else,
 the global `WriteTimeout` is kept at a safe `60s` (guarding standard endpoints such
-as `/health` from slow-write attacks), and any request that negotiates SSE
-(`Accept: text/event-stream`) — both the standalone GET stream and streamed POST
-responses — disables its own write deadline dynamically. Because the default
+as `/health` from slow-write attacks), and any response the server actually
+answers as `text/event-stream` — both the standalone GET stream and streamed POST
+responses — disables its own write deadline dynamically and carries
+`X-Accel-Buffering: no` so a buffering proxy streams it rather than holding it.
+The decision is taken from the response, not from the request's `Accept` header:
+a client sending `*/*` or `text/*` is answered with a stream too. Because the default
 `--http-idle-timeout` is `0`
 (disabled), the HTTP layer also does not close idle connections, so `--session-timeout`
 is the effective idle lifetime. If you set a low `--http-idle-timeout`, expect
