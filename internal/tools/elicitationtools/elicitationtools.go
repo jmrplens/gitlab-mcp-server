@@ -179,13 +179,21 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 
 	tracker.Step(ctx, 4, 4, "Creating issue...")
 
-	return issues.Create(ctx, client, issues.CreateInput{
+	created, err := issues.Create(ctx, client, issues.CreateInput{
 		ProjectID:    input.ProjectID,
 		Title:        title,
 		Description:  description,
 		Labels:       labels,
 		Confidential: confidential,
 	})
+	if err != nil {
+		return created, err
+	}
+	// Step is 1-based and Update is 0-based, so the last Step above reports 3
+	// of 4. Without this the bar stops one short and stays there, which reads
+	// as a wizard that hung on its final call.
+	tracker.Done(ctx, 4, "Issue created")
+	return created, nil
 }
 
 // Interactive MR creation.
@@ -256,7 +264,7 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 
 	tracker.Step(ctx, 5, 5, "Creating merge request...")
 
-	return mergerequests.Create(ctx, client, mergerequests.CreateInput{
+	created, err := mergerequests.Create(ctx, client, mergerequests.CreateInput{
 		ProjectID:          input.ProjectID,
 		SourceBranch:       sourceBranch,
 		TargetBranch:       targetBranch,
@@ -266,6 +274,11 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 		RemoveSourceBranch: removeSource,
 		Squash:             squash,
 	})
+	if err != nil {
+		return created, err
+	}
+	tracker.Done(ctx, 5, "Merge request created")
+	return created, nil
 }
 
 // collectMROptions asks for optional merge request labels and merge behavior.
@@ -415,12 +428,17 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 
 	tracker.Step(ctx, 4, 4, "Creating release...")
 
-	return releases.Create(ctx, client, releases.CreateInput{
+	created, err := releases.Create(ctx, client, releases.CreateInput{
 		ProjectID:   input.ProjectID,
 		TagName:     tagName,
 		Name:        name,
 		Description: description,
 	})
+	if err != nil {
+		return created, err
+	}
+	tracker.Done(ctx, 4, "Release created")
+	return created, nil
 }
 
 // Interactive project creation.
@@ -487,11 +505,16 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 
 	tracker.Step(ctx, 4, 4, "Creating project...")
 
-	return projects.Create(ctx, client, projects.CreateInput{
+	created, err := projects.Create(ctx, client, projects.CreateInput{
 		Name:                 name,
 		Description:          description,
 		Visibility:           visibility,
 		InitializeWithReadme: initReadme,
 		DefaultBranch:        defaultBranch,
 	})
+	if err != nil {
+		return created, err
+	}
+	tracker.Done(ctx, 4, "Project created")
+	return created, nil
 }

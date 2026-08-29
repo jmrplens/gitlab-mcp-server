@@ -744,6 +744,35 @@ sequenceDiagram
     Handler-->>Client: 200 OK + Mcp-Session-Id
 ```
 
+## Cancelling a request
+
+A client cancels an in-flight call by sending `notifications/cancelled` with the
+request id. Three things are worth knowing, because none of them is obvious from
+the protocol text alone.
+
+**The cancellation reaches GitLab.** The upstream request is aborted rather than
+left running to completion, so cancelling a slow search stops paying for it.
+
+**A response may still arrive for a cancelled request.** The specification says
+a server should not send one, and this server cannot prevent it: the SDK's
+jsonrpc2 layer writes the response for an incoming call whose context was
+cancelled, deliberately, and no application-level hook runs in between. A client
+that cancels should therefore be prepared to discard a late response rather than
+treat it as a protocol violation. Recorded in
+[upstream-bugs.md](../development/upstream-bugs.md).
+
+**The reason is not logged, because it does not arrive.** The specification asks
+that implementations log cancellation reasons; the SDK reads the request id from
+`notifications/cancelled` and discards the `reason` field before any application
+code sees it. What is logged is that the call was cancelled and how long it ran,
+at `INFO` — cancellation is the protocol working, so it does not belong in an
+error dashboard.
+
+On `--stateless=false`, a client that simply disconnects mid-call is a different
+case from one that cancels: the request continues to completion, since nothing
+on the connection says otherwise. Send `notifications/cancelled` before
+disconnecting if the work should stop.
+
 ## Shared Configuration
 
 The following settings are **server-wide** — they apply to all clients regardless of their token or GitLab URL:

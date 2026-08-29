@@ -77,8 +77,10 @@ readable without opening the tracker:
 | 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | No | No | No | Was yes | Yes |
 | 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | No | No | No | No | None possible |
 | 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | No | No | No | No | None taken |
-| 12 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
-| 13 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
+| 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | No | No | No | No | Partial |
+| 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | No | No | No | No | None possible |
+| 14 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
+| 15 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
 
 States verified against the upstream trackers on 2026-08-29.
 
@@ -290,6 +292,48 @@ named, which is how this surfaced.
 `test/e2e/stdio`, and `TestResilientStdio_*` in `cmd/server`. The e2e case
 asserts the client-visible contract rather than the workaround, so it keeps
 passing if the SDK ever fixes this and the filter is removed.
+
+### A cancelled incoming call is still answered
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: partial and honest rather than a fix. The response cannot be
+  suppressed, so what we do is stop it lying: a cancellation is classified as
+  "the request was cancelled by the client" instead of falling through to
+  "unexpected error", and logged at INFO rather than ERROR. The client behaviour
+  is documented in the HTTP guide so a client can expect the late response.
+
+**What**: "Servers receiving cancellation notifications SHOULD ... not send a
+response for the cancelled request." `internal/jsonrpc2/conn.go` writes the
+response with `c.write(notDone{req.ctx}, response)`, where `notDone` deliberately
+strips the cancellation from the context so the write proceeds. Nothing at
+application level runs between the handler returning and that write, so no
+server built on this SDK can satisfy the clause.
+
+**How we found it**: the interaction-pattern audit. Captured on stdio, two
+seconds into a hanging GitLab call: the client's `notifications/cancelled` at
+6.306s, and the server's response to that same request id at 6.307s.
+
+### The cancellation reason is discarded before any handler sees it
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: none possible. The field is dropped inside the SDK; there is
+  no seam to read it from. We log what remains — that the call was cancelled and
+  how long it ran.
+
+**What**: "Implementations SHOULD log cancellation reasons for debugging."
+`mcp/transport.go` unmarshals `CancelledParams`, uses `params.RequestID` to
+cancel the call, and discards `params.Reason`. A hook, or even a logger line at
+the preempter, would be enough.
+
+**How we found it**: the interaction-pattern audit. Sending a cancellation with
+reason "User requested cancellation" left no trace of that string anywhere in
+the server's output.
 
 ### The declared protocol version, not the negotiated one, selects MRTR
 

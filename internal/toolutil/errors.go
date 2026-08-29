@@ -1,6 +1,7 @@
 package toolutil
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -43,6 +44,19 @@ func WrapErr(operation string, err error) error {
 func ClassifyError(err error) string {
 	if err == nil {
 		return "unknown error"
+	}
+
+	// The caller went away. Checked before anything else because a canceled
+	// request often surfaces as a transport failure underneath — a closed
+	// connection, an aborted round trip — and every classification below would
+	// describe that symptom as though GitLab had done something wrong. Saying
+	// "unexpected error" about a client pressing stop is both untrue and
+	// unhelpful: nothing is wrong and there is nothing to check.
+	if errors.Is(err, context.Canceled) {
+		return "the request was canceled by the client"
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "the request exceeded its deadline and was canceled"
 	}
 
 	// GitLab API returned an HTTP error response
