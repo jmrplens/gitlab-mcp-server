@@ -193,6 +193,23 @@ func NewUpdateActionSpec(name string, route ActionRoute, opts ActionSpecOptions)
 	return NewActionSpec(name, route, opts)
 }
 
+// NewAdditiveActionSpec creates a mutating action whose repetition changes the
+// result, so idempotentHint stays false.
+//
+// It exists because "update" is the wrong shape for some endpoints that look
+// like one. Logging spent time is the example: GitLab's add_spent_time is
+// additive, so two calls of "1h" leave two hours logged, and an
+// idempotentHint of true would invite a model to retry a call whose outcome it
+// could not observe — leaving the user's timesheet wrong in a way nobody
+// notices for a while.
+//
+// The hint is advisory, which is exactly why it has to be accurate: nothing
+// enforces it, so its only effect is on what a model decides to do.
+func NewAdditiveActionSpec(name string, route ActionRoute, opts ActionSpecOptions) ActionSpec {
+	opts.Idempotent = false
+	return NewActionSpec(name, route, opts)
+}
+
 // NewDeleteActionSpec creates a destructive, idempotent action specification.
 func NewDeleteActionSpec(name string, route ActionRoute, opts ActionSpecOptions) ActionSpec {
 	opts.Destructive = true

@@ -6821,3 +6821,37 @@ func TestValidateHTTPAuthConfig_OAuthRefusesSkipTLSVerify(t *testing.T) {
 		})
 	}
 }
+
+// TestToolsList_FitsInOnePage is the guard on a number that has to stay ahead
+// of the catalog.
+//
+// PageSize is 2000 because one shipping client — OpenAI Codex — ignores
+// nextCursor and silently uses only the first page, so a catalog that outgrew
+// the page size would not fail loudly: it would hand that client a partial tool
+// list and let it conclude the missing tools do not exist.
+//
+// The largest surface is the individual one at the highest tier, and it grows
+// every time a domain is added. Nothing watched the gap between the two numbers
+// until now, which is the kind of limit that is only ever noticed after it is
+// crossed.
+func TestToolsList_FitsInOnePage(t *testing.T) {
+	server, err := createServer(t.Context(), sharedCreateServerClient(t), &config.ServerConfig{
+		ToolSurface: config.ToolSurfaceIndividual,
+		Tier:        edition.Ultimate,
+	}, nil)
+	if err != nil {
+		t.Fatalf("createServer: %v", err)
+	}
+
+	session := connectInMemory(t, server)
+	listed, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("tools/list: %v", err)
+	}
+
+	if listed.NextCursor != "" {
+		t.Fatalf("tools/list paginated at %d tools; a client that ignores nextCursor now sees a partial catalog",
+			len(listed.Tools))
+	}
+	t.Logf("the largest surface lists %d tools in one page", len(listed.Tools))
+}

@@ -832,3 +832,47 @@ func BenchmarkBuildActionCatalog_Ultimate(b *testing.B) {
 		}
 	}
 }
+
+// TestActionAnnotations_AdditiveActionsAreNotIdempotent is the gate for a hint
+// that can only mislead when it is wrong.
+//
+// idempotentHint tells a model that repeating a call has no further effect.
+// Nothing enforces it, so its entire purpose is to say whether a retry is safe,
+// which makes an inaccurate one worse than an absent one.
+//
+// Logging spent time was the case that was wrong. GitLab's add_spent_time is
+// additive — two calls of "1h" leave two hours — and the action was built
+// through the update helper, which marks everything idempotent. A model
+// retrying a call whose result it could not observe would have doubled a
+// timesheet entry, quietly and in a place nobody checks for a while.
+//
+// The rule is checked by name because the name is the claim: an action called
+// "add" that also says repeating it changes nothing is either misnamed or
+// mis-annotated, and either way it should be looked at. Actions that genuinely
+// set a value are named for it — set, update, reset — and keep the hint.
+func TestActionAnnotations_AdditiveActionsAreNotIdempotent(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true})
+
+	var checked int
+	for _, action := range catalog.Actions() {
+		name := string(action.ID)
+		short := name
+		if i := strings.LastIndex(name, "."); i >= 0 {
+			short = name[i+1:]
+		}
+		if !strings.HasPrefix(short, "add_") && !strings.HasSuffix(short, "_add") && short != "add" {
+			continue
+		}
+		checked++
+
+		if action.Idempotent {
+			t.Errorf("%s is annotated idempotent while its name says it accumulates; "+
+				"a model may retry it and apply the effect twice", name)
+		}
+	}
+
+	if checked == 0 {
+		t.Fatal("no additive action was found, so this gate asserted nothing")
+	}
+	t.Logf("checked %d additive action(s)", checked)
+}

@@ -412,6 +412,8 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--auth-mode`         | `legacy` | Authentication mode: `legacy` or `oauth` (RFC 9728 Bearer verification) |
 | `--public-url`        | _(empty)_ | Externally reachable https origin; required with `--auth-mode=oauth` (RFC 9728 resource identifier and metadata-URL derivation) |
 | `--resource-documentation` | _(empty)_ | https URL published as RFC 9728 `resource_documentation`; point it at a page describing your own OAuth application. Empty publishes this project's OAuth setup guide |
+| `--resource-policy-uri` | _(empty)_ | https URL published as RFC 9728 `resource_policy_uri`; your own page on what this deployment does with the data reached through it. Empty omits the field, which is the right default: a link to a page that does not exist would land on a consent screen |
+| `--resource-tos-uri` | _(empty)_ | https URL published as RFC 9728 `resource_tos_uri`; your own terms of service. Empty omits the field |
 | `--oauth-cache-ttl`   | `15m`   | OAuth token identity cache TTL (range 1m–2h)             |
 | `--oauth-client-uid`  | _(empty)_ | Comma-separated GitLab OAuth application uids whose tokens are admitted; empty admits any credential the instance accepts |
 | `--pool-idle-timeout` | `1h` | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h) |

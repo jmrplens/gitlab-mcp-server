@@ -101,7 +101,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_mr_reset_time_estimate — clear the MR's time estimate.
 		mergeRequestUpdateSpec("time_estimate_reset", toolutil.RouteAction(client, ResetTimeEstimate), "gitlab_mr_reset_time_estimate"),
 		// gitlab_mr_add_spent_time — log time spent on the MR.
-		mergeRequestUpdateSpec("spent_time_add", toolutil.RouteAction(client, AddSpentTime), "gitlab_mr_add_spent_time"),
+		// Additive rather than an update: GitLab adds the duration to what is
+		// already logged, so two identical calls leave twice the time.
+		mergeRequestAdditiveSpec("spent_time_add", toolutil.RouteAction(client, AddSpentTime), "gitlab_mr_add_spent_time"),
 		// gitlab_mr_reset_spent_time — clear the MR's spent time.
 		mergeRequestUpdateSpec("spent_time_reset", toolutil.RouteAction(client, ResetSpentTime), "gitlab_mr_reset_spent_time"),
 		// gitlab_mr_time_stats — read MR time tracking totals.
@@ -185,6 +187,13 @@ func mergeRequestCreateSpec(name string, route toolutil.ActionRoute, individualT
 // [mergeRequestOptions].
 func mergeRequestUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	return toolutil.NewUpdateActionSpec(name, route, mergeRequestOptions(name, individualTool))
+}
+
+// mergeRequestAdditiveSpec is mergeRequestUpdateSpec for an action that
+// accumulates rather than sets, so repeating it is not the same as doing it
+// once.
+func mergeRequestAdditiveSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	return toolutil.NewAdditiveActionSpec(name, route, mergeRequestOptions(name, individualTool))
 }
 
 // mergeRequestDeleteSpec builds a destructive [toolutil.ActionSpec]

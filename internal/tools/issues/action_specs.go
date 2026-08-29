@@ -60,7 +60,9 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_issue_time_estimate_reset — clear the time estimate.
 		issueUpdateSpec("time_estimate_reset", toolutil.RouteAction(client, ResetTimeEstimate), "gitlab_issue_time_estimate_reset"),
 		// gitlab_issue_spent_time_add — log time spent on the issue.
-		issueUpdateSpec("spent_time_add", toolutil.RouteAction(client, AddSpentTime), "gitlab_issue_spent_time_add"),
+		// Additive rather than an update: GitLab adds the duration to what is
+		// already logged, so two identical calls leave twice the time.
+		issueAdditiveSpec("spent_time_add", toolutil.RouteAction(client, AddSpentTime), "gitlab_issue_spent_time_add"),
 		// gitlab_issue_spent_time_reset — clear total spent time for the issue.
 		issueUpdateSpec("spent_time_reset", toolutil.RouteAction(client, ResetSpentTime), "gitlab_issue_spent_time_reset"),
 		// gitlab_issue_time_stats_get — read time tracking totals for the issue.
@@ -387,6 +389,14 @@ func issueUpdateSpec(name string, route toolutil.ActionRoute, individualTool str
 	options := issueOptions(individualTool)
 	decorateIssueMeta(&options, individualTool)
 	return toolutil.NewUpdateActionSpec(name, route, options)
+}
+
+// issueAdditiveSpec is issueUpdateSpec for an action that accumulates rather
+// than sets, so repeating it is not the same as doing it once.
+func issueAdditiveSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
+	options := issueOptions(individualTool)
+	decorateIssueMeta(&options, individualTool)
+	return toolutil.NewAdditiveActionSpec(name, route, options)
 }
 
 // issueUpdateActionSpec builds the special update spec for the

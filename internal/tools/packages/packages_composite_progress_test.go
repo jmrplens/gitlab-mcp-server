@@ -149,7 +149,44 @@ func progressOfOneCall(t *testing.T, handler func(context.Context, *mcp.CallTool
 		t.Fatalf("CallTool: %v", callErr)
 	}
 
+	// Progress notifications are one-way messages, so the call can return
+	// before the last of them has been delivered. Waiting for the stream to go
+	// quiet is what makes the sequence assertions deterministic; without it the
+	// final frame is sometimes missing and the test fails claiming the job
+	// never finished.
+	settle(t, &mu, &got)
+
 	mu.Lock()
 	defer mu.Unlock()
 	return append([]mcp.ProgressNotificationParams(nil), got...)
+}
+
+// settle waits until no new notification has arrived for a short quiet period,
+// or until a deadline that is generous enough that reaching it means something
+// is actually wrong.
+func settle(t *testing.T, mu *sync.Mutex, got *[]mcp.ProgressNotificationParams) {
+	t.Helper()
+
+	const quiet = 100 * time.Millisecond
+	deadline := time.Now().Add(10 * time.Second)
+
+	count := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(*got)
+	}
+
+	last := count()
+	stable := time.Now()
+	for time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+		if n := count(); n != last {
+			last, stable = n, time.Now()
+			continue
+		}
+		if time.Since(stable) >= quiet {
+			return
+		}
+	}
+	t.Fatalf("progress notifications never stopped arriving; last count %d", last)
 }

@@ -248,6 +248,15 @@ type Config struct {
 	// defines no field for one.
 	ResourceDocumentation string
 
+	// ResourcePolicyURI and ResourceTermsURI are the RFC 9728
+	// resource_policy_uri and resource_tos_uri fields. Both are omitted from
+	// the metadata document when empty, which is the default: they describe a
+	// specific deployment's undertakings about the data reached with the
+	// tokens it accepts, and publishing a link to a page that does not exist
+	// would put a dead link on a consent screen.
+	ResourcePolicyURI string
+	ResourceTermsURI  string
+
 	TrustedProxyHeader string // HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
 	// TrustedOrigins are absolute origins (scheme://host[:port]) allowed to
 	// make cross-origin browser requests. Empty by default: the server

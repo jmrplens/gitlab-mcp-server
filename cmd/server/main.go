@@ -188,6 +188,8 @@ type httpConfig struct {
 	authMode              string
 	publicURL             string
 	resourceDocumentation string
+	resourcePolicyURI     string
+	resourceTermsURI      string
 	oauthCacheTTL         time.Duration
 	oauthClientUID        string
 	trustedProxyHeader    string
@@ -283,6 +285,8 @@ func main() {
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.StringVar(&hcfg.publicURL, "public-url", "", "Externally reachable origin of this deployment (https). Required with --auth-mode=oauth: it is the RFC 9728 protected-resource identifier")
 	flag.StringVar(&hcfg.resourceDocumentation, "resource-documentation", "", "https URL published as RFC 9728 resource_documentation; point it at a page describing your own OAuth application (its client ID and registered redirect URIs). Empty publishes this project's OAuth setup guide")
+	flag.StringVar(&hcfg.resourcePolicyURI, "resource-policy-uri", "", "https URL published as RFC 9728 resource_policy_uri; point it at your own page describing what this deployment does with the data reached through it. Empty publishes no policy link")
+	flag.StringVar(&hcfg.resourceTermsURI, "resource-tos-uri", "", "https URL published as RFC 9728 resource_tos_uri; point it at your own terms of service. Empty publishes no terms link")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
 	flag.StringVar(&hcfg.oauthClientUID, "oauth-client-uid", "", "Comma-separated GitLab OAuth application uids whose tokens this deployment admits. Empty (default) admits any credential the instance accepts; setting it also refuses personal access tokens, which belong to no application")
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
@@ -435,6 +439,10 @@ FLAGS
   -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
   -resource-documentation string
                             https URL published as RFC 9728 resource_documentation (default: this project's OAuth setup guide)
+  -resource-policy-uri string
+                            https URL published as RFC 9728 resource_policy_uri (default: omitted)
+  -resource-tos-uri string
+                            https URL published as RFC 9728 resource_tos_uri (default: omitted)
   -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
   -oauth-client-uid string  Comma-separated GitLab OAuth application uids whose tokens are admitted (default: any)
   -public-url string        Externally reachable https origin; required with -auth-mode=oauth (RFC 9728 resource identifier)
@@ -696,6 +704,8 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		AuthMode:              hcfg.authMode,
 		PublicURL:             hcfg.publicURL,
 		ResourceDocumentation: hcfg.resourceDocumentation,
+		ResourcePolicyURI:     hcfg.resourcePolicyURI,
+		ResourceTermsURI:      hcfg.resourceTermsURI,
 		OAuthCacheTTL:         hcfg.oauthCacheTTL,
 		OAuthClientUIDs:       config.ParseCSV(hcfg.oauthClientUID),
 		TrustedProxyHeader:    hcfg.trustedProxyHeader,
@@ -2234,7 +2244,11 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		advertisedScope: requiredScope,
 	}
 	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{oauth.MinimumScope}})
-	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.InstanceURLs(), oauth.SupportedScopes(cfg.ReadOnly, cfg.SafeMode), cfg.ResourceDocumentation)
+	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.InstanceURLs(), oauth.SupportedScopes(cfg.ReadOnly, cfg.SafeMode), oauth.ResourceLinks{
+		Documentation:  cfg.ResourceDocumentation,
+		Policy:         cfg.ResourcePolicyURI,
+		TermsOfService: cfg.ResourceTermsURI,
+	})
 	// Both derivations of RFC 9728 §3 resolve: the path-less form and the
 	// path-inserted form a client computes from a resource identifier that
 	// carries a path. Mounted without a method restriction so the SDK
@@ -2242,8 +2256,9 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	// Access-Control-Allow-Origin: *); a "GET "-restricted pattern would
 	// send the preflight to the catch-all gate and 401 it, locking out
 	// browser-based clients that fetch PRM cross-origin (claude.ai).
-	mux.Handle("/.well-known/oauth-protected-resource", prm)
-	mux.Handle("/.well-known/oauth-protected-resource/{rest...}", prm)
+	discovery := metadataDocument(prm)
+	mux.Handle("/.well-known/oauth-protected-resource", discovery)
+	mux.Handle("/.well-known/oauth-protected-resource/{rest...}", discovery)
 	// Bearer only: oauth mode advertises the RFC 6750 scheme, so the legacy
 	// PRIVATE-TOKEN header alias is not silently rewritten into it here —
 	// what the challenge advertises is exactly what is accepted.
