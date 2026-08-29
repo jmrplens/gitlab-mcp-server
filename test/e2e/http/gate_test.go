@@ -611,3 +611,64 @@ func requireRevisionRefused(t *testing.T, body string) {
 		t.Error("the refusal names no revision the client could retry with")
 	}
 }
+
+// TestElicitingToolCall_WithoutAHandshake_DoesNotKillTheServer is the wire
+// regression for the crash that took the whole process down.
+//
+// FromRequest read the session's InitializeParams and guarded only against a
+// nil params pointer, not a nil Capabilities pointer inside it. The SDK
+// synthesizes InitializeParams carrying just a protocol version for a request
+// that arrives without a handshake, so Capabilities was nil and the
+// dereference panicked in the SDK's jsonrpc2 goroutine, where nothing recovers.
+//
+// It required no client misbehavior. Under the default stateless transport
+// every POST is its own session with no handshake, so an ordinary
+// pre-2026-07-28 client hit it on any tools/call that could elicit, and one
+// such call killed the endpoint for every other tenant on it.
+//
+// The unit tests in internal/elicitation cannot see this: a ServerSession built
+// in a test has nil InitializeParams, which the old guard already caught. Only
+// a real session built by the SDK from a real request has the shape that
+// crashed, so the regression has to be driven over the wire.
+//
+// The assertion is deliberately about survival rather than the answer. Whether
+// this call ends in a confirmation prompt or a refusal to elicit is settled
+// elsewhere; what is pinned here is that the process is still serving
+// afterwards.
+func TestElicitingToolCall_WithoutAHandshake_DoesNotKillTheServer(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	// An interactive action on the default dynamic surface. It builds an
+	// elicitation client before it does anything else, and no initialize
+	// precedes the call. The arguments have to satisfy the tool's schema or the
+	// SDK rejects the call before the handler runs, which is exactly how an
+	// earlier version of this test passed against the unfixed binary.
+	const call = `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"interactive.issue_create","params":{"project_id":"1"}}}}`
+
+	// The legacy protocol version is what puts the SDK on the synthesizing
+	// path: it builds InitializeParams for a request that never handshook and
+	// leaves Capabilities, a pointer, nil.
+	legacy := map[string]string{
+		"PRIVATE-TOKEN":        "glpat-whatever",
+		"MCP-Protocol-Version": "2025-11-25",
+	}
+
+	got := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp", body: call, headers: legacy,
+	})
+	if got.status == 0 {
+		t.Fatalf("the server did not answer the eliciting call at all: %s", got.body)
+	}
+
+	// The process must still be serving. A panic in the SDK's reading goroutine
+	// takes the listener with it, so the next request is the real assertion.
+	after := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp",
+		body:    `{"jsonrpc":"2.0","id":2,"method":"tools/list"}`,
+		headers: legacy,
+	})
+	if after.status != http.StatusOK {
+		t.Fatalf("the server stopped serving after the eliciting call: status = %d, body = %s", after.status, after.body)
+	}
+}

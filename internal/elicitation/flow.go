@@ -92,8 +92,12 @@ func FlowFromRequest(req *mcp.CallToolRequest) (*Flow, error) {
 	if req == nil || req.Session == nil {
 		return f, nil
 	}
-	iparams := req.Session.InitializeParams()
-	if iparams == nil || iparams.ProtocolVersion < minMRTRProtocolVersion {
+	// Read the revision from the request rather than the session. From
+	// 2026-07-28 a client states it per request and may arrive without ever
+	// having handshaken, so the session-level value is whatever the first
+	// request on that session happened to say. The accessor still falls back to
+	// InitializeParams, which is where an older client's value lives.
+	if req.ProtocolVersion() < minMRTRProtocolVersion {
 		return f, nil
 	}
 	f.mrtr = true
@@ -145,6 +149,13 @@ func (f *Flow) exchange(ctx context.Context, id, message string, schema map[stri
 	}
 	if rec, ok := f.answers[id]; ok {
 		return contentForAction(rec.Action, rec.Content)
+	}
+	// "Servers MUST NOT send elicitation requests with modes that are not
+	// supported by the client." An answer already given is honored above
+	// regardless, since refusing to read it would discard the user's own input.
+	// The legacy path needs no such check: there the SDK refuses the send.
+	if !f.legacy.IsFormSupported() {
+		return nil, ErrFormElicitationNotSupported
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err

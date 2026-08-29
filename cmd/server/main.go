@@ -1198,6 +1198,9 @@ func createServer(
 		)
 	}
 
+	// Added last so it wraps every middleware above it as well as the handler.
+	server.AddReceivingMiddleware(recoverPanics)
+
 	return server, nil
 }
 

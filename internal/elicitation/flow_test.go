@@ -24,7 +24,7 @@ func newMRTRFlow(answers map[string]answerRecord) *Flow {
 	if answers == nil {
 		answers = map[string]answerRecord{}
 	}
-	return &Flow{legacy: Client{session: &mcp.ServerSession{}}, mrtr: true, answers: answers}
+	return &Flow{legacy: Client{session: &mcp.ServerSession{}, caps: formCapabilities()}, mrtr: true, answers: answers}
 }
 
 // TestFlow_Pending_QueuesInputRequest verifies that an unanswered prompt on
@@ -308,7 +308,7 @@ func urlFlow(t *testing.T, answers map[string]answerRecord) *Flow {
 	if answers == nil {
 		answers = map[string]answerRecord{}
 	}
-	return &Flow{legacy: Client{session: ss}, mrtr: true, answers: answers}
+	return &Flow{legacy: Client{session: ss, caps: urlCapabilities()}, mrtr: true, answers: answers}
 }
 
 // elicitURLBase and elicitURLTarget are the instance and in-instance page the
@@ -776,5 +776,25 @@ func TestFlowFromRequest_LegacySession_UsesSynchronousPath(t *testing.T) {
 	}
 	if !confirmed {
 		t.Error("Confirm(legacy) = false, want true")
+	}
+}
+
+// formCapabilities and urlCapabilities are the two client shapes the flow tests
+// need. They are stated explicitly because a Client now captures the
+// capabilities of the request that built it rather than reading them from the
+// session: from 2026-07-28 a client declares them per request, so a test that
+// leaves them unset is describing a client that declared nothing.
+func formCapabilities() *mcp.ClientCapabilities {
+	return &mcp.ClientCapabilities{
+		Elicitation: &mcp.ElicitationCapabilities{Form: &mcp.FormElicitationCapabilities{}},
+	}
+}
+
+func urlCapabilities() *mcp.ClientCapabilities {
+	return &mcp.ClientCapabilities{
+		Elicitation: &mcp.ElicitationCapabilities{
+			Form: &mcp.FormElicitationCapabilities{},
+			URL:  &mcp.URLElicitationCapabilities{},
+		},
 	}
 }
