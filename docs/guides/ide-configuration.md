@@ -263,7 +263,7 @@ Edit `claude_desktop_config.json`:
 Claude Desktop supports remote MCP servers with OAuth via the **Custom Connectors** UI:
 
 1. Go to [claude.ai/settings/connectors](https://claude.ai/settings/connectors)
-2. Click **Add Connector** and enter the server URL: `https://mcp.example.com/mcp` (the same origin as `--public-url`)
+2. Click **Add Connector** and enter the server URL: `https://mcp.example.com/mcp` — which must be the value the server was started with as `--public-url`, not merely the same origin. RFC 9728 makes a client discard metadata whose `resource` is not identical to the URL it used, so `--public-url=https://mcp.example.com` with clients on `.../mcp` fails discovery. See [HTTP Server Mode — OAuth Mode](http-server-mode.md#oauth-mode)
 3. Under **Advanced settings**, set the **Client ID** to your GitLab Application ID — without it Claude falls back to Dynamic Client Registration, which on GitLab yields an `mcp`-scoped token this server cannot use
 4. Claude handles OAuth discovery and authorization through the browser
 

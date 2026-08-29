@@ -366,6 +366,22 @@ gitlab-mcp-server --http \
   --oauth-cache-ttl=15m
 ```
 
+> **`--public-url` must be byte-identical to the URL clients are configured
+> with.** It is the RFC 9728 _resource identifier_, and §3.3 of that RFC tells a
+> client to **discard** metadata whose `resource` value is not identical to the
+> URL it used. So a deployment started with `--public-url=https://mcp.example.com`
+> whose clients point at `https://mcp.example.com/mcp` fails discovery: the
+> challenge and the metadata both name the origin, the client wanted the `/mcp`
+> URL, and it must throw the document away. With the official Go SDK that
+> degrades quietly to treating the MCP host itself as the authorization server,
+> so the browser flow opens a metadata URL that does not exist.
+>
+> The server answers MCP on several paths as a convenience — the root, `/mcp`,
+> and the `--public-url` path prefix — but only one of them can be the published
+> identifier. Pick the URL you hand to clients and pass exactly that:
+> clients at `https://mcp.example.com/mcp` → `--public-url=https://mcp.example.com/mcp`
+> → metadata at `https://mcp.example.com/.well-known/oauth-protected-resource/mcp`.
+
 **How it works:**
 
 ```mermaid

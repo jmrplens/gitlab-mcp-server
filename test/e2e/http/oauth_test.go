@@ -743,3 +743,52 @@ func TestOAuth_UnderScopedTokenIsForbiddenNotInvalid(t *testing.T) {
 		}
 	}
 }
+
+// TestOAuth_PathCarryingPublicURLIsSelfConsistent pins discovery for a
+// deployment whose resource identifier carries a path — the shape a server
+// mounted behind a prefix actually has, and the one the suite never exercised
+// because every other case here uses the bare origin.
+//
+// RFC 9728 §3.3 tells a client to discard metadata whose `resource` value is not
+// identical to the URL it used, so the three things a client sees must agree:
+// the metadata URL named in the challenge, the path that URL is served on, and
+// the `resource` inside the document. If they drift, the official Go SDK falls
+// back to treating the MCP host itself as the authorization server and opens a
+// metadata URL that does not exist — a failure that looks like a broken
+// authorization server rather than a misconfigured identifier.
+func TestOAuth_PathCarryingPublicURLIsSelfConsistent(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.url,
+		"--auth-mode=oauth",
+		"--public-url=https://mcp.example.com/gitlab",
+	)
+
+	got := srv.do(t, mcpPOST(nil))
+	if got.status != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", got.status)
+	}
+
+	challenge := got.header.Get("WWW-Authenticate")
+	const wantMetadata = "https://mcp.example.com/.well-known/oauth-protected-resource/gitlab"
+	if !strings.Contains(challenge, `resource_metadata="`+wantMetadata+`"`) {
+		t.Fatalf("challenge %q does not point at %s — the well-known segment goes between host and path", challenge, wantMetadata)
+	}
+
+	// The document must be served on the path the challenge named, and must
+	// claim exactly the identifier the deployment was started with.
+	doc := srv.do(t, request{method: http.MethodGet, path: "/.well-known/oauth-protected-resource/gitlab"})
+	if doc.status != http.StatusOK {
+		t.Fatalf("metadata status = %d, want 200 — the challenge points at a path that is not served", doc.status)
+	}
+
+	var metadata struct {
+		Resource string `json:"resource"`
+	}
+	if err := json.Unmarshal([]byte(doc.body), &metadata); err != nil {
+		t.Fatalf("decode metadata: %v", err)
+	}
+	if metadata.Resource != "https://mcp.example.com/gitlab" {
+		t.Errorf("resource = %q, want the --public-url value; a client comparing the two discards this document", metadata.Resource)
+	}
+}

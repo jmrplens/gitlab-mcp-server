@@ -212,7 +212,7 @@ Two pages make it easier still. The [server card](https://mcp.jmrp.io/servers/gi
 
 It is the fastest way to try the server, and the right way to keep using it is still **locally** (any option above) — for one concrete reason, not as a disclaimer: **your token and every request pass through someone else's machine.** Running it locally means your credentials and your GitLab traffic never leave your computer, which also makes it the only sensible option for a private self-managed instance.
 
-The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport and an _authenticated_ `GET` answers `405` by design; with no credential, any method answers `401` carrying the RFC 6750 challenge an OAuth client follows — a bare `curl` that gets `401` is the endpoint working, not failing. `https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",…}`. A self-hosted HTTP deployment can also run `--auth-mode=oauth --gitlab-url=https://gitlab.com --public-url=https://mcp.example.com` (both are required: OAuth needs a fixed instance and the externally reachable origin that RFC 9728 identifies the resource by), where clients discover GitLab as the authorization server through that metadata and authorize in the browser instead of copying tokens — see [OAuth App Setup](docs/guides/oauth-app-setup.md). It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers I maintain, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
+The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport and an _authenticated_ `GET` answers `405` by design; with no credential, any method answers `401` carrying the RFC 6750 challenge an OAuth client follows — a bare `curl` that gets `401` is the endpoint working, not failing. `https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",…}`. A self-hosted HTTP deployment can also run `--auth-mode=oauth --gitlab-url=https://gitlab.com --public-url=https://mcp.example.com/mcp` (both are required: OAuth needs a fixed instance, and `--public-url` is the RFC 9728 resource identifier — pass exactly the URL your clients are configured with, since a client discards metadata naming a different one), where clients discover GitLab as the authorization server through that metadata and authorize in the browser instead of copying tokens — see [OAuth App Setup](docs/guides/oauth-app-setup.md). It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers I maintain, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
 
 It is a personal service, run by one person and offered as-is: no SLA, no support channel, and no promise it is unchanged next week. It adds no quota of its own — every call spends GitLab.com's own limits, under your own token. And it tracks the latest release automatically, so what it serves follows the newest tag rather than a pinned version.
 
@@ -452,8 +452,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |       996 |     204,064 |
 | Unit tests (`_test.go`)  |       554 |     316,090 |
-| End-to-end tests         |       183 |      48,843 |
-| **Total**                | **1,733** | **568,997** |
+| End-to-end tests         |       183 |      48,892 |
+| **Total**                | **1,733** | **569,046** |
 
 ### Functions
 
@@ -464,7 +464,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | — unexported (private)          |  5,066 |
 | Unit test functions (`TestXxx`) | 12,016 |
 | Subtests (`t.Run(...)`)         |  3,020 |
-| End-to-end test functions       |    461 |
+| End-to-end test functions       |    462 |
 
 ### Ratios worth noting
 
