@@ -106,9 +106,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update server.json with SHA256 hashes
-        run: bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}"
-
+      # The bundle is built before the stamp because server.json declares it and
+      # needs its SHA256. GoReleaser does not produce it, so it is absent from
+      # the signed checksums.txt and its hash cannot be appended there.
       - name: Build and upload Claude Desktop extension (.mcpb)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -118,6 +118,9 @@ jobs:
           bash scripts/build-mcpb.sh "${VERSION}"
           sha256sum dist/gitlab-mcp-server.mcpb
           gh release upload "v${VERSION}" dist/gitlab-mcp-server.mcpb --clobber
+
+      - name: Update server.json with SHA256 hashes
+        run: bash scripts/update-server-json-sha.sh dist/checksums.txt "${GITHUB_REF#refs/tags/v}" dist/gitlab-mcp-server.mcpb
 
       # npm publish via OIDC trusted publisher — no stored token. dist/ already
       # holds the binaries under their release names here, the same spot the

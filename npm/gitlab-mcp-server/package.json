@@ -1,6 +1,7 @@
 {
   "name": "@jmrp.io/gitlab-mcp-server",
   "version": "2.7.5",
+  "mcpName": "io.github.jmrplens/gitlab-mcp-server",
   "description": "Model Context Protocol (MCP) server exposing GitLab REST v4 and GraphQL as tools for AI assistants. Runs as a local binary over stdio or HTTP.",
   "keywords": [
     "mcp",
