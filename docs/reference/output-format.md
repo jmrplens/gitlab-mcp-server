@@ -164,7 +164,7 @@ Page 1 of 1 (20 per page) · 5 items
 
 ### Detail Response
 
-When you ask *"Show me merge request !243"*:
+When you ask *"Show me merge request `!243`"*:
 
 **Markdown content**:
 
