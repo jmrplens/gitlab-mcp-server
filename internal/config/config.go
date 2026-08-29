@@ -1043,6 +1043,26 @@ func ParseCSV(s string) []string {
 	return result
 }
 
+// isLoopbackHost reports whether a hostname names this machine.
+//
+// Three separate rules draw an exemption here, and they must draw it in the
+// same place: cleartext is tolerated for --gitlab-url and --public-url, and
+// --skip-tls-verify is tolerated for --gitlab-url. All three are the same
+// judgement, that a credential traveling without a verified peer does not
+// leave the host.
+func isLoopbackHost(host string) bool {
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
+}
+
+// IsLoopbackGitLabURL reports whether a GitLab base URL names this machine.
+func IsLoopbackGitLabURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	return isLoopbackHost(u.Hostname())
+}
+
 // ValidateOAuthGitLabURL requires the GitLab instance URL to use https in
 // oauth mode. Bearer tokens are forwarded upstream on every call, so a
 // cleartext instance URL would put a live credential on the wire
@@ -1053,26 +1073,10 @@ func ValidateOAuthGitLabURL(raw string) error {
 	if err != nil || u.Host == "" {
 		return fmt.Errorf("--gitlab-url %q is not an absolute URL", raw)
 	}
-	host := u.Hostname()
-	loopback := host == "localhost" || host == "127.0.0.1" || host == "::1"
-	if u.Scheme != "https" && (u.Scheme != "http" || !loopback) {
+	if u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname())) {
 		return fmt.Errorf("--auth-mode=oauth requires an https --gitlab-url (got %q): bearer tokens are forwarded to the instance on every call, and http would transmit them in cleartext. http is allowed only for loopback development", raw)
 	}
 	return nil
-}
-
-// IsLoopbackGitLabURL reports whether a GitLab base URL names this machine.
-//
-// Loopback is the one place a credential can travel without a verified peer and
-// not leave the host, which is why both the cleartext exemption and the
-// skip-TLS exemption are drawn here.
-func IsLoopbackGitLabURL(raw string) bool {
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" {
-		return false
-	}
-	host := u.Hostname()
-	return host == "localhost" || host == "127.0.0.1" || host == "::1"
 }
 
 // ValidatePublicURL enforces the RFC 9728 constraints on the advertised
@@ -1099,9 +1103,7 @@ func validatePublicURL(raw string) error {
 	if strings.HasSuffix(u.Path, "/") {
 		return fmt.Errorf("--public-url %q must not end in a slash", raw)
 	}
-	host := u.Hostname()
-	loopback := host == "localhost" || host == "127.0.0.1" || host == "::1"
-	if u.Scheme != "https" && (u.Scheme != "http" || !loopback) {
+	if u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname())) {
 		return fmt.Errorf("--public-url %q must use https (RFC 9728 §1.2; http is allowed only for loopback development)", raw)
 	}
 	return nil
