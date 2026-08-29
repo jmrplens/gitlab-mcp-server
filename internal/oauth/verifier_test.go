@@ -920,3 +920,79 @@ func TestExpiryFromDate(t *testing.T) {
 		})
 	}
 }
+
+// TestNewGitLabVerifier_ForbiddenDistinguishesScope covers the two very
+// different things a GitLab 403 can mean.
+//
+// A token that is genuine but under-scoped must be reported as such, so the
+// caller is told to request the missing scope rather than to throw a working
+// credential away — and so the gate does not charge the attempt against the
+// caller's authentication-failure budget. Anything else 403 means the caller may
+// not do this at all, which keeps being treated as an invalid credential.
+//
+// The distinction lives only in the body: GitLab does not send WWW-Authenticate
+// on a 403, so a check reading the challenge would never fire.
+func TestNewGitLabVerifier_ForbiddenDistinguishesScope(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		body           string
+		contentType    string
+		wantScopeError bool
+	}{
+		{
+			name:           "rack-oauth2 insufficient_scope",
+			body:           `{"error":"insufficient_scope","error_description":"requires higher privileges","scope":"api"}`,
+			contentType:    "application/json",
+			wantScopeError: true,
+		},
+		{
+			name:           "granular personal access token scope",
+			body:           `{"error":"insufficient_granular_scope"}`,
+			contentType:    "application/json",
+			wantScopeError: true,
+		},
+		{
+			name:           "a Grape forbidden carries message, not error",
+			body:           `{"message":"403 Forbidden - Your account has been blocked"}`,
+			contentType:    "application/json",
+			wantScopeError: false,
+		},
+		{
+			name:           "a plain-text rejection is not a scope problem",
+			body:           "forbidden",
+			contentType:    "text/plain",
+			wantScopeError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", tt.contentType)
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(tt.body))
+			}))
+			defer srv.Close()
+
+			verifier := NewGitLabVerifier(srv.URL, false, 15*time.Minute, nil)
+			_, err := verifier(t.Context(), "some-token", nil)
+			if err == nil {
+				t.Fatal("expected an error for a 403 response")
+			}
+
+			gotScope := errors.Is(err, ErrInsufficientScope)
+			if gotScope != tt.wantScopeError {
+				t.Errorf("ErrInsufficientScope = %v, want %v (err: %v)", gotScope, tt.wantScopeError, err)
+			}
+			// Whatever the shape, it must never be reported as an upstream
+			// failure: GitLab answered, and it answered about the credential.
+			if !gotScope && !isErrInvalidToken(err) {
+				t.Errorf("a non-scope 403 should wrap auth.ErrInvalidToken, got: %v", err)
+			}
+		})
+	}
+}

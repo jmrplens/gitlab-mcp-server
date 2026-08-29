@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"maps"
 	"net/http"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -685,5 +686,60 @@ func assertDirectoryMetadata(t *testing.T, body string) {
 	}
 	if len(metadata.ScopesSupported) == 0 {
 		t.Error("scopes_supported is empty")
+	}
+}
+
+// TestOAuth_UnderScopedTokenIsForbiddenNotInvalid pins the answer to a token
+// GitLab accepts as genuine but rejects for lacking a scope.
+//
+// Reporting it as an invalid token tells the client to discard a working
+// credential and re-run its authorization flow, which returns the same
+// under-scoped token and loops. Worse, the invalid-token path charges the
+// caller's address an authentication failure and caches the token as rejected,
+// so a client retrying with its genuine credential can lock its own address out
+// of the endpoint. The server already answers this exact condition correctly
+// when it notices the missing scope itself; this is the same fact arriving from
+// GitLab instead.
+//
+// The distinction is only in the body — GitLab sends no WWW-Authenticate on a
+// 403 — so the fake reproduces rack-oauth2's JSON error document.
+func TestOAuth_UnderScopedTokenIsForbiddenNotInvalid(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"version":"17.0.0","revision":"abcdef"}`))
+	})
+	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"error":"insufficient_scope","error_description":"requires higher privileges","scope":"api"}`))
+	})
+	gitlab := httptest.NewServer(mux)
+	defer gitlab.Close()
+
+	srv := oauthServer(t, gitlab.URL)
+
+	// More attempts than the authentication-failure budget allows. If any of
+	// them were charged, the address would be locked out and the status would
+	// turn into 429 partway through.
+	for attempt := range 12 {
+		got := srv.do(t, request{
+			method: http.MethodPost, path: "/mcp", body: toolsListBody,
+			headers: map[string]string{"Authorization": "Bearer glpat-under-scoped"},
+		})
+
+		if got.status == http.StatusTooManyRequests {
+			t.Fatalf("attempt %d was rate limited: a genuine token was charged against the address", attempt+1)
+		}
+		if got.status != http.StatusForbidden {
+			t.Fatalf("attempt %d: status = %d, want 403 — an under-scoped token is not an invalid one", attempt+1, got.status)
+		}
+		challenge := got.header.Get("WWW-Authenticate")
+		if !strings.Contains(challenge, `error="insufficient_scope"`) {
+			t.Errorf("challenge %q does not say the scope is what is missing", challenge)
+		}
+		if strings.Contains(challenge, `error="invalid_token"`) {
+			t.Errorf("challenge %q tells the client to discard a working credential", challenge)
+		}
 	}
 }

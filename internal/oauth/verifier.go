@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 	"net/http"
@@ -144,6 +145,44 @@ func retryAfter(resp *http.Response) time.Duration {
 	return 0
 }
 
+// ErrInsufficientScope reports a credential GitLab accepts as genuine but which
+// does not carry the scope the request needed.
+//
+// It is deliberately distinct from [auth.ErrInvalidToken]. Reporting the two the
+// same way tells a client to discard a working credential and re-run its
+// authorization flow, which returns the same under-scoped token and loops; the
+// action that resolves it is a step-up request naming the scope. It also matters
+// upstream of that: an invalid token is charged against the caller's
+// authentication-failure budget, and charging a genuine one lets a client lock
+// its own address out of the endpoint while holding a perfectly good token.
+var ErrInsufficientScope = errors.New("token lacks the required GitLab scope")
+
+// insufficientScopeLimit bounds how much of a rejection body is read. The body
+// is attacker-adjacent — it comes from whatever host the request selected — and
+// nothing legitimate needs more than this to name an error code.
+const insufficientScopeLimit = 4 << 10
+
+// isInsufficientScope reports whether GitLab's 403 says the token is genuine but
+// under-scoped, rather than that the caller may not do this at all.
+//
+// The distinction is only in the body. GitLab does not send WWW-Authenticate on
+// a 403 — its own source carries a FIXME saying so, because the Forbidden class
+// it inherits never builds that header — so a server reading the challenge would
+// fall through on every real rejection while looking correct. What it does send
+// is rack-oauth2's JSON error document. A 403 raised by Grape's own forbidden!
+// (an account blocked, an IP restriction) carries a "message" key instead and no
+// "error", so it keeps being treated as an invalid credential.
+func isInsufficientScope(resp *http.Response) bool {
+	var payload struct {
+		Error string `json:"error"`
+	}
+	if json.NewDecoder(io.LimitReader(resp.Body, insufficientScopeLimit)).Decode(&payload) != nil {
+		return false
+	}
+	// GitLab emits both spellings, the second for granular PAT scopes.
+	return payload.Error == "insufficient_scope" || payload.Error == "insufficient_granular_scope"
+}
+
 // gitlabUserResponse holds the minimal fields from GitLab's /api/v4/user endpoint.
 type gitlabUserResponse struct {
 	ID       int    `json:"id"`
@@ -225,7 +264,12 @@ func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.
 		switch {
 		case resp.StatusCode == http.StatusOK:
 			// success — parse below
-		case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
+		case resp.StatusCode == http.StatusUnauthorized:
+			return nil, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
+		case resp.StatusCode == http.StatusForbidden:
+			if isInsufficientScope(resp) {
+				return nil, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, ErrInsufficientScope)
+			}
 			return nil, fmt.Errorf("token rejected by GitLab (HTTP %d): %w", resp.StatusCode, auth.ErrInvalidToken)
 		case resp.StatusCode == http.StatusTooManyRequests:
 			// Not an invalid token: GitLab declined to answer the question.
