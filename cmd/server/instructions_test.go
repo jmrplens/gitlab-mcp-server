@@ -272,6 +272,18 @@ func TestBuildInstructions_WatchingSection_FollowsCapabilitySurface(t *testing.T
 // On stateless HTTP the legacy resources/subscribe is answered with an
 // error, while subscriptions/listen works; instructions that named only the
 // former would send the model straight into a refusal.
+//
+// This assertion was true of the text and false of the server for as long as
+// the stateless refusal also killed subscriptions/listen: the sentence it pins
+// promised a working method where none was. Keeping it is only worth anything
+// alongside the wire test that drives the method, in
+// test/e2e/http/subscriptions_test.go — a claim about a string cannot tell you
+// whether the thing it names works.
+//
+// The revision is pinned too. A client that negotiated an earlier one cannot
+// watch resources on this transport by any route, so instructions that named
+// the method without saying which revision it belongs to would leave it
+// looking for something it has no way to call.
 func TestBuildInstructions_StatelessHTTP_NamesTheWorkingMethod(t *testing.T) {
 	stateless := buildInstructions(config.ToolSurfaceDynamic, config.CapabilitySurfaceFull, true)
 	if !strings.Contains(stateless, "WATCHING RESOURCES") {
@@ -279,6 +291,9 @@ func TestBuildInstructions_StatelessHTTP_NamesTheWorkingMethod(t *testing.T) {
 	}
 	if !strings.Contains(stateless, "subscriptions/listen") {
 		t.Error("stateless instructions do not name subscriptions/listen, the one method that transport honors")
+	}
+	if !strings.Contains(stateless, "2026-07-28") {
+		t.Error("stateless instructions name the method without the revision that introduced it")
 	}
 	if strings.Contains(stateless, "via MCP resources/subscribe") {
 		t.Error("stateless instructions teach resources/subscribe, which that transport refuses")

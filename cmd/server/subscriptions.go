@@ -309,6 +309,15 @@ func (s *listenStreams) stopped(uri string, _ error) {
 func (s *listenStreams) middleware() mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method != methodSubscriptionsListen {
+				return next(ctx, method, req)
+			}
+			// Marked for every listen, including one that also carries
+			// list-changed subscriptions, because the mark is what tells the
+			// subscribe handler which method it is serving. Arming the stream
+			// for closure stays narrower, below.
+			ctx = markListenSubscribe(ctx)
+
 			uris, ok := closableListenURIs(method, req)
 			if !ok {
 				return next(ctx, method, req)
@@ -320,6 +329,28 @@ func (s *listenStreams) middleware() mcp.Middleware {
 			return next(streamCtx, method, req)
 		}
 	}
+}
+
+// listenSubscribeKey marks a context as belonging to a subscriptions/listen
+// request, so the subscribe handler can tell the two methods apart.
+//
+// The SDK gives them one handler: subscriptionsListen calls the same
+// SubscribeHandler once per resource URI it carries, and returns that
+// handler's error before it acknowledges anything. So a handler that refuses
+// every subscribe refuses subscriptions/listen too, whatever it meant to say.
+type listenSubscribeKey struct{}
+
+// markListenSubscribe records that any subscribe reached through this context
+// is the SDK's own, made on behalf of a subscriptions/listen request.
+func markListenSubscribe(ctx context.Context) context.Context {
+	return context.WithValue(ctx, listenSubscribeKey{}, true)
+}
+
+// isListenSubscribe reports whether this subscribe came from a
+// subscriptions/listen request rather than a client's resources/subscribe.
+func isListenSubscribe(ctx context.Context) bool {
+	marked, _ := ctx.Value(listenSubscribeKey{}).(bool)
+	return marked
 }
 
 // closableListenURIs reports the resource URIs of a listen request that
@@ -422,7 +453,7 @@ var errStatelessSubscribe = &jsonrpc.Error{
 }
 
 // subscribeUnlessStateless refuses a legacy subscribe that this transport
-// could never deliver on.
+// could never deliver on, and only that one.
 //
 // The capability itself stays advertised, because the SDK requires it for
 // the 2026-07-28 subscriptions/listen path, which works in stateless mode
@@ -433,7 +464,18 @@ var errStatelessSubscribe = &jsonrpc.Error{
 // having spent a GitLab round-trip on the authorization read. Refusing says
 // so, where accepting would leave the client waiting forever for a
 // notification with nowhere to go.
-func (b *sessionBridge) subscribeUnlessStateless(_ context.Context, _ *mcp.SubscribeRequest) error {
+//
+// The mark is what makes that distinction possible. Refusing unconditionally
+// looked equivalent and was not: the SDK routes a listen's resource URIs
+// through this same handler and returns the first error before acknowledging
+// anything, so the refusal reached every listen carrying a resource — which
+// is to say the whole feature, on the default configuration, while the
+// handshake went on advertising resources.subscribe. A mixed listen was worse
+// still: its list-changed half died with the resource half.
+func (b *sessionBridge) subscribeUnlessStateless(ctx context.Context, req *mcp.SubscribeRequest) error {
+	if isListenSubscribe(ctx) {
+		return b.Subscribe(ctx, req)
+	}
 	return errStatelessSubscribe
 }
 

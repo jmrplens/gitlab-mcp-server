@@ -59,6 +59,14 @@ make the worst case something an operator can predict.
 - **The legacy `resources/subscribe` is refused in stateless HTTP mode**,
   where the session ends with the POST that created it and no notification
   could ever be delivered. `subscriptions/listen` still works there.
+  **The refusal must be scoped by request path, not by transport.** The SDK
+  routes both methods through the one `SubscribeHandler`: `subscriptions/listen`
+  calls it once per resource URI it carries and returns the first error before
+  acknowledging anything. A handler that refuses every subscribe in stateless
+  mode therefore refuses `subscriptions/listen` too, which is how the feature
+  shipped dead in the default configuration while the handshake went on
+  advertising `resources.subscribe`. The listen path is marked in its
+  middleware and the refusal consults that mark.
 - **Rate limiting pauses every watcher on the manager**, with exponential
   back-off, because GitLab enforces its limits per user.
 - **A watch that ends for a reason the client did not ask for closes the
@@ -156,6 +164,16 @@ make the worst case something an operator can predict.
   `resources.subscribe` for the `subscriptions/listen` path, which works in
   stateless mode. Refusing the one method that cannot be honored says more,
   and to the client that actually asked.
+
+  The second sentence was true and the third was not, as written. Refusing "the
+  one method that cannot be honored" described an intent the code could not
+  carry out, because the SDK gives both methods one handler: the refusal
+  reached every `subscriptions/listen` naming a resource, and a mixed listen
+  lost its list-changed half along with it. So for as long as that held, the
+  rejection of this alternative was resting on an outcome that was not
+  happening — the capability was advertised and no method could honor it,
+  which is the state F exists to avoid. The decision stands now that the
+  refusal is scoped by request path; it did not stand before.
 
 ## References
 

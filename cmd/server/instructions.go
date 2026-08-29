@@ -172,7 +172,15 @@ func buildInstructions(toolSurface, capabilitySurface string, statelessHTTP bool
 			// Each stateless POST's session closes with the response, so the
 			// legacy request is refused there; only the long-lived
 			// subscriptions/listen form can be honored.
-			subscribeMethod = "MCP subscriptions/listen (protocol 2026-07-28; the legacy resources/subscribe is refused on this transport)"
+			//
+			// The revision is named because a client that negotiated an
+			// earlier one cannot watch resources on this transport at all:
+			// subscriptions/listen does not exist for it, and the method that
+			// does is the refused one. Naming only the method would send such
+			// a client looking for something it has no way to call.
+			subscribeMethod = "MCP subscriptions/listen, which protocol revision 2026-07-28 introduced " +
+				"(a client speaking an earlier revision cannot watch resources on this transport: the legacy " +
+				"resources/subscribe is refused here, because each request's session ends with its response)"
 		}
 		fmt.Fprintf(&b, "\n\nWATCHING RESOURCES — Instead of re-reading a resource in a loop to detect change:\n"+
 			"1. Single-object resources (a pipeline, an issue, a merge request, a file, a wiki page, ...) can be "+
