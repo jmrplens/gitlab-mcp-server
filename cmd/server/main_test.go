@@ -6566,8 +6566,17 @@ func TestKeepAliveInterval_HTTPPoolEntriesRunWithoutTheServerPing(t *testing.T) 
 
 	stateful := &config.ServerConfig{Stateless: false}
 
-	if got := keepAliveInterval(newServerSettings(nil), stateful); got == 0 {
-		t.Errorf("keepAliveInterval(stateful, no override) = 0; stdio must keep the ping, where it is protocol-legal")
+	// stdio used to keep the ping, justified as doing so "where it is
+	// protocol-legal". The legality is per protocol version, not per transport:
+	// 2026-07-28 removes ping and limits a server-sent notifications/cancelled
+	// to subscriptions/listen, and the SDK pings regardless and then emits that
+	// notification for its own timed-out ping. At KeepAliveFailureThreshold 1,
+	// a conformant client of that revision cannot answer, and the session dies
+	// — observed as the stdio process exiting 45 seconds into an idle session.
+	// The SDK starts the keepalive at session creation, before any request
+	// reveals the revision, so there is no version to gate on.
+	if got := keepAliveInterval(newServerSettings(nil), stateful); got != 0 {
+		t.Errorf("keepAliveInterval(stateful, no override) = %v, want 0 — a server-initiated ping is not ours to send at 2026-07-28, and the SDK starts it before the revision is known", got)
 	}
 
 	poolOptions := []serverOption{withSessionTag("tag"), withKeepAlive(0)}

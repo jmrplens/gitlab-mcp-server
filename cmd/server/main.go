@@ -959,21 +959,32 @@ var sharedSchemaCache = mcp.NewSchemaCache()
 // resources, and prompts registered for the given GitLab client.
 // Used both by stdio mode (single call) and by the HTTP server pool factory.
 // If updater is non-nil, server update MCP tools are registered.
-// keepAliveFor returns the server keepalive interval for the configured
-// transport: zero (disabled) on stateless HTTP, where a server-initiated ping
-// is forbidden and the SDK closes the session when the ping cannot be written;
-// 30s everywhere else.
+// keepAliveFor returns the server keepalive interval, which is zero on every
+// transport: this server never sends the SDK's periodic ping.
 //
-// HTTP mode overrides this to zero for every pool entry, stateful included —
-// see [withKeepAlive] at the pool factory — so in practice only stdio keeps the
-// ping. The condition stays as it is because it is the transport-level truth,
-// and because a caller building a server without the pool still gets the
-// stateless rule right.
-func keepAliveFor(cfg *config.ServerConfig) time.Duration {
-	if cfg.Stateless {
-		return 0
-	}
-	return 30 * time.Second
+// It used to return 30s outside stateless HTTP, justified as keeping the ping
+// "where it is protocol-legal". That reasoning was per-transport and the
+// legality is per-protocol-version. Revision 2026-07-28 removes ping, and
+// restricts a server-sent notifications/cancelled to subscriptions/listen
+// requests; the SDK pings anyway, and on a timeout emits exactly that
+// notification for its own ping — a request the client never issued. Observed
+// on stdio at that revision: ping at +30s, notifications/cancelled with
+// requestId 1 at +45s, and, because KeepAliveFailureThreshold is 1 and a
+// conformant client cannot answer a method its revision does not define, the
+// process exited. The server advertised a revision under which it killed itself
+// after 45 idle seconds.
+//
+// Gating it on the version is not available: the SDK starts the keepalive when
+// the session is created, before any request has revealed which revision the
+// client speaks. So the choice is per-transport or nothing, and the transport
+// that would keep it is the one where it is least needed — a stdio client that
+// goes away closes the pipe, which the server notices without asking anything.
+//
+// HTTP pool entries already passed zero explicitly ([withKeepAlive] at the pool
+// factory); that override is now redundant rather than load-bearing, and is
+// left in place because it states the intent at the layer that has the reason.
+func keepAliveFor(*config.ServerConfig) time.Duration {
+	return 0
 }
 
 // keepAliveInterval resolves the keepalive an individual server runs with: the
