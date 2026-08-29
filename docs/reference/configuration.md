@@ -194,18 +194,18 @@ These settings are for operators deploying the server for a team or managing adv
 
 This table summarizes the most common operational variables. For the complete source-of-truth list, see [Environment Variable Reference](env.md); for HTTP flags, see [CLI Reference](cli.md).
 
-| Variable               | Default                      | Description                                                                                             |
-| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `AUTO_UPDATE`          | `true`                       | Enable automatic binary updates (`true`/`check`/`false`)                                                |
-| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                                    |
-| `AUTO_UPDATE_INTERVAL` | `1h`                         | Interval between periodic update checks (HTTP mode background checks only)                              |
-| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout for startup/background update checks (range: 5s–10m)                                            |
-| `YOLO_MODE`            | `false`                      | Skip destructive action confirmation prompts                                                            |
-| `AUTOPILOT`            | `false`                      | Same as `YOLO_MODE` — skip confirmation prompts                                                         |
-| `AUTH_MODE`            | `legacy`                     | HTTP mode authentication: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification) |
-| `OAUTH_CACHE_TTL`      | `15m`                        | TTL for verified OAuth token identity cache (min 1m, max 2h)                                            |
-| `RATE_LIMIT_RPS`       | `0`                          | Per-server tools/call rate limit in requests/second (`0` = disabled)                                    |
-| `RATE_LIMIT_BURST`     | `40`                         | Token-bucket burst size when `RATE_LIMIT_RPS` > 0                                                       |
+| Variable               | Default                      | Description                                                                                                                          |
+| ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `AUTO_UPDATE`          | `true`                       | Enable automatic binary updates (`true`/`check`/`false`)                                                                             |
+| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets                                                                                                 |
+| `AUTO_UPDATE_INTERVAL` | `1h`                         | Interval between periodic update checks (HTTP mode background checks only)                                                           |
+| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Timeout for startup/background update checks (range: 5s–10m)                                                                         |
+| `YOLO_MODE`            | `false`                      | Skip destructive action confirmation prompts                                                                                         |
+| `AUTOPILOT`            | `false`                      | Same as `YOLO_MODE` — skip confirmation prompts                                                                                      |
+| `AUTH_MODE`            | `legacy`                     | HTTP mode authentication: `legacy` (per-request header) or `oauth` (RFC 9728 Bearer token verification)                              |
+| `OAUTH_CACHE_TTL`      | `15m`                        | TTL for verified OAuth token identity cache (min 1m, max 2h)                                                                         |
+| `RATE_LIMIT_RPS`       | `0`                          | Per-server tools/call rate limit in requests/second (`0` disables it). Stdio only; HTTP mode defaults to `10` via `--rate-limit-rps` |
+| `RATE_LIMIT_BURST`     | `40`                         | Token-bucket burst size when `RATE_LIMIT_RPS` > 0                                                                                    |
 
 See [Auto-Update](../guides/auto-update.md) for detailed documentation on update modes, MCP tools, release requirements, and troubleshooting.
 
@@ -277,7 +277,7 @@ When running the server for multiple users, use HTTP mode. Configuration comes f
 | `--read-only`              | `false`                      | Expose only read-only tools                                                                                                                                                                                                                                                                                                  |
 | `--safe-mode`              | `false`                      | Intercept mutating tools, return preview                                                                                                                                                                                                                                                                                     |
 | `--embedded-resources`     | `true`                       | Embed canonical `gitlab://` MCP resource URIs as `EmbeddedResource` content blocks in `gitlab_*_get` tool results                                                                                                                                                                                                            |
-| `--rate-limit-rps`         | `0`                          | Per-server tools/call rate limit in req/s (`0` = disabled)                                                                                                                                                                                                                                                                   |
+| `--rate-limit-rps`         | `10`                         | Per-server tools/call rate limit in req/s (`0` disables it). On by default because an HTTP deployment is shared: one looping client's calls are charged to its egress address                                                                                                                                                |
 | `--rate-limit-burst`       | `40`                         | Token-bucket burst size when `--rate-limit-rps` > 0                                                                                                                                                                                                                                                                          |
 | `--exclude-tools`          | *(empty)*                    | Comma-separated tool names to exclude                                                                                                                                                                                                                                                                                        |
 | `--ignore-scopes`          | `false`                      | Skip PAT scope detection                                                                                                                                                                                                                                                                                                     |

@@ -387,13 +387,22 @@ agents and noisy clients, not to replace upstream throttling.
 
 ### Configuration
 
-| Setting         | Env var            | Flag (HTTP mode)     | Default        |
-| --------------- | ------------------ | -------------------- | -------------- |
-| Requests/second | `RATE_LIMIT_RPS`   | `--rate-limit-rps`   | `0` (disabled) |
-| Burst capacity  | `RATE_LIMIT_BURST` | `--rate-limit-burst` | `40`           |
+| Setting         | Env var            | Flag (HTTP mode)     | Default (stdio) | Default (HTTP) |
+| --------------- | ------------------ | -------------------- | --------------- | -------------- |
+| Requests/second | `RATE_LIMIT_RPS`   | `--rate-limit-rps`   | `0` (disabled)  | `10`           |
+| Burst capacity  | `RATE_LIMIT_BURST` | `--rate-limit-burst` | `40`            | `40`           |
 
-When `RATE_LIMIT_RPS = 0` the middleware is not attached and there is zero
-overhead on the hot path. Setting any value `> 0` activates a `golang.org/x/time/rate`
+The defaults differ because the deployments differ. The MCP specification
+requires a server exposing tools to rate limit their invocation, and an HTTP
+deployment is the shared one: every call it forwards is charged to its own
+egress address, so one looping client's volume lands on every other tenant and
+on the instance's own limits. A stdio process serves one user on their own
+machine, has no co-tenant to protect, and a limiter there only costs latency.
+
+`10` is a judgement call rather than a specification value — far above any
+human-driven session, and still a bound on a retry loop. Setting `0` explicitly
+is the supported opt-out in either mode: the middleware is then not attached and
+there is zero overhead on the hot path. Setting any value `> 0` activates a `golang.org/x/time/rate`
 limiter scoped to **one MCP server instance**:
 
 - **stdio mode** — one process, one bucket → effectively per-user.
@@ -408,7 +417,8 @@ limiter scoped to **one MCP server instance**:
 | GitLab.com (authenticated user) | `20`               | Stays well under the published ~33 rps authenticated quota with headroom for pagination loops. |
 | Self-hosted (default config)    | `8`                | Matches the typical 600 req/min default in `application_settings`.                             |
 | CI / batch automation           | `2`–`4`            | Conservative; pipelines that invoke many tools per job.                                        |
-| Disabled (default)              | `0`                | Trust GitLab's own throttle; useful when you have not measured traffic patterns yet.           |
+| HTTP default                    | `10`               | On unless you say otherwise; bounds a looping client without touching normal use.              |
+| Disabled (stdio default)        | `0`                | Trust GitLab's own throttle; the right answer for a single-user local process.                 |
 
 ### Behavior on excess
 

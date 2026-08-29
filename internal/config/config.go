@@ -69,10 +69,21 @@ const (
 
 // DefaultRateLimitBurst is the bucket size used when rps > 0 and the operator
 // did not set RATE_LIMIT_BURST explicitly.
+//
+// DefaultHTTPRateLimitRPS is the tool-call limit an HTTP deployment gets unless
+// the operator says otherwise. The specification requires a server exposing
+// tools to rate limit their invocation, and an HTTP deployment is the shared
+// one: every call it forwards is charged to its own egress address, so one
+// looping client's volume lands on every other tenant and on the instance's
+// limits. The number itself is a judgement call, not a spec value — far above
+// any human-driven session, and still a bound on a retry loop. Stdio keeps 0:
+// a single-user local process has no co-tenant to protect, so a limiter there
+// only costs latency. Explicit 0 remains the opt-out in both.
 const (
-	DefaultRateLimitBurst = 40
-	MaxRateLimitRPS       = 1000
-	MaxRateLimitBurst     = 10000
+	DefaultRateLimitBurst   = 40
+	DefaultHTTPRateLimitRPS = 10
+	MaxRateLimitRPS         = 1000
+	MaxRateLimitBurst       = 10000
 )
 
 // Meta-tool param schema modes.

@@ -284,7 +284,7 @@ func main() {
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
 	flag.StringVar(&hcfg.trustedOrigins, "trusted-origins", "", "Comma-separated absolute origins (scheme://host[:port], e.g. an IP for local deploys) allowed to make cross-origin browser requests; '*' accepts any origin (disables the protection); empty rejects all. The --public-url origin is trusted automatically")
-	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", 0, "Per-server tools/call rate limit in requests/second (0 = disabled)")
+	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", config.DefaultHTTPRateLimitRPS, "Per-server tools/call rate limit in requests/second (0 disables it)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
 	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so --session-timeout is the effective lifetime; set a positive duration to recycle idle connections sooner")
@@ -435,7 +435,7 @@ FLAGS
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
   -revalidate-interval dur  How often pooled tokens are re-validated against GitLab (default %s, 0 to disable)
   -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
-  -rate-limit-rps float     Per-server tools/call rate limit (0 = disabled)
+  -rate-limit-rps float     Per-server tools/call rate limit (default 10; 0 disables it)
   -rate-limit-burst int     Token-bucket burst size when --rate-limit-rps > 0 (default %d)
 
 ENVIRONMENT VARIABLES (stdio mode)
@@ -1691,17 +1691,47 @@ func mcpOriginMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if slices.Contains(cfg.TrustedOrigins, origin) || sameOriginAsHost(origin, r.Host) {
+		// An origin the operator named is allowed even when the browser calls
+		// it cross-site — being deliberately cross-origin is the entire point
+		// of --trusted-origins, so this is checked before the fetch metadata.
+		if slices.Contains(cfg.TrustedOrigins, origin) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		slog.Warn("request refused: untrusted Origin on the MCP endpoint", "method", r.Method)
-		(&gateFailure{
-			status:  http.StatusForbidden,
-			code:    errCodeForbidden,
-			message: "Cross-origin request refused: the Origin header names an origin this deployment does not trust.",
-		}).write(w)
+		// Fetch metadata then outranks the Origin comparison, exactly as the
+		// standard library's own protection treats it. A browser that says the
+		// request is same-origin, or that there was no initiating site at all,
+		// is authoritative; a desktop client sending an app:// Origin with
+		// Sec-Fetch-Site: none is the case that matters, since comparing that
+		// Origin against the listen host would refuse it forever.
+		switch r.Header.Get(headerSecFetchSite) {
+		case "same-origin", "none":
+			next.ServeHTTP(w, r)
+			return
+		case "":
+			// No fetch metadata: fall through to the Origin comparison, which
+			// is the only signal left.
+		default:
+			// cross-site or cross-origin, stated by the browser itself.
+			writeUntrustedOrigin(w, r)
+			return
+		}
+		if sameOriginAsHost(origin, r.Host) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		writeUntrustedOrigin(w, r)
 	})
+}
+
+// writeUntrustedOrigin refuses a cross-origin request to the MCP endpoint.
+func writeUntrustedOrigin(w http.ResponseWriter, r *http.Request) {
+	slog.Warn("request refused: untrusted Origin on the MCP endpoint", "method", r.Method)
+	(&gateFailure{
+		status:  http.StatusForbidden,
+		code:    errCodeForbidden,
+		message: "Cross-origin request refused: the Origin header names an origin this deployment does not trust.",
+	}).write(w)
 }
 
 // sameOriginAsHost reports whether an Origin names the host the request was sent
@@ -2305,7 +2335,11 @@ const (
 	headerRequestMethod  = "Access-Control-Request-Method"
 	headerRequestHeaders = "Access-Control-Request-Headers"
 	headerOrigin         = "Origin"
-	headerVary           = "Vary"
+	// headerSecFetchSite carries the browser's own statement about where the
+	// request came from. It outranks an Origin comparison because only the
+	// browser knows whether a navigation was same-origin.
+	headerSecFetchSite = "Sec-Fetch-Site"
+	headerVary         = "Vary"
 )
 
 // The content type every hand-written response in this package sends. They

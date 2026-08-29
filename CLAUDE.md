@@ -387,7 +387,7 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--auto-update`       | `true`  | Enable auto-update (`true`, `check`, `false`)            |
 | `--auto-update-repo`  | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
 | `--auto-update-interval` | `1h` | Periodic update check interval                           |
-| `--rate-limit-rps` | `0` | Per-server tools/call rate limit in req/s (0 = disabled) |
+| `--rate-limit-rps` | `10` | Per-server tools/call rate limit in req/s (`0` disables it). On by default in HTTP mode; the `RATE_LIMIT_RPS` env var used by stdio still defaults to `0` |
 | `--rate-limit-burst` | `40` | Token-bucket burst size when --rate-limit-rps > 0        |
 | `--auto-update-timeout` | `60s` | Startup/background update timeout (range 5s–10m)         |
 

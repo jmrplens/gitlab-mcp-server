@@ -6084,3 +6084,61 @@ func TestProtocolVersions_MatchTheSDK(t *testing.T) {
 		t.Errorf("the SDK supports %q but this server mirrors %q — update supportedProtocolVersions", named, want)
 	}
 }
+
+// TestRateLimit_DefaultsDifferByTransport pins that tool-call limiting is on by
+// default in HTTP mode and off in stdio.
+//
+// The specification requires a server exposing tools to rate limit their
+// invocation. The mechanism existed and was correct, but shipped disabled, so an
+// out-of-the-box HTTP deployment registered no limiter at all — and an HTTP
+// deployment is the shared one, where a looping client's volume is charged to
+// the server's own egress address and lands on every other tenant.
+//
+// Stdio stays at zero deliberately: a single-user local process has no co-tenant
+// to protect, and a limiter there only costs latency. Both keep an explicit 0 as
+// the opt-out.
+// TestRateLimit_HTTPModeLimitsToolCallsByDefault pins that an HTTP deployment
+// bounds tool invocations without being asked.
+//
+// The specification requires a server exposing tools to rate limit their
+// invocation. The mechanism existed and was correct, but shipped disabled, so an
+// out-of-the-box HTTP deployment registered no limiter at all — and an HTTP
+// deployment is the shared one, where a looping client's volume is charged to
+// the server's own egress address and lands on every other tenant.
+func TestRateLimit_HTTPModeLimitsToolCallsByDefault(t *testing.T) {
+	t.Parallel()
+
+	if config.DefaultHTTPRateLimitRPS <= 0 {
+		t.Fatalf("DefaultHTTPRateLimitRPS = %v; an HTTP deployment must bound tool calls",
+			config.DefaultHTTPRateLimitRPS)
+	}
+
+	fs := flag.NewFlagSet("probe", flag.ContinueOnError)
+	var rps float64
+	fs.Float64Var(&rps, "rate-limit-rps", config.DefaultHTTPRateLimitRPS, "")
+	if err := fs.Parse(nil); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if rps != config.DefaultHTTPRateLimitRPS {
+		t.Errorf("flag default = %v, want %v", rps, config.DefaultHTTPRateLimitRPS)
+	}
+}
+
+// TestRateLimit_StdioLeavesItOffUnlessAsked pins the other half of that
+// decision. A single-user local process has no co-tenant to protect, so a
+// limiter there only costs latency; the env var stays at zero.
+//
+// Not parallel: it sets environment variables.
+func TestRateLimit_StdioLeavesItOffUnlessAsked(t *testing.T) {
+	t.Setenv("GITLAB_URL", "https://gitlab.example.com")
+	t.Setenv("GITLAB_TOKEN", "glpat-whatever")
+	t.Setenv("RATE_LIMIT_RPS", "")
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.RateLimitRPS != 0 {
+		t.Errorf("stdio RateLimitRPS = %v, want 0 — a local process has no co-tenant to protect", cfg.RateLimitRPS)
+	}
+}
