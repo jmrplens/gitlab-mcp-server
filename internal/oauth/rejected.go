@@ -23,9 +23,32 @@ import (
 // exhaustion vector.
 type RejectedTokens struct {
 	mu      sync.Mutex
-	entries map[string]time.Time
+	entries map[string]rejection
 	max     int
 	ttl     time.Duration
+}
+
+// RejectionKind records why a token was refused, so an answer served from this
+// cache is the same answer the caller would have got from the round trip.
+//
+// Without it a cached refusal degrades to the harshest available response: an
+// unadmitted recipient would be reported as a token GitLab rejected, and would
+// be charged the authentication-failure budget the first refusal deliberately
+// spared it.
+type RejectionKind int
+
+const (
+	// RejectionInvalid is GitLab's own verdict on the credential.
+	RejectionInvalid RejectionKind = iota
+	// RejectionUnaccepted is this deployment's: the instance accepts the
+	// token, but it was not issued to an admitted OAuth application.
+	RejectionUnaccepted
+)
+
+// rejection is one cached refusal: when it stops applying, and what it was.
+type rejection struct {
+	expiresAt time.Time
+	kind      RejectionKind
 }
 
 // NewRejectedTokens returns a cache holding at most capacity rejections, each for
@@ -35,7 +58,7 @@ type RejectedTokens struct {
 // crashing.
 func NewRejectedTokens(capacity int, ttl time.Duration) *RejectedTokens {
 	return &RejectedTokens{
-		entries: make(map[string]time.Time),
+		entries: make(map[string]rejection),
 		max:     capacity,
 		ttl:     ttl,
 	}
@@ -53,11 +76,11 @@ func (r *RejectedTokens) Contains(gitlabURL, token string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	expiresAt, ok := r.entries[key]
+	entry, ok := r.entries[key]
 	if !ok {
 		return false
 	}
-	if !time.Now().Before(expiresAt) {
+	if !time.Now().Before(entry.expiresAt) {
 		delete(r.entries, key)
 		return false
 	}
@@ -70,6 +93,12 @@ func (r *RejectedTokens) Contains(gitlabURL, token string) bool {
 // a 5xx, a 429 — says nothing about the credential, and caching one would
 // lock out a valid token for the whole TTL over a transient outage.
 func (r *RejectedTokens) Record(gitlabURL, token string) {
+	r.RecordKind(gitlabURL, token, RejectionInvalid)
+}
+
+// RecordKind notes a refusal and why, so [RejectedTokens.Lookup] can reproduce
+// it rather than collapsing every cached refusal into GitLab's verdict.
+func (r *RejectedTokens) RecordKind(gitlabURL, token string, kind RejectionKind) {
 	if r.max <= 0 || r.ttl <= 0 {
 		return
 	}
@@ -87,15 +116,37 @@ func (r *RejectedTokens) Record(gitlabURL, token string) {
 	if len(r.entries) >= r.max {
 		return
 	}
-	r.entries[key] = time.Now().Add(r.ttl)
+	r.entries[key] = rejection{expiresAt: time.Now().Add(r.ttl), kind: kind}
+}
+
+// Lookup returns why a token was refused, and whether the refusal still
+// applies. An expired entry is dropped on the way out.
+func (r *RejectedTokens) Lookup(gitlabURL, token string) (RejectionKind, bool) {
+	if r.max <= 0 || r.ttl <= 0 {
+		return RejectionInvalid, false
+	}
+	key := rejectedKey(gitlabURL, token)
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	entry, ok := r.entries[key]
+	if !ok {
+		return RejectionInvalid, false
+	}
+	if time.Now().After(entry.expiresAt) {
+		delete(r.entries, key)
+		return RejectionInvalid, false
+	}
+	return entry.kind, true
 }
 
 // evictLocked frees space by dropping expired entries, falling back to the
 // entry closest to expiry when none have expired yet. The caller holds r.mu.
 func (r *RejectedTokens) evictLocked() {
 	now := time.Now()
-	for key, expiresAt := range r.entries {
-		if !now.Before(expiresAt) {
+	for key, entry := range r.entries {
+		if !now.Before(entry.expiresAt) {
 			delete(r.entries, key)
 		}
 	}
@@ -104,9 +155,9 @@ func (r *RejectedTokens) evictLocked() {
 	}
 	var oldestKey string
 	var oldestAt time.Time
-	for key, expiresAt := range r.entries {
-		if oldestKey == "" || expiresAt.Before(oldestAt) {
-			oldestKey, oldestAt = key, expiresAt
+	for key, entry := range r.entries {
+		if oldestKey == "" || entry.expiresAt.Before(oldestAt) {
+			oldestKey, oldestAt = key, entry.expiresAt
 		}
 	}
 	if oldestKey != "" {
@@ -128,8 +179,8 @@ func (r *RejectedTokens) Cleanup() {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	for key, expiresAt := range r.entries {
-		if !now.Before(expiresAt) {
+	for key, entry := range r.entries {
+		if !now.Before(entry.expiresAt) {
 			delete(r.entries, key)
 		}
 	}

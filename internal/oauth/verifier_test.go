@@ -1077,8 +1077,18 @@ func TestAcceptedRecipient_PinRefusesEverythingItCannotVouchFor(t *testing.T) {
 				if err == nil {
 					t.Fatal("acceptedRecipient() = nil, want a refusal")
 				}
-				if !errors.Is(err, auth.ErrInvalidToken) {
-					t.Errorf("acceptedRecipient() error = %v, want it to wrap auth.ErrInvalidToken so the guard answers 401", err)
+				// ErrUnacceptedRecipient, not auth.ErrInvalidToken: GitLab
+				// accepted this credential, and reporting it as rejected sends
+				// its holder to reauthorize and return with the same token.
+				// The guard still answers 401 with invalid_token, which RFC
+				// 6750 section 3.1 gives to a token "invalid for other
+				// reasons", but with a true description and without charging
+				// the authentication-failure budget.
+				if !errors.Is(err, ErrUnacceptedRecipient) {
+					t.Errorf("acceptedRecipient() error = %v, want it to wrap ErrUnacceptedRecipient", err)
+				}
+				if errors.Is(err, auth.ErrInvalidToken) {
+					t.Errorf("acceptedRecipient() error = %v, must not read as GitLab's own verdict", err)
 				}
 				return
 			}
@@ -1169,8 +1179,8 @@ func TestGitLabVerifier_RecipientPinIsEnforcedBeforeAnythingIsCached(t *testing.
 		if err == nil {
 			t.Fatal("verify() = nil, want a refusal for a token minted for another application")
 		}
-		if !errors.Is(err, auth.ErrInvalidToken) {
-			t.Errorf("verify() error = %v, want it to wrap auth.ErrInvalidToken", err)
+		if !errors.Is(err, ErrUnacceptedRecipient) {
+			t.Errorf("verify() error = %v, want it to wrap ErrUnacceptedRecipient", err)
 		}
 		if got := cache.Len(); got != 0 {
 			t.Errorf("cache holds %d entries after a refusal; a refused token must never become a cached identity", got)

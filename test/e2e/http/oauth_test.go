@@ -844,3 +844,55 @@ func TestOAuth_ResourceDocumentationIsOperatorConfigurable(t *testing.T) {
 		}
 	})
 }
+
+// TestOAuth_RefusesSkipTLSVerify verifies that the process refuses to start
+// rather than forward bearer tokens over a connection whose certificate is
+// never checked.
+//
+// oauth mode already refuses an http instance, because "bearer tokens are
+// forwarded to the instance on every call, and http would transmit them in
+// cleartext". An https instance with verification disabled has the same
+// property: any host that can answer for the address collects a live
+// credential. OAuth 2.1 section 7.1.3.2 states it directly, and in the upstream
+// leg this server is the client it addresses.
+//
+// Loopback keeps the exemption, for the same reason cleartext does: the
+// credential does not leave the host.
+func TestOAuth_RefusesSkipTLSVerify(t *testing.T) {
+	bin := serverBinary(t)
+
+	t.Run("a remote instance is refused", func(t *testing.T) {
+		out, err := runServerExpectingExit(t, bin,
+			"--http", "--http-addr=127.0.0.1:"+itoa(freePort(t)),
+			"--auth-mode=oauth",
+			"--public-url="+publicURL,
+			"--gitlab-url=https://gitlab.example.com",
+			"--skip-tls-verify",
+		)
+		if err == nil {
+			t.Fatal("oauth mode started with certificate verification disabled")
+		}
+		if !strings.Contains(out, "skip-tls-verify") {
+			t.Errorf("the startup error should name the flag responsible; got:\n%s", out)
+		}
+		if !strings.Contains(out, "SSL_CERT_FILE") {
+			t.Errorf("the startup error should name the supported alternative; got:\n%s", out)
+		}
+	})
+
+	t.Run("one unverified instance among several is enough", func(t *testing.T) {
+		out, err := runServerExpectingExit(t, bin,
+			"--http", "--http-addr=127.0.0.1:"+itoa(freePort(t)),
+			"--auth-mode=oauth",
+			"--public-url="+publicURL,
+			"--gitlab-url=https://localhost:8443,https://gitlab.example.com",
+			"--skip-tls-verify",
+		)
+		if err == nil {
+			t.Fatal("a published instance was left unverified because another one was loopback")
+		}
+		if !strings.Contains(out, "gitlab.example.com") {
+			t.Errorf("the startup error should name the offending instance; got:\n%s", out)
+		}
+	})
+}

@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -468,5 +469,60 @@ func TestBearerGuard_Challenge_IgnoresAnOddTrailingKey(t *testing.T) {
 	}
 	if !strings.Contains(got, `error="invalid_token"`) {
 		t.Errorf("challenge %q dropped the complete pair", got)
+	}
+}
+
+// TestBearerGuard_UnacceptedRecipient_TellsTheTruthAndSpendsNoBudget pins the
+// answer to a token the instance accepts but --oauth-client-uid does not admit.
+//
+// Both halves were wrong when the pin shipped, because the refusal wrapped
+// auth.ErrInvalidToken and became indistinguishable from GitLab's own verdict:
+//
+//   - The holder of a genuine, unexpired, instance-valid credential was told
+//     "the access token is expired, revoked, or not valid for this GitLab
+//     instance". Every clause of that is false, and a client acting on it
+//     reauthorizes and comes back with the same token.
+//   - It charged the authentication-failure budget, so a handful of attempts
+//     locked the address out of the endpoint — including for tokens the
+//     deployment does admit. That is the failure mode ErrInsufficientScope's
+//     own doc comment refuses to accept, and it applies here for the same
+//     reason: this is not a guess at a secret.
+//
+// The status and RFC 6750 code stay 401 and invalid_token; section 3.1 covers a
+// token "invalid for other reasons". Only the words had to change.
+func TestBearerGuard_UnacceptedRecipient_TellsTheTruthAndSpendsNoBudget(t *testing.T) {
+	t.Parallel()
+
+	g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		return nil, fmt.Errorf("token was issued to another OAuth application: %w", oauth.ErrUnacceptedRecipient)
+	})
+
+	failure := g.check(guardRequest(t, "gloas-other-app"))
+	if failure == nil || failure.status != http.StatusUnauthorized {
+		t.Fatalf("want 401, got %+v", failure)
+	}
+
+	challenge := failure.header.Get("WWW-Authenticate")
+	if !strings.Contains(challenge, `error="invalid_token"`) {
+		t.Errorf("challenge %q must keep the RFC 6750 code for a token invalid for other reasons", challenge)
+	}
+	if strings.Contains(challenge, "expired, revoked") {
+		t.Errorf("challenge %q still claims GitLab rejected the token; it did not", challenge)
+	}
+	if !strings.Contains(challenge, "OAuth application") {
+		t.Errorf("challenge %q does not name the actual cause", challenge)
+	}
+	if !strings.Contains(failure.message, "not issued to an OAuth application") {
+		t.Errorf("message %q does not tell the holder what to do differently", failure.message)
+	}
+
+	// The budget is the half that hurts a bystander: these attempts must not
+	// push the address towards a lockout that also refuses admitted tokens.
+	for range 10 {
+		if got := g.check(guardRequest(t, "gloas-other-app-again")); got == nil {
+			t.Fatal("an unadmitted token must keep being refused")
+		} else if got.status == http.StatusTooManyRequests {
+			t.Fatal("refusing an unadmitted recipient charged the failure budget; a client holding a good token can lock out its own address")
+		}
 	}
 }

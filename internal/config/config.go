@@ -1061,6 +1061,20 @@ func ValidateOAuthGitLabURL(raw string) error {
 	return nil
 }
 
+// IsLoopbackGitLabURL reports whether a GitLab base URL names this machine.
+//
+// Loopback is the one place a credential can travel without a verified peer and
+// not leave the host, which is why both the cleartext exemption and the
+// skip-TLS exemption are drawn here.
+func IsLoopbackGitLabURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := u.Hostname()
+	return host == "localhost" || host == "127.0.0.1" || host == "::1"
+}
+
 // ValidatePublicURL enforces the RFC 9728 constraints on the advertised
 // protected-resource identifier. Exported for the HTTP flag path, which
 // assembles its Config directly instead of going through Load.

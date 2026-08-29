@@ -167,10 +167,22 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 		instance = resolved
 	}
 
-	if g.rejected != nil && g.rejected.Contains(instance, token) {
-		g.recordFailure(ip)
-		slog.Info("request rejected: token already known to be invalid", "token_suffix", safeTokenSuffix(token))
-		return g.invalidTokenFailure("GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.")
+	if g.rejected != nil {
+		// Serve the refusal that was actually made. Collapsing every cached
+		// entry into GitLab's verdict would undo the distinction one request
+		// later: an unadmitted recipient would be told its token is expired,
+		// and would start being charged the budget the first refusal spared
+		// it.
+		if kind, cached := g.rejected.Lookup(instance, token); cached {
+			if kind == oauth.RejectionUnaccepted {
+				slog.Info("request rejected: token already known not to be issued to an admitted OAuth application",
+					"token_suffix", safeTokenSuffix(token))
+				return g.unacceptedRecipientFailure()
+			}
+			g.recordFailure(ip)
+			slog.Info("request rejected: token already known to be invalid", "token_suffix", safeTokenSuffix(token))
+			return g.invalidTokenFailure("GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.")
+		}
 	}
 
 	info, err := g.verify(r.Context(), token, r)
@@ -254,6 +266,26 @@ func (g *bearerGuard) classify(err error, ip, instance, token string) *gateFailu
 		}
 	}
 
+	// A token the instance accepts but this deployment does not admit, because
+	// --oauth-client-uid pins the OAuth applications it will serve. The status
+	// and RFC 6750 code are the same as for a rejected token — section 3.1
+	// covers a token "invalid for other reasons" and gives it 401 — but every
+	// other part of the answer has to differ, because GitLab rejected nothing.
+	//
+	// The old wording sent the holder of a genuine, unexpired, instance-valid
+	// credential to reauthorize, which returns the same token. It is also kept
+	// off the failure budget: this is not a guess at a secret, and charging it
+	// let one client lock a shared address out of the endpoint while holding a
+	// credential the deployment does admit.
+	if errors.Is(err, oauth.ErrUnacceptedRecipient) {
+		if g.rejected != nil {
+			g.rejected.RecordKind(instance, token, oauth.RejectionUnaccepted)
+		}
+		slog.Info("request rejected: token was not issued to an admitted OAuth application",
+			"token_suffix", safeTokenSuffix(token))
+		return g.unacceptedRecipientFailure()
+	}
+
 	if errors.Is(err, auth.ErrInvalidToken) {
 		if g.rejected != nil {
 			g.rejected.Record(instance, token)
@@ -272,6 +304,26 @@ func (g *bearerGuard) classify(err error, ip, instance, token string) *gateFailu
 		code:    errCodeUpstreamUnavailable,
 		message: "GitLab could not verify this token right now. Retry shortly — the token itself has not been rejected.",
 		header:  newHeader(headerRetryAfter, strconv.Itoa(int(upstreamRetryAfter.Seconds()))),
+	}
+}
+
+// unacceptedRecipientFailure builds the 401 for a token the instance accepts
+// but --oauth-client-uid does not admit.
+//
+// RFC 6750 section 3.1 covers a token "invalid for other reasons" and gives it
+// 401 with invalid_token, so the status and the code match a rejected token.
+// Nothing else does: GitLab rejected nothing, so a description claiming the
+// token is expired or revoked would send its holder to reauthorize and come
+// back with the same credential.
+func (g *bearerGuard) unacceptedRecipientFailure() *gateFailure {
+	return &gateFailure{
+		status:  http.StatusUnauthorized,
+		code:    errCodeUnauthorized,
+		message: "This token is valid for the GitLab instance, but it was not issued to an OAuth application this deployment admits. Obtain a token from the application the operator published; see the resource documentation named in the WWW-Authenticate challenge.",
+		header: newHeader(headerWWWAuthenticate, g.challenge(
+			"error", "invalid_token",
+			"error_description", "the token was not issued to an OAuth application this deployment admits",
+		)),
 	}
 }
 

@@ -6706,3 +6706,91 @@ func TestRemovedActionKeys_CoverCompatibilityAliases(t *testing.T) {
 			wantAlias, wantAction)
 	}
 }
+
+// TestValidateHTTPAuthConfig_OAuthRefusesSkipTLSVerify pins that oauth mode will
+// not forward a bearer token over a connection whose certificate is unchecked.
+//
+// The existing rule refuses an http instance because "bearer tokens are
+// forwarded to the instance on every call, and http would transmit them in
+// cleartext". An https instance with verification disabled has the same
+// property with extra steps: any host that can answer for the address is handed
+// a live credential, which OAuth 2.1 section 7.1.3.2 names outright ("the client
+// MUST validate the TLS certificate chain when making requests to protected
+// resources"). Allowing one while refusing the other is a distinction without a
+// difference.
+//
+// Loopback keeps the exemption for the same reason cleartext does: the
+// credential does not leave the host.
+func TestValidateHTTPAuthConfig_OAuthRefusesSkipTLSVerify(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		authMode  string
+		instances []string
+		skipTLS   bool
+		wantErr   bool
+	}{
+		{
+			name:      "oauth refuses a remote instance with verification off",
+			authMode:  "oauth",
+			instances: []string{"https://gitlab.example.com"},
+			skipTLS:   true,
+			wantErr:   true,
+		},
+		{
+			name:      "one unverified instance among several is enough to refuse",
+			authMode:  "oauth",
+			instances: []string{"https://localhost:8443", "https://gitlab.example.com"},
+			skipTLS:   true,
+			wantErr:   true,
+		},
+		{
+			name:      "loopback keeps the exemption",
+			authMode:  "oauth",
+			instances: []string{"https://localhost:8443"},
+			skipTLS:   true,
+			wantErr:   false,
+		},
+		{
+			name:      "oauth without the flag is unaffected",
+			authMode:  "oauth",
+			instances: []string{"https://gitlab.example.com"},
+			skipTLS:   false,
+			wantErr:   false,
+		},
+		{
+			name:      "legacy mode keeps the flag",
+			authMode:  "legacy",
+			instances: []string{"https://gitlab.example.com"},
+			skipTLS:   true,
+			wantErr:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := &config.Config{
+				AuthMode:      tt.authMode,
+				GitLabURL:     tt.instances[0],
+				GitLabURLs:    tt.instances,
+				SkipTLSVerify: tt.skipTLS,
+				PublicURL:     "https://mcp.example.com",
+			}
+			err := validateHTTPAuthConfig(cfg)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("validateHTTPAuthConfig() = nil; the deployment would forward bearer tokens to an unverified peer")
+				}
+				if !strings.Contains(err.Error(), "skip-tls-verify") {
+					t.Errorf("error = %q, want it to name the flag responsible", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("validateHTTPAuthConfig() = %v, want nil", err)
+			}
+		})
+	}
+}

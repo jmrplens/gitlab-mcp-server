@@ -125,7 +125,7 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
 Clients that launch servers with `npx` need no install at all — point them at
 `npx -y @jmrp.io/gitlab-mcp-server`.
 
-Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs).
+Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and, for a self-signed certificate, mount the CA and set `--env SSL_CERT_FILE=/path/to/ca-bundle.crt`; `GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative and OAuth mode refuses it).
 
 ### Guided setup (any client, no flags to remember)
 
@@ -369,7 +369,7 @@ Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs
 <details>
 <summary><strong>Does it work with self-hosted GitLab?</strong></summary>
 
-Yes. Set `GITLAB_URL` to your instance URL. When `GITLAB_URL` is omitted, stdio mode uses `https://gitlab.com`. Self-signed TLS certificates are supported via `GITLAB_SKIP_TLS_VERIFY=true`.
+Yes. Set `GITLAB_URL` to your instance URL. When `GITLAB_URL` is omitted, stdio mode uses `https://gitlab.com`. Self-signed TLS certificates are supported by installing the CA in the system trust store or pointing `SSL_CERT_FILE` at a bundle; `GITLAB_SKIP_TLS_VERIFY=true` skips verification instead, and `--auth-mode=oauth` refuses it for a non-loopback instance.
 </details>
 
 <details>
@@ -450,21 +450,21 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       996 |     204,792 |
-| Unit tests (`_test.go`)  |       554 |     317,234 |
-| End-to-end tests         |       183 |      49,160 |
-| **Total**                | **1,733** | **571,186** |
+| Source (`.go`, non-test) |       996 |     204,947 |
+| Unit tests (`_test.go`)  |       554 |     317,388 |
+| End-to-end tests         |       183 |      49,212 |
+| **Total**                | **1,733** | **571,547** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,780 |
-| — exported (public)             |  2,693 |
-| — unexported (private)          |  5,087 |
-| Unit test functions (`TestXxx`) | 12,037 |
-| Subtests (`t.Run(...)`)         |  3,048 |
-| End-to-end test functions       |    466 |
+| Source functions                |  7,784 |
+| — exported (public)             |  2,696 |
+| — unexported (private)          |  5,088 |
+| Unit test functions (`TestXxx`) | 12,039 |
+| Subtests (`t.Run(...)`)         |  3,051 |
+| End-to-end test functions       |    467 |
 
 ### Ratios worth noting
 
@@ -473,16 +473,16 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~205 lines |
 | Average test file length           |                 ~572 lines |
-| Comment lines in source            |  24,735 (~12.1% of source) |
+| Comment lines in source            |  24,805 (~12.1% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,773 |
-| `defer` statements                 |   966 |
-| `struct` types defined             | 2,750 |
+| `if err != nil` checks             | 6,775 |
+| `defer` statements                 |   967 |
+| `struct` types defined             | 2,751 |
 | `//nolint` suppressions            |   268 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -505,8 +505,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,723 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,808 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,726 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,823 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
