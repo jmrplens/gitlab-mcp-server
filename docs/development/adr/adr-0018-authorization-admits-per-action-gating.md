@@ -70,15 +70,21 @@ action.**
   write, and `read_api` alone for one that cannot.
 
 **`tools/list` stays authenticated.** The MCP authorization specification
-states, unchanged across 2025-06-18, 2025-11-25 and 2026-07-28, that MCP
-servers "**MUST** validate access tokens before processing the request … and
-take all necessary steps to ensure no data is returned to unauthorized
-parties", and its error table
-admits only 401, 403 and 400. Authorization is optional for a server as a
-whole; a server that requires it has no sanctioned partially anonymous
-surface. The catalog is published instead through the mechanism designed for
-it: the server card at `/server-card`, unauthenticated, carrying every tool,
-resource, template and prompt with its schemas.
+(checked against 2025-11-25 and 2026-07-28) states that MCP servers "**MUST**
+validate access tokens before processing the request … and take all necessary
+steps to ensure no data is returned to unauthorized parties" (Authorization —
+Security Considerations, Access Token Privilege Restriction), and the
+Streamable HTTP binding adds that servers "**SHOULD** implement proper
+authentication for all connections". No revision carves out a method that may
+be served anonymously. Authorization is optional for a server as a whole; a
+server that requires it has no sanctioned partially anonymous surface.
+
+Revision 2026-07-28 removed the `initialize` handshake, so the question now
+concerns `server/discover`, which servers **MUST** implement and which the
+specification nowhere requires to be anonymous; this deployment authenticates
+it like every other method. The catalog is published instead through the
+mechanism designed for it: the server card at `/server-card`, unauthenticated,
+carrying every tool, resource, template and prompt with its schemas.
 
 ## Consequences
 
@@ -134,7 +140,10 @@ resource, template and prompt with its schemas.
   error="insufficient_scope", scope="api"` would let a client reauthorize
   without a human reading prose, and is the remaining reason to revisit.
 - NEG-004: VerifyMCP's score does not move. Six of its seven categories need
-  an unauthenticated `tools/list`, which this ADR declines to provide.
+  an unauthenticated `server/discover` and `tools/list`, which this ADR
+  declines to provide. The catalog those categories are looking for is at
+  `/server-card`, unauthenticated, and a scorer that reads only the JSON-RPC
+  surface will not find it.
 
 ### Neutral
 
@@ -155,3 +164,10 @@ resource, template and prompt with its schemas.
 - **Serve `initialize` and `tools/list` anonymously behind a flag.**
   Rejected on the specification, not on taste — see the Decision. The server
   card already covers the legitimate need it would serve.
+
+## Related
+
+- [ADR-0019](adr-0019-audience-binding-unavailable-at-the-authorization-server.md)
+  settles the layer below this one: whether a token was issued for this server
+  at all, which GitLab's authorization server cannot express and which
+  `--oauth-client-uid` verifies by other means.

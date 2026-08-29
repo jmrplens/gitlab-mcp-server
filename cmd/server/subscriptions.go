@@ -506,6 +506,14 @@ type serverSettings struct {
 	// that minted it. Empty in stdio mode, where there is no pool and no
 	// session to steal.
 	sessionTag string
+	// keepAlive overrides the server-initiated ping interval. Nil leaves the
+	// transport default in place; a pointer to zero disables the ping.
+	keepAlive *time.Duration
+}
+
+// withKeepAlive overrides the server keepalive interval for this server.
+func withKeepAlive(d time.Duration) serverOption {
+	return func(s *serverSettings) { s.keepAlive = &d }
 }
 
 // withSessionTag makes this server mint session IDs carrying tag as a prefix.

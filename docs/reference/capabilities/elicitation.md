@@ -119,12 +119,13 @@ Handlers that report outcomes through an error return use `flow.PendingError()` 
 
 HTTP mode is stateless by default (see [HTTP Server Mode](../../guides/http-server-mode.md#stateless-mode)), which decides which of the two mechanisms is available:
 
-| Transport                          | Session protocol        | Elicitation                                                                                             |
-| ---------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------- |
-| stdio, or HTTP `--stateless=false` | `< 2026-07-28` (legacy) | Full: synchronous `elicitation/create` requests                                                         |
-| stdio, or HTTP `--stateless=false` | `>= 2026-07-28`         | Full: MRTR                                                                                              |
-| HTTP stateless (default)           | `>= 2026-07-28`         | Full: MRTR travels inside the tool result, so no session or server-initiated channel is required        |
-| HTTP stateless (default)           | `< 2026-07-28` (legacy) | Unavailable: wizards return their non-interactive error hints and destructive actions require `confirm` |
+| Transport                          | Session protocol        | Elicitation                                                                                                                                                               |
+| ---------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| stdio, or HTTP `--stateless=false` | `< 2026-07-28` (legacy) | Full: synchronous `elicitation/create` requests                                                                                                                           |
+| stdio                              | `>= 2026-07-28`         | Full: MRTR                                                                                                                                                                |
+| HTTP `--stateless=false`           | `>= 2026-07-28`         | Unavailable: the transport refuses the revision outright, because SEP-2575 has no session to fall back on. The server answers `400` naming the revisions it can negotiate |
+| HTTP stateless (default)           | `>= 2026-07-28`         | Full: MRTR travels inside the tool result, so no session or server-initiated channel is required                                                                          |
+| HTTP stateless (default)           | `< 2026-07-28` (legacy) | Unavailable: wizards return their non-interactive error hints and destructive actions require `confirm`                                                                   |
 
 ## API
 

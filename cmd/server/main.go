@@ -189,6 +189,7 @@ type httpConfig struct {
 	publicURL             string
 	resourceDocumentation string
 	oauthCacheTTL         time.Duration
+	oauthClientUID        string
 	trustedProxyHeader    string
 	trustedOrigins        string
 	rateLimitRPS          float64
@@ -271,8 +272,8 @@ func main() {
 	flag.BoolVar(&hcfg.embeddedResources, "embedded-resources", true, "Embed canonical MCP resource URIs in get_* tool results")
 	flag.StringVar(&hcfg.excludeTools, "exclude-tools", "", "Comma-separated list of tool names to exclude from registration")
 	flag.BoolVar(&hcfg.ignoreScopes, "ignore-scopes", false, "Skip PAT scope detection and register all tools")
-	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum concurrent client sessions")
-	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle session timeout")
+	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum unique (token, GitLab URL) server entries kept in the pool; bounds pooled entries, not sessions or concurrent requests")
+	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle MCP session timeout; applies to --stateless=false only (under the default stateless transport each POST's session ends with its response)")
 	flag.StringVar(&hcfg.autoUpdate, "auto-update", "true", "Auto-update mode: true (auto-apply), check (log-only), false (disabled)")
 	flag.StringVar(&hcfg.autoUpdateRepo, "auto-update-repo", config.DefaultAutoUpdateRepo, "GitHub repository for update checks")
 	flag.DurationVar(&hcfg.autoUpdateInterval, "auto-update-interval", config.DefaultAutoUpdateInterval, "How often to check for updates")
@@ -282,12 +283,13 @@ func main() {
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.StringVar(&hcfg.publicURL, "public-url", "", "Externally reachable origin of this deployment (https). Required with --auth-mode=oauth: it is the RFC 9728 protected-resource identifier")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
+	flag.StringVar(&hcfg.oauthClientUID, "oauth-client-uid", "", "Comma-separated GitLab OAuth application uids whose tokens this deployment admits. Empty (default) admits any credential the instance accepts; setting it also refuses personal access tokens, which belong to no application")
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
 	flag.StringVar(&hcfg.trustedOrigins, "trusted-origins", "", "Comma-separated absolute origins (scheme://host[:port], e.g. an IP for local deploys) allowed to make cross-origin browser requests; '*' accepts any origin (disables the protection); empty rejects all. The --public-url origin is trusted automatically")
 	flag.Float64Var(&hcfg.rateLimitRPS, "rate-limit-rps", config.DefaultHTTPRateLimitRPS, "Per-server tools/call rate limit in requests/second (0 disables it)")
 	flag.IntVar(&hcfg.rateLimitBurst, "rate-limit-burst", config.DefaultRateLimitBurst, "Token-bucket burst size when --rate-limit-rps > 0")
 	flag.StringVar(&hcfg.metaParamSchema, "meta-param-schema", config.DefaultMetaParamSchema, "Meta-tool input schema mode: opaque (default), compact, full")
-	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so --session-timeout is the effective lifetime; set a positive duration to recycle idle connections sooner")
+	flag.DurationVar(&hcfg.httpIdleTimeout, "http-idle-timeout", defaultHTTPIdleTimeout, "HTTP server idle connection timeout; 0 (default) disables idle closure so nothing above the transport closes idle connections; set a positive duration to recycle idle connections sooner")
 	flag.BoolVar(&hcfg.stateless, "stateless", true, "Stateless streamable HTTP (default; required for MCP protocol 2026-07-28 over HTTP): no Mcp-Session-Id tracking, each POST is self-contained, GET/DELETE return 405. Use -stateless=false to restore legacy stateful sessions")
 	flag.BoolVar(&hcfg.jsonResponse, "json-response", false, "Return application/json responses instead of text/event-stream (SSE)")
 	flag.StringVar(&hcfg.tlsCert, "tls-cert", "", "PEM certificate file; serves HTTPS on the listener itself (requires --tls-key)")
@@ -418,8 +420,8 @@ FLAGS
   -embedded-resources       Embed canonical MCP resource links in get_* tool results (default true)
   -exclude-tools string     Comma-separated tool names to exclude from registration
   -ignore-scopes            Skip PAT scope detection, register all tools (default false)
-  -max-http-clients int     Maximum concurrent client sessions (default %d)
-  -session-timeout duration Idle session timeout (default %s)
+  -max-http-clients int     Maximum unique (token, GitLab URL) pool entries; not sessions or concurrent requests (default %d)
+  -session-timeout duration Idle MCP session timeout; --stateless=false only (default %s)
   -pool-idle-timeout dur    Reclaim a pooled per-token-and-URL server entry after this long unused (default %s, 0 to disable)
   -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure so -session-timeout governs
   -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28). Use -stateless=false for legacy stateful sessions
@@ -431,6 +433,7 @@ FLAGS
   -auto-update-timeout dur  Timeout for startup/background update checks (default %s)
   -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
   -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
+  -oauth-client-uid string  Comma-separated GitLab OAuth application uids whose tokens are admitted (default: any)
   -public-url string        Externally reachable https origin; required with -auth-mode=oauth (RFC 9728 resource identifier)
   -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
   -revalidate-interval dur  How often pooled tokens are re-validated against GitLab (default %s, 0 to disable)
@@ -471,8 +474,9 @@ ENVIRONMENT VARIABLES (HTTP mode)
   PUBLIC_URL                Externally reachable https origin; required with AUTH_MODE=oauth
   TRUSTED_ORIGINS           Origins allowed to make cross-origin browser requests
   OAUTH_CACHE_TTL           OAuth token cache TTL (default 15m, min 1m, max 2h)
-  MAX_HTTP_CLIENTS          Maximum concurrent client sessions (default 100)
-  SESSION_TIMEOUT           Idle session timeout (default 30m)
+  OAUTH_CLIENT_UID          Comma-separated GitLab OAuth application uids whose tokens are admitted (default: any)
+  MAX_HTTP_CLIENTS          Maximum unique (token, GitLab URL) pool entries; not sessions (default 100)
+  SESSION_TIMEOUT           Idle MCP session timeout; --stateless=false only (default 30m)
   POOL_IDLE_TIMEOUT         Reclaim an unused pooled server after this long (default 1h, 0 disables)
   SESSION_REVALIDATE_INTERVAL  Token re-validation interval (default 15m, 0 disables)
 
@@ -690,6 +694,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		PublicURL:             hcfg.publicURL,
 		ResourceDocumentation: hcfg.resourceDocumentation,
 		OAuthCacheTTL:         hcfg.oauthCacheTTL,
+		OAuthClientUIDs:       config.ParseCSV(hcfg.oauthClientUID),
 		TrustedProxyHeader:    hcfg.trustedProxyHeader,
 		TrustedOrigins:        buildTrustedOrigins(hcfg.trustedOrigins, hcfg.publicURL),
 		RateLimitRPS:          hcfg.rateLimitRPS,
@@ -928,14 +933,29 @@ var sharedSchemaCache = mcp.NewSchemaCache()
 // Used both by stdio mode (single call) and by the HTTP server pool factory.
 // If updater is non-nil, server update MCP tools are registered.
 // keepAliveFor returns the server keepalive interval for the configured
-// transport: zero (disabled) on stateless HTTP, where a server-initiated
-// ping is forbidden and the SDK closes the session when the ping cannot be
-// written; 30s everywhere else.
+// transport: zero (disabled) on stateless HTTP, where a server-initiated ping
+// is forbidden and the SDK closes the session when the ping cannot be written;
+// 30s everywhere else.
+//
+// HTTP mode overrides this to zero for every pool entry, stateful included —
+// see [withKeepAlive] at the pool factory — so in practice only stdio keeps the
+// ping. The condition stays as it is because it is the transport-level truth,
+// and because a caller building a server without the pool still gets the
+// stateless rule right.
 func keepAliveFor(cfg *config.ServerConfig) time.Duration {
 	if cfg.Stateless {
 		return 0
 	}
 	return 30 * time.Second
+}
+
+// keepAliveInterval resolves the keepalive an individual server runs with: the
+// explicit override when one was given, otherwise the transport default.
+func keepAliveInterval(settings serverSettings, cfg *config.ServerConfig) time.Duration {
+	if settings.keepAlive != nil {
+		return *settings.keepAlive
+	}
+	return keepAliveFor(cfg)
 }
 
 // sessionIDMinter returns the function the SDK calls to mint a session ID.
@@ -1037,7 +1057,7 @@ func createServer(
 		// including subscriptions/listen — at the 30-second mark. Stateless
 		// servers therefore run with keepalive off; stdio and legacy
 		// stateful HTTP keep the ping, where it is protocol-legal.
-		KeepAlive: keepAliveFor(cfg),
+		KeepAlive: keepAliveInterval(settings, cfg),
 		// One page must fit the whole catalog: OpenAI Codex ignores
 		// tools/list nextCursor in its default protocol mode, so any second
 		// page would be silently lost. The largest surface (individual mode,
@@ -1529,7 +1549,15 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	//nolint:contextcheck // the pool bounds entry construction with its own lifetime context via WithBaseContext below
 	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
 		tag := rand.Text()
-		srv, err := createServer(client, serverCfg, nil, withSessionTag(tag))
+		// No server-initiated keepalive on any HTTP entry, stateful included.
+		// The SDK's keepalive is a JSON-RPC ping request, and it closes the
+		// session the first time one goes unanswered — so a client that is
+		// simply between requests, or one whose transport does not carry
+		// server-initiated messages to it, loses its session at the 30-second
+		// mark for being idle. Liveness on this transport is the SSE
+		// keep-alive comment (see sseAwareWriter), which puts bytes on the
+		// wire without asking the client for anything.
+		srv, err := createServer(client, serverCfg, nil, withSessionTag(tag), withKeepAlive(0))
 		if err != nil {
 			return nil, err
 		}
@@ -1767,7 +1795,7 @@ func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr s
 // deployment already tells the server its public path, so it does not need a
 // second flag to say the same thing.
 func mountMCPEndpoint(cfg *config.Config, mux *http.ServeMux, handler http.Handler) {
-	guarded := mcpOriginMiddleware(cfg, protocolVersionMiddleware(handler))
+	guarded := mcpOriginMiddleware(cfg, protocolVersionMiddleware(cfg.Stateless, handler))
 	for _, pattern := range mcpEndpointPatterns(cfg) {
 		mux.Handle(pattern, guarded)
 	}
@@ -1885,16 +1913,42 @@ var supportedProtocolVersions = []string{
 // server, so it falls back to the withdrawn HTTP+SSE transport — issuing a GET,
 // which a stateless deployment answers 405. The client ends with no transport at
 // all instead of the single retry the supported list would have told it to make.
-func protocolVersionMiddleware(next http.Handler) http.Handler {
+func protocolVersionMiddleware(stateless bool, next http.Handler) http.Handler {
+	supported := supportedProtocolVersionsFor(stateless)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requested := r.Header.Get("MCP-Protocol-Version")
-		if requested == "" || slices.Contains(supportedProtocolVersions, requested) {
+		if requested == "" || slices.Contains(supported, requested) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		writeUnsupportedProtocolVersion(w, requested)
+		writeUnsupportedProtocolVersion(w, supported, requested)
 	})
 }
+
+// supportedProtocolVersionsFor narrows the advertised list to what this
+// deployment can actually negotiate.
+//
+// The SDK's StreamableServerTransport.SupportsProtocolVersion refuses every
+// revision at or above 2026-07-28 unless the transport is stateless, because
+// SEP-2575 has no session concept to fall back on. A stateful deployment that
+// listed 2026-07-28 among its supported versions would be handing a client the
+// one answer that cannot work: the error body exists to say what to retry with.
+func supportedProtocolVersionsFor(stateless bool) []string {
+	if stateless {
+		return supportedProtocolVersions
+	}
+	narrowed := make([]string, 0, len(supportedProtocolVersions))
+	for _, version := range supportedProtocolVersions {
+		if version < protocolVersionStatelessOnly {
+			narrowed = append(narrowed, version)
+		}
+	}
+	return narrowed
+}
+
+// protocolVersionStatelessOnly is the first revision the streamable transport
+// serves only in stateless mode.
+const protocolVersionStatelessOnly = "2026-07-28"
 
 // unsupportedVersionError is the wire shape of the error the transport
 // specification names for a protocol version the server does not implement. It
@@ -1916,12 +1970,12 @@ type unsupportedVersionError struct {
 // writeUnsupportedProtocolVersion emits the JSON-RPC error body the spec names,
 // carrying the versions this server does support so the client can retry once
 // with one of them rather than guessing or downgrading its transport.
-func writeUnsupportedProtocolVersion(w http.ResponseWriter, requested string) {
+func writeUnsupportedProtocolVersion(w http.ResponseWriter, supported []string, requested string) {
 	var body unsupportedVersionError
 	body.JSONRPC = "2.0"
 	body.Error.Code = codeUnsupportedProtocolVersion
 	body.Error.Message = "unsupported protocol version"
-	body.Error.Data.Supported = supportedProtocolVersions
+	body.Error.Data.Supported = supported
 	body.Error.Data.Requested = requested
 
 	w.Header().Set(hdrContentType, mimeJSON)
@@ -2062,6 +2116,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		challenge:  oauthChallenge(requiredScope, resourceMetadataURL),
 		bearerOnly: true,
 		oauthMode:  true,
+		stateless:  cfg.Stateless,
 	}
 
 	tokenCache := oauth.NewTokenCache()
@@ -2087,7 +2142,11 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		}
 		return options.GitLabURL, nil
 	}
-	verifier := oauth.NewGitLabVerifierFor(resolveInstance, cfg.SkipTLSVerify, cacheTTL, tokenCache)
+	verifier := oauth.NewGitLabVerifierFor(resolveInstance, cfg.SkipTLSVerify, cacheTTL, tokenCache, cfg.OAuthClientUIDs...)
+	if len(cfg.OAuthClientUIDs) > 0 {
+		slog.Info("admitting only tokens issued to the pinned OAuth applications; personal access tokens are refused",
+			"applications", len(cfg.OAuthClientUIDs))
+	}
 	guard := &bearerGuard{
 		verify:             verifier,
 		resolveInstance:    resolveInstance,
@@ -2158,6 +2217,7 @@ func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *se
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		sessionTags:        sessionTags,
 		challenge:          legacyAuthChallenge,
+		stateless:          cfg.Stateless,
 	}
 	mcpHandler := mcp.NewStreamableHTTPHandler(serverFromRequestContext, streamableHTTPOptions(cfg))
 	mountMCPEndpoint(cfg, mux, gate.middleware(mcpHandler))

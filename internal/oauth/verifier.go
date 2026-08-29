@@ -198,10 +198,10 @@ type gitlabUserResponse struct {
 //   - Extra["username"]: the GitLab user's login name
 //   - Extra["token"]: the raw token (for downstream GitLab client creation)
 //   - Expiration: now + cacheTTL (so the SDK middleware honors TTL)
-func NewGitLabVerifier(gitlabURL string, skipTLS bool, cacheTTL time.Duration, cache *TokenCache) auth.TokenVerifier {
+func NewGitLabVerifier(gitlabURL string, skipTLS bool, cacheTTL time.Duration, cache *TokenCache, clientUIDs ...string) auth.TokenVerifier {
 	return NewGitLabVerifierFor(
 		func(*http.Request) (string, error) { return gitlabURL, nil },
-		skipTLS, cacheTTL, cache,
+		skipTLS, cacheTTL, cache, clientUIDs...,
 	)
 }
 
@@ -220,7 +220,11 @@ type InstanceResolver func(*http.Request) (string, error)
 // succeeds against an instance where the same string happens to be valid for
 // somebody else. The resolver is the operator's allow-list made executable,
 // and the cache is keyed by instance and token together for the same reason.
-func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.Duration, cache *TokenCache) auth.TokenVerifier {
+// clientUIDs, when non-empty, pins the OAuth applications whose tokens this
+// deployment admits — see [acceptedRecipient]. It is a set rather than a scalar
+// because --gitlab-url is repeatable and each published instance has its own
+// OAuth application with its own uid.
+func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.Duration, cache *TokenCache, clientUIDs ...string) auth.TokenVerifier {
 	baseTransport, ok := http.DefaultTransport.(*http.Transport)
 	if !ok {
 		baseTransport = &http.Transport{}
@@ -307,31 +311,43 @@ func NewGitLabVerifierFor(resolve InstanceResolver, skipTLS bool, cacheTTL time.
 		// restricted instances), the historical api assumption is kept and
 		// logged, so exotic deployments keep working while mainstream
 		// tokens are checked for what they actually carry.
-		scopes, tokenExpiry := introspectToken(ctx, client, gitlabURL, token)
+		result := introspectToken(ctx, client, gitlabURL, token)
 
-		// The cached admission must not outlive the credential it was taken
-		// from. Caching for the configured TTL alone would keep answering 200
-		// for a token that expired a moment after it was verified, for as long
-		// as fifteen minutes by default — and the specification requires an
-		// expired token to be answered 401.
-		ttl := effectiveCacheTTL(cacheTTL, tokenExpiry)
-
-		info := &auth.TokenInfo{
-			UserID:     strconv.Itoa(user.ID),
-			Scopes:     scopes,
-			Expiration: time.Now().Add(ttl),
-			Extra: map[string]any{
-				"username": user.Username,
-				"token":    token,
-			},
+		// Recipient verification, when the operator asked for it. Checked
+		// before anything is cached, so a refused token never becomes a
+		// cached identity.
+		if recipientErr := acceptedRecipient(clientUIDs, result); recipientErr != nil {
+			return nil, recipientErr
 		}
-
-		if cache != nil {
-			cache.Put(gitlabURL, token, info, ttl)
-		}
-
-		return info, nil
+		return admitToken(cache, gitlabURL, token, cacheTTL, user, result), nil
 	}
+}
+
+// admitToken builds the admission record and caches it for as long as the
+// credential itself lives.
+func admitToken(cache *TokenCache, gitlabURL, token string, cacheTTL time.Duration, user gitlabUserResponse, result introspection) *auth.TokenInfo {
+	// The cached admission must not outlive the credential it was taken from.
+	// Caching for the configured TTL alone would keep answering 200 for a token
+	// that expired a moment after it was verified, for as long as fifteen
+	// minutes by default — and the specification requires an expired token to
+	// be answered 401.
+	ttl := effectiveCacheTTL(cacheTTL, result.expiry)
+
+	info := &auth.TokenInfo{
+		UserID:     strconv.Itoa(user.ID),
+		Scopes:     result.scopes,
+		Expiration: time.Now().Add(ttl),
+		Extra: map[string]any{
+			"username": user.Username,
+			"token":    token,
+		},
+	}
+
+	if cache != nil {
+		cache.Put(gitlabURL, token, info, ttl)
+	}
+
+	return info
 }
 
 // introspectScopes resolves a token's granted scopes. Personal access
@@ -355,6 +371,25 @@ func effectiveCacheTTL(configured time.Duration, tokenExpiry time.Time) time.Dur
 	return min(configured, remaining)
 }
 
+// introspection is what one round trip to GitLab's token endpoints yields.
+//
+// applicationUID names the OAuth application the token was minted for, and is
+// empty for a personal access token, which belongs to no application. It is the
+// only recipient signal GitLab offers: its authorization server publishes no
+// resource_indicators_supported, so RFC 8707 audience restriction is not
+// available and this is the "otherwise verify that they are the intended
+// recipient" alternative the specification allows.
+type introspection struct {
+	scopes         []string
+	expiry         time.Time
+	applicationUID string
+	// answered records whether an endpoint actually replied with scopes. A
+	// pinned deployment must refuse when it did not, because the scope
+	// fallback below is deliberately fail-open and reusing its shape would let
+	// anything that breaks introspection walk past the pin.
+	answered bool
+}
+
 // introspectToken returns the token's real scopes and its own expiry.
 //
 // The expiry is what stops a cached admission from outliving the credential it
@@ -368,19 +403,66 @@ func effectiveCacheTTL(configured time.Duration, tokenExpiry time.Time) time.Dur
 // /api/v4/personal_access_tokens/self gives expires_at as a plain YYYY-MM-DD
 // date. Parsing the latter as RFC 3339 fails and silently degrades to "no
 // expiry", which is exactly the bug this exists to prevent.
-func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token string) ([]string, time.Time) {
+func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token string) introspection {
 	if payload := fetchIntrospection(ctx, client, gitlabURL+"/api/v4/personal_access_tokens/self", token); payload != nil {
 		if scopes := stringSlice(payload["scopes"]); scopes != nil {
-			return expandImpliedScopes(scopes), expiryFromDate(payload["expires_at"])
+			return introspection{
+				scopes:   expandImpliedScopes(scopes),
+				expiry:   expiryFromDate(payload["expires_at"]),
+				answered: true,
+			}
 		}
 	}
 	if payload := fetchIntrospection(ctx, client, gitlabURL+"/oauth/token/info", token); payload != nil {
 		if scopes := stringSlice(payload["scope"]); scopes != nil {
-			return expandImpliedScopes(scopes), expiryFromSeconds(payload["expires_in"])
+			return introspection{
+				scopes:         expandImpliedScopes(scopes),
+				expiry:         expiryFromSeconds(payload["expires_in"]),
+				applicationUID: applicationUID(payload["application"]),
+				answered:       true,
+			}
 		}
 	}
 	slog.Debug("token scope introspection unavailable; assuming api scope")
-	return expandImpliedScopes([]string{"api"}), time.Time{}
+	return introspection{scopes: expandImpliedScopes([]string{"api"})}
+}
+
+// applicationUID reads the uid of the OAuth application a token was issued to,
+// from the nested "application" object /oauth/token/info returns.
+func applicationUID(raw any) string {
+	app, ok := raw.(map[string]any)
+	if !ok {
+		return ""
+	}
+	uid, _ := app["uid"].(string)
+	return uid
+}
+
+// acceptedRecipient reports whether a token may be admitted under an operator's
+// recipient pin, and says why when it may not.
+//
+// An empty pin admits everything: that is the default, because pinning refuses
+// personal access tokens outright — a PAT belongs to no application — and a PAT
+// is a supported credential here.
+//
+// With a pin set, the check inverts the surrounding fail-open behavior on
+// purpose. An absent, unreadable or unmatched uid is a refusal, and so is an
+// introspection that never answered: treating "we could not ask" as "it is
+// fine" would make breaking introspection the way around the pin.
+func acceptedRecipient(pinned []string, result introspection) error {
+	if len(pinned) == 0 {
+		return nil
+	}
+	if !result.answered {
+		return fmt.Errorf("token recipient could not be verified: introspection did not answer: %w", auth.ErrInvalidToken)
+	}
+	if result.applicationUID == "" {
+		return fmt.Errorf("token names no OAuth application, and this deployment admits only tokens issued to its own: %w", auth.ErrInvalidToken)
+	}
+	if !slices.Contains(pinned, result.applicationUID) {
+		return fmt.Errorf("token was issued to another OAuth application: %w", auth.ErrInvalidToken)
+	}
+	return nil
 }
 
 // expiryFromDate reads a GitLab personal access token's expires_at, which is a

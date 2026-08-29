@@ -303,28 +303,56 @@ func TestMCPServerGate_RepeatedAuthFailures_Returns429WithRetryAfter(t *testing.
 	}
 }
 
-// TestMCPServerGate_NonPOSTMethods_ReachTheHandler guards a regression the gate
-// could easily cause: GET and DELETE must still reach the SDK so it answers 405,
-// which is what protocol 2026-07-28 prescribes for them. Gating them as 401
-// would replace a correct answer with a misleading one.
+// TestMCPServerGate_NonPOSTMethods_ReachTheHandler guards both halves of the
+// non-POST rule.
+//
+// On the default stateless transport, GET and DELETE must still reach the SDK
+// so it answers 405, which is what protocol 2026-07-28 prescribes for them;
+// gating them as 401 would replace a correct answer with a misleading one.
+//
+// On a stateful deployment they are live operations on a session — GET opens
+// its standalone SSE stream, DELETE terminates it — so they are gated there.
+// OPTIONS is exempt in both modes: it is a CORS preflight, which a browser
+// sends without credentials by definition, so refusing it for lacking one would
+// refuse the request that exists to ask whether the real request is allowed.
 func TestMCPServerGate_NonPOSTMethods_ReachTheHandler(t *testing.T) {
+	passesThrough := func(t *testing.T, gate *mcpServerGate, method string) bool {
+		t.Helper()
+		var reached atomic.Bool
+		handler := gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			reached.Store(true)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}))
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), method, "/", nil))
+		if reached.Load() && rec.Code != http.StatusMethodNotAllowed {
+			t.Errorf("%s reached the handler but the status was %d", method, rec.Code)
+		}
+		return reached.Load()
+	}
+
 	for _, method := range []string{http.MethodGet, http.MethodDelete, http.MethodOptions} {
-		t.Run(method, func(t *testing.T) {
+		t.Run("stateless/"+method, func(t *testing.T) {
 			gate := newGate(t, okFactory)
-			var reached atomic.Bool
-			handler := gate.middleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				reached.Store(true)
-				w.WriteHeader(http.StatusMethodNotAllowed)
-			}))
-
-			rec := httptest.NewRecorder()
-			handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), method, "/", nil))
-
-			if !reached.Load() {
+			gate.stateless = true
+			if !passesThrough(t, gate, method) {
 				t.Errorf("%s was gated; it must pass through so the SDK can answer 405", method)
 			}
-			if rec.Code != http.StatusMethodNotAllowed {
-				t.Errorf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
+		})
+	}
+
+	t.Run("stateful/OPTIONS", func(t *testing.T) {
+		gate := newGate(t, okFactory)
+		if !passesThrough(t, gate, http.MethodOptions) {
+			t.Error("a CORS preflight was gated; a browser sends it without credentials")
+		}
+	})
+
+	for _, method := range []string{http.MethodGet, http.MethodDelete} {
+		t.Run("stateful/"+method, func(t *testing.T) {
+			gate := newGate(t, okFactory)
+			if passesThrough(t, gate, method) {
+				t.Errorf("%s reached the session layer unauthenticated; a session ID would be enough to read or end someone else's session", method)
 			}
 		})
 	}

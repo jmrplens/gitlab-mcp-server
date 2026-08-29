@@ -190,6 +190,7 @@ LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log
 ./gitlab-mcp-server --http --http-addr=localhost:8080 --gitlab-url=$GITLAB_URL
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 
@@ -198,6 +199,7 @@ curl -X POST http://localhost:8080/mcp \
 curl -s http://localhost:8080/.well-known/oauth-protected-resource | jq .
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "Authorization: Bearer $GITLAB_TOKEN" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```

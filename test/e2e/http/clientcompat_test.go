@@ -12,6 +12,7 @@
 package httpe2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -27,31 +28,42 @@ import (
 // the transport defaults to the initialization-era version rather than
 // refusing, and refusing here would break every client that has not caught up.
 func TestClient_ProtocolVersions(t *testing.T) {
-	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	// An accepted token, so the request reaches the transport instead of
+	// stopping at the auth gate: a 401 would pass this test with the version
+	// never having been looked at.
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
 	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
 
-	for _, version := range []string{"", "2025-06-18", "2025-11-25", "2026-07-28"} {
+	// Every revision this build negotiates, plus the no-header case. The
+	// default transport is stateless, which is what makes 2026-07-28 servable.
+	for _, version := range []string{"", "2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"} {
 		name := version
 		if name == "" {
 			name = "no version header"
 		}
 		t.Run(name, func(t *testing.T) {
-			headers := map[string]string{"PRIVATE-TOKEN": "glpat-whatever"}
-			if version != "" {
-				headers["MCP-Protocol-Version"] = version
+			// An empty value deletes the header the harness sets by default,
+			// which is what "no version header" has to mean here.
+			headers := map[string]string{
+				"PRIVATE-TOKEN":        "glpat-whatever",
+				"MCP-Protocol-Version": version,
+			}
+			// SEP-2575's per-request _meta belongs to 2026-07-28 and carries
+			// its own protocolVersion, which the transport requires the header
+			// to agree with (-32020). An older revision therefore sends the
+			// plain body it would really send, not the modern one with a
+			// mismatched _meta.
+			body := legacyToolsListBody
+			if version == "2026-07-28" {
+				body = toolsListBody
 			}
 			got := srv.do(t, request{
 				method: http.MethodPost, path: "/mcp",
-				body:    toolsListBody,
+				body:    body,
 				headers: headers,
 			})
-			// The credential is invalid, so 401 is the expected answer. What
-			// matters is that the version was not itself grounds for refusal.
-			if got.status == http.StatusBadRequest {
-				t.Errorf("protocol version %q was refused outright: %s", version, got.body)
-			}
-			if got.status >= http.StatusInternalServerError {
-				t.Errorf("protocol version %q produced %d: %s", version, got.status, got.body)
+			if got.status != http.StatusOK {
+				t.Errorf("protocol version %q got %d, want 200: %s", version, got.status, got.body)
 			}
 		})
 	}
@@ -61,19 +73,48 @@ func TestClient_ProtocolVersions(t *testing.T) {
 // build has never heard of does not take the server down or produce a 5xx.
 // Clients ship ahead of servers.
 func TestClient_UnknownProtocolVersionIsNotFatal(t *testing.T) {
-	gitlab := startFakeGitLab(t, http.StatusUnauthorized, "")
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
 	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
 
-	for _, version := range []string{"2099-01-01", "not-a-date", "0"} {
+	for _, version := range []string{"2099-01-01", "not-a-date", "0", "1.0", "2026-03-26"} {
 		got := srv.do(t, request{
-			method: http.MethodPost, path: "/mcp", body: toolsListBody,
+			method: http.MethodPost, path: "/mcp", body: legacyToolsListBody,
 			headers: map[string]string{
 				"PRIVATE-TOKEN":        "glpat-whatever",
 				"MCP-Protocol-Version": version,
 			},
 		})
-		if got.status >= http.StatusInternalServerError {
-			t.Errorf("version %q produced %d, want a client error at worst: %s", version, got.status, got.body)
+		if got.status != http.StatusBadRequest {
+			t.Errorf("version %q got %d, want %d", version, got.status, http.StatusBadRequest)
+			continue
+		}
+
+		// The body is what makes the 400 actionable. The specification tells a
+		// client that a 400 whose body is not a recognizable JSON-RPC error
+		// means it is talking to an initialization-era server, so it falls back
+		// to the withdrawn HTTP+SSE transport and ends with no transport at
+		// all. The supported list is the single retry that works instead.
+		var decoded struct {
+			Error struct {
+				Code int `json:"code"`
+				Data struct {
+					Supported []string `json:"supported"`
+					Requested string   `json:"requested"`
+				} `json:"data"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(got.body), &decoded); err != nil {
+			t.Errorf("version %q: body is not JSON: %v (%s)", version, err, got.body)
+			continue
+		}
+		if decoded.Error.Code != -32022 {
+			t.Errorf("version %q: error.code = %d, want -32022", version, decoded.Error.Code)
+		}
+		if decoded.Error.Data.Requested != version {
+			t.Errorf("version %q: error.data.requested = %q", version, decoded.Error.Data.Requested)
+		}
+		if len(decoded.Error.Data.Supported) == 0 {
+			t.Errorf("version %q: error.data.supported is empty; the client is left with nothing to retry", version)
 		}
 	}
 }

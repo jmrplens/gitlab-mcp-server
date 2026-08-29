@@ -132,6 +132,19 @@ Validate a deployment with `make validate-http-stateless` (compiled binary) or
 `make validate-http-stateless-docker` (Docker image), both backed by
 `scripts/validate-http-stateless.sh`.
 
+#### Protocol revisions this server negotiates
+
+Stateless mode accepts `2026-07-28`, `2025-11-25`, `2025-06-18`, `2025-03-26`
+and `2024-11-05`. `--stateless=false` accepts the same set **minus**
+`2026-07-28`: the SDK's streamable transport serves that revision only when the
+transport is stateless, because SEP-2575 has no session concept to fall back
+on. Either way, an `MCP-Protocol-Version` header naming anything else is
+answered `400` with a JSON-RPC `-32022` error whose `data.supported` lists what
+this deployment can negotiate — so a client gets one retry that works rather
+than a bare 400 it must interpret. The elicitation table in
+[Elicitation](../reference/capabilities/elicitation.md#elicitation-over-stateless-http)
+follows the same split.
+
 #### Legacy stateful mode
 
 `--stateless=false` restores the session-based transport: the server issues
@@ -332,7 +345,9 @@ Verifying is what stops an unauthenticated caller from obtaining a working sessi
 
 Every other outcome — a transport error, a `5xx`, a `404` from an instance that does not expose the endpoint — means no verdict was obtained, and the session is admitted. Failing closed whenever GitLab is unreachable would turn an instance outage into a total denial of service. The probe does not retry and is bounded at 5 seconds.
 
-Codes are allocated outside the JSON-RPC reserved range (`-32768` to `-32000`), as the MCP specification requires for application-defined errors, and mirror their HTTP status. `GET` and `DELETE` are not gated: they continue to receive `405 Method Not Allowed`, the answer protocol 2026-07-28 prescribes for them.
+Codes are allocated outside the JSON-RPC reserved range (`-32768` to `-32000`), as the MCP specification requires for application-defined errors, and mirror their HTTP status.
+
+`GET` and `DELETE` skip the credential check **only under the default `--stateless`**, where they receive `405 Method Not Allowed` whatever they carry — the answer protocol 2026-07-28 prescribes for them, and gating them would replace it with a `401`. Under `--stateless=false` they are not inert: a `GET` opens a session's standalone SSE stream and reads the server-initiated messages meant for its owner, and a `DELETE` terminates the session. There they are authenticated and ownership-checked exactly like a `POST`, so learning a session ID is not enough to read or end someone else's session.
 
 ## Authentication Modes
 
@@ -513,6 +528,7 @@ VS Code discovers the GitLab authorization server via `/.well-known/oauth-protec
 # Initialize a session
 curl -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "PRIVATE-TOKEN: glpat-your-token" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
@@ -532,6 +548,21 @@ gitlab-mcp-server --http --http-addr=/run/gitlab-mcp/server.sock --gitlab-url=ht
 ```nginx
 upstream gitlab_mcp {
     server unix:/run/gitlab-mcp/server.sock;
+}
+
+location /mcp {
+    proxy_pass http://gitlab_mcp;
+    # An SSE stream must not be held: buffering turns a live stream into one
+    # delivery at the end, which is what X-Accel-Buffering: no asks nginx to
+    # stop doing — set it here too so the intent survives a config that
+    # ignores the header.
+    proxy_buffering off;
+    # A subscriptions/listen stream, and a standalone GET, are silent between
+    # notifications. The server's 25-second keep-alive holds them open across
+    # the 60-second default; raise the timeout if you expect quiet periods
+    # longer than your clients tolerate reconnecting through.
+    proxy_read_timeout 1h;
+    proxy_http_version 1.1;
 }
 ```
 
@@ -785,6 +816,7 @@ Liveness is reported both ways on purpose. `started_at` is the stable fact — i
 curl -s -o /dev/null -w "%{http_code}" \
   -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "PRIVATE-TOKEN: glpat-your-token" \
   -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 # Expected: 200

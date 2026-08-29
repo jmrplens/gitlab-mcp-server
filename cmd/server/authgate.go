@@ -198,6 +198,17 @@ type mcpServerGate struct {
 	// identity — never as an unverified PRIVATE-TOKEN a request might also
 	// carry, which ExtractToken would otherwise prefer.
 	bearerOnly bool
+	// stateless mirrors Config.Stateless, and decides whether GET and DELETE
+	// may skip authentication.
+	//
+	// On a stateless deployment the SDK answers both with 405 whatever they
+	// carry, so there is nothing to protect and letting them through is how
+	// the specified answer gets emitted. On a stateful one they are live
+	// operations on a session someone else created — GET opens that session's
+	// standalone SSE stream and reads its server-initiated messages, DELETE
+	// terminates it — so they must present the credential that owns it, like
+	// every POST does.
+	stateless bool
 }
 
 // verifiedScopes returns the scopes the OAuth layer already resolved for this
@@ -231,10 +242,26 @@ func (g *mcpServerGate) extractCredential(r *http.Request) string {
 // with the server attached, or writes the classified rejection.
 func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Only POST carries MCP messages. GET and DELETE must keep reaching the
-		// SDK so it answers 405 Method Not Allowed, which is what protocol
-		// 2026-07-28 prescribes for them on a stateless endpoint.
-		if r.Method != http.MethodPost {
+		// POST always carries an MCP message, so it is always gated. GET and
+		// DELETE depend on the transport:
+		//
+		// On a stateless deployment the SDK answers both with 405 Method Not
+		// Allowed — what protocol 2026-07-28 prescribes — whatever they carry.
+		// They address nothing, so gating them would only replace a correct
+		// answer with a 401.
+		//
+		// On a stateful one they are not inert: GET opens a session's
+		// standalone SSE stream and reads the server-initiated messages meant
+		// for its owner, and DELETE terminates the session. Waving them through
+		// would make a session ID sufficient to read or end someone else's
+		// session, so they take the same resolution and ownership check a POST
+		// takes.
+		//
+		// Every other method passes through unconditionally. OPTIONS is the one
+		// that matters: it is a CORS preflight, which a browser sends without
+		// credentials by definition, so gating it would refuse the request that
+		// exists to ask whether the real request is allowed.
+		if r.Method != http.MethodPost && !g.addressesSession(r.Method) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -252,6 +279,15 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 		ctx = g.withIdentity(ctx, r)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// addressesSession reports whether a non-POST method can act on a live MCP
+// session in this deployment's transport mode.
+func (g *mcpServerGate) addressesSession(method string) bool {
+	if g.stateless {
+		return false
+	}
+	return method == http.MethodGet || method == http.MethodDelete
 }
 
 // withIdentity attaches the GitLab user behind the request's credential to

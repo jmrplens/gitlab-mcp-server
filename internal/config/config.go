@@ -218,6 +218,21 @@ type Config struct {
 
 	AuthMode      string        // Auth mode for HTTP: "legacy" (default) or "oauth"
 	OAuthCacheTTL time.Duration // OAuth token cache TTL (HTTP mode, oauth auth mode)
+	// OAuthClientUIDs pins the OAuth applications whose tokens this
+	// deployment admits, by GitLab application uid. Empty — the default —
+	// admits any credential the instance accepts.
+	//
+	// It is the only recipient check available: GitLab's authorization server
+	// publishes no resource_indicators_supported, so RFC 8707 audience
+	// restriction cannot be used, and the specification's "or otherwise verify
+	// that they are the intended recipient" is met by comparing the
+	// application a token was minted for. It is a set because --gitlab-url is
+	// repeatable and every published instance has its own application.
+	//
+	// Off by default because turning it on refuses personal access tokens
+	// outright: a PAT belongs to no application, and it is a supported
+	// credential here.
+	OAuthClientUIDs []string
 	// PublicURL is the externally reachable origin of this deployment
 	// (scheme://host[:port][/path], no trailing slash). Required in oauth
 	// mode: RFC 9728 defines the protected-resource identifier as an https
@@ -444,6 +459,7 @@ func Load() (*Config, error) {
 		AuthMode:           auth.mode,
 		PublicURL:          auth.publicURL,
 		OAuthCacheTTL:      auth.oauthCacheTTL,
+		OAuthClientUIDs:    auth.oauthClientUIDs,
 		ExcludeTools:       ParseCSV(os.Getenv("EXCLUDE_TOOLS")),
 		IgnoreScopes:       bools.ignoreScopes,
 		RateLimitRPS:       rateLimitRPS,
@@ -482,9 +498,10 @@ type autoUpdateEnv struct {
 }
 
 type authEnv struct {
-	mode          string
-	oauthCacheTTL time.Duration
-	publicURL     string
+	mode            string
+	oauthCacheTTL   time.Duration
+	publicURL       string
+	oauthClientUIDs []string
 }
 
 func loadBooleanEnv() (booleanEnv, error) {
@@ -645,7 +662,12 @@ func loadAuthEnv() (authEnv, error) {
 	if err != nil {
 		return authEnv{}, fmt.Errorf("invalid OAUTH_CACHE_TTL value: %w", err)
 	}
-	return authEnv{mode: mode, oauthCacheTTL: oauthCacheTTL, publicURL: strings.TrimSpace(os.Getenv("PUBLIC_URL"))}, nil
+	return authEnv{
+		mode:            mode,
+		oauthCacheTTL:   oauthCacheTTL,
+		publicURL:       strings.TrimSpace(os.Getenv("PUBLIC_URL")),
+		oauthClientUIDs: ParseCSV(os.Getenv("OAUTH_CLIENT_UID")),
+	}, nil
 }
 
 func gitLabURLFromEnv() string {

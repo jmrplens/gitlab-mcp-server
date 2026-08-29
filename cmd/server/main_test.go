@@ -6547,3 +6547,119 @@ func TestSSEKeepAlive_StopsBeforeTheHandlerReturns(t *testing.T) {
 		t.Error("stopKeepAlive returned without waiting for the heartbeat goroutine")
 	}
 }
+
+// TestKeepAliveInterval_HTTPPoolEntriesRunWithoutTheServerPing pins that the
+// SDK's server-initiated keepalive is off for every HTTP pool entry, and still
+// on for stdio.
+//
+// The keepalive is a JSON-RPC ping request, and the SDK closes the session the
+// first time one goes unanswered. On a stateless stream the transport forbids
+// the request outright, which is why stateless already disabled it — but a
+// stateful HTTP client that is merely between requests, or whose transport does
+// not deliver server-initiated messages to it, was losing its session at the
+// 30-second mark for being idle, regardless of --session-timeout.
+//
+// Liveness on this transport is the SSE keep-alive comment instead: it puts
+// bytes on the wire without asking the client for anything.
+func TestKeepAliveInterval_HTTPPoolEntriesRunWithoutTheServerPing(t *testing.T) {
+	t.Parallel()
+
+	stateful := &config.ServerConfig{Stateless: false}
+
+	if got := keepAliveInterval(newServerSettings(nil), stateful); got == 0 {
+		t.Errorf("keepAliveInterval(stateful, no override) = 0; stdio must keep the ping, where it is protocol-legal")
+	}
+
+	poolOptions := []serverOption{withSessionTag("tag"), withKeepAlive(0)}
+	if got := keepAliveInterval(newServerSettings(poolOptions), stateful); got != 0 {
+		t.Errorf("keepAliveInterval(stateful, pool options) = %v, want 0 — a stateful HTTP session must not be closed for not answering a ping", got)
+	}
+
+	stateless := &config.ServerConfig{Stateless: true}
+	if got := keepAliveInterval(newServerSettings(nil), stateless); got != 0 {
+		t.Errorf("keepAliveInterval(stateless, no override) = %v, want 0 — the transport forbids a server-initiated request on that stream", got)
+	}
+}
+
+// TestSupportedProtocolVersionsFor_StatefulDropsTheStatelessOnlyRevision pins
+// that the advertised list matches what the transport can actually negotiate.
+//
+// The SDK's StreamableServerTransport.SupportsProtocolVersion refuses every
+// revision at or above 2026-07-28 unless the transport is stateless: SEP-2575
+// has no session concept to fall back on. The whole purpose of the
+// UnsupportedProtocolVersion error body is to tell a client what to retry with,
+// so a stateful deployment listing 2026-07-28 there hands back the one answer
+// that cannot work — and the client's single retry is spent on it.
+func TestSupportedProtocolVersionsFor_StatefulDropsTheStatelessOnlyRevision(t *testing.T) {
+	t.Parallel()
+
+	stateless := supportedProtocolVersionsFor(true)
+	if !slices.Contains(stateless, protocolVersionStatelessOnly) {
+		t.Errorf("stateless supported = %v, want it to include %q", stateless, protocolVersionStatelessOnly)
+	}
+	if len(stateless) != len(supportedProtocolVersions) {
+		t.Errorf("stateless supported = %v, want the full list %v", stateless, supportedProtocolVersions)
+	}
+
+	stateful := supportedProtocolVersionsFor(false)
+	if slices.Contains(stateful, protocolVersionStatelessOnly) {
+		t.Errorf("stateful supported = %v, must not advertise %q — the SDK refuses it without stateless", stateful, protocolVersionStatelessOnly)
+	}
+	if len(stateful) == 0 {
+		t.Fatal("stateful supported is empty; a stateful deployment still negotiates every legacy revision")
+	}
+	for _, version := range stateful {
+		if !slices.Contains(supportedProtocolVersions, version) {
+			t.Errorf("stateful supported names %q, which is not a version this server implements", version)
+		}
+	}
+}
+
+// TestProtocolVersionMiddleware_StatefulRefusesTheStatelessOnlyRevision checks
+// the same narrowing where a client sees it: the 400 body.
+func TestProtocolVersionMiddleware_StatefulRefusesTheStatelessOnlyRevision(t *testing.T) {
+	t.Parallel()
+
+	var reached atomic.Bool
+	handler := protocolVersionMiddleware(false, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Store(true)
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.Header.Set("MCP-Protocol-Version", protocolVersionStatelessOnly)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if reached.Load() {
+		t.Error("a stateful server must refuse the stateless-only revision before the SDK does, so the client is told what to retry with")
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+
+	var body struct {
+		Error struct {
+			Code int `json:"code"`
+			Data struct {
+				Supported []string `json:"supported"`
+				Requested string   `json:"requested"`
+			} `json:"data"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("body is not JSON: %v (body=%q)", err, rec.Body.String())
+	}
+	if body.Error.Code != codeUnsupportedProtocolVersion {
+		t.Errorf("error.code = %d, want %d", body.Error.Code, codeUnsupportedProtocolVersion)
+	}
+	if body.Error.Data.Requested != protocolVersionStatelessOnly {
+		t.Errorf("error.data.requested = %q, want %q", body.Error.Data.Requested, protocolVersionStatelessOnly)
+	}
+	if slices.Contains(body.Error.Data.Supported, protocolVersionStatelessOnly) {
+		t.Errorf("error.data.supported = %v, must not name the version just refused", body.Error.Data.Supported)
+	}
+	if len(body.Error.Data.Supported) == 0 {
+		t.Error("error.data.supported is empty; the client is left with nothing to retry")
+	}
+}

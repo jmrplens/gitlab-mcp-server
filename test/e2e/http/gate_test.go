@@ -427,3 +427,41 @@ func TestProtocolVersion_SupportedVersionsStillWork(t *testing.T) {
 		})
 	}
 }
+
+// TestGate_StatefulGETAndDELETEAreAuthenticated pins that the two methods the
+// gate used to wave through are protected when they can actually do something.
+//
+// The bypass exists for a good reason: on a stateless deployment the SDK
+// answers GET and DELETE with 405 whatever they carry, so authenticating them
+// would only replace the specified answer with a 401. On a stateful deployment
+// they are not inert — GET opens a session's standalone SSE stream and reads
+// the server-initiated messages meant for its owner, DELETE terminates the
+// session — so anyone who learned a session ID could read another client's
+// traffic or end their session with no credential at all.
+func TestGate_StatefulGETAndDELETEAreAuthenticated(t *testing.T) {
+	gitlab := startTokenAwareGitLab(t)
+
+	t.Run("stateful refuses them without a credential", func(t *testing.T) {
+		srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--stateless=false")
+		for _, method := range []string{http.MethodGet, http.MethodDelete} {
+			got := srv.do(t, request{method: method, path: "/mcp"})
+			if got.status == http.StatusOK {
+				t.Errorf("%s reached the session layer with no credential: %s", method, got.body)
+			}
+			if got.status != http.StatusUnauthorized {
+				t.Errorf("%s status = %d, want %d", method, got.status, http.StatusUnauthorized)
+			}
+		}
+	})
+
+	t.Run("stateless still answers the specified 405", func(t *testing.T) {
+		srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+		for _, method := range []string{http.MethodGet, http.MethodDelete} {
+			got := srv.do(t, request{method: method, path: "/mcp"})
+			if got.status != http.StatusMethodNotAllowed {
+				t.Errorf("%s status = %d, want %d — a stateless deployment must keep emitting the specified answer, not a 401",
+					method, got.status, http.StatusMethodNotAllowed)
+			}
+		}
+	})
+}

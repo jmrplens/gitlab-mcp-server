@@ -66,6 +66,20 @@ protected-resource metadata is served from the identifier derived from
 credential entrusted to this proxy, scoped as narrowly as the workload
 allows.
 
+The specification's alternative to RFC 8707 — "or otherwise verify that they
+are the intended recipient of the token" — is available opt-in.
+`--oauth-client-uid` (env `OAUTH_CLIENT_UID`, comma-separated) pins the GitLab
+OAuth applications whose tokens the deployment admits, compared against
+`application.uid` from `/oauth/token/info`. It is off by default because
+turning it on refuses personal access tokens outright: a PAT belongs to no
+application, and it is the credential every non-browser client uses. When it is
+on, an absent, unreadable or unmatched uid is a refusal, and so is an
+introspection that never answered — the surrounding fail-open behaviour is
+deliberately inverted there, or breaking introspection would be the way around
+the pin. The full reasoning, with the live evidence that GitLab publishes no
+`resource_indicators_supported`, is
+[ADR-0019](../development/adr/adr-0019-audience-binding-unavailable-at-the-authorization-server.md).
+
 ## Cross-Origin Protection
 
 Every non-safe request (`POST`, `DELETE`) that a **browser** makes from another origin is rejected with `403` before authentication or MCP dispatch:

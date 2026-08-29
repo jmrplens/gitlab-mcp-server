@@ -191,6 +191,15 @@ The server answers both the bare and the path-suffixed form, so no rewriting is 
 
 Two more things the deployment must get right:
 
+- **`--public-url` is published verbatim, and clients compare it exactly.**
+  Whatever string you pass becomes the RFC 9728 `resource` field as written,
+  and [RFC 9728 §3.3](https://datatracker.ietf.org/doc/html/rfc9728#section-3.3)
+  has a client compare it code point by code point against the URL it was
+  configured with. Configure clients with that exact string — not an alias, not
+  the same host with a trailing slash added or removed, not `www.` prepended.
+  `--public-url=https://mcp.example.com/gitlab` means clients use
+  `https://mcp.example.com/gitlab`, and a client pointed at
+  `https://mcp.example.com/gitlab/` will reject the metadata it fetches.
 - **`Host` must reach the server as the public host.** The cross-origin check compares a browser's `Origin` against the request `Host` when `Sec-Fetch-Site` is absent, so forwarding an internal host name breaks legitimate same-origin browser calls. `proxy_set_header Host $host;` is the correct form.
 - **Browser clients need `--trusted-origins`.** Cross-origin browser `POST`s are refused before authentication; list the origins that should be allowed (the `--public-url` origin is trusted automatically). See [Security — Cross-Origin Protection](../concepts/security.md#cross-origin-protection).
 

@@ -41,7 +41,12 @@ import (
 const (
 	protocolVersion = "2026-07-28"
 	toolsListBody   = `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}`
-	acceptHeader    = "application/json, text/event-stream"
+	// legacyToolsListBody is the same call as a pre-2026-07-28 client sends it.
+	// SEP-2575's per-request _meta carries its own protocolVersion, and the
+	// transport refuses a request whose header disagrees with it (-32020), so a
+	// body announcing 2026-07-28 cannot be used to exercise an older revision.
+	legacyToolsListBody = `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`
+	acceptHeader        = "application/json, text/event-stream"
 )
 
 var (
@@ -286,6 +291,14 @@ func (s *server) do(t *testing.T, r request) response {
 		}
 	}
 	for k, v := range r.headers {
+		// An empty value deletes the header rather than sending it empty, so a
+		// test can express "this client sends no such header" for one the
+		// harness sets by default. A pre-negotiation client sends no
+		// MCP-Protocol-Version at all, and that is a case worth covering.
+		if v == "" {
+			req.Header.Del(k)
+			continue
+		}
 		req.Header.Set(k, v)
 	}
 
