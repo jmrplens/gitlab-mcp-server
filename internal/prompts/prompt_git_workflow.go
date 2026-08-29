@@ -119,7 +119,7 @@ func handleMRDescriptionQuality(ctx context.Context, client *gitlabclient.Client
 
 	iid := parseIID(mrIID)
 	if iid == 0 {
-		return nil, errors.New("merge_request_iid must be a positive integer")
+		return nil, toolutil.InvalidParams(errors.New("merge_request_iid must be a positive integer"))
 	}
 
 	mr, _, err := client.GL().MergeRequests.GetMergeRequest(projectID, iid, &gl.GetMergeRequestsOptions{}, gl.WithContext(ctx))

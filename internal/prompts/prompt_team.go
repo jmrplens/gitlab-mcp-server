@@ -62,7 +62,7 @@ func registerUserActivityReportPrompt(server *mcp.Server, client *gitlabclient.C
 func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	username := req.Params.Arguments[argUsername]
 	if username == "" {
-		return nil, errors.New("user_activity_report: username is required")
+		return nil, toolutil.InvalidParams(errors.New("user_activity_report: username is required"))
 	}
 
 	resolvedUser, userID, isSelf, err := resolveUser(ctx, client, username)
@@ -181,7 +181,7 @@ func registerTeamOverviewPrompt(server *mcp.Server, client *gitlabclient.Client)
 func handleTeamOverview(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
-		return nil, errors.New("team_overview: group_id is required")
+		return nil, toolutil.InvalidParams(errors.New("team_overview: group_id is required"))
 	}
 	days := parseDays(getArgOr(req.Params.Arguments, argDays, "7"), 7)
 	since := sinceDate(days)
@@ -306,7 +306,7 @@ func registerGroupMRDashboardPrompt(server *mcp.Server, client *gitlabclient.Cli
 func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
-		return nil, errors.New("group_mr_dashboard: group_id is required")
+		return nil, toolutil.InvalidParams(errors.New("group_mr_dashboard: group_id is required"))
 	}
 
 	state := getArgOr(req.Params.Arguments, argState, "opened")
@@ -385,7 +385,7 @@ func registerReviewerWorkloadPrompt(server *mcp.Server, client *gitlabclient.Cli
 func handleReviewerWorkload(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
-		return nil, errors.New("reviewer_workload: group_id is required")
+		return nil, toolutil.InvalidParams(errors.New("reviewer_workload: group_id is required"))
 	}
 
 	// Group members

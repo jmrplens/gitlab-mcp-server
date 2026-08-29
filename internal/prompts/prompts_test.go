@@ -2263,3 +2263,66 @@ func TestPromptErrors_CarryTheSpecifiedJSONRPCCodes(t *testing.T) {
 		})
 	}
 }
+
+// TestEveryPromptWithRequiredArguments_RefusesWithInvalidParams is the
+// exhaustive form of TestPromptErrors_CarryTheSpecifiedJSONRPCCodes.
+//
+// "Missing required arguments: -32602 (Invalid params)".
+//
+// The sampled test above asserts the code for four named prompts, and the
+// sample fell inside the half of the package that had been classified: twenty
+// argument checks carried the code and twenty did not, so a missing project_id
+// answered -32603 for half the catalog while the gate stayed green. A sample
+// cannot hold a rule that applies to every prompt.
+//
+// This walks the registered catalog instead of a list written by hand. For each
+// prompt that declares a required argument it calls the prompt with none, which
+// is the case the specification names outright, and requires -32602. A new
+// prompt is covered the moment it is registered. The upstream handler is a
+// blanket 404, so a prompt that reaches GitLab before checking its own
+// arguments fails here rather than quietly answering an internal error.
+func TestEveryPromptWithRequiredArguments_RefusesWithInvalidParams(t *testing.T) {
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "the prompt should not have reached GitLab", http.StatusNotFound)
+	}))
+
+	listed, err := session.ListPrompts(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list prompts: %v", err)
+	}
+
+	var checked int
+	for _, p := range listed.Prompts {
+		var required []string
+		for _, a := range p.Arguments {
+			if a.Required {
+				required = append(required, a.Name)
+			}
+		}
+		if len(required) == 0 {
+			continue
+		}
+		checked++
+
+		t.Run(p.Name, func(t *testing.T) {
+			_, getErr := session.GetPrompt(context.Background(), &mcp.GetPromptParams{Name: p.Name})
+			if getErr == nil {
+				t.Fatalf("omitting the required argument(s) %v produced no error", required)
+			}
+
+			var rpcErr *jsonrpc.Error
+			if !errors.As(getErr, &rpcErr) {
+				t.Fatalf("error does not carry a JSON-RPC code: %v", getErr)
+			}
+			if rpcErr.Code != jsonrpc.CodeInvalidParams {
+				t.Errorf("code = %d, want %d (invalid params) for missing %v: %v",
+					rpcErr.Code, jsonrpc.CodeInvalidParams, required, getErr)
+			}
+		})
+	}
+
+	if checked == 0 {
+		t.Fatal("no prompt declared a required argument, so this gate asserted nothing")
+	}
+	t.Logf("checked %d of %d prompts", checked, len(listed.Prompts))
+}

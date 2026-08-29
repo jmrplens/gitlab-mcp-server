@@ -82,7 +82,7 @@ func registerMilestoneProgressPrompt(server *mcp.Server, client *gitlabclient.Cl
 func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("milestone_progress: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("milestone_progress: project_id is required"))
 	}
 	milestoneTitle := req.Params.Arguments[argMilestone]
 
@@ -161,7 +161,7 @@ func registerLabelDistributionPrompt(server *mcp.Server, client *gitlabclient.Cl
 func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("label_distribution: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("label_distribution: project_id is required"))
 	}
 
 	labels, _, err := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{
@@ -241,7 +241,7 @@ func registerGroupMilestoneProgressPrompt(server *mcp.Server, client *gitlabclie
 func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
-		return nil, errors.New("group_milestone_progress: group_id is required")
+		return nil, toolutil.InvalidParams(errors.New("group_milestone_progress: group_id is required"))
 	}
 
 	milestones, _, err := client.GL().GroupMilestones.ListGroupMilestones(groupID, &gl.ListGroupMilestonesOptions{
@@ -310,7 +310,7 @@ func registerProjectContributorsPrompt(server *mcp.Server, client *gitlabclient.
 func handleProjectContributors(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("project_contributors: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("project_contributors: project_id is required"))
 	}
 
 	contributors, _, err := client.GL().Repositories.Contributors(projectID, &gl.ListContributorsOptions{

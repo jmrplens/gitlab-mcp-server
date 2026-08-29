@@ -52,11 +52,11 @@ func registerBranchMRSummaryPrompt(server *mcp.Server, client *gitlabclient.Clie
 func handleBranchMRSummary(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("branch_mr_summary: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("branch_mr_summary: project_id is required"))
 	}
 	targetBranch := req.Params.Arguments[argTargetBranch]
 	if targetBranch == "" {
-		return nil, errors.New("branch_mr_summary: target_branch is required")
+		return nil, toolutil.InvalidParams(errors.New("branch_mr_summary: target_branch is required"))
 	}
 	state := getArgOr(req.Params.Arguments, argState, "opened")
 
@@ -121,7 +121,7 @@ func registerProjectActivityReportPrompt(server *mcp.Server, client *gitlabclien
 func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("project_activity_report: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("project_activity_report: project_id is required"))
 	}
 	days := parseDays(getArgOr(req.Params.Arguments, argDays, "7"), 7)
 	since := sinceDate(days)
@@ -220,7 +220,7 @@ type mrDiscussionInfo struct {
 func handleMRDiscussionHealth(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("mr_discussion_health: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("mr_discussion_health: project_id is required"))
 	}
 
 	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
@@ -329,7 +329,7 @@ func registerUnassignedItemsPrompt(server *mcp.Server, client *gitlabclient.Clie
 func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("unassigned_items: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("unassigned_items: project_id is required"))
 	}
 
 	// Unassigned MRs
@@ -396,7 +396,7 @@ func registerStaleItemsReportPrompt(server *mcp.Server, client *gitlabclient.Cli
 func handleStaleItemsReport(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("stale_items_report: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("stale_items_report: project_id is required"))
 	}
 	staleDays := parseDays(getArgOr(req.Params.Arguments, "stale_days", "14"), 14)
 	staleDate := time.Now().UTC().AddDate(0, 0, -staleDays)

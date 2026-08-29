@@ -974,7 +974,7 @@ func handleTeamMemberWorkload(ctx context.Context, client *gitlabclient.Client, 
 
 	usernameArg := req.Params.Arguments["username"]
 	if usernameArg == "" {
-		return nil, errors.New("argument 'username' is required")
+		return nil, toolutil.InvalidParams(errors.New("argument 'username' is required"))
 	}
 
 	days := 7

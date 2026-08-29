@@ -53,7 +53,7 @@ func registerMergeVelocityPrompt(server *mcp.Server, client *gitlabclient.Client
 func handleMergeVelocity(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("merge_velocity: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("merge_velocity: project_id is required"))
 	}
 	days := parseDays(getArgOr(req.Params.Arguments, argDays, "30"), 30)
 	since := sinceDate(days)
@@ -160,7 +160,7 @@ func registerReleaseReadinessPrompt(server *mcp.Server, client *gitlabclient.Cli
 func handleReleaseReadiness(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("release_readiness: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("release_readiness: project_id is required"))
 	}
 	branch := getArgOr(req.Params.Arguments, "branch", "main")
 
@@ -265,7 +265,7 @@ func registerReleaseCadencePrompt(server *mcp.Server, client *gitlabclient.Clien
 func handleReleaseCadence(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("release_cadence: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("release_cadence: project_id is required"))
 	}
 	days := parseDays(getArgOr(req.Params.Arguments, argDays, "90"), 90)
 	since := sinceDate(days)
@@ -381,7 +381,7 @@ func registerWeeklyTeamRecapPrompt(server *mcp.Server, client *gitlabclient.Clie
 func handleWeeklyTeamRecap(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
-		return nil, errors.New("weekly_team_recap: group_id is required")
+		return nil, toolutil.InvalidParams(errors.New("weekly_team_recap: group_id is required"))
 	}
 	days := parseDays(getArgOr(req.Params.Arguments, argDays, "7"), 7)
 	since := sinceDate(days)

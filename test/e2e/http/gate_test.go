@@ -471,8 +471,9 @@ func TestGate_StatefulGETAndDELETEAreAuthenticated(t *testing.T) {
 	})
 }
 
-// TestDiscover_AnswersTheStatelessDeployment pins that server/discover is
-// routed and describes this deployment.
+// TestDiscover_AnswersTheDeploymentItIsServedBy pins that server/discover is
+// routed, describes this deployment, and is present exactly where the transport
+// serves the revision it belongs to.
 //
 // It is the method 2026-07-28 put in place of the initialize handshake, and
 // nothing in this repository exercised it: the only references anywhere are in
@@ -486,19 +487,59 @@ func TestGate_StatefulGETAndDELETEAreAuthenticated(t *testing.T) {
 // revision only when stateless, so an SDK bump or a transport change could
 // remove a MUST-implement method and every gate in the repository would still
 // pass.
-func TestDiscover_AnswersTheStatelessDeployment(t *testing.T) {
-	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
-	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
-
+//
+// Both transports are driven, because "only when stateless" is the load-bearing
+// half of that sentence and asserting the stateless case alone would leave it
+// as a claim in a comment. Under --stateless=false the revision is refused at
+// the version gate with -32022 and the method is never reached, which is the
+// correct answer rather than a gap: a client that negotiated an older revision
+// has no business calling a method that revision does not define.
+func TestDiscover_AnswersTheDeploymentItIsServedBy(t *testing.T) {
 	const discoverBody = `{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}`
 
-	got := srv.do(t, request{
-		method: http.MethodPost, path: "/mcp", body: discoverBody,
-		headers: map[string]string{"PRIVATE-TOKEN": "glpat-whatever"},
-	})
-	if got.status != http.StatusOK {
-		t.Fatalf("status = %d, want %d: %s", got.status, http.StatusOK, got.body)
+	tests := []struct {
+		name       string
+		flags      []string
+		wantStatus int
+		check      func(t *testing.T, body string)
+	}{
+		{
+			name:       "the stateless transport serves discover and describes this surface",
+			flags:      nil,
+			wantStatus: http.StatusOK,
+			check:      requireDiscoverDescribesSurface,
+		},
+		{
+			name:       "the stateful transport does not serve the revision discover belongs to",
+			flags:      []string{"--stateless=false"},
+			wantStatus: http.StatusBadRequest,
+			check:      requireRevisionRefused,
+		},
 	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+			srv := startServer(t, nil, append([]string{"--gitlab-url=" + gitlab.url}, tt.flags...)...)
+
+			got := srv.do(t, request{
+				method: http.MethodPost, path: "/mcp", body: discoverBody,
+				headers: map[string]string{"PRIVATE-TOKEN": "glpat-whatever"},
+			})
+			if got.status != tt.wantStatus {
+				t.Fatalf("status = %d, want %d: %s", got.status, tt.wantStatus, got.body)
+			}
+			tt.check(t, got.body)
+		})
+	}
+}
+
+// requireDiscoverDescribesSurface asserts that a discover result reports the
+// revision this deployment serves and the capabilities it actually registered.
+// A capability it discovers but the server refuses is worse than one it never
+// saw, so the absent one is asserted alongside the present ones.
+func requireDiscoverDescribesSurface(t *testing.T, body string) {
+	t.Helper()
 
 	var decoded struct {
 		Result struct {
@@ -516,8 +557,8 @@ func TestDiscover_AnswersTheStatelessDeployment(t *testing.T) {
 			Message string `json:"message"`
 		} `json:"error"`
 	}
-	if err := json.Unmarshal([]byte(jsonRPCPayload(t, got.body)), &decoded); err != nil {
-		t.Fatalf("body is not JSON: %v (%s)", err, got.body)
+	if err := json.Unmarshal([]byte(jsonRPCPayload(t, body)), &decoded); err != nil {
+		t.Fatalf("body is not JSON: %v (%s)", err, body)
 	}
 	if decoded.Error != nil {
 		t.Fatalf("server/discover is not routed: %d %s", decoded.Error.Code, decoded.Error.Message)
@@ -529,8 +570,6 @@ func TestDiscover_AnswersTheStatelessDeployment(t *testing.T) {
 	if !slices.Contains(decoded.Result.SupportedVersions, "2026-07-28") {
 		t.Errorf("supportedVersions = %v, want it to include the revision this deployment serves", decoded.Result.SupportedVersions)
 	}
-	// The capabilities have to match the surface that was started, or a client
-	// discovers something the server will then refuse.
 	if decoded.Result.Capabilities.Tools == nil {
 		t.Error("capabilities omit tools, which this deployment registers")
 	}
@@ -539,5 +578,36 @@ func TestDiscover_AnswersTheStatelessDeployment(t *testing.T) {
 	}
 	if decoded.Result.Capabilities.Logging != nil {
 		t.Error("capabilities advertise logging, which this server does not implement")
+	}
+}
+
+// requireRevisionRefused asserts that the stateful transport turns the request
+// away at the version gate rather than reaching the method, and that it names
+// what it does serve so a client can retry rather than guess.
+func requireRevisionRefused(t *testing.T, body string) {
+	t.Helper()
+
+	var decoded struct {
+		Error *struct {
+			Code int `json:"code"`
+			Data struct {
+				Supported []string `json:"supported"`
+			} `json:"data"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(jsonRPCPayload(t, body)), &decoded); err != nil {
+		t.Fatalf("body is not JSON: %v (%s)", err, body)
+	}
+	if decoded.Error == nil {
+		t.Fatalf("the stateful transport answered a revision it does not serve: %s", body)
+	}
+	if decoded.Error.Code != -32022 {
+		t.Errorf("code = %d, want -32022 (UnsupportedProtocolVersionError)", decoded.Error.Code)
+	}
+	if slices.Contains(decoded.Error.Data.Supported, "2026-07-28") {
+		t.Errorf("supported = %v, want it to exclude the revision that was just refused", decoded.Error.Data.Supported)
+	}
+	if len(decoded.Error.Data.Supported) == 0 {
+		t.Error("the refusal names no revision the client could retry with")
 	}
 }
