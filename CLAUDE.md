@@ -149,6 +149,7 @@ gitlab-mcp-server/
 │   └── ide-configuration.md     # Per-IDE MCP JSON configuration (stdio, HTTP legacy, OAuth)
 ├── test/e2e/                    # End-to-end integration tests
 │   ├── http/                    # HTTP transport module (`httpe2e`): cross-origin, preflight, auth modes, rate limiting, nginx layer. Needs no GitLab
+│   ├── stdio/                   # stdio transport module (`stdioe2e`): drives the real binary over pipes. Needs no GitLab
 │   ├── docker-compose.yml       # Ephemeral GitLab CE + Runner + fixture service for Docker mode
 │   ├── .env.docker              # Docker mode environment variables
 │   ├── README.md                # E2E documentation
@@ -208,6 +209,35 @@ Four error wrapping functions in `internal/toolutil/errors.go`, used across the 
 
 Use `IsHTTPStatus(err, code)` and `ContainsAny(err, substrs...)` for status-specific branching before calling `WrapErrWithHint`. For get handlers, check `IsHTTPStatus(err, 404)` **before** `LogToolCallAll` and return `NotFoundResult` with `nil` error to log at INFO instead of ERROR. See [ADR-0007](docs/development/adr/adr-0007-rich-error-semantics.md) and [Error Handling](docs/concepts/error-handling.md).
 
+### Transport end-to-end modules
+
+Two modules start the **real binary** and drive it the way a client does, both
+without GitLab or credentials, and both run on every CI push:
+
+- `test/e2e/http` (`httpe2e`) — the HTTP handler chain: cross-origin decisions,
+  preflight, authentication modes, rate limiting, the JSON-RPC shape of a
+  rejection, and the flags that restrict them.
+- `test/e2e/stdio` (`stdioe2e`) — the stdio transport: pipes, process lifetime,
+  stdout carrying nothing but JSON-RPC, logs on stderr, and the environment
+  variables stdio configuration actually uses.
+
+**They exist because the e2e suite cannot see any of this.** `test/e2e/suite`
+drives an in-memory transport in the same process, which is the right shape for
+questions about tool behavior and answers none about the transport: no streams,
+no process, no separation of stdout from stderr, and no flags or environment
+variables, since it builds the server directly.
+
+stdio is the primary transport and nothing drove it until `test/e2e/stdio`
+existed. Two defects shipped through that gap: a nil dereference that killed the
+process on an ordinary eliciting tool call, and a keepalive ping that closed the
+session of any client speaking 2026-07-28 after 45 idle seconds — the second
+held in place by a unit test asserting the ping ought to be there. Both were
+found by hand against a binary, which is what these modules automate.
+
+When adding a transport-level behavior, put its test here rather than in a unit
+test that reassembles the handler chain: a test that builds its own copy of the
+thing under test is testing the copy.
+
 ### Test infrastructure
 
 All tests use `httptest` to mock GitLab API responses. Shared helpers in `internal/testutil/`:
@@ -232,6 +262,7 @@ make golangci-lint                       # Consolidated Go formatting and lintin
 go test -v -tags e2e -timeout 300s ./test/e2e/suite/   # Run all e2e tests
 make test-e2e                                          # Same via Makefile
 make test-e2e-http                                     # HTTP transport module: no GitLab, no credentials
+make test-e2e-stdio                                    # stdio transport module: no GitLab, no credentials
 make test-e2e-docker                                   # Ephemeral GitLab CE + runner + fixture service (Docker, ~4 GB RAM)
 go test -tags e2e -c -o NUL ./test/e2e/suite/           # Compile-only check (Windows)
 go test -tags e2e -c -o /dev/null ./test/e2e/suite/     # Compile-only check (Linux)

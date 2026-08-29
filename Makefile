@@ -1,5 +1,5 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-	run brand brand-check brand-rasters test test-short test-race test-pkg test-integration test-e2e test-e2e-http ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
+	run brand brand-check brand-rasters test test-short test-race test-pkg test-integration test-e2e test-e2e-http test-e2e-stdio ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
 	validate-http-stateless validate-http-stateless-docker \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
 	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
@@ -143,6 +143,14 @@ ensure-gotestsum:
 		echo "gotestsum not found; installing with go install..."; \
 		go install gotest.tools/gotestsum@latest; \
 	}
+
+## test-e2e-stdio: run the stdio transport end-to-end module (no GitLab needed; drives the real binary over pipes).
+test-e2e-stdio: ensure-gotestsum
+	$(call MKDIR_P,$(E2E_REPORT_DIR))
+	bash -o pipefail -c '$(GOTESTSUM) \
+	  --format testdox \
+	  --junitfile $(E2E_REPORT_DIR)/e2e-stdio-junit.xml \
+	  -- -tags stdioe2e -count=1 -timeout 900s ./test/e2e/stdio/'
 
 ## test-e2e-http: run the HTTP transport end-to-end module (no GitLab needed; nginx layer skips without Docker).
 test-e2e-http: ensure-gotestsum

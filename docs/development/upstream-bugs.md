@@ -60,8 +60,10 @@ readable without opening the tracker:
 | 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | No | No | No | No | Yes |
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | No | No | No | No | Yes |
-| 9 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
-| 10 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
+| 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | No | No | No | No | None available |
+| 10 | go-sdk | [The keepalive pings a revision that removed `ping`](#the-keepalive-pings-a-session-serving-a-revision-that-removed-ping) | No | No | No | Was yes | Yes |
+| 11 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
+| 12 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
 
 States verified against the upstream trackers on 2026-08-29.
 
@@ -228,6 +230,67 @@ the first read rather than after.
 
 **How we found it**: writing `TestSSEKeepAlive_IdleStreamKeepsBytesOnTheWire`.
 The test hung instead of failing, which is how the header-flush half surfaced.
+
+### A malformed message ends the session instead of answering -32700
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no, on stdio. One client loses its session and its accumulated
+  context to a single unparseable line; there is no cross-tenant effect, since
+  stdio is one process per client.
+- **Workaround**: no, and none is available from application code: the decision
+  is inside the SDK's read loop, below every seam this project can reach.
+
+**What**: `internal/jsonrpc2/conn.go`'s `readIncoming` breaks its loop on *any*
+error from `reader.Read`, so a message that fails to parse is treated exactly
+like a closed pipe. The session ends, and on stdio the process exits. Nothing is
+written to the client, which sees EOF on a stream it can still write to.
+
+JSON-RPC 2.0 defines `-32700 Parse error` for this case, and the framing here is
+one message per line, so the next line is an independent message and
+resynchronizing is trivial. Both a line that is not JSON (`{not json`) and one
+that parses but carries no `"jsonrpc":"2.0"` (`{"hello":"world"}`) produce it; a
+request the server understands but cannot serve — an unknown method, a
+nonexistent tool — is correctly answered with an error and the session
+continues.
+
+**How we found it**: writing `test/e2e/stdio`. The case was written expecting
+the session to survive, and it did not.
+
+**Pinned by**: `TestMalformedInput_RecordsWhatActuallyHappens` documents the
+current behavior rather than asserting it is right, so an SDK bump that fixes
+this surfaces as that test failing.
+
+### The keepalive pings a session serving a revision that removed ping
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: it was. A stdio session speaking 2026-07-28 was closed by the
+  server after 45 idle seconds.
+- **Workaround**: yes, and it is total: `keepAliveFor` in `cmd/server/main.go`
+  returns 0 on every transport, so this server never runs the SDK keepalive.
+
+**What**: two clauses of 2026-07-28 are broken by the keepalive. The revision
+removes `ping`, so a conformant client cannot answer one; with
+`KeepAliveFailureThreshold` at 1 the SDK then closes the session. And on the
+ping's timeout `mcp/transport.go`'s `cancelCall` emits
+`notifications/cancelled` referencing the ping's own request ID, where the same
+revision says a server "MUST NOT send `notifications/cancelled` for any other
+purpose" than tearing down a `subscriptions/listen` stream.
+
+The version cannot be gated on from application code either: the SDK starts the
+keepalive when the session is created, before any request has revealed which
+revision the client speaks. So the SDK is the only place this can be decided.
+
+**How we found it**: the interaction-pattern specification audit. Confirmed on
+the wire against a build of the previous code — an unprompted
+`{"jsonrpc":"2.0","id":1,"method":"ping"}` on a stdio session that declared
+2026-07-28.
+
+**Pinned by**: `TestIdleSession_IsNotClosedByTheServer` in `test/e2e/stdio`,
+which fails with a broken pipe when the keepalive is restored.
 
 ## OpenAI Codex (`openai/codex`)
 

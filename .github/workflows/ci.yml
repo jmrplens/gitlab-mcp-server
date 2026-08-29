@@ -156,6 +156,15 @@ jobs:
       - name: HTTP transport end-to-end
         run: go test -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/
 
+      # stdio is the primary transport and nothing drove it until this module
+      # existed: the e2e suite uses an in-memory transport in the same process,
+      # so no pipes, no process, no separation of stdout from stderr, and none
+      # of the environment-variable configuration stdio mode actually uses.
+      # Two defects that shipped were reachable here and invisible everywhere
+      # else, one of them held in place by a unit test asserting the opposite.
+      - name: stdio transport end-to-end
+        run: go test -tags stdioe2e -count=1 -timeout 900s ./test/e2e/stdio/
+
   golangci-lint:
     name: golangci-lint
     runs-on: ubuntu-latest
