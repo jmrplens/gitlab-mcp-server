@@ -1652,11 +1652,68 @@ func registerHTTPMCPHandlers(ctx context.Context, cfg *config.Config, httpAddr s
 // deployment already tells the server its public path, so it does not need a
 // second flag to say the same thing.
 func mountMCPEndpoint(cfg *config.Config, mux *http.ServeMux, handler http.Handler) {
-	guarded := protocolVersionMiddleware(handler)
+	guarded := mcpOriginMiddleware(cfg, protocolVersionMiddleware(handler))
 	for _, pattern := range mcpEndpointPatterns(cfg) {
 		mux.Handle(pattern, guarded)
 	}
 	mux.HandleFunc("/", notFoundHandler)
+}
+
+// isCORSPreflightRequest reports whether a request is a browser's preflight,
+// which carries no credential and must be answered rather than authenticated or
+// refused on its Origin.
+func isCORSPreflightRequest(r *http.Request) bool {
+	return r.Method == http.MethodOptions && r.Header.Get(headerRequestMethod) != ""
+}
+
+// mcpOriginMiddleware refuses a request to the MCP endpoint whose Origin names a
+// host this deployment does not trust, on every method.
+//
+// The transport specification requires a server to validate Origin on all
+// incoming connections and answer 403 when one is present and invalid. The
+// process-wide guard in front of every route delegates to the standard library,
+// which deliberately exempts GET, HEAD and OPTIONS as safe methods — correct for
+// /health and the server card, which are meant to be publicly fetchable, but not
+// for the MCP endpoint: with stateful sessions a cross-origin GET opened a real
+// SSE stream on someone else's session instead of being refused. Scoping this
+// check to the endpoint keeps both intents, rather than trading one for the
+// other.
+//
+// The preflight carve-out is deliberate and matches the CORS middleware in
+// front: a browser strips credentials from a preflight, and refusing it here
+// would answer the routine permission question with a 403 the client cannot
+// interpret.
+func mcpOriginMiddleware(cfg *config.Config, next http.Handler) http.Handler {
+	trustAll := slices.Contains(cfg.TrustedOrigins, "*")
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get(headerOrigin)
+		if origin == "" || trustAll || isCORSPreflightRequest(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if slices.Contains(cfg.TrustedOrigins, origin) || sameOriginAsHost(origin, r.Host) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		slog.Warn("request refused: untrusted Origin on the MCP endpoint", "method", r.Method)
+		(&gateFailure{
+			status:  http.StatusForbidden,
+			code:    errCodeForbidden,
+			message: "Cross-origin request refused: the Origin header names an origin this deployment does not trust.",
+		}).write(w)
+	})
+}
+
+// sameOriginAsHost reports whether an Origin names the host the request was sent
+// to. It compares the host only, exactly as the standard library's own
+// cross-origin protection does — comparing schemes as well would refuse
+// same-origin browser traffic to a deployment behind TLS termination.
+func sameOriginAsHost(origin, host string) bool {
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return parsed.Host == host
 }
 
 // supportedProtocolVersions mirrors the SDK's own list, which is unexported.

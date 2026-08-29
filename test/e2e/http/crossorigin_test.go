@@ -279,3 +279,63 @@ func TestCrossOrigin_PreflightAuthorizesTheParameterHeader(t *testing.T) {
 		t.Errorf("Access-Control-Allow-Headers = %q; a browser would drop Mcp-Param-Action and the call would then be rejected for its absence", allowed)
 	}
 }
+
+// TestCrossOrigin_MCPEndpointRefusesUntrustedOriginOnEveryMethod pins the
+// requirement that Origin is validated on all incoming connections to the MCP
+// endpoint, not only on the methods a browser treats as unsafe.
+//
+// The process-wide guard delegates to the standard library, which exempts GET,
+// HEAD and OPTIONS as safe methods. That exemption is deliberate and is what
+// keeps /health and the server card publicly fetchable —
+// TestCrossOrigin_SafeMethodsStayReachable pins it — but on the MCP endpoint it
+// meant a cross-origin GET opened a real SSE stream against a stateful session
+// instead of being refused. The two intents are separate, so they are pinned
+// separately: this test asserts the endpoint refuses, that one asserts the
+// public routes do not.
+func TestCrossOrigin_MCPEndpointRefusesUntrustedOriginOnEveryMethod(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--stateless=false")
+
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodHead} {
+		t.Run(method, func(t *testing.T) {
+			got := srv.do(t, request{
+				method: method, path: "/mcp",
+				headers: map[string]string{
+					"Origin":         "https://evil.example",
+					"Sec-Fetch-Site": "cross-site",
+					"PRIVATE-TOKEN":  "glpat-whatever",
+					"Accept":         "application/json, text/event-stream",
+				},
+			})
+			if got.status != http.StatusForbidden {
+				t.Errorf("%s with an untrusted Origin: status = %d, want 403", method, got.status)
+			}
+		})
+	}
+
+	// A preflight must still be answered rather than refused: the browser
+	// strips credentials from it, and a 403 here is not something a client can
+	// interpret.
+	preflight := srv.do(t, request{
+		method: http.MethodOptions, path: "/mcp",
+		headers: map[string]string{
+			"Origin":                        "https://evil.example",
+			"Access-Control-Request-Method": http.MethodPost,
+		},
+	})
+	if preflight.status == http.StatusForbidden {
+		t.Error("a preflight was refused on its Origin; the browser cannot interpret that")
+	}
+
+	// And the deployment's own host is still same-origin.
+	same := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp", body: toolsListBody,
+		headers: map[string]string{
+			"Origin":        srv.baseURL,
+			"PRIVATE-TOKEN": "glpat-whatever",
+		},
+	})
+	if same.status == http.StatusForbidden {
+		t.Errorf("a same-origin request was refused: status = %d", same.status)
+	}
+}
