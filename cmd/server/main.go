@@ -964,15 +964,19 @@ var sharedSchemaCache = mcp.NewSchemaCache()
 //
 // It used to return 30s outside stateless HTTP, justified as keeping the ping
 // "where it is protocol-legal". That reasoning was per-transport and the
-// legality is per-protocol-version. Revision 2026-07-28 removes ping, and
-// restricts a server-sent notifications/cancelled to subscriptions/listen
-// requests; the SDK pings anyway, and on a timeout emits exactly that
-// notification for its own ping — a request the client never issued. Observed
-// on stdio at that revision: ping at +30s, notifications/cancelled with
-// requestId 1 at +45s, and, because KeepAliveFailureThreshold is 1 and a
+// legality is per-protocol-version, so it was wrong wherever a client speaks
+// 2026-07-28: that revision removes ping, and restricts a server-sent
+// notifications/cancelled to subscriptions/listen requests. Observed on stdio
+// at that revision: an unprompted ping at +30s, notifications/cancelled with
+// requestId 1 at +45s, and then, because KeepAliveFailureThreshold is 1 and a
 // conformant client cannot answer a method its revision does not define, the
 // process exited. The server advertised a revision under which it killed itself
 // after 45 idle seconds.
+//
+// None of that was the SDK acting on its own. ServerOptions.KeepAlive defaults
+// to zero and the SDK starts a keepalive only when it is set; this function set
+// it. Worth stating plainly, because the failure looks like library behavior
+// from inside a debugger and was briefly filed as such.
 //
 // Gating it on the version is not available: the SDK starts the keepalive when
 // the session is created, before any request has revealed which revision the

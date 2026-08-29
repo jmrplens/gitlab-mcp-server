@@ -107,10 +107,12 @@ func TestHandshake_AnswersTheLegacyInitialize(t *testing.T) {
 // TestIdleSession_IsNotClosedByTheServer pins the defect that made a
 // 2026-07-28 stdio session die on its own.
 //
-// The SDK's keepalive pinged every 30 seconds and closed the session on the
-// first unanswered ping. ping is removed in 2026-07-28, so a conformant client
-// of that revision cannot answer, and the process exited 45 seconds into an
-// idle session — while a unit test asserted the ping ought to be there.
+// This server used to ask the SDK for a 30-second keepalive, which closes the
+// session on the first unanswered ping. ping is removed in 2026-07-28, so a
+// conformant client of that revision cannot answer, and the process exited 45
+// seconds into an idle session — while a unit test asserted the ping ought to
+// be there. The keepalive is opt-in and defaults to off, so this was a setting
+// of ours rather than anything the SDK did unbidden.
 //
 // Sixty seconds is deliberate: it has to outlast the ping interval and the
 // failure threshold that followed it, or the test passes by finishing early.

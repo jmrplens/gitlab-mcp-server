@@ -35,6 +35,20 @@ project path in the link text and the full URL in the target:
 That stays readable as a mention, resolves from either forge, and creates no
 cross-reference anywhere.
 
+## What does not belong here
+
+Our own misconfiguration. An entry was opened here for the SDK keepalive that
+pinged sessions serving protocol 2026-07-28, where `ping` is a removed method,
+and it was wrong: `ServerOptions.KeepAlive` defaults to zero and the SDK only
+starts a keepalive when it is set to something. This project set it to 30
+seconds. The defect was real and is fixed, but it was ours, and filing it
+upstream would have sent someone looking for a bug in code that was doing what
+it was told.
+
+The test to apply before adding an entry: would the behavior happen to a caller
+who never configured it? If it takes a setting of ours to reach, it is a bug in
+this repository whatever it looks like from inside the debugger.
+
 ## What each entry records
 
 Every entry carries the same five facts, so the state of a contribution is
@@ -62,9 +76,8 @@ readable without opening the tracker:
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | No | No | No | No | Yes |
 | 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | No | No | No | Was yes | Yes |
 | 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | No | No | No | No | None possible |
-| 11 | go-sdk | [The keepalive pings a revision that removed `ping`](#the-keepalive-pings-a-session-serving-a-revision-that-removed-ping) | No | No | No | Was yes | Yes |
-| 12 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
-| 13 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
+| 11 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
+| 12 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
 
 States verified against the upstream trackers on 2026-08-29.
 
@@ -303,36 +316,6 @@ and the only output was the listen request's own result — no
 
 **Recorded in**: ADR-0015, so the gap is stated where the design is rather than
 only here.
-
-### The keepalive pings a session serving a revision that removed ping
-
-- **Reported**: no.
-- **In review**: no.
-- **Merged**: no.
-- **Blocking**: it was. A stdio session speaking 2026-07-28 was closed by the
-  server after 45 idle seconds.
-- **Workaround**: yes, and it is total: `keepAliveFor` in `cmd/server/main.go`
-  returns 0 on every transport, so this server never runs the SDK keepalive.
-
-**What**: two clauses of 2026-07-28 are broken by the keepalive. The revision
-removes `ping`, so a conformant client cannot answer one; with
-`KeepAliveFailureThreshold` at 1 the SDK then closes the session. And on the
-ping's timeout `mcp/transport.go`'s `cancelCall` emits
-`notifications/cancelled` referencing the ping's own request ID, where the same
-revision says a server "MUST NOT send `notifications/cancelled` for any other
-purpose" than tearing down a `subscriptions/listen` stream.
-
-The version cannot be gated on from application code either: the SDK starts the
-keepalive when the session is created, before any request has revealed which
-revision the client speaks. So the SDK is the only place this can be decided.
-
-**How we found it**: the interaction-pattern specification audit. Confirmed on
-the wire against a build of the previous code — an unprompted
-`{"jsonrpc":"2.0","id":1,"method":"ping"}` on a stdio session that declared
-2026-07-28.
-
-**Pinned by**: `TestIdleSession_IsNotClosedByTheServer` in `test/e2e/stdio`,
-which fails with a broken pipe when the keepalive is restored.
 
 ## OpenAI Codex (`openai/codex`)
 
