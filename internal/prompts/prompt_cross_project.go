@@ -16,7 +16,7 @@ import (
 
 // registerMyOpenMRsPrompt registers the my_open_mrs prompt.
 func registerMyOpenMRsPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "my_open_mrs",
 		Title:       toolutil.TitleFromName("my_open_mrs"),
 		Description: "Show all open merge requests across all projects where you are author or assignee. Results are grouped by project for easy scanning. Use this to get a personal MR dashboard without specifying a project.",
@@ -109,7 +109,7 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 
 // registerMyPendingReviewsPrompt registers the my_pending_reviews prompt.
 func registerMyPendingReviewsPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "my_pending_reviews",
 		Title:       toolutil.TitleFromName("my_pending_reviews"),
 		Description: "Show all open merge requests where you are assigned as reviewer across all projects. Helps track which MRs are waiting for your review. Results grouped by project.",
@@ -164,7 +164,7 @@ func handleMyPendingReviews(ctx context.Context, client *gitlabclient.Client, re
 
 // registerMyIssuesPrompt registers the my_issues prompt.
 func registerMyIssuesPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "my_issues",
 		Title:       toolutil.TitleFromName("my_issues"),
 		Description: "Show all issues assigned to you across all projects. Includes overdue detection and project grouping. Use this to see your full issue backlog without specifying a project.",
@@ -236,7 +236,7 @@ func handleMyIssues(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 
 // registerMyActivitySummaryPrompt registers the my_activity_summary prompt.
 func registerMyActivitySummaryPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "my_activity_summary",
 		Title:       toolutil.TitleFromName("my_activity_summary"),
 		Description: "Generate a personal activity summary for a configurable time period. Includes contribution events breakdown, MRs created/merged/reviewed, issues created/closed, and a daily activity chart. Aggregates across all projects.",

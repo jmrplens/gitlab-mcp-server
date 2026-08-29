@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -2182,3 +2183,83 @@ func TestTeamMemberWorkload_MissingProjectID_ReturnsError(t *testing.T) {
 }
 
 // prompt_team.go error branches.
+
+// TestPromptErrors_CarryTheSpecifiedJSONRPCCodes is the gate for the codes the
+// prompts specification names.
+//
+// "Servers SHOULD return standard JSON-RPC errors for common failure cases:
+// * Invalid prompt name: -32602 (Invalid params) * Missing required arguments:
+// -32602 (Invalid params) * Internal errors: -32603 (Internal error)".
+//
+// Every prompt failure used to go out as code 0, which is not a JSON-RPC error
+// code at all. The cause was one mechanism, not one prompt: go-sdk derives the
+// wire code from the error and leaves it at 0 unless the error is, or wraps, a
+// *jsonrpc.Error, and nothing in this package produced one. A client cannot
+// distinguish "you sent the wrong arguments" from "GitLab is down", which are
+// the two things it would act on differently.
+//
+// The unknown-name case is the SDK's own and is asserted here as the control:
+// it was already correct, so a regression in the helpers cannot be mistaken for
+// the SDK changing underneath.
+func TestPromptErrors_CarryTheSpecifiedJSONRPCCodes(t *testing.T) {
+	tests := []struct {
+		name     string
+		prompt   string
+		args     map[string]string
+		upstream http.HandlerFunc
+		wantCode int64
+	}{
+		{
+			name:     "a missing required argument is invalid params",
+			prompt:   "summarize_mr_changes",
+			args:     map[string]string{"project_id": "42"},
+			wantCode: jsonrpc.CodeInvalidParams,
+		},
+		{
+			name:     "an empty required argument is invalid params",
+			prompt:   "summarize_pipeline_status",
+			args:     map[string]string{"project_id": ""},
+			wantCode: jsonrpc.CodeInvalidParams,
+		},
+		{
+			name:   "an upstream failure is an internal error",
+			prompt: "summarize_mr_changes",
+			args:   map[string]string{"project_id": "42", "merge_request_iid": "7"},
+			upstream: func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "boom", http.StatusInternalServerError)
+			},
+			wantCode: jsonrpc.CodeInternalError,
+		},
+		{
+			name:     "an unknown prompt name is invalid params",
+			prompt:   "no_such_prompt_exists",
+			wantCode: jsonrpc.CodeInvalidParams,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := tt.upstream
+			if handler == nil {
+				handler = func(w http.ResponseWriter, _ *http.Request) { http.NotFound(w, nil) }
+			}
+			session := newMCPSession(t, handler)
+
+			_, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
+				Name:      tt.prompt,
+				Arguments: tt.args,
+			})
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+
+			var rpcErr *jsonrpc.Error
+			if !errors.As(err, &rpcErr) {
+				t.Fatalf("error %v carries no JSON-RPC code; it would go out as 0, which is not an error code", err)
+			}
+			if rpcErr.Code != tt.wantCode {
+				t.Errorf("code = %d, want %d (%v)", rpcErr.Code, tt.wantCode, err)
+			}
+		})
+	}
+}

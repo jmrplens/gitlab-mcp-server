@@ -64,7 +64,7 @@ func writeDueDateSection(b *strings.Builder, dueDate *gl.ISOTime) {
 
 // registerMilestoneProgressPrompt registers the milestone_progress prompt.
 func registerMilestoneProgressPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "milestone_progress",
 		Title:       toolutil.TitleFromName("milestone_progress"),
 		Description: "Track milestone progress for a project. Shows issue/MR completion, progress bar, and due date risk. Omit milestone argument to see all active milestones.",
@@ -144,7 +144,7 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 
 // registerLabelDistributionPrompt registers the label_distribution prompt.
 func registerLabelDistributionPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "label_distribution",
 		Title:       toolutil.TitleFromName("label_distribution"),
 		Description: "Analyze label usage distribution in a project. Shows open/closed issue counts and open MR counts per label. Zero additional API calls beyond label list.",
@@ -224,7 +224,7 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 
 // registerGroupMilestoneProgressPrompt registers the group_milestone_progress prompt.
 func registerGroupMilestoneProgressPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "group_milestone_progress",
 		Title:       toolutil.TitleFromName("group_milestone_progress"),
 		Description: "Track milestone progress across all projects in a group. Shows issue/MR completion per milestone with progress bars.",
@@ -293,7 +293,7 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 
 // registerProjectContributorsPrompt registers the project_contributors prompt.
 func registerProjectContributorsPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "project_contributors",
 		Title:       toolutil.TitleFromName("project_contributors"),
 		Description: "Rank project contributors by commits, additions, and deletions. Uses the repository contributors API for accurate stats.",

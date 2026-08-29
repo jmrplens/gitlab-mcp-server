@@ -44,7 +44,7 @@ func registerTeamPrompts(server *mcp.Server, client *gitlabclient.Client) {
 
 // registerUserActivityReportPrompt registers the user_activity_report prompt.
 func registerUserActivityReportPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "user_activity_report",
 		Title:       toolutil.TitleFromName("user_activity_report"),
 		Description: "Generate a detailed activity report for a specific user: contribution events, merged MRs, reviewed MRs, daily activity chart. Designed for managers to review team member productivity.",
@@ -163,7 +163,7 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 
 // registerTeamOverviewPrompt registers the team_overview prompt.
 func registerTeamOverviewPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "team_overview",
 		Title:       toolutil.TitleFromName("team_overview"),
 		Description: "Generate a team dashboard showing all group members with their open MR counts and recently merged MRs. Includes a workload distribution pie chart. Requires a GitLab group ID.",
@@ -287,7 +287,7 @@ func writeTeamOverviewChart(b *strings.Builder, stats map[string]*teamOverviewMe
 
 // registerGroupMRDashboardPrompt registers the group_mr_dashboard prompt.
 func registerGroupMRDashboardPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "group_mr_dashboard",
 		Title:       toolutil.TitleFromName("group_mr_dashboard"),
 		Description: "List merge requests across a GitLab group with optional state and target branch filters. Shows MRs grouped by project with blocker and readiness summary statistics.",
@@ -368,7 +368,7 @@ func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, re
 
 // registerReviewerWorkloadPrompt registers the reviewer_workload prompt.
 func registerReviewerWorkloadPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "reviewer_workload",
 		Title:       toolutil.TitleFromName("reviewer_workload"),
 		Description: "Analyze review distribution across group members. Shows how many open MRs each member is reviewing and identifies imbalances. Useful for managers to ensure fair review distribution.",

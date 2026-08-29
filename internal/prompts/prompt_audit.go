@@ -67,7 +67,7 @@ func registerAuditPrompts(server *mcp.Server, client *gitlabclient.Client) {
 func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, fmt.Errorf("audit_project_settings: %s is required", argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf("audit_project_settings: %s is required", argProjectID))
 	}
 
 	project, _, err := client.GL().Projects.GetProject(projectID, &gl.GetProjectOptions{
@@ -166,7 +166,7 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 func handleAuditBranchProtection(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, fmt.Errorf("audit_branch_protection: %s is required", argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf("audit_branch_protection: %s is required", argProjectID))
 	}
 
 	project, _, err := client.GL().Projects.GetProject(projectID, &gl.GetProjectOptions{}, gl.WithContext(ctx))
@@ -307,7 +307,7 @@ func writeSharedGroups(b *strings.Builder, groups []gl.ProjectSharedWithGroup) {
 func handleAuditProjectAccess(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, fmt.Errorf("audit_project_access: %s is required", argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf("audit_project_access: %s is required", argProjectID))
 	}
 
 	members, _, err := client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{
@@ -388,7 +388,7 @@ func writeMemberTable(b *strings.Builder, members []*gl.ProjectMember) {
 
 // registerAuditProjectWorkflowPrompt registers the audit_project_workflow prompt.
 func registerAuditProjectWorkflowPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:  "audit_project_workflow",
 		Title: toolutil.TitleFromName("audit_project_workflow"),
 		Description: "Audit workflow configuration for a GitLab project: labels (names, colors, descriptions), " +
@@ -407,7 +407,7 @@ func registerAuditProjectWorkflowPrompt(server *mcp.Server, client *gitlabclient
 func handleAuditProjectWorkflow(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, fmt.Errorf("audit_project_workflow: %s is required", argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf("audit_project_workflow: %s is required", argProjectID))
 	}
 
 	project, _, err := client.GL().Projects.GetProject(projectID, &gl.GetProjectOptions{}, gl.WithContext(ctx))
@@ -545,7 +545,7 @@ func writeTemplatesAudit(b *strings.Builder, issueTPL, mrTPL []*gl.ProjectTempla
 
 // registerAuditProjectFullPrompt registers the audit_project_full prompt.
 func registerAuditProjectFullPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:  "audit_project_full",
 		Title: toolutil.TitleFromName("audit_project_full"),
 		Description: "Run a comprehensive audit of a GitLab project covering settings, branch protection, " +
@@ -564,7 +564,7 @@ func registerAuditProjectFullPrompt(server *mcp.Server, client *gitlabclient.Cli
 func handleAuditProjectFull(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, fmt.Errorf("audit_project_full: %s is required", argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf("audit_project_full: %s is required", argProjectID))
 	}
 
 	// Fetch all data in sequence (could be parallelized but keeping simple)

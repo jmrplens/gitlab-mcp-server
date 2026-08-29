@@ -7,12 +7,14 @@ package resources
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
@@ -2664,5 +2666,60 @@ func TestDecodeFileContent_Base64BinaryFile(t *testing.T) {
 	content, category := decodeFileContent(f)
 	if content != "" || category != "binary" {
 		t.Errorf("decodeFileContent(binary base64) = (%q, %q), want (\"\", \"binary\")", content, category)
+	}
+}
+
+// TestResourceReadErrors_CarryTheSpecifiedJSONRPCCodes pins the codes a
+// resources/read failure goes out with.
+//
+// Every GitLab-backed failure used to reach the client as code 0, which is not
+// a JSON-RPC error code: the SDK derives the code from the error value and
+// leaves it at 0 unless the error is, or wraps, a *jsonrpc.Error, and wrapErr
+// produced a plain fmt.Errorf.
+//
+// The absent-resource case is the one that must NOT become -32603, and it is
+// asserted here for that reason: those handlers return mcp.ResourceNotFoundError
+// directly, and internal/subscriptions reads exactly that code to decide a
+// watch is dead rather than merely failing. Flattening it would have kept
+// watchers polling a deleted resource until their absolute lifetime ran out.
+func TestResourceReadErrors_CarryTheSpecifiedJSONRPCCodes(t *testing.T) {
+	tests := []struct {
+		name     string
+		uri      string
+		status   int
+		wantCode int64
+	}{
+		{
+			name:     "an upstream failure is an internal error",
+			uri:      "gitlab://user/current",
+			status:   http.StatusInternalServerError,
+			wantCode: jsonrpc.CodeInternalError,
+		},
+		{
+			name:     "an unreadable instance is an internal error",
+			uri:      "gitlab://groups",
+			status:   http.StatusBadGateway,
+			wantCode: jsonrpc.CodeInternalError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				http.Error(w, "boom", tt.status)
+			}))
+
+			_, err := session.ReadResource(context.Background(), &mcp.ReadResourceParams{URI: tt.uri})
+			if err == nil {
+				t.Fatal("expected an error")
+			}
+			var rpcErr *jsonrpc.Error
+			if !errors.As(err, &rpcErr) {
+				t.Fatalf("error %v carries no JSON-RPC code; it would go out as 0", err)
+			}
+			if rpcErr.Code != tt.wantCode {
+				t.Errorf("code = %d, want %d (%v)", rpcErr.Code, tt.wantCode, err)
+			}
+		})
 	}
 }

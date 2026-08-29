@@ -35,7 +35,7 @@ func registerAnalyticsPrompts(server *mcp.Server, client *gitlabclient.Client) {
 
 // registerMergeVelocityPrompt registers the merge_velocity prompt.
 func registerMergeVelocityPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "merge_velocity",
 		Title:       toolutil.TitleFromName("merge_velocity"),
 		Description: "Analyze MR throughput metrics for a project. Shows merge rate, average time-to-merge, and daily merged count chart. Ideal for tracking team delivery pace.",
@@ -142,7 +142,7 @@ func writeDailyMergeChart(b *strings.Builder, mrs []*gl.BasicMergeRequest) {
 
 // registerReleaseReadinessPrompt registers the release_readiness prompt.
 func registerReleaseReadinessPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "release_readiness",
 		Title:       toolutil.TitleFromName("release_readiness"),
 		Description: "Check readiness of a release branch by analyzing open MRs targeting it, draft/conflict counts, and unresolved discussion threads.",
@@ -247,7 +247,7 @@ func readinessLabel(blockers int) string {
 
 // registerReleaseCadencePrompt registers the release_cadence prompt.
 func registerReleaseCadencePrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "release_cadence",
 		Title:       toolutil.TitleFromName("release_cadence"),
 		Description: "Analyze release frequency for a project. Shows time between releases, average cadence, and release history chart.",
@@ -363,7 +363,7 @@ func releaseDate(r *gl.Release) time.Time {
 
 // registerWeeklyTeamRecapPrompt registers the weekly_team_recap prompt.
 func registerWeeklyTeamRecapPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "weekly_team_recap",
 		Title:       toolutil.TitleFromName("weekly_team_recap"),
 		Description: "Generate a comprehensive weekly recap for a team. Combines merged MRs, open MRs, issues activity, and events into a single summary with Mermaid charts.",

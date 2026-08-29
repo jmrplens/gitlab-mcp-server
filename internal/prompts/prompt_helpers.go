@@ -1,17 +1,54 @@
 package prompts
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	gl "gitlab.com/gitlab-org/api/client-go/v2"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// The prompts specification names the JSON-RPC codes a server should return:
+// "Servers **SHOULD** return standard JSON-RPC errors for common failure
+// cases: * Invalid prompt name: `-32602` (Invalid params) * Missing required
+// arguments: `-32602` (Invalid params) * Internal errors: `-32603` (Internal
+// error)".
+//
+// Nothing in this package produced one. The SDK derives the wire code from the
+// error, and go-sdk's toWireError leaves it at 0 unless the error is, or wraps,
+// a *jsonrpc.Error, so every prompt failure went out as code 0, which is not a
+// JSON-RPC error code at all. A client could not tell "you sent the wrong
+// arguments" from "GitLab is down", which are the two things it would act on
+// differently. The unknown-prompt-name case needs nothing: the SDK answers
+// -32602 before dispatch.
+
+// addPrompt registers a prompt whose handler errors always carry a code.
+//
+// Classifying at each return site does not hold: several handlers return the
+// GitLab client's error unwrapped (`return nil, err`), and a handler added
+// later would have to remember. Registration is the one place every error
+// passes through, so the -32603 default lands here and the explicit
+// [errInvalidParams] calls in the handlers take precedence over it.
+func addPrompt(server *mcp.Server, prompt *mcp.Prompt, handler mcp.PromptHandler) {
+	server.AddPrompt(prompt, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+		result, err := handler(ctx, req)
+		if err == nil {
+			return result, nil
+		}
+		if _, coded := errors.AsType[*jsonrpc.Error](err); coded {
+			return nil, err
+		}
+		return nil, toolutil.InternalError(err)
+	})
+}
 
 // Reusable argument names for team-management prompts.
 const (

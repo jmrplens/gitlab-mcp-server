@@ -30,7 +30,7 @@ func registerGitWorkflowPrompts(server *mcp.Server, client *gitlabclient.Client)
 
 // registerAuditCommitHygienePrompt registers the audit_commit_hygiene prompt.
 func registerAuditCommitHygienePrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "audit_commit_hygiene",
 		Title:       toolutil.TitleFromName("audit_commit_hygiene"),
 		Description: "Audit commit message quality between two refs. Scores Conventional Commit usage, merge commits, breaking-change markers, body/detail quality, and linked work references for release and contribution readiness.",
@@ -50,7 +50,7 @@ func handleAuditCommitHygiene(ctx context.Context, client *gitlabclient.Client, 
 	projectID := req.Params.Arguments[argProjectID]
 	from := req.Params.Arguments["from"]
 	if projectID == "" || from == "" {
-		return nil, fmt.Errorf("%s and from are required", argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf("%s and from are required", argProjectID))
 	}
 	to := getArgOr(req.Params.Arguments, "to", "HEAD")
 
@@ -95,7 +95,7 @@ func handleAuditCommitHygiene(ctx context.Context, client *gitlabclient.Client, 
 
 // registerMRDescriptionQualityPrompt registers the mr_description_quality prompt.
 func registerMRDescriptionQualityPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "mr_description_quality",
 		Title:       toolutil.TitleFromName("mr_description_quality"),
 		Description: "Score a merge request description for reviewer readiness. Checks context, linked work, test evidence, rollout/risk notes, checklists, and whether changed files suggest missing screenshots or migration notes.",
@@ -114,7 +114,7 @@ func handleMRDescriptionQuality(ctx context.Context, client *gitlabclient.Client
 	projectID := req.Params.Arguments[argProjectID]
 	mrIID := req.Params.Arguments[argMRIID]
 	if projectID == "" || mrIID == "" {
-		return nil, fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID)
+		return nil, toolutil.InvalidParams(fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID))
 	}
 
 	iid := parseIID(mrIID)

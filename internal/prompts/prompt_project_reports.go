@@ -33,7 +33,7 @@ func registerProjectReportPrompts(server *mcp.Server, client *gitlabclient.Clien
 
 // registerBranchMRSummaryPrompt registers the branch_mr_summary prompt.
 func registerBranchMRSummaryPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "branch_mr_summary",
 		Title:       toolutil.TitleFromName("branch_mr_summary"),
 		Description: "List all MRs targeting a specific branch in a project. Shows readiness summary with conflict/draft/approval counts. Ideal for release branch reviews.",
@@ -103,7 +103,7 @@ func handleBranchMRSummary(ctx context.Context, client *gitlabclient.Client, req
 
 // registerProjectActivityReportPrompt registers the project_activity_report prompt.
 func registerProjectActivityReportPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "project_activity_report",
 		Title:       toolutil.TitleFromName("project_activity_report"),
 		Description: "Generate a project activity report including recent events, merged MRs, and open issues. Shows daily activity chart and contributor breakdown.",
@@ -194,7 +194,7 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 
 // registerMRDiscussionHealthPrompt registers the mr_discussion_health prompt.
 func registerMRDiscussionHealthPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "mr_discussion_health",
 		Title:       toolutil.TitleFromName("mr_discussion_health"),
 		Description: "Analyze unresolved discussion threads across open MRs in a project. Use this for review follow-up and merge-readiness cleanup, not approval-rule status.",
@@ -312,7 +312,7 @@ func countDiscussionThreads(info *mrDiscussionInfo, discussions []*gl.Discussion
 
 // registerUnassignedItemsPrompt registers the unassigned_items prompt.
 func registerUnassignedItemsPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "unassigned_items",
 		Title:       toolutil.TitleFromName("unassigned_items"),
 		Description: "Find open MRs and issues in a project that have no assignee. Helps identify ownership gaps and items needing attention.",
@@ -378,7 +378,7 @@ func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req
 
 // registerStaleItemsReportPrompt registers the stale_items_report prompt.
 func registerStaleItemsReportPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "stale_items_report",
 		Title:       toolutil.TitleFromName("stale_items_report"),
 		Description: "Find MRs and issues in a project that haven't been updated for a configurable number of days. Helps identify forgotten or blocked items.",
