@@ -684,9 +684,12 @@ responses — disables its own write deadline dynamically and carries
 The decision is taken from the response, not from the request's `Accept` header:
 a client sending `*/*` or `text/*` is answered with a stream too. Because the default
 `--http-idle-timeout` is `0`
-(disabled), the HTTP layer also does not close idle connections, so `--session-timeout`
-is the effective idle lifetime. If you set a low `--http-idle-timeout`, expect
-long-lived MCP sessions to drop when the connection idles past that value.
+(disabled), the HTTP layer also does not close idle connections. Under
+`--stateless=false` that makes `--session-timeout` the effective idle lifetime;
+under the default stateless transport there is no MCP session to expire — each
+POST's session ends with its response — so nothing above the transport bounds a
+connection at all. If you set a low `--http-idle-timeout`, expect long-lived
+MCP sessions to drop when the connection idles past that value.
 
 **Keep-alives.** Clearing the write deadline settles this end of the connection
 and nothing in between. An SSE response that stays silent therefore emits a
@@ -747,7 +750,7 @@ The following settings are **server-wide** — they apply to all clients regardl
 
 | Setting                     | Source                                                   | Description                                                                                                                                                                            |
 | --------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Fixed GitLab URL            | `--gitlab-url`                                           | Authoritative GitLab instance for all clients when set. If omitted, clients must send `GITLAB-URL`                                                                                     |
+| Fixed GitLab URL            | `--gitlab-url`                                           | Authoritative GitLab instance for all clients when set. If omitted, `GITLAB-URL` selects the instance per request, and a request without it falls back to `https://gitlab.com`         |
 | TLS verification            | `--skip-tls-verify`                                      | Applied to all GitLab client connections                                                                                                                                               |
 | Tool and capability surface | `--meta-tools`, `--tool-surface`, `--capability-surface` | Same tool catalog and resource/prompt exposure for all clients (`meta`/`individual`/`dynamic`; `full`/`minimal` capabilities); scope and CE/EE filtering still happen per server entry |
 | Upload limits               | Compile-time defaults                                    | Max file size                                                                                                                                                                          |

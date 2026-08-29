@@ -402,7 +402,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		return nil, &gateFailure{
 			status:  http.StatusBadRequest,
 			code:    errCodeInvalidRequest,
-			message: invalidURLMessage(r, err),
+			message: g.invalidURLMessage(r, err),
 		}
 	}
 	logIgnoredRequestOptions(token, options)
@@ -452,9 +452,20 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 // a misconfigured server-side --gitlab-url is never reflected back. The
 // underlying error already names the header, so it is returned verbatim rather
 // than prefixed.
-func invalidURLMessage(r *http.Request, err error) string {
+func (g *mcpServerGate) invalidURLMessage(r *http.Request, err error) string {
 	if r.Header.Get(serverpool.RequestOptionGitLabURL) == "" {
 		return "The server's configured GitLab instance URL is invalid; contact the operator."
+	}
+	// Naming the published instances is a help to a client that guessed wrong,
+	// and it is safe exactly when that list is already public — which is oauth
+	// mode, where the same set is served unauthenticated as RFC 9728
+	// authorization_servers. Legacy mode publishes no metadata document, and
+	// this rejection is reached before the credential is validated, so echoing
+	// the list there would let any non-empty token enumerate the operator's
+	// instance hostnames.
+	var disallowed *serverpool.DisallowedGitLabURLError
+	if errors.As(err, &disallowed) && !g.oauthMode {
+		return "The GITLAB-URL header names an instance this deployment does not serve. Ask the operator which instances it publishes."
 	}
 	return capitalizeFirst(err.Error())
 }

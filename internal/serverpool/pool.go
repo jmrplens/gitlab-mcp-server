@@ -116,12 +116,22 @@ type Snapshot struct {
 // least recently used entry is evicted. Entries are periodically re-validated
 // against the GitLab API; entries with revoked tokens are evicted automatically.
 type ServerPool struct {
-	mu                 sync.RWMutex
-	entries            map[string]*poolEntry
-	lru                *list.List
-	maxSize            int
-	cfg                *config.Config
-	factory            ServerFactory
+	mu      sync.RWMutex
+	entries map[string]*poolEntry
+	lru     *list.List
+	maxSize int
+	cfg     *config.Config
+	factory ServerFactory
+	// onEvict is called with a server the pool has just stopped owning, for
+	// every removal path: LRU pressure, idle reclamation, revalidation of a
+	// revoked token, and Close. It exists because a caller that keeps its own
+	// per-server state — cmd/server maps each pooled server to the tag its
+	// session IDs carry — otherwise has no way to learn that an entry is gone,
+	// and its map grows past the pool's own size bound.
+	//
+	// It runs while the pool's write lock is held, so it must be cheap and
+	// must not call back into the pool.
+	onEvict            func(*mcp.Server)
 	revalidateInterval time.Duration
 	idleTimeout        time.Duration
 	metrics            Metrics
@@ -151,6 +161,14 @@ type ServerPool struct {
 
 // Option configures pool behavior.
 type Option func(*ServerPool)
+
+// WithOnEvict registers a callback invoked with each server the pool removes.
+//
+// The callback runs under the pool's write lock: it must not block and must not
+// re-enter the pool.
+func WithOnEvict(fn func(*mcp.Server)) Option {
+	return func(p *ServerPool) { p.onEvict = fn }
+}
 
 // WithMaxSize sets the maximum number of unique token entries in the pool.
 // Values ≤ 0 are ignored; the default is 100.
@@ -629,10 +647,26 @@ func (p *ServerPool) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for key := range p.entries {
-		delete(p.entries, key)
+		p.dropEntry(key)
 	}
 	p.lru.Init()
 	slog.Info("server pool: closed all entries")
+}
+
+// dropEntry removes one entry and notifies the eviction callback. It is the
+// only place an entry leaves p.entries, so a new removal path cannot silently
+// skip the notification. Must be called with the write lock held; the caller
+// remains responsible for the LRU list, which differs per path.
+func (p *ServerPool) dropEntry(key string) *poolEntry {
+	entry, ok := p.entries[key]
+	if !ok {
+		return nil
+	}
+	delete(p.entries, key)
+	if p.onEvict != nil {
+		p.onEvict(entry.server)
+	}
+	return entry
 }
 
 // evictLRU removes the least recently used entry. Must be called with
@@ -643,9 +677,8 @@ func (p *ServerPool) evictLRU() {
 		return
 	}
 	key, _ := back.Value.(string)
-	if entry, ok := p.entries[key]; ok {
+	if entry := p.dropEntry(key); entry != nil {
 		gitlabURL, enterprise := poolEntryConfigLogValues(entry)
-		delete(p.entries, key)
 		p.metrics.Evictions.Add(1)
 		slog.Info(
 			"server pool: evicted LRU entry",
@@ -740,7 +773,7 @@ func (p *ServerPool) evictIdle() {
 		}
 		gitlabURL, enterprise := poolEntryConfigLogValues(entry)
 		p.lru.Remove(entry.element)
-		delete(p.entries, key)
+		p.dropEntry(key)
 		p.metrics.IdleEvictions.Add(1)
 		slog.Info(
 			"server pool: evicted idle entry",
@@ -832,7 +865,7 @@ func (p *ServerPool) evictByKey(key string) {
 	if entry, ok := p.entries[key]; ok {
 		gitlabURL, enterprise := poolEntryConfigLogValues(entry)
 		p.lru.Remove(entry.element)
-		delete(p.entries, key)
+		p.dropEntry(key)
 		p.metrics.Evictions.Add(1)
 		slog.Info(
 			"server pool: evicted invalid entry",

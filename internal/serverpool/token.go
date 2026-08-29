@@ -288,10 +288,13 @@ func NormalizeGitLabURLs(raw []string) ([]string, error) {
 // DisallowedGitLabURLError reports a GITLAB-URL header naming an instance the
 // deployment does not publish.
 //
-// It names the allowed instances in its message: they are already public in
-// the deployment's RFC 9728 metadata, and a client that guessed wrong needs
-// to know what it may ask for. The rejected value is deliberately not echoed
-// — it is caller-controlled text.
+// It names the allowed instances in its message, for a client that guessed
+// wrong and needs to know what it may ask for. Whether that message reaches the
+// caller is the gate's decision, not this type's: in oauth mode the same list
+// is already served unauthenticated as RFC 9728 authorization_servers, while
+// legacy mode publishes no metadata document and reaches this rejection before
+// the credential is validated, so the gate redacts it there. The rejected value
+// is deliberately not echoed — it is caller-controlled text.
 type DisallowedGitLabURLError struct {
 	Allowed []string
 }

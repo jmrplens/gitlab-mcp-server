@@ -77,45 +77,47 @@ func TestClient_UnknownProtocolVersionIsNotFatal(t *testing.T) {
 	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
 
 	for _, version := range []string{"2099-01-01", "not-a-date", "0", "1.0", "2026-03-26"} {
-		got := srv.do(t, request{
-			method: http.MethodPost, path: "/mcp", body: legacyToolsListBody,
-			headers: map[string]string{
-				"PRIVATE-TOKEN":        "glpat-whatever",
-				"MCP-Protocol-Version": version,
-			},
-		})
-		if got.status != http.StatusBadRequest {
-			t.Errorf("version %q got %d, want %d", version, got.status, http.StatusBadRequest)
-			continue
-		}
+		t.Run(version, func(t *testing.T) {
+			got := srv.do(t, request{
+				method: http.MethodPost, path: "/mcp", body: legacyToolsListBody,
+				headers: map[string]string{
+					"PRIVATE-TOKEN":        "glpat-whatever",
+					"MCP-Protocol-Version": version,
+				},
+			})
+			if got.status != http.StatusBadRequest {
+				t.Errorf("version %q got %d, want %d", version, got.status, http.StatusBadRequest)
+				return
+			}
 
-		// The body is what makes the 400 actionable. The specification tells a
-		// client that a 400 whose body is not a recognizable JSON-RPC error
-		// means it is talking to an initialization-era server, so it falls back
-		// to the withdrawn HTTP+SSE transport and ends with no transport at
-		// all. The supported list is the single retry that works instead.
-		var decoded struct {
-			Error struct {
-				Code int `json:"code"`
-				Data struct {
-					Supported []string `json:"supported"`
-					Requested string   `json:"requested"`
-				} `json:"data"`
-			} `json:"error"`
-		}
-		if err := json.Unmarshal([]byte(got.body), &decoded); err != nil {
-			t.Errorf("version %q: body is not JSON: %v (%s)", version, err, got.body)
-			continue
-		}
-		if decoded.Error.Code != -32022 {
-			t.Errorf("version %q: error.code = %d, want -32022", version, decoded.Error.Code)
-		}
-		if decoded.Error.Data.Requested != version {
-			t.Errorf("version %q: error.data.requested = %q", version, decoded.Error.Data.Requested)
-		}
-		if len(decoded.Error.Data.Supported) == 0 {
-			t.Errorf("version %q: error.data.supported is empty; the client is left with nothing to retry", version)
-		}
+			// The body is what makes the 400 actionable. The specification tells a
+			// client that a 400 whose body is not a recognizable JSON-RPC error
+			// means it is talking to an initialization-era server, so it falls back
+			// to the withdrawn HTTP+SSE transport and ends with no transport at
+			// all. The supported list is the single retry that works instead.
+			var decoded struct {
+				Error struct {
+					Code int `json:"code"`
+					Data struct {
+						Supported []string `json:"supported"`
+						Requested string   `json:"requested"`
+					} `json:"data"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(got.body), &decoded); err != nil {
+				t.Errorf("version %q: body is not JSON: %v (%s)", version, err, got.body)
+				return
+			}
+			if decoded.Error.Code != -32022 {
+				t.Errorf("version %q: error.code = %d, want -32022", version, decoded.Error.Code)
+			}
+			if decoded.Error.Data.Requested != version {
+				t.Errorf("version %q: error.data.requested = %q", version, decoded.Error.Data.Requested)
+			}
+			if len(decoded.Error.Data.Supported) == 0 {
+				t.Errorf("version %q: error.data.supported is empty; the client is left with nothing to retry", version)
+			}
+		})
 	}
 }
 

@@ -326,7 +326,7 @@ make analyze-report                        # generate LLM-consumable report
 
 | Variable                 | Required | Description                                              |
 | ------------------------ | -------- | -------------------------------------------------------- |
-| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode, optional via `--gitlab-url`, and the count decides the header's meaning: none means clients send `GITLAB-URL` per request, exactly one fixes the instance and the header is ignored, several publish an allow-list the header selects among (anything else refused). A comma-separated value spells the list |
+| `GITLAB_URL`             | Stdio    | GitLab instance URL (e.g., `https://gitlab.example.com`). In HTTP mode, optional via `--gitlab-url`, and the count decides the header's meaning: none lets `GITLAB-URL` select freely per request, falling back to `https://gitlab.com` when it is absent; exactly one fixes the instance and the header is ignored; several publish an allow-list the header selects among (anything else refused). A comma-separated value spells the list |
 | `GITLAB_TOKEN`           | Stdio    | Personal Access Token (`glpat-...`)                      |
 | `GITLAB_SKIP_TLS_VERIFY` | No       | Skip TLS verification for self-signed certs (`true`)     |
 | `META_TOOLS`             | No       | Deprecated compatibility selector; prefer `TOOL_SURFACE` for new configs |
@@ -649,7 +649,7 @@ LOG_LEVEL=debug ./gitlab-mcp-server 2>debug.log
 
 # HTTP mode for easier debugging with curl
 ./gitlab-mcp-server --http --http-addr=localhost:8080
-curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "PRIVATE-TOKEN: $GITLAB_TOKEN" -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -H "GITLAB-URL: $GITLAB_URL" -H "PRIVATE-TOKEN: $GITLAB_TOKEN" -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
 ```
 
 ### Common issues

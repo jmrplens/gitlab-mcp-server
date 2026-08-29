@@ -640,7 +640,7 @@ GITLAB_SKIP_TLS_VERIFY=true
 </TabItem>
 </Tabs>
 
-Both GitLab CE (free) and EE (Premium/Ultimate) are fully supported. For EE-exclusive features like DORA metrics, epics, and vulnerability management, set `GITLAB_TIER=premium` (or `GITLAB_TIER=ultimate`) in stdio mode or use `--tier=premium`/`--tier=ultimate` in HTTP mode. When unset, the tier is detected from `GET /license` (fallback `free`). The legacy boolean `GITLAB_ENTERPRISE=true` and `--enterprise` flag are still honored for compatibility but are deprecated. See [Configuration](/gitlab-mcp-server/configuration/) for all available options.
+Both GitLab CE (free) and EE (Premium/Ultimate) are fully supported. For EE-exclusive features like DORA metrics, epics, and vulnerability management, set `GITLAB_TIER=premium` (or `GITLAB_TIER=ultimate`) in stdio mode or use `--tier=premium`/`--tier=ultimate` in HTTP mode. When unset, the tier is detected from `GET /license` (fallback `free`). The legacy boolean `GITLAB_ENTERPRISE=true` environment variable is still honored in stdio mode for compatibility but is deprecated; HTTP mode reads `--tier` only, and there is no `--enterprise` flag. See [Configuration](/gitlab-mcp-server/configuration/) for all available options.
 
 ## Verify the setup
 

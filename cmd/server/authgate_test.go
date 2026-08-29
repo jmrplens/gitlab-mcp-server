@@ -552,3 +552,68 @@ func TestMcpServerGate_WithIdentity_UnknownTokenLeavesContextAlone(t *testing.T)
 		t.Errorf("identity = %+v, want the zero value for a token the pool never built", identity)
 	}
 }
+
+// TestGate_AllowListIsOnlyNamedWhereItIsAlreadyPublic pins who gets to see the
+// set of instances a deployment publishes.
+//
+// Naming them helps a client that guessed wrong, and it costs nothing in oauth
+// mode: the same list is served unauthenticated as RFC 9728
+// `authorization_servers`, and the bearer guard has already verified the caller
+// before the gate runs. Legacy mode has neither property — no metadata document
+// publishes the list, and this rejection is reached before the credential is
+// validated — so any non-empty token would have enumerated the operator's
+// instance hostnames, internal ones included.
+func TestGate_AllowListIsOnlyNamedWhereItIsAlreadyPublic(t *testing.T) {
+	t.Parallel()
+
+	const published = "https://gitlab.internal.example"
+
+	newRequest := func(t *testing.T) *http.Request {
+		t.Helper()
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", strings.NewReader("{}"))
+		req.Header.Set("PRIVATE-TOKEN", "glpat-anything")
+		req.Header.Set(serverpool.RequestOptionGitLabURL, "https://gitlab.attacker.example")
+		return req
+	}
+
+	// Two published instances, because with exactly one the header is ignored
+	// by design and never reaches the rejection under test.
+	withAllowList := func(t *testing.T) *mcpServerGate {
+		t.Helper()
+		gate := newGateAgainst(t, okFactory, published)
+		gate.gitlabURLs = []string{published, "https://gitlab.other.example"}
+		return gate
+	}
+
+	t.Run("legacy mode redacts it", func(t *testing.T) {
+		t.Parallel()
+		gate := withAllowList(t)
+		rec := httptest.NewRecorder()
+		gate.middleware(http.NotFoundHandler()).ServeHTTP(rec, newRequest(t))
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+		if strings.Contains(rec.Body.String(), "gitlab.internal.example") {
+			t.Errorf("the published instance leaked to an unverified caller: %s", rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "does not serve") {
+			t.Errorf("the caller was not told what went wrong: %s", rec.Body.String())
+		}
+	})
+
+	t.Run("oauth mode names it", func(t *testing.T) {
+		t.Parallel()
+		gate := withAllowList(t)
+		gate.oauthMode = true
+		rec := httptest.NewRecorder()
+		gate.middleware(http.NotFoundHandler()).ServeHTTP(rec, newRequest(t))
+
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+		}
+		if !strings.Contains(rec.Body.String(), "gitlab.internal.example") {
+			t.Errorf("oauth mode must keep naming the list it already publishes: %s", rec.Body.String())
+		}
+	})
+}

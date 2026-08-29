@@ -166,9 +166,11 @@ const insufficientScopeLimit = 4 << 10
 // under-scoped, rather than that the caller may not do this at all.
 //
 // The distinction is only in the body. GitLab does not send WWW-Authenticate on
-// a 403 — its own source carries a FIXME saying so, because the Forbidden class
-// it inherits never builds that header — so a server reading the challenge would
-// fall through on every real rejection while looking correct. What it does send
+// a 403: the Forbidden class it inherits never builds that header, which its own
+// source marks as a known standards deviation. The quote and the upstream
+// reference are in docs/development/upstream-bugs.md. A server reading the
+// challenge would therefore fall through on every real rejection while looking
+// correct. What it does send
 // is rack-oauth2's JSON error document. A 403 raised by Grape's own forbidden!
 // (an account blocked, an IP restriction) carries a "message" key instead and no
 // "error", so it keeps being treated as an invalid credential.
@@ -466,8 +468,15 @@ func acceptedRecipient(pinned []string, result introspection) error {
 }
 
 // expiryFromDate reads a GitLab personal access token's expires_at, which is a
-// calendar date rather than a timestamp. The token stays valid through that day,
-// so the date is taken as its end.
+// calendar date rather than a timestamp.
+//
+// The date is the instant the token dies, not the last day it works: GitLab
+// expires a personal access token at 00:00:00 UTC **on** the stated date, so a
+// token reading 2030-01-02 is already refused at the first moment of the 2nd.
+// time.Parse with time.DateOnly yields exactly that instant, so the value is
+// returned as parsed. Adding a day — reading the date as "valid through" —
+// would let a cached admission outlive the credential by up to 24 hours, which
+// is the one thing [effectiveCacheTTL] exists to prevent.
 func expiryFromDate(raw any) time.Time {
 	s, ok := raw.(string)
 	if !ok || s == "" {
@@ -478,7 +487,7 @@ func expiryFromDate(raw any) time.Time {
 		slog.Debug("token expiry not parsable as a date; treating the token as non-expiring", "value", s)
 		return time.Time{}
 	}
-	return day.AddDate(0, 0, 1)
+	return day
 }
 
 // expiryFromSeconds reads an OAuth token's expires_in, a count of seconds from

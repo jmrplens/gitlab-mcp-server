@@ -24,6 +24,7 @@ the full testing reference live in subfolders here.
 | [Orbit Live Test Fixtures](orbit-fixtures.md)                             | Fixtures, setup, and the indexer caveat for GitLab.com live tests          |
 | [Testing](testing/README.md)                                              | Unit, E2E, and AI model-evaluation documentation                           |
 | [Architecture Decision Records](adr/README.md)                            | The recorded architectural decisions (ADRs)                                |
+| [Upstream Bugs and Gaps](upstream-bugs.md)                                | Defects found in dependencies, and what we contributed back                |
 
 **Looking for something else?**
 [Concepts](../concepts/README.md) for design rationale ·

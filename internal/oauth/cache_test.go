@@ -287,17 +287,34 @@ func TestRunCleanup_EvictsEntriesNobodyComesBackFor(t *testing.T) {
 
 // TestRunCleanup_NonPositiveIntervalReturns verifies the guard against a ticker
 // built from a zero or negative period, which panics in the standard library.
+//
+// Both shapes are covered because they arrive differently: zero is what a
+// caller passes to mean "disabled", while a negative value is what arithmetic
+// on a misconfigured TTL produces.
 func TestRunCleanup_NonPositiveIntervalReturns(t *testing.T) {
 	t.Parallel()
 
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		NewTokenCache().RunCleanup(t.Context(), 0)
-	}()
-	select {
-	case <-done:
-	case <-time.After(5 * time.Second):
-		t.Fatal("RunCleanup did not return for a non-positive interval")
+	tests := []struct {
+		name     string
+		interval time.Duration
+	}{
+		{name: "zero", interval: 0},
+		{name: "negative", interval: -time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				NewTokenCache().RunCleanup(t.Context(), tt.interval)
+			}()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatalf("RunCleanup did not return for interval %v", tt.interval)
+			}
+		})
 	}
 }

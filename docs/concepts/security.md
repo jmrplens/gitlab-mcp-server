@@ -401,10 +401,17 @@ The `newGitHubSource` HTTP client (`internal/autoupdate/github_source.go`):
 
 ## Rate Limiting Model
 
-The server ships an **optional** token-bucket rate limiter that gates `tools/call`
-invocations. It is **disabled by default** because GitLab itself is the canonical
-rate-limit authority — the limiter exists to protect operators against runaway
-agents and noisy clients, not to replace upstream throttling.
+The server ships a token-bucket rate limiter that gates `tools/call`
+invocations. It exists to protect operators against runaway agents and noisy
+clients, not to replace upstream throttling: GitLab itself remains the canonical
+rate-limit authority.
+
+Whether it is on out of the box depends on the transport. **HTTP mode enables it
+by default** (`--rate-limit-rps=10`), because that deployment is shared — every
+call it forwards is charged to its own egress address, so one looping client's
+volume lands on every other tenant. **Stdio leaves it off** (`RATE_LIMIT_RPS=0`):
+a single-user local process has no co-tenant to protect, and a limiter there only
+costs latency. Setting `0` explicitly is the opt-out in either mode.
 
 ### Configuration
 
@@ -463,8 +470,9 @@ The local limiter complements but does not replace:
 - HTTP-mode bounded server pool (`MAX_HTTP_CLIENTS`) which caps concurrency.
 - Reverse-proxy/WAF policies in front of public deployments.
 
-Disable it again by setting `RATE_LIMIT_RPS=0` (or omitting the flag). No state
-is persisted between restarts.
+Disable it by setting the value to `0` explicitly — `RATE_LIMIT_RPS=0` in stdio,
+`--rate-limit-rps=0` in HTTP mode. Omitting the flag no longer disables it in
+HTTP mode, where `10` is the default. No state is persisted between restarts.
 
 ---
 

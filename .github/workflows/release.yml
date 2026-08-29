@@ -302,7 +302,12 @@ jobs:
             # Strings are quoted from the v1.8.1 validators (internal/validators/
             # registries/{npm,oci}.go); a genuine "not found (status: 404)" is
             # deliberately absent, so a truly unpublished package fails fast.
-            if grep -qE "take a moment to appear|retry later|retry shortly|does not exist in the registry|validation timed out" mcp-publisher-publish.log; then
+            # The OCI validator's own 404 text — "does not exist in the
+            # registry" — is absent for the same reason: the image is pushed by
+            # the docker job this one depends on, so its absence is a broken
+            # release rather than propagation lag, and retrying it would spend
+            # ten minutes hiding that.
+            if grep -qE "take a moment to appear|retry later|retry shortly|validation timed out" mcp-publisher-publish.log; then
               echo "::notice::Registry-side validation not yet consistent (attempt ${attempt}); retrying in 60s"
               sleep 60
               continue

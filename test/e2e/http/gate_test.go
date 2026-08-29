@@ -444,24 +444,28 @@ func TestGate_StatefulGETAndDELETEAreAuthenticated(t *testing.T) {
 	t.Run("stateful refuses them without a credential", func(t *testing.T) {
 		srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--stateless=false")
 		for _, method := range []string{http.MethodGet, http.MethodDelete} {
-			got := srv.do(t, request{method: method, path: "/mcp"})
-			if got.status == http.StatusOK {
-				t.Errorf("%s reached the session layer with no credential: %s", method, got.body)
-			}
-			if got.status != http.StatusUnauthorized {
-				t.Errorf("%s status = %d, want %d", method, got.status, http.StatusUnauthorized)
-			}
+			t.Run(method, func(t *testing.T) {
+				got := srv.do(t, request{method: method, path: "/mcp"})
+				if got.status == http.StatusOK {
+					t.Errorf("%s reached the session layer with no credential: %s", method, got.body)
+				}
+				if got.status != http.StatusUnauthorized {
+					t.Errorf("%s status = %d, want %d", method, got.status, http.StatusUnauthorized)
+				}
+			})
 		}
 	})
 
 	t.Run("stateless still answers the specified 405", func(t *testing.T) {
 		srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
 		for _, method := range []string{http.MethodGet, http.MethodDelete} {
-			got := srv.do(t, request{method: method, path: "/mcp"})
-			if got.status != http.StatusMethodNotAllowed {
-				t.Errorf("%s status = %d, want %d — a stateless deployment must keep emitting the specified answer, not a 401",
-					method, got.status, http.StatusMethodNotAllowed)
-			}
+			t.Run(method, func(t *testing.T) {
+				got := srv.do(t, request{method: method, path: "/mcp"})
+				if got.status != http.StatusMethodNotAllowed {
+					t.Errorf("%s status = %d, want %d — a stateless deployment must keep emitting the specified answer, not a 401",
+						method, got.status, http.StatusMethodNotAllowed)
+				}
+			})
 		}
 	})
 }

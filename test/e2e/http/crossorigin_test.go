@@ -15,6 +15,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 )
 
 const trustedOrigin = "https://client.example"
@@ -274,9 +276,20 @@ func TestCrossOrigin_PreflightAuthorizesTheParameterHeader(t *testing.T) {
 	if got.status != http.StatusNoContent && got.status != http.StatusOK {
 		t.Fatalf("preflight status = %d, want 204 or 200", got.status)
 	}
+	// Compared token by token, not as a substring: a header list carrying
+	// x-mcp-param-action contains the substring and authorizes nothing, and a
+	// browser matches the header name itself.
 	allowed := got.header.Get("Access-Control-Allow-Headers")
-	if !strings.Contains(strings.ToLower(allowed), "mcp-param-action") {
-		t.Errorf("Access-Control-Allow-Headers = %q; a browser would drop Mcp-Param-Action and the call would then be rejected for its absence", allowed)
+	authorized := false
+	for header := range strings.SplitSeq(allowed, ",") {
+		if strings.EqualFold(strings.TrimSpace(header), dynamictools.ExecuteActionHeaderName) {
+			authorized = true
+			break
+		}
+	}
+	if !authorized {
+		t.Errorf("Access-Control-Allow-Headers = %q; a browser would drop %s and the call would then be rejected for its absence",
+			allowed, dynamictools.ExecuteActionHeaderName)
 	}
 }
 

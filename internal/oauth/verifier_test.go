@@ -919,6 +919,20 @@ func TestExpiryFromDate(t *testing.T) {
 			}
 		})
 	}
+
+	// The instant matters, not just that one was produced. GitLab expires a
+	// personal access token at 00:00:00 UTC on the stated date, so the date is
+	// when the token dies and not the last day it works. Reading it as
+	// "valid through" put the expiry 24 hours late, which would let a cached
+	// admission outlive the credential it was taken from.
+	t.Run("the date is midnight UTC on that day, not the day after", func(t *testing.T) {
+		t.Parallel()
+		got := expiryFromDate("2030-01-02")
+		want := time.Date(2030, time.January, 2, 0, 0, 0, 0, time.UTC)
+		if !got.Equal(want) {
+			t.Errorf("expiryFromDate(\"2030-01-02\") = %s, want %s", got.Format(time.RFC3339), want.Format(time.RFC3339))
+		}
+	})
 }
 
 // TestNewGitLabVerifier_ForbiddenDistinguishesScope covers the two very

@@ -94,8 +94,12 @@ mcp-list-issues:
         echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
         echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
         echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"issue.list","params":{"project_id":"'"${CI_PROJECT_ID}"'","state":"opened","per_page":5}}},"id":2}'
-      } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text')
-    - echo "${RESULT}"
+      } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1]')
+    # jq -e para que un error JSON-RPC o un error de herramienta hagan fallar el
+    # job en lugar de imprimir "null" y salir con 0.
+    - jq -e 'has("error") | not' >/dev/null <<<"${RESULT}"
+    - jq -e '.result.isError != true' >/dev/null <<<"${RESULT}"
+    - jq -r '.result.content[0].text' <<<"${RESULT}"
 ```
 
 ### Función auxiliar
@@ -106,11 +110,25 @@ Para pipelines con muchas llamadas, envuelve el protocolo en una función reutil
 mcp_call() {
   local action="$1"
   local args="$2"
-  {
+  local response
+  response=$({
     echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
     echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
     echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"'"${action}"'","params":'"${args}"'}},"id":2}'
-  } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text' -r
+  } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1]')
+
+  # Un error JSON-RPC y un error de herramienta son fallos distintos, y ninguno
+  # llega al estado de salida del pipeline anterior: sin estas comprobaciones la
+  # función imprime "null" y el job termina con éxito.
+  if jq -e 'has("error")' >/dev/null <<<"${response}"; then
+    echo "MCP ${action} ha fallado: $(jq -r '.error.message' <<<"${response}")" >&2
+    return 1
+  fi
+  if jq -e '.result.isError == true' >/dev/null <<<"${response}"; then
+    echo "MCP ${action} ha devuelto un error de herramienta: $(jq -r '.result.content[0].text' <<<"${response}")" >&2
+    return 1
+  fi
+  jq -r '.result.content[0].text' <<<"${response}"
 }
 
 # Uso

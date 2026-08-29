@@ -641,7 +641,7 @@ GITLAB_SKIP_TLS_VERIFY=true
 </TabItem>
 </Tabs>
 
-Tanto GitLab CE (gratuito) como EE (Premium/Ultimate) son totalmente compatibles. Para funciones exclusivas de EE como métricas DORA, épicas y gestión de vulnerabilidades, establece `GITLAB_TIER=premium` (o `GITLAB_TIER=ultimate`) en modo stdio, o usa `--tier=premium`/`--tier=ultimate` en modo HTTP. Cuando se omite, el tier se detecta desde `GET /license` (por defecto `free`). El booleano heredado `GITLAB_ENTERPRISE=true` y el flag `--enterprise` siguen funcionando por compatibilidad, pero están deprecados. Consulta [Configuración](/gitlab-mcp-server/es/configuration/) para todas las opciones disponibles.
+Tanto GitLab CE (gratuito) como EE (Premium/Ultimate) son totalmente compatibles. Para funciones exclusivas de EE como métricas DORA, épicas y gestión de vulnerabilidades, establece `GITLAB_TIER=premium` (o `GITLAB_TIER=ultimate`) en modo stdio, o usa `--tier=premium`/`--tier=ultimate` en modo HTTP. Cuando se omite, el tier se detecta desde `GET /license` (por defecto `free`). La variable de entorno heredada `GITLAB_ENTERPRISE=true` sigue respetándose en modo stdio por compatibilidad, pero está deprecada; el modo HTTP solo lee `--tier`, y no existe ningún flag `--enterprise`. Consulta [Configuración](/gitlab-mcp-server/es/configuration/) para todas las opciones disponibles.
 
 ## Verificar la configuración
 

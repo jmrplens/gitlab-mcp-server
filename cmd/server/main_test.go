@@ -6663,3 +6663,46 @@ func TestProtocolVersionMiddleware_StatefulRefusesTheStatelessOnlyRevision(t *te
 		t.Error("error.data.supported is empty; the client is left with nothing to retry")
 	}
 }
+
+// TestRemovedActionKeys_CoverCompatibilityAliases pins that an action's older
+// names are withheld alongside its canonical one.
+//
+// The dynamic registry resolves compatibility aliases exactly as it resolves
+// declared ones, so a caller working from a name the catalog used to carry
+// would otherwise be told the action is unknown — which is precisely the
+// misdiagnosis the withheld path exists to prevent, arriving through the door
+// left open.
+func TestRemovedActionKeys_CoverCompatibilityAliases(t *testing.T) {
+	t.Parallel()
+
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{
+		Tier:       edition.Free,
+		IncludeMCP: true,
+	})
+	if err != nil {
+		t.Fatalf("BuildActionCatalog() error = %v", err)
+	}
+
+	var wantAlias string
+	var wantAction string
+	for _, action := range catalog.Actions() {
+		if action.ReadOnly || len(action.Compatibility.ActionAliases) == 0 {
+			continue
+		}
+		wantAlias = action.Compatibility.ActionAliases[0].Alias
+		wantAction = string(action.ID)
+		break
+	}
+	if wantAlias == "" {
+		t.Skip("no mutating action in the Free catalog declares a compatibility alias")
+	}
+
+	_, withheld := mustFilterCatalog(t, catalog, &config.ServerConfig{
+		ReadOnly:               true,
+		ReadOnlyFromTokenScope: true,
+	})
+	if !slices.Contains(withheld.byTokenScope, wantAlias) {
+		t.Errorf("withheld.byTokenScope omits %q, the compatibility alias of the withheld action %q; a caller using it would be told the action does not exist",
+			wantAlias, wantAction)
+	}
+}

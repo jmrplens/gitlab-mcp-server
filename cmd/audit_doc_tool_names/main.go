@@ -45,7 +45,12 @@ const (
 )
 
 // docRoots are the trees whose Markdown mentions are audited.
-var docRoots = []string{"docs", "site/src/content/docs", "README.md", "llms-install.md", "CLAUDE.md"}
+//
+// The npm launcher's README is in the list because it is published to a
+// registry rather than only rendered from this repository: a wrong tool name
+// there reaches users through `npm install` and is not fixable without
+// republishing a version.
+var docRoots = []string{"docs", "site/src/content/docs", "README.md", "llms-install.md", "CLAUDE.md", "npm/gitlab-mcp-server/README.md"}
 
 // toolToken matches a tool-name-shaped token in prose or code.
 var toolToken = regexp.MustCompile(`\bgitlab_[a-z0-9_]+\b`)

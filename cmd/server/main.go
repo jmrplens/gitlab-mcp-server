@@ -1337,7 +1337,7 @@ func effectiveIdleTimeout(d time.Duration) time.Duration {
 // middleware exists to keep.
 func sseWriteDeadlineMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writer := &sseAwareWriter{ResponseWriter: w, ctx: r.Context()}
+		writer := &sseAwareWriter{ResponseWriter: w, disconnected: r.Context().Done()}
 		defer writer.stopKeepAlive()
 		next.ServeHTTP(writer, r)
 	})
@@ -1367,8 +1367,11 @@ var sseKeepAliveFrame = []byte(": keep-alive\n\n")
 // keep-alive the moment a response commits to text/event-stream.
 type sseAwareWriter struct {
 	http.ResponseWriter
-	ctx         context.Context
-	wroteHeader bool
+	// disconnected is the request context's Done channel rather than the
+	// context itself: the heartbeat needs only the cancellation signal, and a
+	// Context stored in a struct outlives the call it belongs to.
+	disconnected <-chan struct{}
+	wroteHeader  bool
 
 	// mu serializes the handler's writes with the keep-alive goroutine's. An
 	// http.ResponseWriter is not safe for concurrent use, and the SDK emits one
@@ -1445,7 +1448,7 @@ func (w *sseAwareWriter) startKeepAlive() {
 			select {
 			case <-stop:
 				return
-			case <-w.ctx.Done():
+			case <-w.disconnected:
 				return
 			case <-ticker.C:
 				if !w.writeKeepAlive() {
@@ -1567,6 +1570,11 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		sessionTags.Store(srv, tag)
 		return srv, nil
 	}, serverpool.WithMaxSize(cfg.MaxHTTPClients),
+		// The tag map must not outlive the pool entries it describes. Without
+		// this it grew past --max-http-clients on credential churn, and every
+		// stale key kept a whole server — its GitLab client and its registered
+		// tool surface — reachable.
+		serverpool.WithOnEvict(func(srv *mcp.Server) { sessionTags.Delete(srv) }),
 		serverpool.WithRevalidateInterval(cfg.RevalidateInterval),
 		serverpool.WithIdleTimeout(cfg.PoolIdleTimeout),
 		// Entry construction is bounded by the server's lifetime rather than
@@ -1667,7 +1675,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 			writeCardUnavailable(w)
 			return
 		}
-		w.Header().Set(hdrContentType, mimeJSON)
+		w.Header().Set(hdrContentType, serverCardMediaType(r.URL.Path))
 		w.Header().Set("Cache-Control", "public, max-age=3600")
 		_, _ = w.Write(serverCardJSON)
 	}
@@ -1897,7 +1905,7 @@ func sameOriginAsHost(origin, host string) bool {
 // compares this against the list it names, so an SDK bump that adds or drops a
 // revision fails loudly instead of silently making this stale.
 var supportedProtocolVersions = []string{
-	"2026-07-28",
+	protocolVersionStatelessOnly,
 	"2025-11-25",
 	"2025-06-18",
 	"2025-03-26",
@@ -1958,16 +1966,23 @@ const protocolVersionStatelessOnly = "2026-07-28"
 // is a typed struct rather than a map so the JSON encoding cannot fail, which
 // is what lets the write below be total.
 type unsupportedVersionError struct {
-	JSONRPC string  `json:"jsonrpc"`
-	ID      *string `json:"id"`
-	Error   struct {
-		Code    int    `json:"code"`
-		Message string `json:"message"`
-		Data    struct {
-			Supported []string `json:"supported"`
-			Requested string   `json:"requested"`
-		} `json:"data"`
-	} `json:"error"`
+	JSONRPC string                    `json:"jsonrpc"`
+	ID      *string                   `json:"id"`
+	Error   unsupportedVersionErrBody `json:"error"`
+}
+
+// unsupportedVersionErrBody is the JSON-RPC error object of that response.
+type unsupportedVersionErrBody struct {
+	Code    int                       `json:"code"`
+	Message string                    `json:"message"`
+	Data    unsupportedVersionErrData `json:"data"`
+}
+
+// unsupportedVersionErrData carries what the client needs to retry: the
+// revisions this deployment negotiates, and the one it asked for.
+type unsupportedVersionErrData struct {
+	Supported []string `json:"supported"`
+	Requested string   `json:"requested"`
 }
 
 // writeUnsupportedProtocolVersion emits the JSON-RPC error body the spec names,
@@ -2018,6 +2033,16 @@ func mcpEndpointPatterns(cfg *config.Config) []string {
 // A proxy that forwards its prefix rather than stripping it reaches this
 // server at /prefix/health, not /health. The prefix is not new configuration:
 // --public-url already tells the server the path it is published under.
+// serverCardMediaType picks the media type for the path the card was fetched
+// from, matching on the suffix so a deployment mounting the card under
+// --public-url's path prefix is classified the same way.
+func serverCardMediaType(requestPath string) string {
+	if strings.HasSuffix(requestPath, serverCardLegacyPath) {
+		return mimeJSON
+	}
+	return mimeServerCard
+}
+
 func publicPaths(cfg *config.Config, paths ...string) []string {
 	prefix := publicURLPath(cfg.PublicURL)
 	if prefix == "" {
@@ -2545,6 +2570,11 @@ const (
 const (
 	hdrContentType = "Content-Type"
 	mimeJSON       = "application/json"
+	// mimeServerCard is the media type the MCP server-card extension registers.
+	// Only the recommended path serves it: the legacy .well-known location ends
+	// in .json and is fetched by scanners written against the earlier draft,
+	// which expect application/json there.
+	mimeServerCard = "application/mcp-server-card+json"
 )
 
 // corsMiddleware makes trusted origins usable from an actual browser.
@@ -2966,7 +2996,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 			"methods": map[string]any{
 				"subscriptions/listen": map[string]any{
 					"available":      true,
-					"since_protocol": "2026-07-28",
+					"since_protocol": protocolVersionStatelessOnly,
 				},
 				"resources/subscribe": map[string]any{
 					"available": !cfg.Stateless,
@@ -3287,6 +3317,13 @@ func removedActionKeys(before, after *actioncatalog.Catalog) []string {
 		}
 		keys = append(keys, string(action.ID))
 		keys = append(keys, action.Aliases...)
+		// Compatibility aliases resolve in the dynamic registry exactly as the
+		// declared ones do, so a caller working from an older action name
+		// would otherwise be told the action is unknown — the misdiagnosis
+		// this whole path exists to prevent.
+		for _, alias := range action.Compatibility.ActionAliases {
+			keys = append(keys, alias.Alias)
+		}
 	}
 	return keys
 }

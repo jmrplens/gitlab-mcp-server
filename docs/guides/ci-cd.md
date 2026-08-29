@@ -169,11 +169,25 @@ mcp_call() {
   local args="$2"
   local id="${3:-2}"
 
-  {
+  local response
+  response=$({
     echo '{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"ci","version":"1.0"}},"id":1}'
     echo '{"jsonrpc":"2.0","method":"notifications/initialized"}'
     echo '{"jsonrpc":"2.0","method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"'"${action}"'","params":'"${args}"'}},"id":'"${id}"'}'
-  } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1].result.content[0].text' -r
+  } | ./gitlab-mcp-server 2>/dev/null | jq -s '.[1]')
+
+  # A JSON-RPC error and a tool error are different failures, and neither
+  # reaches the exit status of the pipeline above: without these checks the
+  # function prints "null" and the job succeeds.
+  if jq -e 'has("error")' >/dev/null <<<"${response}"; then
+    echo "MCP ${action} failed: $(jq -r '.error.message' <<<"${response}")" >&2
+    return 1
+  fi
+  if jq -e '.result.isError == true' >/dev/null <<<"${response}"; then
+    echo "MCP ${action} returned a tool error: $(jq -r '.result.content[0].text' <<<"${response}")" >&2
+    return 1
+  fi
+  jq -r '.result.content[0].text' <<<"${response}"
 }
 
 # Usage
