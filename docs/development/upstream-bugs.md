@@ -60,7 +60,7 @@ readable without opening the tracker:
 | 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | No | No | No | No | Yes |
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | No | No | No | No | Yes |
-| 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | No | No | No | No | None available |
+| 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | No | No | No | Was yes | Yes |
 | 10 | go-sdk | [The keepalive pings a revision that removed `ping`](#the-keepalive-pings-a-session-serving-a-revision-that-removed-ping) | No | No | No | Was yes | Yes |
 | 11 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
 | 12 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
@@ -236,11 +236,17 @@ The test hung instead of failing, which is how the header-flush half surfaced.
 - **Reported**: no.
 - **In review**: no.
 - **Merged**: no.
-- **Blocking**: no, on stdio. One client loses its session and its accumulated
-  context to a single unparseable line; there is no cross-tenant effect, since
-  stdio is one process per client.
-- **Workaround**: no, and none is available from application code: the decision
-  is inside the SDK's read loop, below every seam this project can reach.
+- **Blocking**: it was, on stdio. One client lost its session and its
+  accumulated context to a single unparseable line; there was no cross-tenant
+  effect, since stdio is one process per client.
+- **Workaround**: yes. `resilientStdio` in `cmd/server/stdio.go` filters stdin
+  ahead of the SDK, answering a line the read loop would choke on and dropping
+  it. This entry first said no workaround was available, on the reasoning that
+  the decision sits inside the SDK's read loop; that was wrong. The SDK exposes
+  `mcp.IOTransport`, which takes any `Reader` and `Writer`, so the loop can be
+  fed a stream that never contains the input it cannot handle. Anything parsing
+  as a JSON object with `"jsonrpc":"2.0"` is passed through untouched, since
+  deciding what a valid message means is the SDK's job.
 
 **What**: `internal/jsonrpc2/conn.go`'s `readIncoming` breaks its loop on *any*
 error from `reader.Read`, so a message that fails to parse is treated exactly
@@ -258,9 +264,17 @@ continues.
 **How we found it**: writing `test/e2e/stdio`. The case was written expecting
 the session to survive, and it did not.
 
-**Pinned by**: `TestMalformedInput_RecordsWhatActuallyHappens` documents the
-current behavior rather than asserting it is right, so an SDK bump that fixes
-this surfaces as that test failing.
+**Also fixed by the workaround, unintentionally**: with `mcp.StdioTransport`,
+EOF on stdin — a client closing its pipe, which is how every session ends —
+produced an error from `server.Run`, and the process exited 1. A clean shutdown
+reported failure to whatever supervises it. Under `IOTransport` it exits 0. A
+unit test had been passing because of that error rather than the condition it
+named, which is how this surfaced.
+
+**Pinned by**: `TestMalformedInput_IsAnsweredAndTheSessionSurvives` in
+`test/e2e/stdio`, and `TestResilientStdio_*` in `cmd/server`. The e2e case
+asserts the client-visible contract rather than the workaround, so it keeps
+passing if the SDK ever fixes this and the filter is removed.
 
 ### The keepalive pings a session serving a revision that removed ping
 

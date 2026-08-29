@@ -3053,7 +3053,13 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 // It blocks until the context is canceled or an error occurs.
 func serveStdio(ctx context.Context, server *mcp.Server) error {
 	slog.Info("starting MCP server", "transport", "stdio", "version", version, "commit", commit)
-	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
+	// An IOTransport over filtered stdin rather than mcp.StdioTransport, which
+	// wraps os.Stdin directly: the SDK's read loop treats a message it cannot
+	// parse like a closed pipe and ends the session, so one malformed line
+	// would take the process and the client's whole context with it. See
+	// [resilientStdio].
+	reader, writer := resilientStdio(os.Stdin, os.Stdout)
+	if err := server.Run(ctx, &mcp.IOTransport{Reader: reader, Writer: writer}); err != nil {
 		return fmt.Errorf("mcp server error: %w", err)
 	}
 	return nil

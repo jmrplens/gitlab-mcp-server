@@ -884,20 +884,38 @@ func TestRunWithContext_InvalidConfig(t *testing.T) {
 	}
 }
 
-// TestRunWithContext_PingFailure verifies that [runWithContext] returns an error
-// when the GitLab connectivity ping returns a failure status.
-func TestRunWithContext_PingFailure(t *testing.T) {
+// TestRunWithContext_PingFailure_StartsInDegradedMode verifies that an
+// unreachable or refusing GitLab does not stop the server from starting.
+//
+// That is deliberate: a server that refused to start because its instance was
+// briefly down would be harder to work with than one that starts and reports
+// the failure per call, so runWithContext logs the failed check and enables
+// lazy initialization instead.
+//
+// This test used to assert the opposite, and passed for a reason that had
+// nothing to do with the ping. Nothing here fails, so the run reached
+// serveStdio, whose transport returned an error when the test's own stdin hit
+// EOF — that error was what the assertion caught. The transport now treats EOF
+// as the ordinary end of a session (a client closing its pipe is not a
+// failure), which is what exposed it. Ending cleanly is asserted alongside the
+// startup, so the same false positive cannot come back.
+func TestRunWithContext_PingFailure_StartsInDegradedMode(t *testing.T) {
 	srv := newFailingGitLabServer(t, http.StatusForbidden)
 	t.Setenv("GITLAB_URL", srv.URL)
 	t.Setenv("GITLAB_TOKEN", testToken)
 	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "true")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	err := runWithContext(ctx, nil)
-	if err == nil {
-		t.Fatal("expected error when gitlab ping fails")
+	// stdin is already at EOF here, so the session ends as soon as it starts.
+	// Reaching that point at all is the assertion: the refused ping did not
+	// stop the server from coming up.
+	if err := runWithContext(ctx, nil); err != nil {
+		t.Fatalf("a refused connectivity check stopped the server from starting: %v", err)
+	}
+	if ctx.Err() != nil {
+		t.Error("the run did not return on its own; it was cut short by the timeout")
 	}
 }
 

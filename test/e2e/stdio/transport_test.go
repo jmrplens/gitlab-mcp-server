@@ -170,43 +170,41 @@ func TestElicitingCall_DoesNotKillTheProcess(t *testing.T) {
 	}
 }
 
-// TestMalformedInput_RecordsWhatActuallyHappens pins how the server answers a
-// client that sends something it cannot read.
+// TestMalformedInput_IsAnsweredAndTheSessionSurvives pins how the server
+// answers a client that sends something it cannot read.
 //
-// Two behaviors, and the split is not where you would expect. A request the
-// server understands but cannot serve — an unknown method, a tool that does not
-// exist — is answered with a JSON-RPC error and the session continues, which is
-// right. A line that fails to parse, or one that parses but carries no
-// "jsonrpc":"2.0", ends the session: the server writes nothing at all and the
-// process exits.
+// The SDK's read loop ends the session on any error from its reader, so a
+// message that fails to parse is handled exactly like a closed pipe: the
+// process exits, having written nothing, and the client sees EOF on a stream it
+// could still write to. One stray byte cost a client its whole session and its
+// accumulated context.
 //
-// That second half is a go-sdk limitation, recorded in
-// docs/development/upstream-bugs.md rather than worked around here, and this
-// test documents it rather than asserting it is correct. It is not correct.
-// JSON-RPC 2.0 defines -32700 Parse error for exactly this case, framing here
-// is one message per line so the next line is independent and resynchronizing
-// is trivial, and internal/jsonrpc2/conn.go's readIncoming nevertheless breaks
-// its loop on any read error, treating a malformed message like a closed pipe.
-// The client is left with EOF and no explanation for a stream it can still
-// write to.
+// JSON-RPC 2.0 has codes for both shapes of this, and the framing is one
+// message per line, so the next line is an independent message. serveStdio
+// therefore filters stdin ahead of the SDK: an unreadable line is answered and
+// dropped, and the session goes on. The underlying SDK behavior is unchanged
+// and recorded in docs/development/upstream-bugs.md.
 //
-// The practical cost on stdio is one client losing its session and its context
-// to a single stray byte. It is written down here so that a future SDK bump
-// that fixes it shows up as this test failing, which is the cheapest way to
-// find out.
-func TestMalformedInput_RecordsWhatActuallyHappens(t *testing.T) {
+// Every case checks the same two things — the answer carries the right code,
+// and the session still works afterwards — because either alone would miss the
+// point: a correct refusal on a dead session is no better than silence.
+func TestMalformedInput_IsAnsweredAndTheSessionSurvives(t *testing.T) {
 	gitlab := startFakeGitLab(t)
 
 	tests := []struct {
 		name string
 		body string
-		// survives records whether the session is still usable afterwards.
-		survives bool
+		// wantCode is the JSON-RPC error code the sender must receive, or 0
+		// when the input is dropped without an answer.
+		wantCode int
 	}{
-		{name: "an unknown method", body: `{"jsonrpc":"2.0","id":1,"method":"no/such/method","params":{}}`, survives: true},
-		{name: "a tool that does not exist", body: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"not_a_tool","arguments":{}}}`, survives: true},
-		{name: "not JSON at all", body: `{not json`, survives: false},
-		{name: "JSON carrying no jsonrpc version", body: `{"hello":"world"}`, survives: false},
+		{name: "an unknown method", body: `{"jsonrpc":"2.0","id":1,"method":"no/such/method","params":{}}`, wantCode: -32601},
+		{name: "a tool that does not exist", body: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"not_a_tool","arguments":{}}}`, wantCode: -32602},
+		{name: "not JSON at all", body: `{not json`, wantCode: -32700},
+		{name: "a truncated message", body: `{"jsonrpc":"2.0","id":1,"meth`, wantCode: -32700},
+		{name: "JSON carrying no jsonrpc version", body: `{"hello":"world"}`, wantCode: -32600},
+		{name: "a JSON array, which is not a message", body: `["jsonrpc","2.0"]`, wantCode: -32700},
+		{name: "a blank line is framing, not a message", body: ``, wantCode: 0},
 	}
 
 	for _, tt := range tests {
@@ -219,26 +217,45 @@ func TestMalformedInput_RecordsWhatActuallyHappens(t *testing.T) {
 			}
 
 			s.send(t, tt.body)
-			s.send(t, request(2, "tools/list", ""))
 
-			if tt.survives {
+			if tt.wantCode != 0 {
 				got := s.readMessage(t, 30*time.Second)
-				if answeredID(got) != 2 {
-					// The malformed input was answered first; read once more.
-					got = s.readMessage(t, 30*time.Second)
-					if answeredID(got) != 2 {
-						t.Fatalf("no answer to the follow-up call: %v", got)
-					}
+				code, ok := errorCode(got)
+				if !ok {
+					t.Fatalf("the input was not refused: %v", got)
 				}
-				return
+				if code != tt.wantCode {
+					t.Errorf("error code = %d, want %d: %v", code, tt.wantCode, got)
+				}
 			}
 
-			// The documented-but-wrong path: stdout closes with nothing on it.
-			if line, err := s.stdout.ReadString('\n'); err == nil {
-				t.Errorf("the session survived unreadable input and answered %q; if the SDK now recovers, this test and the upstream register entry are both out of date", line)
+			// The session has to still be usable, which is the half the SDK
+			// gets wrong on its own.
+			s.send(t, request(2, "tools/list", ""))
+			for {
+				got := s.readMessage(t, 30*time.Second)
+				if answeredID(got) == 2 {
+					if got["error"] != nil {
+						t.Fatalf("the session survived but stopped working: %v", got["error"])
+					}
+					return
+				}
 			}
 		})
 	}
+}
+
+// errorCode returns the JSON-RPC error code of a message, if it carries one.
+func errorCode(message map[string]any) (int, bool) {
+	raw, ok := message["error"].(map[string]any)
+	if !ok {
+		return 0, false
+	}
+	code, ok := raw["code"].(float64)
+	if !ok {
+		return 0, false
+	}
+	return int(code), true
 }
 
 // TestToolSurface_IsReadFromTheEnvironment pins the configuration path stdio
