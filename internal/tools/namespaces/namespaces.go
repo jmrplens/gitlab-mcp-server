@@ -119,7 +119,8 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 // Get retrieves a single namespace by ID or path.
 // Uses a raw HTTP request to work around upstream client-go issue where
 // GetNamespace expects a single JSON object but some GitLab versions
-// return an array for path-based lookups.
+// return an array for path-based lookups. Tracked, unreported so far, in
+// docs/development/upstream-bugs.md.
 func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Output, error) {
 	ns, _, err := client.GL().Namespaces.GetNamespace(input.ID, gl.WithContext(ctx))
 	if err != nil {
