@@ -171,6 +171,18 @@ var ErrInsufficientScope = errors.New("token lacks the required GitLab scope")
 // endpoint while holding a perfectly good credential.
 var ErrUnacceptedRecipient = errors.New("token was not issued to an OAuth application this deployment admits")
 
+// ErrRecipientUnverifiable reports that the recipient check could not be made:
+// introspection answered nothing, so the token's owning application is unknown.
+//
+// The request is still refused, because a pin that admits what it cannot verify
+// is not a pin. What must not happen is calling it a verdict. It is separate
+// from ErrUnacceptedRecipient so the caller does not tell the holder of a
+// perfectly admissible token that it belongs to another application, and does
+// not cache that non-answer: RejectedTokens.Record is documented for definitive
+// rejections only, since caching an upstream failure locks out a valid token
+// for the whole TTL over a transient outage.
+var ErrRecipientUnverifiable = errors.New("token recipient could not be verified")
+
 // insufficientScopeLimit bounds how much of a rejection body is read. The body
 // is attacker-adjacent — it comes from whatever host the request selected — and
 // nothing legitimate needs more than this to name an error code.
@@ -470,7 +482,9 @@ func acceptedRecipient(pinned []string, result introspection) error {
 		return nil
 	}
 	if !result.answered {
-		return fmt.Errorf("token recipient could not be verified: introspection did not answer: %w", ErrUnacceptedRecipient)
+		// Refused, but not judged. Introspection said nothing, so this is a
+		// failed check rather than a failed token.
+		return fmt.Errorf("introspection did not answer: %w", ErrRecipientUnverifiable)
 	}
 	if result.applicationUID == "" {
 		return fmt.Errorf("token names no OAuth application, and this deployment admits only tokens issued to its own: %w", ErrUnacceptedRecipient)

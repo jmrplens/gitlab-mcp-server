@@ -266,6 +266,24 @@ func (g *bearerGuard) classify(err error, ip, instance, token string) *gateFailu
 		}
 	}
 
+	// The recipient check could not be made. The request is refused, because a
+	// pin that admits what it cannot verify is not a pin, but it is reported as
+	// what it is: an upstream problem, not a verdict on the credential. So it
+	// carries 503 with Retry-After rather than 401, it is not cached, and it
+	// does not charge the failure budget. A transient introspection outage
+	// would otherwise lock a valid token out for the whole cache TTL while
+	// telling its holder the token belongs to somebody else.
+	if errors.Is(err, oauth.ErrRecipientUnverifiable) {
+		slog.Warn("token recipient could not be verified: introspection did not answer",
+			"token_suffix", safeTokenSuffix(token))
+		return &gateFailure{
+			status:  http.StatusServiceUnavailable,
+			code:    errCodeUpstreamUnavailable,
+			message: "This deployment admits only tokens issued to specific OAuth applications, and GitLab did not answer the introspection request needed to check this one. Retry shortly — the token itself has not been rejected.",
+			header:  newHeader(headerRetryAfter, strconv.Itoa(int(upstreamRetryAfter.Seconds()))),
+		}
+	}
+
 	// A token the instance accepts but this deployment does not admit, because
 	// --oauth-client-uid pins the OAuth applications it will serve. The status
 	// and RFC 6750 code are the same as for a rejected token — section 3.1

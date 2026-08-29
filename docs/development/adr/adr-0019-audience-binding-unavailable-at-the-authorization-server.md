@@ -79,6 +79,14 @@ around the pin, so an unanswered introspection, an absent uid and an unmatched
 uid are all refusals. The check runs before the token cache is written, so a
 refused token never becomes a cached identity.
 
+The three refusals are not the same refusal, though. An absent or unmatched uid
+is a verdict on the token, answered `401`. An unanswered introspection is a
+failed check: the token's application is unknown rather than wrong, so it is
+answered `503` with `Retry-After`, is not written to the rejected-token cache,
+and does not charge the authentication-failure budget. Collapsing the two would
+tell the holder of an admissible credential that it belongs to somebody else,
+and would keep saying so for the whole cache TTL after a transient outage.
+
 It is **off by default** because turning it on refuses personal access tokens
 outright, a PAT belongs to no application, and a PAT is a supported credential
 here, the one that makes the server usable from CI and from anything that cannot

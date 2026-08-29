@@ -125,7 +125,7 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
 Clients that launch servers with `npx` need no install at all — point them at
 `npx -y @jmrp.io/gitlab-mcp-server`.
 
-Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and, for a self-signed certificate, mount the CA and set `--env SSL_CERT_FILE=/path/to/ca-bundle.crt`; `GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative and OAuth mode refuses it).
+Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and, for a self-signed certificate, mount the CA and set `--env SSL_CERT_FILE=/path/to/ca-bundle.crt`; `GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative, and OAuth mode refuses it for a non-loopback instance).
 
 ### Guided setup (any client, no flags to remember)
 
