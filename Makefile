@@ -1,5 +1,5 @@
 .PHONY: build build-all build-linux-amd64 build-linux-arm64 build-windows-amd64 build-windows-arm64 build-darwin-amd64 build-darwin-arm64 \
-	run brand brand-check brand-rasters test test-short test-race test-pkg test-integration test-e2e test-e2e-http test-e2e-stdio test-e2e-collector ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
+	run brand brand-check brand-rasters test test-short test-race test-pkg test-integration test-e2e test-e2e-http test-e2e-stdio ensure-gotestsum test-e2e-docker test-e2e-docker-enterprise test-e2e-gitlab-com \
 	validate-http-stateless validate-http-stateless-docker \
 	orbit-setup-fixtures orbit-wait-indexer orbit-run-live-tests orbit-ensure-token \
 	eval-surfaces-docker eval-surfaces-docker-enterprise eval-surfaces-docker-enterprise-ce eval-surfaces-docker-enterprise-all eval-surfaces-docker-enterprise-all-fixtures coverage \
@@ -30,7 +30,7 @@ GO_ANALYSIS_PKGS=./...
 # `stdioe2e` until the stdio suite did, and `orbitlive` had never been listed
 # at all, so test/e2e/orbit had gone unlinted since it was written. The same
 # list lives in cmd/gen_testing_docs as e2eTags, for the same reason.
-GO_ANALYSIS_TAGS=e2e,collectore2e,httpe2e,orbitlive,stdioe2e
+GO_ANALYSIS_TAGS=e2e,httpe2e,orbitlive,stdioe2e
 PROJECT_GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 GO_TOOLCHAIN ?= go$(PROJECT_GO_VERSION)
 export GOTOOLCHAIN := $(GO_TOOLCHAIN)
@@ -164,29 +164,6 @@ test-e2e-http: ensure-gotestsum
 	  --format testdox \
 	  --junitfile $(E2E_REPORT_DIR)/e2e-http-junit.xml \
 	  -- -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/'
-
-## test-e2e-collector: run this server's telemetry into a real OpenTelemetry Collector (Docker required; skips cleanly without it).
-# Deliberately absent from the push-triggered CI jobs, which run the httpe2e and
-# stdioe2e tags and never this one. Those two need no daemon; this one pulls a
-# container image, which belongs with the Docker-mode targets rather than in the
-# path every commit waits on.
-test-e2e-collector: ensure-gotestsum
-	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c '$(GOTESTSUM) \
-	  --format testdox \
-	  --junitfile $(E2E_REPORT_DIR)/e2e-collector-junit.xml \
-	  -- -tags collectore2e -count=1 -timeout 900s ./test/e2e/collector/'
-
-test-e2e: ensure-gotestsum
-	@echo "WARNING: This will run E2E tests against the GitLab instance configured in .env (GITLAB_URL)."
-	@echo "         Tests create and delete projects, groups, users, and other resources."
-	@read -p "Are you sure you want to continue? [y/N] " confirm && [ "$$confirm" = "y" ] || { echo "Aborted."; exit 1; }
-	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c '$(GOTESTSUM) \
-	  --format testdox \
-	  --junitfile $(E2E_REPORT_DIR)/e2e-junit.xml \
-	  --jsonfile $(E2E_REPORT_DIR)/e2e-log.json \
-	  -- -tags e2e -timeout 120s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-output.txt'
 
 ## validate-http-stateless: smoke-validate stateless streamable HTTP with the compiled binary (reads GITLAB_URL, GITLAB_TOKEN from .env)
 validate-http-stateless:

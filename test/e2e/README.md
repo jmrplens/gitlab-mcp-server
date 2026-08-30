@@ -9,7 +9,6 @@ There are five modules, answering different questions:
 | `test/e2e/suite`     | `e2e`          | yes          | Tool behaviour against a real instance, over in-memory MCP transport                  |
 | `test/e2e/http`      | `httpe2e`      | no           | The HTTP transport itself: cross-origin, preflight, auth modes, rate limiting, proxy  |
 | `test/e2e/stdio`     | `stdioe2e`     | no           | The stdio transport: pipes, process lifetime, exit status, environment configuration  |
-| `test/e2e/collector` | `collectore2e` | no           | Telemetry against a real OpenTelemetry Collector in Docker: acceptance and span shape |
 | `test/e2e/orbit`     | `orbitlive`    | gitlab.com   | The experimental Knowledge Graph API                                                  |
 
 Each tag has to be listed in `GO_ANALYSIS_TAGS` in the Makefile and in `e2eTags` in `cmd/gen_testing_docs`, or the module is invisible to `go vet`, to `golangci-lint` and to the generated test metrics. A file behind a tag nothing names is analysed by nothing.
@@ -35,18 +34,6 @@ make test-e2e-stdio
 Also no GitLab and no credentials. It builds the binary, starts it with the environment each case needs, and speaks JSON-RPC to it over real pipes.
 
 stdio is this project's primary transport and nothing anywhere drove it until this module existed. The in-memory suite runs in one process, so it has no pipes, no separation of stdout from stderr, no process to exit, and no environment-variable configuration, since HTTP mode takes flags instead. Every case here corresponds to something that shipped broken and was found by hand against a binary: a nil dereference that killed the process on an ordinary eliciting tool call; a keepalive ping that closed the session of any client speaking `2026-07-28` after 45 idle seconds, held in place by a unit test asserting the ping ought to be there; an exit status of 1 on every normal shutdown; and a log stream whose steady state was entirely the SDK's own session chatter.
-
-## Collector module
-
-```bash
-make test-e2e-collector
-```
-
-No GitLab and no credentials either, but Docker is required: it starts a pinned `otel/opentelemetry-collector-contrib` with an OTLP receiver and file exporters, points the real binary at it, drives traffic, and asserts on the OTLP JSON the collector wrote after parsing what it was sent. Without Docker it **skips**, with the reason, rather than modeling a receiver.
-
-It exists because every other telemetry test in this repository is graded by code we wrote. The in-process receiver in `test/e2e/http` answers `200` to whatever it is handed and stores the bytes, which is right for the two questions it asks (was the collector credential sent, did anything private leak) and is no evidence that the export is well formed. A malformed protobuf, a resource missing an attribute a backend requires, or a metric whose unit contradicts its name all pass a stub and all ship telemetry an operator cannot use. So this module asserts acceptance and shape, and deliberately repeats none of the credential or privacy assertions.
-
-Unlike the two transport modules it is **not** in the push-triggered CI jobs, because it pulls a container image. It belongs with the Docker-mode targets.
 
 ## Quick Start
 

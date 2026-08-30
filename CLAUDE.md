@@ -260,7 +260,6 @@ go test -v -tags e2e -timeout 300s ./test/e2e/suite/   # Run all e2e tests
 make test-e2e                                          # Same via Makefile
 make test-e2e-http                                     # HTTP transport module: no GitLab, no credentials
 make test-e2e-stdio                                    # stdio transport module: no GitLab, no credentials
-make test-e2e-collector                                # telemetry into a real OpenTelemetry Collector (Docker; skips without it)
 make test-e2e-docker                                   # Ephemeral GitLab CE + runner + fixture service (Docker, ~4 GB RAM)
 go test -tags e2e -c -o NUL ./test/e2e/suite/           # Compile-only check (Windows)
 go test -tags e2e -c -o /dev/null ./test/e2e/suite/     # Compile-only check (Linux)
