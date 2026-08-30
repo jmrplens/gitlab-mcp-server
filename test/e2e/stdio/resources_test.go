@@ -70,14 +70,31 @@ func TestResourceList_SaysHowMuchOfTheCollectionItReturned(t *testing.T) {
 	if !ok {
 		t.Fatalf("no pageInfo in _meta: %v", meta)
 	}
-	if complete, _ := page["complete"].(bool); complete {
+	// Each field is required to be present and of the right type before its
+	// value is read. A comma-ok assertion that falls through to the zero value
+	// would let an absent "complete" read as false, which is the answer this
+	// case is looking for: the test would pass on a server that disclosed
+	// nothing at all.
+	complete, ok := page["complete"].(bool)
+	if !ok {
+		t.Fatalf("no boolean \"complete\" in pageInfo, so nothing states whether the read is partial: %v", page)
+	}
+	if complete {
 		t.Errorf("the read claims to be complete while returning %d of %d: %v", len(groups), fakeGroupTotal, page)
 	}
-	if total, _ := page["total"].(float64); int(total) != fakeGroupTotal {
-		t.Errorf("total = %v, want %d so a consumer knows what it is missing", page["total"], fakeGroupTotal)
+	total, ok := page["total"].(float64)
+	if !ok {
+		t.Fatalf("no numeric \"total\" in pageInfo: %v", page)
 	}
-	if returned, _ := page["returned"].(float64); int(returned) != len(groups) {
-		t.Errorf("returned = %v, want %d", page["returned"], len(groups))
+	if int(total) != fakeGroupTotal {
+		t.Errorf("total = %v, want %d so a consumer knows what it is missing", total, fakeGroupTotal)
+	}
+	returned, ok := page["returned"].(float64)
+	if !ok {
+		t.Fatalf("no numeric \"returned\" in pageInfo: %v", page)
+	}
+	if int(returned) != len(groups) {
+		t.Errorf("returned = %v, want %d", returned, len(groups))
 	}
 }
 
@@ -128,10 +145,12 @@ func TestCacheHints_ReachTheWire(t *testing.T) {
 			if scope != tc.wantScope {
 				t.Errorf("cacheScope = %q, want %q", scope, tc.wantScope)
 			}
-			if ttl, present := result["ttlMs"]; !present {
-				t.Errorf("%s carries no ttlMs, so a client has no freshness window to honor", tc.method)
-			} else if ttlMs, _ := ttl.(float64); ttlMs < 0 {
-				t.Errorf("ttlMs = %v, and the specification requires >= 0", ttl)
+			ttlMs, ok := result["ttlMs"].(float64)
+			if !ok {
+				t.Fatalf("%s carries no numeric ttlMs, so a client has no freshness window to honor: %v", tc.method, result["ttlMs"])
+			}
+			if ttlMs < 0 {
+				t.Errorf("ttlMs = %v, and the specification requires >= 0", ttlMs)
 			}
 		})
 	}
@@ -150,35 +169,52 @@ func TestResourceList_DescriptionsDoNotPromiseEverything(t *testing.T) {
 	env["CAPABILITY_SURFACE"] = "full"
 	s := startSession(t, env)
 
-	got := s.call(t, request(1, "resources/templates/list", ""))
-	if got["error"] != nil {
-		t.Fatalf("resources/templates/list failed: %v", got["error"])
-	}
-	result, _ := got["result"].(map[string]any)
-	templates, _ := result["resourceTemplates"].([]any)
-	if len(templates) == 0 {
-		t.Fatalf("no templates listed: %v", result)
-	}
-
-	for _, entry := range templates {
-		template, _ := entry.(map[string]any)
-		description, _ := template["description"].(string)
-		if strings.Contains(description, "List all ") {
-			t.Errorf("%v promises to list all of a collection it reads one page of: %q",
-				template["uriTemplate"], description)
-		}
-	}
+	templates := entriesOf(t, s, request(1, "resources/templates/list", ""), "resourceTemplates")
+	assertNoCompletenessPromise(t, templates, "uriTemplate")
 
 	// The same claim on the static resources, which resources/list carries.
-	listed := s.call(t, request(2, "resources/list", ""))
-	listedResult, _ := listed["result"].(map[string]any)
-	resources, _ := listedResult["resources"].([]any)
-	for _, entry := range resources {
-		resource, _ := entry.(map[string]any)
-		description, _ := resource["description"].(string)
+	resources := entriesOf(t, s, request(2, "resources/list", ""), "resources")
+	assertNoCompletenessPromise(t, resources, "uri")
+}
+
+// entriesOf calls a listing method and returns the named array from its result.
+//
+// It fails on anything unexpected rather than falling through to an empty
+// slice: a listing that errored would otherwise leave nothing to iterate, and
+// every assertion made over it would pass by not running.
+func entriesOf(t *testing.T, s *session, req, field string) []any {
+	t.Helper()
+
+	got := s.call(t, req)
+	if got["error"] != nil {
+		t.Fatalf("listing failed: %v", got["error"])
+	}
+	result, ok := got["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("no result object: %v", got)
+	}
+	entries, ok := result[field].([]any)
+	if !ok || len(entries) == 0 {
+		t.Fatalf("no %s listed: %v", field, result)
+	}
+	return entries
+}
+
+// assertNoCompletenessPromise fails for any entry whose description claims to
+// return a whole collection.
+func assertNoCompletenessPromise(t *testing.T, entries []any, idField string) {
+	t.Helper()
+
+	for _, entry := range entries {
+		listing, ok := entry.(map[string]any)
+		if !ok {
+			t.Errorf("a listing entry is not an object: %v", entry)
+			continue
+		}
+		description, _ := listing["description"].(string)
 		if strings.Contains(description, "List all ") {
 			t.Errorf("%v promises to list all of a collection it reads one page of: %q",
-				resource["uri"], description)
+				listing[idField], description)
 		}
 	}
 }

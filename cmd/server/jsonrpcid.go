@@ -40,10 +40,28 @@ func requestIDFromBody(r *http.Request) json.RawMessage {
 	}
 
 	var probe struct {
-		ID json.RawMessage `json:"id"`
+		JSONRPC string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
 	}
-	limited := http.MaxBytesReader(nil, r.Body, maxIDProbeBytes)
-	if err := json.NewDecoder(limited).Decode(&probe); err != nil {
+	decoder := json.NewDecoder(http.MaxBytesReader(nil, r.Body, maxIDProbeBytes))
+	if err := decoder.Decode(&probe); err != nil {
+		return nil
+	}
+	// Decode stops at the end of the first JSON value, so a body like
+	// `{"id":1} trailing` decodes without complaint. That body is not a
+	// request, and an id lifted out of it is not the id of anything: require
+	// the value to be the whole of what was sent.
+	if decoder.More() {
+		return nil
+	}
+	// The same rule the stdio filter applies in [refuseUnreadable]: an object
+	// that does not announce itself as JSON-RPC 2.0 is not a message, so there
+	// is no request to correlate a refusal with. Stopping here rather than also
+	// requiring "method" is deliberate. A body carrying jsonrpc and an id but
+	// no method is a malformed request, and the specification's own exception
+	// covers exactly that case; refusing to echo would be defensible too, but
+	// it would refuse an id the sender can still match.
+	if probe.JSONRPC != "2.0" {
 		return nil
 	}
 	if !isRequestID(probe.ID) {

@@ -320,8 +320,8 @@ func TestLimit_RateLimitRPS(t *testing.T) {
 		// The claim the previous version of this case got wrong. Asserted from
 		// the server's own startup line, because fifteen served calls are
 		// equally consistent with a limiter of ten and with no limiter at all.
-		if logs := srv.logs(); !strings.Contains(logs, "tools/call rate limit enabled") {
-			t.Errorf("HTTP mode started with no rate limit; the default is 10 rps, burst 40:\n%s", logs)
+		if awaitLog(t, srv, "tools/call rate limit enabled") == "" {
+			t.Errorf("HTTP mode started with no rate limit; the default is 10 rps, burst 40:\n%s", srv.logs())
 		}
 	})
 }

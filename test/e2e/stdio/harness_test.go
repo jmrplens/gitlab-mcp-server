@@ -309,11 +309,34 @@ func request(id int, method, params string) string {
 	return fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":%q,"params":%s}`, id, method, params)
 }
 
-// startFakeGitLab serves the handful of endpoints the server probes at startup
-// plus one project, so a tool call has something to answer with.
-func startFakeGitLab(t *testing.T) *httptest.Server {
+// fakeGitLab is a running fake instance and what a test can observe about it.
+type fakeGitLab struct {
+	// URL is the base address to point the server at.
+	URL string
+	// entered is closed the first time a request reaches the blocking
+	// endpoint, so a test can wait for a call to be genuinely in flight
+	// instead of guessing at a duration.
+	entered chan struct{}
+	arrived sync.Once
+}
+
+// awaitInFlightCall blocks until a call has reached the blocking endpoint.
+func (f *fakeGitLab) awaitInFlightCall(t *testing.T, within time.Duration) {
 	t.Helper()
 
+	select {
+	case <-f.entered:
+	case <-time.After(within):
+		t.Fatalf("no call reached the blocking endpoint within %s, so nothing was in flight to test", within)
+	}
+}
+
+// startFakeGitLab serves the handful of endpoints the server probes at startup
+// plus one project, so a tool call has something to answer with.
+func startFakeGitLab(t *testing.T) *fakeGitLab {
+	t.Helper()
+
+	fake := &fakeGitLab{entered: make(chan struct{})}
 	blocked := make(chan struct{})
 
 	mux := http.NewServeMux()
@@ -353,6 +376,11 @@ func startFakeGitLab(t *testing.T) *httptest.Server {
 	// tool call in flight while it shuts the server down. It returns as soon as
 	// the caller goes away, so a dead server does not leave it parked.
 	mux.HandleFunc("/api/v4/projects/99", func(w http.ResponseWriter, r *http.Request) {
+		// Announcing arrival is what lets a caller know the call is genuinely
+		// in flight. A test that slept instead was asserting on the scheduler:
+		// if the request had not started yet, closing stdin exercised the idle
+		// path and the case passed without testing anything it claimed to.
+		fake.arrived.Do(func() { close(fake.entered) })
 		select {
 		case <-blocked:
 		case <-r.Context().Done():
@@ -364,11 +392,12 @@ func startFakeGitLab(t *testing.T) *httptest.Server {
 	})
 
 	srv := httptest.NewServer(mux)
+	fake.URL = srv.URL
 	t.Cleanup(srv.Close)
 	// Registered after srv.Close so it runs before it: Close waits for
 	// outstanding requests, and one parked on this channel would hold it.
 	t.Cleanup(func() { close(blocked) })
-	return srv
+	return fake
 }
 
 func writeJSON(w http.ResponseWriter, body string) {

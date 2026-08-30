@@ -36,6 +36,15 @@ func TestRequestIDFromBody_RecoversOnlyALegalRequestID(t *testing.T) {
 		{"id after params", http.MethodPost, `{"jsonrpc":"2.0","method":"tools/list","params":{"a":1},"id":7}`, "7"},
 
 		{"notification", http.MethodPost, `{"jsonrpc":"2.0","method":"notifications/initialized"}`, ""},
+		// Decode stops at the end of the first value, so without an explicit
+		// end-of-input check these would yield an id lifted out of something
+		// that is not a request.
+		{"trailing garbage", http.MethodPost, `{"jsonrpc":"2.0","id":1,"method":"tools/list"} and then some`, ""},
+		{"a second message on the same body", http.MethodPost, `{"jsonrpc":"2.0","id":1}{"jsonrpc":"2.0","id":2}`, ""},
+		// An object that does not announce itself as JSON-RPC is not a message,
+		// which is the rule the stdio filter already applies.
+		{"no jsonrpc member", http.MethodPost, `{"id":1,"method":"tools/list"}`, ""},
+		{"wrong jsonrpc version", http.MethodPost, `{"jsonrpc":"1.0","id":1,"method":"tools/list"}`, ""},
 		{"null id", http.MethodPost, `{"jsonrpc":"2.0","id":null,"method":"tools/list"}`, ""},
 		{"object id", http.MethodPost, `{"jsonrpc":"2.0","id":{"a":1},"method":"tools/list"}`, ""},
 		{"array id", http.MethodPost, `{"jsonrpc":"2.0","id":[1],"method":"tools/list"}`, ""},

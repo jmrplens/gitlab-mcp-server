@@ -29,7 +29,10 @@ This also bounds what a subscription can see: a watch on one of the three subscr
 
 Most single-object resources can also be **subscribed to**: the server polls
 them and sends `notifications/resources/updated` when their content changes.
-Collections are deliberately not subscribable — see
+Open-ended collections are deliberately not subscribable, since they change for
+reasons a subscriber did not ask about; the three lists belonging to a single
+parent (a pipeline's jobs, a merge request's notes, its discussions) are, within
+the page the poll reads. See
 [Resource subscriptions](capabilities/subscriptions.md). Every subscribable
 template's description ends with a machine-appended marker sentence
 (`Subscribable: subscriptions/listen (protocol 2026-07-28); resources/subscribe

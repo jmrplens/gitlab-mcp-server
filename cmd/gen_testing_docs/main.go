@@ -49,13 +49,20 @@ const (
 	e2eSuiteRun     = "./test/e2e/suite/"
 	e2ePath         = "test/e2e"
 	e2eDisplay      = "test/e2e/"
-	// orbitliveTag reveals test/e2e/orbit to `go list`: every file in that
-	// package is behind it, so without the tag the package reports no Go
-	// files and drops out of the listing entirely — which is why its four
-	// live-test functions were missing from these totals while the README,
-	// which reads the git index, counted them. The tag gates nothing outside
-	// that directory, so cmd/ and internal/ resolve identically with it.
-	orbitliveTag = "orbitlive"
+	// e2eTags reveal the build-tagged e2e packages to `go list`. Every file in
+	// each of them is behind its tag, so without the tag the package reports
+	// no Go files and drops out of the listing entirely, which is why its test
+	// functions went missing from these totals while the README, which reads
+	// the git index, counted them.
+	//
+	// This has now happened three times: to test/e2e/orbit behind orbitlive,
+	// and then to test/e2e/http and test/e2e/stdio, whose fifteen files were
+	// absent from every number here. A suite added behind a new tag has to be
+	// added to this list, exactly as it has to be added to GO_ANALYSIS_TAGS in
+	// the Makefile, or the tooling silently measures a smaller project than
+	// the one in the repository. None of these tags gates anything outside
+	// test/e2e, so cmd/ and internal/ resolve identically with them.
+	e2eTags = "e2e,orbitlive,httpe2e,stdioe2e"
 
 	goFileSuffix     = ".go"
 	goTestFileSuffix = "_test.go"
@@ -245,7 +252,7 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 
 	metrics := repositoryMetrics{
 		NamingCounts: map[string]int{},
-		E2ENote:      "E2E tests are counted statically from test/e2e because they require a live GitLab to execute: test/e2e/suite needs a provisioned instance, and test/e2e/orbit needs a gitlab.com token for the Knowledge Graph API.",
+		E2ENote:      "E2E tests are counted statically from test/e2e because two of the four modules need something this run does not have: test/e2e/suite needs a provisioned GitLab instance and test/e2e/orbit needs a gitlab.com token for the Knowledge Graph API, while test/e2e/http and test/e2e/stdio need neither and run on every CI push. The count here is of `_test.go` files; the README's end-to-end row counts every tracked `.go` file under test/e2e, so it is higher by the non-test helpers (`doc.go`, `name_helpers.go`).",
 	}
 
 	coverageByPackage := map[string]coverageValue{}
@@ -317,7 +324,7 @@ func collectMetrics(ctx context.Context, opts options) (repositoryMetrics, error
 
 // listPackages returns all packages covered by the testing reference document.
 func listPackages(ctx context.Context) ([]packageInfo, error) {
-	output, err := runGo(ctx, []string{"list", "-tags", orbitliveTag, "-f", "{{.ImportPath}}\t{{.Dir}}\t{{.Name}}", cmdPattern, internalPattern, e2ePattern})
+	output, err := runGo(ctx, []string{"list", "-tags", e2eTags, "-f", "{{.ImportPath}}\t{{.Dir}}\t{{.Name}}", cmdPattern, internalPattern, e2ePattern})
 	if err != nil {
 		return nil, fmt.Errorf("list packages: %w", err)
 	}
