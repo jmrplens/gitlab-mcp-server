@@ -14,7 +14,7 @@
 gitlab-mcp-server [flags]
 ```
 
-When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio mode**. With no token and an interactive terminal, it prints what it needs and waits, rather than starting a session it cannot serve.
+When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio mode**. With an interactive terminal and either `GITLAB_URL` or `GITLAB_TOKEN` still missing after the dotenv files are read, it prints what it needs and waits, rather than starting a session it cannot serve.
 
 ---
 
@@ -69,11 +69,6 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-stateless`              | bool     | `true`                     | Sessionless streamable HTTP (SEP-2567 / protocol 2026-07-28): no `Mcp-Session-Id` tracking, every POST is self-contained, GET/DELETE return `405`. Use `-stateless=false` for legacy stateful sessions. See [HTTP Server Mode — Stateless Mode](../guides/http-server-mode.md#stateless-mode)                                                                                                           |
 | `-json-response`          | bool     | `false`                    | Return `application/json` response bodies instead of `text/event-stream` (SSE)                                                                                                                                                                                                                                                                                                                          |
 | `-max-request-body-bytes` | int64    | `0`                        | Maximum streamable HTTP request body size in bytes; `0` uses the SDK default (4 MiB). Oversized bodies are rejected with `413`; negative values are rejected at startup                                                                                                                                                                                                                                 |
-
-### Auto-Update
-
-| Flag | Type | Default | Description |
-| ---- | ---- | ------- | ----------- |
 
 ---
 

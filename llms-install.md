@@ -109,8 +109,8 @@ at install time.
 }
 ```
 
-Node.js 18 or newer is required. Self-update is off on this path (npm owns the
-binary), so updates come from `npm update -g @jmrp.io/gitlab-mcp-server`. The
+Node.js 18 or newer is required. The server never replaces its own binary, so
+updates come from `npm update -g @jmrp.io/gitlab-mcp-server`. The
 Linux packages need glibc: on musl systems such as Alpine, use Method A.
 
 ## Step 3 — Optional environment variables

@@ -76,9 +76,6 @@ That shape is what determines whether something counts as a vulnerability here.
   something the operator did not expose is a vulnerability.
 - **Server-side request forgery.** A caller-controlled value that redirects an
   API request away from the configured `GITLAB_URL` to an internal address.
-- **Update-channel compromise.** Auto-update fetches and replaces the running
-  binary. A way to make it install an unverified or substituted artifact is a
-  vulnerability regardless of how the release was produced.
 
 **Assumptions we make.** The operator is trusted and chooses the token and its
 scope; the GitLab instance enforces its own authorization, and this server never
@@ -97,7 +94,6 @@ under *Out of scope* below.
 - TLS configuration handling and `GITLAB_SKIP_TLS_VERIFY` semantics.
 - Error messages and logs that could leak credentials or sensitive metadata.
 - Released binaries and Docker images published from this repository.
-- Auto-update mechanism (signature verification, integrity checks).
 
 ### Out of scope
 

@@ -39,9 +39,9 @@
 | Completion argument types | 17                                                                                                           |
 | MCP Capabilities          | 4 (progress, elicitation, completions, resource subscriptions)                     |
 | MCP Icons                 | 51 icons (50 domain + brand mark), each a 3-entry `[]mcp.Icon`: one SVG (base64 data URI, `Sizes: ["any"]`, `currentColor`) plus light/dark 16×16 lossless WebP fallbacks (`Theme`-tagged, `cmd/gen_icon_webp`) for clients that reject SVG. The brand mark is the generated "fan-out" (`cmd/gen_brand` → `brandmark_gen.go`), original artwork replacing the former tanuki |
-| Source files (tools)      | 756 non-test Go files under `internal/tools/`                                                                |
-| Test files (tools)        | 362 test files under `internal/tools/`                                                                       |
-| Go packages               | 234 total; 176 under `internal/tools/...`                                                                    |
+| Source files (tools)      | 753 non-test Go files under `internal/tools/`                                                                |
+| Test files (tools)        | 359 test files under `internal/tools/`                                                                       |
+| Go packages               | 233 total; 175 under `internal/tools/...`                                                                    |
 
 ### Orbit live tests
 
@@ -85,7 +85,7 @@ gitlab-mcp-server/
 │   ├── subscriptions/          # resources/subscribe: polled watchers, cadence, leases (ADR-0015)
 │   ├── toolutil/                # Shared tool utilities (errors, pagination, markdown, logging)
 │   ├── testutil/                # Shared test helpers (NewTestClient, RespondJSON)
-│   ├── tools/                   # Tool orchestration layer + 176 internal/tools packages
+│   ├── tools/                   # Tool orchestration layer + 175 internal/tools packages
 │   │   ├── register.go          # RegisterAll() — projects individual tools from the canonical action catalog
 │   │   ├── register_meta.go     # RegisterAllMeta() — registers catalog-backed meta groups and standalone surfaces
 │   │   ├── dynamic/             # Low-token dynamic find/execute surface over catalog routes
@@ -196,7 +196,7 @@ Every documentation example must name a tool the surface it shows actually regis
 
 ### Error handling in tool handlers
 
-Four error wrapping functions in `internal/toolutil/errors.go`, used across the 176 packages under `internal/tools/`:
+Four error wrapping functions in `internal/toolutil/errors.go`, used across the 175 packages under `internal/tools/`:
 
 - `WrapErr(op, err)` — read-only operations (list, get, search). Generic classification only.
 - `WrapErrWithMessage(op, err)` — mutating operations (create, update, delete). Includes GitLab-specific error detail via `ExtractGitLabMessage`.
@@ -575,7 +575,7 @@ ADRs document key decisions in `docs/development/adr`:
 
 | ADR      | Decision                                                       | Status                                       |
 | -------- | -------------------------------------------------------------- | -------------------------------------------- |
-| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (176 `internal/tools` packages; tools by tier: ~847 Free/CE, ~999 Premium, ~1065 Ultimate self-managed, ~1071 GitLab.com Ultimate) |
+| ADR-0004 | Modular sub-packages under `internal/tools/{domain}/`          | Accepted (175 `internal/tools` packages; tools by tier: ~847 Free/CE, ~999 Premium, ~1065 Ultimate self-managed, ~1071 GitLab.com Ultimate) |
 | ADR-0006 | Raw GraphQL.Do() for domains without client-go service wrappers | Accepted (7 GraphQL-only domains)             |
 | ADR-0007 | Rich error semantics for LLM-actionable diagnostics            | Accepted (WrapErrWithMessage, WrapErrWithHint) |
 | ADR-0009 | Progressive GraphQL migration strategy                         | Accepted (trigger-based REST→GraphQL migration) |
@@ -586,7 +586,7 @@ ADRs document key decisions in `docs/development/adr`:
 
 ### Modular tools sub-packages (ADR-0004)
 
-The `internal/tools/` package family is split into 176 packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
+The `internal/tools/` package family is split into 175 packages. Runtime tool surfaces are projected from canonical `ActionSpec` and surface specs. Package-local `RegisterTools` functions have been removed for ordinary GitLab API actions; the catalog-first runtime is the exclusive registration model. This provides:
 
 - Package-level namespace eliminates need for domain prefixes on types (`branches.Output` vs old `BranchOutput`)
 - Each sub-package is independently testable with isolated `httptest` mocks

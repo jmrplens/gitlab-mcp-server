@@ -116,7 +116,7 @@ Next steps:
        claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- $BIN_NAME
      (self-managed GitLab: add  --env GITLAB_URL=https://gitlab.example.com)
   2. Or configure another MCP client by hand:
-       https://jmrp.io/docs/gitlab-mcp-server/guides/ide-configuration/
+       https://jmrp.io/docs/gitlab-mcp-server/configuration/
 
 Running $BIN_NAME with no token prints what it needs and waits, so you can
 check the install without configuring anything.

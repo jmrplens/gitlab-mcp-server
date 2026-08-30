@@ -329,13 +329,27 @@ func main() {
 		return
 	}
 
-	// Started by hand with nothing configured: say what this is and wait, so
-	// a double-clicked window does not close before it can be read. An MCP
-	// client never reaches this, because it connects pipes rather than a
-	// terminal, which is the same test the setup wizard used to gate on.
-	if !useHTTP && !showHelp && !showVersion && isInteractiveTerminal() &&
-		os.Getenv("GITLAB_TOKEN") == "" && os.Getenv("GITLAB_URL") == "" {
-		firstRunGuidance(os.Stdout, os.Stdin, version)
+	// Started by hand without the credentials stdio mode needs: say what this
+	// is and wait, so a double-clicked window does not close before it can be
+	// read. An MCP client never reaches this, because it connects pipes rather
+	// than a terminal.
+	//
+	// The dotenv files are loaded first, and that ordering is the whole
+	// correctness of the check. config.Load reads a CWD .env and
+	// ~/.gitlab-mcp-server.env, so a deployment that keeps its token out of the
+	// client configuration is configured; asking os.Getenv before those files
+	// are read would tell this person their server needs setting up and then
+	// refuse to start it, in the arrangement the documentation recommends.
+	//
+	// Either value missing is enough, not both. Supplying one and not the other
+	// fails inside config.Load with a JSON error line on stderr, which on a
+	// double-clicked Windows console is a window that flashes and closes: the
+	// exact outcome this screen exists to prevent, reached by a path that used
+	// to bypass it.
+	config.LoadEnvFiles()
+	if !useHTTP && isInteractiveTerminal() &&
+		(os.Getenv("GITLAB_TOKEN") == "" || os.Getenv("GITLAB_URL") == "") {
+		firstRunGuidance(os.Stderr, os.Stdin, version)
 		return
 	}
 

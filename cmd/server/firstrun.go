@@ -28,6 +28,13 @@ func isInteractiveTerminal() bool {
 // from is a message nobody reads. This blocks on a line from stdin, which is
 // safe because it only runs when stdin is a terminal.
 //
+// It writes to stderr rather than stdout, and that is not cosmetic. On the
+// stdio transport stdout carries JSON-RPC and nothing else, and a single stray
+// line ends the session. Writing the one message that exists to be read by a
+// human onto the one stream reserved for a machine would be a defect waiting
+// for the guard above it to be widened by accident. A console window shows
+// stderr just as readily.
+//
 // It replaced an interactive setup wizard that offered a web UI, a TUI and a
 // prompt flow, and wrote a configuration file. That was twelve thousand lines
 // and forty-five packages to configure two environment variables that almost
@@ -52,7 +59,7 @@ per-client JSON, and the OAuth alternative if you would rather not paste a
 token at all, are here:
 
   %s/getting-started/
-  %s/guides/ide-configuration/
+  %s/configuration/
 
 For every flag and environment variable this build accepts:
 

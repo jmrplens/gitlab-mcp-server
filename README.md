@@ -339,7 +339,7 @@ Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs
 
 | Document                                              | Description                                                                            |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [Getting Started](docs/getting-started.md)            | Download, setup wizard, per-client configuration                                       |
+| [Getting Started](docs/getting-started.md)            | Download, install, per-client configuration                                            |
 | [IDE Configuration](docs/guides/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                 |
 | [Configuration](docs/reference/configuration.md)      | Environment variables, transport modes, TLS                                            |
 | [Environment Variables](docs/reference/env.md)        | Exhaustive environment variable table with defaults and examples                       |
@@ -401,7 +401,7 @@ The server includes retry logic with backoff for GitLab API rate limits. Errors 
 <details>
 <summary><strong>Which AI clients are supported?</strong></summary>
 
-Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. The built-in setup wizard can auto-configure most clients.
+Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. Configuration lives in your MCP client's own JSON; the per-client examples are in the documentation.
 </details>
 
 ## Building from Source
@@ -446,21 +446,21 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       977 |     202,253 |
-| Unit tests (`_test.go`)  |       538 |     307,142 |
-| End-to-end tests         |       189 |      51,342 |
-| **Total**                | **1,704** | **560,737** |
+| Source (`.go`, non-test) |       977 |     202,349 |
+| Unit tests (`_test.go`)  |       538 |     307,335 |
+| End-to-end tests         |       189 |      51,408 |
+| **Total**                | **1,704** | **561,092** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,660 |
-| — exported (public)             |  2,642 |
-| — unexported (private)          |  5,018 |
-| Unit test functions (`TestXxx`) | 11,573 |
+| Source functions                |  7,662 |
+| — exported (public)             |  2,643 |
+| — unexported (private)          |  5,019 |
+| Unit test functions (`TestXxx`) | 11,582 |
 | Subtests (`t.Run(...)`)         |  3,030 |
-| End-to-end test functions       |    488 |
+| End-to-end test functions       |    489 |
 
 ### Ratios worth noting
 
@@ -468,15 +468,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.52× more tests than code |
 | Average source file length         |                 ~207 lines |
-| Average test file length           |                 ~570 lines |
-| Comment lines in source            |  25,356 (~12.5% of source) |
+| Average test file length           |                 ~571 lines |
+| Comment lines in source            |  25,418 (~12.6% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,518 |
+| `if err != nil` checks             | 6,521 |
 | `defer` statements                 |   967 |
 | `struct` types defined             | 2,734 |
 | `//nolint` suppressions            |   249 |
@@ -501,8 +501,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,677 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,653 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,679 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,655 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

@@ -7,17 +7,35 @@
 # ALLOWLIST below. Any advisory not on the list fails the build, so newly
 # introduced (fixable) vulnerabilities are never silently ignored.
 #
-# Accepted advisories (keep in sync with docs/development/static-analysis.md):
-#   None. The list was emptied when the self-update subsystem was removed: it
-#   held only GO-2026-5932, for golang.org/x/crypto/openpgp, which entered the
-#   build through github.com/creativeprojects/go-selfupdate. That advisory
-#   covers every version of the module ("introduced: 0", "Fixed in: N/A"), so
-#   no dependency bump could ever have cleared it; dropping the dependency did.
+# What this gates on, precisely: whether OUR CODE CALLS a vulnerable symbol.
+# That is what govulncheck's own exit status reports, and this wrapper defers to
+# it rather than re-deriving it from the printed text. The distinction is not
+# academic. govulncheck also reports advisories against modules that are merely
+# in the build graph, and it prints those only at higher -show levels, so a
+# wrapper that scraped every advisory ID out of the output would pass or fail
+# depending on a flag its caller happened to pass. That is what this one used to
+# do, and `scripts/govulncheck.sh -show verbose ./...` failed while the same
+# scan without the flag passed.
 #
-#   Keep it empty. An entry here is a vulnerability shipped on purpose, and the
-#   last one was only defensible because the code was never executed. If a new
-#   one is ever added, it needs the same standard of argument: why no bump can
-#   fix it, and why the reachable path is inert.
+# Accepted advisories (keep in sync with docs/development/static-analysis.md):
+#   None. The list was emptied when the self-update subsystem was removed. It
+#   held only GO-2026-5932, "the golang.org/x/crypto/openpgp package is
+#   unmaintained, unsafe by design, and has known security issues", which
+#   reached our code through github.com/creativeprojects/go-selfupdate. Dropping
+#   that dependency removed the call path, so govulncheck now reports "Your code
+#   is affected by 0 vulnerabilities" where it previously named ours.
+#
+#   Be precise about what did NOT happen: the advisory is keyed to the module
+#   golang.org/x/crypto, not to the openpgp package, and that module is still a
+#   direct requirement because cmd/eval_mcp_surfaces imports
+#   golang.org/x/crypto/ssh. So `govulncheck -show verbose ./...` still lists
+#   GO-2026-5932 under module results, and always will: it covers every version
+#   ("introduced: 0", "Fixed in: N/A"). What the removal cleared is the reachable
+#   path, which is the thing that mattered and the thing this gate checks.
+#
+#   Keep the list empty. An entry here is a vulnerability shipped on purpose in
+#   code we actually call. If one is ever added it needs the same standard of
+#   argument: why no bump can fix it, and why the reachable path is inert.
 #
 # Usage: scripts/govulncheck.sh [-tags <tags>] [packages...]
 set -uo pipefail
@@ -30,12 +48,21 @@ out="$(govulncheck "$@" 2>&1)"
 status=$?
 printf '%s\n' "$out"
 
-# Advisory IDs govulncheck reported (deduplicated).
+if [ "$status" -eq 0 ]; then
+	# Nothing our code calls is vulnerable. Advisories against modules that are
+	# only in the build graph may still appear above, at -show levels that print
+	# them; they are informational and do not gate, because a module we require
+	# for one package does not become a risk through a package we never import.
+	exit 0
+fi
+
+# Past here our code is affected, or govulncheck itself failed. Advisory IDs
+# govulncheck reported (deduplicated).
 ids="$(printf '%s\n' "$out" | grep -oE 'GO-[0-9]{4}-[0-9]+' | sort -u)"
 
 if [ -z "$ids" ]; then
-	# No advisories parsed: propagate govulncheck's own exit status verbatim so
-	# tool/build errors still fail.
+	# A non-zero exit with no advisory parsed is a tool or build error. Propagate
+	# it verbatim rather than reporting a clean scan.
 	exit "$status"
 fi
 

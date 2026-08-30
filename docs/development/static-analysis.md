@@ -177,17 +177,35 @@ the allowlist.
 Accepted advisories (keep the list in the script in sync with this table):
 
 **None.** The allowlist is empty and should stay that way. It held one entry,
-[`GO-2026-5932`](https://pkg.go.dev/vuln/GO-2026-5932) for
-`golang.org/x/crypto/openpgp`, which reached the binary through
+[`GO-2026-5932`](https://pkg.go.dev/vuln/GO-2026-5932), "the
+`golang.org/x/crypto/openpgp` package is unmaintained, unsafe by design, and has
+known security issues". It reached the binary through
 `github.com/creativeprojects/go-selfupdate`: that module's `validate.go` imports
 openpgp unconditionally for its `PGPValidator` type, linking it into anything
 that imports `selfupdate`. The advisory covers every version of the module
-(`introduced: 0`, `Fixed in: N/A`), so no dependency bump could ever have
-cleared it. Removing the self-update subsystem did.
+(`introduced: 0`, `Fixed in: N/A`), so no dependency bump could ever have cleared
+it. Removing the self-update subsystem removed the call path, and govulncheck now
+reports "Your code is affected by 0 vulnerabilities" where it previously named
+ours.
 
-An entry here is a vulnerability shipped on purpose. The last one was only
-defensible because the code was never executed, and it still meant every release
-carried a package documented as unmaintained and unsafe.
+Be precise about what did **not** happen, because the shorter version of this
+story is wrong. The advisory is keyed to the module `golang.org/x/crypto`, not to
+the `openpgp` package, and that module is still a direct requirement:
+`cmd/eval_mcp_surfaces` imports `golang.org/x/crypto/ssh` to build its fixtures.
+So `govulncheck -show verbose ./...` still lists `GO-2026-5932` under module
+results, and always will. What changed is the only thing that was ever
+actionable: nothing in this repository calls into openpgp any more, so the
+package is not linked into any shipped binary.
+
+That distinction is also what the wrapper gates on. It defers to govulncheck's
+own exit status, which reports whether **our code calls** a vulnerable symbol,
+rather than scraping advisory IDs out of the printed text. Scraping was the
+earlier design and it made the gate depend on a flag the caller passed:
+`scripts/govulncheck.sh -show verbose ./...` failed while the same scan without
+the flag passed, because module-level results are printed only at the higher
+verbosity.
+
+An entry here is a vulnerability shipped on purpose in code we actually call.
 
 To accept a new advisory, add its OSV ID to `ALLOWLIST` in
 `scripts/govulncheck.sh` and add a row here with the justification. To retire one

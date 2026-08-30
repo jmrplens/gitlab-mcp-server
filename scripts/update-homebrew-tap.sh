@@ -88,7 +88,7 @@ class GitlabMcpServer < Formula
         env:     GITLAB_TOKEN=glpat-... (and GITLAB_URL for self-managed)
 
       Per-client JSON:
-        https://jmrp.io/docs/gitlab-mcp-server/guides/ide-configuration/
+        https://jmrp.io/docs/gitlab-mcp-server/configuration/
     EOS
   end
 

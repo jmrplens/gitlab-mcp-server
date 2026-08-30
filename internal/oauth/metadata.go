@@ -11,7 +11,17 @@ import (
 
 // DefaultResourceDocumentation is the RFC 9728 resource_documentation value a
 // deployment publishes when the operator names no page of their own.
-const DefaultResourceDocumentation = "https://jmrp.io/docs/gitlab-mcp-server/guides/oauth-app-setup/"
+//
+// It must be a page that actually resolves, which is not a given: this pointed
+// at .../guides/oauth-app-setup/ for as long as the field has existed, and that
+// path has never been served. The documentation site has a flat structure with
+// no guides/ segment, and the OAuth application walkthrough lives only in the
+// repository, so the closest page that exists is the HTTP server one, whose
+// OAuth section links onward to the guide. A 404 is worse here than anywhere
+// else it could appear: this URL is published in the protected-resource
+// metadata every OAuth client fetches, and some of them show it on the consent
+// screen a person is being asked to trust.
+const DefaultResourceDocumentation = "https://jmrp.io/docs/gitlab-mcp-server/operations/http-server/"
 
 // ResourceLinks carries the RFC 9728 URL fields an operator can point at their
 // own pages.

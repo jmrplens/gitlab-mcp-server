@@ -24,8 +24,6 @@ const (
 	SurfaceKindRuntimeUtility SurfaceKind = "runtime-utility"
 	// SurfaceKindInteractiveUtility identifies tools that require MCP elicitation.
 	SurfaceKindInteractiveUtility SurfaceKind = "interactive-utility"
-	// SurfaceKindServerMaintenance identifies server maintenance tools.
-	SurfaceKindServerMaintenance SurfaceKind = "server-maintenance"
 )
 
 // CatalogGroupSpec is the canonical metadata contract for one catalog group.
@@ -130,8 +128,7 @@ func validSurfaceKind(kind SurfaceKind) bool {
 		SurfaceKindMetaGroup,
 		SurfaceKindDynamicController,
 		SurfaceKindRuntimeUtility,
-		SurfaceKindInteractiveUtility,
-		SurfaceKindServerMaintenance:
+		SurfaceKindInteractiveUtility:
 		return true
 	default:
 		return false
