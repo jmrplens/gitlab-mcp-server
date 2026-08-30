@@ -176,9 +176,18 @@ the allowlist.
 
 Accepted advisories (keep the list in the script in sync with this table):
 
-| Advisory                                               | Package                       | Reached via                                                                                                                                                                                          | Why accepted                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| ------------------------------------------------------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`GO-2026-5932`](https://pkg.go.dev/vuln/GO-2026-5932) | `golang.org/x/crypto/openpgp` | `github.com/creativeprojects/go-selfupdate` — its `validate.go` imports the package unconditionally (no build tag) for the `PGPValidator` type, linking it into any binary that imports `selfupdate` | The package is unmaintained and unsafe by design. The advisory covers **every version** of the module (`introduced: 0`, `Fixed in: N/A`), so no dependency bump can clear it. **We never execute it**: `internal/autoupdate` configures `selfupdate.ChecksumValidator`, never a PGP validator, and releases are signed with cosign/sigstore (`checksums.txt.sigstore.json`), not GPG. Every `govulncheck` trace is a package `init()` call — none reaches an openpgp cryptographic function. Reachability is linkage only. |
+**None.** The allowlist is empty and should stay that way. It held one entry,
+[`GO-2026-5932`](https://pkg.go.dev/vuln/GO-2026-5932) for
+`golang.org/x/crypto/openpgp`, which reached the binary through
+`github.com/creativeprojects/go-selfupdate`: that module's `validate.go` imports
+openpgp unconditionally for its `PGPValidator` type, linking it into anything
+that imports `selfupdate`. The advisory covers every version of the module
+(`introduced: 0`, `Fixed in: N/A`), so no dependency bump could ever have
+cleared it. Removing the self-update subsystem did.
+
+An entry here is a vulnerability shipped on purpose. The last one was only
+defensible because the code was never executed, and it still meant every release
+carried a package documented as unmaintained and unsafe.
 
 To accept a new advisory, add its OSV ID to `ALLOWLIST` in
 `scripts/govulncheck.sh` and add a row here with the justification. To retire one

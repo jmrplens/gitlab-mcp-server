@@ -118,7 +118,7 @@ Security fixes are issued for the latest stable release line on `main`. Older re
 | Older `1.x` releases   | :x: (please update) |
 | `0.x` (pre-1.0)        | :x:                |
 
-We strongly recommend running the most recent release. The auto-update mechanism (`AUTO_UPDATE=true`, default) keeps the binary current.
+We strongly recommend running the most recent release. Updates arrive through whichever channel you installed from (npm, Homebrew, the container image, the Claude Desktop extension, winget, or a fresh download); the server never replaces its own binary.
 
 ## Coordinated Disclosure
 
@@ -209,7 +209,6 @@ The remainder of this document describes how the server handles security-sensiti
 
 - Release binaries are built from tagged commits and published via GoReleaser.
 - Checksums (`checksums.txt`) and a Cosign/Sigstore signature bundle (`checksums.txt.sigstore.json`) are attached to every GitHub Release. Verify with [`cosign`](https://docs.sigstore.dev/cosign/installation/) using the keyless GitHub OIDC identity of this repository.
-- The auto-update mechanism verifies integrity against published checksums before replacing the running binary.
 
 ## Security Best Practices for Deployment
 
@@ -222,4 +221,4 @@ The remainder of this document describes how the server handles security-sensiti
 7. **Monitor token usage** via GitLab's admin panel.
 8. **Rotate tokens periodically** according to your organization's policy.
 9. **In HTTP mode**, restrict network access to trusted clients only and consider running behind a TLS-terminating reverse proxy.
-10. **Keep `gitlab-mcp-server` updated** — enable `AUTO_UPDATE=true` (default) or subscribe to repository releases.
+10. **Keep `gitlab-mcp-server` updated** by updating through your install channel, or subscribe to repository releases.

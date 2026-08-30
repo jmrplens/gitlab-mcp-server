@@ -26,8 +26,8 @@ Docker, Node.js, or Python required.
 
    The token is stored in the operating system keychain by Claude Desktop.
 
-Auto-update is disabled inside the extension (`AUTO_UPDATE=false`): updates
-arrive as new extension versions rather than in-place binary swaps.
+Updates arrive as new extension versions. The server never replaces its own
+binary, on any distribution channel.
 
 ### Verify the bundle you downloaded
 

@@ -406,13 +406,11 @@ func writeJSON(w http.ResponseWriter, body string) {
 }
 
 // baseEnv is the environment every case starts from: a fake GitLab, a token
-// that looks real, and no auto-update, which would otherwise reach the network
-// from a test.
+// that looks real.
 func baseEnv(gitlabURL string) map[string]string {
 	return map[string]string{
 		"GITLAB_URL":   gitlabURL,
 		"GITLAB_TOKEN": "glpat-stdio-e2e-token",
-		"AUTO_UPDATE":  "false",
 		"LOG_LEVEL":    "info",
 	}
 }

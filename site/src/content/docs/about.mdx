@@ -12,7 +12,7 @@ faq:
   - q: "How do I report a bug or request a feature?"
     a: "Open an issue on the GitHub repository. For security vulnerabilities, do not open a public issue — use GitHub Security Advisories instead, as described on the security page. Bug reports are most useful when they include the output of `gitlab-mcp-server --version`, the transport in use (stdio or HTTP), the tool surface (`TOOL_SURFACE`), and the GitLab edition and version you connect to."
   - q: "How often is GitLab MCP Server released?"
-    a: "Releases are cut as work lands rather than on a fixed calendar, and versioning follows semantic versioning. Every release publishes signed cross-platform binaries for Linux, macOS, and Windows on amd64 and arm64, a container image, and a Claude Desktop extension. The built-in auto-update checks GitHub Releases and can apply updates for you; it is documented on the auto-update page."
+    a: "Releases are cut as work lands rather than on a fixed calendar, and versioning follows semantic versioning. Every release publishes signed cross-platform binaries for Linux, macOS, and Windows on amd64 and arm64, a container image, and a Claude Desktop extension. The server does not update itself: upgrades come from whichever channel installed it (npm, Homebrew, winget, the container image, the Claude Desktop extension) or from a fresh download off the Releases page."
 ---
 
 import FAQ from "../../components/FAQ.astro";

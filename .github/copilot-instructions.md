@@ -228,10 +228,6 @@ When creating a new release and uploading binaries to GitHub Releases:
 | `META_PARAM_SCHEMA`      | Meta-tool input-schema strategy: `opaque` (default), `compact` (~5x), or `full` (~10x). Independent of `META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface | `opaque` (default) |
 | `GITLAB_READ_ONLY`       | Read-only mode: disables all mutating tools | `false` (default)  |
 | `GITLAB_SAFE_MODE`       | Safe mode: intercepts mutating tools and returns a JSON preview | `false` (default)  |
-| `AUTO_UPDATE`            | Enable auto-update: `true` (default), `check`, `false` | `true` (default)   |
-| `AUTO_UPDATE_REPO`       | GitHub repository slug for release assets (owner/repo) | `jmrplens/gitlab-mcp-server` |
-| `AUTO_UPDATE_INTERVAL`   | Periodic check interval, HTTP mode | `1h` (default)     |
-| `AUTO_UPDATE_TIMEOUT`    | Startup/background update timeout (range 5s–10m) | `60s` (default)    |
 | `GITLAB_ENTERPRISE`      | **Deprecated** — use `GITLAB_TIER`. Honored for back-compat only when `GITLAB_TIER` is unset (`true` → `ultimate`, `false` → `free`); logs a deprecation warning | `false` (default) |
 | `GITLAB_TIER`            | Licensing tier selector: `free`/`ce`, `premium`, or `ultimate`. When set, used verbatim; when unset, detected from `GET /license` (fallback `free`). Tier gates Enterprise/Premium tools AND per-field schema pruning (see `pruneSchemaFieldsByTier` in `internal/tools/action_catalog.go`) | `free` (default)   |
 | `EVAL_SURFACE_ENTERPRISE` | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus | `false` (default)  |

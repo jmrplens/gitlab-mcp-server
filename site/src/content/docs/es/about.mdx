@@ -12,7 +12,7 @@ faq:
   - q: "¿Cómo reporto un error o pido una funcionalidad?"
     a: "Abre un issue en el repositorio de GitHub. Para vulnerabilidades de seguridad no abras un issue público: usa GitHub Security Advisories, como se describe en la página de seguridad. Los reportes más útiles incluyen la salida de `gitlab-mcp-server --version`, el transporte en uso (stdio o HTTP), la superficie de herramientas (`TOOL_SURFACE`) y la edición y versión de GitLab a la que te conectas."
   - q: "¿Con qué frecuencia se publican versiones?"
-    a: "Las versiones se publican a medida que el trabajo se completa, no en un calendario fijo, y el versionado sigue versionado semántico. Cada release publica binarios firmados multiplataforma para Linux, macOS y Windows en amd64 y arm64, una imagen de contenedor y una extensión para Claude Desktop. La actualización automática integrada consulta GitHub Releases y puede aplicar las actualizaciones por ti; está documentada en la página de auto-actualización."
+    a: "Las versiones se publican a medida que el trabajo se completa, no en un calendario fijo, y el versionado sigue versionado semántico. Cada release publica binarios firmados multiplataforma para Linux, macOS y Windows en amd64 y arm64, una imagen de contenedor y una extensión para Claude Desktop. El servidor no se actualiza a sí mismo: las actualizaciones llegan por el canal con el que se instaló (npm, Homebrew, winget, la imagen de contenedor, la extensión para Claude Desktop) o descargando de nuevo desde la página de Releases."
 ---
 
 import FAQ from "../../../components/FAQ.astro";

@@ -81,16 +81,14 @@ class GitlabMcpServer < Formula
 
   def caveats
     <<~EOS
-      Homebrew manages upgrades for this binary, so disable the built-in
-      self-update in your MCP client configuration:
-        AUTO_UPDATE=false
+      Homebrew manages upgrades for this binary.
 
       Configure your MCP client with:
         command: #{HOMEBREW_PREFIX}/bin/gitlab-mcp-server
         env:     GITLAB_TOKEN=glpat-... (and GITLAB_URL for self-managed)
 
-      Or run the interactive setup wizard:
-        gitlab-mcp-server --setup
+      Per-client JSON:
+        https://jmrp.io/docs/gitlab-mcp-server/guides/ide-configuration/
     EOS
   end
 

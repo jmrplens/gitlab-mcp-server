@@ -43,7 +43,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/repository"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/runners"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/search"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/serverupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/tags"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/todos"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/uploads"
@@ -1251,7 +1250,6 @@ func TestMarkdownForResult_DispatchCompleteness(t *testing.T) {
 		{"groups.Output", groups.Output{ID: 1, Name: "g"}},
 		{"users.Output", users.Output{Username: "u1"}},
 		{"health.Output", health.Output{Status: "ok", GitLabVersion: "16.0"}},
-		{"serverupdate.CheckOutput", serverupdate.CheckOutput{CurrentVersion: "1.0"}},
 
 		// markdownForPipelineCommitMilestoneTypes
 		{"pipelines.ListOutput", pipelines.ListOutput{Pipelines: []pipelines.Output{{ID: 1}}}},

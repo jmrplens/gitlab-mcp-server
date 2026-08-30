@@ -33,16 +33,19 @@ same software runs on a machine the maintainer operates.
   [GitLab Privacy Statement](https://about.gitlab.com/privacy/) (for
   GitLab.com) or by your organization's own policies (for self-managed
   instances).
-- **GitHub (auto-update only).** When the auto-update feature is enabled
-  (`AUTO_UPDATE=true`, the default for standalone binaries), the server
-  periodically checks GitHub Releases on this repository for new versions and
-  downloads signed binaries from there. No personal data is sent — it is a
-  standard HTTPS request to `api.github.com`, subject to the
-  [GitHub Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
-  The Claude Desktop extension (`.mcpb`) ships with auto-update **disabled**;
-  updates arrive through new extension versions instead.
+Your GitLab instance is the only destination. The server contacts nothing else,
+and nothing it does is optional in that respect: there is no update check, no
+license check, no registry ping and no default that reaches any other host.
 
-There are no other network destinations.
+This used to be untrue in one narrow way worth recording rather than quietly
+dropping. The server carried a self-update feature that was **on by default**
+for standalone binaries, so it periodically asked GitHub Releases whether a
+newer version existed. No personal data travelled with that request, but it was
+a network call to a third party that nobody had asked for, made by a program
+whose privacy policy opens by saying it collects nothing. The feature is gone:
+every way of installing this server already owns updates, and a binary that
+downloads and runs new code is the last thing that belongs in a process holding
+your GitLab token.
 
 ## Hosted endpoint
 

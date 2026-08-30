@@ -295,7 +295,7 @@ func listTools(client *gitlabclient.Client, toolSurface string, enterprise bool)
 			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
 			os.Exit(1)
 		}
-		tools.RegisterMCPMeta(server, client, nil)
+		tools.RegisterMCPMeta(server, client)
 	case config.ToolSurfaceIndividual:
 		tools.RegisterAll(server, client, edition.TierForEnterprise(enterprise))
 	default:

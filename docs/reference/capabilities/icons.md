@@ -416,7 +416,7 @@ All 50 domain icons with their SVG preview, exported variable name, and the tool
 | Preview                                                              | Name           | Packages                                                                                                                          |
 | -------------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | <img src="icons/config.svg" width="32" height="32" alt="Config">     | `IconConfig`   | appearance, applications, customattributes, dbmigrations, elicitationtools, featureflags, features, planlimits, settings, sidekiq |
-| <img src="icons/server.svg" width="32" height="32" alt="Server">     | `IconServer`   | metadata, serverupdate                                                                                                            |
+| <img src="icons/server.svg" width="32" height="32" alt="Server">     | `IconServer`   | metadata                                                                                                            |
 | <img src="icons/template.svg" width="32" height="32" alt="Template"> | `IconTemplate` | ciyamltemplates, dockerfiletemplates, gitignoretemplates, licensetemplates, projecttemplates                                      |
 
 ### Notifications and Events
@@ -483,7 +483,7 @@ Alphabetical listing of all 50 domain icons and every sub-package that uses each
 | Schedule      | `IconSchedule`      | freezeperiods, pipelineschedules                                                                                                  |
 | Search        | `IconSearch`        | search                                                                                                                            |
 | Security      | `IconSecurity`      | externalstatuschecks, groupscim, license, memberroles, securefiles, securityattributes, securitycategories, securitysettings      |
-| Server        | `IconServer`        | metadata, serverupdate                                                                                                            |
+| Server        | `IconServer`        | metadata                                                                                                            |
 | Shield        | `IconShield`        | groupprotectedbranches, groupprotectedenvs, protectedenvs, protectedpackages                                                      |
 | Snippet       | `IconSnippet`       | snippets                                                                                                                          |
 | Tag           | `IconTag`           | tags                                                                                                                              |

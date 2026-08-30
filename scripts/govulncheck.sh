@@ -8,26 +8,22 @@
 # introduced (fixable) vulnerabilities are never silently ignored.
 #
 # Accepted advisories (keep in sync with docs/development/static-analysis.md):
-#   - GO-2026-5932: golang.org/x/crypto/openpgp is unmaintained and unsafe by
-#     design. The advisory covers every version of the module
-#     ("introduced: 0" / "Fixed in: N/A"), so no dependency bump can ever clear
-#     it. It enters the build through github.com/creativeprojects/go-selfupdate,
-#     whose validate.go imports the package unconditionally (no build tag) for
-#     its PGPValidator type, which links openpgp into any binary importing the
-#     selfupdate package.
+#   None. The list was emptied when the self-update subsystem was removed: it
+#   held only GO-2026-5932, for golang.org/x/crypto/openpgp, which entered the
+#   build through github.com/creativeprojects/go-selfupdate. That advisory
+#   covers every version of the module ("introduced: 0", "Fixed in: N/A"), so
+#   no dependency bump could ever have cleared it; dropping the dependency did.
 #
-#     We never execute that code. internal/autoupdate configures
-#     selfupdate.ChecksumValidator (checksums.txt), never a PGP validator, and
-#     our releases are signed with cosign/sigstore
-#     (checksums.txt.sigstore.json), not GPG. Every govulncheck trace is a
-#     package init() call; not one reaches an openpgp cryptographic function.
-#     Reachability is therefore linkage only. Accepted risk.
+#   Keep it empty. An entry here is a vulnerability shipped on purpose, and the
+#   last one was only defensible because the code was never executed. If a new
+#   one is ever added, it needs the same standard of argument: why no bump can
+#   fix it, and why the reachable path is inert.
 #
 # Usage: scripts/govulncheck.sh [-tags <tags>] [packages...]
 set -uo pipefail
 
 # Space-separated OSV IDs accepted with documented justification above.
-ALLOWLIST="GO-2026-5932"
+ALLOWLIST=""
 
 echo "=== govulncheck ==="
 out="$(govulncheck "$@" 2>&1)"

@@ -7,13 +7,11 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/elicitationtools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projectdiscovery"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/serverupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -55,21 +53,6 @@ func StandaloneToolSpecs(client *gitlabclient.Client) []actioncatalog.SurfaceToo
 		CompatibilityToolName:  "gitlab_interactive",
 	}, elicitationtools.ActionSpecs(client))...)
 	return specs
-}
-
-// ServerMaintenanceToolSpecs returns updater-backed visible server maintenance
-// tools.
-func ServerMaintenanceToolSpecs(updater *autoupdate.Updater) []actioncatalog.SurfaceToolSpec {
-	return surfaceToolSpecsFromActions(surfaceToolGroupOptions{
-		GroupToolName:         "gitlab_server",
-		BaseDomain:            "server",
-		SurfaceKind:           actioncatalog.SurfaceKindServerMaintenance,
-		Icons:                 toolutil.IconServer,
-		FormatResult:          toolutil.MarkdownForResult,
-		OwnerPackage:          "serverupdate",
-		Description:           "MCP server maintenance tools for update checks and manual update application.",
-		CompatibilityToolName: "gitlab_server",
-	}, serverupdate.ActionSpecs(updater))
 }
 
 // AddToolCatalog projects surface specs into a catalog used by Dynamic

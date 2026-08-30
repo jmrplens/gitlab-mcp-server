@@ -18,8 +18,8 @@ import (
 //
 // One hour is the ceiling for anything catalog-shaped. The only event that
 // legitimately changes the tool set under a running server is a new binary,
-// and auto-update checks hourly by default, so a longer window could outlive
-// the build that issued it.
+// which means an operator restarting the process, so a window longer than an
+// hour risks a client holding a catalog the running build no longer serves.
 const (
 	// staticListTTLMs marks the catalogs compiled into the binary — prompts,
 	// resources and resource templates — fresh for 1 hour. None of them

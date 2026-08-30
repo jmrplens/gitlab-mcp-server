@@ -14,7 +14,7 @@
 gitlab-mcp-server [flags]
 ```
 
-When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio mode**. When no token is available and the terminal is interactive, the **Setup Wizard** launches automatically.
+When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio mode**. With no token and an interactive terminal, it prints what it needs and waits, rather than starting a session it cannot serve.
 
 ---
 
@@ -27,8 +27,6 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 | `-h`           | bool   | `false`   | Show full help with flags, environment variables, and JSON examples  |
 | `-version`     | bool   | `false`   | Print version and commit hash, then exit                             |
 | `-shutdown`    | bool   | `false`   | Terminate all running instances and exit (used by external updaters) |
-| `-setup`       | bool   | `false`   | Run the interactive Setup Wizard                                     |
-| `-setup-mode`  | string | `auto`    | Setup UI mode: `auto` (cascade), `web`, `tui`, or `cli`              |
 | `-tool-search` | string | _(empty)_ | Search registered tools by name or description, then exit            |
 
 ### HTTP Transport Mode
@@ -74,12 +72,8 @@ When run without flags and a `GITLAB_TOKEN` is set, the server starts in **stdio
 
 ### Auto-Update
 
-| Flag                    | Type     | Default                      | Description                                                                   |
-| ----------------------- | -------- | ---------------------------- | ----------------------------------------------------------------------------- |
-| `-auto-update`          | string   | `true`                       | Auto-update mode: `true` (auto-apply), `check` (log-only), `false` (disabled) |
-| `-auto-update-repo`     | string   | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for update release assets                 |
-| `-auto-update-interval` | duration | `1h`                         | How often to check for new releases (HTTP mode periodic checks)               |
-| `-auto-update-timeout`  | duration | `60s`                        | Timeout for startup/background update checks (range: 5s–10m)                  |
+| Flag | Type | Default | Description |
+| ---- | ---- | ------- | ----------- |
 
 ---
 
@@ -123,27 +117,21 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --stateless=false --max
 gitlab-mcp-server --http --http-addr=:8080
 ```
 
-### Setup Wizard
+### First run without configuration
 
-The interactive wizard configures the binary, GitLab connection, and MCP client files. The wizard is **stdio-only**: it does not configure the HTTP server (use [HTTP Server Mode](../guides/http-server-mode.md) for that).
+Started by hand in a terminal, or double-clicked, with neither `GITLAB_TOKEN`
+nor `GITLAB_URL` set, the server prints what it is and what it needs, then waits
+for Enter before exiting. The wait matters on Windows, where a double-clicked
+console program closes its window the instant it returns, so a message printed
+and returned from is a message nobody reads.
 
-```bash
-gitlab-mcp-server --setup                    # Auto-detect UI mode (web → tui → cli)
-gitlab-mcp-server --setup --setup-mode web   # Browser-based UI (best for first-time setup)
-gitlab-mcp-server --setup --setup-mode tui   # Terminal UI (Bubble Tea, keyboard-driven)
-gitlab-mcp-server --setup --setup-mode cli   # Plain text prompts (headless / SSH)
-```
+An MCP client never reaches that screen: a client connects pipes rather than a
+terminal, which is the test the server uses.
 
-The `--setup-mode` flag controls which user interface the wizard uses:
-
-- `auto` (default) — cascade: try Web UI first (when a graphical display is detected), then Bubble Tea TUI (when stdin is a TTY), then plain CLI prompts. The cascade is transparent and falls back automatically on headless or terminal-only environments.
-- `web` — local HTTP server on `127.0.0.1`, opens your default browser, and waits until you submit the form. Advanced options in this UI carry inline help tooltips.
-- `tui` — full-screen terminal interface built with Bubble Tea. Keyboard navigation (Tab/Shift+Tab, Space, Enter, arrow keys, `Ctrl+O` for advanced options, `Esc` to cancel).
-- `cli` — line-by-line prompts read from stdin. Safest choice for SSH sessions, CI, or any environment where browsers and TUI rendering are unavailable.
-
-When `~/.gitlab-mcp-server.env` already exists, every UI mode pre-loads the saved values, so re-running the wizard lets you change only the fields you need. Leaving the token field blank keeps the previously stored token. See [Configuration — Setup Wizard](configuration.md#setup-wizard-recommended) for the full list of fields and their env-var mappings.
-
-On Windows, double-clicking the `.exe` when no `GITLAB_TOKEN` is set launches the wizard automatically.
+This replaced an interactive setup wizard with web, terminal and prompt modes
+that wrote `~/.gitlab-mcp-server.env`. MCP configuration lives in the client's
+own JSON, which is where [Getting Started](../getting-started.md) puts it and
+where a wizard writing a dotfile on this machine could not help.
 
 ### Shutdown Mode
 
@@ -200,9 +188,6 @@ gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic
 # Start HTTP server with the dynamic toolset and reduced non-tool capabilities
 gitlab-mcp-server --http --gitlab-url=https://gitlab.com --tool-surface=dynamic --capability-surface=minimal
 
-# Start with auto-update in check-only mode
-gitlab-mcp-server --http --gitlab-url=https://gitlab.com --auto-update=check
-
 # Terminate all running instances (used by external updaters)
 gitlab-mcp-server --shutdown
 ```
@@ -225,5 +210,4 @@ See [Dynamic Tools](../concepts/dynamic-tools.md) for how `dynamic` relates.
 - [Configuration](configuration.md) — Environment variables and `.env` files
 - [HTTP Server Mode](../guides/http-server-mode.md) — Architecture and deployment details
 - [Dynamic Toolset](../concepts/dynamic-tools.md) — Low-token find/execute mode
-- [Auto-Update](../guides/auto-update.md) — Update modes, release requirements, troubleshooting
 - [Getting Started](../getting-started.md) — Step-by-step tutorial

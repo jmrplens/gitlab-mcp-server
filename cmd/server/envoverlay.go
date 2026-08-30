@@ -69,8 +69,6 @@ func applyOverlayStrings(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
 	overlayString(hcfg, "auth-mode", &hcfg.authMode, o.AuthMode)
 	overlayString(hcfg, "public-url", &hcfg.publicURL, o.PublicURL)
 	overlayString(hcfg, "trusted-origins", &hcfg.trustedOrigins, o.TrustedOrigins)
-	overlayString(hcfg, "auto-update", &hcfg.autoUpdate, o.AutoUpdate)
-	overlayString(hcfg, "auto-update-repo", &hcfg.autoUpdateRepo, o.AutoUpdateRepo)
 }
 
 func applyOverlayBools(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
@@ -111,8 +109,6 @@ func applyOverlayDurations(hcfg *httpConfig, o *config.HTTPEnvOverlay) {
 		{"pool-idle-timeout", &hcfg.poolIdleTimeout, o.PoolIdleTimeout},
 		{"revalidate-interval", &hcfg.revalidateInterval, o.RevalidateInterval},
 		{"oauth-cache-ttl", &hcfg.oauthCacheTTL, o.OAuthCacheTTL},
-		{"auto-update-interval", &hcfg.autoUpdateInterval, o.AutoUpdateInterval},
-		{"auto-update-timeout", &hcfg.autoUpdateTimeout, o.AutoUpdateTimeout},
 	}
 	for _, d := range durations {
 		if d.value != nil && !hcfg.setFlags[d.flagName] {

@@ -260,12 +260,12 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 		len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
 
 	b.WriteString("Quick start:\n\n")
-	b.WriteString("1. Download the binary for your platform from the Releases page\n")
-	b.WriteString("2. Run `gitlab-mcp-server --setup` to launch the interactive setup wizard\n")
-	b.WriteString("3. The wizard configures your AI client (VS Code, Cursor, Claude Desktop, etc.)\n\n")
+	b.WriteString("1. Install it: the npm launcher, Homebrew, winget, the Docker image, the Claude Desktop extension, or a binary from the Releases page\n")
+	b.WriteString("2. Create a GitLab personal access token with `api` scope\n")
+	b.WriteString("3. Add the server to your AI client's MCP configuration with that token in `GITLAB_TOKEN`\n\n")
 
-	b.WriteString("Installing for an AI assistant (headless, no wizard):\n\n")
-	fmt.Fprintf(&b, "If you are an AI assistant setting this up for a user from just this repository URL, do NOT run the interactive `--setup` wizard (it needs a human). Instead write the MCP client configuration directly. The default and recommended surface is dynamic mode over stdio (only two visible tools, lowest token cost). Minimum required: a GitLab personal access token with `api` scope in `GITLAB_TOKEN`; set `GITLAB_URL` only for self-managed instances (default `%s`).\n\n", config.DefaultGitLabURL)
+	b.WriteString("Installing for an AI assistant:\n\n")
+	fmt.Fprintf(&b, "If you are an AI assistant setting this up for a user from just this repository URL, write the MCP client configuration directly; there is no interactive setup to run. The default and recommended surface is dynamic mode over stdio (only two visible tools, lowest token cost). Minimum required: a GitLab personal access token with `api` scope in `GITLAB_TOKEN`; set `GITLAB_URL` only for self-managed instances (default `%s`).\n\n", config.DefaultGitLabURL)
 	b.WriteString("The config schema differs by client: Cursor, Claude Desktop, and Claude Code use a `mcpServers` key; VS Code and GitHub Copilot use a `servers` key (each entry also sets `\"type\": \"stdio\"`). The `mcpServers` form with Docker:\n\n")
 	b.WriteString("```json\n")
 	b.WriteString("{\n")
@@ -283,11 +283,10 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	fmt.Fprintf(&b, "The exact config-file path and JSON schema for each client (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, JetBrains, Zed, Kiro, opencode, Cline; stdio / HTTP / OAuth) are in [docs/guides/ide-configuration.md](%s).\n\n",
 		absoluteLLMSTarget("docs/guides/ide-configuration.md"))
 
-	b.WriteString("Setup wizard:\n\n")
-	b.WriteString("- Modes: `--setup-mode web` (browser, inline help tooltips), `tui` (Bubble Tea keyboard UI), `cli` (plain prompts). Default `auto` cascades through them.\n")
-	b.WriteString("- Scope: stdio MCP clients only (VS Code, Claude Desktop, Cursor, etc.). HTTP server mode is configured via flags, not the wizard.\n")
-	b.WriteString("- Reconfiguration: when `~/.gitlab-mcp-server.env` already exists, the wizard pre-loads its values so users can change one or two fields without re-typing the rest. Leaving the token blank keeps the stored value.\n")
-	b.WriteString("- Re-run with `gitlab-mcp-server --setup` to rotate the token, add a new client, or switch tool surface.\n\n")
+	b.WriteString("Running the binary by hand:\n\n")
+	b.WriteString("- With no `GITLAB_TOKEN` and a terminal attached, the server prints what it needs and waits for Enter rather than starting a session it cannot serve. An MCP client never reaches that screen, because a client connects pipes rather than a terminal.\n")
+	b.WriteString("- Keeping the token out of client config: put `GITLAB_URL` and `GITLAB_TOKEN` in `~/.gitlab-mcp-server.env`, which the server reads when they are not already in its environment.\n")
+	b.WriteString("- Updating: use whichever channel installed it. The server never replaces its own binary.\n\n")
 
 	b.WriteString("Configuration (environment variables, stdio mode):\n\n")
 	fmt.Fprintf(&b, "- GITLAB_URL: GitLab instance URL (default: `%s`; set for self-managed instances)\n", config.DefaultGitLabURL)

@@ -18,33 +18,31 @@ gitlab-mcp-server authenticates to GitLab using a Personal Access Token (PAT) pa
 ### Token Security
 
 - **Never commit tokens** — `.env` is gitignored; use environment variables in CI/production
-- **Wizard-managed secrets** — The Setup Wizard stores `GITLAB_TOKEN`, `GITLAB_URL`, and `GITLAB_SKIP_TLS_VERIFY` in `~/.gitlab-mcp-server.env` with restricted permissions (`0600` on Unix). Client config files only contain non-secret preferences. The server loads this file automatically at startup as a fallback
+- **Keep the token out of client JSON** — Put `GITLAB_TOKEN` in `~/.gitlab-mcp-server.env` or a local `.env`, both of which the server loads at startup, and give the client config only non-secret launch preferences. Restrict the file to the owner (`chmod 600`)
 - **Never hardcode tokens in JSON** — MCP client configuration files (`.vscode/mcp.json`, `.cursor/mcp.json`) are often committed to version control. Use [input variables](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration#_input-variables-for-sensitive-data) (`${input:gitlab-token}`), [environment files](https://code.visualstudio.com/docs/copilot/reference/mcp-configuration#_standard-io-stdio-servers) (`envFile`), or system environment variables instead. See [Configuration — Secure Token Configuration](../reference/configuration.md#secure-token-configuration) for examples
 - **Minimum scope** — Use `api` scope only; avoid `admin` scope unless required
-- **Token rotation** — Rotate tokens regularly; use expiring tokens when possible. Re-run `gitlab-mcp-server --setup` and enter a new token — leaving the field blank keeps the previously stored value
+- **Token rotation** — Rotate tokens regularly and use expiring tokens where possible. Replace the value wherever it is configured: the env file, the client JSON, or the environment
 - **Error output minimization** — Error Markdown includes diagnostic fields such as operation name, error class, HTTP status, request ID, and actionable hints. Tool input parameters are not copied into error output
 
-### Setup Wizard Token Storage
+### Where the token lives
 
-The Setup Wizard (`gitlab-mcp-server --setup`) writes a single env file and a per-client JSON config. Both contain sensitive material that operators must protect.
+The server reads `GITLAB_TOKEN` from the environment, from a local `.env`, or
+from `~/.gitlab-mcp-server.env`, in that order of precedence. Whichever you use,
+it is a secret on disk and should be owner-readable only (`chmod 600` on Unix).
 
-#### `~/.gitlab-mcp-server.env`
+Most MCP clients (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf,
+OpenCode, Crush, Zed) can reference an env file rather than embedding the token
+in their JSON, and that is the arrangement to prefer: those JSON files are
+frequently committed.
 
-- Created on the first successful run with mode `0600` (owner read/write only) on Unix and `0644` on Windows.
-- Contains `GITLAB_TOKEN` plus non-secret launch preferences (`GITLAB_URL`, `GITLAB_SKIP_TLS_VERIFY`, `TOOL_SURFACE`, `CAPABILITY_SURFACE`, `META_PARAM_SCHEMA`, `GITLAB_TIER`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `EMBEDDED_RESOURCES`, `EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `UPLOAD_MAX_FILE_SIZE`, `AUTO_UPDATE`, `AUTO_UPDATE_REPO`, `AUTO_UPDATE_TIMEOUT`, `RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`, `YOLO_MODE`, `LOG_LEVEL`).
-- The server loads this file at startup as a fallback after the local `.env` and the shell environment.
-- The Web UI's existing-token placeholder shows only the first 8 characters followed by `*` (see `wizard.MaskToken`). The full token never leaves the local browser session.
+**JetBrains IDEs are the documented exception**: the JetBrains AI Assistant
+cannot reference an external env file, so its entry carries `GITLAB_TOKEN`
+inline. If you use it:
 
-#### Per-client JSON files
-
-Most MCP clients (VS Code, Claude Desktop, Claude Code, Cursor, Windsurf, OpenCode, Crush, Zed) reference the env file rather than embedding `GITLAB_TOKEN`. Their JSON only contains the binary path, optional `envFile` reference, and non-secret launch preferences.
-
-**JetBrains IDEs are the documented exception**: the JetBrains AI Assistant cannot reference an external env file, so the wizard prints the full entry (including `GITLAB_TOKEN`, `GITLAB_URL`, and `GITLAB_SKIP_TLS_VERIFY`) as a JSON snippet to paste into *Settings > Tools > AI Assistant > MCP Servers*. If you choose this path:
-
-- Paste the snippet into a machine-local IDE config (not a workspace-shared file).
-- Treat the snippet as a secret — anyone with read access to the IDE config has the token.
-- Rotate `GITLAB_TOKEN` immediately if the snippet is exposed (commit, backup, screen share, etc.).
-- Prefer a client that supports `envFile` or system environment variables whenever possible.
+- Put the snippet in a machine-local IDE config, never a workspace-shared file.
+- Treat that file as a secret: anyone who can read it has the token.
+- Rotate `GITLAB_TOKEN` immediately if it is exposed (a commit, a backup, a screen share).
+- Prefer a client that supports `envFile` or system environment variables.
 
 ### OAuth mode and audience binding (documented deviation)
 
@@ -360,47 +358,6 @@ Run `go list -m all` to see all transitive dependencies. Use `govulncheck` for v
 go install golang.org/x/vuln/cmd/govulncheck@latest
 govulncheck ./...
 ```
-
-## Auto-Update Token Security
-
-### Threat Model
-
-The auto-update subsystem embeds a GitHub API token in the
-compiled binary to check for and download new releases. Attack vectors:
-
-| Vector                                 | Description                                     | Mitigation                                                   |
-| -------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------ |
-| Traffic capture (HTTP)                 | Intercept token on the wire                     | HTTPS enforcement in `NewUpdater()`                          |
-| Proxy interception (`HTTPS_PROXY`)     | Token sent through attacker proxy               | `Proxy: nil` in HTTP transport                               |
-| HTTP redirect to external host         | GitHub redirects to S3/CDN leaking token        | `CheckRedirect` strips `Authorization` on cross-host         |
-| Protocol downgrade (HTTPS→HTTP)        | Redirect from HTTPS to HTTP exposes token       | `CheckRedirect` refuses HTTPS→HTTP redirects                 |
-| Redirect chain abuse                   | Infinite redirects / open redirect exploitation | Max 10 redirects enforced                                    |
-| Token to external hosts                | Asset URL points to non-GitHub host             | `sameHost()` check before attaching header                   |
-| Memory dump (`gcore`, `/proc/PID/mem`) | Read token from process memory                  | Intermediate `[]byte` zeroed; globals zeroed after first use |
-| Accidental logging (`%v`, panic)       | Token printed in logs or stack traces           | `Config.String()` / `GoString()` redact to `***`             |
-| `GetConfig()` API                      | Token exposed via MCP tool                      | Returns copy with `Token: "***"`                             |
-
-### Network Hardening
-
-The `newGitHubSource` HTTP client (`internal/autoupdate/github_source.go`):
-
-- `Proxy: nil` — disables system proxy
-- `TLSClientConfig.MinVersion: tls.VersionTLS12`
-- `InsecureSkipVerify` conditional on `SkipTLS` parameter
-- `CheckRedirect`:
-  - Strips `Authorization` on cross-host redirects
-  - Refuses HTTPS→HTTP protocol downgrades
-  - Limits redirect chain to 10 hops
-
-### File Reference
-
-| File                                   | Purpose                                           |
-| -------------------------------------- | ------------------------------------------------- |
-| `internal/autoupdate/github_source.go` | `newGitHubSource` with hardened HTTP client       |
-| `internal/autoupdate/autoupdate.go`    | HTTPS enforcement, `Config.String()`/`GoString()` |
-| `cmd/server/main.go`                   | Update initialization                             |
-
----
 
 ## Rate Limiting Model
 

@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -870,14 +869,8 @@ func clientForAudit() (*gitlabclient.Client, error) {
 }
 
 func collectSurfaceSpecs(client *gitlabclient.Client) []actioncatalog.SurfaceToolSpec {
-	updater := autoupdate.NewUpdaterWithSource(autoupdate.Config{
-		Mode:           autoupdate.ModeCheck,
-		Repository:     autoupdate.DefaultRepository,
-		CurrentVersion: "0.0.0",
-	}, nil)
 	specs := make([]actioncatalog.SurfaceToolSpec, 0, 11)
 	specs = append(specs, surfaces.StandaloneToolSpecs(client)...)
-	specs = append(specs, surfaces.ServerMaintenanceToolSpecs(updater)...)
 	specs = append(specs, dynamictools.ControllerSurfaceSpecs(nil)...)
 	return specs
 }

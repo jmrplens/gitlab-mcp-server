@@ -48,10 +48,6 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 		"OAuthCacheTTL":      overlay.OAuthCacheTTL == nil,
 		"RateLimitRPS":       overlay.RateLimitRPS == nil,
 		"RateLimitBurst":     overlay.RateLimitBurst == nil,
-		"AutoUpdate":         overlay.AutoUpdate == nil,
-		"AutoUpdateRepo":     overlay.AutoUpdateRepo == nil,
-		"AutoUpdateInterval": overlay.AutoUpdateInterval == nil,
-		"AutoUpdateTimeout":  overlay.AutoUpdateTimeout == nil,
 	}
 	for field, isNil := range nilFields {
 		if !isNil {
@@ -248,33 +244,6 @@ func presentVariableCases() []presentVariableCase {
 			},
 		},
 		{
-			name: "auto-update settings are reported individually",
-			env: map[string]string{
-				"AUTO_UPDATE":          "check",
-				"AUTO_UPDATE_REPO":     "someone/fork",
-				"AUTO_UPDATE_INTERVAL": "2h",
-				"AUTO_UPDATE_TIMEOUT":  "90s",
-			},
-			assert: func(t *testing.T, o *HTTPEnvOverlay) {
-				t.Helper()
-				assertStr(t, "AutoUpdate", o.AutoUpdate, "check")
-				assertStr(t, "AutoUpdateRepo", o.AutoUpdateRepo, "someone/fork")
-				assertDur(t, "AutoUpdateInterval", o.AutoUpdateInterval, 2*time.Hour)
-				assertDur(t, "AutoUpdateTimeout", o.AutoUpdateTimeout, 90*time.Second)
-			},
-		},
-		{
-			name: "one auto-update variable does not drag in the others",
-			env:  map[string]string{"AUTO_UPDATE": "false"},
-			assert: func(t *testing.T, o *HTTPEnvOverlay) {
-				t.Helper()
-				assertStr(t, "AutoUpdate", o.AutoUpdate, "false")
-				if o.AutoUpdateRepo != nil || o.AutoUpdateInterval != nil || o.AutoUpdateTimeout != nil {
-					t.Error("unset auto-update variables were reported alongside the set one")
-				}
-			},
-		},
-		{
 			name: "whitespace counts as absent",
 			env:  map[string]string{"AUTH_MODE": "   "},
 			assert: func(t *testing.T, o *HTTPEnvOverlay) {
@@ -311,8 +280,6 @@ func TestLoadHTTPEnvOverlay_InvalidValuesFailLoudly(t *testing.T) {
 		{"OAUTH_CACHE_TTL", "bogus", "OAUTH_CACHE_TTL"},
 		{"RATE_LIMIT_RPS", "bogus", "RATE_LIMIT_RPS"},
 		{"RATE_LIMIT_BURST", "bogus", "RATE_LIMIT_BURST"},
-		{"AUTO_UPDATE_INTERVAL", "bogus", "AUTO_UPDATE_INTERVAL"},
-		{"AUTO_UPDATE_TIMEOUT", "bogus", "AUTO_UPDATE_TIMEOUT"},
 		{"POOL_IDLE_TIMEOUT", "48h", "exceeds maximum"},
 	}
 
@@ -379,7 +346,6 @@ func clearOverlayEnv(t *testing.T) {
 		"SESSION_TIMEOUT", "POOL_IDLE_TIMEOUT", "SESSION_REVALIDATE_INTERVAL",
 		"AUTH_MODE", "PUBLIC_URL", "TRUSTED_ORIGINS", "OAUTH_CACHE_TTL",
 		"RATE_LIMIT_RPS", "RATE_LIMIT_BURST",
-		"AUTO_UPDATE", "AUTO_UPDATE_REPO", "AUTO_UPDATE_INTERVAL", "AUTO_UPDATE_TIMEOUT",
 	} {
 		// t.Setenv registers the restore; unsetting afterwards makes the
 		// variable genuinely absent rather than present-and-empty, which is

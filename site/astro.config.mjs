@@ -122,7 +122,7 @@ const featureList = [
 	"stdio and multi-user HTTP transport with per-token isolation",
 	"GitLab CE and EE support, including self-hosted instances",
 	"Single cross-platform Go binary (Linux, macOS, Windows; amd64 and arm64)",
-	"Read-only and safe-preview modes, plus built-in auto-update",
+	"Read-only and safe-preview protective modes",
 ];
 const softwareRequirements =
 	"A GitLab instance (GitLab.com or self-hosted, Community or Enterprise Edition) with REST v4/GraphQL API access and a personal access token.";
@@ -582,11 +582,6 @@ export default defineConfig({
 							translations: { es: "Inicio rápido" },
 						},
 						{
-							slug: "setup-wizard",
-							label: "Setup Wizard",
-							translations: { es: "Asistente de configuración" },
-						},
-						{
 							slug: "claude-desktop",
 							label: "Claude Desktop (.mcpb)",
 							translations: { es: "Claude Desktop (.mcpb)" },
@@ -688,11 +683,6 @@ export default defineConfig({
 							slug: "operations/privacy",
 							label: "Privacy",
 							translations: { es: "Privacidad" },
-						},
-						{
-							slug: "operations/auto-update",
-							label: "Auto-update",
-							translations: { es: "Auto-actualización" },
 						},
 						{
 							slug: "operations/http-server",

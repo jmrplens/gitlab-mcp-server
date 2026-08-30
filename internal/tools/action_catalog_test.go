@@ -10,7 +10,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
@@ -170,45 +169,29 @@ func TestBuildActionCatalog_EnterpriseAndGitLabDotComGates(t *testing.T) {
 	}
 }
 
-// TestBuildMCPActionGroup_NilUpdaterOmitsUpdateActions verifies BuildMCPActionGroup when nil updater omits update actions.
-func TestBuildMCPActionGroup_NilUpdaterOmitsUpdateActions(t *testing.T) {
-	group := BuildMCPActionGroup(nil, nil)
-	if _, ok := group.Actions["status"]; !ok {
-		t.Fatal("BuildMCPActionGroup(nil updater) missing status action")
+// TestBuildMCPActionGroup_IsReadOnlyDiagnostics pins what gitlab_server is.
+//
+// It is diagnostics and nothing else. The group used to gain check_update and
+// apply_update when a self-updater was configured, and apply_update was this
+// server's only destructive action that acted on the machine rather than on
+// GitLab. Both are gone with the self-update subsystem, so a group that grew a
+// mutating action again would be a surprise worth failing on.
+func TestBuildMCPActionGroup_IsReadOnlyDiagnostics(t *testing.T) {
+	group := BuildMCPActionGroup(nil)
+	for _, want := range []string{"status", "health_check"} {
+		if _, ok := group.Actions[want]; !ok {
+			t.Errorf("BuildMCPActionGroup is missing the %s action", want)
+		}
 	}
-	if _, ok := group.Actions["apply_update"]; ok {
-		t.Fatal("BuildMCPActionGroup(nil updater) contains apply_update")
+	if len(group.Actions) != 2 {
+		t.Errorf("gitlab_server carries %d actions, want only status and health_check: %v",
+			len(group.Actions), group.Actions)
+	}
+	if !group.ReadOnly {
+		t.Error("gitlab_server is not marked read-only; it reaches nothing that mutates")
 	}
 	if group.ToolName != "gitlab_server" || group.Description == "" || len(group.Icons) == 0 {
 		t.Fatalf("BuildMCPActionGroup metadata = %+v, want tool name, description, and icons", group)
-	}
-}
-
-// TestBuildActionCatalog_WithUpdaterIncludesUpdateSchemas verifies updater-backed
-// server maintenance actions remain valid in the dynamic action catalog.
-func TestBuildActionCatalog_WithUpdaterIncludesUpdateSchemas(t *testing.T) {
-	updater := autoupdate.NewUpdaterWithSource(autoupdate.Config{
-		Mode:           autoupdate.ModeCheck,
-		Repository:     "owner/repo",
-		CurrentVersion: "1.0.0",
-	}, autoupdate.EmptySource{})
-
-	catalog, err := BuildActionCatalog(nil, ActionCatalogOptions{IncludeMCP: true, Updater: updater})
-	if err != nil {
-		t.Fatalf("BuildActionCatalog(with updater) error = %v", err)
-	}
-
-	for _, actionID := range []actioncatalog.ActionID{"server.check_update", "server.apply_update"} {
-		action, ok := catalog.Action(actionID)
-		if !ok {
-			t.Fatalf("catalog missing %s", actionID)
-		}
-		if action.Route.InputSchema == nil {
-			t.Fatalf("%s Route.InputSchema is nil", actionID)
-		}
-		if got := action.Route.InputSchema["type"]; got != "object" {
-			t.Fatalf("%s input schema type = %v, want object", actionID, got)
-		}
 	}
 }
 

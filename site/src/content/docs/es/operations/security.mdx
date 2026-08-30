@@ -10,7 +10,7 @@ faq:
   - q: "¿Cuál es la diferencia entre el modo solo lectura y el modo seguro?"
     a: "El **modo solo lectura** (`GITLAB_READ_ONLY=true`) no registra ninguna herramienta de escritura, así que solo están disponibles list, get y search —una garantía firme a nivel de servidor. El **modo seguro** (`GITLAB_SAFE_MODE=true`) sí registra las herramientas de escritura pero las intercepta y devuelve una vista previa JSON estructurada del nombre, los parámetros y las anotaciones en lugar de ejecutarlas. Si ambos están activos, el modo solo lectura tiene precedencia y las herramientas de escritura se desactivan por completo."
   - q: "¿Cómo verifico la integridad de un binario descargado?"
-    a: "Cada GitHub Release incluye `checksums.txt` (hashes SHA-256) y `checksums.txt.sigstore.json` (un bundle de firma keyless Cosign/Sigstore con GitHub OIDC). La auto-actualización verifica los binarios contra `checksums.txt` automáticamente. Para instalaciones manuales, ejecuta `cosign verify-blob` con el bundle, anclando la identidad del certificado a este repositorio y el emisor OIDC a GitHub, y luego valida el hash del binario contra el checksum firmado. Si la verificación falla, **no ejecutes el binario**."
+    a: "Cada GitHub Release incluye `checksums.txt` (hashes SHA-256) y `checksums.txt.sigstore.json` (un bundle de firma keyless Cosign/Sigstore con GitHub OIDC). La verificación te toca a ti, porque el servidor nunca descarga un binario por ti: ejecuta `cosign verify-blob` con el bundle, anclando la identidad del certificado a este repositorio y el emisor OIDC a GitHub, y luego valida el hash del binario contra el checksum firmado. Si la verificación falla, **no ejecutes el binario**."
 ---
 
 import FAQ from "../../../../components/FAQ.astro";
@@ -234,7 +234,7 @@ Cada GitHub Release incluye tres artefactos de integridad:
 - `checksums.txt.sigstore.json` — bundle de firma keyless [Cosign](https://docs.sigstore.dev/cosign/installation/) / Sigstore (GitHub OIDC, sin distribución de claves)
 - `<artefacto>.sbom.json` — un SBOM en formato SPDX por cada binario
 
-El mecanismo de auto-actualización verifica los binarios contra `checksums.txt` automáticamente antes de reemplazar el proceso en ejecución. Para instalaciones manuales, verifica tanto la firma como el checksum antes de ejecutar el binario.
+Nada de esto se verifica por ti: el servidor nunca descarga ni reemplaza su propio binario, así que quien pone un binario en la máquina es quien lo comprueba. Los gestores de paquetes hacen su propia verificación (Homebrew fija una fórmula con checksums; npm y el registro de contenedores fijan digests). Para un binario que descargues tú, verifica tanto la firma como el checksum antes de ejecutarlo.
 
 ### 1. Instalar Cosign
 
@@ -324,7 +324,7 @@ Un reporte útil incluye la versión afectada (`gitlab-mcp-server --version`), e
 - ☐ Habilita `GITLAB_READ_ONLY=true` para flujos de trabajo de solo lectura
 - ☐ Mantén la verificación TLS habilitada (`GITLAB_SKIP_TLS_VERIFY` sin establecer o `false`)
 - ☐ Usa transporte stdio cuando sea posible (sin exposición de red)
-- ☐ Mantén el binario del servidor actualizado (`AUTO_UPDATE=true`)
+- ☐ Mantén el binario del servidor actualizado por el canal con el que lo instalaste
 - ☐ Verifica la firma Cosign/Sigstore en la primera instalación manual (<a href="#verificación-de-la-integridad-del-release">instrucciones arriba</a>)
 - ☐ Bloqueo de esquema: todos los esquemas de entrada de herramientas aplican `additionalProperties: false` para rechazar campos inesperados
 

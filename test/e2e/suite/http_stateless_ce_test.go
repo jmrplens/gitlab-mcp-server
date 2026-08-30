@@ -108,8 +108,7 @@ func TestHTTPStatelessBinary_FullFlow_NoSessionTracking(t *testing.T) {
 	server := exec.CommandContext(ctx, bin, //nolint:gosec // bin is compiled into t.TempDir() by this test, not user input
 		"--http", "--http-addr="+addr,
 		"--gitlab-url="+gitlabURL,
-		"--stateless", "--json-response",
-		"--auto-update=false")
+		"--stateless", "--json-response")
 	server.Stdout = os.Stderr
 	server.Stderr = os.Stderr
 	requireNoError(t, server.Start(), "start server binary")

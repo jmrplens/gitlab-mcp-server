@@ -78,7 +78,6 @@ gitlab-mcp-server/
 │   ├── gen_stats/               # Generates README stats section from codebase metrics
 │   └── gen_testing_docs/        # Generates docs/development/testing/testing.md
 ├── internal/
-│   ├── autoupdate/              # Self-update: background startup checks, rename trick, restart activation
 │   ├── config/                  # Configuration loading (.env, flags, env vars)
 │   ├── gitlab/                  # GitLab API client wrapper (client.GL() accessor)
 │   ├── oauth/                   # OAuth HTTP mode: token cache, GitLab verifier, header middleware, RFC 9728 metadata
@@ -127,7 +126,6 @@ gitlab-mcp-server/
 │   │   ├── releases/            # Release tools
 │   │   ├── repository/          # Repository tree/compare tools
 │   │   ├── search/              # Search tools (code, MRs, issues, etc.)
-│   │   ├── serverupdate/       # Server self-update MCP tools (check/apply)
 │   │   ├── projectdiscovery/   # Git remote URL to GitLab project resolution
 │   │   ├── tags/                # Tag tools
 │   │   ├── todos/               # Todo tools
@@ -139,7 +137,6 @@ gitlab-mcp-server/
 │   ├── completions/             # 17 argument completion types
 │   ├── progress/                # MCP progress notifications
 │   ├── elicitation/             # MCP elicitation capability
-│   └── wizard/                  # Setup wizard (Web UI, TUI, CLI modes)
 ├── docs/                        # Project documentation (Diátaxis framework)
 │   ├── adr/                     # Architectural Decision Records
 │   ├── tools/                   # Per-domain tool documentation
@@ -306,7 +303,7 @@ When creating a new release and uploading binaries to GitHub Releases:
 
    The generator declares the **default** surface: it pins `dynamic` and talks to an in-process stub client instead of reading `TOOL_SURFACE`, `GITLAB_URL` or `GITLAB_TOKEN`. Anything a generator reads from the environment ships in the committed file, so a developer machine with `TOOL_SURFACE=individual` exported would otherwise publish a different manifest than CI checks. New environment-sensitive inputs belong in `cmd/internal/mcpsurface`, pinned there once for every generator, not read at the call site.
 
-6. **npm publishes automatically via an OIDC trusted publisher — no stored token.** The distribution is a launcher package (`@jmrp.io/gitlab-mcp-server`) plus six per-platform packages that each carry a release binary — the esbuild/biome model, so `npx` works, `--ignore-scripts` works, and nothing is downloaded at install time. The release job's `Publish to npm` step runs right after GoReleaser, reading the same `dist/` binaries the mcpb step uses. It authenticates through [npm trusted publishing](https://docs.npmjs.com/trusted-publishers): the job's `id-token: write` lets npm mint an OIDC token, and npm ≥ 11.5.1 (the step upgrades the setup-node 22 default) performs the exchange, so no secret is stored anywhere and provenance is attached automatically (no `--provenance` flag). `scripts/build-npm.mjs` assembles the packages from `dist/` (Node's `win32`/`x64` names mapped to Go's `windows`/`amd64` in one table there); `scripts/publish-npm.sh` publishes the platform packages first, then the launcher — that order matters, or an install racing the publish resolves optional dependencies not on the registry yet — and it **skips any version already published** so re-running a release job does not die on npm's 409. **`scripts/validate-npm.mjs` runs before the publish step** (a published npm version is permanent): it packs all seven tarballs and checks their file set, the binary's executable bit and platform magic number, a size floor, and the os/cpu/name/version, then installs the launcher plus the host-native platform package and drives a real MCP handshake asserting stdout is pure JSON-RPC. `make validate-npm NPM_BINARIES=dist` runs it in a clean `node:22` container so a developer's machine is never touched; the release job runs `make validate-npm-local` on the ephemeral runner. **Bootstrap constraint:** a package cannot have a trusted publisher configured until it exists, so the first version (v2.7.5) was created by a one-time tokened `make publish-npm`; the trusted publisher on npmjs.com is then configured **per package** (all seven) naming this repo, the workflow file `release.yml`, and the `release` environment (the job sets `environment: release`), after which the token is removed and every later tag publishes with no credential. The launcher's version and its optionalDependency pins move together via `build-npm.mjs --sync-only`, wired into `scripts/update-server-json-sha.sh` so the committed `npm/gitlab-mcp-server/package.json` stays current with the release stamp. The launcher forces `AUTO_UPDATE=false` (npm owns the binary, like the Homebrew formula and the mcpb manifest). For an out-of-band publish, `make publish-npm NPM_BINARIES=dist` from a machine with an npm token (rehearse with `make publish-npm-dry`). The unscoped name `gitlab-mcp-server` was already taken on npm, hence the scope.
+6. **npm publishes automatically via an OIDC trusted publisher — no stored token.** The distribution is a launcher package (`@jmrp.io/gitlab-mcp-server`) plus six per-platform packages that each carry a release binary — the esbuild/biome model, so `npx` works, `--ignore-scripts` works, and nothing is downloaded at install time. The release job's `Publish to npm` step runs right after GoReleaser, reading the same `dist/` binaries the mcpb step uses. It authenticates through [npm trusted publishing](https://docs.npmjs.com/trusted-publishers): the job's `id-token: write` lets npm mint an OIDC token, and npm ≥ 11.5.1 (the step upgrades the setup-node 22 default) performs the exchange, so no secret is stored anywhere and provenance is attached automatically (no `--provenance` flag). `scripts/build-npm.mjs` assembles the packages from `dist/` (Node's `win32`/`x64` names mapped to Go's `windows`/`amd64` in one table there); `scripts/publish-npm.sh` publishes the platform packages first, then the launcher — that order matters, or an install racing the publish resolves optional dependencies not on the registry yet — and it **skips any version already published** so re-running a release job does not die on npm's 409. **`scripts/validate-npm.mjs` runs before the publish step** (a published npm version is permanent): it packs all seven tarballs and checks their file set, the binary's executable bit and platform magic number, a size floor, and the os/cpu/name/version, then installs the launcher plus the host-native platform package and drives a real MCP handshake asserting stdout is pure JSON-RPC. `make validate-npm NPM_BINARIES=dist` runs it in a clean `node:22` container so a developer's machine is never touched; the release job runs `make validate-npm-local` on the ephemeral runner. **Bootstrap constraint:** a package cannot have a trusted publisher configured until it exists, so the first version (v2.7.5) was created by a one-time tokened `make publish-npm`; the trusted publisher on npmjs.com is then configured **per package** (all seven) naming this repo, the workflow file `release.yml`, and the `release` environment (the job sets `environment: release`), after which the token is removed and every later tag publishes with no credential. The launcher's version and its optionalDependency pins move together via `build-npm.mjs --sync-only`, wired into `scripts/update-server-json-sha.sh` so the committed `npm/gitlab-mcp-server/package.json` stays current with the release stamp. For an out-of-band publish, `make publish-npm NPM_BINARIES=dist` from a machine with an npm token (rehearse with `make publish-npm-dry`). The unscoped name `gitlab-mcp-server` was already taken on npm, hence the scope.
 
 7. **A `server.json` `remotes` URL must be globally unique across the whole MCP Registry, and the comparison is on the literal string.** The registry refuses a publish whose remote URL any other server already claims — templates included. This repository used to declare `https://{host}:{port}/` as a self-hosted form; the sibling `libgen-mcp` copied that pattern and its v1.5.2 publish was rejected with `remote URL https://{host}:{port}/ is already used by server io.github.jmrplens/gitlab-mcp-server`. Checking that nothing claims your _hostname_ is not the check — the string is. Generic templates are therefore not worth claiming: the self-hosted HTTP mode they advertise is documented in the guides anyway, and holding one blocks every other server you publish. `make check-server-json` validates the schema only; uniqueness is a registry-side property no local gate can see.
 
@@ -330,8 +327,8 @@ go test ./internal/tools/branches/ -count=1    # tests on changed package
 golangci-lint run --build-tags e2e ./internal/tools/branches/ # lint changed package
 
 # Markdown files — run on specific changed files
-npx markdownlint-cli2 docs/guides/auto-update.md README.md  # lint specific .md files
-npx markdownlint-cli2 --fix docs/guides/auto-update.md      # auto-fix specific .md files
+npx markdownlint-cli2 docs/guides/ci-cd.md README.md  # lint specific .md files
+npx markdownlint-cli2 --fix docs/guides/ci-cd.md      # auto-fix specific .md files
 
 # README.md/docs tables — normalize pipe tables, or verify with --check
 go run ./cmd/format_md_tables/
@@ -366,10 +363,6 @@ make analyze-report                        # generate LLM-consumable report
 | `META_PARAM_SCHEMA`      | No       | Meta-tool input-schema strategy: `opaque` (default), `compact` (~6.5x), or `full` (~11.9x). Independent of `META_TOOLS`. Per-action call shapes and input schemas are discoverable through `gitlab://tools` and `gitlab://tools/{id}` for every surface |
 | `GITLAB_READ_ONLY`       | No       | Read-only mode: removes mutating operations per action; reads keep working on every surface (`false` default) |
 | `GITLAB_SAFE_MODE`       | No       | Safe mode: intercepts mutating operations per action and returns a JSON preview naming the action; reads keep working (`false` default) |
-| `AUTO_UPDATE`            | No       | Enable auto-update: `true` (default), `check`, `false`  |
-| `AUTO_UPDATE_REPO`       | No       | GitHub repository slug for release assets (`jmrplens/gitlab-mcp-server`) |
-| `AUTO_UPDATE_INTERVAL`   | No       | Periodic check interval (`1h` default, HTTP mode)        |
-| `AUTO_UPDATE_TIMEOUT`    | No       | Startup/background update timeout (`60s` default, range 5s–10m) |
 | `GITLAB_TIER`            | No       | Licensing tier selector: `free`/`ce` (Free), `premium`, or `ultimate`. When set, the tier is used verbatim with no license check. When unset, the tier is detected from the instance license (`GET /license` → plan), falling back to `free`. In HTTP mode use `--tier`; when omitted the tier is detected per token+URL pool entry. Enterprise/Premium tools are gated when the resolved tier is Premium or Ultimate |
 | `GITLAB_ENTERPRISE`      | No       | **Deprecated** — use `GITLAB_TIER`. Honored for back-compat only when `GITLAB_TIER` is unset: `true` → `ultimate`, `false` → `free`. Logs a deprecation warning |
 | `AUTH_MODE`              | No       | HTTP mode auth: `legacy` (default) or `oauth` (RFC 9728 Bearer verification) |
@@ -419,12 +412,8 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--pool-idle-timeout` | `1h` | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h) |
 | `--revalidate-interval` | `15m` | Token re-validation interval; `0` to disable (upper bound: 24h) |
 | `--trusted-proxy-header` | _(empty)_ | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`) |
-| `--auto-update`       | `true`  | Enable auto-update (`true`, `check`, `false`)            |
-| `--auto-update-repo`  | `jmrplens/gitlab-mcp-server` | GitHub repository for release assets |
-| `--auto-update-interval` | `1h` | Periodic update check interval                           |
 | `--rate-limit-rps` | `10` | Per-server tools/call rate limit in req/s (`0` disables it). On by default in HTTP mode; the `RATE_LIMIT_RPS` env var used by stdio still defaults to `0` |
 | `--rate-limit-burst` | `40` | Token-bucket burst size when --rate-limit-rps > 0        |
-| `--auto-update-timeout` | `60s` | Startup/background update timeout (range 5s–10m)         |
 
 **General flags** (both stdio and HTTP modes):
 

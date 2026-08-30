@@ -697,7 +697,7 @@ Codex-specific notes:
 
 ### Internal
 
-- [Getting Started](../getting-started.md) — first-time setup tutorial with Setup Wizard
+- [Getting Started](../getting-started.md) — install, configure a client, first call
 - [OAuth App Setup](oauth-app-setup.md) — creating GitLab OAuth applications
 - [Configuration](../reference/configuration.md) — environment variables and config loading order
 - [HTTP Server Mode](http-server-mode.md) — HTTP transport architecture and deployment

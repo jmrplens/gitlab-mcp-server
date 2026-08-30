@@ -171,7 +171,6 @@ func startServerOnPort(t *testing.T, port int, env map[string]string, flags ...s
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = append(os.Environ(),
-		"AUTO_UPDATE=false",
 		"LOG_LEVEL=info",
 		"TOOL_SURFACE=dynamic",
 	)
@@ -382,7 +381,7 @@ func runServerExpectingExit(t *testing.T, bin string, args ...string) (string, e
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = append(os.Environ(), "AUTO_UPDATE=false", "LOG_LEVEL=info")
+	cmd.Env = append(os.Environ(), "LOG_LEVEL=info")
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

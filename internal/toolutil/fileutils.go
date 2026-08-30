@@ -207,7 +207,7 @@ func pathWithinBase(path, base string) bool {
 // and returns the lowercase hex-encoded hash string.
 func ComputeSHA256(path string) (string, error) {
 	cleanPath := filepath.Clean(path)
-	f, err := os.Open(cleanPath) //#nosec G304 -- path is cleaned via filepath.Clean; callers are internal (auto-update binary path from os.Executable), not user-controlled
+	f, err := os.Open(cleanPath) //#nosec G304 -- path is cleaned via filepath.Clean; callers are internal, not user-controlled
 	if err != nil {
 		return "", fmt.Errorf("open for checksum %s: %w", cleanPath, err)
 	}

@@ -3,7 +3,7 @@
 //
 // Configuration comes from environment variables, .env files, and CLI flags in
 // cmd/server. The package centralizes defaults and bounds for stdio mode, HTTP
-// mode, OAuth token verification, auto-update behavior, upload limits, safe
+// mode, OAuth token verification, upload limits, safe
 // mode, read-only mode, rate limiting, tool surfaces, capability surfaces, and
 // meta-tool schema detail.
 //
@@ -56,15 +56,6 @@ const (
 	DefaultOAuthCacheTTL = 15 * time.Minute
 	MinOAuthCacheTTL     = 1 * time.Minute
 	MaxOAuthCacheTTL     = 2 * time.Hour
-)
-
-// Auto-update defaults.
-const (
-	DefaultAutoUpdateRepo     = "jmrplens/gitlab-mcp-server"
-	DefaultAutoUpdateInterval = 1 * time.Hour
-	DefaultAutoUpdateTimeout  = 60 * time.Second
-	MinAutoUpdateTimeout      = 5 * time.Second
-	MaxAutoUpdateTimeout      = 10 * time.Minute
 )
 
 // DefaultRateLimitBurst is the bucket size used when rps > 0 and the operator
@@ -210,11 +201,6 @@ type Config struct {
 	// SocketMode is the permission bits applied to a unix socket named by
 	// the listen address. 0 means the default, [DefaultSocketMode].
 	SocketMode os.FileMode
-
-	AutoUpdate         string        // Auto-update mode: "true" (auto), "check" (log-only), "false" (disabled)
-	AutoUpdateRepo     string        // GitLab project path for update checks
-	AutoUpdateInterval time.Duration // How often to check for updates (HTTP mode)
-	AutoUpdateTimeout  time.Duration // Timeout for startup/background update checks
 
 	AuthMode      string        // Auth mode for HTTP: "legacy" (default) or "oauth"
 	OAuthCacheTTL time.Duration // OAuth token cache TTL (HTTP mode, oauth auth mode)
@@ -420,11 +406,6 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	updates, err := loadAutoUpdateEnv()
-	if err != nil {
-		return nil, err
-	}
 	auth, err := loadAuthEnv()
 	if err != nil {
 		return nil, err
@@ -461,10 +442,6 @@ func Load() (*Config, error) {
 		SessionTimeout:     limits.sessionTimeout,
 		RevalidateInterval: limits.revalidateInterval,
 		PoolIdleTimeout:    limits.poolIdleTimeout,
-		AutoUpdate:         updates.mode,
-		AutoUpdateRepo:     updates.repo,
-		AutoUpdateInterval: updates.interval,
-		AutoUpdateTimeout:  updates.timeout,
 		AuthMode:           auth.mode,
 		PublicURL:          auth.publicURL,
 		OAuthCacheTTL:      auth.oauthCacheTTL,
@@ -497,13 +474,6 @@ type limitEnv struct {
 	sessionTimeout     time.Duration
 	revalidateInterval time.Duration
 	poolIdleTimeout    time.Duration
-}
-
-type autoUpdateEnv struct {
-	mode     string
-	repo     string
-	interval time.Duration
-	timeout  time.Duration
 }
 
 type authEnv struct {
@@ -644,24 +614,6 @@ func parseBoundedDurationEnv(name string, defaultValue, maxValue time.Duration) 
 	return value, nil
 }
 
-func loadAutoUpdateEnv() (autoUpdateEnv, error) {
-	values := autoUpdateEnv{mode: os.Getenv("AUTO_UPDATE"), repo: os.Getenv("AUTO_UPDATE_REPO")}
-	if values.mode == "" {
-		values.mode = "true"
-	}
-	if values.repo == "" {
-		values.repo = DefaultAutoUpdateRepo
-	}
-	var err error
-	if values.interval, err = parseDuration(os.Getenv("AUTO_UPDATE_INTERVAL"), DefaultAutoUpdateInterval); err != nil {
-		return autoUpdateEnv{}, fmt.Errorf("invalid AUTO_UPDATE_INTERVAL value: %w", err)
-	}
-	if values.timeout, err = parseDuration(os.Getenv("AUTO_UPDATE_TIMEOUT"), DefaultAutoUpdateTimeout); err != nil {
-		return autoUpdateEnv{}, fmt.Errorf("invalid AUTO_UPDATE_TIMEOUT value: %w", err)
-	}
-	return values, nil
-}
-
 func loadAuthEnv() (authEnv, error) {
 	mode := os.Getenv("AUTH_MODE")
 	if mode == "" {
@@ -775,9 +727,6 @@ func validateCapabilitySurface(capabilitySurface string) error {
 
 func (c *Config) validateDurationsAndRates() error {
 	if err := validateDurationRange("OAUTH_CACHE_TTL", c.OAuthCacheTTL, MinOAuthCacheTTL, MaxOAuthCacheTTL); err != nil {
-		return err
-	}
-	if err := validateDurationRange("AUTO_UPDATE_TIMEOUT", c.AutoUpdateTimeout, MinAutoUpdateTimeout, MaxAutoUpdateTimeout); err != nil {
 		return err
 	}
 	if c.RateLimitRPS < 0 {

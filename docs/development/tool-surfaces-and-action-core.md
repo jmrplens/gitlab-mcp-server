@@ -82,10 +82,8 @@ and `repository.file_get`.
 
 Every normal GitLab API action in the catalog is now backed by an `ActionSpec`.
 Every normal individual GitLab API tool derives its MCP metadata from an
-`ActionSpec` projection. The only documented source-level exceptions are the
-dynamic catalog find/execute surface and the server auto-update
-surface, which is wired from `cmd/server` with an updater instead of a GitLab
-client.
+`ActionSpec` projection. The only documented source-level exception is the
+dynamic catalog find/execute surface.
 Standalone dynamic actions such as `discover_project.resolve` and interactive
 elicitation flows are added through their own spec builders before dynamic mode
 registers visible tools.

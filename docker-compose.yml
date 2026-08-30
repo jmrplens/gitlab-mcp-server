@@ -12,7 +12,6 @@ services:
       - GITLAB_TIER=${GITLAB_TIER:-}
       - GITLAB_READ_ONLY=${GITLAB_READ_ONLY:-false}
       - GITLAB_SAFE_MODE=${GITLAB_SAFE_MODE:-false}
-      - AUTO_UPDATE=${AUTO_UPDATE:-false}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     command:
       - "--http"
@@ -25,7 +24,6 @@ services:
       - "--skip-tls-verify=${GITLAB_SKIP_TLS_VERIFY:-false}"
       - "--read-only=${GITLAB_READ_ONLY:-false}"
       - "--safe-mode=${GITLAB_SAFE_MODE:-false}"
-      - "--auto-update=${AUTO_UPDATE:-false}"
     deploy:
       resources:
         limits:

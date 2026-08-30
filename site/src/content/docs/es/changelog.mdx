@@ -10,9 +10,9 @@ faq:
   - q: "¿Qué publica cada release?"
     a: "Cada release publica binarios para Linux, macOS y Windows en amd64 y arm64, un binario universal de macOS, una imagen de contenedor en GHCR y Docker Hub, una extensión para Claude Desktop (.mcpb), los paquetes npm y checksums.txt. Los checksums se firman sin claves con Cosign/Sigstore, cada binario lleva su SBOM en formato SPDX y los artefactos del release llevan atestaciones de procedencia SLSA, así que puedes verificar lo que has descargado antes de ejecutarlo."
   - q: "¿Cómo me entero de los nuevos releases?"
-    a: "De tres formas. Observa el repositorio en GitHub con el filtro de Releases; suscribe un lector de feeds a https://github.com/jmrplens/gitlab-mcp-server/releases.atom; o deja activada la auto-actualización integrada, que consulta GitHub Releases al arrancar y puede aplicar la actualización por ti. Usa AUTO_UPDATE=check para que te avise sin instalar nada."
+    a: "De dos formas. Observa el repositorio en GitHub con el filtro de Releases, o suscribe un lector de feeds a https://github.com/jmrplens/gitlab-mcp-server/releases.atom. Instalar un release es después un paso que das tú: el servidor no comprueba si hay actualizaciones ni reemplaza nunca su propio binario, así que actualizas por el canal con el que lo instalaste (npm, Homebrew, winget, una etiqueta de imagen más nueva, una extensión para Claude Desktop más nueva) o descargas el nuevo asset desde la página de Releases."
   - q: "¿Cómo vuelvo a una versión anterior?"
-    a: "Todos los releases siguen descargables desde la página de GitHub Releases, así que revertir consiste en descargar el asset anterior para tu plataforma y sustituir el binario, o fijar la etiqueta de imagen anterior si usas el contenedor. Fija una versión exacta en lugar de latest en entornos donde una actualización inesperada sería disruptiva, y pon AUTO_UPDATE=false para que el servidor no se actualice solo."
+    a: "Todos los releases siguen descargables desde la página de GitHub Releases, así que revertir consiste en descargar el asset anterior para tu plataforma y sustituir el binario, o fijar la etiqueta de imagen anterior si usas el contenedor. En entornos donde una actualización inesperada sería disruptiva, fija una versión exacta en lugar de latest. No hace falta nada más: el servidor no reemplaza nunca su propio binario, así que una versión fijada se queda donde está hasta que la actualices tú."
 ---
 
 import FAQ from "../../../components/FAQ.astro";
@@ -52,16 +52,17 @@ Los pasos de verificación están en la [página de seguridad](/gitlab-mcp-serve
 
 ## Mantenerse al día
 
-Tres formas de seguir los releases, de menos a más automática:
+Dos formas de enterarte de un release:
 
 1. **Observa el repositorio** en GitHub con el filtro de Releases, para recibir una notificación por versión.
 2. **Suscríbete al [feed Atom](https://github.com/jmrplens/gitlab-mcp-server/releases.atom)** desde un lector de feeds o desde tu automatización.
-3. **Deja activada la auto-actualización.** El servidor consulta GitHub Releases al arrancar y puede aplicar las actualizaciones por sí mismo. Usa `AUTO_UPDATE=check` para que te avise sin instalar, o `AUTO_UPDATE=false` para desactivarla — ver [auto-actualización](/gitlab-mcp-server/operations/auto-update/).
+
+Instalarlo es después un paso aparte y deliberado. El servidor no comprueba si hay actualizaciones ni reemplaza nunca su propio binario, así que una actualización pasa por el canal con el que lo instalaste (`npm update`, `brew upgrade`, `winget upgrade`, una etiqueta de imagen más nueva, una extensión para Claude Desktop más nueva) o por descargar el nuevo asset desde la página de Releases.
 
 ## Fijar versión y revertir
 
 Todos los releases publicados siguen descargables, así que revertir es simplemente descargar el asset anterior para tu plataforma, o fijar la etiqueta de imagen previa si usas el contenedor.
 
-En entornos donde una actualización inesperada sería disruptiva, fija una versión exacta en lugar de `latest` **y** pon `AUTO_UPDATE=false`, para que el binario no pueda sustituirse a sí mismo entre ejecuciones. La extensión para Claude Desktop se distribuye con la auto-actualización desactivada por ese mismo motivo.
+En entornos donde una actualización inesperada sería disruptiva, fija una versión exacta en lugar de `latest`. Eso es todo: el binario no puede sustituirse a sí mismo entre ejecuciones, así que la versión que fijaste es la que sigue ejecutándose hasta que la actualices.
 
 <FAQ />

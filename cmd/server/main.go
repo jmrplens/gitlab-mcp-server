@@ -21,7 +21,7 @@
 //	server
 //	    |
 //	    v
-//	configuration and auto-update setup
+//	configuration and startup
 //	    |
 //	    v
 //	MCP capability registration
@@ -55,7 +55,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cachehints"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/capguard"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/clientcompat"
@@ -72,9 +71,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/health"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/serverupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/wizard"
 )
 
 // version and commit are set at build time via -ldflags.
@@ -179,10 +176,6 @@ type httpConfig struct {
 	ignoreScopes          bool
 	maxHTTPClients        int
 	sessionTimeout        time.Duration
-	autoUpdate            string
-	autoUpdateRepo        string
-	autoUpdateInterval    time.Duration
-	autoUpdateTimeout     time.Duration
 	revalidateInterval    time.Duration
 	poolIdleTimeout       time.Duration
 	authMode              string
@@ -250,15 +243,11 @@ func main() {
 	var showVersion bool
 	var shutdownPeers bool
 	var useHTTP bool
-	var forceSetup bool
-	var setupMode string
 	var toolSearch string
 	var hcfg httpConfig
 
 	flag.BoolVar(&showHelp, "h", false, "Show full help with flags, env vars, and examples")
 	flag.BoolVar(&shutdownPeers, "shutdown", false, "Terminate all running instances and exit")
-	flag.BoolVar(&forceSetup, "setup", false, "Run interactive setup wizard")
-	flag.StringVar(&setupMode, "setup-mode", "auto", "Setup UI mode: auto, web, tui, cli")
 	flag.BoolVar(&showVersion, "version", false, "Print version and exit")
 	flag.StringVar(&toolSearch, "tool-search", "", "Search tools by name/description and exit")
 	flag.BoolVar(&useHTTP, "http", false, "Run MCP server in HTTP mode")
@@ -276,10 +265,6 @@ func main() {
 	flag.BoolVar(&hcfg.ignoreScopes, "ignore-scopes", false, "Skip PAT scope detection and register all tools")
 	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum unique (token, GitLab URL) server entries kept in the pool; bounds pooled entries, not sessions or concurrent requests")
 	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle MCP session timeout; applies to --stateless=false only (under the default stateless transport each POST's session ends with its response)")
-	flag.StringVar(&hcfg.autoUpdate, "auto-update", "true", "Auto-update mode: true (auto-apply), check (log-only), false (disabled)")
-	flag.StringVar(&hcfg.autoUpdateRepo, "auto-update-repo", config.DefaultAutoUpdateRepo, "GitHub repository for update checks")
-	flag.DurationVar(&hcfg.autoUpdateInterval, "auto-update-interval", config.DefaultAutoUpdateInterval, "How often to check for updates")
-	flag.DurationVar(&hcfg.autoUpdateTimeout, "auto-update-timeout", config.DefaultAutoUpdateTimeout, "Timeout for startup/background update checks (range 5s\u201310m)")
 	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval (0 to disable)")
 	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token-and-URL server entry after this long unused (0 to disable)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
@@ -344,14 +329,13 @@ func main() {
 		return
 	}
 
-	autoWizard := !useHTTP && !showHelp && !showVersion &&
-		wizard.IsInteractiveTerminal() &&
-		os.Getenv("GITLAB_TOKEN") == "" && os.Getenv("GITLAB_URL") == ""
-	if forceSetup || autoWizard {
-		if err := wizard.Run(version, wizard.UIMode(setupMode), os.Stdin, os.Stdout); err != nil {
-			slog.Error("setup wizard failed", "error", err)
-			os.Exit(1)
-		}
+	// Started by hand with nothing configured: say what this is and wait, so
+	// a double-clicked window does not close before it can be read. An MCP
+	// client never reaches this, because it connects pipes rather than a
+	// terminal, which is the same test the setup wizard used to gate on.
+	if !useHTTP && !showHelp && !showVersion && isInteractiveTerminal() &&
+		os.Getenv("GITLAB_TOKEN") == "" && os.Getenv("GITLAB_URL") == "" {
+		firstRunGuidance(os.Stdout, os.Stdin, version)
 		return
 	}
 
@@ -359,16 +343,8 @@ func main() {
 		Level: parseLogLevel(os.Getenv("LOG_LEVEL")),
 	})))
 
-	setupAutoUpdateRedaction("")
-
 	health.SetServerInfo(health.ServerInfo{
 		Version:    version,
-		Author:     projectAuthor,
-		Department: projectDepartment,
-		Repository: projectRepository,
-	})
-
-	serverupdate.SetServerInfo(serverupdate.ServerInfo{
 		Author:     projectAuthor,
 		Department: projectDepartment,
 		Repository: projectRepository,
@@ -405,8 +381,6 @@ FLAGS
   -h                        Show this help message
   -version                  Print version and exit
   -shutdown                 Terminate all running instances and exit
-  -setup                    Run interactive setup wizard
-  -setup-mode string        Setup UI mode: auto|web|tui|cli (default "auto")
   -tool-search string       Search tools by name/description and exit
   -http                     Run in HTTP transport mode (default: stdio)
   -http-addr string         Listen address: host:port, or a path to bind a unix socket (default ":8080")
@@ -432,10 +406,6 @@ FLAGS
   -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28). Use -stateless=false for legacy stateful sessions
   -json-response            Return application/json responses instead of SSE (default false)
   -max-request-body-bytes n Maximum streamable HTTP request body bytes (0 = SDK default 4 MiB)
-  -auto-update string       Auto-update mode: true|check|false (default "true")
-  -auto-update-repo string  GitHub repository for update checks (default "%s")
-  -auto-update-interval dur How often to check for updates (default %s, HTTP mode)
-  -auto-update-timeout dur  Timeout for startup/background update checks (default %s)
   -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
   -resource-documentation string
                             https URL published as RFC 9728 resource_documentation (default: this project's OAuth setup guide)
@@ -467,10 +437,6 @@ ENVIRONMENT VARIABLES (stdio mode)
   EXCLUDE_TOOLS             Comma-separated tool names to exclude (default empty)
   GITLAB_IGNORE_SCOPES      Skip PAT scope detection: true/false (default false)
   UPLOAD_MAX_FILE_SIZE      Maximum upload/file size for upload tools (default 2GB)
-  AUTO_UPDATE               Auto-update mode: true/check/false (default true)
-  AUTO_UPDATE_REPO          GitHub repository for update checks (default %s)
-  AUTO_UPDATE_INTERVAL      Periodic check interval (default 1h, HTTP mode)
-  AUTO_UPDATE_TIMEOUT       Startup/background update timeout (default 60s, range 5s–10m)
   RATE_LIMIT_RPS            Per-server tools/call rate limit (default 0, disabled)
   RATE_LIMIT_BURST          Token-bucket burst size when RATE_LIMIT_RPS > 0 (default 40)
   YOLO_MODE                 Skip destructive action confirmation prompts (default false)
@@ -530,13 +496,10 @@ JSON CONFIGURATION EXAMPLES
 `, version, commit,
 		projectAuthor, projectDepartment, projectRepository,
 		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout, config.DefaultPoolIdleTimeout,
-		config.DefaultAutoUpdateRepo, config.DefaultAutoUpdateInterval,
-		config.DefaultAutoUpdateTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
 		config.DefaultRevalidateInterval,
 		config.DefaultRateLimitBurst,
-		config.DefaultGitLabURL,
-		config.DefaultAutoUpdateRepo)
+		config.DefaultGitLabURL)
 }
 
 // run starts the MCP server with OS signal handling for graceful shutdown.
@@ -600,8 +563,6 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
 	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
-	autoupdate.CleanupOldBinary()
-	startAutoUpdate(ctx, cfg)
 
 	return serveHTTP(ctx, cfg, hcfg.addr, hcfg.httpIdleTimeout)
 }
@@ -697,10 +658,6 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		JSONResponse:          hcfg.jsonResponse,
 		MaxRequestBodyBytes:   hcfg.maxRequestBodyBytes,
 		UploadMaxFileSize:     config.DefaultMaxFileSize,
-		AutoUpdate:            hcfg.autoUpdate,
-		AutoUpdateRepo:        hcfg.autoUpdateRepo,
-		AutoUpdateInterval:    hcfg.autoUpdateInterval,
-		AutoUpdateTimeout:     hcfg.autoUpdateTimeout,
 		AuthMode:              hcfg.authMode,
 		PublicURL:             hcfg.publicURL,
 		ResourceDocumentation: hcfg.resourceDocumentation,
@@ -805,8 +762,8 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 	// A private or self-signed certificate does not need this flag. Install the
 	// CA in the OS trust store, or point SSL_CERT_FILE at a bundle, which is
 	// the container answer. Note that SSL_CERT_FILE replaces the default root
-	// pool process-wide, so it also governs the auto-update call to GitHub;
-	// a bundle, not a bare leaf certificate.
+	// pool process-wide, so give it a bundle rather than a bare leaf
+	// certificate.
 	if cfg.SkipTLSVerify {
 		for _, instance := range instances {
 			if !config.IsLoopbackGitLabURL(instance) {
@@ -875,12 +832,6 @@ func validateHTTPDurationConfig(cfg *config.Config) error {
 	if cfg.PoolIdleTimeout > config.MaxPoolIdleTimeout {
 		return fmt.Errorf("--pool-idle-timeout %s exceeds maximum of %s", cfg.PoolIdleTimeout, config.MaxPoolIdleTimeout)
 	}
-	if cfg.AutoUpdateTimeout < config.MinAutoUpdateTimeout {
-		return fmt.Errorf("--auto-update-timeout %s is below minimum of %s", cfg.AutoUpdateTimeout, config.MinAutoUpdateTimeout)
-	}
-	if cfg.AutoUpdateTimeout > config.MaxAutoUpdateTimeout {
-		return fmt.Errorf("--auto-update-timeout %s exceeds maximum of %s", cfg.AutoUpdateTimeout, config.MaxAutoUpdateTimeout)
-	}
 	return nil
 }
 
@@ -910,9 +861,6 @@ func runStdio(ctx context.Context) error {
 	toolutil.EnableEmbeddedResources(cfg.EmbeddedResources)
 
 	// Clean up leftover .old binary from previous updates.
-	autoupdate.CleanupOldBinary()
-
-	startStdioAutoUpdate(ctx, cfg)
 
 	client, err := gitlabclient.NewClient(cfg)
 	if err != nil {
@@ -964,8 +912,7 @@ func runStdio(ctx context.Context) error {
 		}
 	}
 
-	updater := newUpdaterForTools(cfg)
-	server, err := createServer(ctx, client, serverCfg, updater)
+	server, err := createServer(ctx, client, serverCfg)
 	if err != nil {
 		return fmt.Errorf("creating MCP server: %w", err)
 	}
@@ -1049,7 +996,6 @@ func createServer(
 	ctx context.Context,
 	client *gitlabclient.Client,
 	cfg *config.ServerConfig,
-	updater *autoupdate.Updater,
 	opts ...serverOption,
 ) (*mcp.Server, error) {
 	if client == nil {
@@ -1175,7 +1121,7 @@ func createServer(
 	if toolSurface != config.ToolSurfaceIndividual {
 		gitlabtools.SetMetaParamSchema(cfg.MetaParamSchema)
 	}
-	surfaceRegistration, err := registerConfiguredToolSurface(server, client, cfg, updater, toolSurface)
+	surfaceRegistration, err := registerConfiguredToolSurface(server, client, cfg, toolSurface)
 	if err != nil {
 		return nil, err
 	}
@@ -1318,18 +1264,18 @@ func registerConfiguredCapabilities(server *mcp.Server, client *gitlabclient.Cli
 	}
 }
 
-func registerConfiguredToolSurface(server *mcp.Server, client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater, toolSurface string) (serverSurfaceRegistration, error) {
-	return registerConfiguredToolSurfaceWithCatalog(server, client, cfg, updater, toolSurface, nil)
+func registerConfiguredToolSurface(server *mcp.Server, client *gitlabclient.Client, cfg *config.ServerConfig, toolSurface string) (serverSurfaceRegistration, error) {
+	return registerConfiguredToolSurfaceWithCatalog(server, client, cfg, toolSurface, nil)
 }
 
-func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater, toolSurface string, prebuiltCatalog *actioncatalog.Catalog) (serverSurfaceRegistration, error) {
+func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlabclient.Client, cfg *config.ServerConfig, toolSurface string, prebuiltCatalog *actioncatalog.Catalog) (serverSurfaceRegistration, error) {
 	switch toolSurface {
 	case config.ToolSurfaceDynamic:
 		actionCatalog := prebuiltCatalog
 		var withheld withheldActions
 		if actionCatalog == nil {
 			var catalogErr error
-			actionCatalog, withheld, catalogErr = buildDynamicActionCatalog(client, cfg, updater)
+			actionCatalog, withheld, catalogErr = buildDynamicActionCatalog(client, cfg)
 			if catalogErr != nil {
 				return serverSurfaceRegistration{}, fmt.Errorf("build dynamic action catalog: %w", catalogErr)
 			}
@@ -1340,7 +1286,7 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 	case config.ToolSurfaceMeta:
 		filteredCatalog := prebuiltCatalog
 		if filteredCatalog == nil {
-			actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true, Updater: updater})
+			actionCatalog, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
 			if catalogErr != nil {
 				slog.Warn("failed to build meta action catalog", "error", catalogErr)
 				actionCatalog = actioncatalog.NewCatalog()
@@ -1356,7 +1302,6 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		return serverSurfaceRegistration{metaSchemaRoutes: filteredCatalog.ActionMaps(), surfaceCatalog: filteredCatalog}, nil
 	default:
 		gitlabtools.RegisterAll(server, client, cfg.Tier)
-		gitlabtools.RegisterServerMaintenanceSurfaceTools(server, updater)
 		return serverSurfaceRegistration{}, nil
 	}
 }
@@ -1632,7 +1577,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// mark for being idle. Liveness on this transport is the SSE
 		// keep-alive comment (see sseAwareWriter), which puts bytes on the
 		// wire without asking the client for anything.
-		srv, err := createServer(ctx, client, serverCfg, nil, withSessionTag(tag), withKeepAlive(0))
+		srv, err := createServer(ctx, client, serverCfg, withSessionTag(tag), withKeepAlive(0))
 		if err != nil {
 			return nil, err
 		}
@@ -2882,7 +2827,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 	// createServer's internal tool-exclusion pass runs an ephemeral
 	// in-memory session of its own; the caller's context governs the card
 	// session below, not that registration detail.
-	srv, err := createServer(ctx, dummyClient, cfg.ServerConfig(), nil)
+	srv, err := createServer(ctx, dummyClient, cfg.ServerConfig())
 	if err != nil {
 		return nil, fmt.Errorf("creating server-card MCP server: %w", err)
 	}
@@ -3130,138 +3075,6 @@ func serveStdio(ctx context.Context, server *mcp.Server) error {
 	return fmt.Errorf("mcp server error: %w", err)
 }
 
-type stdioAutoUpdateCheckFunc func(context.Context, autoupdate.Config) (newVersion string, updated bool, err error)
-
-func runStdioAutoUpdateCheck(ctx context.Context, cfg autoupdate.Config) (newVersion string, updated bool, err error) {
-	updater, err := autoupdate.NewUpdater(cfg)
-	if err != nil {
-		return "", false, err
-	}
-	return updater.CheckOnce(ctx)
-}
-
-// startStdioAutoUpdate launches the startup update check for stdio mode.
-// The check runs in the background so MCP startup and tool negotiation are not
-// delayed by release detection, download, or binary replacement.
-func startStdioAutoUpdate(ctx context.Context, cfg *config.Config) {
-	startStdioAutoUpdateWithCheck(ctx, cfg, runStdioAutoUpdateCheck)
-}
-
-func startStdioAutoUpdateWithCheck(ctx context.Context, cfg *config.Config, check stdioAutoUpdateCheckFunc) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("autoupdate: startup auto-update panicked — continuing without update", "panic", r)
-		}
-	}()
-
-	mode, err := autoupdate.ParseMode(cfg.AutoUpdate)
-	if err != nil {
-		slog.Warn("autoupdate: invalid AUTO_UPDATE value, skipping", "error", err)
-		return
-	}
-	if mode == autoupdate.ModeDisabled {
-		return
-	}
-	if autoupdate.JustUpdated() {
-		autoupdate.ClearJustUpdated()
-		slog.Info("autoupdate: skipping startup update check (just re-executed after update)")
-		return
-	}
-
-	timeout := cfg.AutoUpdateTimeout
-	if timeout <= 0 {
-		timeout = config.DefaultAutoUpdateTimeout
-	}
-	updateCfg := autoupdate.Config{
-		Mode:           mode,
-		Repository:     cfg.AutoUpdateRepo,
-		Timeout:        timeout,
-		CurrentVersion: version,
-	}
-
-	slog.Info(
-		"autoupdate: starting startup check in background",
-		"mode", mode,
-		"repository", cfg.AutoUpdateRepo,
-		"current_version", version,
-	)
-
-	go func() {
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Error("autoupdate: startup auto-update goroutine panicked — continuing without update", "panic", r)
-			}
-		}()
-
-		checkCtx, cancel := context.WithTimeout(ctx, timeout)
-		defer cancel()
-
-		newVersion, updated, checkErr := check(checkCtx, updateCfg)
-		if checkErr != nil {
-			slog.Warn("autoupdate: startup background check failed", "error", checkErr)
-			return
-		}
-		if updated && newVersion != "" {
-			slog.Info(
-				"autoupdate: binary updated in background — restart the server to use the new version",
-				"new_version", newVersion,
-			)
-		}
-	}()
-}
-
-// newUpdaterForTools creates an [*autoupdate.Updater] for the MCP server-update
-// tools. Returns nil (safe for RegisterTools) if auto-update is disabled or
-// initialisation fails.
-func newUpdaterForTools(cfg *config.Config) *autoupdate.Updater {
-	mode, err := autoupdate.ParseMode(cfg.AutoUpdate)
-	if err != nil || mode == autoupdate.ModeDisabled {
-		return nil
-	}
-	u, err := autoupdate.NewUpdater(autoupdate.Config{
-		Mode:           mode,
-		Repository:     cfg.AutoUpdateRepo,
-		CurrentVersion: version,
-	})
-	if err != nil {
-		slog.Warn("autoupdate: could not create updater for MCP tools", "error", err)
-		return nil
-	}
-	return u
-}
-
-// startAutoUpdate initializes background periodic update checks for HTTP mode.
-func startAutoUpdate(ctx context.Context, cfg *config.Config) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("autoupdate: background auto-update panicked — continuing without updates", "panic", r)
-		}
-	}()
-
-	mode, err := autoupdate.ParseMode(cfg.AutoUpdate)
-	if err != nil {
-		slog.Warn("autoupdate: invalid auto-update mode, skipping", "error", err)
-		return
-	}
-	if mode == autoupdate.ModeDisabled {
-		return
-	}
-
-	u, err := autoupdate.NewUpdater(autoupdate.Config{
-		Mode:           mode,
-		Repository:     cfg.AutoUpdateRepo,
-		Interval:       cfg.AutoUpdateInterval,
-		Timeout:        cfg.AutoUpdateTimeout,
-		CurrentVersion: version,
-	})
-	if err != nil {
-		slog.Warn("autoupdate: could not initialize periodic updater", "error", err)
-		return
-	}
-
-	u.StartPeriodicCheck(ctx)
-}
-
 // countRegisteredTools returns the number of tools registered on the server
 // by connecting an ephemeral in-memory client session and calling ListTools.
 func countRegisteredTools(server *mcp.Server) (int, error) {
@@ -3339,11 +3152,10 @@ func visibleMetaSchemaRoutes(server *mcp.Server, routes map[string]toolutil.Acti
 // buildDynamicActionCatalog builds the executable catalog for low-token dynamic
 // mode. Filters run before standalone tools are added so configured exclusions,
 // token scopes, and read-only mode cannot leave hidden catalog actions behind.
-func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig, updater *autoupdate.Updater) (*actioncatalog.Catalog, withheldActions, error) {
+func buildDynamicActionCatalog(client *gitlabclient.Client, cfg *config.ServerConfig) (*actioncatalog.Catalog, withheldActions, error) {
 	catalog, err := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{
 		Tier:       cfg.Tier,
 		IncludeMCP: true,
-		Updater:    updater,
 	})
 	if err != nil {
 		return nil, withheldActions{}, fmt.Errorf("build action catalog: %w", err)
@@ -3607,86 +3419,4 @@ func buildToolSearchCatalog(tier edition.Tier) (*actioncatalog.Catalog, error) {
 		return nil, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
 	}
 	return withStandalone, nil
-}
-
-// setupAutoUpdateRedaction wraps the current global slog handler with a
-// handler that redacts the auto-update GitLab URL (and its host) from log
-// entries whose message starts with "autoupdate:". Regular GitLab operation
-// logs are left untouched so the user's configured GITLAB_URL remains visible.
-func setupAutoUpdateRedaction(autoUpdateURL string) {
-	if autoUpdateURL == "" {
-		return
-	}
-	var redactStrings []string
-	redactStrings = append(redactStrings, autoUpdateURL)
-	if host := extractHost(autoUpdateURL); host != "" {
-		redactStrings = append(redactStrings, host)
-	}
-	slog.SetDefault(slog.New(&autoUpdateRedactHandler{
-		base:          slog.Default().Handler(),
-		redactStrings: redactStrings,
-	}))
-}
-
-// extractHost returns the host (with port) from a URL string, or empty on error.
-func extractHost(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
-	}
-	return u.Host
-}
-
-// autoUpdateRedactHandler wraps a [slog.Handler] and replaces occurrences of
-// the auto-update GitLab URL (and host) with "[REDACTED]" in string attributes,
-// but only for log records whose message starts with "autoupdate:".
-type autoUpdateRedactHandler struct {
-	base          slog.Handler
-	redactStrings []string
-}
-
-// Enabled implements [slog.Handler] by delegating to the wrapped base handler.
-func (h *autoUpdateRedactHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return h.base.Enabled(ctx, level)
-}
-
-// Handle implements [slog.Handler]. For records whose message starts with
-// "autoupdate:", it redacts the configured strings from string-valued
-// attributes before forwarding to the base handler. Other records pass through
-// unchanged.
-func (h *autoUpdateRedactHandler) Handle(ctx context.Context, r slog.Record) error {
-	if !strings.HasPrefix(r.Message, "autoupdate:") {
-		return h.base.Handle(ctx, r)
-	}
-	nr := slog.NewRecord(r.Time, r.Level, r.Message, r.PC)
-	r.Attrs(func(a slog.Attr) bool {
-		nr.AddAttrs(h.redactAttr(a))
-		return true
-	})
-	return h.base.Handle(ctx, nr)
-}
-
-// WithAttrs implements [slog.Handler] by returning a new redacting handler
-// wrapping the base handler with the additional attributes.
-func (h *autoUpdateRedactHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &autoUpdateRedactHandler{base: h.base.WithAttrs(attrs), redactStrings: h.redactStrings}
-}
-
-// WithGroup implements [slog.Handler] by returning a new redacting handler
-// wrapping the base handler with the named group.
-func (h *autoUpdateRedactHandler) WithGroup(name string) slog.Handler {
-	return &autoUpdateRedactHandler{base: h.base.WithGroup(name), redactStrings: h.redactStrings}
-}
-
-// redactAttr redacts configured auto-update URL fragments from string-valued
-// log attributes before they are forwarded to the wrapped handler.
-func (h *autoUpdateRedactHandler) redactAttr(a slog.Attr) slog.Attr {
-	if a.Value.Kind() == slog.KindString {
-		s := a.Value.String()
-		for _, r := range h.redactStrings {
-			s = strings.ReplaceAll(s, r, "[REDACTED]")
-		}
-		a.Value = slog.StringValue(s)
-	}
-	return a
 }

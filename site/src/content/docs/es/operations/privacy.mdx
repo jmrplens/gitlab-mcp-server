@@ -38,17 +38,21 @@ mismo software corre en una máquina que opera el mantenedor.
   [Declaración de privacidad de GitLab](https://about.gitlab.com/privacy/)
   (en GitLab.com) o por las políticas de tu organización (en instancias
   self-managed).
-- **GitHub (solo auto-actualización).** Con la
-  [auto-actualización](/gitlab-mcp-server/es/operations/auto-update/)
-  activada (por defecto en los binarios standalone), el servidor consulta
-  periódicamente GitHub Releases y descarga binarios firmados. No se envía
-  ningún dato personal — es una petición HTTPS estándar a `api.github.com`,
-  sujeta a la [Declaración de privacidad de GitHub](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
-  La [extensión para Claude Desktop](/gitlab-mcp-server/es/claude-desktop/)
-  lleva la auto-actualización **desactivada**; las actualizaciones llegan como
-  nuevas versiones de la extensión.
 
-No existen otros destinos de red.
+La instancia de GitLab que configures es el único host con el que contacta el
+servidor. No hay comprobación de actualizaciones, ni clave de licencia que
+validar, ni telemetría, así que no existe ningún otro destino de red.
+
+La comprobación de actualizaciones es lo que cambió, y esta página sería
+engañosa si se limitara a dejar de mencionarlo. Las versiones hasta la v2.7.5 incluidas llevaban una
+auto-actualización integrada **activada por defecto**: un binario standalone
+preguntaba a `api.github.com` por la última release al arrancar y podía
+descargar e instalar un reemplazo de sí mismo. Se ha eliminado, no solo
+desactivado por defecto. Todos los canales que instalan el servidor ya son
+dueños del binario (npm, Homebrew, winget, la imagen de contenedor, la
+extensión para Claude Desktop), y un proceso que sostiene tu token de GitLab
+no tenía por qué descargar y ejecutar código además. Si abriste
+`api.github.com` en un proxy para esa comprobación, puedes volver a cerrarlo.
 
 ## Endpoint alojado
 

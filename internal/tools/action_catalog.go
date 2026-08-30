@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
@@ -24,14 +23,12 @@ import (
 // model: when Tier is the zero value ([edition.Free]) and Enterprise is true,
 // the effective tier is [edition.Ultimate] (all tools), preserving the historical
 // "enterprise = show everything" behavior. IncludeMCP adds the gitlab_server
-// maintenance group; Updater enables the apply_update/check_update actions
-// inside that group; SpecGroups injects additional [ActionSpecGroup] overrides
+// maintenance group; SpecGroups injects additional [ActionSpecGroup] overrides
 // that merge on top of the collected domain specs.
 type ActionCatalogOptions struct {
 	Tier       edition.Tier
 	Enterprise bool
 	IncludeMCP bool
-	Updater    *autoupdate.Updater
 	SpecGroups []ActionSpecGroup
 }
 
@@ -79,7 +76,7 @@ func BuildActionCatalog(client *gitlabclient.Client, opts ActionCatalogOptions) 
 		}
 	}
 	if opts.IncludeMCP {
-		if addErr := catalog.AddGroup(BuildMCPActionGroup(client, opts.Updater)); addErr != nil {
+		if addErr := catalog.AddGroup(BuildMCPActionGroup(client)); addErr != nil {
 			return nil, fmt.Errorf("add MCP action group: %w", addErr)
 		}
 	}

@@ -84,11 +84,6 @@ if ! jq -e '.mcpServers.gitlab.args | index("--http=false") != null' "$MCP_JSON"
   exit 1
 fi
 
-if ! jq -e '.mcpServers.gitlab.args | index("AUTO_UPDATE=false") as $i | $i != null and .[$i - 1] == "-e"' "$MCP_JSON" > /dev/null; then
-  echo "ERROR: config must force -e AUTO_UPDATE=false (the package channel owns the binary)" >&2
-  exit 1
-fi
-
 # Agent Plugins interpolation expands only ${PLUGIN_ROOT}/${PLUGIN_DATA}; any
 # other ${...} would reach the container as a literal string.
 if jq -e '[.mcpServers.gitlab | (.args[]?, (.env // {} | .[]?)) | select(test("\\$\\{(?!PLUGIN_ROOT\\}|PLUGIN_DATA\\})"))] | length > 0' "$MCP_JSON" > /dev/null; then
