@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"golang.org/x/time/rate"
 )
 
 // TestNewRateLimiter_Disabled verifies that a non-positive rps disables the
@@ -383,6 +384,29 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 
 		if buf.Len() != 0 {
 			t.Errorf("a disabled limiter logged something: %s", buf.String())
+		}
+	})
+
+	t.Run("an unnamed tool still produces a usable line", func(t *testing.T) {
+		// extractToolName returns "" for a request shape it does not
+		// recognize. The line has to say something an operator can read, and
+		// the method is the honest fallback.
+		buf := captureSlog(t)
+		NewRateLimiter(1, 1).reportRefusal("")
+
+		assertContains(t, buf.String(), `"tool":"tools/call"`)
+	})
+
+	t.Run("a zero window falls back to the default", func(t *testing.T) {
+		// A limiter built without going through NewRateLimiter, which the
+		// scaled() completion limiter is, must not divide by an unset window.
+		buf := captureSlog(t)
+		limiter := &RateLimiter{limiter: rate.NewLimiter(1, 1)}
+		limiter.reportRefusal("gitlab_execute_action")
+		limiter.reportRefusal("gitlab_execute_action")
+
+		if got := strings.Count(buf.String(), "rate limit exceeded"); got != 1 {
+			t.Errorf("%d lines with an unset window, want 1 under the default", got)
 		}
 	})
 }

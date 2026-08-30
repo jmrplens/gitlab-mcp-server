@@ -199,6 +199,50 @@ func TestSDKLogHandler_PassesEverythingElseThrough(t *testing.T) {
 	}
 }
 
+// TestSDKLogHandler_WithAttrsKeepsTheHandlerWrapping checks that attaching
+// attributes returns another wrapping handler rather than the bare base.
+//
+// slog calls WithAttrs whenever a logger is derived with slog.With, and a
+// handler that returned its base there would quietly stop demoting and
+// renaming for that logger. Nothing in the SDK derives one today, which is
+// exactly why this needs a test: an implementation nobody exercises is one
+// nobody notices breaking.
+func TestSDKLogHandler_WithAttrsKeepsTheHandlerWrapping(t *testing.T) {
+	var buf bytes.Buffer
+	base := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
+	logger := slog.New((&sdkLogHandler{base: base}).WithAttrs([]slog.Attr{slog.String("component", "sdk")}))
+
+	logger.Info("server session connected", "session_id", "")
+	logger.Info("resource subscribed", "uri", "gitlab://project/42")
+
+	records := decodeRecords(t, &buf)
+	if len(records) != 1 {
+		t.Fatalf("%d records at INFO, want 1; the chatter must still be demoted after WithAttrs", len(records))
+	}
+	if got := records[0]["msg"]; got != "resource subscribed" {
+		t.Errorf("the surviving record is %q, want the one that is not session chatter", got)
+	}
+	if got := records[0]["component"]; got != "sdk" {
+		t.Errorf("the attached attribute was lost: %v", records[0])
+	}
+}
+
+// TestSDKLogHandler_ShutdownWithoutACause covers a session error carrying no
+// error attribute at all, which must stay at ERROR: the demotion is for the two
+// shutdowns this server asked for, and an unexplained one is not among them.
+func TestSDKLogHandler_ShutdownWithoutACause(t *testing.T) {
+	logger, buf := sdkLogSink(slog.LevelDebug)
+	logger.Error("server session ended with error", "session_id", "abc")
+
+	records := decodeRecords(t, buf)
+	if len(records) != 1 {
+		t.Fatalf("%d records, want 1", len(records))
+	}
+	if got := records[0]["level"]; got != "ERROR" {
+		t.Errorf("level = %v, want ERROR for a session error with no stated cause", got)
+	}
+}
+
 // TestSDKLogHandler_GroupedAttributesAreLeftAlone checks the one case where the
 // rename must not happen: inside a group the attributes are nested, so a key
 // named level cannot reach the record's own field.

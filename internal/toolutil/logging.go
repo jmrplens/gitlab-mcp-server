@@ -9,20 +9,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// LogToolCall logs a structured message after a tool handler completes.
-// It records the tool name, elapsed duration, and any error that occurred.
-func LogToolCall(tool string, start time.Time, err error) {
-	duration := time.Since(start)
-	switch {
-	case wasCancelled(err):
-		slog.Info("tool call canceled", "tool", tool, "duration", duration, "cause", err)
-	case err != nil:
-		slog.Error("tool call failed", "tool", tool, "duration", duration, "error", err)
-	default:
-		slog.Info("tool call completed", "tool", tool, "duration", duration)
-	}
-}
-
 // wasCancelled reports whether a tool call ended because its caller went away
 // rather than because anything went wrong.
 //
@@ -107,7 +93,12 @@ func resultIsError(result any) bool {
 	return ok && callResult != nil && callResult.IsError
 }
 
-// logToolCall writes the anonymous form of the record.
+// logToolCall writes the anonymous form of the record: the tool name, the
+// elapsed duration, and how the call ended.
+//
+// It replaced an exported LogToolCall of the same shape without the isError
+// argument. Nothing outside this package called it, and leaving both would have
+// left one that could not say whether the call actually succeeded.
 func logToolCall(tool string, start time.Time, isError bool, err error) {
 	duration := time.Since(start)
 	switch {

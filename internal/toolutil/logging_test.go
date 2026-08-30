@@ -42,11 +42,11 @@ func assertNotContains(t *testing.T, output, unwanted string) {
 	}
 }
 
-// TestLogToolCall_Success verifies that LogToolCall logs an INFO message
+// TestLogToolCall_Success verifies that logToolCall logs an INFO message
 // with the tool name and duration for a successful call (nil error).
 func TestLogToolCall_Success(t *testing.T) {
 	buf := captureSlog(t)
-	LogToolCall("test_tool", time.Now(), nil)
+	logToolCall("test_tool", time.Now(), false, nil)
 	out := buf.String()
 	assertContains(t, out, `"level":"INFO"`)
 	assertContains(t, out, `"msg":"tool call completed"`)
@@ -55,11 +55,11 @@ func TestLogToolCall_Success(t *testing.T) {
 	assertNotContains(t, out, `"error"`)
 }
 
-// TestLogToolCall_Error verifies that LogToolCall logs an ERROR message
+// TestLogToolCall_Error verifies that logToolCall logs an ERROR message
 // with the tool name, duration, and error details for a failed call.
 func TestLogToolCall_Error(t *testing.T) {
 	buf := captureSlog(t)
-	LogToolCall("test_tool", time.Now(), errors.New("something failed"))
+	logToolCall("test_tool", time.Now(), false, errors.New("something failed"))
 	out := buf.String()
 	assertContains(t, out, `"level":"ERROR"`)
 	assertContains(t, out, `"msg":"tool call failed"`)
