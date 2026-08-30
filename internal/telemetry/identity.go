@@ -124,17 +124,54 @@ func (r *Redactor) Attributes(userID, username string) []attribute.KeyValue {
 	}
 	switch r.Policy() {
 	case IdentityFull:
-		attrs := []attribute.KeyValue{attribute.String("enduser.id", userID)}
+		attrs := []attribute.KeyValue{attribute.String(AttrUserID, userID)}
 		if username != "" {
-			attrs = append(attrs, attribute.String("enduser.name", username))
+			attrs = append(attrs, attribute.String(AttrUserName, username))
 		}
 		return attrs
 	case IdentityPseudonymous:
-		return []attribute.KeyValue{attribute.String("enduser.pseudo_id", r.pseudonym(userID))}
+		return []attribute.KeyValue{attribute.String(AttrUserHash, r.pseudonym(userID))}
 	default:
 		return nil
 	}
 }
+
+// The registry-defined keys this policy emits.
+//
+// All three are in the user.* namespace, and that uniformity is the point: the
+// same three names appear on a span, on a log record and anywhere else identity
+// is recorded, so an operator writes one query rather than three.
+//
+// The enduser.* namespace was the first choice and is the wrong one. Only two
+// attributes live there, enduser.id and enduser.pseudo.id, and the registry
+// tags them "contains sensitive (PII) information" and "contains sensitive
+// (linkable PII) information" respectively, which is a heavier warning than the
+// user.* pair carries for the same values. There is no enduser.name at all: an
+// earlier version of this file invented one, which is precisely what the naming
+// guidance rules out, since a key in a namespace OpenTelemetry owns can be
+// given a different meaning by a future release.
+const (
+	// AttrUserID is "Unique identifier of the user". The GitLab numeric id.
+	AttrUserID = "user.id"
+
+	// AttrUserName is "Short name or login/username of the user".
+	AttrUserName = "user.name"
+
+	// AttrUserHash is "Unique user hash to correlate information for a user in
+	// anonymized form", to be used "when user.id or user.name contain
+	// confidential data". That is this policy's pseudonymous mode exactly.
+	//
+	// One objection to this key deserves an answer rather than a dismissal: a
+	// hash over GitLab's numeric ids is reversible by enumeration, because the
+	// input space is small and predictable. That is true of a plain digest and
+	// false of what [Redactor.pseudonym] computes, which is an HMAC under a
+	// 32-byte key generated per process and never written down. Without the key
+	// there is nothing to enumerate against. What remains is inherent to
+	// pseudonymity rather than to the construction: somebody who can correlate a
+	// known user's activity with a digest can link the two, which is why the
+	// mode is called pseudonymous and not anonymous.
+	AttrUserHash = "user.hash"
+)
 
 // pseudonym derives the stable per-process digest for a user id.
 //
