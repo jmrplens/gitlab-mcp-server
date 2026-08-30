@@ -228,6 +228,26 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 	return p, nil
 }
 
+// EnvSwitchName is the environment variable that turns telemetry on.
+//
+// It carries this project's prefix rather than living in the OTEL_ namespace,
+// for the reasons in the package doc: that namespace belongs to the
+// specification and the language SDKs, and a bare name would collide with
+// whatever else a host has exported.
+const EnvSwitchName = "GITLAB_MCP_TELEMETRY"
+
+// EnvSwitch reports whether the environment asks for telemetry.
+//
+// Parsed with the same grammar as every other boolean here, which is stricter
+// than Go's: only the case-insensitive string "true" enables, an empty value
+// counts as unset, and anything unrecognized is a warning and a false rather
+// than an error. Using one parser for our switch and for OTEL_SDK_DISABLED is
+// deliberate: two booleans in one configuration surface that disagree about
+// whether "1" means true would be worse than either rule alone.
+func EnvSwitch() bool {
+	return envBool(EnvSwitchName)
+}
+
 // SDKDisabledByEnv reports whether the specification's own kill switch is set.
 //
 // OTEL_SDK_DISABLED cannot be this server's on switch, and reading it as one

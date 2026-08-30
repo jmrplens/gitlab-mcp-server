@@ -285,6 +285,11 @@ func main() {
 	flag.StringVar(&hcfg.tlsCert, "tls-cert", "", "PEM certificate file; serves HTTPS on the listener itself (requires --tls-key)")
 	flag.StringVar(&hcfg.tlsKey, "tls-key", "", "PEM private key file matching --tls-cert")
 	flag.StringVar(&hcfg.socketMode, "http-socket-mode", "", "Permission mode for a unix socket named by --http-addr, in octal (default 0660)")
+	// Both transports, not just HTTP: a stdio deployment is exactly the case an
+	// operator monitoring their own machine cares about. Off by default for
+	// privacy, and the endpoint, headers, sampling and resource attributes come
+	// from the standard OTEL_* environment the exporters read themselves.
+	telemetryFlag = flag.Bool("telemetry", false, "Export OpenTelemetry traces, metrics and logs over OTLP. Off by default. Endpoint and credentials come from the standard OTEL_EXPORTER_OTLP_* environment variables; see the documentation for a worked example")
 	flag.Int64Var(&hcfg.maxRequestBodyBytes, "max-request-body-bytes", 0, "Maximum streamable HTTP request body size in bytes; 0 uses the SDK default (4 MiB)")
 	flag.Parse()
 	hcfg.setFlags = make(map[string]bool)
@@ -529,11 +534,41 @@ func run(hcfg *httpConfig) error {
 // (no GITLAB_TOKEN required). A nil hcfg starts stdio mode using
 // environment-variable configuration (GITLAB_TOKEN required).
 func runWithContext(ctx context.Context, hcfg *httpConfig) error {
+	// One place for both transports, because telemetry is a property of the
+	// process rather than of how it is spoken to, and because a second copy of
+	// this would eventually disagree with the first about shutdown ordering.
+	//
+	// Shutdown runs on context.WithoutCancel: by the time it fires, ctx is
+	// usually already cancelled by the signal that started the shutdown, and
+	// passing a cancelled context to the exporters would discard the very
+	// batch describing why the process is stopping.
+	// The provider is held rather than discarded because the server card
+	// reports what telemetry is running: a person connecting to a published
+	// endpoint should be able to see that their calls are instrumented without
+	// having to ask.
+	telemetryProvider, stopTelemetry := startTelemetry(ctx, version)
+	_ = telemetryProvider
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), telemetryShutdownTimeout)
+		defer cancel()
+		stopTelemetry(shutdownCtx)
+	}()
+
 	if hcfg != nil {
 		return runHTTP(ctx, hcfg)
 	}
 	return runStdio(ctx)
 }
+
+// telemetryShutdownTimeout bounds the final flush.
+//
+// It is the caller's context that bounds Shutdown at the provider level (the
+// SDK's own 30s default applies per export, not to the whole drain), so without
+// a deadline here a collector that accepts a connection and then stalls would
+// hold the process open. Five seconds is long enough for a local collector to
+// take a last batch and short enough that a person pressing Ctrl-C sees the
+// process exit.
+const telemetryShutdownTimeout = 5 * time.Second
 
 // runHTTP validates HTTP flags, builds a [config.Config] from them, and
 // starts the HTTP server. No GITLAB_TOKEN is needed; each client provides
