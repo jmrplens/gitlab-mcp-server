@@ -62,6 +62,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
@@ -961,7 +962,7 @@ func runStdio(ctx context.Context) error {
 		}
 	}
 
-	server, err := createServer(ctx, client, serverCfg)
+	server, err := createServer(ctx, client, serverCfg, withTransport("pipe"))
 	if err != nil {
 		return fmt.Errorf("creating MCP server: %w", err)
 	}
@@ -1235,6 +1236,17 @@ func createServer(
 			"burst", cfg.RateLimitBurst,
 		)
 	}
+
+	// Second to last, so the span covers every middleware above it, and so a
+	// panic reaches this middleware's deferred span.End before recoverPanics
+	// swallows it. That ordering is what lets the SDK record the panic as an
+	// exception event: it recovers inside End, records it, and re-panics. A
+	// recovery running first would leave the span with no explanation.
+	server.AddReceivingMiddleware(mcpotel.Middleware(mcpotel.Options{
+		Identifier: gitlabtools.NewCallIdentifier(surfaceCatalog),
+		Surface:    toolSurface,
+		Transport:  settings.transport,
+	}))
 
 	// Added last so it wraps every middleware above it as well as the handler.
 	server.AddReceivingMiddleware(recoverPanics)
@@ -1626,7 +1638,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// mark for being idle. Liveness on this transport is the SSE
 		// keep-alive comment (see sseAwareWriter), which puts bytes on the
 		// wire without asking the client for anything.
-		srv, err := createServer(ctx, client, serverCfg, withSessionTag(tag), withKeepAlive(0))
+		srv, err := createServer(ctx, client, serverCfg, withSessionTag(tag), withKeepAlive(0), withTransport("tcp"))
 		if err != nil {
 			return nil, err
 		}

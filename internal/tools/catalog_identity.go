@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"encoding/json"
 	"strings"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
@@ -122,19 +123,50 @@ func newCallIdentifier(actions []actioncatalog.Action) mcpotel.CallIdentifier {
 
 // actionArgument reads the operation out of a tool call's arguments.
 //
-// The arguments arrive as whatever the SDK decoded, which is a map for a call
-// that came off the wire. Anything else, including a typed struct from an
-// in-process caller, yields the empty string rather than reflection: this runs
-// on every tool call, and a value this cannot read means "no action attribute",
-// which is a far better outcome than a slow path or a panic.
+// Two shapes, and the first one is the one that matters. A call that came off
+// the wire arrives as CallToolParamsRaw, whose Arguments field is
+// json.RawMessage: the SDK deliberately leaves decoding to the tool handler.
+// So a reader that only understood map[string]any would compile, run, and find
+// nothing on every real request, recording no action for the two surfaces that
+// need it most. The map form is kept because an in-process caller, including
+// this repository's own e2e suite, can build CallToolParams directly.
+//
+// Anything else yields the empty string rather than reflection. This runs on
+// every tool call, and "no action attribute" is a far better outcome than a
+// slow path or a panic.
 func actionArgument(arguments any) string {
-	fields, ok := arguments.(map[string]any)
-	if !ok {
+	switch args := arguments.(type) {
+	case json.RawMessage:
+		return actionFromJSON(args)
+	case []byte:
+		return actionFromJSON(args)
+	case map[string]any:
+		value, ok := args[actionArgumentName].(string)
+		if !ok {
+			return ""
+		}
+		return strings.TrimSpace(value)
+	default:
 		return ""
 	}
-	value, ok := fields[actionArgumentName].(string)
-	if !ok {
+}
+
+// actionFromJSON pulls one field out of a raw argument blob.
+//
+// Decoding into a single-field struct rather than a map is what keeps this
+// affordable: encoding/json skips every other key without allocating for it,
+// so a tool call carrying a large body costs one string. A decode failure is
+// not reported anywhere, because malformed arguments are the handler's business
+// to reject and telemetry has no standing to complain about them first.
+func actionFromJSON(raw []byte) string {
+	if len(raw) == 0 {
 		return ""
 	}
-	return strings.TrimSpace(value)
+	var envelope struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(envelope.Action)
 }

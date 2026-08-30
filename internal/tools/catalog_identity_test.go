@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
@@ -101,6 +102,62 @@ func TestNewCallIdentifier_ResolvesEverySurface(t *testing.T) {
 				t.Errorf("domain = %q, want %q", identity.Domain, tc.wantDomain)
 			}
 		})
+	}
+}
+
+// TestNewCallIdentifier_ReadsTheWireShape is the regression for a defect these
+// tests originally could not see.
+//
+// A tools/call arriving over the wire is CallToolParamsRaw, whose Arguments
+// field is json.RawMessage: the SDK deliberately leaves decoding to the tool
+// handler. The first version of this resolver read only map[string]any, so it
+// compiled, ran, passed every test built on maps, and would have recorded no
+// action for a single real request on the two surfaces that need one.
+//
+// Both shapes are asserted because both occur: raw JSON off the wire, and a map
+// from an in-process caller such as this repository's own e2e suite.
+func TestNewCallIdentifier_ReadsTheWireShape(t *testing.T) {
+	identifier := NewCallIdentifier(buildTestCatalog(t))
+
+	for _, tc := range []struct {
+		name      string
+		arguments any
+	}{
+		{name: "raw JSON, as the wire delivers it", arguments: json.RawMessage(`{"action":"issue.list"}`)},
+		{name: "raw JSON with other fields alongside", arguments: json.RawMessage(`{"project_id":"a/b","action":"issue.list","per_page":20}`)},
+		{name: "a byte slice", arguments: []byte(`{"action":"issue.list"}`)},
+		{name: "a map, as an in-process caller builds it", arguments: map[string]any{"action": "issue.list"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			identity, ok := identifier.Identify("gitlab_execute_action", tc.arguments)
+			if !ok {
+				t.Fatal("resolved to nothing; every real tools/call would carry no action")
+			}
+			if identity.ActionID != "issue.list" {
+				t.Errorf("action = %q, want issue.list", identity.ActionID)
+			}
+		})
+	}
+}
+
+// TestNewCallIdentifier_MalformedArgumentsResolveToNothing pins the failure
+// mode. Arguments that do not parse are the handler's business to reject, and
+// telemetry has no standing to complain about them first: the only correct
+// outcome here is no attribute, never a panic and never an error.
+func TestNewCallIdentifier_MalformedArgumentsResolveToNothing(t *testing.T) {
+	identifier := NewCallIdentifier(buildTestCatalog(t))
+
+	for _, arguments := range []any{
+		json.RawMessage(`{"action":`),
+		json.RawMessage(`[]`),
+		json.RawMessage(`{"action":42}`),
+		json.RawMessage(``),
+		json.RawMessage(`null`),
+		42,
+	} {
+		if identity, ok := identifier.Identify("gitlab_execute_action", arguments); ok {
+			t.Errorf("arguments %v resolved to %+v", arguments, identity)
+		}
 	}
 }
 
