@@ -4,7 +4,9 @@ import (
 	"context"
 	"flag"
 	"log/slog"
+	"os"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
 )
 
@@ -55,9 +57,10 @@ func telemetryEnabled() bool {
 // one because it runs after the work succeeded.
 func startTelemetry(ctx context.Context, serverVersion string) (provider *telemetry.Provider, stop func(context.Context)) {
 	provider, err := telemetry.Start(ctx, telemetry.Config{
-		Enabled:        telemetryEnabled(),
-		ServiceVersion: serverVersion,
-		Signals:        telemetry.AllSignals(),
+		Enabled:                 telemetryEnabled(),
+		ServiceVersion:          serverVersion,
+		Signals:                 telemetry.AllSignals(),
+		DropToolNameFromMetrics: dropToolNameFromMetrics(),
 	})
 	if err != nil {
 		slog.Error("telemetry disabled: it could not be started",
@@ -170,3 +173,34 @@ func installSlogBridge() (restore func()) {
 // handler whose behavior is known rather than whatever the global happens to
 // hold. See installSlogBridge for what goes wrong otherwise.
 var baseLogHandler slog.Handler
+
+// telemetryToolNameFlag holds --telemetry-tool-name.
+var telemetryToolNameFlag *string
+
+// dropToolNameFromMetrics resolves whether the tool name is a metric dimension.
+//
+// The surface is read from the environment rather than taken as a parameter
+// because this runs before the server is built, and it is the same value
+// config.Load will resolve: the dotenv files are already loaded by the time
+// anything calls this.
+//
+// An unusable policy is reported and treated as auto. Auto is the value that
+// protects an individual-surface deployment from a thousand-series dimension,
+// so falling back to it is the safe direction, and the loud failure for a typo
+// belongs at startup validation rather than here.
+func dropToolNameFromMetrics() bool {
+	value := os.Getenv(telemetry.EnvToolNameName)
+	if telemetryToolNameFlag != nil && isFlagPassed("telemetry-tool-name") {
+		value = *telemetryToolNameFlag
+	}
+
+	policy, err := telemetry.ParseToolNamePolicy(value)
+	if err != nil {
+		slog.Error("telemetry tool-name policy is unusable; using auto",
+			"component", "telemetry", "error", err)
+		policy = telemetry.ToolNameAuto
+	}
+
+	surface, _, _ := config.ParseToolSurface(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
+	return telemetry.DropToolName(policy, surface)
+}

@@ -292,6 +292,8 @@ func main() {
 	// privacy, and the endpoint, headers, sampling and resource attributes come
 	// from the standard OTEL_* environment the exporters read themselves.
 	telemetryFlag = flag.Bool("telemetry", false, "Export OpenTelemetry traces, metrics and logs over OTLP. Off by default. Endpoint and credentials come from the standard OTEL_EXPORTER_OTLP_* environment variables; see the documentation for a worked example")
+	telemetryToolNameFlag = flag.String("telemetry-tool-name", string(telemetry.ToolNameAuto),
+		"Whether the tool name is a metric dimension: auto (default; on for the dynamic and meta surfaces, off for individual, where ~1000 tools would exhaust the cardinality limit), on, or off")
 	telemetryIdentityFlag = flag.String("telemetry-identity", string(telemetry.DefaultIdentityPolicy),
 		"How much telemetry records about who made a call: none (default, records nobody), pseudonymous (a per-process digest that correlates one caller's calls without naming them), or full (the GitLab user id and username)")
 	flag.Int64Var(&hcfg.maxRequestBodyBytes, "max-request-body-bytes", 0, "Maximum streamable HTTP request body size in bytes; 0 uses the SDK default (4 MiB)")
@@ -487,6 +489,9 @@ FLAGS
  Telemetry
   -telemetry                Export OpenTelemetry traces, metrics and logs over OTLP (default false)
   -telemetry-identity str   What telemetry records about the caller: none|pseudonymous|full (default none)
+  -telemetry-tool-name str  Whether the tool name is a metric dimension: auto|on|off (default auto:
+                            on for dynamic and meta, off for individual, where ~1000 tools would
+                            exhaust the cardinality limit and collapse the long tail)
 
   Off by default, and it goes to a collector you configure through the
   standard OTEL_EXPORTER_OTLP_* environment; nothing is ever sent anywhere

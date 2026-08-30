@@ -121,6 +121,14 @@ type Config struct {
 	// ServiceVersion is reported as service.version, so a collector can tell
 	// which build produced a span.
 	ServiceVersion string
+	// DropToolNameFromMetrics removes gen_ai.tool.name from metric attributes.
+	//
+	// Set by the caller, which knows the registered tool surface; see
+	// [DropToolName] for the decision and for why the individual surface needs
+	// it. It affects metrics only: the span keeps the attribute on every
+	// surface, because one span carrying a tool name costs one span while one
+	// metric dimension carrying it costs a time series per tool, forever.
+	DropToolNameFromMetrics bool
 	// Signals selects what is exported. A zero value means all three.
 	Signals Signals
 }
@@ -149,10 +157,13 @@ func (s Signals) none() bool { return !s.Traces && !s.Metrics && !s.Logs }
 // telemetry can still call [Provider.Shutdown] and [Provider.Snapshot] without
 // a nil check.
 type Provider struct {
-	enabled  bool
-	protocol string
-	signals  Signals
-	endpoint string
+	enabled bool
+	// dropToolName removes gen_ai.tool.name from metric attributes, which the
+	// individual surface needs and the other two do not.
+	dropToolName bool
+	protocol     string
+	signals      Signals
+	endpoint     string
 
 	shutdowns []func(context.Context) error
 }
@@ -202,10 +213,11 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 	}
 
 	p := &Provider{
-		enabled:  true,
-		protocol: traceProtocol,
-		signals:  signals,
-		endpoint: endpointFromEnv(),
+		enabled:      true,
+		dropToolName: cfg.DropToolNameFromMetrics,
+		protocol:     traceProtocol,
+		signals:      signals,
+		endpoint:     endpointFromEnv(),
 	}
 
 	if startErr := p.startTraces(ctx, res, traceProtocol, signals); startErr != nil {
@@ -607,10 +619,18 @@ func (p *Provider) startMetrics(ctx context.Context, res *resource.Resource, pro
 	if err != nil {
 		return fmt.Errorf("otlp metric exporter: %w", err)
 	}
-	provider := sdkmetric.NewMeterProvider(
+	opts := []sdkmetric.Option{
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter)),
 		sdkmetric.WithResource(res),
-	)
+	}
+	if p.dropToolName {
+		// Registered as a View rather than by raising the cardinality limit,
+		// because filtering happens before the limit is counted. See
+		// cardinality.go for the number that makes this necessary and for the
+		// deviation it represents.
+		opts = append(opts, sdkmetric.WithView(toolNameView()))
+	}
+	provider := sdkmetric.NewMeterProvider(opts...)
 	otel.SetMeterProvider(provider)
 	p.shutdowns = append(p.shutdowns, provider.Shutdown)
 	return nil
