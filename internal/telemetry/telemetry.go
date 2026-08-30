@@ -42,6 +42,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -54,7 +56,7 @@ import (
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 )
 
 // Protocol selects the OTLP transport.
@@ -139,6 +141,10 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 	if !cfg.Enabled {
 		return &Provider{}, nil
 	}
+	if SDKDisabledByEnv() {
+		slog.Info("telemetry suppressed by OTEL_SDK_DISABLED", "component", "telemetry")
+		return &Provider{}, nil
+	}
 
 	signals := cfg.Signals
 	if signals.none() {
@@ -180,6 +186,69 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 		propagation.Baggage{},
 	))
 	return p, nil
+}
+
+// SDKDisabledByEnv reports whether the specification's own kill switch is set.
+//
+// OTEL_SDK_DISABLED cannot be this server's on switch, and reading it as one
+// would be worse than not reading it at all. Its specified default is false,
+// meaning "the SDK is enabled", while telemetry here is off until an operator
+// asks for it. Treating the variable as the single switch would therefore
+// invert its meaning for exactly the operators who already know what it means.
+// It composes instead: our own switch turns telemetry on, and this vetoes.
+//
+// Nothing beneath us implements it. The string does not appear anywhere in the
+// OpenTelemetry Go modules, and the specification's compliance matrix records
+// no Go support, so a deployment that sets it and expects to be obeyed is
+// relying on this function existing.
+//
+// The carve-out in the specification is honored by where this is called rather
+// than by anything here: "This setting has no effect on propagators configured
+// through the OTEL_PROPAGATORS variable." Returning early from Start leaves the
+// global propagator untouched, which is the no-op composite the SDK installs by
+// default.
+func SDKDisabledByEnv() bool {
+	return envBool("OTEL_SDK_DISABLED")
+}
+
+// envBool parses an OTEL_* boolean exactly as the configuration specification
+// requires, which is strictly narrower than Go's own parser.
+//
+// The rule: "Any value that represents a Boolean MUST be set to true only by
+// the case-insensitive string \"true\"... An implementation MUST NOT extend
+// this definition and define additional values that are interpreted as true.
+// Any value not explicitly defined here as a true value, including unset and
+// empty values, MUST be interpreted as false."
+//
+// strconv.ParseBool violates that in three separate ways, which is why it is
+// not used here: it accepts "1", "t" and "T" as true, which is precisely the
+// extension the MUST NOT forbids; it returns an error for anything
+// unrecognized rather than false; and it would need case folding bolted on
+// anyway. An unrecognized value is warned about, per the specification's
+// SHOULD, and then treated as false.
+func envBool(key string) bool {
+	raw, ok := os.LookupEnv(key)
+	if !ok {
+		return false
+	}
+	value := strings.TrimSpace(raw)
+	switch {
+	case value == "":
+		// "The SDK MUST interpret an empty value of an environment variable the
+		// same way as when the variable is unset." Container orchestrators
+		// routinely inject an empty variable for a secret that was never
+		// provided, so this is the common case, not the pathological one.
+		return false
+	case strings.EqualFold(value, "true"):
+		return true
+	case strings.EqualFold(value, "false"):
+		return false
+	default:
+		slog.Warn("ignoring unrecognized boolean environment variable",
+			"component", "telemetry", "variable", key, "value", value,
+			"expected", "true or false, case-insensitive")
+		return false
+	}
 }
 
 // abandon retires whatever started before an error, so a partial failure does
@@ -282,25 +351,86 @@ func normalizeProtocol(protocol string) (string, error) {
 
 // buildResource describes this process to a collector.
 //
-// resource.WithFromEnv reads OTEL_RESOURCE_ATTRIBUTES and OTEL_SERVICE_NAME, so
-// an operator can add deployment.environment or anything else without this
-// server knowing about it. The explicit attributes are merged under that, which
-// means the environment wins: an operator naming the service differently across
-// two deployments of the same binary is doing so on purpose.
+// The precedence chain is: a service name configured here beats OTEL_SERVICE_NAME,
+// which beats a service.name key inside OTEL_RESOURCE_ATTRIBUTES, which beats the
+// SDK's own unknown_service fallback. Everything else an operator puts in
+// OTEL_RESOURCE_ATTRIBUTES passes through untouched, because this server has no
+// opinion about deployment.environment.name or service.namespace and no business
+// overwriting them.
+//
+// The conditional is the whole point and it is not decoration. resource.New
+// merges each option as the *updating* resource in the order given, so an
+// unconditional semconv.ServiceName here overwrites whatever the environment
+// supplied, and the provider's own resource.Merge(resource.Environment(), r)
+// then re-merges the environment underneath, where it loses a second time. That
+// is what this function used to do: OTEL_SERVICE_NAME was discarded in silence,
+// with no error and no log line, while the doc comment claimed the environment
+// won. Setting the key only when nothing beneath us set it is what actually
+// gives an operator the override.
 func buildResource(ctx context.Context, cfg Config) (*resource.Resource, error) {
-	name := cfg.ServiceName
-	if name == "" {
-		name = DefaultServiceName
+	var attrs []attribute.KeyValue
+	if name := serviceName(cfg); name != "" {
+		attrs = append(attrs, semconv.ServiceName(name))
 	}
-	attrs := []attribute.KeyValue{semconv.ServiceName(name)}
 	if cfg.ServiceVersion != "" {
 		attrs = append(attrs, semconv.ServiceVersion(cfg.ServiceVersion))
 	}
 	return resource.New(ctx,
+		// First, because WithService is two detectors and only one of them is
+		// wanted here. It contributes service.instance.id, which resource.Default
+		// omits unless the experimental OTEL_GO_X_RESOURCE flag is set and which
+		// is what separates two concurrent copies of an HTTP deployment, or a
+		// stdio process from an HTTP one sharing a service name. It also
+		// contributes a service.name of "unknown_service:<binary>", and since
+		// resource.New applies each option as the updating resource in order,
+		// placing it after WithFromEnv would overwrite the operator's name with
+		// that placeholder: the same silent defect this function was fixed for,
+		// reintroduced from the other end.
+		resource.WithService(),
 		resource.WithFromEnv(),
 		resource.WithTelemetrySDK(),
 		resource.WithAttributes(attrs...),
 	)
+}
+
+// serviceName resolves what this process calls itself, or returns the empty
+// string to mean "leave it to whatever is beneath us".
+//
+// Empty is a real answer rather than a failure: the caller omits the attribute
+// entirely, which is what lets OTEL_SERVICE_NAME and a service.name inside
+// OTEL_RESOURCE_ATTRIBUTES take effect. Writing an empty string instead would
+// be worse than useless, because resource.Merge lets an empty value from the
+// updating resource erase a real one from the base.
+func serviceName(cfg Config) string {
+	if cfg.ServiceName != "" {
+		return cfg.ServiceName
+	}
+	if envHasServiceName() {
+		return ""
+	}
+	return DefaultServiceName
+}
+
+// envHasServiceName reports whether anything in the environment already names
+// the service, by either of the two variables that can.
+//
+// An empty value counts as unset, per the configuration specification: "The SDK
+// MUST interpret an empty value of an environment variable the same way as when
+// the variable is unset." Container orchestrators routinely inject empty
+// variables for secrets that were never provided, so reading os.Getenv(k) != ""
+// as "the operator set this" is wrong in exactly the deployments most likely to
+// hit it.
+func envHasServiceName() bool {
+	if strings.TrimSpace(os.Getenv("OTEL_SERVICE_NAME")) != "" {
+		return true
+	}
+	for pair := range strings.SplitSeq(os.Getenv("OTEL_RESOURCE_ATTRIBUTES"), ",") {
+		key, _, found := strings.Cut(pair, "=")
+		if found && strings.TrimSpace(key) == string(semconv.ServiceNameKey) {
+			return true
+		}
+	}
+	return false
 }
 
 // startTraces installs the tracer provider.
