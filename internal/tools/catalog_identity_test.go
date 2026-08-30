@@ -4,25 +4,35 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 )
 
-// TestNewCallIdentifier_ResolvesEverySurface is the whole reason this resolver
-// exists, so it asserts all three shapes against the real catalog rather than a
-// fixture.
+// rawArgs encodes tool arguments the way the wire delivers them.
+func rawArgs(t *testing.T, fields map[string]any) json.RawMessage {
+	t.Helper()
+	encoded, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatalf("encoding arguments: %v", err)
+	}
+	return encoded
+}
+
+// TestNewCallIdentifier_EachSurfaceResolvesItsOwnShape is the resolver's whole
+// job, asserted one surface at a time because that is how it is built.
 //
-// The tool name is the operation on exactly one surface. On the other two it is
-// either a domain that needs the action argument to mean anything, or, on the
-// default surface, one of two names covering roughly a thousand operations.
-// Instrumentation keyed on the tool name alone would record nothing useful for
-// the deployment shape most people run.
-func TestNewCallIdentifier_ResolvesEverySurface(t *testing.T) {
+// The surface is decided before the process starts and cannot change while it
+// runs, so the resolver is told which one it serves rather than trying each
+// shape until something matches. Asserting them separately is what keeps that
+// honest: a single table over a resolver that fell back through all three would
+// pass whether or not the surface parameter did anything.
+func TestNewCallIdentifier_EachSurfaceResolvesItsOwnShape(t *testing.T) {
 	catalog := buildTestCatalog(t)
-	identifier := NewCallIdentifier(catalog)
 
 	tests := []struct {
 		name       string
+		surface    string
 		tool       string
 		arguments  any
 		wantAction string
@@ -31,56 +41,64 @@ func TestNewCallIdentifier_ResolvesEverySurface(t *testing.T) {
 	}{
 		{
 			name:       "individual: the declared tool name is looked up",
+			surface:    config.ToolSurfaceIndividual,
 			tool:       "gitlab_issue_list",
-			arguments:  map[string]any{},
+			arguments:  nil,
 			wantAction: "issue.list",
 			wantDomain: "issue",
 			wantOK:     true,
 		},
 		{
 			name:       "meta: the group supplies the domain the action lacks",
+			surface:    config.ToolSurfaceMeta,
 			tool:       "gitlab_issue",
-			arguments:  map[string]any{"action": "list"},
+			arguments:  rawArgs(t, map[string]any{"action": "list"}),
 			wantAction: "issue.list",
 			wantDomain: "issue",
 			wantOK:     true,
 		},
 		{
 			name:       "dynamic: the argument is already canonical",
+			surface:    config.ToolSurfaceDynamic,
 			tool:       "gitlab_execute_action",
-			arguments:  map[string]any{"action": "issue.list"},
+			arguments:  rawArgs(t, map[string]any{"action": "issue.list"}),
 			wantAction: "issue.list",
 			wantDomain: "issue",
 			wantOK:     true,
 		},
 		{
-			name:      "a standalone tool belongs to no action",
+			name:      "individual: a standalone tool belongs to no action",
+			surface:   config.ToolSurfaceIndividual,
 			tool:      "gitlab_discover_project",
-			arguments: map[string]any{},
+			arguments: nil,
 			wantOK:    false,
 		},
 		{
-			name:      "an invented tool resolves to nothing rather than guessing",
-			tool:      "gitlab_not_a_tool",
-			arguments: map[string]any{"action": "list"},
+			name:      "meta: a standalone tool belongs to no action",
+			surface:   config.ToolSurfaceMeta,
+			tool:      "gitlab_discover_project",
+			arguments: rawArgs(t, map[string]any{}),
 			wantOK:    false,
 		},
 		{
-			name:       "meta with an invented action keeps the domain, which is still true",
+			name:       "meta: an invented action keeps the domain, which is still true",
+			surface:    config.ToolSurfaceMeta,
 			tool:       "gitlab_issue",
-			arguments:  map[string]any{"action": "teleport"},
+			arguments:  rawArgs(t, map[string]any{"action": "teleport"}),
 			wantDomain: "issue",
 			wantOK:     true,
 		},
 		{
-			name:      "arguments that are not a map yield nothing, not a panic",
+			name:      "dynamic: an invented action resolves to nothing",
+			surface:   config.ToolSurfaceDynamic,
 			tool:      "gitlab_execute_action",
-			arguments: "issue.list",
+			arguments: rawArgs(t, map[string]any{"action": "issue.teleport"}),
 			wantOK:    false,
 		},
 		{
-			name:      "nil arguments yield nothing",
-			tool:      "gitlab_execute_action",
+			name:      "individual: an invented tool resolves to nothing",
+			surface:   config.ToolSurfaceIndividual,
+			tool:      "gitlab_not_a_tool",
 			arguments: nil,
 			wantOK:    false,
 		},
@@ -88,7 +106,7 @@ func TestNewCallIdentifier_ResolvesEverySurface(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			identity, ok := identifier.Identify(tc.tool, tc.arguments)
+			identity, ok := NewCallIdentifier(catalog, tc.surface).Identify(tc.tool, tc.arguments)
 			if ok != tc.wantOK {
 				t.Fatalf("Identify(%q) ok = %v, want %v (identity %+v)", tc.tool, ok, tc.wantOK, identity)
 			}
@@ -105,19 +123,64 @@ func TestNewCallIdentifier_ResolvesEverySurface(t *testing.T) {
 	}
 }
 
-// TestNewCallIdentifier_ReadsTheWireShape is the regression for a defect these
-// tests originally could not see.
+// TestNewCallIdentifier_OneSurfaceDoesNotAnswerForAnother is what the surface
+// parameter buys, and the assertion that fails if it is ignored.
+//
+// A resolver that tried every shape would answer all of these, which sounds
+// harmless and is not: it would mean the code cannot state what it knows, and a
+// reader would reasonably conclude the surfaces overlap when only one is ever
+// registered.
+func TestNewCallIdentifier_OneSurfaceDoesNotAnswerForAnother(t *testing.T) {
+	catalog := buildTestCatalog(t)
+
+	individual := NewCallIdentifier(catalog, config.ToolSurfaceIndividual)
+	meta := NewCallIdentifier(catalog, config.ToolSurfaceMeta)
+	dynamic := NewCallIdentifier(catalog, config.ToolSurfaceDynamic)
+
+	if identity, ok := individual.Identify("gitlab_execute_action", rawArgs(t, map[string]any{"action": "issue.list"})); ok {
+		t.Errorf("the individual resolver answered a dynamic call: %+v", identity)
+	}
+	if identity, ok := dynamic.Identify("gitlab_issue_list", nil); ok {
+		t.Errorf("the dynamic resolver answered an individual call: %+v", identity)
+	}
+	if identity, ok := meta.Identify("gitlab_issue_list", nil); ok {
+		t.Errorf("the meta resolver answered an individual call: %+v", identity)
+	}
+	if identity, ok := dynamic.Identify("gitlab_issue", rawArgs(t, map[string]any{"action": "list"})); ok {
+		t.Errorf("the dynamic resolver answered a meta call, whose bare action is not a canonical id: %+v", identity)
+	}
+}
+
+// TestNewCallIdentifier_UnknownSurfaceBehavesAsTheDefault covers a value that
+// cannot reach here from configuration but could from a caller.
+//
+// Dynamic is the server's own default when nothing is set, so matching it
+// produces no surprise. Inventing a fourth behavior, or resolving nothing at
+// all, would make a wiring mistake show up as silently missing telemetry rather
+// than as telemetry for the default surface.
+func TestNewCallIdentifier_UnknownSurfaceBehavesAsTheDefault(t *testing.T) {
+	catalog := buildTestCatalog(t)
+
+	identity, ok := NewCallIdentifier(catalog, "no-such-surface").
+		Identify("gitlab_execute_action", rawArgs(t, map[string]any{"action": "issue.list"}))
+	if !ok {
+		t.Fatal("an unknown surface resolved nothing")
+	}
+	if identity.ActionID != "issue.list" {
+		t.Errorf("action = %q, want issue.list", identity.ActionID)
+	}
+}
+
+// TestNewCallIdentifier_ReadsTheWireShape is the regression for a defect the
+// first version of these tests could not see.
 //
 // A tools/call arriving over the wire is CallToolParamsRaw, whose Arguments
 // field is json.RawMessage: the SDK deliberately leaves decoding to the tool
-// handler. The first version of this resolver read only map[string]any, so it
-// compiled, ran, passed every test built on maps, and would have recorded no
-// action for a single real request on the two surfaces that need one.
-//
-// Both shapes are asserted because both occur: raw JSON off the wire, and a map
-// from an in-process caller such as this repository's own e2e suite.
+// handler. The first resolver read only map[string]any, so it compiled, ran,
+// passed every test built on maps, and would have recorded no action for a
+// single real request on the two surfaces that need one.
 func TestNewCallIdentifier_ReadsTheWireShape(t *testing.T) {
-	identifier := NewCallIdentifier(buildTestCatalog(t))
+	identifier := NewCallIdentifier(buildTestCatalog(t), config.ToolSurfaceDynamic)
 
 	for _, tc := range []struct {
 		name      string
@@ -143,9 +206,9 @@ func TestNewCallIdentifier_ReadsTheWireShape(t *testing.T) {
 // TestNewCallIdentifier_MalformedArgumentsResolveToNothing pins the failure
 // mode. Arguments that do not parse are the handler's business to reject, and
 // telemetry has no standing to complain about them first: the only correct
-// outcome here is no attribute, never a panic and never an error.
+// outcome is no attribute, never a panic and never an error.
 func TestNewCallIdentifier_MalformedArgumentsResolveToNothing(t *testing.T) {
-	identifier := NewCallIdentifier(buildTestCatalog(t))
+	identifier := NewCallIdentifier(buildTestCatalog(t), config.ToolSurfaceDynamic)
 
 	for _, arguments := range []any{
 		json.RawMessage(`{"action":`),
@@ -154,6 +217,7 @@ func TestNewCallIdentifier_MalformedArgumentsResolveToNothing(t *testing.T) {
 		json.RawMessage(``),
 		json.RawMessage(`null`),
 		42,
+		nil,
 	} {
 		if identity, ok := identifier.Identify("gitlab_execute_action", arguments); ok {
 			t.Errorf("arguments %v resolved to %+v", arguments, identity)
@@ -170,7 +234,7 @@ func TestNewCallIdentifier_MalformedArgumentsResolveToNothing(t *testing.T) {
 // the ones worth seeing in a trace.
 func TestNewCallIdentifier_ResolvesAnAlias(t *testing.T) {
 	catalog := buildTestCatalog(t)
-	identifier := NewCallIdentifier(catalog)
+	identifier := NewCallIdentifier(catalog, config.ToolSurfaceDynamic)
 
 	var alias, wantID string
 	for _, action := range catalog.Actions() {
@@ -183,7 +247,7 @@ func TestNewCallIdentifier_ResolvesAnAlias(t *testing.T) {
 		t.Skip("no action in the catalog declares an alias")
 	}
 
-	identity, ok := identifier.Identify("gitlab_execute_action", map[string]any{"action": alias})
+	identity, ok := identifier.Identify("gitlab_execute_action", rawArgs(t, map[string]any{"action": alias}))
 	if !ok {
 		t.Fatalf("alias %q resolved to nothing; a model using it would produce an unattributed span", alias)
 	}
@@ -202,11 +266,11 @@ func TestNewCallIdentifier_ResolvesAnAlias(t *testing.T) {
 // below is the one that fails when it is.
 func TestNewCallIdentifier_EveryCanonicalIDResolvesToItself(t *testing.T) {
 	catalog := buildTestCatalog(t)
-	identifier := NewCallIdentifier(catalog)
+	identifier := NewCallIdentifier(catalog, config.ToolSurfaceDynamic)
 
 	for _, action := range catalog.Actions() {
 		id := string(action.ID)
-		identity, ok := identifier.Identify("gitlab_execute_action", map[string]any{"action": id})
+		identity, ok := identifier.Identify("gitlab_execute_action", rawArgs(t, map[string]any{"action": id}))
 		if !ok {
 			t.Errorf("canonical id %q resolved to nothing", id)
 			continue
@@ -225,10 +289,8 @@ func TestNewCallIdentifier_EveryCanonicalIDResolvesToItself(t *testing.T) {
 // one wins, which is a coin flip dressed as behavior. A synthetic catalog is
 // the only way to assert the rule: against real data the guard is invisible.
 //
-// The two actions are ordered so that the alias is inserted after the canonical
-// id it collides with, which is the case the guard exists for. The reverse
-// order is asserted too, because a guard that only worked one way round would
-// pass the first case and still be wrong.
+// Both orderings are asserted, because a guard that only worked one way round
+// would pass the first case and still be wrong.
 func TestNewCallIdentifier_AliasNeverShadowsACanonicalID(t *testing.T) {
 	victim := actioncatalog.Action{ID: "issue.close", Domain: "issue", Name: "close"}
 	shadower := actioncatalog.Action{
@@ -246,9 +308,9 @@ func TestNewCallIdentifier_AliasNeverShadowsACanonicalID(t *testing.T) {
 		{name: "alias first", actions: []actioncatalog.Action{shadower, victim}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			identifier := newCallIdentifier(tc.actions)
+			identifier := newCallIdentifier(tc.actions, config.ToolSurfaceDynamic)
 
-			identity, ok := identifier.Identify("gitlab_execute_action", map[string]any{"action": "issue.close"})
+			identity, ok := identifier.Identify("gitlab_execute_action", rawArgs(t, map[string]any{"action": "issue.close"}))
 			if !ok {
 				t.Fatal("issue.close resolved to nothing")
 			}
@@ -264,10 +326,11 @@ func TestNewCallIdentifier_AliasNeverShadowsACanonicalID(t *testing.T) {
 // every tool call, and a nil dereference there would be a crash on the happy
 // path.
 func TestNewCallIdentifier_NilCatalogIsUsable(t *testing.T) {
-	identifier := NewCallIdentifier(nil)
-
-	if identity, ok := identifier.Identify("gitlab_issue_list", map[string]any{}); ok {
-		t.Errorf("a nil catalog resolved something: %+v", identity)
+	for _, surface := range []string{config.ToolSurfaceIndividual, config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
+		identifier := NewCallIdentifier(nil, surface)
+		if identity, ok := identifier.Identify("gitlab_issue_list", nil); ok {
+			t.Errorf("a nil catalog resolved something on %s: %+v", surface, identity)
+		}
 	}
 }
 
@@ -282,4 +345,4 @@ func buildTestCatalog(t *testing.T) *actioncatalog.Catalog {
 	return catalog
 }
 
-var _ mcpotel.CallIdentifier = NewCallIdentifier(nil)
+var _ mcpotel.CallIdentifier = NewCallIdentifier(nil, config.ToolSurfaceDynamic)

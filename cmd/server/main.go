@@ -1244,7 +1244,7 @@ func createServer(
 	// exception event: it recovers inside End, records it, and re-panics. A
 	// recovery running first would leave the span with no explanation.
 	server.AddReceivingMiddleware(mcpotel.Middleware(mcpotel.Options{
-		Identifier: gitlabtools.NewCallIdentifier(surfaceCatalog),
+		Identifier: gitlabtools.NewCallIdentifier(surfaceCatalog, toolSurface),
 		Surface:    toolSurface,
 		Transport:  settings.transport,
 	}))
