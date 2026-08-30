@@ -685,6 +685,11 @@ export default defineConfig({
 							translations: { es: "Privacidad" },
 						},
 						{
+							slug: "operations/telemetry",
+							label: "OpenTelemetry",
+							translations: { es: "OpenTelemetry" },
+						},
+						{
 							slug: "operations/http-server",
 							label: "HTTP Server",
 							translations: { es: "Servidor HTTP" },

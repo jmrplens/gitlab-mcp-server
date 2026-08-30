@@ -14,14 +14,40 @@ machine rather than yours. See [Hosted endpoint](#hosted-endpoint).
 
 ## What we collect
 
-**Nothing.** The server has no telemetry, no analytics, no crash reporting,
-and no backend of its own. When you run it yourself — which is how this
-documentation recommends using it — the maintainer never receives, stores, or
-has access to any of your data, credentials, or usage information.
+**Nothing.** The server has no analytics, no crash reporting, and no backend
+of its own. When you run it yourself, which is how this documentation
+recommends using it, the maintainer never receives, stores, or has access to
+any of your data, credentials, or usage information.
 
 That is a statement about the software, and it holds wherever you run it. It
 is not a statement about the [hosted endpoint](#hosted-endpoint), where the
 same software runs on a machine the maintainer operates.
+
+### OpenTelemetry, if you turn it on
+
+The server can export traces, metrics and logs, and this section exists so the
+paragraph above stays exactly true rather than becoming a technicality.
+
+It is **off by default**. When you enable it, the telemetry goes to a collector
+**you** configure and run. There is no default address, no fallback endpoint,
+and no path by which it could reach the maintainer: if you set nothing, nothing
+is exported. Turning it on is a decision you make about your own deployment and
+your own users.
+
+What it records describes operations, never their contents: the method called,
+the catalog action, whether it succeeded, and how long it took. Tool arguments,
+tool results, resource contents, search queries, GitLab response bodies and
+credentials are excluded by design and not by a setting, because there is no
+setting that would include them.
+
+Who made a call is recorded only if you ask for it, through
+`--telemetry-identity`. The default records nobody. A middle setting records a
+per-process digest that lets you tell one caller's traffic from another's
+without naming anyone. Full identity is available for an organization auditing
+its own users on its own collector.
+
+The full detail, including what each mode exports, is in
+[docs/guides/telemetry.md](docs/guides/telemetry.md).
 
 ## Data flows
 

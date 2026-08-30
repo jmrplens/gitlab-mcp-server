@@ -374,6 +374,8 @@ make analyze-report                        # generate LLM-consumable report
 | `RATE_LIMIT_RPS`         | No       | Per-server tools/call rate limit in req/s (`0` = disabled) |
 | `RATE_LIMIT_BURST`       | No       | Token-bucket burst size when RPS > 0 (`40` default)       |
 | `CLIENT_COMPAT`          | No       | Per-client response compatibility (`auto` default): Codex sessions get float `priority` in annotations rounded to 0/1; `off` disables. Read from the process environment in both stdio and HTTP modes (no flag equivalent). See `internal/clientcompat` and `docs/guides/client-compatibility.md` |
+| `GITLAB_MCP_TELEMETRY`   | No       | Export OpenTelemetry traces, metrics and logs over OTLP (`false` default). Off for privacy: telemetry goes to a collector the operator configures, never to the maintainer, and there is no default endpoint. Endpoint, credentials, sampling and batching all come from the standard `OTEL_EXPORTER_OTLP_*` variables the exporters read themselves. `OTEL_SDK_DISABLED=true` vetoes it regardless. Flag `--telemetry`. See `docs/guides/telemetry.md` |
+| `GITLAB_MCP_TELEMETRY_IDENTITY` | No | How much telemetry records about who made a call: `none` (default, records nobody), `pseudonymous` (a per-process HMAC digest that correlates one caller's calls without naming them), or `full` (`user.id` and `user.name`). Identity never reaches a metric under any policy. Flag `--telemetry-identity` |
 | `LOG_LEVEL`              | No       | Logging verbosity (`debug`, `info`, `warn`, `error`)     |
 | `EVAL_SURFACE_ENTERPRISE` | No      | `cmd/eval_mcp_surfaces`: run the enterprise case set on top of the base corpus. Used by `make eval-surfaces-docker-enterprise*` targets |
 | `EVAL_SURFACE_CASE_SET`   | No      | `cmd/eval_mcp_surfaces`: case-set selector — `ce` (Community Edition only), `all` (CE+Enterprise). Used by `make eval-surfaces-docker-enterprise-all` |
@@ -414,6 +416,8 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--trusted-proxy-header` | _(empty)_ | HTTP header with real client IP for rate limiting behind proxies (e.g. `CF-Connecting-IP`, `X-Forwarded-For`) |
 | `--rate-limit-rps` | `10` | Per-server tools/call rate limit in req/s (`0` disables it). On by default in HTTP mode; the `RATE_LIMIT_RPS` env var used by stdio still defaults to `0` |
 | `--rate-limit-burst` | `40` | Token-bucket burst size when --rate-limit-rps > 0        |
+| `--telemetry`       | `false` | Export OpenTelemetry traces, metrics and logs over OTLP. Applies to both transports. Endpoint and credentials come from the standard `OTEL_EXPORTER_OTLP_*` environment |
+| `--telemetry-identity` | `none` | What telemetry records about the caller: `none`, `pseudonymous` or `full` |
 
 **General flags** (both stdio and HTTP modes):
 
