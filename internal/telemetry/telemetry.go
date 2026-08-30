@@ -42,6 +42,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -207,8 +208,8 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 
 	var errs []error
 	// Reverse order, so a signal that depends on another is retired first.
-	for i := len(p.shutdowns) - 1; i >= 0; i-- {
-		if err := p.shutdowns[i](ctx); err != nil {
+	for _, shutdown := range slices.Backward(p.shutdowns) {
+		if err := shutdown(ctx); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -272,7 +273,8 @@ func normalizeProtocol(protocol string) (string, error) {
 	case "http/json":
 		return "", fmt.Errorf(
 			"OTLP protocol %q is not implemented by the OpenTelemetry Go exporters; use %q or %q",
-			"http/json", ProtocolHTTP, ProtocolGRPC)
+			"http/json", ProtocolHTTP, ProtocolGRPC,
+		)
 	default:
 		return "", fmt.Errorf("unknown OTLP protocol %q: use %q or %q", protocol, ProtocolHTTP, ProtocolGRPC)
 	}
