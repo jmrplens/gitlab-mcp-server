@@ -71,3 +71,118 @@ func TestShutdown_IsNotBlockedByAnOpenSubscription(t *testing.T) {
 		}
 	})
 }
+
+// TestShutdown_ExitStatusSaysItWasClean pins that an ordinary stop is reported
+// as one.
+//
+// "Servers SHOULD exit promptly when their standard input is closed or reads
+// return end-of-file. This is the primary graceful-shutdown signal and the only
+// portable one."
+//
+// The binding says nothing about exit status, so this is not a conformance
+// case. It is a truthfulness one: the two shutdowns the binding prescribes are
+// the two a supervisor sees most, and announcing either as a failure is a
+// report nobody can act on. systemd's Restart=on-failure restarts on it, a CI
+// wrapper fails the job on it, and a launcher that propagates its child's status
+// passes it outward. The repository already states the intent against itself:
+// the comment on TestRunWithContext_PingFailure_StartsInDegradedMode says "the
+// transport now treats EOF as the ordinary end of a session (a client closing
+// its pipe is not a failure)", which held only while nothing was in flight.
+//
+// The idle-EOF case is the control: it passed before this test existed, so a
+// failure in the others is attributable to what they add rather than to
+// shutdown in general.
+func TestShutdown_ExitStatusSaysItWasClean(t *testing.T) {
+	const grace = 20 * time.Second
+
+	// handshake gets the session past initialize so the cases below are
+	// stopping a server that is actually serving.
+	handshake := func(t *testing.T, s *session) {
+		t.Helper()
+		if got := s.call(t, request(1, "tools/list", "")); got["error"] != nil {
+			t.Fatalf("tools/list failed: %v", got["error"])
+		}
+	}
+
+	t.Run("stdin closed with nothing in flight", func(t *testing.T) {
+		s := startSession(t, baseEnv(startFakeGitLab(t).URL))
+		handshake(t, s)
+
+		code, exited := s.closeStdinAndWait(t, grace)
+		if !exited {
+			t.Fatalf("the server did not exit after stdin closed:\n%s", s.stderrText())
+		}
+		if code != 0 {
+			t.Errorf("exit status %d after an ordinary stdin close, want 0:\n%s", code, s.stderrText())
+		}
+	})
+
+	t.Run("stdin closed with a tool call in flight", func(t *testing.T) {
+		s := startSession(t, baseEnv(startFakeGitLab(t).URL))
+		handshake(t, s)
+
+		// Project 99 never answers, so the call is still open when the pipe
+		// goes. A client closing stdin while a call is running is the everyday
+		// case, not an exotic one: it is what happens when the client exits.
+		s.send(t, request(2, "tools/call",
+			`{"name":"gitlab_execute_action","arguments":{"action":"project.get","params":{"project_id":"99"}}}`))
+		time.Sleep(500 * time.Millisecond)
+
+		code, exited := s.closeStdinAndWait(t, grace)
+		if !exited {
+			t.Fatalf("the server did not exit after stdin closed with a call in flight:\n%s", s.stderrText())
+		}
+		if code != 0 {
+			t.Errorf("exit status %d after stdin closed with a call in flight, want 0:\n%s", code, s.stderrText())
+		}
+	})
+
+	t.Run("stdin closed with a subscription open", func(t *testing.T) {
+		env := baseEnv(startFakeGitLab(t).URL)
+		env["CAPABILITY_SURFACE"] = "full"
+		s := startSession(t, env)
+		handshake(t, s)
+
+		s.send(t, request(7, "subscriptions/listen",
+			`{"notifications":{"resourceSubscriptions":["gitlab://project/42"]}}`))
+		awaitAcknowledgement(t, s)
+
+		code, exited := s.closeStdinAndWait(t, grace)
+		if !exited {
+			t.Fatalf("the server did not exit after stdin closed with a subscription open:\n%s", s.stderrText())
+		}
+		if code != 0 {
+			t.Errorf("exit status %d after stdin closed with a subscription open, want 0:\n%s", code, s.stderrText())
+		}
+	})
+
+	t.Run("SIGTERM with nothing in flight", func(t *testing.T) {
+		s := startSession(t, baseEnv(startFakeGitLab(t).URL))
+		handshake(t, s)
+
+		code, exited := s.terminateAndWait(t, grace)
+		if !exited {
+			t.Fatalf("the server ignored SIGTERM:\n%s", s.stderrText())
+		}
+		if code != 0 {
+			t.Errorf("exit status %d after SIGTERM on an idle server, want 0:\n%s", code, s.stderrText())
+		}
+	})
+}
+
+// awaitAcknowledgement blocks until the server confirms a subscription.
+func awaitAcknowledgement(t *testing.T, s *session) {
+	t.Helper()
+
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		got := s.readMessage(t, 30*time.Second)
+		if got["error"] != nil {
+			t.Fatalf("the subscription was refused, so this case is not testing what it says: %v", got["error"])
+		}
+		if method, _ := got["method"].(string); method == "notifications/subscriptions/acknowledged" {
+			return
+		}
+	}
+	t.Fatalf("the subscription was never acknowledged:\n%s", s.stderrText())
+}

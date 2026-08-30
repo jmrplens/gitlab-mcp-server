@@ -244,6 +244,7 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 	return func(ctx context.Context, req *mcp.CallToolRequest, input map[string]any) (*mcp.CallToolResult, any, error) {
 		if opts.SafeMode && !individualCatalogActionReadOnly(action) {
 			result, err := safeModeHandler(toolName)(ctx, req)
+			toolutil.LogToolRefusal(ctx, req, toolName, toolutil.RefusalSafeMode)
 			return result, nil, err
 		}
 		if action.Route.Destructive {
@@ -253,6 +254,7 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 				return nil, nil, guardErr
 			}
 			if guard != nil {
+				toolutil.LogToolRefusal(ctx, req, toolName, toolutil.RefusalNeedsConfirmation)
 				return guard, nil, nil
 			}
 		}
@@ -262,7 +264,7 @@ func individualCatalogHandler(toolName string, action actioncatalog.Action, form
 		if inputResult, needsInput := toolutil.InputRequiredResultFromError(err); needsInput {
 			return inputResult, nil, nil
 		}
-		toolutil.LogToolCallAll(ctx, req, toolName, start, err)
+		toolutil.LogToolCallAll(ctx, req, toolName, start, result, err)
 		if err != nil {
 			return nil, nil, err
 		}

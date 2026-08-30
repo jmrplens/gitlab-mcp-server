@@ -101,7 +101,7 @@ type bearerGuard struct {
 func (g *bearerGuard) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if failure := g.check(r); failure != nil {
-			failure.write(w)
+			failure.write(w, r)
 			return
 		}
 		next.ServeHTTP(w, r)

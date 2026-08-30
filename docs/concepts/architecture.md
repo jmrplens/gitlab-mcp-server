@@ -610,7 +610,9 @@ Structured JSON logs via `log/slog` to stderr:
 
 ### Pagination
 
-All list endpoints support pagination via `PaginationInput` (page, per_page) and return `PaginationOutput` (total_items, total_pages, next_page, prev_page, has_more) extracted from GitLab response headers. The `has_more` boolean allows LLMs to decide pagination without comparing page numbers.
+Every list **tool** supports pagination via `PaginationInput` (page, per_page) and returns `PaginationOutput` (total_items, total_pages, next_page, prev_page, has_more) extracted from GitLab response headers. The `has_more` boolean allows LLMs to decide pagination without comparing page numbers.
+
+Collection **resources** are a different case, and the difference is in the protocol rather than in this server. `resources/read` has no continuation mechanism: the specification scopes pagination to the list operations (`resources/list`, `resources/templates/list`, `tools/list`, `prompts/list`) and defines neither a cursor nor a partial-result shape for a read. So a collection resource returns one page of up to 100 items and discloses the rest through `_meta`, under the reverse-DNS key `io.github.jmrplens/pageInfo` (`returned`, `total`, `complete`). A consumer that needs the whole collection uses the tool surface, which paginates properly.
 
 ### Security
 

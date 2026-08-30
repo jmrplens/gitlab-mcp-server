@@ -33,8 +33,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -43,6 +45,11 @@ import (
 // protocolVersion is the revision these tests speak unless a case says
 // otherwise.
 const protocolVersion = "2026-07-28"
+
+// fakeGroupTotal is how many groups the fake instance holds. Deliberately more
+// than one page: the number that made this worth testing was a real instance
+// answering 20 of 137 under a description that said "List all".
+const fakeGroupTotal = 137
 
 var (
 	buildOnce   sync.Once
@@ -119,6 +126,8 @@ type session struct {
 	// again: a second Wait on a reaped child answers ErrProcessDone, which
 	// cannot be told from a real failure.
 	exited chan struct{}
+	// state is what the reaper found, for the callers that report an exit code.
+	state atomic.Pointer[os.ProcessState]
 
 	mu     sync.Mutex
 	stderr strings.Builder
@@ -177,7 +186,8 @@ func startSession(t *testing.T, env map[string]string) *session {
 	// alive() has to answer before anybody has asked the process to stop, and
 	// a check that has to wait first cannot answer that question.
 	go func() {
-		_, _ = cmd.Process.Wait()
+		state, _ := cmd.Process.Wait()
+		s.state.Store(state)
 		close(s.exited)
 	}()
 
@@ -304,6 +314,8 @@ func request(id int, method, params string) string {
 func startFakeGitLab(t *testing.T) *httptest.Server {
 	t.Helper()
 
+	blocked := make(chan struct{})
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, `{"version":"17.0.0","revision":"abcdef"}`)
@@ -314,12 +326,48 @@ func startFakeGitLab(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/api/v4/projects/42", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, `{"id":42,"name":"proj","path_with_namespace":"g/proj","web_url":"http://example.invalid/g/proj"}`)
 	})
+	// A collection larger than one page, answering exactly what was asked for
+	// and reporting the rest through the pagination headers GitLab sends. It
+	// honors per_page rather than ignoring it, so the number of items that
+	// come back is itself the assertion about what the server requested.
+	mux.HandleFunc("/api/v4/groups", func(w http.ResponseWriter, r *http.Request) {
+		perPage := 20 // GitLab's own default, which is what an unset per_page gets
+		if requested, err := strconv.Atoi(r.URL.Query().Get("per_page")); err == nil && requested > 0 {
+			perPage = min(requested, fakeGroupTotal)
+		}
+		w.Header().Set("X-Total", strconv.Itoa(fakeGroupTotal))
+		w.Header().Set("X-Total-Pages", strconv.Itoa((fakeGroupTotal+perPage-1)/perPage))
+		w.Header().Set("X-Page", "1")
+		w.Header().Set("X-Per-Page", strconv.Itoa(perPage))
+		if perPage < fakeGroupTotal {
+			w.Header().Set("X-Next-Page", "2")
+		}
+
+		groups := make([]string, 0, perPage)
+		for id := 1; id <= perPage; id++ {
+			groups = append(groups, fmt.Sprintf(`{"id":%d,"name":"g%d","path":"g%d","full_path":"g%d","visibility":"private"}`, id, id, id, id))
+		}
+		writeJSON(w, "["+strings.Join(groups, ",")+"]")
+	})
+	// Project 99 never answers until the test is over, so a case can hold a
+	// tool call in flight while it shuts the server down. It returns as soon as
+	// the caller goes away, so a dead server does not leave it parked.
+	mux.HandleFunc("/api/v4/projects/99", func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-blocked:
+		case <-r.Context().Done():
+		}
+		writeJSON(w, `{"id":99,"name":"slow","path_with_namespace":"g/slow"}`)
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	})
 
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
+	// Registered after srv.Close so it runs before it: Close waits for
+	// outstanding requests, and one parked on this channel would hold it.
+	t.Cleanup(func() { close(blocked) })
 	return srv
 }
 
@@ -349,22 +397,58 @@ func baseEnv(gitlabURL string) map[string]string {
 // was doing.
 func (s *session) terminate(t *testing.T, within time.Duration) bool {
 	t.Helper()
+	_, exited := s.terminateAndWait(t, within)
+	return exited
+}
+
+// terminateAndWait sends SIGTERM and returns the exit status.
+func (s *session) terminateAndWait(t *testing.T, within time.Duration) (code int, exited bool) {
+	t.Helper()
 
 	if err := s.cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		t.Fatalf("sending SIGTERM: %v", err)
 	}
+	return s.waitExit(t, within)
+}
 
-	done := make(chan struct{})
+// closeStdinAndWait closes the client's end of stdin and returns the exit
+// status.
+//
+// This is the shutdown signal the stdio binding calls primary and portable, and
+// the one a client that simply goes away produces.
+func (s *session) closeStdinAndWait(t *testing.T, within time.Duration) (code int, exited bool) {
+	t.Helper()
+
+	if err := s.stdin.Close(); err != nil {
+		t.Fatalf("closing stdin: %v", err)
+	}
+	return s.waitExit(t, within)
+}
+
+// waitExit reaps the process and returns its exit code.
+//
+// It reaps through Process.Wait rather than Cmd.Wait deliberately: Cmd.Wait
+// closes the stdout and stderr pipes once it sees the process exit, and a read
+// still in flight on either would fail rather than return what it had. Reading
+// the status directly leaves the pipes alone, and the drain goroutine ends on
+// its own when the process does.
+func (s *session) waitExit(t *testing.T, within time.Duration) (code int, exited bool) {
+	t.Helper()
+
+	done := make(chan *os.ProcessState, 1)
 	go func() {
 		<-s.exited
-		close(done)
+		done <- s.state.Load()
 	}()
 
 	select {
-	case <-done:
-		return true
+	case state := <-done:
+		if state == nil {
+			t.Fatalf("the process could not be reaped\nstderr: %s", s.stderrText())
+		}
+		return state.ExitCode(), true
 	case <-time.After(within):
-		return false
+		return 0, false
 	}
 }
 

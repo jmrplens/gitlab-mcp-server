@@ -73,8 +73,8 @@ func TestLogToolCallAll_NilRequest(t *testing.T) {
 	buf := captureSlog(t)
 	ctx := context.Background()
 
-	LogToolCallAll(ctx, nil, "nil_req_tool", time.Now(), nil)
-	LogToolCallAll(ctx, nil, "nil_req_tool", time.Now(), errors.New("err"))
+	LogToolCallAll(ctx, nil, "nil_req_tool", time.Now(), nil, nil)
+	LogToolCallAll(ctx, nil, "nil_req_tool", time.Now(), nil, errors.New("err"))
 
 	out := buf.String()
 	assertContains(t, out, `"level":"INFO"`)
@@ -89,8 +89,8 @@ func TestLogToolCallAll_WithRequest(t *testing.T) {
 	ctx := context.Background()
 	req := &mcp.CallToolRequest{}
 
-	LogToolCallAll(ctx, req, "req_tool", time.Now(), nil)
-	LogToolCallAll(ctx, req, "req_tool", time.Now(), errors.New("err"))
+	LogToolCallAll(ctx, req, "req_tool", time.Now(), nil, nil)
+	LogToolCallAll(ctx, req, "req_tool", time.Now(), nil, errors.New("err"))
 
 	out := buf.String()
 	assertContains(t, out, `"tool":"req_tool"`)
@@ -106,8 +106,8 @@ func TestLogToolCallAll_WithAuthenticatedUser(t *testing.T) {
 	identity := UserIdentity{UserID: "123", Username: "testuser"}
 	ctx := IdentityToContext(context.Background(), identity)
 
-	LogToolCallAll(ctx, nil, "user_tool", time.Now(), nil)
-	LogToolCallAll(ctx, nil, "user_tool", time.Now(), errors.New("test error"))
+	LogToolCallAll(ctx, nil, "user_tool", time.Now(), nil, nil)
+	LogToolCallAll(ctx, nil, "user_tool", time.Now(), nil, errors.New("test error"))
 
 	out := buf.String()
 	assertContains(t, out, `"tool":"user_tool"`)
@@ -122,7 +122,7 @@ func TestLogToolCallAll_WithAuthenticatedUser(t *testing.T) {
 func TestLogToolCallWithUser_Success(t *testing.T) {
 	buf := captureSlog(t)
 	user := UserIdentity{UserID: "42", Username: "admin"}
-	logToolCallWithUser("user_success_tool", time.Now(), nil, user)
+	logToolCallWithUser("user_success_tool", time.Now(), false, nil, user)
 
 	out := buf.String()
 	assertContains(t, out, `"level":"INFO"`)
@@ -138,7 +138,7 @@ func TestLogToolCallWithUser_Success(t *testing.T) {
 func TestLogToolCallWithUser_Error(t *testing.T) {
 	buf := captureSlog(t)
 	user := UserIdentity{UserID: "42", Username: "admin"}
-	logToolCallWithUser("user_error_tool", time.Now(), errors.New("api failure"), user)
+	logToolCallWithUser("user_error_tool", time.Now(), false, errors.New("api failure"), user)
 
 	out := buf.String()
 	assertContains(t, out, `"level":"ERROR"`)
@@ -231,4 +231,72 @@ func TestWasCancelled_SeparatesCallerDepartureFromFailure(t *testing.T) {
 			t.Errorf("wasCancelled(%v) = true; a real failure would be logged at INFO and lost", err)
 		}
 	}
+}
+
+// TestLogToolCallAll_ErrorResultIsNotLoggedAsSuccess pins the distinction an
+// operator needs and did not have.
+//
+// A handler can report failure two ways: by returning a Go error, which was
+// logged at ERROR, or by returning a result with IsError set, which was logged
+// as "tool call completed" with nothing to tell it apart from a call that
+// worked. The second is not a rare path: NotFoundResult takes it at eighteen
+// call sites, so every 404 this server turns into a helpful message was counted
+// as a success. An error rate could not be computed from this stream, because
+// the stream did not contain one.
+func TestLogToolCallAll_ErrorResultIsNotLoggedAsSuccess(t *testing.T) {
+	notFound := &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "## Project Not Found"}}}
+
+	t.Run("anonymous", func(t *testing.T) {
+		buf := captureSlog(t)
+		LogToolCallAll(context.Background(), nil, "gitlab_project_get", time.Now(), notFound, nil)
+
+		out := buf.String()
+		assertContains(t, out, `"msg":"tool call completed"`)
+		assertContains(t, out, `"is_error":true`)
+	})
+
+	t.Run("with an identity", func(t *testing.T) {
+		buf := captureSlog(t)
+		ctx := IdentityToContext(context.Background(), UserIdentity{UserID: "7", Username: "someone"})
+		LogToolCallAll(ctx, nil, "gitlab_project_get", time.Now(), notFound, nil)
+
+		out := buf.String()
+		assertContains(t, out, `"is_error":true`)
+		assertContains(t, out, `"user":"someone"`)
+	})
+
+	t.Run("a call that worked says so", func(t *testing.T) {
+		buf := captureSlog(t)
+		LogToolCallAll(context.Background(), nil, "gitlab_project_get", time.Now(), &mcp.CallToolResult{}, nil)
+
+		assertContains(t, buf.String(), `"is_error":false`)
+	})
+}
+
+// TestLogToolRefusal_RecordsWhatWasDeclinedAndWhy pins the line the silent
+// paths now write.
+//
+// Safe-mode previews, unknown actions, missing parameters and unconfirmed
+// destructive actions all returned an error result to the model and wrote
+// nothing at all: they return before reaching LogToolCallAll. A deployment
+// refusing every third call because its clients have not learned the parameter
+// shape looked identical to a healthy one. ADR-0011 IMP-008 accepted this
+// ("observability for ... validation failure, policy block, and destructive
+// confirmation events") and only the destructive half was delivered.
+func TestLogToolRefusal_RecordsWhatWasDeclinedAndWhy(t *testing.T) {
+	buf := captureSlog(t)
+	ctx := IdentityToContext(context.Background(), UserIdentity{UserID: "7", Username: "someone"})
+
+	LogToolRefusal(ctx, nil, "gitlab_project/delete", RefusalNeedsConfirmation)
+	LogToolRefusal(context.Background(), nil, "gitlab_execute_action/nope.nope", RefusalUnknownAction)
+
+	out := buf.String()
+	assertContains(t, out, `"msg":"tool call refused"`)
+	assertContains(t, out, `"reason":"needs_confirmation"`)
+	assertContains(t, out, `"tool":"gitlab_project/delete"`)
+	assertContains(t, out, `"user":"someone"`)
+	assertContains(t, out, `"reason":"unknown_action"`)
+	// A refusal is the protocol working, not a failure. Logging it at ERROR
+	// would fill an operator's dashboard with entries nobody can act on.
+	assertNotContains(t, out, `"level":"ERROR"`)
 }

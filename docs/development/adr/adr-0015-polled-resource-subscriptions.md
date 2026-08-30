@@ -161,6 +161,22 @@ make the worst case something an operator can predict.
   watch. That read is what stops the watch.
 - NEG-004: More moving parts: a watcher goroutine per subscription, a
   session bridge, and middleware on the receive path.
+- NEG-005: A watch on one of the three admitted lists (a pipeline's jobs, a
+  merge request's notes, a merge request's discussions) sees only the first
+  page. The reasoning above costed a subscribed collection at "a full page
+  read per tick" and was right about the cost while missing what a page read
+  cannot see: a change past it raises no `notifications/resources/updated` at
+  all. Reproduced against a fake instance holding 25 notes at a 15s cadence:
+  editing note 1 notified at +10.2s, editing note 25 produced nothing across
+  three polls.
+
+  Mitigated rather than removed. The page is now 100 items instead of
+  GitLab's default of 20, which puts every ordinary pipeline and merge
+  request inside it, and every read discloses its own completeness through
+  the `io.github.jmrplens/pageInfo` `_meta` key, so a subscriber can see that
+  what it is watching is partial. Reading a subscribed list to exhaustion was
+  rejected: it multiplies the per-tick cost this ADR bounded, by an amount
+  the client does not choose and the operator cannot predict.
 
 ### Neutral
 

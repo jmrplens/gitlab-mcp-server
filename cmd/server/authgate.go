@@ -120,18 +120,24 @@ func newHeader(pairs ...string) http.Header {
 
 // jsonRPCError is the wire shape of a transport-level rejection.
 //
-// The id is null because the request body was never parsed: the Streamable HTTP
-// transport explicitly permits an error response with no id for rejections at
-// this layer, and JSON-RPC 2.0 represents an undeterminable id as null.
+// It carries the id of the request it refuses, recovered from the body by
+// [requestIDFromBody], and omits the member when there is none to carry. The id
+// used to be a *string that nothing ever set, so every rejection went out as
+// null: unmatchable by a client that routes on id, and not a legal RequestId
+// under 2026-07-28, which admits a string or an integer and marks the member
+// optional. A *string could not have carried a numeric id in any case.
 //
 // Emitting this instead of plain text also matters for version negotiation. A
 // client that receives 400 with a body that is not a recognized JSON-RPC error
 // is told by the specification to conclude the server is initialization-era and
 // downgrade, so an opaque 400 turns a missing header into a false protocol
-// diagnosis.
+// diagnosis. A client that recognizes the body by validating it against the
+// published schema rather than by reading error.code is the case that makes the
+// id shape matter: null fails that validation, and the failure it produces is
+// the exact downgrade this body exists to prevent.
 type jsonRPCError struct {
 	JSONRPC string           `json:"jsonrpc"`
-	ID      *string          `json:"id"`
+	ID      json.RawMessage  `json:"id,omitempty"`
 	Error   jsonRPCErrorBody `json:"error"`
 }
 
@@ -141,7 +147,11 @@ type jsonRPCErrorBody struct {
 }
 
 // write emits the failure as a JSON-RPC error response with the mapped status.
-func (f *gateFailure) write(w http.ResponseWriter) {
+//
+// The request is taken so the refusal can name what it refuses. Every caller
+// returns immediately afterwards, which is what makes reading the body here
+// safe.
+func (f *gateFailure) write(w http.ResponseWriter, r *http.Request) {
 	for name, values := range f.header {
 		for _, value := range values {
 			w.Header().Add(name, value)
@@ -151,6 +161,7 @@ func (f *gateFailure) write(w http.ResponseWriter) {
 	w.WriteHeader(f.status)
 	if err := json.NewEncoder(w).Encode(jsonRPCError{
 		JSONRPC: "2.0",
+		ID:      requestIDFromBody(r),
 		Error:   jsonRPCErrorBody{Code: f.code, Message: f.message},
 	}); err != nil {
 		slog.Error("failed to write gate error response", "error", err)
@@ -268,11 +279,11 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 
 		server, failure := g.resolve(r) //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
 		if failure != nil {
-			failure.write(w)
+			failure.write(w, r)
 			return
 		}
 		if sessionFailure := g.checkSessionOwnership(r, server); sessionFailure != nil {
-			sessionFailure.write(w)
+			sessionFailure.write(w, r)
 			return
 		}
 		ctx := context.WithValue(r.Context(), resolvedServerContextKey{}, server)

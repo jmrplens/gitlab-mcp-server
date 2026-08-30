@@ -8,6 +8,25 @@ This document lists the MCP resources exposed by gitlab-mcp-server. With the def
 
 GitLab data resources and tool manifest resources return `application/json`. Workflow guide resources return `text/markdown`.
 
+## Collections return one page
+
+`resources/read` has no continuation mechanism. The specification scopes pagination to the list operations (`resources/list`, `resources/templates/list`, `tools/list`, `prompts/list`) and defines neither a cursor nor a partial-result shape for a read, so a collection resource cannot hand back a page token and a client cannot ask for the next page.
+
+Each collection resource therefore returns up to **100 items** and states its own completeness in `_meta`, under the vendor-namespaced key `io.github.jmrplens/pageInfo`:
+
+```json
+{
+  "_meta": {
+    "io.github.jmrplens/pageInfo": { "returned": 100, "total": 137, "complete": false }
+  },
+  "contents": [{ "mimeType": "application/json", "text": "[…]" }]
+}
+```
+
+`total` is omitted when GitLab sends no `X-Total` header, which is the case on keyset-paginated endpoints; `complete` is the field to branch on. When it is `false`, use the tool surface for the same data: every list tool paginates properly and returns `total_items`, `next_page` and `has_more`.
+
+This also bounds what a subscription can see: a watch on one of the three subscribable collections is notified about changes inside the page it reads, and not about changes past it. See [ADR-0015](../development/adr/adr-0015-polled-resource-subscriptions.md), NEG-005.
+
 Most single-object resources can also be **subscribed to**: the server polls
 them and sends `notifications/resources/updated` when their content changes.
 Collections are deliberately not subscribable — see
@@ -33,7 +52,7 @@ Static resources have a fixed URI and require no parameters.
 | #   | Name            | URI                     | Description                                                                                                                                                                        |
 | --- | --------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | `current_user`  | `gitlab://user/current` | Get the currently authenticated GitLab user profile. Returns username, display name, email, state (active/blocked), admin status, and web URL.                                     |
-| 2   | `groups`        | `gitlab://groups`       | List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.                                 |
+| 2   | `groups`        | `gitlab://groups`       | Groups accessible to the authenticated user, up to one page (100). Returns each group's ID, name, full path, description, visibility level, and web URL.                           |
 | 3   | `tool_manifest` | `gitlab://tools`        | Surface-aware manifest of the tools and executable actions available in this server instance. Use `gitlab://tools/{id}` to fetch one entry's accepted call shape and input schema. |
 
 ## Resource Templates (37 core)
@@ -45,13 +64,13 @@ Resource templates use URI variables (e.g., `{project_id}`) that the client fill
 | #   | Name                 | URI Template                                                 | Description                                                                                                                                                                                                            |
 | --- | -------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 5   | `project`            | `gitlab://project/{project_id}`                              | Get basic metadata for a GitLab project by numeric ID or URL-encoded path. Returns name, namespace path, visibility, web URL, description, and default branch.                                                         |
-| 6   | `project_members`    | `gitlab://project/{project_id}/members`                      | List all members of a GitLab project with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members from parent groups.                                           |
-| 7   | `project_labels`     | `gitlab://project/{project_id}/labels`                       | List all labels defined in a GitLab project. Returns each label's name, color, description, and counts of open issues and merge requests using the label.                                                              |
-| 8   | `project_milestones` | `gitlab://project/{project_id}/milestones`                   | List all milestones in a GitLab project. Returns each milestone's title, description, state (active/closed), due date, and web URL.                                                                                    |
-| 9   | `project_branches`   | `gitlab://project/{project_id}/branches`                     | List all branches in a GitLab project. Returns each branch's name, protection status, merge status, default flag, and web URL.                                                                                         |
-| 10  | `project_issues`     | `gitlab://project/{project_id}/issues`                       | List open issues for a GitLab project. Returns each issue's IID, title, state, labels, assignees, author, web URL, and creation date.                                                                                  |
-| 11  | `project_releases`   | `gitlab://project/{project_id}/releases`                     | List all releases for a GitLab project. Returns each release's tag name, name, description, author, and creation/release dates.                                                                                        |
-| 12  | `project_tags`       | `gitlab://project/{project_id}/tags`                         | List all repository tags for a GitLab project. Returns each tag's name, message, target commit SHA, protection status, and creation date.                                                                              |
+| 6   | `project_members`    | `gitlab://project/{project_id}/members`                      | Members of a GitLab project, up to one page (100), with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members from parent groups.                             |
+| 7   | `project_labels`     | `gitlab://project/{project_id}/labels`                       | Labels defined in a GitLab project, up to one page (100). Returns each label's name, color, description, and counts of open issues and merge requests using the label.                                                 |
+| 8   | `project_milestones` | `gitlab://project/{project_id}/milestones`                   | Milestones in a GitLab project, up to one page (100). Returns each milestone's title, description, state (active/closed), due date, and web URL.                                                                       |
+| 9   | `project_branches`   | `gitlab://project/{project_id}/branches`                     | Branches in a GitLab project, up to one page (100). Returns each branch's name, protection status, merge status, default flag, and web URL.                                                                            |
+| 10  | `project_issues`     | `gitlab://project/{project_id}/issues`                       | Open issues for a GitLab project, up to one page (100). Returns each issue's IID, title, state, labels, assignees, author, web URL, and creation date.                                                                 |
+| 11  | `project_releases`   | `gitlab://project/{project_id}/releases`                     | Releases for a GitLab project, up to one page (100). Returns each release's tag name, name, description, author, and creation/release dates.                                                                           |
+| 12  | `project_tags`       | `gitlab://project/{project_id}/tags`                         | Repository tags for a GitLab project, up to one page (100). Returns each tag's name, message, target commit SHA, protection status, and creation date.                                                                 |
 | 13  | `commit`             | `gitlab://project/{project_id}/commit/{sha}`                 | Get details for a single commit by SHA. Returns short_id, title, message, author, committer, authored/committed dates, parent commits, web URL, and stats (additions/deletions/total).                                 |
 | 14  | `file_blob`          | `gitlab://project/{project_id}/file/{ref}/{+path}`           | Get the contents of a repository file at a specific ref (branch, tag, or SHA). Path may include slashes. Files over 1 MiB return metadata only with `truncated=true`. Binary files return metadata with empty content. |
 | 15  | `wiki_page`          | `gitlab://project/{project_id}/wiki/{slug}`                  | Get a wiki page by slug. Returns title, slug, format (markdown/rdoc/asciidoc/org), and raw content. Slugs are case-sensitive and use hyphens for spaces.                                                               |
@@ -83,17 +102,17 @@ Resource templates use URI variables (e.g., `{project_id}`) that the client fill
 | --- | ----------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 32  | `latest_pipeline` | `gitlab://project/{project_id}/pipelines/latest`            | Get the most recent CI/CD pipeline for a GitLab project. Returns pipeline ID, status (running/pending/success/failed/canceled), ref, SHA, source, and web URL. |
 | 33  | `pipeline`        | `gitlab://project/{project_id}/pipeline/{pipeline_id}`      | Get details of a specific CI/CD pipeline by its numeric ID. Returns pipeline status, ref, SHA, source, and web URL.                                            |
-| 34  | `pipeline_jobs`   | `gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs` | List all jobs for a specific CI/CD pipeline including each job's name, stage, status, duration, failure reason (if failed), and web URL.                       |
+| 34  | `pipeline_jobs`   | `gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs` | Jobs for a specific CI/CD pipeline, up to one page (100), including each job's name, stage, status, duration, failure reason (if failed), and web URL.         |
 
 ### Group Resources
 
-| #   | Name              | URI Template                                          | Description                                                                                                                                             |
-| --- | ----------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 35  | `group`           | `gitlab://group/{group_id}`                           | Get details for a specific GitLab group by numeric ID or URL-encoded path. Returns name, full path, description, visibility, and web URL.               |
-| 36  | `group_members`   | `gitlab://group/{group_id}/members`                   | List all members of a GitLab group with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members. |
-| 37  | `group_projects`  | `gitlab://group/{group_id}/projects`                  | List all projects within a GitLab group. Returns each project's ID, name, namespace path, visibility, web URL, description, and default branch.         |
-| 38  | `group_label`     | `gitlab://group/{group_id}/label/{label_id}`          | Get a single group label. Returns name, color, description, and open issue/MR counts.                                                                   |
-| 39  | `group_milestone` | `gitlab://group/{group_id}/milestone/{milestone_iid}` | Get a single group milestone by IID. Returns title, description, state, due date, and web URL.                                                          |
+| #   | Name              | URI Template                                          | Description                                                                                                                                                           |
+| --- | ----------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 35  | `group`           | `gitlab://group/{group_id}`                           | Get details for a specific GitLab group by numeric ID or URL-encoded path. Returns name, full path, description, visibility, and web URL.                             |
+| 36  | `group_members`   | `gitlab://group/{group_id}/members`                   | Members of a GitLab group, up to one page (100), with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members. |
+| 37  | `group_projects`  | `gitlab://group/{group_id}/projects`                  | Projects within a GitLab group, up to one page (100). Returns each project's ID, name, namespace path, visibility, web URL, description, and default branch.          |
+| 38  | `group_label`     | `gitlab://group/{group_id}/label/{label_id}`          | Get a single group label. Returns name, color, description, and open issue/MR counts.                                                                                 |
+| 39  | `group_milestone` | `gitlab://group/{group_id}/milestone/{milestone_iid}` | Get a single group milestone by IID. Returns title, description, state, due date, and web URL.                                                                        |
 
 ### Personal Snippet
 

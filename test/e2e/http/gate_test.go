@@ -402,8 +402,123 @@ func TestProtocolVersion_UnsupportedGetsTheSpecifiedError(t *testing.T) {
 			if body.Error.Data.Requested != version {
 				t.Errorf("requested = %q, want %q", body.Error.Data.Requested, version)
 			}
+			if got := requestIDOf(t, got.body); got != "1" {
+				t.Errorf("id = %s, want 1 echoed back from the request", got)
+			}
 		})
 	}
+}
+
+// TestJSONRPCError_CarriesTheRequestID pins that a refusal can be matched to
+// what it refuses.
+//
+// "Error responses MUST include the same ID as the request they correspond to
+// (except in error cases where the ID could not be read due a malformed
+// request)." None of these refusals are that exception: each is decided from a
+// header, on a well-formed body whose id is the second member.
+//
+// Both HTTP gates used to declare the id as a *string that nothing ever set, so
+// every rejection went out as "id":null while the SDK's own errors, on the same
+// deployment, echoed the id properly. Two defects in one: unmatchable by a
+// client that routes on id, and not a legal RequestId, which under 2026-07-28
+// is a string or an integer. The *string could not have carried a numeric id
+// even if something had set it.
+//
+// The absent cases are the other half of the rule. Where there is genuinely no
+// id to echo (a GET carries no request, a notification has none by
+// definition), the member must be left out rather than sent as null, which is
+// what the schema's optionality is for.
+func TestJSONRPCError_CarriesTheRequestID(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
+
+	const stringIDBody = `{"jsonrpc":"2.0","id":"req-abc","method":"tools/list","params":{}}`
+	const notificationBody = `{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}`
+
+	cases := []struct {
+		name    string
+		req     request
+		wantID  string
+		wantOut bool // the member must be absent entirely
+	}{
+		{
+			name: "unsupported version, numeric id",
+			req: request{method: http.MethodPost, path: "/mcp", body: legacyToolsListBody, headers: map[string]string{
+				"PRIVATE-TOKEN": "glpat-whatever", "MCP-Protocol-Version": "1999-01-01",
+			}},
+			wantID: "1",
+		},
+		{
+			name: "unsupported version, string id",
+			req: request{method: http.MethodPost, path: "/mcp", body: stringIDBody, headers: map[string]string{
+				"PRIVATE-TOKEN": "glpat-whatever", "MCP-Protocol-Version": "1999-01-01",
+			}},
+			wantID: `"req-abc"`,
+		},
+		{
+			// The auth gate is the same defect in a second place, which is why
+			// one helper serves both: it was filed as a versioning problem and
+			// is not one.
+			name: "missing credential, numeric id",
+			req: request{method: http.MethodPost, path: "/mcp", body: legacyToolsListBody, headers: map[string]string{
+				"MCP-Protocol-Version": "2025-11-25",
+			}},
+			wantID: "1",
+		},
+		{
+			name: "unsupported version, notification carries no id",
+			req: request{method: http.MethodPost, path: "/mcp", body: notificationBody, headers: map[string]string{
+				"PRIVATE-TOKEN": "glpat-whatever", "MCP-Protocol-Version": "1999-01-01",
+			}},
+			wantOut: true,
+		},
+		{
+			name: "unsupported version on a GET, no request to correlate with",
+			req: request{method: http.MethodGet, path: "/mcp", headers: map[string]string{
+				"PRIVATE-TOKEN": "glpat-whatever", "MCP-Protocol-Version": "1999-01-01",
+			}},
+			wantOut: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := srv.do(t, tc.req)
+			if got.status < 400 {
+				t.Fatalf("status = %d, want a refusal; this case is not testing what it says", got.status)
+			}
+
+			var decoded map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(got.body), &decoded); err != nil {
+				t.Fatalf("decode %q: %v", got.body, err)
+			}
+			id, present := decoded["id"]
+
+			if tc.wantOut {
+				if present {
+					t.Errorf("id = %s, want the member omitted; null is not a legal RequestId", id)
+				}
+				return
+			}
+			if !present {
+				t.Fatalf("no id in %s; a client routing on id cannot match this refusal", got.body)
+			}
+			if string(id) != tc.wantID {
+				t.Errorf("id = %s, want %s", id, tc.wantID)
+			}
+		})
+	}
+}
+
+// requestIDOf returns the raw id member of a JSON-RPC body, or "" when absent.
+func requestIDOf(t *testing.T, body string) string {
+	t.Helper()
+
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+		t.Fatalf("decode %q: %v", body, err)
+	}
+	return string(decoded["id"])
 }
 
 // TestProtocolVersion_SupportedVersionsStillWork guards against the middleware

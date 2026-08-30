@@ -3,6 +3,7 @@
 package stdioe2e
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
@@ -69,6 +70,85 @@ func TestStderr_TakesTheLogsAndStdoutDoesNot(t *testing.T) {
 	logs := s.stderrText()
 	if !strings.Contains(logs, "level=DEBUG") && !strings.Contains(logs, "DEBUG") {
 		t.Errorf("LOG_LEVEL=debug produced no debug lines on stderr:\n%s", logs)
+	}
+}
+
+// TestStderr_DefaultLevelIsNotAllSessionChatter pins what an operator actually
+// sees on the default log stream.
+//
+// The SDK logs nothing unless it is handed a Logger, and this server hands it
+// one, so the volume is this repository's. What it produced was one connect,
+// one log-level and one disconnect line per session, plus a run-start line, and
+// nothing else: measured on HTTP, where a stateless POST is a session, twenty-
+// four calls gave ninety-six records and all ninety-six were those four
+// messages. Not most. All. The stream looked busy and said nothing, and
+// LOG_LEVEL was no way out, since raising it silenced this server's own signal
+// along with the noise.
+//
+// The check is on the wire rather than on the handler because the handler had
+// no way of being reached wrongly: a Logger left unwrapped at the wiring point
+// would pass every unit test in cmd/server and change nothing about them.
+func TestStderr_DefaultLevelIsNotAllSessionChatter(t *testing.T) {
+	s := startSession(t, baseEnv(startFakeGitLab(t).URL))
+
+	// Enough calls that per-session chatter would dominate if it were emitted.
+	for id := 1; id <= 6; id++ {
+		if got := s.call(t, request(id, "tools/list", "")); got["error"] != nil {
+			t.Fatalf("tools/list failed: %v", got["error"])
+		}
+	}
+
+	logs := s.stderrText()
+	for _, chatter := range []string{
+		"server session connected",
+		"server session disconnected",
+		"client log level set",
+		"server connecting",
+	} {
+		if strings.Contains(logs, chatter) {
+			t.Errorf("%q is on the default log stream; it is per-session and carries nothing:\n%s", chatter, logs)
+		}
+	}
+
+	// The other half of the claim: this is a demotion, not a silencing. The
+	// server's own startup lines must still be there.
+	if !strings.Contains(logs, "gitlab connection verified") {
+		t.Errorf("the server's own startup signal is missing from the default stream:\n%s", logs)
+	}
+}
+
+// TestStderr_LogLinesKeepTheirSeverity pins that a record's severity survives
+// the attributes traveling with it.
+//
+// "client log level set" carries an attribute the SDK calls level, and level is
+// also what slog's JSON handler names the record's own severity. Neither side
+// deduplicates, so the line went out with two of them and any parser keeping
+// the last read the severity as the empty string. On the default HTTP surface
+// that was one steady-state line in four arriving at an aggregator with no
+// severity at all.
+//
+// Asserted by parsing, because the raw text looks correct: both members are
+// present, and only a parser has to choose between them.
+func TestStderr_LogLinesKeepTheirSeverity(t *testing.T) {
+	env := baseEnv(startFakeGitLab(t).URL)
+	env["LOG_LEVEL"] = "debug"
+	s := startSession(t, env)
+
+	if got := s.call(t, request(1, "tools/list", "")); got["error"] != nil {
+		t.Fatalf("tools/list failed: %v", got["error"])
+	}
+
+	for line := range strings.SplitSeq(strings.TrimSpace(s.stderrText()), "\n") {
+		if line == "" {
+			continue
+		}
+		var record map[string]any
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("a log line is not JSON: %q (%v)", line, err)
+		}
+		if level, _ := record["level"].(string); level == "" {
+			t.Errorf("a log line reached a parser with no severity: %s", line)
+		}
 	}
 }
 
@@ -228,14 +308,14 @@ func TestMalformedInput_IsAnsweredAndTheSessionSurvives(t *testing.T) {
 
 			// The session has to still be usable, which is the half the SDK
 			// gets wrong on its own.
-			assertSessionStillWorks(t, s)
+			assertStillServing(t, s)
 		})
 	}
 }
 
-// assertRefusedWith reads the next message and requires it to be a refusal
-// carrying the given JSON-RPC code.
-func assertRefusedWith(t *testing.T, s *session, wantCode int) {
+// assertRefusedWith checks that the server's next message is a refusal carrying
+// the given JSON-RPC error code.
+func assertRefusedWith(t *testing.T, s *session, want int) {
 	t.Helper()
 
 	got := s.readMessage(t, 30*time.Second)
@@ -243,24 +323,29 @@ func assertRefusedWith(t *testing.T, s *session, wantCode int) {
 	if !ok {
 		t.Fatalf("the input was not refused: %v", got)
 	}
-	if code != wantCode {
-		t.Errorf("error code = %d, want %d: %v", code, wantCode, got)
+	if code != want {
+		t.Errorf("error code = %d, want %d: %v", code, want, got)
 	}
 }
 
-// assertSessionStillWorks drives one more call and requires its answer.
-func assertSessionStillWorks(t *testing.T, s *session) {
+// assertStillServing checks that the session answers a fresh call.
+//
+// It reads past anything the server is still saying about the previous input,
+// matching on the id rather than on arrival order, so a refusal that turns up
+// late is not mistaken for the answer.
+func assertStillServing(t *testing.T, s *session) {
 	t.Helper()
 
 	s.send(t, request(2, "tools/list", ""))
 	for {
 		got := s.readMessage(t, 30*time.Second)
-		if answeredID(got) == 2 {
-			if got["error"] != nil {
-				t.Fatalf("the session survived but stopped working: %v", got["error"])
-			}
-			return
+		if answeredID(got) != 2 {
+			continue
 		}
+		if got["error"] != nil {
+			t.Fatalf("the session survived but stopped working: %v", got["error"])
+		}
+		return
 	}
 }
 

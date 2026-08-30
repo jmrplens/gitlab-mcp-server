@@ -120,9 +120,12 @@ func TestMiddleware_StaticCatalogs_AlwaysHourTTL(t *testing.T) {
 }
 
 // TestMiddleware_ResourcesRead_TTLDependsOnURI verifies the resources/read
-// policy: static content (guides, schemas, tool manifests) is cacheable for an
-// hour, while resources backed by live GitLab API calls are marked immediately
-// stale. Both are private because their content is token- and tier-dependent.
+// policy: a workflow guide is cacheable for an hour, the gitlab://tools
+// manifest shares the tool catalog's window because it describes that catalog,
+// and resources backed by live GitLab API calls are marked immediately stale.
+// All are private because their content is token- and tier-dependent: the
+// guides are compiled in, but they are registered only on
+// CAPABILITY_SURFACE=full, so which of them exists is a deployment property.
 func TestMiddleware_ResourcesRead_TTLDependsOnURI(t *testing.T) {
 	tests := []struct {
 		name    string

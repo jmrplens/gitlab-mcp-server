@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -309,6 +310,79 @@ func TestAttachRateLimit_GatesCompletionWithoutBlockingIt(t *testing.T) {
 		}
 		if !none.allow() {
 			t.Error("a disabled limiter must allow everything")
+		}
+	})
+}
+
+// TestRateLimiter_RefusalIsReportedAndSelfSuppressed pins that a throttled
+// deployment says so, without saying it ninety-five times a second.
+//
+// Reproduced on the shipped default before this existed (rps 10, burst 40, no
+// flags, no LOG_LEVEL): 150 concurrent calls gave 102 refusals inside 1.07s and
+// the log for the whole run was session chatter. The 48 served and the 102
+// refused were indistinguishable in it. LOG_LEVEL=debug changed nothing:
+// nothing was written at any level, so there was no level to raise.
+//
+// Suppression is not an optimization. Refusals are unbounded: their rate is
+// the arrival rate minus the limit, so a line per refusal would replace a
+// silent limiter with a flood, which is the failure mode the specification
+// names when it says to rate limit log messages. One line per window carries
+// the count of what it stands for, so nothing is lost.
+func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
+	t.Run("the first refusal in a window is reported", func(t *testing.T) {
+		buf := captureSlog(t)
+		limiter := NewRateLimiter(1, 1)
+		limiter.reportRefusal("gitlab_execute_action")
+
+		out := buf.String()
+		assertContains(t, out, `"level":"WARN"`)
+		assertContains(t, out, `"msg":"tool call refused: rate limit exceeded"`)
+		assertContains(t, out, `"tool":"gitlab_execute_action"`)
+		assertContains(t, out, `"reason":"rate_limited"`)
+		assertContains(t, out, `"limit_rps":1`)
+		assertContains(t, out, `"burst":1`)
+	})
+
+	t.Run("a flood inside the window is counted, not logged", func(t *testing.T) {
+		buf := captureSlog(t)
+		limiter := NewRateLimiter(10, 40)
+		for range 102 {
+			limiter.reportRefusal("gitlab_execute_action")
+		}
+
+		if got := strings.Count(buf.String(), "rate limit exceeded"); got != 1 {
+			t.Errorf("%d lines for 102 refusals in one window, want 1", got)
+		}
+	})
+
+	t.Run("the next window reports what the last one absorbed", func(t *testing.T) {
+		buf := captureSlog(t)
+		limiter := NewRateLimiter(10, 40)
+		limiter.throttleWindow = time.Millisecond
+
+		limiter.reportRefusal("gitlab_execute_action")
+		for range 41 {
+			limiter.reportRefusal("gitlab_execute_action")
+		}
+		time.Sleep(5 * time.Millisecond)
+		limiter.reportRefusal("gitlab_execute_action")
+
+		out := buf.String()
+		if got := strings.Count(out, "rate limit exceeded"); got != 2 {
+			t.Fatalf("%d lines across two windows, want 2:\n%s", got, out)
+		}
+		// Without the count, an operator reading one line per ten seconds has
+		// no idea whether it stands for one refusal or a thousand.
+		assertContains(t, out, `"also_refused_since_last_report":41`)
+	})
+
+	t.Run("a nil limiter reports nothing", func(t *testing.T) {
+		buf := captureSlog(t)
+		var none *RateLimiter
+		none.reportRefusal("gitlab_execute_action")
+
+		if buf.Len() != 0 {
+			t.Errorf("a disabled limiter logged something: %s", buf.String())
 		}
 	})
 }

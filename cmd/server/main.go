@@ -1091,7 +1091,7 @@ func createServer(
 		// surface this server actually registers: a dynamic-mode model can
 		// only see gitlab_find_action and gitlab_execute_action.
 		Instructions: buildInstructions(toolSurface, capabilitySurface, cfg.Stateless),
-		Logger:       slog.Default(),
+		Logger:       sdkLogger(),
 		Capabilities: serverCapabilities,
 		// The SDK asks the RESOLVED server for the session ID, so a tag minted
 		// here is a trustworthy statement about which pooled entry owns the
@@ -1142,9 +1142,11 @@ func createServer(
 	subs.attach(ctx, server)
 
 	// SEP-2549 cache hints: catalogs and resource reads are token- and
-	// tier-dependent, so every cacheable result is stamped "private". A
-	// configured tier cannot change while the server runs, which earns the
-	// tool catalog the same freshness window as the compiled-in catalogs.
+	// tier-dependent, so almost every cacheable result is stamped "private".
+	// The prompt catalog is the exception and is stamped "public": it is
+	// compiled in and identical for every caller. A configured tier cannot
+	// change while the server runs, which earns the tool catalog the same
+	// freshness window as the compiled-in catalogs.
 	server.AddReceivingMiddleware(cachehints.Middleware(cachehints.Options{
 		TierPinned: cfg.TierExplicit,
 	}))
@@ -1226,10 +1228,10 @@ func createServer(
 		resources.RegisterToolSurfaceResources(server, manifestOpts)
 	}
 
-	// Optional per-server tools/call rate limit. In HTTP mode each pooled
-	// per-token-and-URL server entry gets its own bucket. In
-	// stdio mode the bucket is global to the process. Disabled when
-	// RateLimitRPS is 0 (default).
+	// Per-server tools/call rate limit. In HTTP mode each pooled
+	// per-token-and-URL server entry gets its own bucket. In stdio mode the
+	// bucket is global to the process. Disabled when RateLimitRPS is 0, which
+	// is the stdio default; HTTP mode defaults to 10 rps with a burst of 40.
 	if limiter := toolutil.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst); limiter != nil {
 		toolutil.AttachRateLimit(server, limiter)
 		slog.Info(
@@ -1952,7 +1954,7 @@ func writeUntrustedOrigin(w http.ResponseWriter, r *http.Request) {
 		status:  http.StatusForbidden,
 		code:    errCodeForbidden,
 		message: "Cross-origin request refused: the Origin header names an origin this deployment does not trust.",
-	}).write(w)
+	}).write(w, r)
 }
 
 // sameOriginAsHost reports whether an Origin names the host the request was sent
@@ -1999,7 +2001,7 @@ func protocolVersionMiddleware(stateless bool, next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		writeUnsupportedProtocolVersion(w, supported, requested)
+		writeUnsupportedProtocolVersion(w, r, supported, requested)
 	})
 }
 
@@ -2032,9 +2034,15 @@ const protocolVersionStatelessOnly = "2026-07-28"
 // specification names for a protocol version the server does not implement. It
 // is a typed struct rather than a map so the JSON encoding cannot fail, which
 // is what lets the write below be total.
+//
+// The id is recovered from the request and omitted when there is none, for the
+// reasons on [jsonRPCError]. The spec's own example of this error carries an
+// id, and the SDK's equivalent errors do too, so before this the same server
+// answered the same client with two different correlation behaviors depending
+// on which layer refused.
 type unsupportedVersionError struct {
 	JSONRPC string                    `json:"jsonrpc"`
-	ID      *string                   `json:"id"`
+	ID      json.RawMessage           `json:"id,omitempty"`
 	Error   unsupportedVersionErrBody `json:"error"`
 }
 
@@ -2055,9 +2063,10 @@ type unsupportedVersionErrData struct {
 // writeUnsupportedProtocolVersion emits the JSON-RPC error body the spec names,
 // carrying the versions this server does support so the client can retry once
 // with one of them rather than guessing or downgrading its transport.
-func writeUnsupportedProtocolVersion(w http.ResponseWriter, supported []string, requested string) {
+func writeUnsupportedProtocolVersion(w http.ResponseWriter, r *http.Request, supported []string, requested string) {
 	var body unsupportedVersionError
 	body.JSONRPC = "2.0"
+	body.ID = requestIDFromBody(r)
 	body.Error.Code = codeUnsupportedProtocolVersion
 	body.Error.Message = "unsupported protocol version"
 	body.Error.Data.Supported = supported
@@ -2762,7 +2771,7 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 				status:  http.StatusForbidden,
 				code:    errCodeForbidden,
 				message: "Request refused: the Host header names a host this deployment does not serve.",
-			}).write(w)
+			}).write(w, r)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -3093,10 +3102,32 @@ func serveStdio(ctx context.Context, server *mcp.Server) error {
 	// would take the process and the client's whole context with it. See
 	// [resilientStdio].
 	reader, writer := resilientStdio(os.Stdin, os.Stdout)
-	if err := server.Run(ctx, &mcp.IOTransport{Reader: reader, Writer: writer}); err != nil {
-		return fmt.Errorf("mcp server error: %w", err)
+	err := server.Run(ctx, &mcp.IOTransport{Reader: reader, Writer: writer})
+	if err == nil {
+		return nil
 	}
-	return nil
+
+	// The two shutdowns the stdio binding prescribes are not failures, and
+	// saying they are has consequences beyond the log line: a nonzero status is
+	// what systemd's Restart=on-failure acts on, what fails a CI wrapper, and
+	// what a launcher passes outward as its own.
+	//
+	// Both used to arrive here as errors. A client closing its pipe returns
+	// cleanly only when nothing is in flight: the SDK cancels the open calls
+	// and still writes their responses, which fails against the now-closed
+	// stream and is reported as the session's outcome. A signal returns
+	// ctx.Err() whether or not anything was open. So the only stop that exited
+	// zero was EOF on a completely idle server, and the everyday case of a
+	// client exiting mid-call did not.
+	switch {
+	case reader.clientClosed():
+		slog.Info("client closed stdin, shutting down", "transport", "stdio")
+		return nil
+	case errors.Is(err, context.Canceled):
+		slog.Info("signal received, shutting down", "transport", "stdio")
+		return nil
+	}
+	return fmt.Errorf("mcp server error: %w", err)
 }
 
 type stdioAutoUpdateCheckFunc func(context.Context, autoupdate.Config) (newVersion string, updated bool, err error)

@@ -2256,8 +2256,9 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		formatResult = defaultFormatResult
 	}
 	return func(ctx context.Context, req *mcp.CallToolRequest, input MetaToolInput) (*mcp.CallToolResult, any, error) {
-		route, validationResult := validateMetaToolInput(toolName, routes, &input)
+		route, refusal, validationResult := validateMetaToolInput(toolName, routes, &input)
 		if validationResult != nil {
+			LogToolRefusal(ctx, req, metaCallName(toolName, input.Action), refusal)
 			return validationResult, nil, nil
 		}
 
@@ -2272,6 +2273,7 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 				return nil, nil, guardErr
 			}
 			if guard != nil {
+				LogToolRefusal(ctx, req, metaCallName(toolName, input.Action), RefusalNeedsConfirmation)
 				return guard, nil, nil
 			}
 		}
@@ -2284,7 +2286,7 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		if inputResult, needsInput := InputRequiredResultFromError(err); needsInput {
 			return inputResult, nil, nil
 		}
-		LogToolCallAll(ctx, req, fmt.Sprintf("%s/%s", toolName, input.Action), start, err)
+		LogToolCallAll(ctx, req, metaCallName(toolName, input.Action), start, result, err)
 
 		if err != nil {
 			if validationErr, matched := errors.AsType[*ParamValidationError](err); matched {
@@ -2303,20 +2305,33 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 	}
 }
 
-func validateMetaToolInput(toolName string, routes ActionMap, input *MetaToolInput) (ActionRoute, *mcp.CallToolResult) {
+// It returns the refusal class alongside the result, so a rejection can be
+// counted by kind rather than merely observed: a deployment whose clients keep
+// naming actions that do not exist has a different problem from one whose
+// clients keep omitting a required parameter, and neither used to appear in the
+// log at all.
+func validateMetaToolInput(toolName string, routes ActionMap, input *MetaToolInput) (ActionRoute, string, *mcp.CallToolResult) {
 	if input.Action == "" {
-		return ActionRoute{}, ErrorResult(fmt.Sprintf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes)))
+		return ActionRoute{}, RefusalInvalidParams, ErrorResult(fmt.Sprintf("%s: 'action' is required. Valid actions: %s", toolName, ValidActionsString(routes)))
 	}
 	input.Action = NormalizeActionAlias(input.Action, routes)
 	input.Action = normalizeActionAliasForParams(toolName, input.Action, input.Params, routes)
 	route, ok := routes[input.Action]
 	if !ok {
-		return ActionRoute{}, ErrorResult(fmt.Sprintf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes)))
+		return ActionRoute{}, RefusalUnknownAction, ErrorResult(fmt.Sprintf("%s: unknown action %q. Valid actions: %s", toolName, input.Action, ValidActionsString(routes)))
 	}
 	if result := validateMetaToolParams(toolName, route, input); result != nil {
-		return ActionRoute{}, result
+		return ActionRoute{}, RefusalInvalidParams, result
 	}
-	return route, nil
+	return route, "", nil
+}
+
+// metaCallName is how a meta-tool action is named in a log record.
+func metaCallName(toolName, action string) string {
+	if action == "" {
+		return toolName
+	}
+	return fmt.Sprintf("%s/%s", toolName, action)
 }
 
 func validateMetaToolParams(toolName string, route ActionRoute, input *MetaToolInput) *mcp.CallToolResult {

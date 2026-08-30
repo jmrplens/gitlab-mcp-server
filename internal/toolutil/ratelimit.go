@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/time/rate"
@@ -18,8 +21,8 @@ import (
 // rate limits. The local limiter exists to soften bursts (typical LLM
 // retry-loop with a flaky tool can fire dozens of identical calls per
 // second) and to give operators a single knob they can tighten when they
-// see 429s in practice. Default is off so existing deployments keep their
-// current behavior.
+// see 429s in practice. HTTP mode enables it by default (10 rps, burst 40);
+// stdio leaves it off, since there the bucket would be global to one client.
 //
 // The limiter shares a single bucket across the server. In HTTP mode each
 // server instance from the pool gets its own RateLimiter, so the limit is
@@ -30,7 +33,30 @@ import (
 // not need additional synchronization of its own.
 type RateLimiter struct {
 	limiter *rate.Limiter
+
+	// Throttle reporting. A refusal used to be completely silent: no log line,
+	// no counter, nothing. Measured on the shipped default (rps 10, burst 40,
+	// no flags), 150 concurrent calls produced 102 refusals inside 1.07s, and
+	// the log for the whole run was session chatter and nothing else. The 48
+	// served and the 102 refused were byte-identical in it, and LOG_LEVEL=debug
+	// did not help: there was nothing to raise the level of.
+	//
+	// Self-suppressed because refusals are unbounded: their rate is the
+	// arrival rate minus the limit, 95 a second in that run, so one line per
+	// event would replace a silent limiter with a log flood. One line per
+	// window carries the count of everything it stands for.
+	reportMu       sync.Mutex
+	windowStart    time.Time
+	windowRefusals int
+	// throttleWindow is how often a refusal is reported. Overridden in tests.
+	throttleWindow time.Duration
 }
+
+// defaultThrottleWindow is the reporting interval for refusals.
+//
+// Long enough that a sustained flood costs six lines a minute, short enough
+// that a burst is visible while it is happening.
+const defaultThrottleWindow = 10 * time.Second
 
 // NewRateLimiter builds a RateLimiter with the given rate (requests per
 // second) and burst (maximum concurrent tokens in the bucket). Returns nil
@@ -44,8 +70,48 @@ func NewRateLimiter(rps float64, burst int) *RateLimiter {
 		burst = 1
 	}
 	return &RateLimiter{
-		limiter: rate.NewLimiter(rate.Limit(rps), burst),
+		limiter:        rate.NewLimiter(rate.Limit(rps), burst),
+		throttleWindow: defaultThrottleWindow,
 	}
+}
+
+// reportRefusal writes at most one line per window, naming the tool that was
+// refused and how many refusals the line stands for.
+//
+// WARN rather than INFO: unlike the other refusals, this one is not the
+// caller's doing. The call was well formed and would have succeeded a moment
+// earlier or later, and an operator seeing it may need to raise the limit.
+func (r *RateLimiter) reportRefusal(tool string) {
+	if r == nil {
+		return
+	}
+
+	r.reportMu.Lock()
+	window := r.throttleWindow
+	if window <= 0 {
+		window = defaultThrottleWindow
+	}
+	now := time.Now()
+	if !r.windowStart.IsZero() && now.Sub(r.windowStart) < window {
+		r.windowRefusals++
+		r.reportMu.Unlock()
+		return
+	}
+	alsoRefused := r.windowRefusals
+	r.windowStart = now
+	r.windowRefusals = 0
+	r.reportMu.Unlock()
+
+	if tool == "" {
+		tool = "tools/call"
+	}
+	slog.Warn("tool call refused: rate limit exceeded",
+		"tool", tool,
+		"reason", RefusalRateLimited,
+		"limit_rps", float64(r.limiter.Limit()),
+		"burst", r.limiter.Burst(),
+		"also_refused_since_last_report", alsoRefused,
+	)
 }
 
 // allow reports whether a single token is currently available. The
@@ -92,7 +158,9 @@ func AttachRateLimit(server *mcp.Server, limiter *RateLimiter) {
 			switch method {
 			case "tools/call":
 				if !limiter.allow() {
-					return rateLimitedResult(req), nil
+					result := rateLimitedResult(req)
+					limiter.reportRefusal(extractToolName(req))
+					return result, nil
 				}
 			case "completion/complete":
 				if !completions.allow() {

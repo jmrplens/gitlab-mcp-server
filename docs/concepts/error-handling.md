@@ -169,11 +169,14 @@ For "get" handlers, HTTP 404 errors are intercepted **before** the standard erro
 // In a catalog route wrapper for the get action:
 out, err := Get(ctx, client, input)
 if err != nil && toolutil.IsHTTPStatus(err, 404) {
-    toolutil.LogToolCallAll(ctx, req, "gitlab_branch_get", start, nil) // nil → INFO log
-    return toolutil.NotFoundResult("Branch", fmt.Sprintf("%q in project %s", input.BranchName, input.ProjectID),
+    result := toolutil.NotFoundResult("Branch", fmt.Sprintf("%q in project %s", input.BranchName, input.ProjectID),
         "Use gitlab_branch_list with project_id to list available branches",
         "Verify the branch name is spelled correctly (case-sensitive)",
-    ), Output{}, nil // nil error → SDK logs at INFO, not ERROR
+    )
+    // The result is passed as well as the error: no Go error means INFO
+    // rather than ERROR, and the result is what stamps is_error on the record.
+    toolutil.LogToolCallAll(ctx, req, "gitlab_branch_get", start, result, nil)
+    return result, Output{}, nil
 }
 ```
 
@@ -182,7 +185,7 @@ The `NotFoundResult(resource, identifier string, hints ...string)` function in `
 1. Creates a Markdown-formatted `CallToolResult` with `IsError: true`
 2. Includes a `## ❓ {Resource} Not Found` heading with the identifier
 3. Appends `💡 Next steps` hints specific to the domain
-4. The handler returns `nil` as the Go error so `LogToolCallAll` logs at INFO level
+4. The handler returns `nil` as the Go error so `LogToolCallAll` logs at INFO level, and passing the result to it stamps `is_error: true` on that record. Without that, every 404 the server turns into a helpful message would be counted as a success
 
 This pattern is applied to **27 get handlers** across 21 domains: projects, groups, branches, tags, commits, files, issues (get + get_by_id), merge requests, milestones, labels, pipelines, releases, release links, environments, deployments, snippets, wikis, users, issue links, issue notes, MR notes, MR discussions, MR draft notes, badges (project + group), and award emoji (6 variants).
 

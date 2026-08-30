@@ -554,11 +554,11 @@ func registerGroupsResource(server registrar, client *gitlabclient.Client) {
 		Name:        "groups",
 		Title:       "All Groups",
 		MIMEType:    mimeJSON,
-		Description: "List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.",
+		Description: "Groups accessible to the authenticated user, up to one page (100). Returns each group's ID, name, full path, description, visibility level, and web URL.",
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconGroup,
 	}, func(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		groups, _, err := client.GL().Groups.ListGroups(&gl.ListGroupsOptions{}, gl.WithContext(ctx))
+		groups, resp, err := client.GL().Groups.ListGroups(&gl.ListGroupsOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list groups", err)
 		}
@@ -574,7 +574,7 @@ func registerGroupsResource(server registrar, client *gitlabclient.Client) {
 				WebURL:      g.WebURL,
 			}
 		}
-		return marshalResourceJSON(out)
+		return marshalResourceList(out, pageOf(len(out), resp))
 	})
 }
 
@@ -619,17 +619,17 @@ func registerProjectMembersResource(server registrar, client *gitlabclient.Clien
 		URITemplate: "gitlab://project/{project_id}/members",
 		Name:        "project_members",
 		Title:       "Project Members",
-		Description: "List all members of a GitLab project with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members from parent groups.",
-	}, uriProjectPrefix, "failed to list project members", func(ctx context.Context, projectID string) ([]MemberResourceOutput, error) {
-		members, _, err := client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{}, gl.WithContext(ctx))
+		Description: "Members of a GitLab project, up to one page (100), with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members from parent groups.",
+	}, uriProjectPrefix, "failed to list project members", func(ctx context.Context, projectID string) ([]MemberResourceOutput, *gl.Response, error) {
+		members, resp, err := client.GL().ProjectMembers.ListAllProjectMembers(projectID, &gl.ListProjectMembersOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		out := make([]MemberResourceOutput, len(members))
 		for i, m := range members {
 			out[i] = projectMemberResourceOutput(m)
 		}
-		return out, nil
+		return out, resp, nil
 	})
 }
 
@@ -692,7 +692,7 @@ func registerPipelineJobsResource(server registrar, client *gitlabclient.Client)
 		Name:        "pipeline_jobs",
 		Title:       "Pipeline Jobs",
 		MIMEType:    mimeJSON,
-		Description: "List all jobs for a specific CI/CD pipeline including each job's name, stage, status, duration, failure reason (if failed), and web URL.",
+		Description: "Jobs for a specific CI/CD pipeline, up to one page (100), including each job's name, stage, status, duration, failure reason (if failed), and web URL.",
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconJob,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -705,7 +705,7 @@ func registerPipelineJobsResource(server registrar, client *gitlabclient.Client)
 		if err != nil {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		jobs, _, err := client.GL().Jobs.ListPipelineJobs(projectID, pipelineID, &gl.ListJobsOptions{}, gl.WithContext(ctx))
+		jobs, resp, err := client.GL().Jobs.ListPipelineJobs(projectID, pipelineID, &gl.ListJobsOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list pipeline jobs", err)
 		}
@@ -722,7 +722,7 @@ func registerPipelineJobsResource(server registrar, client *gitlabclient.Client)
 				WebURL:        j.WebURL,
 			}
 		}
-		return marshalResourceJSON(out)
+		return marshalResourceList(out, pageOf(len(out), resp))
 	})
 }
 
@@ -735,7 +735,7 @@ func registerProjectLabelsResource(server registrar, client *gitlabclient.Client
 		Name:        "project_labels",
 		Title:       "Project Labels",
 		MIMEType:    mimeJSON,
-		Description: "List all labels defined in a GitLab project. Returns each label's name, color, description, and counts of open issues and merge requests using the label.",
+		Description: "Labels defined in a GitLab project, up to one page (100). Returns each label's name, color, description, and counts of open issues and merge requests using the label.",
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconLabel,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -743,7 +743,7 @@ func registerProjectLabelsResource(server registrar, client *gitlabclient.Client
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		labels, _, err := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{}, gl.WithContext(ctx))
+		labels, resp, err := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list labels", err)
 		}
@@ -758,7 +758,7 @@ func registerProjectLabelsResource(server registrar, client *gitlabclient.Client
 				OpenMergeRequestsCount: l.OpenMergeRequestsCount,
 			}
 		}
-		return marshalResourceJSON(out)
+		return marshalResourceList(out, pageOf(len(out), resp))
 	})
 }
 
@@ -771,7 +771,7 @@ func registerProjectMilestonesResource(server registrar, client *gitlabclient.Cl
 		Name:        "project_milestones",
 		Title:       "Project Milestones",
 		MIMEType:    mimeJSON,
-		Description: "List all milestones in a GitLab project. Returns each milestone's title, description, state (active/closed), due date, and web URL.",
+		Description: "Milestones in a GitLab project, up to one page (100). Returns each milestone's title, description, state (active/closed), due date, and web URL.",
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconMilestone,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -779,7 +779,7 @@ func registerProjectMilestonesResource(server registrar, client *gitlabclient.Cl
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		milestones, _, err := client.GL().Milestones.ListMilestones(projectID, &gl.ListMilestonesOptions{}, gl.WithContext(ctx))
+		milestones, resp, err := client.GL().Milestones.ListMilestones(projectID, &gl.ListMilestonesOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list milestones", err)
 		}
@@ -798,7 +798,7 @@ func registerProjectMilestonesResource(server registrar, client *gitlabclient.Cl
 			}
 			out[i] = ms
 		}
-		return marshalResourceJSON(out)
+		return marshalResourceList(out, pageOf(len(out), resp))
 	})
 }
 
@@ -855,7 +855,7 @@ func registerProjectBranchesResource(server registrar, client *gitlabclient.Clie
 		Name:        "project_branches",
 		Title:       "Project Branches",
 		MIMEType:    mimeJSON,
-		Description: "List all branches in a GitLab project. Returns each branch's name, protection status, merge status, default flag, and web URL.",
+		Description: "Branches in a GitLab project, up to one page (100). Returns each branch's name, protection status, merge status, default flag, and web URL.",
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconBranch,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -863,7 +863,7 @@ func registerProjectBranchesResource(server registrar, client *gitlabclient.Clie
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		branches, _, err := client.GL().Branches.ListBranches(projectID, &gl.ListBranchesOptions{}, gl.WithContext(ctx))
+		branches, resp, err := client.GL().Branches.ListBranches(projectID, &gl.ListBranchesOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list branches", err)
 		}
@@ -877,7 +877,7 @@ func registerProjectBranchesResource(server registrar, client *gitlabclient.Clie
 				WebURL:    b.WebURL,
 			}
 		}
-		return marshalResourceJSON(out)
+		return marshalResourceList(out, pageOf(len(out), resp))
 	})
 }
 
@@ -922,21 +922,23 @@ func registerGroupMembersResource(server registrar, client *gitlabclient.Client)
 		URITemplate: "gitlab://group/{group_id}/members",
 		Name:        "group_members",
 		Title:       "Group Members",
-		Description: "List all members of a GitLab group with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members.",
-	}, uriGroupPrefix, "failed to list group members", func(ctx context.Context, groupID string) ([]MemberResourceOutput, error) {
-		members, _, err := client.GL().Groups.ListAllGroupMembers(groupID, &gl.ListGroupMembersOptions{}, gl.WithContext(ctx))
+		Description: "Members of a GitLab group, up to one page (100), with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members.",
+	}, uriGroupPrefix, "failed to list group members", func(ctx context.Context, groupID string) ([]MemberResourceOutput, *gl.Response, error) {
+		members, resp, err := client.GL().Groups.ListAllGroupMembers(groupID, &gl.ListGroupMembersOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		out := make([]MemberResourceOutput, len(members))
 		for i, m := range members {
 			out[i] = groupMemberResourceOutput(m)
 		}
-		return out, nil
+		return out, resp, nil
 	})
 }
 
-func registerMembersResource(server registrar, tmpl *mcp.ResourceTemplate, uriPrefix, operation string, list func(context.Context, string) ([]MemberResourceOutput, error)) {
+// The list callback returns GitLab's response alongside the members so the
+// read can disclose whether it is the whole membership. See [listPageMetaKey].
+func registerMembersResource(server registrar, tmpl *mcp.ResourceTemplate, uriPrefix, operation string, list func(context.Context, string) ([]MemberResourceOutput, *gl.Response, error)) {
 	tmpl.MIMEType = mimeJSON
 	tmpl.Annotations = toolutil.ResourceList
 	tmpl.Icons = toolutil.IconUser
@@ -945,11 +947,11 @@ func registerMembersResource(server registrar, tmpl *mcp.ResourceTemplate, uriPr
 		if scopeID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		out, err := list(ctx, scopeID)
+		out, resp, err := list(ctx, scopeID)
 		if err != nil {
 			return nil, wrapErr(operation, err)
 		}
-		return marshalResourceJSON(out)
+		return marshalResourceList(out, pageOf(len(out), resp))
 	})
 }
 
@@ -962,7 +964,7 @@ func registerGroupProjectsResource(server registrar, client *gitlabclient.Client
 		Name:        "group_projects",
 		Title:       "Group Projects",
 		MIMEType:    mimeJSON,
-		Description: "List all projects within a GitLab group. Returns each project's ID, name, namespace path, visibility, web URL, description, and default branch.",
+		Description: "Projects within a GitLab group, up to one page (100). Returns each project's ID, name, namespace path, visibility, web URL, description, and default branch.",
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconProject,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -970,7 +972,7 @@ func registerGroupProjectsResource(server registrar, client *gitlabclient.Client
 		if groupID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		projects, _, err := client.GL().Groups.ListGroupProjects(groupID, &gl.ListGroupProjectsOptions{}, gl.WithContext(ctx))
+		projects, resp, err := client.GL().Groups.ListGroupProjects(groupID, &gl.ListGroupProjectsOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list group projects", err)
 		}
@@ -986,7 +988,7 @@ func registerGroupProjectsResource(server registrar, client *gitlabclient.Client
 				DefaultBranch:     p.DefaultBranch,
 			}
 		}
-		return marshalResourceJSON(out)
+		return marshalResourceList(out, pageOf(len(out), resp))
 	})
 }
 
@@ -999,7 +1001,7 @@ func registerProjectIssuesResource(server registrar, client *gitlabclient.Client
 		Name:        "project_issues",
 		Title:       "Project Issues",
 		MIMEType:    mimeJSON,
-		Description: "List open issues for a GitLab project. Returns each issue's IID, title, state, labels, assignees, author, web URL, and creation date.",
+		Description: "Open issues for a GitLab project, up to one page (100). Returns each issue's IID, title, state, labels, assignees, author, web URL, and creation date.",
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconIssue,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -1008,8 +1010,9 @@ func registerProjectIssuesResource(server registrar, client *gitlabclient.Client
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
 		state := "opened"
-		issues, _, err := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
-			State: &state,
+		issues, resp, err := client.GL().Issues.ListProjectIssues(projectID, &gl.ListProjectIssuesOptions{
+			PerPage: resourcePerPage,
+			State:   &state,
 		}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list project issues", err)
@@ -1018,7 +1021,7 @@ func registerProjectIssuesResource(server registrar, client *gitlabclient.Client
 		for i, issue := range issues {
 			out[i] = issueToResourceOutput(issue)
 		}
-		return marshalResourceJSON(out)
+		return marshalResourceList(out, pageOf(len(out), resp))
 	})
 }
 
@@ -1055,7 +1058,7 @@ func registerProjectReleasesResource(server registrar, client *gitlabclient.Clie
 		Name:        "project_releases",
 		Title:       "Project Releases",
 		MIMEType:    mimeJSON,
-		Description: "List all releases for a GitLab project. Returns each release's tag name, name, description, author, and creation/release dates.",
+		Description: "Releases for a GitLab project, up to one page (100). Returns each release's tag name, name, description, author, and creation/release dates.",
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconRelease,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -1063,7 +1066,7 @@ func registerProjectReleasesResource(server registrar, client *gitlabclient.Clie
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		releases, _, err := client.GL().Releases.ListReleases(projectID, &gl.ListReleasesOptions{}, gl.WithContext(ctx))
+		releases, resp, err := client.GL().Releases.ListReleases(projectID, &gl.ListReleasesOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list releases", err)
 		}
@@ -1083,7 +1086,7 @@ func registerProjectReleasesResource(server registrar, client *gitlabclient.Clie
 			}
 			out[i] = ro
 		}
-		return marshalResourceJSON(out)
+		return marshalResourceList(out, pageOf(len(out), resp))
 	})
 }
 
@@ -1096,7 +1099,7 @@ func registerProjectTagsResource(server registrar, client *gitlabclient.Client) 
 		Name:        "project_tags",
 		Title:       "Project Tags",
 		MIMEType:    mimeJSON,
-		Description: "List all repository tags for a GitLab project. Returns each tag's name, message, target commit SHA, protection status, and creation date.",
+		Description: "Repository tags for a GitLab project, up to one page (100). Returns each tag's name, message, target commit SHA, protection status, and creation date.",
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconTag,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -1104,7 +1107,7 @@ func registerProjectTagsResource(server registrar, client *gitlabclient.Client) 
 		if projectID == "" {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		tags, _, err := client.GL().Tags.ListTags(projectID, &gl.ListTagsOptions{}, gl.WithContext(ctx))
+		tags, resp, err := client.GL().Tags.ListTags(projectID, &gl.ListTagsOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list tags", err)
 		}
@@ -1121,7 +1124,7 @@ func registerProjectTagsResource(server registrar, client *gitlabclient.Client) 
 			}
 			out[i] = to
 		}
-		return marshalResourceJSON(out)
+		return marshalResourceList(out, pageOf(len(out), resp))
 	})
 }
 
@@ -1274,7 +1277,7 @@ func registerMergeRequestNotesResource(server registrar, client *gitlabclient.Cl
 		if err != nil {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		notes, _, err := client.GL().Notes.ListMergeRequestNotes(projectID, mrIID, &gl.ListMergeRequestNotesOptions{}, gl.WithContext(ctx))
+		notes, resp, err := client.GL().Notes.ListMergeRequestNotes(projectID, mrIID, &gl.ListMergeRequestNotesOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list merge request notes", err)
 		}
@@ -1298,7 +1301,7 @@ func registerMergeRequestNotesResource(server registrar, client *gitlabclient.Cl
 			}
 			out[i] = no
 		}
-		return marshalResourceJSON(out)
+		return marshalResourceList(out, pageOf(len(out), resp))
 	})
 }
 
@@ -1325,7 +1328,7 @@ func registerMergeRequestDiscussionsResource(server registrar, client *gitlabcli
 		if err != nil {
 			return nil, mcp.ResourceNotFoundError(req.Params.URI)
 		}
-		discussions, _, err := client.GL().Discussions.ListMergeRequestDiscussions(projectID, mrIID, &gl.ListMergeRequestDiscussionsOptions{}, gl.WithContext(ctx))
+		discussions, resp, err := client.GL().Discussions.ListMergeRequestDiscussions(projectID, mrIID, &gl.ListMergeRequestDiscussionsOptions{PerPage: resourcePerPage}, gl.WithContext(ctx))
 		if err != nil {
 			return nil, wrapErr("failed to list merge request discussions", err)
 		}
@@ -1357,7 +1360,7 @@ func registerMergeRequestDiscussionsResource(server registrar, client *gitlabcli
 			}
 			out[i] = dout
 		}
-		return marshalResourceJSON(out)
+		return marshalResourceList(out, pageOf(len(out), resp))
 	})
 }
 
@@ -1707,6 +1710,67 @@ func marshalResourceJSON(v any) (*mcp.ReadResourceResult, error) {
 			Text:     string(data),
 		}},
 	}, nil
+}
+
+// resourcePerPage is the page size every collection resource asks GitLab for.
+//
+// It is GitLab's maximum. The default is 20, which is what these resources were
+// silently getting: gitlab://groups answered 20 of 137 with nothing to say so.
+const resourcePerPage = 100
+
+// listPageMetaKey carries the completeness of a collection read.
+//
+// resources/read has no continuation mechanism. The transport specification
+// scopes pagination to the list operations (resources/list,
+// resources/templates/list, tools/list, prompts/list) and gives read none, so
+// there is no cursor a client could follow and no partial-result shape in the
+// schema. Disclosure is all a server can offer, and it belongs in _meta rather
+// than in the payload: the resource body is what a consumer parses, it has no
+// negotiated shape, and wrapping the array in an object would break every
+// reader of it.
+//
+// Reverse-DNS keyed, matching [subscribableMetaKey], which is the extension
+// point the specification sanctions for exactly this.
+const listPageMetaKey = "io.github.jmrplens/pageInfo"
+
+// listPage is what a resource read knows about the collection it returned.
+type listPage struct {
+	// Returned is how many items are in the body.
+	Returned int `json:"returned"`
+	// Total is how many exist, when GitLab said. Omitted when it did not:
+	// keyset-paginated and unindexed endpoints send no X-Total.
+	Total int `json:"total,omitempty"`
+	// Complete reports whether the body is the whole collection. False means a
+	// consumer needing completeness must use the tool surface, which paginates
+	// properly, rather than reading this resource again.
+	Complete bool `json:"complete"`
+}
+
+// pageOf reads the completeness of a response GitLab has just answered.
+func pageOf(returned int, resp *gl.Response) listPage {
+	page := listPage{Returned: returned, Complete: true}
+	if resp == nil {
+		return page
+	}
+	page.Total = int(resp.TotalItems)
+	// NextPage is the honest signal: X-Total is absent on endpoints GitLab
+	// paginates by keyset or declines to count, and a missing total is not a
+	// statement that there is nothing more.
+	if resp.NextPage > 0 {
+		page.Complete = false
+	}
+	return page
+}
+
+// marshalResourceList is [marshalResourceJSON] for a collection, adding the
+// _meta that says whether the collection is all of it.
+func marshalResourceList(v any, page listPage) (*mcp.ReadResourceResult, error) {
+	result, err := marshalResourceJSON(v)
+	if err != nil {
+		return nil, err
+	}
+	result.Meta = mcp.Meta{listPageMetaKey: page}
+	return result, nil
 }
 
 // pipelineToResourceOutput converts a GitLab API [gl.Pipeline] to the

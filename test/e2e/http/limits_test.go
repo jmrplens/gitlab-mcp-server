@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // countTools returns how many tools a tools/list reply advertises.
@@ -36,6 +37,21 @@ func listTools(t *testing.T, srv *server) string {
 		t.Fatalf("tools/list = %d: %s", got.status, truncate(got.body))
 	}
 	return got.body
+}
+
+// rateLimitedCall makes one tools/call, which is the only method the limiter
+// gates.
+func rateLimitedCall(t *testing.T, srv *server) response {
+	t.Helper()
+	return srv.do(t, request{
+		method: http.MethodPost, path: "/mcp",
+		body: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_find_action","arguments":{"query":"list projects"},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}`,
+		headers: map[string]string{
+			"PRIVATE-TOKEN": "glpat-x",
+			"Mcp-Method":    "tools/call",
+			"Mcp-Name":      "gitlab_find_action",
+		},
+	})
 }
 
 // acceptingGitLab is a fake instance that accepts the credential, so a request
@@ -258,7 +274,14 @@ func TestLimit_MaxRequestBodyBytes(t *testing.T) {
 }
 
 // TestLimit_RateLimitRPS verifies that the tools/call rate limiter engages when
-// configured, and that it is off by default.
+// configured, that HTTP mode has it on by default, and that a refusal is
+// visible to an operator.
+//
+// This used to carry a subtest called "off by default" asserting the opposite.
+// It passed for a reason that had nothing to do with the claim: HTTP mode
+// defaults to 10 rps with a burst of 40, and fifteen serial calls never drain a
+// bucket of forty. The suite documented a default that had not held since the
+// flag gained one.
 //
 // It is a per-server limit rather than a per-address one, so it protects the
 // GitLab instance behind this server from a client looping rather than
@@ -266,18 +289,6 @@ func TestLimit_MaxRequestBodyBytes(t *testing.T) {
 // exists separately.
 func TestLimit_RateLimitRPS(t *testing.T) {
 	gitlab := acceptingGitLab(t)
-
-	call := func(srv *server) response {
-		return srv.do(t, request{
-			method: http.MethodPost, path: "/mcp",
-			body: `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"gitlab_find_action","arguments":{"query":"list projects"},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}`,
-			headers: map[string]string{
-				"PRIVATE-TOKEN": "glpat-x",
-				"Mcp-Method":    "tools/call",
-				"Mcp-Name":      "gitlab_find_action",
-			},
-		})
-	}
 
 	t.Run("engages when configured", func(t *testing.T) {
 		srv := startServer(t, nil,
@@ -287,7 +298,7 @@ func TestLimit_RateLimitRPS(t *testing.T) {
 		)
 		var limited bool
 		for range 15 {
-			body := call(srv).body
+			body := rateLimitedCall(t, srv).body
 			if strings.Contains(strings.ToLower(body), "rate limit") || strings.Contains(body, "-42900") {
 				limited = true
 				break
@@ -298,15 +309,56 @@ func TestLimit_RateLimitRPS(t *testing.T) {
 		}
 	})
 
-	t.Run("off by default", func(t *testing.T) {
+	t.Run("on by default in HTTP mode, and ordinary traffic passes", func(t *testing.T) {
 		srv := startServer(t, nil, "--gitlab-url="+gitlab.url)
 		for i := range 15 {
-			body := call(srv).body
+			body := rateLimitedCall(t, srv).body
 			if strings.Contains(strings.ToLower(body), "rate limit") {
-				t.Fatalf("call %d was rate limited with no limiter configured: %s", i, truncate(body))
+				t.Fatalf("call %d was rate limited inside the default burst: %s", i, truncate(body))
 			}
 		}
+		// The claim the previous version of this case got wrong. Asserted from
+		// the server's own startup line, because fifteen served calls are
+		// equally consistent with a limiter of ten and with no limiter at all.
+		if logs := srv.logs(); !strings.Contains(logs, "tools/call rate limit enabled") {
+			t.Errorf("HTTP mode started with no rate limit; the default is 10 rps, burst 40:\n%s", logs)
+		}
 	})
+}
+
+// TestLimit_RateLimitRefusalIsVisible verifies that a throttled deployment says
+// so.
+//
+// Reproduced on the shipped default before this existed: 150 concurrent calls
+// gave 102 refusals in 1.07s and the log carried nothing about any of them, at
+// any LOG_LEVEL. The 48 served and the 102 refused were identical in it, so the
+// one thing an operator needs from a throttled deployment, that it is
+// throttled, was the one thing it could not report.
+func TestLimit_RateLimitRefusalIsVisible(t *testing.T) {
+	gitlab := acceptingGitLab(t)
+	srv := startServer(t, nil,
+		"--gitlab-url="+gitlab.url,
+		"--rate-limit-rps=1",
+		"--rate-limit-burst=1",
+	)
+	for range 15 {
+		if strings.Contains(strings.ToLower(rateLimitedCall(t, srv).body), "rate limit") {
+			break
+		}
+	}
+
+	logs := awaitLog(t, srv, "tool call refused: rate limit exceeded")
+	if logs == "" {
+		t.Fatalf("refusals left no trace in the log:\n%s", srv.logs())
+	}
+	if !strings.Contains(logs, `"reason":"rate_limited"`) {
+		t.Errorf("the refusal carries no reason to group by:\n%s", logs)
+	}
+	// Self-suppressed: refusals are unbounded, so one line each would be a
+	// flood. One line per window, carrying the count it stands for.
+	if got := strings.Count(logs, "tool call refused: rate limit exceeded"); got != 1 {
+		t.Errorf("%d refusal lines inside one suppression window, want 1", got)
+	}
 }
 
 // TestLimit_IgnoreScopesSkipsDetection verifies that --ignore-scopes actually
@@ -323,4 +375,26 @@ func TestLimit_IgnoreScopesSkipsDetection(t *testing.T) {
 	if strings.Contains(srv.logs(), "detected PAT scopes") {
 		t.Error("scope detection ran despite --ignore-scopes")
 	}
+}
+
+// awaitLog returns the server's output once it contains want, or "" if it never
+// does.
+//
+// Reading the log immediately after the response that provoked it is a race,
+// and one that only shows under load: the server writes to a pipe, and the
+// parent's copier goroutine appends to the buffer this reads. Asserting on a
+// log line therefore has to wait for the line rather than for the response. The
+// case that needed this passed alone and failed inside the full suite under
+// -shuffle, which is the shape of every such race.
+func awaitLog(t *testing.T, srv *server, want string) string {
+	t.Helper()
+
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if logs := srv.logs(); strings.Contains(logs, want) {
+			return logs
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return ""
 }
