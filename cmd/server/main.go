@@ -1243,11 +1243,21 @@ func createServer(
 	// swallows it. That ordering is what lets the SDK record the panic as an
 	// exception event: it recovers inside End, records it, and re-panics. A
 	// recovery running first would leave the span with no explanation.
-	server.AddReceivingMiddleware(mcpotel.Middleware(mcpotel.Options{
+	telemetryOptions := mcpotel.Options{
 		Identifier: gitlabtools.NewCallIdentifier(surfaceCatalog, toolSurface),
 		Surface:    toolSurface,
 		Transport:  settings.transport,
-	}))
+	}
+	server.AddReceivingMiddleware(mcpotel.Middleware(telemetryOptions))
+
+	// The other direction. The MCP convention splits client and server spans by
+	// initiator rather than by role, so the same process produces both: SERVER
+	// for a tools/call it receives, CLIENT for the elicitation, sampling,
+	// roots/list and notifications it sends. Without this the interactive flows
+	// and every resource-updated notification are invisible, which is exactly
+	// the work an operator most wants to see, since it happens without anybody
+	// asking for it.
+	server.AddSendingMiddleware(mcpotel.SendingMiddleware(telemetryOptions))
 
 	// Added last so it wraps every middleware above it as well as the handler.
 	server.AddReceivingMiddleware(recoverPanics)

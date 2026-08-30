@@ -122,28 +122,37 @@ func TestTelemetry_AnUnreachableCollectorChangesNoResponse(t *testing.T) {
 	quiet := startServer(t, nil)
 	instrumented := startServer(t, telemetryEnv())
 
-	cases := []request{
-		{body: `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`},
-		{body: `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"issue.list"}}}`},
-		{body: `{"jsonrpc":"2.0","id":3,"method":"nonexistent/method"}`},
-		{method: http.MethodGet, path: "/health"},
+	// bodyIsDeterministic is false for /health, whose payload carries the
+	// process start time and uptime. Two servers started a second apart differ
+	// there for reasons that have nothing to do with telemetry, and comparing
+	// it anyway made this test fail whenever the suite ran long enough for the
+	// clock to tick between them. The status is still compared, which is what
+	// the assertion is actually about.
+	cases := []struct {
+		call                request
+		bodyIsDeterministic bool
+	}{
+		{call: request{body: `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`}, bodyIsDeterministic: true},
+		{call: request{body: `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"gitlab_execute_action","arguments":{"action":"issue.list"}}}`}, bodyIsDeterministic: true},
+		{call: request{body: `{"jsonrpc":"2.0","id":3,"method":"nonexistent/method"}`}, bodyIsDeterministic: true},
+		{call: request{method: http.MethodGet, path: "/health"}, bodyIsDeterministic: false},
 	}
 
-	for _, r := range cases {
-		want := quiet.do(t, r)
-		got := instrumented.do(t, r)
+	for _, tc := range cases {
+		want := quiet.do(t, tc.call)
+		got := instrumented.do(t, tc.call)
 
 		if got.status != want.status {
-			t.Errorf("status %d with telemetry and %d without, for %q", got.status, want.status, r.body+r.path)
+			t.Errorf("status %d with telemetry and %d without, for %q", got.status, want.status, tc.call.body+tc.call.path)
 		}
-		if got.body != want.body {
-			t.Errorf("the body differs with telemetry enabled, for %q: got %q, want %q", r.body+r.path, got.body, want.body)
+		if tc.bodyIsDeterministic && got.body != want.body {
+			t.Errorf("the body differs with telemetry enabled, for %q: got %q, want %q", tc.call.body+tc.call.path, got.body, want.body)
 		}
 	}
 
 	// Nothing about the collector may reach a client, whatever the outcome was.
-	for _, r := range cases {
-		body := strings.ToLower(instrumented.do(t, r).body)
+	for _, tc := range cases {
+		body := strings.ToLower(instrumented.do(t, tc.call).body)
 		for _, leak := range []string{"127.0.0.1:1", "otlp", "collector", "telemetry"} {
 			if strings.Contains(body, leak) {
 				t.Errorf("%q reached a client response: %s", leak, body)

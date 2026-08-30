@@ -112,6 +112,36 @@ func classifyError(err error) outcome {
 	}
 }
 
+// classifyClient is the strict counterpart to [classifyError], for operations
+// this server initiates.
+//
+// Every JSON-RPC error code counts. "All JSON-RPC error codes SHOULD be
+// considered errors" is the client-side rule, and it contradicts the
+// server-side one on purpose: a caller-fault code such as method-not-found is
+// not the receiver's failure, but when WE are the caller a client that cannot
+// serve our elicitation is exactly the thing to notice.
+//
+// It is a separate function rather than a parameter on the other one, because
+// the two rules being one call apart with a boolean between them is how one of
+// them eventually gets applied to the wrong side.
+func classifyClient(err error) outcome {
+	if err == nil {
+		return outcome{}
+	}
+
+	var wire *jsonrpc.Error
+	if !errors.As(err, &wire) {
+		return outcome{failed: true, errorType: ErrorTypeOther}
+	}
+	code := codeString(wire.Code)
+	return outcome{
+		failed:      true,
+		errorType:   code,
+		statusCode:  code,
+		description: wire.Message,
+	}
+}
+
 // isErrorResult reports whether a tool call answered with a failure inside a
 // successful response.
 //
