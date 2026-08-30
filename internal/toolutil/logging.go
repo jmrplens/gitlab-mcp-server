@@ -75,11 +75,25 @@ func LogToolCallAll(ctx context.Context, req *mcp.CallToolRequest, tool string, 
 func LogToolRefusal(ctx context.Context, req *mcp.CallToolRequest, tool, reason string) {
 	user := ResolveIdentity(ctx, req)
 	if user.IsAuthenticated() {
-		slog.Info("tool call refused", "tool", tool, "reason", reason,
-			"user", user.Username, "user_id", user.UserID)
+		slog.Info("tool call refused",
+			append([]any{"tool", tool, "reason", reason}, identityAttrs(user)...)...)
 		return
 	}
 	slog.Info("tool call refused", "tool", tool, "reason", reason)
+}
+
+// identityAttrs are the log fields naming who made a call.
+//
+// The instance is included only when the caller knows one, which is when the
+// deployment publishes several. A pinned deployment and stdio each serve one,
+// so the field would be a constant repeated on every line rather than
+// something to group by. See [UserIdentity.Instance].
+func identityAttrs(user UserIdentity) []any {
+	attrs := []any{"user", user.Username, "user_id", user.UserID}
+	if user.Instance != "" {
+		attrs = append(attrs, "instance", user.Instance)
+	}
+	return attrs
 }
 
 // resultIsError reports whether a handler's return value is an error result.
@@ -113,16 +127,13 @@ func logToolCall(tool string, start time.Time, isError bool, err error) {
 
 // logToolCallWithUser logs a tool call including the authenticated user identity.
 func logToolCallWithUser(tool string, start time.Time, isError bool, err error, user UserIdentity) {
-	duration := time.Since(start)
+	args := append([]any{"tool", tool, "duration", time.Since(start)}, identityAttrs(user)...)
 	switch {
 	case wasCancelled(err):
-		slog.Info("tool call canceled", "tool", tool, "duration", duration,
-			"user", user.Username, "user_id", user.UserID, "cause", err)
+		slog.Info("tool call canceled", append(args, "cause", err)...)
 	case err != nil:
-		slog.Error("tool call failed", "tool", tool, "duration", duration,
-			"user", user.Username, "user_id", user.UserID, "error", err)
+		slog.Error("tool call failed", append(args, "error", err)...)
 	default:
-		slog.Info("tool call completed", "tool", tool, "duration", duration,
-			"user", user.Username, "user_id", user.UserID, "is_error", isError)
+		slog.Info("tool call completed", append(args, "is_error", isError)...)
 	}
 }

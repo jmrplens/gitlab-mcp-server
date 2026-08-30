@@ -300,3 +300,56 @@ func TestLogToolRefusal_RecordsWhatWasDeclinedAndWhy(t *testing.T) {
 	// would fill an operator's dashboard with entries nobody can act on.
 	assertNotContains(t, out, `"level":"ERROR"`)
 }
+
+// TestLogToolCall_InstanceNamesWhichGitLabAnsweredIt pins the field that makes
+// an audit line unambiguous, and pins that it is absent when it would say
+// nothing.
+//
+// A GitLab user id is unique within an instance and means nothing across them,
+// so a deployment publishing several through --gitlab-url logs two different
+// people as user_id 7 with nothing to tell them apart. ADR-0008 fixes the
+// identity as {UserID, Username} and motivates it expressly for audit logging
+// without recording that limit, which is the one place an ambiguous subject
+// matters.
+//
+// The absent case is the other half of the claim: stdio resolves one identity
+// against one instance, and a pinned deployment has only the one, so emitting
+// the field there would repeat a constant on every line instead of giving
+// something to group by.
+func TestLogToolCall_InstanceNamesWhichGitLabAnsweredIt(t *testing.T) {
+	tests := []struct {
+		name     string
+		identity UserIdentity
+		want     bool
+	}{
+		{
+			name:     "several instances published, so the id needs qualifying",
+			identity: UserIdentity{UserID: "7", Username: "someone", Instance: "https://gitlab.example.com"},
+			want:     true,
+		},
+		{
+			name:     "one instance, so there is nothing to distinguish",
+			identity: UserIdentity{UserID: "7", Username: "someone"},
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := captureSlog(t)
+			ctx := IdentityToContext(context.Background(), tt.identity)
+
+			LogToolCallAll(ctx, nil, "gitlab_project_get", time.Now(), nil, nil)
+			LogToolRefusal(ctx, nil, "gitlab_project_delete", RefusalNeedsConfirmation)
+
+			out := buf.String()
+			if got := strings.Contains(out, `"instance":"https://gitlab.example.com"`); got != tt.want {
+				t.Errorf("instance present = %v, want %v:\n%s", got, tt.want, out)
+			}
+			// The fields that were always there must still be, on both records.
+			if strings.Count(out, `"user_id":"7"`) != 2 {
+				t.Errorf("the identity is missing from one of the two records:\n%s", out)
+			}
+		})
+	}
+}

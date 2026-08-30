@@ -328,6 +328,10 @@ func (g *mcpServerGate) withIdentity(ctx context.Context, r *http.Request) conte
 	return toolutil.IdentityToContext(ctx, toolutil.UserIdentity{
 		UserID:   identity.UserID,
 		Username: identity.Username,
+		// Carried rather than resolved: the instance was already computed above
+		// to choose the pool entry, and a GitLab user id is only unique within
+		// one. See [toolutil.UserIdentity.Instance].
+		Instance: options.GitLabURL,
 	})
 }
 

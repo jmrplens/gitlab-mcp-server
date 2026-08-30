@@ -111,13 +111,28 @@ negotiated down and served MRTR anyway.
 
 That is deliberate rather than overlooked. The SDK makes the same choice in
 `clientSupportsMultiRoundTrip`, and its client middleware fulfills
-`inputRequests` regardless of version, so an SDK-based client is unaffected;
-disagreeing with it here would produce a result the SDK then labels
-inconsistently. A hand-written client that strictly implements `2025-11-25`,
-claims `2026-07-28` in its handshake, and does not handle `inputRequests` would
-receive a result it cannot act on — but it would have to do all three. Recorded
-in [upstream-bugs.md](../../development/upstream-bugs.md): the negotiated
-version should drive both sides, and that is the SDK's call to make.
+`inputRequests` regardless of version, so an SDK-based client is unaffected. A
+hand-written client that strictly implements `2025-11-25`, claims `2026-07-28`
+in its handshake, and does not handle `inputRequests` would receive a result it
+cannot act on, but it would have to do all three, and no conforming client of
+either era produces that opening: `initialize` is a method `2026-07-28` deleted,
+a legacy client declares a legacy version, and the go-sdk client pins its own
+fallback handshake to `2025-11-25`. Recorded in
+[upstream-bugs.md](../../development/upstream-bugs.md): the negotiated version
+should drive both sides, and that is the SDK's call to make.
+
+This paragraph used to give a second reason, that disagreeing with the SDK here
+would produce a result it then labels inconsistently. That does not survive
+checking. In the direction that would actually arise, our gate choosing legacy
+while the SDK considers the session modern, the result is coherent: no
+`inputRequests` alongside `resultType: "complete"` is a well-formed complete
+result, and the client also receives the `elicitation/create` requests
+`2025-11-25` specifies. The inconsistency exists only in the opposite direction,
+which cannot happen. What does remain unavoidable is a residue of the SDK's own
+labelling: on a session that declared `2026-07-28` over `initialize`, an
+ordinary non-eliciting call already comes back carrying `resultType`, whatever
+this server's flow decides, so capping the mechanism would not make such a
+session look purely legacy.
 
 On the multi-round-trip path the handler is **re-invoked from the start on every round**. Answers gathered in earlier rounds are carried in the opaque `requestState` string that the client echoes back, so multi-step wizards replay previously answered prompts from state instead of re-asking the user. From the user's perspective both mechanisms look identical: the same sequential forms in the same order.
 

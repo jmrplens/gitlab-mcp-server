@@ -79,8 +79,10 @@ readable without opening the tracker:
 | 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | No | No | No | No | None taken |
 | 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | No | No | No | No | Partial |
 | 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | No | No | No | No | None possible |
-| 14 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
-| 15 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
+| 14 | go-sdk | [`Mcp-Name` compared without decoding](#mcp-name-is-compared-without-decoding-the-base64-sentinel) | No | No | No | No | None taken |
+| 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | No | No | No | No | None taken |
+| 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
+| 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
 
 States verified against the upstream trackers on 2026-08-29.
 
@@ -392,6 +394,69 @@ and the only output was the listen request's own result — no
 
 **Recorded in**: ADR-0015, so the gap is stated where the design is rather than
 only here.
+
+### `Mcp-Name` is compared without decoding the base64 sentinel
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. Nothing on this server's surface forces the encoded form:
+  every tool name is `gitlab_*`, every prompt name is ASCII, and a resource URI
+  is a URI, so non-ASCII arrives percent-encoded and matches a plain header.
+- **Workaround**: none taken. The header is the SDK's to validate and this
+  repository reads `Mcp-Name` nowhere outside tests, so intercepting it would
+  mean a second implementation of a rule the SDK already has fifteen lines
+  further down.
+
+**What**: SEP-2575 defines a `=?base64?…?=` sentinel for header values that
+cannot be sent as plain ASCII, and the transport binding says servers **MUST**
+decode encoded values before comparing them to the body. In
+`mcp/streamable_headers.go`, `validateParamHeaders` calls `decodeHeaderValue`
+(line 425) and `validateMcpHeaders` does not (line 381): it compares
+`nameInHeader != nameInBody` raw. A client that encodes a name is answered
+`-32020 "header mismatch"` even though its header and body agree.
+
+The direction of the failure is the notable part. Encoding an ASCII-safe value
+is permitted, not forbidden, so a client that does it is conforming and is
+refused, while a client that sends a non-ASCII name as raw UTF-8 bytes passes:
+Go's `net/textproto` hands those through and the string comparison succeeds.
+Only the conforming client is rejected.
+
+**How we found it**: the transports specification audit. Reproduced against the
+shipped HTTP default with a base64 `Mcp-Name` on `tools/call`, `resources/read`
+and `prompts/get`, all three answered `-32020` where the plain-ASCII control was
+served. It is upstream by this file's own test: it happens to any caller of
+`StreamableHTTPHandler` with no setting of ours.
+
+### The protocol version is classified by string ordering
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. The window contains only malformed version strings.
+- **Workaround**: none taken. The clean seam is a wrapping `mcp.Transport` that
+  inspects the decoded request before the SDK session sees it; the stdio filter
+  in `cmd/server/stdio.go` is deliberately not that seam, since it exists to do
+  the least it can and parsing `params._meta` there would be a second, divergent
+  implementation of the protocol. Receiving middleware cannot serve either: the
+  initialization gate returns at `mcp/server.go:1901`, before `handleReceive`
+  runs the middleware chain at :1927.
+
+**What**: `mcp/shared.go:549` decides whether a request is modern by comparing
+version strings with `<`. Anything sorting below `2026-07-28` is treated as a
+legacy handshake, so a request carrying an unrecognised version in per-request
+`_meta` is answered `method "tools/list" is invalid during session
+initialization` with wire code `0`, rather than the
+`UnsupportedProtocolVersionError` the versioning page requires. Published
+revisions are unaffected, since they are all in the supported list; the window
+holds `2026-01-01`, `2025-11-24`, `1900-01-01`, `1.0`, `0` and the empty string.
+
+`1900-01-01` is the versioning page's own worked example of this error, so the
+literal illustration in the specification is the case that comes back wrong.
+
+**How we found it**: the lifecycle specification audit, on stdio. HTTP cannot
+reach it: the header check rejects a `_meta`-only version with `-32020`, and
+`protocolVersionMiddleware` in this repository answers the header case itself.
 
 ## OpenAI Codex (`openai/codex`)
 

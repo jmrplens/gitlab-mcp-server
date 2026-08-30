@@ -100,11 +100,34 @@ make the worst case something an operator can predict.
   request ID when it tears down that subscription stream". This server does not,
   and cannot: `SubscriptionsListenResult` embeds an unexported type, so
   application code cannot construct the message, and the SDK exposes no other
-  way to send one. What a client does get is the graceful completion result the
-  SDK writes when the handler's context ends, which tells a conforming client
-  the stream is over — so the practical gap is small, and it is recorded here
-  rather than left unstated because it is a MUST that nobody in this process
-  satisfies. Raised upstream.
+  way to send one. What a client does get **when a watch retires** is the
+  graceful completion result the SDK writes as that handler's context ends,
+  which tells a conforming client the stream is over, so the practical gap is
+  small. It is recorded here rather than left unstated because it is a MUST that
+  nobody in this process satisfies. Raised upstream.
+
+  That consolation does **not** extend to server shutdown, and this sentence
+  used to read as though it did. Measured on stdio: an open
+  `subscriptions/listen` receives no completion result when stdin closes and
+  none when the process is signalled, while the same server on HTTP delivers one
+  every time. The cause is ordering rather than capability: `attach` retires the
+  streams from a goroutine waiting on the context, and stdin EOF ends
+  `Server.Run` through the session's own wait rather than by cancelling that
+  context, so the retirement never runs. HTTP is reliable because its shutdown
+  path answers `ctx.Done()` with `httpServer.Shutdown`, which drains the
+  in-flight response first.
+
+  Left as it is, deliberately. The clause is a SHOULD, nothing is lost when it
+  is missed (no notification is dropped, the process exits promptly, the stream
+  ends), and the only thing it buys is the client's permission to reconnect,
+  which on stdio is close to inert: on the EOF path the client closed the pipe
+  itself and knows why, and on the signal path the server is genuinely gone.
+  Delivering it would mean sequencing the stream retirement ahead of session
+  close across the input filter, the subscription bridge and the SDK, and then
+  waiting a bounded moment for writes we cannot observe. That is a heuristic
+  bolted into the shutdown path to satisfy a preference, which is a worse trade
+  than saying plainly that the server closes less politely than the
+  specification would like.
 - **Rate limiting pauses every watcher on the manager**, with exponential
   back-off, because GitLab enforces its limits per user.
 - **A watch that ends for a reason the client did not ask for closes the
