@@ -155,7 +155,18 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 	if signals.none() {
 		signals = AllSignals()
 	}
-	protocol, err := normalizeProtocol(cfg.Protocol)
+	// Resolved per signal, before anything is built, so a protocol that cannot
+	// be honored fails at startup with a name rather than at the first export
+	// with a rejected batch.
+	traceProtocol, err := resolveProtocol(cfg.Protocol, tracesProtocolKey)
+	if err != nil {
+		return nil, err
+	}
+	metricProtocol, err := resolveProtocol(cfg.Protocol, metricsProtocolKey)
+	if err != nil {
+		return nil, err
+	}
+	logProtocol, err := resolveProtocol(cfg.Protocol, logsProtocolKey)
 	if err != nil {
 		return nil, err
 	}
@@ -167,18 +178,18 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 
 	p := &Provider{
 		enabled:  true,
-		protocol: protocol,
+		protocol: traceProtocol,
 		signals:  signals,
 		endpoint: endpointFromEnv(),
 	}
 
-	if startErr := p.startTraces(ctx, res, protocol, signals); startErr != nil {
+	if startErr := p.startTraces(ctx, res, traceProtocol, signals); startErr != nil {
 		return nil, p.abandon(ctx, startErr)
 	}
-	if startErr := p.startMetrics(ctx, res, protocol, signals); startErr != nil {
+	if startErr := p.startMetrics(ctx, res, metricProtocol, signals); startErr != nil {
 		return nil, p.abandon(ctx, startErr)
 	}
-	if startErr := p.startLogs(ctx, res, protocol, signals); startErr != nil {
+	if startErr := p.startLogs(ctx, res, logProtocol, signals); startErr != nil {
 		return nil, p.abandon(ctx, startErr)
 	}
 
@@ -330,14 +341,21 @@ func (p *Provider) Snapshot() Snapshot {
 	}
 }
 
-// normalizeProtocol accepts the two values OTEL_EXPORTER_OTLP_PROTOCOL defines
-// and refuses anything else by name.
+// normalizeProtocol accepts the two transports this server implements and
+// refuses anything else by name.
 //
 // `http` is accepted as a spelling of `http/protobuf` because operators write
-// it, and refusing it would fail at startup over a shorthand. `http/json` is
-// refused explicitly rather than silently treated as protobuf: the Go
-// exporters do not implement it, and a collector expecting JSON would receive
-// protobuf and reject every batch.
+// it, and refusing it would fail at startup over a shorthand.
+//
+// `http/json` is refused, and the reason is narrower than it looks. It is not
+// that nothing implements it: since v1.46.0 otlptracehttp does, selecting the
+// payload encoding from these very variables and offering WithEncoding to
+// override. otlpmetrichttp and otlploghttp do not. So honoring http/json would
+// give a deployment two encodings at once, JSON spans beside protobuf metrics
+// and logs, from one setting that reads like it selects one thing. Refusing at
+// startup, by name, is the only outcome an operator can act on: silently
+// downgrading to protobuf would ignore an explicit choice, and silently
+// honoring it for traces alone would produce the split.
 func normalizeProtocol(protocol string) (string, error) {
 	switch strings.TrimSpace(strings.ToLower(protocol)) {
 	case "", "http", ProtocolHTTP:
@@ -346,13 +364,58 @@ func normalizeProtocol(protocol string) (string, error) {
 		return ProtocolGRPC, nil
 	case "http/json":
 		return "", fmt.Errorf(
-			"OTLP protocol %q is not implemented by the OpenTelemetry Go exporters; use %q or %q",
+			"OTLP protocol %q is implemented by the Go trace exporter but not by the metric or log exporters, "+
+				"so a deployment using it would emit JSON spans alongside protobuf metrics and logs; use %q or %q",
 			"http/json", ProtocolHTTP, ProtocolGRPC,
 		)
 	default:
 		return "", fmt.Errorf("unknown OTLP protocol %q: use %q or %q", protocol, ProtocolHTTP, ProtocolGRPC)
 	}
 }
+
+// resolveProtocol decides the transport for one signal.
+//
+// Transport selection is this server's job and nothing beneath it can do the
+// work. In Go the transport is chosen by which package is imported, so
+// OTEL_EXPORTER_OTLP_PROTOCOL cannot reach across that boundary: on the HTTP
+// path WithProtocol logs a warning about grpc and carries on over HTTP anyway.
+// For metrics and logs this function is the only thing that gives those
+// variables any effect at all, since otlpmetrichttp, otlpmetricgrpc,
+// otlploghttp and otlploggrpc contain no protocol handling whatsoever.
+//
+// Reading the signal-specific variable is not a refinement, it is the point:
+// "Each configuration option MUST be overridable by a signal specific option."
+// Consulting only the general variable leaves a real hole, because
+// otlptracehttp reads the signal-specific one itself to pick its payload
+// encoding. An operator setting OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json
+// with the general variable unset would slip past a check that looked only at
+// the general one, and get JSON spans with protobuf everything else.
+//
+// Precedence follows this server's house rule, most specific first: an
+// explicitly configured protocol beats the signal-specific variable, which
+// beats the general one, which falls back to the default. An empty value counts
+// as unset at every level, per the configuration specification.
+func resolveProtocol(configured, signalKey string) (string, error) {
+	for _, candidate := range []string{
+		configured,
+		os.Getenv(signalKey),
+		os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL"),
+	} {
+		if strings.TrimSpace(candidate) == "" {
+			continue
+		}
+		return normalizeProtocol(candidate)
+	}
+	return ProtocolHTTP, nil
+}
+
+// The signal-specific protocol variables, named once so a typo cannot make one
+// of them quietly unread.
+const (
+	tracesProtocolKey  = "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"
+	metricsProtocolKey = "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"
+	logsProtocolKey    = "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL"
+)
 
 // buildResource describes this process to a collector.
 //
