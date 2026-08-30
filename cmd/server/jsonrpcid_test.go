@@ -41,6 +41,15 @@ func TestRequestIDFromBody_RecoversOnlyALegalRequestID(t *testing.T) {
 		// that is not a request.
 		{"trailing garbage", http.MethodPost, `{"jsonrpc":"2.0","id":1,"method":"tools/list"} and then some`, ""},
 		{"a second message on the same body", http.MethodPost, `{"jsonrpc":"2.0","id":1}{"jsonrpc":"2.0","id":2}`, ""},
+		// The two bytes decoder.More() cannot see. It answers "is there another
+		// element in the array or object being parsed", which it decides by
+		// peeking for anything that is not ] or }, so a stray closing brace
+		// slipped past the check that was written first.
+		{"a trailing closing brace", http.MethodPost, `{"jsonrpc":"2.0","id":1}}`, ""},
+		{"a trailing closing bracket", http.MethodPost, `{"jsonrpc":"2.0","id":1}]`, ""},
+		// And the whitespace that must not be mistaken for trailing content: a
+		// body ending in a newline is the ordinary case.
+		{"a trailing newline is not trailing content", http.MethodPost, "{\"jsonrpc\":\"2.0\",\"id\":1}\n", "1"},
 		// An object that does not announce itself as JSON-RPC is not a message,
 		// which is the rule the stdio filter already applies.
 		{"no jsonrpc member", http.MethodPost, `{"id":1,"method":"tools/list"}`, ""},

@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 )
 
@@ -51,7 +53,15 @@ func requestIDFromBody(r *http.Request) json.RawMessage {
 	// `{"id":1} trailing` decodes without complaint. That body is not a
 	// request, and an id lifted out of it is not the id of anything: require
 	// the value to be the whole of what was sent.
-	if decoder.More() {
+	//
+	// A second Decode rather than decoder.More(), which is not the check it
+	// looks like. More reports whether another element exists in the array or
+	// object currently being parsed, and is implemented as "the next byte is
+	// not ] or }" — so it answers true for `{...} trailing` and for two
+	// concatenated messages, and false for `{...}}`. Only end of input means
+	// the value was the whole body.
+	var rest json.RawMessage
+	if err := decoder.Decode(&rest); !errors.Is(err, io.EOF) {
 		return nil
 	}
 	// The same rule the stdio filter applies in [refuseUnreadable]: an object
