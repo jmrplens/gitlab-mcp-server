@@ -4,11 +4,7 @@
     "timeout": 15000,
     "wait": 2000,
     "chromeLaunchConfig": {
-      "args": [
-        "--no-sandbox",
-        "--disable-gpu",
-        "--disable-dev-shm-usage"
-      ]
+      "args": ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
     }
   },
   "urls": [

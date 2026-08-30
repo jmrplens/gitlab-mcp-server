@@ -598,7 +598,7 @@ var standaloneIndividualToolExceptions = map[string]string{
 // manualRegistrationExceptions allows the few package-level registration files
 // that intentionally stay outside ordinary GitLab API action projection.
 var manualRegistrationExceptions = map[string]string{
-	filepath.Join("dynamic", "register.go"):      "dynamic catalog controller tools are generated from the canonical catalog surface, not individual GitLab API tools",
+	filepath.Join("dynamic", "register.go"): "dynamic catalog controller tools are generated from the canonical catalog surface, not individual GitLab API tools",
 }
 
 // sharedIndividualToolSpecNames records individual tool names that are projected
