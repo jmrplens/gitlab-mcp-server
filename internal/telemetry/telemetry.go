@@ -146,6 +146,11 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 		return &Provider{}, nil
 	}
 
+	// Before anything can fail, so that whatever the SDK says about the
+	// failure arrives structured on stderr rather than as a stdlib log line on
+	// whatever stream the default sink chose.
+	installDiagnostics(slog.Default())
+
 	signals := cfg.Signals
 	if signals.none() {
 		signals = AllSignals()
