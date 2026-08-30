@@ -68,6 +68,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -2810,6 +2811,72 @@ func newHealthResponse(startedAt, now time.Time) healthResponse {
 	}
 }
 
+// serverCardSubscriptions describes the subscription surface, or nil when this
+// deployment does not offer one.
+//
+// Machine-readable on purpose: the same whitelist the gitlab://tools manifest
+// advertises and the SubscribeHandler enforces, plus per-method availability a
+// consumer can branch on without parsing prose.
+//
+// Both methods are always listed, because the block describes the binary's
+// capability surface, but "available" states what THIS deployment answers. The
+// legacy resources/subscribe verb is refused on stateless HTTP, where each
+// POST's session closes with its response so an accepted subscription could
+// never notify, and subscriptions/listen is the working form there.
+func serverCardSubscriptions(cfg *config.Config) map[string]any {
+	if config.EffectiveCapabilitySurface(cfg.CapabilitySurface) != config.CapabilitySurfaceFull {
+		return nil
+	}
+	return map[string]any{
+		"supported": true,
+		"methods": map[string]any{
+			"subscriptions/listen": map[string]any{
+				"available":      true,
+				"since_protocol": protocolVersionStatelessOnly,
+			},
+			"resources/subscribe": map[string]any{
+				"available": !cfg.Stateless,
+				"requires":  "stateful sessions (--stateless=false)",
+			},
+		},
+		"subscribable_uri_templates": subscriptions.Templates(),
+		"notification":               "notifications/resources/updated, sent when the watched content changes (server polls GitLab)",
+	}
+}
+
+// serverCardTelemetry describes the instrumentation this deployment is running,
+// or nil when it is running none.
+//
+// Announced rather than assumed. The switch is off by default for privacy, and
+// a privacy default nobody can observe is worth less than one they can:
+// somebody connecting to a published endpoint should be able to see that their
+// calls are instrumented without having to ask the operator.
+//
+// Absent rather than "enabled": false, because a consumer should not have to
+// parse a negation to learn that nothing is recorded, and a block that is
+// always present invites one written by hand that says the wrong thing.
+//
+// The collector endpoint is deliberately NOT published, and that is the one
+// line here worth defending. It names the operator's own infrastructure, and a
+// server card is fetched by every client that asks. What a caller needs is that
+// their calls are recorded and in what form; where the records land is not
+// theirs to know.
+func serverCardTelemetry() map[string]any {
+	snapshot := telemetry.CurrentSnapshot()
+	if !snapshot.Enabled {
+		return nil
+	}
+	return map[string]any{
+		"enabled":     true,
+		"signals":     snapshot.Signals,
+		"protocol":    snapshot.Protocol,
+		"conventions": "OpenTelemetry, following the MCP semantic convention",
+		"recorded":    "the method called, the tool and catalog action, the outcome and the duration",
+		"not_recorded": "tool arguments, tool results, resource contents, " +
+			"queries, tokens, and GitLab response bodies",
+	}
+}
+
 // buildServerCard creates a Smithery-compatible server-card JSON by spinning up
 // an ephemeral MCP server with a dummy GitLab client, listing all registered
 // tools, resources, resource templates, and prompts via in-memory MCP session,
@@ -3068,31 +3135,11 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 		"prompts":           cardPrompts,
 	}
 
-	// The subscription surface, machine-readable: the same whitelist the
-	// gitlab://tools manifest advertises and the SubscribeHandler enforces,
-	// plus per-method availability a consumer can branch on without parsing
-	// prose. Both methods are always listed — the block describes the
-	// binary's capability surface — but "available" states what THIS
-	// deployment answers: the legacy resources/subscribe verb is refused on
-	// stateless HTTP (each POST's session closes with its response, so an
-	// accepted subscription could never notify), where subscriptions/listen
-	// is the working form.
-	if config.EffectiveCapabilitySurface(cfg.CapabilitySurface) == config.CapabilitySurfaceFull {
-		card["subscriptions"] = map[string]any{
-			"supported": true,
-			"methods": map[string]any{
-				"subscriptions/listen": map[string]any{
-					"available":      true,
-					"since_protocol": protocolVersionStatelessOnly,
-				},
-				"resources/subscribe": map[string]any{
-					"available": !cfg.Stateless,
-					"requires":  "stateful sessions (--stateless=false)",
-				},
-			},
-			"subscribable_uri_templates": subscriptions.Templates(),
-			"notification":               "notifications/resources/updated, sent when the watched content changes (server polls GitLab)",
-		}
+	if block := serverCardSubscriptions(cfg); block != nil {
+		card["subscriptions"] = block
+	}
+	if block := serverCardTelemetry(); block != nil {
+		card["telemetry"] = block
 	}
 
 	return json.Marshal(card)

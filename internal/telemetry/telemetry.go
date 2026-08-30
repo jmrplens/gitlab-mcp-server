@@ -70,6 +70,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -225,6 +226,8 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
+
+	setCurrent(p.Snapshot())
 	return p, nil
 }
 
@@ -344,6 +347,7 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	}
 	p.shutdowns = nil
 	p.enabled = false
+	setCurrent(Snapshot{})
 	return errors.Join(errs...)
 }
 
@@ -385,7 +389,38 @@ func (p *Provider) Snapshot() Snapshot {
 	}
 }
 
-// normalizeProtocol accepts the two transports this server implements and
+// current holds what the running providers were started with, for surfaces that
+// need to report telemetry without holding the provider.
+//
+// A package-level value rather than a threaded parameter, and the reason is
+// that it mirrors what is already true: Start installs global OTel providers,
+// so there is exactly one answer per process and pretending otherwise by
+// passing a handle through the server-card builder and its test seam would add
+// plumbing without adding truth.
+var current struct {
+	mu       sync.RWMutex
+	snapshot Snapshot
+}
+
+// CurrentSnapshot reports what telemetry this process is running.
+//
+// The zero value means off, which is what a caller gets before Start, after
+// Shutdown, and when telemetry was never enabled. No caller needs a nil check
+// or a second branch.
+func CurrentSnapshot() Snapshot {
+	current.mu.RLock()
+	defer current.mu.RUnlock()
+	return current.snapshot
+}
+
+// setCurrent publishes the snapshot, or clears it on shutdown.
+func setCurrent(snapshot Snapshot) {
+	current.mu.Lock()
+	defer current.mu.Unlock()
+	current.snapshot = snapshot
+}
+
+// normalizeProtocol accepts the two transports this server implements and// normalizeProtocol accepts the two transports this server implements and
 // refuses anything else by name.
 //
 // `http` is accepted as a spelling of `http/protobuf` because operators write
