@@ -121,6 +121,25 @@ const attrGenAIToolName = "gen_ai.tool.name"
 // attribute filtering functionality for this parameter." An allow-list would
 // have to enumerate every convention-owned key and would silently drop the next
 // one somebody adds.
+//
+// # A filtered attribute still reaches the collector, through exemplars
+//
+// Measured rather than assumed: with this View active, the tool name is absent
+// from every data point's attribute set and present in the exported payload,
+// because an exemplar records the attributes that were filtered out along with
+// the trace it came from. Setting OTEL_METRICS_EXEMPLAR_FILTER=always_off makes
+// it disappear entirely, which is how it was confirmed.
+//
+// For cardinality that changes nothing, and cardinality is what this View is
+// for: an exemplar reservoir is bounded per data point, so it mints no time
+// series however many distinct values pass through it.
+//
+// It matters for anyone who later reaches for a View to keep a value away from
+// a collector. That does not work, and the failure is silent. Privacy filtering
+// in this server is done by never putting the value in an attribute in the
+// first place, which is the only place it holds: see internal/mcpotel, where
+// the span and metric attribute lists are built separately and neither ever
+// carries a tool argument, a resource URI or a credential.
 func toolNameView() sdkmetric.View {
 	return func(instrument sdkmetric.Instrument) (sdkmetric.Stream, bool) {
 		return sdkmetric.Stream{

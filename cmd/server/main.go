@@ -1434,8 +1434,13 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		gitlabtools.RegisterMetaStandaloneTools(server, client)
 		return serverSurfaceRegistration{metaSchemaRoutes: filteredCatalog.ActionMaps(), surfaceCatalog: filteredCatalog}, nil
 	default:
-		gitlabtools.RegisterAll(server, client, cfg.Tier)
-		return serverSurfaceRegistration{}, nil
+		// The catalog is carried out rather than discarded. On this surface a
+		// tool name is declared per ActionSpec rather than derived, so nothing
+		// downstream can map one back to its action without it, and telemetry
+		// recorded no action here at all until this returned something.
+		return serverSurfaceRegistration{
+			surfaceCatalog: gitlabtools.RegisterAll(server, client, cfg.Tier),
+		}, nil
 	}
 }
 
@@ -1846,6 +1851,14 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	if hosts := allowedHosts(httpAddr); len(hosts) > 0 {
 		rootHandler = hostValidationMiddleware(hosts, rootHandler)
 	}
+	// Second outermost, so the span covers host validation, CORS and the
+	// credential check as well as the handler. That placement is the whole
+	// point: the MCP span starts after authentication, so it never exists for
+	// a refused request, which leaves an operator of a published endpoint
+	// unable to see how much traffic is being rejected or how long a rejection
+	// takes. Here a refusal is a status code on a span.
+	rootHandler = mcpotel.ServerMiddleware(rootHandler)
+
 	// Outermost, so that EVERY response carries the security headers —
 	// including the ones written by a middleware that answers instead of
 	// forwarding. Host validation used to sit outside this and its 403 went
