@@ -50,7 +50,7 @@ func TestCurrentSnapshot_PublishedByStartAndClearedByShutdown(t *testing.T) {
 		t.Error("protocol is empty; the card would advertise telemetry without saying how it ships")
 	}
 
-	if shutdownErr := provider.Shutdown(context.Background()); shutdownErr != nil {
+	if shutdownErr := provider.Shutdown(boundedShutdown(t)); shutdownErr != nil {
 		t.Logf("shutdown against an unreachable collector: %v", shutdownErr)
 	}
 	if after := CurrentSnapshot(); after.Enabled {
@@ -68,7 +68,7 @@ func TestCurrentSnapshot_DisabledStartPublishesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	t.Cleanup(func() { _ = provider.Shutdown(boundedShutdown(t)) })
 
 	if snapshot := CurrentSnapshot(); snapshot.Enabled {
 		t.Errorf("a disabled Start published a snapshot: %+v", snapshot)

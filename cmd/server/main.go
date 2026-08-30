@@ -295,7 +295,21 @@ func main() {
 	telemetryIdentityFlag = flag.String("telemetry-identity", string(telemetry.DefaultIdentityPolicy),
 		"How much telemetry records about who made a call: none (default, records nobody), pseudonymous (a per-process digest that correlates one caller's calls without naming them), or full (the GitLab user id and username)")
 	flag.Int64Var(&hcfg.maxRequestBodyBytes, "max-request-body-bytes", 0, "Maximum streamable HTTP request body size in bytes; 0 uses the SDK default (4 MiB)")
+
+	// Settings that used to be reachable only through the environment. See
+	// envflags.go for why the flag writes the variable rather than being read
+	// directly, and for the one setting deliberately left without a flag.
+	registerEnvBackedFlags()
+
+	// --help as well as -h. Go's flag package treats an unregistered --help as
+	// a parse error and prints its own flat alphabetical dump of every flag,
+	// which is both the longer output and the one nobody curated. Registering
+	// it means the two spellings give the same curated help, and --help is the
+	// one people actually type.
+	flag.BoolVar(&showHelp, "help", false, "Show full help with flags, env vars, and examples")
+
 	flag.Parse()
+	applyEnvBackedFlags()
 	hcfg.setFlags = make(map[string]bool)
 	flag.Visit(func(f *flag.Flag) {
 		hcfg.setFlags[f.Name] = true
@@ -362,9 +376,10 @@ func main() {
 		return
 	}
 
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+	baseLogHandler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 		Level: parseLogLevel(os.Getenv("LOG_LEVEL")),
-	})))
+	})
+	slog.SetDefault(slog.New(baseLogHandler))
 
 	health.SetServerInfo(health.ServerInfo{
 		Version:    version,
@@ -401,49 +416,82 @@ DESCRIPTION
   Supports stdio (default) and HTTP transport modes.
 
 FLAGS
-  -h                        Show this help message
+
+  Grouped by what they configure. Every flag also reads its value from the
+  environment when it is not passed; see ENVIRONMENT VARIABLES below.
+
+ General
+  -h, -help                 Show this help message
   -version                  Print version and exit
   -shutdown                 Terminate all running instances and exit
   -tool-search string       Search tools by name/description and exit
+  -log-level string         Logging verbosity: debug|info|warn|error (default info)
+
+ Transport
   -http                     Run in HTTP transport mode (default: stdio)
   -http-addr string         Listen address: host:port, or a path to bind a unix socket (default ":8080")
   -http-socket-mode str     Octal permission mode for a unix socket (default "0660")
   -tls-cert string          PEM certificate; serves HTTPS on the listener (requires -tls-key)
   -tls-key string           PEM private key matching -tls-cert
-  -gitlab-url string        GitLab URL; omit to require per-request GITLAB-URL header. Repeatable to publish several instances
-  -skip-tls-verify          Skip TLS certificate verification when calling GitLab (default false)
-  -meta-tools               Legacy boolean tool selector; prefer -tool-surface
-  -tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
-  -capability-surface str   Capability surface: full|minimal (default full)
-  -meta-param-schema str    Meta-tool input schema mode: opaque|compact|full (default opaque)
-  -tier string              Force licensing tier: free|ce|premium|ultimate; omit to detect per server entry
-  -read-only                Expose only read-only tools (default false)
-  -safe-mode                Intercept mutating tools and return a preview instead of executing
-  -embedded-resources       Embed canonical MCP resource links in get_* tool results (default true)
-  -exclude-tools string     Comma-separated tool names to exclude from registration
-  -ignore-scopes            Skip PAT scope detection, register all tools (default false)
-  -max-http-clients int     Maximum unique (token, GitLab URL) pool entries; not sessions or concurrent requests (default %d)
-  -session-timeout duration Idle MCP session timeout; --stateless=false only (default %s)
-  -pool-idle-timeout dur    Reclaim a pooled per-token-and-URL server entry after this long unused (default %s, 0 to disable)
-  -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure so -session-timeout governs
-  -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28). Use -stateless=false for legacy stateful sessions
+  -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28)
   -json-response            Return application/json responses instead of SSE (default false)
   -max-request-body-bytes n Maximum streamable HTTP request body bytes (0 = SDK default 4 MiB)
+  -session-timeout duration Idle MCP session timeout; -stateless=false only (default %s)
+  -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure
+
+ GitLab connection
+  -gitlab-url string        GitLab URL; omit to require per-request GITLAB-URL header. Repeatable to publish several instances
+  -skip-tls-verify          Skip TLS certificate verification when calling GitLab (default false)
+  -tier string              Force licensing tier: free|ce|premium|ultimate; omit to detect per server entry
+  -ignore-scopes            Skip PAT scope detection, register all tools (default false)
+  -upload-max-file-size n   Maximum size in bytes for upload and file-read tools (default 2GB)
+
+  The GitLab token has no flag, on purpose: a token on a command line is
+  visible to every user on the machine through ps and lands in shell history.
+  Set GITLAB_TOKEN in the environment, or send it per request in HTTP mode.
+
+ Tool surface
+  -tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
+  -meta-tools               Legacy boolean tool selector; prefer -tool-surface
+  -capability-surface str   Capability surface: full|minimal (default full)
+  -meta-param-schema str    Meta-tool input schema mode: opaque|compact|full (default opaque)
+  -embedded-resources       Embed canonical MCP resource links in get_* tool results (default true)
+  -exclude-tools string     Comma-separated tool names to exclude from registration
+  -client-compat string     Per-client response compatibility: auto|off (default auto)
+
+ Protective modes
+  -read-only                Expose only read-only tools (default false)
+  -safe-mode                Intercept mutating tools and return a preview instead of executing
+  -yolo-mode                Skip the confirmation prompt on destructive actions (default false)
+
+ Authentication (HTTP mode)
   -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
+  -public-url string        Externally reachable https origin; required with -auth-mode=oauth
+  -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
+  -oauth-client-uid string  Comma-separated GitLab OAuth application uids whose tokens are admitted (default: any)
+  -revalidate-interval dur  How often pooled tokens are re-validated against GitLab (default %s, 0 to disable)
   -resource-documentation string
                             https URL published as RFC 9728 resource_documentation (default: this project's OAuth setup guide)
   -resource-policy-uri string
                             https URL published as RFC 9728 resource_policy_uri (default: omitted)
-  -resource-tos-uri string
-                            https URL published as RFC 9728 resource_tos_uri (default: omitted)
-  -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
-  -oauth-client-uid string  Comma-separated GitLab OAuth application uids whose tokens are admitted (default: any)
-  -public-url string        Externally reachable https origin; required with -auth-mode=oauth (RFC 9728 resource identifier)
-  -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
-  -revalidate-interval dur  How often pooled tokens are re-validated against GitLab (default %s, 0 to disable)
-  -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
+  -resource-tos-uri string  https URL published as RFC 9728 resource_tos_uri (default: omitted)
+
+ Limits and pooling (HTTP mode)
+  -max-http-clients int     Maximum unique (token, GitLab URL) pool entries; not sessions or concurrent requests (default %d)
+  -pool-idle-timeout dur    Reclaim a pooled per-token-and-URL server entry after this long unused (default %s, 0 to disable)
   -rate-limit-rps float     Per-server tools/call rate limit (default 10; 0 disables it)
-  -rate-limit-burst int     Token-bucket burst size when --rate-limit-rps > 0 (default %d)
+  -rate-limit-burst int     Token-bucket burst size when -rate-limit-rps > 0 (default %d)
+  -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
+  -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
+
+ Telemetry
+  -telemetry                Export OpenTelemetry traces, metrics and logs over OTLP (default false)
+  -telemetry-identity str   What telemetry records about the caller: none|pseudonymous|full (default none)
+
+  Off by default, and it goes to a collector you configure through the
+  standard OTEL_EXPORTER_OTLP_* environment; nothing is ever sent anywhere
+  else. OTEL_SDK_DISABLED=true vetoes it regardless of the flag. See
+  docs/guides/telemetry.md.
 
 ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
@@ -518,9 +566,14 @@ JSON CONFIGURATION EXAMPLES
   gitlab-mcp-server --http --http-addr=:8080
 `, version, commit,
 		projectAuthor, projectDepartment, projectRepository,
-		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout, config.DefaultPoolIdleTimeout,
+		// In the order the grouped FLAGS block prints them: Transport, then
+		// Authentication, then Limits and pooling. Reordering a group above
+		// means reordering these, which the vet check catches when the types
+		// stop lining up and a reader catches when they do not.
+		config.DefaultSessionTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
 		config.DefaultRevalidateInterval,
+		config.DefaultMaxHTTPClients, config.DefaultPoolIdleTimeout,
 		config.DefaultRateLimitBurst,
 		config.DefaultGitLabURL)
 }

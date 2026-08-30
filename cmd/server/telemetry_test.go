@@ -87,7 +87,7 @@ func TestStartTelemetry_DisabledReturnsAUsableStop(t *testing.T) {
 	if provider.Enabled() {
 		t.Error("provider reports itself enabled with the switch off")
 	}
-	stop(context.Background())
+	stop(boundedShutdown(t))
 }
 
 // TestStartTelemetry_SurvivesAnUnreachableCollector is the decision this project
@@ -149,7 +149,7 @@ func TestStartTelemetry_RefusesAnUnusableProtocolWithoutKillingTheProcess(t *tes
 	if provider.Enabled() {
 		t.Error("a protocol this server cannot honor was accepted; nothing would reach the collector and nothing would say so")
 	}
-	stop(context.Background())
+	stop(boundedShutdown(t))
 }
 
 // TestSDKDisabledVetoesTheFlag asserts the composition an operator relies on
@@ -168,7 +168,7 @@ func TestSDKDisabledVetoesTheFlag(t *testing.T) {
 	t.Setenv("OTEL_SDK_DISABLED", "true")
 
 	provider, stop := startTelemetry(t.Context(), "2.7.6")
-	t.Cleanup(func() { stop(context.Background()) })
+	t.Cleanup(func() { stop(boundedShutdown(t)) })
 
 	if provider.Enabled() {
 		t.Error("OTEL_SDK_DISABLED=true did not veto an explicitly requested start")

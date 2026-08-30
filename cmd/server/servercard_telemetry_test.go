@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -35,7 +34,7 @@ func TestServerCard_AnnouncesTelemetryWithoutNamingTheCollector(t *testing.T) {
 	if err != nil {
 		t.Fatalf("starting telemetry: %v", err)
 	}
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	t.Cleanup(func() { _ = provider.Shutdown(boundedShutdown(t)) })
 
 	cfg := &config.Config{SkipTLSVerify: true, MetaTools: true}
 	data, err := buildServerCard(t.Context(), cfg)
@@ -82,7 +81,7 @@ func TestServerCard_OmitsTelemetryWhenItIsOff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("starting telemetry: %v", err)
 	}
-	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	t.Cleanup(func() { _ = provider.Shutdown(boundedShutdown(t)) })
 
 	cfg := &config.Config{SkipTLSVerify: true, MetaTools: true}
 	data, err := buildServerCard(t.Context(), cfg)

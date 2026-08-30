@@ -64,7 +64,16 @@ func startTelemetry(ctx context.Context, serverVersion string) (provider *teleme
 			"component", "telemetry", "error", err)
 		return &telemetry.Provider{}, func(context.Context) {}
 	}
+	restoreLogger := func() {}
 	if provider.Enabled() {
+		// The logs signal is only real once something writes into it. Until
+		// this line existed the provider was installed, "logs" was announced
+		// at startup and on the server card, and no record was ever exported:
+		// the card advertised a signal that produced nothing. Bridging here,
+		// after Start has installed the global logger provider, is what makes
+		// the announcement true.
+		restoreLogger = installSlogBridge()
+
 		snapshot := provider.Snapshot()
 		slog.Info("telemetry enabled",
 			"component", "telemetry",
@@ -77,6 +86,12 @@ func startTelemetry(ctx context.Context, serverVersion string) (provider *teleme
 			slog.Warn("telemetry did not shut down cleanly",
 				"component", "telemetry", "error", shutdownErr)
 		}
+		// After the provider, so the warning above still reaches a collector
+		// that is listening. Restoring makes the bridge's lifetime match the
+		// provider's, which matters beyond tidiness: the logger is a process
+		// global, so without this a stopped telemetry stack keeps every later
+		// log record routed at a logger provider that has been shut down.
+		restoreLogger()
 	}
 }
 
@@ -94,3 +109,64 @@ func isFlagPassed(name string) bool {
 	})
 	return found
 }
+
+// installSlogBridge sends this server's structured log records to the collector
+// as well as to stderr.
+//
+// It replaces the default logger rather than wrapping at the call sites,
+// because every package here logs through slog.Default and threading a second
+// logger to all of them would be a change with no upside: the bridge needs to
+// see the same records, with the same fields, that stderr already gets.
+//
+// Called only when telemetry started successfully. With telemetry off, the
+// default handler stays exactly as it was, so the ordinary deployment pays
+// nothing for a bridge it does not use.
+// It returns the function that puts the previous logger back. The default
+// logger is a process global, so a bridge installed and never removed outlives
+// the provider it writes into: in production that is a stopped exporter
+// receiving records during shutdown, and in a test binary it is one test's
+// telemetry poisoning every later test's logging.
+//
+// # Why it wraps baseLogHandler rather than slog.Default().Handler()
+//
+// Because the obvious version recurses forever, and the stack trace is not
+// obvious at all:
+//
+//	fanOutHandler.Handle -> slog.defaultHandler.Handle -> log.Logger.output
+//	  -> slog.handlerWriter.Write -> fanOutHandler.Handle -> ...
+//
+// slog.SetDefault does two things, and the second is easy to miss: it also
+// redirects the standard library's log package at the new default handler. So
+// wrapping whatever slog.Default() currently holds is safe only while that is
+// something we installed. When it is still slog's own built-in handler, which
+// writes through log.Print, the wrapper's stderr leg calls log, log calls the
+// default slog handler, and the default slog handler is now the wrapper.
+//
+// In this binary main installs a JSON handler before telemetry ever starts, so
+// the cycle does not fire in production. Depending on that ordering is the
+// fragile part: any caller reaching startTelemetry first, which is exactly what
+// a test does, hangs the process with no error. Wrapping a handler we captured
+// ourselves removes the dependency rather than documenting it.
+func installSlogBridge() (restore func()) {
+	if baseLogHandler == nil {
+		// Nothing installed a base handler, so there is no known-safe thing to
+		// wrap. Skipping costs the log export and keeps the process alive,
+		// which is the right trade for a path only reached out of order.
+		return func() {}
+	}
+
+	previous := slog.Default()
+	bridged := telemetry.NewSlogHandler(baseLogHandler, telemetry.DefaultLogSeverity)
+	if bridged == nil {
+		return func() {}
+	}
+	slog.SetDefault(slog.New(bridged))
+	return func() { slog.SetDefault(previous) }
+}
+
+// baseLogHandler is the stderr handler this server installs at startup.
+//
+// Captured at the one place that builds it, so the telemetry bridge wraps a
+// handler whose behavior is known rather than whatever the global happens to
+// hold. See installSlogBridge for what goes wrong otherwise.
+var baseLogHandler slog.Handler
