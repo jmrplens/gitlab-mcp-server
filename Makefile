@@ -23,11 +23,14 @@ PKGS=./cmd/... ./internal/...
 # this one validates the manifest, that one publishes it.
 MCP_PUBLISHER_VERSION=v1.8.1
 GO_ANALYSIS_PKGS=./...
-# Every e2e build tag. A tagged file is invisible to go vet and to
-# golangci-lint unless its tag is listed here, so each suite added behind one
-# has to be added here too or it is analysed by nothing: `httpe2e` was missing
-# until the HTTP suite broke CI, and `stdioe2e` until the stdio suite did.
-GO_ANALYSIS_TAGS=e2e,httpe2e,stdioe2e
+# Every e2e build tag, and it must stay every one. A tagged file is invisible
+# to go vet and to golangci-lint unless its tag is listed here, so a suite
+# added behind a new tag is analysed by nothing until it is added. That has
+# happened three times: `httpe2e` was missing until the HTTP suite broke CI,
+# `stdioe2e` until the stdio suite did, and `orbitlive` had never been listed
+# at all, so test/e2e/orbit had gone unlinted since it was written. The same
+# list lives in cmd/gen_testing_docs as e2eTags, for the same reason.
+GO_ANALYSIS_TAGS=e2e,httpe2e,orbitlive,stdioe2e
 PROJECT_GO_VERSION := $(shell awk '/^go / {print $$2; exit}' go.mod)
 GO_TOOLCHAIN ?= go$(PROJECT_GO_VERSION)
 export GOTOOLCHAIN := $(GO_TOOLCHAIN)

@@ -330,83 +330,106 @@ func TestAttachRateLimit_GatesCompletionWithoutBlockingIt(t *testing.T) {
 // names when it says to rate limit log messages. One line per window carries
 // the count of what it stands for, so nothing is lost.
 func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
-	t.Run("the first refusal in a window is reported", func(t *testing.T) {
-		buf := captureSlog(t)
-		limiter := NewRateLimiter(1, 1)
-		limiter.reportRefusal("gitlab_execute_action")
+	tests := []struct {
+		name string
+		// build returns the limiter under test. A closure rather than a pair
+		// of numbers because two cases need a limiter the constructor does not
+		// produce: a nil one, and one assembled directly, which is what
+		// scaled() hands the completion bucket.
+		build func() *RateLimiter
+		// refuse drives the refusals this case is about.
+		refuse func(*RateLimiter)
+		// wantLines is how many refusal lines the whole case may emit.
+		wantLines int
+		// wantContains are substrings the output must carry.
+		wantContains []string
+	}{
+		{
+			name:      "the first refusal in a window is reported",
+			build:     func() *RateLimiter { return NewRateLimiter(1, 1) },
+			refuse:    func(r *RateLimiter) { r.reportRefusal("gitlab_execute_action") },
+			wantLines: 1,
+			wantContains: []string{
+				`"level":"WARN"`,
+				`"msg":"tool call refused: rate limit exceeded"`,
+				`"tool":"gitlab_execute_action"`,
+				`"reason":"rate_limited"`,
+				`"limit_rps":1`,
+				`"burst":1`,
+			},
+		},
+		{
+			name:  "a flood inside the window is counted, not logged",
+			build: func() *RateLimiter { return NewRateLimiter(10, 40) },
+			refuse: func(r *RateLimiter) {
+				for range 102 {
+					r.reportRefusal("gitlab_execute_action")
+				}
+			},
+			wantLines: 1,
+		},
+		{
+			name: "the next window reports what the last one absorbed",
+			build: func() *RateLimiter {
+				r := NewRateLimiter(10, 40)
+				r.throttleWindow = time.Millisecond
+				return r
+			},
+			refuse: func(r *RateLimiter) {
+				r.reportRefusal("gitlab_execute_action")
+				for range 41 {
+					r.reportRefusal("gitlab_execute_action")
+				}
+				time.Sleep(5 * time.Millisecond)
+				r.reportRefusal("gitlab_execute_action")
+			},
+			wantLines: 2,
+			// Without the count, an operator reading one line per ten seconds
+			// has no idea whether it stands for one refusal or a thousand.
+			wantContains: []string{`"also_refused_since_last_report":41`},
+		},
+		{
+			name:      "a nil limiter reports nothing",
+			build:     func() *RateLimiter { return nil },
+			refuse:    func(r *RateLimiter) { r.reportRefusal("gitlab_execute_action") },
+			wantLines: 0,
+		},
+		{
+			// extractToolName returns "" for a request shape it does not
+			// recognize. The line has to say something an operator can read,
+			// and the method is the honest fallback.
+			name:         "an unnamed tool still produces a usable line",
+			build:        func() *RateLimiter { return NewRateLimiter(1, 1) },
+			refuse:       func(r *RateLimiter) { r.reportRefusal("") },
+			wantLines:    1,
+			wantContains: []string{`"tool":"tools/call"`},
+		},
+		{
+			// A limiter built without going through NewRateLimiter, which the
+			// scaled() completion limiter is, must not divide by an unset
+			// window.
+			name:  "a zero window falls back to the default",
+			build: func() *RateLimiter { return &RateLimiter{limiter: rate.NewLimiter(1, 1)} },
+			refuse: func(r *RateLimiter) {
+				r.reportRefusal("gitlab_execute_action")
+				r.reportRefusal("gitlab_execute_action")
+			},
+			wantLines: 1,
+		},
+	}
 
-		out := buf.String()
-		assertContains(t, out, `"level":"WARN"`)
-		assertContains(t, out, `"msg":"tool call refused: rate limit exceeded"`)
-		assertContains(t, out, `"tool":"gitlab_execute_action"`)
-		assertContains(t, out, `"reason":"rate_limited"`)
-		assertContains(t, out, `"limit_rps":1`)
-		assertContains(t, out, `"burst":1`)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := captureSlog(t)
+			tt.refuse(tt.build())
 
-	t.Run("a flood inside the window is counted, not logged", func(t *testing.T) {
-		buf := captureSlog(t)
-		limiter := NewRateLimiter(10, 40)
-		for range 102 {
-			limiter.reportRefusal("gitlab_execute_action")
-		}
-
-		if got := strings.Count(buf.String(), "rate limit exceeded"); got != 1 {
-			t.Errorf("%d lines for 102 refusals in one window, want 1", got)
-		}
-	})
-
-	t.Run("the next window reports what the last one absorbed", func(t *testing.T) {
-		buf := captureSlog(t)
-		limiter := NewRateLimiter(10, 40)
-		limiter.throttleWindow = time.Millisecond
-
-		limiter.reportRefusal("gitlab_execute_action")
-		for range 41 {
-			limiter.reportRefusal("gitlab_execute_action")
-		}
-		time.Sleep(5 * time.Millisecond)
-		limiter.reportRefusal("gitlab_execute_action")
-
-		out := buf.String()
-		if got := strings.Count(out, "rate limit exceeded"); got != 2 {
-			t.Fatalf("%d lines across two windows, want 2:\n%s", got, out)
-		}
-		// Without the count, an operator reading one line per ten seconds has
-		// no idea whether it stands for one refusal or a thousand.
-		assertContains(t, out, `"also_refused_since_last_report":41`)
-	})
-
-	t.Run("a nil limiter reports nothing", func(t *testing.T) {
-		buf := captureSlog(t)
-		var none *RateLimiter
-		none.reportRefusal("gitlab_execute_action")
-
-		if buf.Len() != 0 {
-			t.Errorf("a disabled limiter logged something: %s", buf.String())
-		}
-	})
-
-	t.Run("an unnamed tool still produces a usable line", func(t *testing.T) {
-		// extractToolName returns "" for a request shape it does not
-		// recognize. The line has to say something an operator can read, and
-		// the method is the honest fallback.
-		buf := captureSlog(t)
-		NewRateLimiter(1, 1).reportRefusal("")
-
-		assertContains(t, buf.String(), `"tool":"tools/call"`)
-	})
-
-	t.Run("a zero window falls back to the default", func(t *testing.T) {
-		// A limiter built without going through NewRateLimiter, which the
-		// scaled() completion limiter is, must not divide by an unset window.
-		buf := captureSlog(t)
-		limiter := &RateLimiter{limiter: rate.NewLimiter(1, 1)}
-		limiter.reportRefusal("gitlab_execute_action")
-		limiter.reportRefusal("gitlab_execute_action")
-
-		if got := strings.Count(buf.String(), "rate limit exceeded"); got != 1 {
-			t.Errorf("%d lines with an unset window, want 1 under the default", got)
-		}
-	})
+			out := buf.String()
+			if got := strings.Count(out, "rate limit exceeded"); got != tt.wantLines {
+				t.Fatalf("%d refusal lines, want %d:\n%s", got, tt.wantLines, out)
+			}
+			for _, want := range tt.wantContains {
+				assertContains(t, out, want)
+			}
+		})
+	}
 }

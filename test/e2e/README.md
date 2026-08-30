@@ -2,13 +2,16 @@
 
 E2E tests validate the full MCP server against a real GitLab instance using in-memory transport (`mcp.NewInMemoryTransports()`). Build tag: `e2e`.
 
-There are two modules, answering different questions:
+There are four modules, answering different questions:
 
-| Module           | Build tag  | Needs GitLab | What it covers                                                                     |
-| ---------------- | ---------- | ------------ | ---------------------------------------------------------------------------------- |
-| `test/e2e/suite` | `e2e`      | yes          | Tool behaviour against a real instance, over in-memory MCP transport                |
-| `test/e2e/http`  | `httpe2e`  | no           | The HTTP transport itself: cross-origin, preflight, auth modes, rate limiting, proxy |
-| `test/e2e/orbit` | `orbitlive`| gitlab.com   | The experimental Knowledge Graph API                                                |
+| Module           | Build tag   | Needs GitLab | What it covers                                                                      |
+| ---------------- | ----------- | ------------ | ----------------------------------------------------------------------------------- |
+| `test/e2e/suite` | `e2e`       | yes          | Tool behaviour against a real instance, over in-memory MCP transport                 |
+| `test/e2e/http`  | `httpe2e`   | no           | The HTTP transport itself: cross-origin, preflight, auth modes, rate limiting, proxy |
+| `test/e2e/stdio` | `stdioe2e`  | no           | The stdio transport: pipes, process lifetime, exit status, environment configuration |
+| `test/e2e/orbit` | `orbitlive` | gitlab.com   | The experimental Knowledge Graph API                                                 |
+
+Each tag has to be listed in `GO_ANALYSIS_TAGS` in the Makefile and in `e2eTags` in `cmd/gen_testing_docs`, or the module is invisible to `go vet`, to `golangci-lint` and to the generated test metrics. A file behind a tag nothing names is analysed by nothing.
 
 ## HTTP transport module
 
@@ -21,6 +24,16 @@ No GitLab and no credentials: the module builds the binary, starts it with the f
 It exists because the in-memory suite cannot reach any of this. The handler chain is assembled in `package main`, so a unit test could not import it and a test that reassembled it would be testing its own copy. Every case in the module corresponds to something that shipped broken: a preflight answered `401`, which made `--trusted-origins` useless in a browser; a throttled GitLab reported as an invalid token; an invalid token relayed upstream on every retry; and an `x-mcp-header` annotation carrying a prefix the transport also adds.
 
 The `TestProxy_*` cases run a real nginx in Docker in front of the server, and **skip** when Docker is unavailable rather than modelling one. That layer is not optional detail: a proxy answering `OPTIONS` itself hides a server that cannot, and a proxy adding its own CORS headers collides with the server's to produce a response `curl` reports as `200` and a browser refuses outright.
+
+## stdio transport module
+
+```bash
+make test-e2e-stdio
+```
+
+Also no GitLab and no credentials. It builds the binary, starts it with the environment each case needs, and speaks JSON-RPC to it over real pipes.
+
+stdio is this project's primary transport and nothing anywhere drove it until this module existed. The in-memory suite runs in one process, so it has no pipes, no separation of stdout from stderr, no process to exit, and no environment-variable configuration, since HTTP mode takes flags instead. Every case here corresponds to something that shipped broken and was found by hand against a binary: a nil dereference that killed the process on an ordinary eliciting tool call; a keepalive ping that closed the session of any client speaking `2026-07-28` after 45 idle seconds, held in place by a unit test asserting the ping ought to be there; an exit status of 1 on every normal shutdown; and a log stream whose steady state was entirely the SDK's own session chatter.
 
 ## Quick Start
 

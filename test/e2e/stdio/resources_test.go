@@ -82,18 +82,20 @@ func TestResourceList_SaysHowMuchOfTheCollectionItReturned(t *testing.T) {
 	if complete {
 		t.Errorf("the read claims to be complete while returning %d of %d: %v", len(groups), fakeGroupTotal, page)
 	}
+	// Compared as float64 rather than through int(): these are counts, and
+	// truncating first would accept 137.9 for a total of 137.
 	total, ok := page["total"].(float64)
 	if !ok {
 		t.Fatalf("no numeric \"total\" in pageInfo: %v", page)
 	}
-	if int(total) != fakeGroupTotal {
+	if total != float64(fakeGroupTotal) {
 		t.Errorf("total = %v, want %d so a consumer knows what it is missing", total, fakeGroupTotal)
 	}
 	returned, ok := page["returned"].(float64)
 	if !ok {
 		t.Fatalf("no numeric \"returned\" in pageInfo: %v", page)
 	}
-	if int(returned) != len(groups) {
+	if returned != float64(len(groups)) {
 		t.Errorf("returned = %v, want %d", returned, len(groups))
 	}
 }
@@ -169,12 +171,25 @@ func TestResourceList_DescriptionsDoNotPromiseEverything(t *testing.T) {
 	env["CAPABILITY_SURFACE"] = "full"
 	s := startSession(t, env)
 
-	templates := entriesOf(t, s, request(1, "resources/templates/list", ""), "resourceTemplates")
-	assertNoCompletenessPromise(t, templates, "uriTemplate")
+	// Both listings, because a description reaches a model through whichever
+	// one carries it: the collection templates through one, the static
+	// gitlab://groups resource through the other.
+	listings := []struct {
+		name    string
+		method  string
+		field   string
+		idField string
+	}{
+		{"templates", "resources/templates/list", "resourceTemplates", "uriTemplate"},
+		{"static resources", "resources/list", "resources", "uri"},
+	}
 
-	// The same claim on the static resources, which resources/list carries.
-	resources := entriesOf(t, s, request(2, "resources/list", ""), "resources")
-	assertNoCompletenessPromise(t, resources, "uri")
+	for id, tc := range listings {
+		t.Run(tc.name, func(t *testing.T) {
+			entries := entriesOf(t, s, request(id+1, tc.method, ""), tc.field)
+			assertNoCompletenessPromise(t, entries, tc.idField)
+		})
+	}
 }
 
 // entriesOf calls a listing method and returns the named array from its result.

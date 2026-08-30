@@ -186,7 +186,7 @@ func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 	})
 
 	summarize(t, "DSL_llm", func(ctx context.Context) (any, error) {
-		out, err := orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormatInput: orbit.ResponseFormatInput{ResponseFormat: "llm"}})
+		out, err := orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormat: "llm"})
 		if err != nil {
 			return nil, err
 		}
@@ -194,7 +194,7 @@ func testOrbitLiveDSLHandlers(t *testing.T, client *gitlabclient.Client) {
 	})
 
 	summarize(t, "DSL_raw", func(ctx context.Context) (any, error) {
-		out, err := orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormatInput: orbit.ResponseFormatInput{ResponseFormat: "raw"}})
+		out, err := orbit.DSL(ctx, client, orbit.DSLInput{ResponseFormat: "raw"})
 		if err != nil {
 			return nil, err
 		}
@@ -281,7 +281,7 @@ func testOrbitLiveQueryHandlers(t *testing.T, client *gitlabclient.Client) {
 
 	summarize(t, "Query_llm_format", func(ctx context.Context) (any, error) {
 		out, err := orbit.Query(ctx, client, orbit.QueryInput{
-			ResponseFormatInput: orbit.ResponseFormatInput{ResponseFormat: "llm"},
+			ResponseFormat: "llm",
 			Query: map[string]any{
 				"query_type": "traversal",
 				"node": map[string]any{
