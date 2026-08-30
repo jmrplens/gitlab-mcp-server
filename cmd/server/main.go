@@ -292,6 +292,8 @@ func main() {
 	// privacy, and the endpoint, headers, sampling and resource attributes come
 	// from the standard OTEL_* environment the exporters read themselves.
 	telemetryFlag = flag.Bool("telemetry", false, "Export OpenTelemetry traces, metrics and logs over OTLP. Off by default. Endpoint and credentials come from the standard OTEL_EXPORTER_OTLP_* environment variables; see the documentation for a worked example")
+	telemetryIdentityFlag = flag.String("telemetry-identity", string(telemetry.DefaultIdentityPolicy),
+		"How much telemetry records about who made a call: none (default, records nobody), pseudonymous (a per-process digest that correlates one caller's calls without naming them), or full (the GitLab user id and username)")
 	flag.Int64Var(&hcfg.maxRequestBodyBytes, "max-request-body-bytes", 0, "Maximum streamable HTTP request body size in bytes; 0 uses the SDK default (4 MiB)")
 	flag.Parse()
 	hcfg.setFlags = make(map[string]bool)
@@ -1245,6 +1247,7 @@ func createServer(
 	// recovery running first would leave the span with no explanation.
 	telemetryOptions := mcpotel.Options{
 		Identifier: gitlabtools.NewCallIdentifier(surfaceCatalog, toolSurface),
+		Users:      telemetryUsers(),
 		Surface:    toolSurface,
 		Transport:  settings.transport,
 	}

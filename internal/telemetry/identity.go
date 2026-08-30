@@ -53,6 +53,33 @@ const (
 	IdentityFull IdentityPolicy = "full"
 )
 
+// EnvIdentityName is the environment variable that selects the identity policy.
+//
+// Prefixed, like every variable this server owns, so it cannot collide with
+// whatever else a host has exported. The standard OTEL_* names are never
+// prefixed, because the SDK reads those and we do not.
+const EnvIdentityName = "GITLAB_MCP_TELEMETRY_IDENTITY"
+
+// PolicyDescription says in plain words what a policy exports, for the startup
+// log and the server card.
+//
+// It exists so that the one line an operator reads at startup says what will
+// actually leave the process, rather than a mode name they would have to look
+// up. "pseudonymous" means nothing on its own; "a per-process digest, no
+// readable identity" is the sentence that lets somebody notice a mistake.
+func PolicyDescription(policy IdentityPolicy) string {
+	switch policy {
+	case IdentityFull:
+		return "the GitLab user id and username"
+	case IdentityPseudonymous:
+		return "a per-process digest, with no readable identity"
+	case IdentityNone:
+		return "nothing about who made a call"
+	default:
+		return "nothing about who made a call"
+	}
+}
+
 // DefaultIdentityPolicy is what an operator gets without deciding.
 const DefaultIdentityPolicy = IdentityNone
 

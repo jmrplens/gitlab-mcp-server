@@ -1,5 +1,12 @@
 package mcpotel
 
+import (
+	"context"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/attribute"
+)
+
 // CallIdentifier answers what a tools/call actually invokes.
 //
 // # Why this is an interface rather than code in this package
@@ -72,6 +79,48 @@ func (f identifierFunc) Identify(toolName string, arguments any) (Identity, bool
 // IdentifierFunc wraps a function as a [CallIdentifier].
 func IdentifierFunc(f func(toolName string, arguments any) (Identity, bool)) CallIdentifier {
 	return identifierFunc(f)
+}
+
+// UserAttributer turns an authenticated caller into the attributes a
+// deployment's identity policy permits, or into nothing.
+//
+// # Why this is an interface too
+//
+// The policy itself, its three modes and its per-process HMAC salt, live in
+// internal/telemetry beside the rest of the configuration, and the identity is
+// resolved by internal/toolutil from a request or a context. Neither belongs
+// here, and importing either would tie instrumentation to a package it has no
+// business knowing. This is the seam between them.
+//
+// # Why an empty result is the common case
+//
+// The default policy exports nothing about who made a call, and a deployment
+// that never thought about the question keeps that default. So the ordinary
+// answer is nil, and every caller must treat it as ordinary rather than as a
+// failure to look something up.
+type UserAttributer interface {
+	// UserAttributes returns what may be recorded about the caller of this
+	// request, which is frequently nothing.
+	UserAttributes(ctx context.Context, req mcp.Request) []attribute.KeyValue
+}
+
+// UserAttributerFunc wraps a function as a [UserAttributer].
+func UserAttributerFunc(f func(ctx context.Context, req mcp.Request) []attribute.KeyValue) UserAttributer {
+	return userAttributerFunc(f)
+}
+
+type userAttributerFunc func(ctx context.Context, req mcp.Request) []attribute.KeyValue
+
+func (f userAttributerFunc) UserAttributes(ctx context.Context, req mcp.Request) []attribute.KeyValue {
+	return f(ctx, req)
+}
+
+// noUserAttributes is the fallback when no attributer was configured, and it is
+// the same answer the default policy gives: nothing.
+type noUserAttributes struct{}
+
+func (noUserAttributes) UserAttributes(context.Context, mcp.Request) []attribute.KeyValue {
+	return nil
 }
 
 // noIdentity is the fallback when no identifier was configured.

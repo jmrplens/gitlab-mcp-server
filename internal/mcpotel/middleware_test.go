@@ -82,6 +82,13 @@ func attrOf(span sdktrace.ReadOnlySpan, key attribute.Key) (attribute.Value, boo
 // runOnce drives the middleware for one request and returns the span it made.
 func runOnce(t *testing.T, opts Options, method string, req mcp.Request, res mcp.Result, handlerErr error) sdktrace.ReadOnlySpan {
 	t.Helper()
+	return runOnceWithOptions(t, opts, method, req, res, handlerErr)
+}
+
+// runOnceWithOptions is the same, named for the cases that vary the options
+// rather than the request.
+func runOnceWithOptions(t *testing.T, opts Options, method string, req mcp.Request, res mcp.Result, handlerErr error) sdktrace.ReadOnlySpan {
+	t.Helper()
 
 	recorder := newRecorder(t)
 	handler := Middleware(opts)(func(context.Context, string, mcp.Request) (mcp.Result, error) {

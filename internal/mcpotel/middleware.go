@@ -27,6 +27,11 @@ type Options struct {
 	// this is not something this package can work out for itself.
 	Identifier CallIdentifier
 
+	// Users turns an authenticated caller into attributes, subject to the
+	// deployment's identity policy. Nil means nothing about who made a call is
+	// ever recorded, which is also what the default policy does.
+	Users UserAttributer
+
 	// Surface names the registered tool catalog (dynamic, meta, individual).
 	// It goes on every span because the same request means different things
 	// across the three, and a trace read months later has no other way to tell.
@@ -61,6 +66,10 @@ func Middleware(opts Options) mcp.Middleware {
 	if identifier == nil {
 		identifier = noIdentity{}
 	}
+	users := opts.Users
+	if users == nil {
+		users = noUserAttributes{}
+	}
 	tracer := otel.Tracer(scopeName)
 	duration := newDurationHistogram(otel.Meter(scopeName))
 
@@ -84,9 +93,15 @@ func Middleware(opts Options) mcp.Middleware {
 			// the reason no error is checked here.
 			ctx = otel.GetTextMapPropagator().Extract(ctx, carrierFor(req))
 
-			attrs := make([]attribute.KeyValue, 0, len(constant)+len(call.attributes))
+			// Identity is resolved before the span starts, like everything
+			// else on it, because a sampler can only see what was present at
+			// creation. A deployment sampling by user needs it there.
+			identityAttrs := users.UserAttributes(ctx, req)
+
+			attrs := make([]attribute.KeyValue, 0, len(constant)+len(call.attributes)+len(identityAttrs))
 			attrs = append(attrs, constant...)
 			attrs = append(attrs, call.attributes...)
+			attrs = append(attrs, identityAttrs...)
 
 			// The context returned by Start is the one passed onward. Passing
 			// the original would compile, run, and silently produce a flat
@@ -107,8 +122,20 @@ func Middleware(opts Options) mcp.Middleware {
 			// are silent no-ops guarded by isRecording, so an outcome recorded
 			// afterwards leaves the span green with nothing to say why.
 			result.record(span)
-			duration.Record(ctx, time.Since(started).Seconds(),
-				metric.WithAttributes(append(attrs, result.metricAttributes()...)...))
+
+			// The metric deliberately omits the identity attributes the span
+			// carries. Every distinct label combination is a time series that
+			// has to be stored and paid for, and a per-user dimension is
+			// unbounded by construction: it grows with the number of people
+			// using the deployment, which is exactly the number an operator
+			// cannot predict. The Go SDK would drop the overflow into a bucket
+			// marked otel.metric.overflow rather than refuse it, so the failure
+			// would be silent data destruction rather than an error.
+			metricAttrs := make([]attribute.KeyValue, 0, len(constant)+len(call.attributes)+2)
+			metricAttrs = append(metricAttrs, constant...)
+			metricAttrs = append(metricAttrs, call.attributes...)
+			metricAttrs = append(metricAttrs, result.metricAttributes()...)
+			duration.Record(ctx, time.Since(started).Seconds(), metric.WithAttributes(metricAttrs...))
 
 			return res, err
 		}
