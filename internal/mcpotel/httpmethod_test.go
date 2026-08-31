@@ -89,6 +89,14 @@ func TestServerMiddleware_AnInventedMethodIsNotAMetricDimension(t *testing.T) {
 	if instrument, key := metricCarryingValue(t, reader, "FROBNICATE"); instrument != "" {
 		t.Errorf("%s carries the caller's verb on metric %s; a client then chooses the label space", key, instrument)
 	}
+
+	// The absence above is not enough on its own: it also holds if the
+	// middleware stopped recording the instrument at all, which would pass this
+	// test while deleting the measurement it exists to bound. So the bucket has
+	// to be present, not merely the verb absent.
+	if instrument, _ := metricCarryingValue(t, reader, "_OTHER"); instrument == "" {
+		t.Error("no metric carries http.request.method=_OTHER; the duration histogram was not recorded at all")
+	}
 }
 
 // metricCarryingValue reports the first instrument and key recording a given
@@ -123,4 +131,35 @@ func metricCarryingValue(t *testing.T, reader interface {
 		}
 	}
 	return "", ""
+}
+
+// TestServerMiddleware_TheSpanNameIsHTTPForASubstitutedMethod pins the naming
+// half of the same rule, which the convention states separately from the
+// attribute.
+//
+// A span name is a low-cardinality label a backend groups by, and "_OTHER"
+// there would read as a method rather than as the absence of one.
+func TestServerMiddleware_TheSpanNameIsHTTPForASubstitutedMethod(t *testing.T) {
+	recorder := newRecorder(t)
+
+	handler := ServerMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	handler.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequestWithContext(t.Context(), "FROBNICATE", "/mcp", nil))
+
+	for _, span := range recorder.Ended() {
+		if span.Name() != "HTTP" {
+			t.Errorf("span name = %q, want %q for a method the convention does not name", span.Name(), "HTTP")
+		}
+	}
+}
+
+// TestKnownMethod_QUERYIsKnown covers the method the first version of this list
+// omitted. QUERY is in the convention's set, and recording a valid request as
+// _OTHER loses it in the bucket meant for invented verbs.
+func TestKnownMethod_QUERYIsKnown(t *testing.T) {
+	if recorded, original := knownMethod("QUERY"); recorded != "QUERY" || original != "" {
+		t.Errorf("knownMethod(QUERY) = (%q, %q), want (QUERY, \"\")", recorded, original)
+	}
 }

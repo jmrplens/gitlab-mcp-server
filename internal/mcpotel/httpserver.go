@@ -69,7 +69,16 @@ func ServerMiddleware(next http.Handler) http.Handler {
 				attrHTTPRequestMethodOriginal.String(original))
 		}
 
-		ctx, span := tracer.Start(r.Context(), method,
+		// "HTTP" rather than "_OTHER" for the span name, which the convention
+		// states separately from the attribute: the name is a low-cardinality
+		// label a backend groups by, and _OTHER there would read as a method
+		// rather than as the absence of one.
+		name := method
+		if original != "" {
+			name = "HTTP"
+		}
+
+		ctx, span := tracer.Start(r.Context(), name,
 			trace.WithSpanKind(trace.SpanKindServer),
 			trace.WithAttributes(spanAttrs...),
 		)
@@ -173,7 +182,7 @@ func newHTTPServerDurationHistogram(meter metric.Meter) metric.Float64Histogram 
 // different door and on the one instrument every single request touches.
 var knownMethods = map[string]struct{}{
 	"CONNECT": {}, "DELETE": {}, "GET": {}, "HEAD": {}, "OPTIONS": {},
-	"PATCH": {}, "POST": {}, "PUT": {}, "TRACE": {},
+	"PATCH": {}, "POST": {}, "PUT": {}, "QUERY": {}, "TRACE": {},
 }
 
 // knownMethod returns the value to record and, when the method was substituted,

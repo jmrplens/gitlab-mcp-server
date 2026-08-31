@@ -189,7 +189,7 @@ func Middleware(opts Options) mcp.Middleware {
 			// would be silent data destruction rather than an error.
 			metricAttrs := make([]attribute.KeyValue, 0, len(constant)+len(call.attributes)+3)
 			metricAttrs = append(metricAttrs, constant...)
-			metricAttrs = append(metricAttrs, boundedMetricName(call, result)...)
+			metricAttrs = append(metricAttrs, metricAttributesFor(call, result)...)
 			if version != "" {
 				metricAttrs = append(metricAttrs, AttrMCPProtocolVersion.String(version))
 			}
@@ -336,9 +336,23 @@ func newDurationHistogram(meter metric.Meter) metric.Float64Histogram {
 	return histogram
 }
 
-// boundedMetricName returns the call's attributes with the caller-supplied name
-// replaced by a single bucket when the call failed the way an unknown name
-// fails.
+// metricAttributesFor returns the call's attributes as a metric may carry
+// them: the caller-supplied name bounded, and the resource attributes gone.
+//
+// # Why the resource attributes cannot go on a metric
+//
+// They name one resource. Under the default policy that is a keyed digest and
+// under full it is the URI itself, and either way it is one distinct value per
+// project, merge request, pipeline or job a client touches, which is a series
+// count no operator can predict and no deployment can bound. The span carries
+// them precisely because a span has no series budget.
+//
+// This was introduced by the change that added the attributes, because describe
+// appends them to call.attributes and that list feeds both signals. The
+// inventory test in test/e2e/collector exists to catch exactly this and did not:
+// its never-on-a-metric list named mcp.resource.uri and not the
+// gitlab_mcp.resource.ref key invented alongside it. A closed list only closes
+// over what somebody remembered to write in it.
 //
 // # The hole this closes
 //
@@ -369,18 +383,19 @@ func newDurationHistogram(meter metric.Meter) metric.Float64Histogram {
 // bucketed too, so the metric under-reports it while the span still carries it
 // exactly. Losing one label on a failed call is worth not letting a caller
 // choose how many time series this process stores.
-func boundedMetricName(c call, result outcome) []attribute.KeyValue {
-	if c.callerNameKey == "" || !result.nameIsUnverified() {
-		return c.attributes
-	}
+func metricAttributesFor(c call, result outcome) []attribute.KeyValue {
+	bound := c.callerNameKey != "" && result.nameIsUnverified()
 
-	bounded := make([]attribute.KeyValue, 0, len(c.attributes))
+	out := make([]attribute.KeyValue, 0, len(c.attributes))
 	for _, kv := range c.attributes {
-		if kv.Key == c.callerNameKey {
-			bounded = append(bounded, kv.Key.String(ErrorTypeOther))
+		if kv.Key == AttrResourceURI || kv.Key == AttrResourceRef {
 			continue
 		}
-		bounded = append(bounded, kv)
+		if bound && kv.Key == c.callerNameKey {
+			out = append(out, kv.Key.String(ErrorTypeOther))
+			continue
+		}
+		out = append(out, kv)
 	}
-	return bounded
+	return out
 }

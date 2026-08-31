@@ -205,12 +205,12 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 	var metricProtocol, logProtocol string
 	if signals.Metrics {
 		if metricProtocol, err = resolveProtocol(cfg.Protocol, metricsProtocolKey); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("metrics OTLP protocol: %w", err)
 		}
 	}
 	if signals.Logs {
 		if logProtocol, err = resolveProtocol(cfg.Protocol, logsProtocolKey); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("logs OTLP protocol: %w", err)
 		}
 	}
 

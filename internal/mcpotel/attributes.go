@@ -30,6 +30,13 @@ const (
 	// substitution exists to prevent.
 	attrHTTPRequestMethodOriginal = attribute.Key("http.request.method_original")
 
+	// AttrResourceURI and AttrResourceRef name the resource a request asked
+	// for. Which of the two is set is the identity policy's decision, made in
+	// internal/telemetry; this package only has to know that neither may reach
+	// a metric, because both are one value per resource a client touches.
+	AttrResourceURI = attribute.Key("mcp.resource.uri")
+	AttrResourceRef = attribute.Key("gitlab_mcp.resource.ref")
+
 	// AttrMCPMethodName is Required: every span and every measurement carries it.
 	AttrMCPMethodName = attribute.Key("mcp.method.name")
 

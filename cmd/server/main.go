@@ -3633,5 +3633,14 @@ func uploadMaxFileSize() int64 {
 			"error", err, "default", config.DefaultMaxFileSize)
 		return config.DefaultMaxFileSize
 	}
+	// The ceiling is enforced here rather than only in config.Validate, which
+	// the HTTP path never calls: "1025GB" parses cleanly, so without this a
+	// deployment starts with a limit above the documented one and nothing says
+	// so until a request the size of a small disk arrives.
+	if size > config.MaxFileSize {
+		slog.Warn("UPLOAD_MAX_FILE_SIZE exceeds the maximum; using the maximum",
+			"requested", size, "maximum", config.MaxFileSize)
+		return config.MaxFileSize
+	}
 	return size
 }
