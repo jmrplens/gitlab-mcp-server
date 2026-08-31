@@ -57,6 +57,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -390,6 +391,25 @@ func tailOfPayload(payload []byte) string {
 // the cases that need a failure this server counts as its own.
 const failingProject = "always-failing-project"
 
+// fakeGitLab is a running fake instance whose project payload can be changed.
+//
+// Only the project changes, and only because a subscription is defined by
+// noticing that a read returned something different. The rest stays static:
+// a fake that can drift in several places is a fake whose failures need
+// diagnosing.
+type fakeGitLab struct {
+	url         string
+	description atomic.Pointer[string]
+}
+
+// URL is where the server should point.
+func (f *fakeGitLab) URL() string { return f.url }
+
+// change makes the next read of the project return something different.
+func (f *fakeGitLab) change(text string) {
+	f.description.Store(&text)
+}
+
 // startFakeGitLab serves the endpoints the server probes when it builds a pool
 // entry, so a credential is admitted and the call reaches the middleware.
 //
@@ -398,7 +418,15 @@ const failingProject = "always-failing-project"
 // property of the design and an obstacle to testing it.
 func startFakeGitLab(t *testing.T) string {
 	t.Helper()
+	return startMutableFakeGitLab(t).URL()
+}
 
+// startMutableFakeGitLab is the same instance, returned so a test can change
+// what it answers.
+func startMutableFakeGitLab(t *testing.T) *fakeGitLab {
+	t.Helper()
+
+	fake := &fakeGitLab{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v4/version", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -436,8 +464,13 @@ func startFakeGitLab(t *testing.T) string {
 			// The project itself, which the gitlab://project/{ref} resource
 			// reads. Enough fields for the handler to render it; the test is
 			// about what telemetry says, not about the payload.
+			description := ""
+			if current := fake.description.Load(); current != nil {
+				description = *current
+			}
 			_, _ = w.Write([]byte(`{"id":1,"name":"some-project",` +
 				`"path_with_namespace":"some-group/some-project","default_branch":"main",` +
+				`"description":"` + description + `",` +
 				`"visibility":"private","web_url":"http://example.invalid/some-group/some-project"}`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -451,7 +484,8 @@ func startFakeGitLab(t *testing.T) string {
 
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return srv.URL
+	fake.url = srv.URL
+	return fake
 }
 
 // TestMain removes the binary this package builds once the suite has finished.

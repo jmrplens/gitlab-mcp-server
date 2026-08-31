@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 // documentedButNotDrivenHere are names the guide documents that this module
@@ -16,19 +17,7 @@ import (
 // The list is the review. Anything on it is a claim in the documentation that
 // nothing here checks, so it should be short and every entry should be
 // uncomfortable to write. Adding a name to silence a failure is the failure.
-var documentedButNotDrivenHere = map[string]string{
-	// Server-initiated, so producing one means a client that answers an
-	// elicitation. The stdio module drives that; this one speaks HTTP to a
-	// server whose caller is a bare HTTP client.
-	"mcp.client.operation.duration": "requires a client that answers a server-initiated request",
-
-	// Recorded only when a session exists, which the stateful case covers in
-	// its own test rather than in this sweep: it needs a different protocol
-	// revision and a handshake, so folding it in here would make one case
-	// depend on two transports.
-	"mcp.session.id":              "covered by the stateful case, which needs its own transport",
-	"mcp.server.session.duration": "covered by the stateful case, which needs its own transport",
-}
+var documentedButNotDrivenHere = map[string]string{}
 
 // TestRealCollector_EveryDocumentedNameIsReallyEmitted turns the operator guide
 // into an artifact this suite checks.
@@ -53,30 +42,14 @@ func TestRealCollector_EveryDocumentedNameIsReallyEmitted(t *testing.T) {
 			len(documented))
 	}
 
+	// One collector, two servers. Some documented names exist only under a
+	// stateful transport and some only under a stateless one, so a sweep that
+	// ran a single server would have to excuse the other half, and an exclusion
+	// list that fills up with bookkeeping stops being a review. Pointing both
+	// at one collector makes the union happen where the names are read.
 	c := startCollector(t)
-	env := telemetryEnv(c)
-	// The policy that records the most, so a name absent here is absent
-	// because nothing emits it rather than because a policy suppressed it.
-	env["GITLAB_MCP_TELEMETRY_IDENTITY"] = "full"
-	srv := startServer(t, env, "--gitlab-url="+startFakeGitLab(t))
-
-	// A spread wide enough to reach every documented name: a tool call, a
-	// prompt fetch and a resource read each carry attributes the others do not.
-	for i := range 3 {
-		srv.callAction(t, i*4+1, "issue.list", "some-group/some-project")
-		srv.readResource(t, i*4+2, resourceURI)
-		srv.getPromptExpectingRefusal(t, i*4+3, "not-a-prompt-this-server-has")
-		// A GitLab failure, which is the only thing that produces error.type:
-		// a caller fault deliberately does not, since a model naming an action
-		// that does not exist is an ordinary event rather than a malfunction.
-		srv.callToolTolerant(t, i*4+4, "gitlab_execute_action",
-			`{"action":"issue.list","params":{"project_id":"`+failingProject+`"}}`)
-	}
-
-	// Give the exporters their schedules before reading.
-	if _, _, ok := c.awaitMetric(t, exportDeadline, durationMetric); !ok {
-		t.Fatalf("no metric arrived at all.\nCollector:\n%s\nServer:\n%s", c.containerLogs(t), srv.logs())
-	}
+	driveStatelessNames(t, c)
+	driveStatefulNames(t, c)
 
 	emitted := emittedNames(t, c)
 
@@ -184,5 +157,67 @@ func collectMetricNames(t *testing.T, c *collector, found map[string]bool) {
 func addKeys(found map[string]bool, attrs []otlpAttr) {
 	for _, kv := range attrs {
 		found[kv.Key] = true
+	}
+}
+
+// driveStatelessNames exercises everything the default transport emits.
+//
+// The identity policy that records the most, so a name missing afterwards is
+// missing because nothing emits it rather than because a policy suppressed it.
+func driveStatelessNames(t *testing.T, c *collector) {
+	t.Helper()
+
+	env := telemetryEnv(c)
+	env["GITLAB_MCP_TELEMETRY_IDENTITY"] = "full"
+	srv := startServer(t, env, "--gitlab-url="+startFakeGitLab(t))
+
+	// A tool call, a prompt fetch and a resource read each carry attributes the
+	// others do not.
+	for i := range 3 {
+		srv.callAction(t, i*4+1, "issue.list", "some-group/some-project")
+		srv.readResource(t, i*4+2, resourceURI)
+		srv.getPromptExpectingRefusal(t, i*4+3, "not-a-prompt-this-server-has")
+		// A GitLab failure, which is the only thing that produces error.type:
+		// a caller fault deliberately does not, since a model naming an action
+		// that does not exist is an ordinary event rather than a malfunction.
+		srv.callToolTolerant(t, i*4+4, "gitlab_execute_action",
+			`{"action":"issue.list","params":{"project_id":"`+failingProject+`"}}`)
+	}
+
+	if _, _, ok := c.awaitMetric(t, exportDeadline, durationMetric); !ok {
+		t.Fatalf("no metric arrived from the stateless server.\nCollector:\n%s\nServer:\n%s",
+			c.containerLogs(t), srv.logs())
+	}
+}
+
+// driveStatefulNames exercises what only exists when a deployment has sessions:
+// the session identifier, the session instrument, and the client span a
+// server-initiated notification produces.
+//
+// This is the slow half, and unavoidably so: the notification comes from a
+// subscription noticing a change, and the watcher's base cadence is fifteen
+// seconds.
+func driveStatefulNames(t *testing.T, c *collector) {
+	t.Helper()
+
+	fake := startMutableFakeGitLab(t)
+	srv := startServer(t, telemetryEnv(c), "--gitlab-url="+fake.URL(), "--stateless=false")
+
+	sess := srv.openSession(t)
+	sess.call(t, 2, "resources/subscribe", `{"uri":"`+resourceURI+`"}`)
+	fake.change("changed so the watcher has something to notice")
+
+	if _, _, ok := c.awaitSpan(t, 90*time.Second, func(_ otlpResourceSpans, s otlpSpan) bool {
+		return s.Kind == spanKindClient && strings.HasPrefix(s.Name, "notifications/")
+	}); !ok {
+		t.Fatalf("no server-initiated notification arrived.\nCollector:\n%s\nServer:\n%s",
+			c.containerLogs(t), srv.logs())
+	}
+
+	// Ending the session is what records its duration.
+	sess.close(t)
+	if _, _, ok := c.awaitMetric(t, exportDeadline, "mcp.server.session.duration"); !ok {
+		t.Fatalf("no session duration arrived.\nCollector:\n%s\nServer:\n%s",
+			c.containerLogs(t), srv.logs())
 	}
 }
