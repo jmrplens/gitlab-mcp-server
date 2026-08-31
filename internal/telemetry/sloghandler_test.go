@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/log/global"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -147,4 +148,123 @@ func TestSlogHandler_BelowTheFloor_IsNotExported(t *testing.T) {
 	if got := len(exp.all()); got != 0 {
 		t.Errorf("exported %d records, want 0: debug is below the export floor", got)
 	}
+}
+
+// TestSlogHandler_ADerivedLoggerStillExports is the test the handler's own doc
+// comment asks for and did not have.
+//
+// It says of WithAttrs and WithGroup: "Forgetting either would produce a handler
+// that works until somebody calls slog.With, which is the ordinary way to build
+// a component logger." Both methods were at zero coverage, so that sentence was
+// a claim about untested code, which is the shape of defect this work has found
+// three times already.
+//
+// It matters more here than the ordinary case for losing a method. Every
+// component in this server builds its logger with slog.With, so a fan-out that
+// dropped its OTLP leg there would leave the stderr stream complete and the
+// exported stream missing almost everything, with the startup lines still
+// arriving to prove telemetry was working.
+func TestSlogHandler_ADerivedLoggerStillExports(t *testing.T) {
+	tests := []struct {
+		name   string
+		derive func(*slog.Logger) *slog.Logger
+		want   func(*testing.T, sdklog.Record)
+	}{
+		{
+			name:   "the base logger",
+			derive: func(l *slog.Logger) *slog.Logger { return l },
+		},
+		{
+			name:   "one derived with attributes",
+			derive: func(l *slog.Logger) *slog.Logger { return l.With("component", "telemetry") },
+			want: func(t *testing.T, record sdklog.Record) {
+				t.Helper()
+				if !recordHasAttr(record, "component", "telemetry") {
+					t.Error("the attribute added by slog.With did not reach the exported record")
+				}
+			},
+		},
+		{
+			name:   "one derived twice",
+			derive: func(l *slog.Logger) *slog.Logger { return l.With("component", "telemetry").With("phase", "startup") },
+			want: func(t *testing.T, record sdklog.Record) {
+				t.Helper()
+				for key, value := range map[string]string{"component": "telemetry", "phase": "startup"} {
+					if !recordHasAttr(record, key, value) {
+						t.Errorf("%s=%s did not reach the exported record", key, value)
+					}
+				}
+			},
+		},
+		{
+			name:   "one derived with a group",
+			derive: func(l *slog.Logger) *slog.Logger { return l.WithGroup("gitlab") },
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			logger, exp := newRecordingLogger(t)
+
+			tp := sdktrace.NewTracerProvider()
+			t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+			ctx, span := tp.Tracer("test").Start(context.Background(), "tools/call")
+
+			tc.derive(logger).InfoContext(ctx, "tool call completed")
+			span.End()
+
+			records := exp.all()
+			if len(records) != 1 {
+				t.Fatalf("exported %d records, want 1: the derived handler lost its OTLP leg", len(records))
+			}
+
+			// The correlation has to survive derivation too. A component logger
+			// that exports records with no span is the same defect one level
+			// down.
+			if records[0].TraceID() != span.SpanContext().TraceID() {
+				t.Error("the derived handler exported a record that names no span")
+			}
+			if tc.want != nil {
+				tc.want(t, records[0])
+			}
+		})
+	}
+}
+
+// TestSlogHandler_ADerivedLoggerKeepsTheExportFloor pins the other half of
+// derivation: the floor is carried, not reset.
+//
+// A derived handler that lost it would start exporting debug records, which is
+// the failure the floor exists to prevent and the one nobody would notice until
+// a collector bill arrived.
+func TestSlogHandler_ADerivedLoggerKeepsTheExportFloor(t *testing.T) {
+	exp := &recordingExporter{}
+	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
+	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
+
+	previous := global.GetLoggerProvider()
+	global.SetLoggerProvider(lp)
+	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+
+	base := slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug})
+	logger := slog.New(NewSlogHandler(base, slog.LevelInfo)).With("component", "telemetry")
+
+	logger.DebugContext(context.Background(), "per-request detail")
+
+	if got := len(exp.all()); got != 0 {
+		t.Errorf("exported %d records, want 0: the derived handler reset the export floor", got)
+	}
+}
+
+// recordHasAttr reports whether a record carries a string attribute.
+func recordHasAttr(record sdklog.Record, key, value string) bool {
+	found := false
+	record.WalkAttributes(func(kv attribute.KeyValue) bool {
+		if string(kv.Key) == key && kv.Value.AsString() == value {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
 }

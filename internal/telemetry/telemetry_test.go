@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
@@ -242,4 +243,341 @@ func TestSDKDisabledByEnv_DoesNotVetoOnAnUnrecognizedValue(t *testing.T) {
 	if SDKDisabledByEnv() {
 		t.Error("OTEL_SDK_DISABLED=1 vetoed telemetry; only case-insensitive \"true\" may")
 	}
+}
+
+// startForSnapshot starts a provider with the given signals and returns its
+// snapshot, shutting it down afterwards.
+//
+// A real provider rather than a hand-built struct: the whole defect was that
+// Start filled one field from one signal, so a test that assembled the fields
+// itself would assert the shape and miss the wiring.
+func startForSnapshot(t *testing.T, signals Signals) Snapshot {
+	t.Helper()
+
+	p, err := Start(context.Background(), Config{Enabled: true, Signals: signals})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = p.Shutdown(boundedShutdown(t)) })
+	return p.Snapshot()
+}
+
+// TestSnapshot_MetricsOnlyDeploymentIsNotDescribedByTraces is the regression.
+//
+// Provider.protocol held the traces value unconditionally, so a metrics-only
+// deployment exporting over gRPC published "http/protobuf" on the server card:
+// not imprecise but false, in a document a client reads. The traces variable is
+// set here to a value nothing will use, which is precisely the shape that used
+// to be reported.
+func TestSnapshot_MetricsOnlyDeploymentIsNotDescribedByTraces(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "grpc")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "http://traces.invalid:4318")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", "http://metrics.invalid:4317")
+
+	got := startForSnapshot(t, Signals{Metrics: true})
+
+	if got.Protocol == "http/protobuf" {
+		t.Error("the snapshot reports the traces protocol for a deployment that exports no traces")
+	}
+	if got.Protocol != "grpc" {
+		t.Errorf("protocol = %q, want %q: one enabled signal agrees with itself", got.Protocol, "grpc")
+	}
+	if got.Endpoint != "http://metrics.invalid:4317" {
+		t.Errorf("endpoint = %q, want the metrics endpoint", got.Endpoint)
+	}
+	if got.SignalProtocols["metrics"] != "grpc" {
+		t.Errorf("per-signal protocol for metrics = %q, want grpc", got.SignalProtocols["metrics"])
+	}
+	if _, present := got.SignalProtocols["traces"]; present {
+		t.Error("a disabled signal appears in the per-signal detail")
+	}
+}
+
+// TestSnapshot_DisagreeingSignalsReportNoSummary pins the rule that keeps the
+// public field honest.
+//
+// A field that must hold one value for a process that has two has no correct
+// answer, and picking one is how it came to be wrong. Empty is the answer, and
+// the per-signal detail carries what an operator needs.
+func TestSnapshot_DisagreeingSignalsReportNoSummary(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf")
+	t.Setenv("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "grpc")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://shared.invalid:4318")
+
+	got := startForSnapshot(t, Signals{Traces: true, Metrics: true})
+
+	if got.Protocol != "" {
+		t.Errorf("protocol = %q; two enabled signals use different transports, so there is no process-wide answer", got.Protocol)
+	}
+	if got.SignalProtocols["traces"] != "http/protobuf" || got.SignalProtocols["metrics"] != "grpc" {
+		t.Errorf("per-signal protocols = %v, want each signal's own", got.SignalProtocols)
+	}
+	// The endpoint comes from the shared variable, so that one does agree, and
+	// disagreement on one field must not blank the other.
+	if got.Endpoint != "http://shared.invalid:4318" {
+		t.Errorf("endpoint = %q; both signals resolve the same one, so it has a summary", got.Endpoint)
+	}
+}
+
+// TestSnapshot_AgreeingSignalsKeepTheSummary is the common case, and the one a
+// consumer of the server card actually meets: everything over one transport to
+// one collector.
+func TestSnapshot_AgreeingSignalsKeepTheSummary(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector.invalid:4317")
+
+	got := startForSnapshot(t, AllSignals())
+
+	if got.Protocol != "grpc" {
+		t.Errorf("protocol = %q, want grpc for three signals that agree", got.Protocol)
+	}
+	if got.Endpoint != "http://collector.invalid:4317" {
+		t.Errorf("endpoint = %q, want the shared one", got.Endpoint)
+	}
+	if len(got.SignalProtocols) != 3 {
+		t.Errorf("per-signal protocols = %v, want one per enabled signal", got.SignalProtocols)
+	}
+}
+
+// TestCurrentSnapshot_ZeroValueMeansOff pins what a caller gets before anything
+// has started, which is the state the server card is built in for every
+// deployment that never enables telemetry.
+//
+// The zero value has to be usable rather than a sentinel, so no caller needs a
+// nil check or a second branch to describe a server that is not instrumented.
+func TestCurrentSnapshot_ZeroValueMeansOff(t *testing.T) {
+	setCurrent(Snapshot{})
+
+	if snapshot := CurrentSnapshot(); snapshot.Enabled {
+		t.Errorf("CurrentSnapshot reports enabled with nothing started: %+v", snapshot)
+	}
+}
+
+// TestCurrentSnapshot_PublishedByStartAndClearedByShutdown asserts the lifecycle
+// the server card depends on.
+//
+// A card built after shutdown must not still advertise telemetry: an operator
+// who turned it off, or a process on its way out, would otherwise keep
+// promising instrumentation that no longer exists. The endpoint is unreachable
+// on purpose, because Start must succeed regardless: the exporters connect
+// lazily and a collector being down is not a configuration error.
+func TestCurrentSnapshot_PublishedByStartAndClearedByShutdown(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "200")
+
+	provider, err := Start(context.Background(), Config{
+		Enabled: true,
+		Signals: Signals{Traces: true, Metrics: true},
+	})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	snapshot := CurrentSnapshot()
+	if !snapshot.Enabled {
+		t.Fatal("CurrentSnapshot reports disabled after a successful Start")
+	}
+	if len(snapshot.Signals) != 2 {
+		t.Errorf("signals = %v, want the two that were configured", snapshot.Signals)
+	}
+	if snapshot.Protocol == "" {
+		t.Error("protocol is empty; the card would advertise telemetry without saying how it ships")
+	}
+
+	if shutdownErr := provider.Shutdown(boundedShutdown(t)); shutdownErr != nil {
+		t.Logf("shutdown against an unreachable collector: %v", shutdownErr)
+	}
+	if after := CurrentSnapshot(); after.Enabled {
+		t.Errorf("CurrentSnapshot still reports enabled after Shutdown: %+v", after)
+	}
+}
+
+// TestCurrentSnapshot_DisabledStartPublishesNothing covers the ordinary path.
+// Every deployment that does not enable telemetry runs through here, and the
+// card must say nothing rather than say "off" in a way a consumer has to parse.
+func TestCurrentSnapshot_DisabledStartPublishesNothing(t *testing.T) {
+	setCurrent(Snapshot{})
+
+	provider, err := Start(context.Background(), Config{Enabled: false})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = provider.Shutdown(boundedShutdown(t)) })
+
+	if snapshot := CurrentSnapshot(); snapshot.Enabled {
+		t.Errorf("a disabled Start published a snapshot: %+v", snapshot)
+	}
+}
+
+// TestSnapshot_CarriesNoCredentialOrPath is a guard on what may ever be added
+// to this type.
+//
+// Snapshot feeds the public server card, which every client can read. The
+// collector endpoint is held here because the log line at startup names it for
+// the operator, and it must never reach the card: it identifies the operator's
+// own infrastructure. This test does not assert the card's contents, which is
+// the card's own business; it asserts that the fields on this type stay
+// enumerable, so that adding one is a deliberate act with a test to update
+// rather than something that leaks into a public document by inheritance.
+func TestSnapshot_CarriesNoCredentialOrPath(t *testing.T) {
+	snapshot := Snapshot{
+		Enabled:  true,
+		Protocol: ProtocolHTTP,
+		Signals:  []string{"traces"},
+		Endpoint: "https://collector.internal.example:4318",
+	}
+
+	// Enumerated deliberately: a new field breaks this compile-time list and
+	// forces a decision about whether it belongs in a public card.
+	_ = snapshot.Enabled
+	_ = snapshot.Protocol
+	_ = snapshot.Signals
+	_ = snapshot.Endpoint
+}
+
+// TestResolveProtocol_SignalSpecificBeatsTheGeneralVariable pins the rule the
+// protocol specification states as a MUST: "Each configuration option MUST be
+// overridable by a signal specific option."
+//
+// It is not a refinement. otlptracehttp reads the signal-specific variable
+// itself, to pick its payload encoding, so a check that consulted only the
+// general variable would let a signal-specific value through to the exporter
+// unexamined. For metrics and logs the situation is the opposite and just as
+// consequential: otlpmetrichttp, otlpmetricgrpc, otlploghttp and otlploggrpc
+// contain no protocol handling at all, so this function is the only thing that
+// gives those variables any effect whatsoever.
+func TestResolveProtocol_SignalSpecificBeatsTheGeneralVariable(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf")
+	t.Setenv(metricsProtocolKey, "grpc")
+
+	got, err := resolveProtocol("", metricsProtocolKey)
+	if err != nil {
+		t.Fatalf("resolveProtocol: %v", err)
+	}
+	if got != ProtocolGRPC {
+		t.Errorf("metrics protocol = %q, want %q from the signal-specific variable", got, ProtocolGRPC)
+	}
+}
+
+// TestResolveProtocol_OneSignalDoesNotDecideForAnother is the corollary. A
+// deployment sending traces over gRPC and everything else over HTTP is a
+// supported configuration, and it only works if each signal reads its own
+// variable rather than the first one that happens to be set.
+func TestResolveProtocol_OneSignalDoesNotDecideForAnother(t *testing.T) {
+	t.Setenv(tracesProtocolKey, "grpc")
+
+	traces, err := resolveProtocol("", tracesProtocolKey)
+	if err != nil {
+		t.Fatalf("resolveProtocol(traces): %v", err)
+	}
+	logs, err := resolveProtocol("", logsProtocolKey)
+	if err != nil {
+		t.Fatalf("resolveProtocol(logs): %v", err)
+	}
+
+	if traces != ProtocolGRPC {
+		t.Errorf("traces = %q, want %q", traces, ProtocolGRPC)
+	}
+	if logs != ProtocolHTTP {
+		t.Errorf("logs = %q, want the default %q; the traces variable leaked", logs, ProtocolHTTP)
+	}
+}
+
+// TestResolveProtocol_ConfiguredBeatsTheEnvironment pins this server's house
+// precedence, which puts the more specific source first: a protocol chosen on
+// the command line beats one exported into the environment.
+func TestResolveProtocol_ConfiguredBeatsTheEnvironment(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
+	t.Setenv(tracesProtocolKey, "grpc")
+
+	got, err := resolveProtocol(ProtocolHTTP, tracesProtocolKey)
+	if err != nil {
+		t.Fatalf("resolveProtocol: %v", err)
+	}
+	if got != ProtocolHTTP {
+		t.Errorf("protocol = %q, want the configured %q", got, ProtocolHTTP)
+	}
+}
+
+// TestResolveProtocol_EmptyCountsAsUnsetAtEveryLevel covers the case container
+// orchestrators produce constantly: a variable exported with no value because
+// the secret or setting behind it was never provided.
+//
+// "The SDK MUST interpret an empty value of an environment variable the same
+// way as when the variable is unset." Reading an empty signal-specific variable
+// as a decision would mask the general one that was actually set.
+func TestResolveProtocol_EmptyCountsAsUnsetAtEveryLevel(t *testing.T) {
+	t.Setenv(tracesProtocolKey, "")
+	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc")
+
+	got, err := resolveProtocol("", tracesProtocolKey)
+	if err != nil {
+		t.Fatalf("resolveProtocol: %v", err)
+	}
+	if got != ProtocolGRPC {
+		t.Errorf("protocol = %q, want %q; an empty signal variable masked the general one", got, ProtocolGRPC)
+	}
+}
+
+// TestResolveProtocol_RefusesJSONFromASignalSpecificVariable is the hole this
+// whole function was written to close.
+//
+// Since v1.46.0 otlptracehttp implements http/json, selecting its payload
+// encoding from exactly this variable. otlpmetrichttp and otlploghttp do not.
+// So a deployment that set the traces variable alone, with the general one
+// unset, would previously have slipped past every check here and emitted JSON
+// spans beside protobuf metrics and logs, from one setting that reads like it
+// selects one thing. The failure must arrive at startup with a name.
+func TestResolveProtocol_RefusesJSONFromASignalSpecificVariable(t *testing.T) {
+	t.Setenv(tracesProtocolKey, "http/json")
+
+	_, err := resolveProtocol("", tracesProtocolKey)
+	if err == nil {
+		t.Fatal("http/json in the signal-specific variable was accepted")
+	}
+	if !strings.Contains(err.Error(), "http/json") {
+		t.Errorf("error does not name the refused value: %v", err)
+	}
+}
+
+// TestStart_RefusesAnUnhonorableProtocolBeforeBuildingAnything asserts that the
+// refusal reaches the caller rather than being buried in one signal's setup.
+//
+// The value here is a plausible typo rather than a nonsense string, because
+// that is what an operator will actually produce, and because the error has to
+// be readable enough to tell them what to write instead.
+func TestStart_RefusesAnUnhonorableProtocolBeforeBuildingAnything(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuff")
+
+	p, err := Start(context.Background(), Config{Enabled: true, Signals: Signals{Traces: true}})
+	if err == nil {
+		_ = p.Shutdown(context.Background())
+		t.Fatal("Start accepted an unknown protocol")
+	}
+	for _, want := range []string{"http/protobuff", ProtocolHTTP, ProtocolGRPC} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+}
+
+// boundedShutdown returns a context a test can safely pass to Shutdown.
+//
+// Never context.Background(). The provider-level Shutdown honors only the
+// caller's context: the SDK's own 30s default applies per export, not to the
+// whole drain. So an unbounded context against a collector that is not there
+// waits forever, and the failure presents as a test binary that never finishes
+// rather than as an assertion anybody can read.
+//
+// This was not hypothetical. Adding the logs pipeline gave Shutdown something
+// real to drain, and this package went from a hundred seconds to a timeout.
+// Nothing had changed in those tests; they had simply been passing an unbounded
+// context to a call that previously had nothing to wait for.
+func boundedShutdown(t *testing.T) context.Context {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	t.Cleanup(cancel)
+	return ctx
 }
