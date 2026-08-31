@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -226,4 +227,97 @@ func TestRealCollector_TheIdentityPolicyGovernsEverySignal(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRealCollector_AConfiguredKeyMakesTwoProcessesAgree is the replica
+// scenario, run as two processes rather than reasoned about.
+//
+// A unit test can show that two keyrings built from one secret compute the same
+// digest. What it cannot show is that two independently started servers,
+// exporting into the same collector, put the same value on the wire: that
+// depends on the environment reaching the keyring, on the keyring reaching both
+// redactors, and on nothing in between regenerating a key. Each of those has
+// been wrong at least once in this package's history.
+//
+// Both halves are asserted, because the interesting failure is one-sided. A
+// build that ignored the key entirely would fail the first; a build that
+// somehow shared state between processes would fail the second, and would be a
+// far stranger defect.
+func TestRealCollector_AConfiguredKeyMakesTwoProcessesAgree(t *testing.T) {
+	t.Run("with a key, two processes agree", func(t *testing.T) {
+		digests := digestsFromTwoServers(t, map[string]string{
+			"GITLAB_MCP_TELEMETRY_IDENTITY":     "pseudonymous",
+			"GITLAB_MCP_TELEMETRY_IDENTITY_KEY": "a deployment-wide secret",
+		})
+		if len(digests) != 1 {
+			t.Errorf("two replicas sharing a key produced %d digests (%v); one caller must read as one person",
+				len(digests), digests)
+		}
+	})
+
+	t.Run("without a key, they do not", func(t *testing.T) {
+		digests := digestsFromTwoServers(t, map[string]string{
+			"GITLAB_MCP_TELEMETRY_IDENTITY": "pseudonymous",
+		})
+		if len(digests) != 2 {
+			t.Errorf("two replicas without a shared key produced %d digests (%v); the default is a per-process key",
+				len(digests), digests)
+		}
+	})
+}
+
+// digestsFromTwoServers runs two servers into one collector and returns the set
+// of user.hash values they exported.
+func digestsFromTwoServers(t *testing.T, extra map[string]string) []string {
+	t.Helper()
+
+	c := startCollector(t)
+	gitlab := startFakeGitLab(t)
+
+	for range 2 {
+		env := telemetryEnv(c)
+		maps.Copy(env, extra)
+		srv := startServer(t, env, "--gitlab-url="+gitlab)
+		for i := range 2 {
+			srv.callAction(t, i+1, "issue.list", "some-group/some-project")
+		}
+	}
+
+	// Both processes have to have reported before the digests mean anything:
+	// reading after only the faster one exported would find one digest and
+	// call that agreement. The instance id is what distinguishes them, and it
+	// is independent of the digest being asked about.
+	reported := map[string]bool{}
+	if _, _, ok := c.awaitSpan(t, exportDeadline, func(rs otlpResourceSpans, s otlpSpan) bool {
+		if _, present := attr(s.Attributes, "user.hash"); !present {
+			return false
+		}
+		if instance, present := attr(rs.Resource.Attributes, "service.instance.id"); present {
+			reported[instance] = true
+		}
+		return len(reported) == 2
+	}); !ok {
+		t.Fatalf("only %d of 2 processes exported a user.hash.\nCollector:\n%s",
+			len(reported), c.containerLogs(t))
+	}
+
+	seen := map[string]bool{}
+	for _, doc := range documents[traceDocument](t, filepath.Join(c.outDir, tracesFile)) {
+		for _, rs := range doc.ResourceSpans {
+			for _, ss := range rs.ScopeSpans {
+				for _, span := range ss.Spans {
+					if digest, present := attr(span.Attributes, "user.hash"); present {
+						seen[digest] = true
+					}
+				}
+			}
+		}
+	}
+
+	out := make([]string, 0, len(seen))
+	for digest := range seen {
+		out = append(out, digest)
+	}
+	sort.Strings(out)
+	return out
 }
