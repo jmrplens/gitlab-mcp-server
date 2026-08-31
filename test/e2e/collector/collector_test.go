@@ -160,7 +160,20 @@ func startCollector(t *testing.T) *collector {
 	runCtx, runCancel := context.WithTimeout(t.Context(), 5*time.Minute)
 	defer runCancel()
 	if out, err := exec.CommandContext(runCtx, "docker", args...).CombinedOutput(); err != nil {
-		t.Skipf("could not start %s (%v):\n%s", collectorImage, err, out)
+		// requireDocker has already established that a daemon answers, so a
+		// failure here is usually this module's own: a configuration the
+		// collector rejects, a flag it does not know, a bind mount it cannot
+		// make. Reporting those as an environmental skip is how a broken
+		// harness stays green, which is the failure this module exists to
+		// prevent in the server and should not commit itself.
+		//
+		// The exception is reaching the registry. A machine with a working
+		// daemon and no route to the image cannot run this and has nothing to
+		// fix in the code, so that stays a skip.
+		if isRegistryFailure(out) {
+			t.Skipf("could not pull %s (%v):\n%s", collectorImage, err, out)
+		}
+		t.Fatalf("could not start %s (%v):\n%s", collectorImage, err, out)
 	}
 
 	c := &collector{
@@ -442,4 +455,30 @@ func keys(attrs []otlpAttr) []string {
 		out = append(out, a.Key)
 	}
 	return out
+}
+
+// isRegistryFailure reports whether docker failed because it could not obtain
+// the image rather than because it could not run it.
+//
+// Matching on the message is coarse, and it is the only signal available:
+// docker exits 125 for both "cannot pull" and "bad configuration", so the exit
+// status cannot separate them. The list is deliberately narrow, because the
+// cost of a wrong match in this direction is a skipped test that should have
+// failed.
+func isRegistryFailure(output []byte) bool {
+	text := strings.ToLower(string(output))
+	for _, marker := range []string{
+		"pull access denied",
+		"manifest unknown",
+		"no such host",
+		"connection refused while trying to connect",
+		"timeout exceeded while awaiting headers",
+		"error pulling image",
+		"failed to resolve reference",
+	} {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
