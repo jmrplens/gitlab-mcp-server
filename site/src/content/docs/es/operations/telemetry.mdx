@@ -135,15 +135,18 @@ falla una exportación.
 Un span por petición MCP, más un span hijo por cada llamada a la API de GitLab
 que provoque.
 
-| Atributo                   | Dónde                  | Significado                                        |
-| -------------------------- | ---------------------- | -------------------------------------------------- |
-| `mcp.method.name`          | todos los spans        | `tools/call`, `resources/read`, `prompts/get`, …   |
-| `gen_ai.tool.name`         | llamadas a herramienta | la herramienta que nombró el cliente               |
-| `gitlab_mcp.action`        | llamadas a herramienta | la acción canónica del catálogo, como `issue.list` |
-| `gitlab_mcp.tool_surface`  | todos los spans        | `dynamic`, `meta` o `individual`                   |
-| `network.transport`        | todos los spans        | `pipe` en stdio, `tcp` en HTTP                     |
-| `error.type`               | solo en fallos         | un código JSON-RPC, o `tool_error`                 |
-| `rpc.response.status_code` | cuando hubo código     | el código JSON-RPC                                 |
+| Atributo                   | Dónde                    | Significado                                        |
+| -------------------------- | ------------------------ | -------------------------------------------------- |
+| `mcp.method.name`          | todos los spans          | `tools/call`, `resources/read`, `prompts/get`, …   |
+| `gen_ai.tool.name`         | llamadas a herramienta   | la herramienta que nombró el cliente               |
+| `gitlab_mcp.action`        | llamadas a herramienta   | la acción canónica del catálogo, como `issue.list` |
+| `gitlab_mcp.tool_surface`  | todos los spans          | `dynamic`, `meta` o `individual`                   |
+| `network.transport`        | todos los spans          | `pipe` en stdio, `tcp` en HTTP                     |
+| `gen_ai.prompt.name`       | `prompts/get`            | el prompt que nombró el cliente                    |
+| `mcp.protocol.version`     | cuando se conoce         | la revisión de MCP que habla la petición           |
+| `mcp.session.id`           | solo sesiones con estado | ausente en el HTTP sin estado por defecto          |
+| `error.type`               | solo en fallos           | un código JSON-RPC, o `tool_error`                 |
+| `rpc.response.status_code` | cuando hubo código       | el código JSON-RPC                                 |
 
 `gitlab_mcp.action` es el que conviene entender. En la superficie dinámica, que
 es la de por defecto, cada llamada nombra las mismas dos herramientas, así que
@@ -158,6 +161,16 @@ distingue.
 | `mcp.server.operation.duration` | `s`    | cuánto tardan las peticiones, por método y acción |
 | `mcp.client.operation.duration` | `s`    | cuánto espera este servidor al cliente            |
 | `http.client.request.duration`  | `s`    | cuánto tarda GitLab                               |
+| `mcp.server.session.duration`   | `s`    | cuánto sigue conectado un cliente                 |
+
+`mcp.server.session.duration` no se registra a propósito en el HTTP sin estado
+por defecto, donde cada POST es su propia sesión: el histograma sería una copia
+de `mcp.server.operation.duration` con un nombre que promete otra cosa.
+
+Falta un atributo que la convención pide y que no se puede aportar:
+`jsonrpc.request.id`. El SDK de Go no da a un middleware receptor ningún acceso
+al identificador JSON-RPC del mensaje que atiende, así que no hay nada que
+registrar.
 
 Segundos, no milisegundos. Lo fija la convención, y es lo contrario del campo
 `duration` de los registros de log de este servidor.

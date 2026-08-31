@@ -17,6 +17,12 @@ import "go.opentelemetry.io/otel/attribute"
 // error. The mitigation is that they are all here, in one block, so a rename is
 // a one-file change, and the convention is re-read before each release.
 const (
+	// TransportPipe and TransportTCP are the convention's own vocabulary for
+	// network.transport, not names of our choosing: its "Recording MCP
+	// transport" table gives "pipe" for stdio and "tcp" for streamable HTTP.
+	TransportPipe = "pipe"
+	TransportTCP  = "tcp"
+
 	// AttrMCPMethodName is Required: every span and every measurement carries it.
 	AttrMCPMethodName = attribute.Key("mcp.method.name")
 
@@ -28,6 +34,17 @@ const (
 	// here; there is no mcp.tool.name, which is a thing to check rather than
 	// assume, because the obvious guess is wrong.
 	AttrGenAIToolName = attribute.Key("gen_ai.tool.name")
+
+	// AttrMCPSessionID is Recommended, and its note is a condition rather than
+	// a preference: "When the MCP request or notification is part of a
+	// session." The default HTTP mode is stateless and has no session id, so
+	// the condition is simply not met there and the attribute is omitted rather
+	// than filled with a per-request invention. It is deliberately absent from
+	// the metric, which the convention's own instrument table omits it from.
+	//
+	// The serverpool key is never a substitute: it is derived from the token,
+	// and putting it here would place a credential fingerprint on every span.
+	AttrMCPSessionID = attribute.Key("mcp.session.id")
 
 	// AttrGenAIPromptName is the same shape for prompts/get.
 	AttrGenAIPromptName = attribute.Key("gen_ai.prompt.name")

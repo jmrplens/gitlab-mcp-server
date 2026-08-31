@@ -38,8 +38,16 @@ type Options struct {
 	Surface string
 
 	// Transport is "pipe" for stdio and "tcp" for HTTP, which is what the
-	// convention's note prescribes rather than a name of our choosing.
+	// convention's note prescribes rather than a name of our choosing. Use
+	// [TransportPipe] and [TransportTCP].
 	Transport string
+
+	// ProtocolVersions are the MCP revisions this server admits. Only a
+	// version in this list is ever recorded, because the value arrives from the
+	// caller and lands on a metric dimension; see protocolVersionFor. Empty
+	// means the attribute is never recorded, which is the safe default for a
+	// caller that has not thought about it.
+	ProtocolVersions []string
 }
 
 // Middleware instruments every MCP request with a span and a duration
@@ -71,7 +79,9 @@ func Middleware(opts Options) mcp.Middleware {
 		users = noUserAttributes{}
 	}
 	tracer := otel.Tracer(scopeName)
-	duration := newDurationHistogram(otel.Meter(scopeName))
+	meter := otel.Meter(scopeName)
+	duration := newDurationHistogram(meter)
+	allowed := allowedVersions(opts.ProtocolVersions)
 
 	// Built once: these are the same for every request this process serves, and
 	// rebuilding them per call would allocate on the hot path for no reason.
@@ -83,6 +93,8 @@ func Middleware(opts Options) mcp.Middleware {
 		constant = append(constant, AttrNetworkTransport.String(opts.Transport))
 	}
 
+	sessions := newSessionTracker(meter, constant, opts.Transport)
+
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
 			call := describe(method, req, identifier)
@@ -91,28 +103,62 @@ func Middleware(opts Options) mcp.Middleware {
 			// parent rather than a link. A malformed or absent value leaves
 			// ctx untouched, which is the propagator's specified behavior and
 			// the reason no error is checked here.
+			//
+			// The ambient context is read first because Extract replaces it.
+			// On HTTP that ambient span is this server's own HTTP span, and
+			// the convention asks for both relationships: parent on the MCP
+			// context, "and SHOULD link current ambient context, if it's
+			// present". Without the link, a trace that arrives through _meta
+			// loses every trace of which HTTP request carried it.
+			ambient := trace.SpanContextFromContext(ctx)
 			ctx = otel.GetTextMapPropagator().Extract(ctx, carrierFor(req))
+			parent := trace.SpanContextFromContext(ctx)
 
 			// Identity is resolved before the span starts, like everything
 			// else on it, because a sampler can only see what was present at
 			// creation. A deployment sampling by user needs it there.
 			identityAttrs := users.UserAttributes(ctx, req)
 
-			attrs := make([]attribute.KeyValue, 0, len(constant)+len(call.attributes)+len(identityAttrs))
+			// The version is bounded by the allow-list, so it is cheap enough
+			// to carry on the metric too. The session id is not: it is one
+			// value per connected client, and the convention's own instrument
+			// table omits it for exactly that reason.
+			version := protocolVersionFor(req, allowed)
+			sessionID := sessionIDOf(req)
+
+			attrs := make([]attribute.KeyValue, 0, len(constant)+len(call.attributes)+len(identityAttrs)+2)
 			attrs = append(attrs, constant...)
 			attrs = append(attrs, call.attributes...)
+			if version != "" {
+				attrs = append(attrs, AttrMCPProtocolVersion.String(version))
+			}
+			if sessionID != "" {
+				attrs = append(attrs, AttrMCPSessionID.String(sessionID))
+			}
 			attrs = append(attrs, identityAttrs...)
 
 			// The context returned by Start is the one passed onward. Passing
 			// the original would compile, run, and silently produce a flat
 			// trace with every GitLab call as a root.
-			ctx, span := tracer.Start(ctx, call.spanName,
+			startOpts := []trace.SpanStartOption{
 				trace.WithSpanKind(trace.SpanKindServer),
 				trace.WithAttributes(attrs...),
-			)
+			}
+			// Only when Extract actually changed the parent. With no incoming
+			// context the ambient span is already the parent, and linking a
+			// span to its own parent says nothing.
+			if ambient.IsValid() && parent.IsValid() && !parent.Equal(ambient) {
+				startOpts = append(startOpts, trace.WithLinks(trace.Link{SpanContext: ambient}))
+			}
+
+			ctx, span := tracer.Start(ctx, call.spanName, startOpts...)
 			// Deferred so a panic still ends the span, which is what makes the
 			// SDK record the panic as an exception event before re-panicking.
 			defer span.End()
+
+			// The tracker deliberately outlives this request: it parks a
+			// goroutine on the session, which ends long after the call returns.
+			sessions.observe(req, version) //nolint:contextcheck // the session outlives the request, so a request context would cancel the measurement
 
 			started := time.Now()
 			res, err := next(ctx, method, req)
@@ -131,9 +177,12 @@ func Middleware(opts Options) mcp.Middleware {
 			// cannot predict. The Go SDK would drop the overflow into a bucket
 			// marked otel.metric.overflow rather than refuse it, so the failure
 			// would be silent data destruction rather than an error.
-			metricAttrs := make([]attribute.KeyValue, 0, len(constant)+len(call.attributes)+2)
+			metricAttrs := make([]attribute.KeyValue, 0, len(constant)+len(call.attributes)+3)
 			metricAttrs = append(metricAttrs, constant...)
 			metricAttrs = append(metricAttrs, call.attributes...)
+			if version != "" {
+				metricAttrs = append(metricAttrs, AttrMCPProtocolVersion.String(version))
+			}
 			metricAttrs = append(metricAttrs, result.metricAttributes()...)
 			duration.Record(ctx, time.Since(started).Seconds(), metric.WithAttributes(metricAttrs...))
 

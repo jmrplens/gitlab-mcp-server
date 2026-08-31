@@ -1023,7 +1023,7 @@ func runStdio(ctx context.Context) error {
 		}
 	}
 
-	server, err := createServer(ctx, client, serverCfg, withTransport("pipe"))
+	server, err := createServer(ctx, client, serverCfg, withTransport(mcpotel.TransportPipe))
 	if err != nil {
 		return fmt.Errorf("creating MCP server: %w", err)
 	}
@@ -1308,6 +1308,11 @@ func createServer(
 		Users:      telemetryUsers(),
 		Surface:    toolSurface,
 		Transport:  settings.transport,
+		// The full supported list rather than the narrowed one: this bounds
+		// which caller-supplied version strings may become a metric dimension,
+		// and a revision this build admits at all is a safe label whether or
+		// not this particular transport serves it.
+		ProtocolVersions: supportedProtocolVersions,
 	}
 	server.AddReceivingMiddleware(mcpotel.Middleware(telemetryOptions))
 
@@ -1715,7 +1720,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// mark for being idle. Liveness on this transport is the SSE
 		// keep-alive comment (see sseAwareWriter), which puts bytes on the
 		// wire without asking the client for anything.
-		srv, err := createServer(ctx, client, serverCfg, withSessionTag(tag), withKeepAlive(0), withTransport("tcp"))
+		srv, err := createServer(ctx, client, serverCfg, withSessionTag(tag), withKeepAlive(0), withTransport(mcpotel.TransportTCP))
 		if err != nil {
 			return nil, err
 		}

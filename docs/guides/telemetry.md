@@ -124,6 +124,9 @@ One span per MCP request, plus one child span per GitLab API call it caused.
 | `gitlab_mcp.action`        | tool calls               | the canonical catalog action, such as `issue.list` |
 | `gitlab_mcp.tool_surface`  | every span               | `dynamic`, `meta` or `individual`                  |
 | `network.transport`        | every span               | `pipe` for stdio, `tcp` for HTTP                   |
+| `gen_ai.prompt.name`       | `prompts/get`            | the prompt the client named                        |
+| `mcp.protocol.version`     | when it is known         | the MCP revision the request is speaking           |
+| `mcp.session.id`           | stateful sessions only   | absent under the default stateless HTTP transport  |
 | `error.type`               | failures only            | a JSON-RPC code, or `tool_error`                   |
 | `rpc.response.status_code` | when a code was returned | the JSON-RPC code                                  |
 
@@ -134,11 +137,22 @@ The action attribute is the only thing that tells them apart.
 
 ### Metrics
 
-| Instrument                      | Unit | What it answers                                                  |
-| ------------------------------- | ---- | ---------------------------------------------------------------- |
-| `mcp.server.operation.duration` | `s`  | how long requests take, by method and action                     |
-| `mcp.client.operation.duration` | `s`  | how long this server waits on the client (elicitation, sampling) |
-| `http.client.request.duration`  | `s`  | how long GitLab takes                                            |
+| Instrument                      | Unit | What it answers                                                   |
+| ------------------------------- | ---- | ----------------------------------------------------------------- |
+| `mcp.server.operation.duration` | `s`  | how long requests take, by method and action                      |
+| `mcp.client.operation.duration` | `s`  | how long this server waits on the client (elicitation, sampling)  |
+| `http.client.request.duration`  | `s`  | how long GitLab takes                                             |
+| `mcp.server.session.duration`   | `s`  | how long a client stays connected (stdio and `--stateless=false`) |
+
+`mcp.server.session.duration` is deliberately not recorded under the default
+stateless HTTP transport, where each POST is its own session: the histogram
+would be a copy of `mcp.server.operation.duration` under a name promising
+something else.
+
+One attribute the convention asks for is missing, and it cannot be supplied:
+`jsonrpc.request.id`. The Go SDK gives a receiving middleware no access to the
+JSON-RPC id of the message it is handling, so there is nothing to record. It is
+[registered upstream](../development/upstream-bugs.md).
 
 Seconds, not milliseconds. The convention fixes that, and it is the opposite of
 the `duration` field in this server's log records.

@@ -83,6 +83,7 @@ readable without opening the tracker:
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | No | No | No | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
 | 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
+| 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | No | No | No | No | None possible |
 
 States verified against the upstream trackers on 2026-08-29.
 
@@ -507,3 +508,28 @@ markdown. We keep emitting both.
 - **Blocking**: no.
 - **Workaround**: yes, the `GO-2026-5932` entry in the govulncheck allowlist.
   Retire it when the PR merges.
+
+### A receiving middleware cannot read the JSON-RPC request id
+
+`mcp.Request` exposes `GetSession`, `GetParams` and `GetExtra`, and nothing that
+returns the JSON-RPC `id` of the message being handled. A receiving middleware
+therefore cannot see it, and neither can anything built on one.
+
+That is what stops this server from emitting `jsonrpc.request.id`, which the MCP
+semantic convention marks Conditionally Required "When the client executes a
+request". The attribute is what distinguishes a request span from a notification
+span, and the Go semantic-conventions package already ships the key
+(`semconv.JSONRPCRequestID`), so the only missing piece is an accessor.
+
+The id is not secret and is already on the wire in both directions; the SDK
+decodes it to route the response and then discards it before application code
+runs, the same shape as
+[the cancellation reason](#the-cancellation-reason-is-discarded-before-any-handler-sees-it). Adding `GetID()` to the `Request` interface, or a
+field on `RequestExtra`, would close it.
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. One Conditionally Required attribute is omitted; the span is
+  otherwise complete and the metric does not carry the attribute at all.
+- **Workaround**: none possible. Nothing in the public API exposes the value.
