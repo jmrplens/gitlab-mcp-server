@@ -23,10 +23,22 @@ func TestResourcePseudonym_DoesNotContainTheURI(t *testing.T) {
 	if digest == "" {
 		t.Fatal("no digest was produced")
 	}
-	for _, fragment := range []string{"gitlab", "project", "82077663", "42", "mr"} {
+
+	// Only fragments long enough that a chance match is not credible. A digest
+	// is 16 hex characters, so a two-character numeric fragment such as the "42"
+	// in this URI appears in it by coincidence about one run in twenty: an
+	// assertion including one fails periodically and says nothing when it does.
+	// CI found that before this comment existed.
+	//
+	// The distinctive part is the project id, and eight hex characters landing
+	// in the right order by chance is around one in four billion per position.
+	for _, fragment := range []string{"gitlab", "project", "82077663"} {
 		if strings.Contains(digest, fragment) {
 			t.Errorf("digest %q contains %q from the URI", digest, fragment)
 		}
+	}
+	if strings.Contains(uri, digest) {
+		t.Errorf("digest %q is a substring of the URI it stands for", digest)
 	}
 }
 

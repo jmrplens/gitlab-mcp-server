@@ -89,7 +89,6 @@ no significa treinta segundos: no parsea y se mantiene el valor por defecto de
 fácil de pisar, no más difícil.
 </Aside>
 
-
 <Aside type="caution" title="`http/json` se rechaza al arrancar">
 Desde la v1.46.0 el exportador de trazas de Go lo implementa y los de métricas y
 logs no. Honrarlo daría a un mismo despliegue dos codificaciones a la vez, spans
@@ -122,6 +121,7 @@ El valor usa el formato W3C Baggage y se decodifica en porcentaje.
 - El relleno de base64 no da problemas: `=` separa clave y valor solo en su
   **primera** aparición, así que el `==` final de una credencial básica
   sobrevive.
+
 </Aside>
 
 Este servidor nunca lee, registra ni transforma esa variable. Lo que configures
@@ -242,7 +242,6 @@ lecturas y sondeos de un mismo recurso sin nombrarlo. Con `full` lleva
 Una bandera y no dos, porque un despliegue que registrara rutas de proyecto
 mientras dice no registrar a nadie sería el resultado previsible de dejar que
 las dos configuraciones se separen.
-
 
 **`none`** es el valor por defecto porque registrar la identidad de una persona
 es una decisión tuya sobre tus propios usuarios, y un valor por defecto que la
