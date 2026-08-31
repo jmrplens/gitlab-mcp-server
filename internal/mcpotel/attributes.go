@@ -1,6 +1,11 @@
 package mcpotel
 
-import "go.opentelemetry.io/otel/attribute"
+import (
+	"context"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+)
 
 // The attribute keys this package emits, written out rather than imported.
 //
@@ -137,3 +142,24 @@ const (
 	// than omitting the attribute on a span whose status is Error.
 	ErrorTypeOther = "_OTHER"
 )
+
+// RecordRefusal marks the current span with why this server declined a call.
+//
+// Called from where the refusal is decided rather than from the middleware,
+// because the middleware cannot know: a refusal travels as an error result,
+// which is a successful JSON-RPC response carrying a failure meant for the
+// model, and from outside the handler it is indistinguishable from a handler
+// that ran and failed.
+//
+// A no-op when there is no recording span, which is the case with telemetry off
+// and in every unit test that installs no provider.
+func RecordRefusal(ctx context.Context, reason string) {
+	if reason == "" {
+		return
+	}
+	span := trace.SpanFromContext(ctx)
+	if !span.IsRecording() {
+		return
+	}
+	span.SetAttributes(AttrRefusalReason.String(reason))
+}

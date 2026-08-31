@@ -49,7 +49,14 @@ func NewSafeModePreview(name string, params any) SafeModePreview {
 // the dynamic execute tool) preview each mutating action individually while
 // their read-only actions keep executing.
 func SafeModeActionFunc(name string) ActionFunc {
-	return func(_ context.Context, params map[string]any) (any, error) {
+	return func(ctx context.Context, params map[string]any) (any, error) {
+		// The context was discarded here, and with it the only evidence that
+		// safe mode did anything. A preview is a successful result, so the span
+		// and the log stream both showed an ordinary tool call that worked: an
+		// operator could not tell a deployment in safe mode from one doing real
+		// work, nor count how often it intercepted, which is the first question
+		// anybody asks after turning it on.
+		LogToolRefusal(ctx, nil, name, RefusalSafeMode)
 		return NewSafeModePreview(name, params), nil
 	}
 }

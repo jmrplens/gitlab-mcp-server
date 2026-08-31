@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 )
 
 // wasCancelled reports whether a tool call ended because its caller went away
@@ -73,6 +75,14 @@ func LogToolCallAll(ctx context.Context, req *mcp.CallToolRequest, tool string, 
 // policy block, and destructive confirmation events". Only the destructive one
 // was delivered.
 func LogToolRefusal(ctx context.Context, req *mcp.CallToolRequest, tool, reason string) {
+	// The span too, and from here rather than from the middleware. A refusal
+	// travels as an error result, which is a successful response carrying a
+	// failure for the model, so from outside the handler it is
+	// indistinguishable from a call that ran and failed. Without this, a
+	// deployment refusing every third request looks exactly like one whose
+	// GitLab is erroring.
+	mcpotel.RecordRefusal(ctx, reason)
+
 	user := ResolveIdentity(ctx, req)
 	if user.IsAuthenticated() {
 		slog.InfoContext(ctx, "tool call refused",
