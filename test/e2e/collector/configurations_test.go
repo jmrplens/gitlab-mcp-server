@@ -180,3 +180,50 @@ func assertNothingExported(t *testing.T, c *collector, srv *server) {
 		}
 	}
 }
+
+// TestRealCollector_TheIdentityPolicyGovernsEverySignal is the end-to-end form
+// of a gap two of the three signals hid.
+//
+// A hosted deployment ran with the policy on pseudonymous, which by definition
+// names nobody. Its spans carried user.hash and its metrics carried no identity
+// at all, exactly as designed, while 48 exported log records carried user_id
+// and 38 carried the username in the clear. The policy had been applied where
+// it was written and never to the log bridge.
+//
+// So the assertion is deliberately about the whole log stream rather than one
+// record: what must hold is that nothing exported names the caller under a
+// policy that promises not to, not that a particular line was fixed. This is
+// the same shape as the resource-URI leak this module already guards, and it is
+// the second time the log signal has been the one that leaked.
+func TestRealCollector_TheIdentityPolicyGovernsEverySignal(t *testing.T) {
+	for _, tc := range []struct {
+		policy  string
+		forbids []string
+	}{
+		{policy: "none", forbids: []string{"user.id", "user.name", "user.hash", "user_id"}},
+		{policy: "pseudonymous", forbids: []string{"user.id", "user.name", "user_id"}},
+	} {
+		t.Run(tc.policy, func(t *testing.T) {
+			c, srv := driveDynamic(t, map[string]string{"GITLAB_MCP_TELEMETRY_IDENTITY": tc.policy})
+
+			// A log record has to have arrived, or an empty stream passes for a
+			// clean one. The tool call the driver makes writes one.
+			if _, ok := c.awaitLog(t, exportDeadline, func(r otlpLogRecord) bool {
+				return strings.Contains(r.Body.StringValue, "tool call")
+			}); !ok {
+				t.Fatalf("no tool call log record arrived.\nCollector:\n%s\nServer:\n%s",
+					c.containerLogs(t), srv.logs())
+			}
+
+			for _, record := range allLogRecords(t, c) {
+				rendered := renderLogRecord(record)
+				for _, forbidden := range tc.forbids {
+					if strings.Contains(rendered, forbidden) {
+						t.Errorf("an exported log record carries %q under policy %q: %s",
+							forbidden, tc.policy, rendered)
+					}
+				}
+			}
+		})
+	}
+}
