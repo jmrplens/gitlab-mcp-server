@@ -250,10 +250,20 @@ func waitHealthy(t *testing.T, s *server) {
 func (s *server) callAction(t *testing.T, id int, action, projectID string) {
 	t.Helper()
 
+	// The action's own parameters go under params, which is the shape
+	// gitlab_execute_action declares. They used to be siblings of action, and
+	// the server refused every call with "unexpected additional properties":
+	// the request never reached a handler, never called GitLab, and never
+	// logged anything.
+	//
+	// Nothing here noticed for the life of the module, because every assertion
+	// was about the MCP span and the middleware creates that before the handler
+	// runs. A module whose reason for existing is not to be graded by our own
+	// code was driving a request our own code rejected.
 	body := `{"jsonrpc":"2.0","id":` + strconv.Itoa(id) +
 		`,"method":"tools/call","params":{` + protocolMeta +
 		`,"name":"gitlab_execute_action","arguments":{"action":"` + action +
-		`","project_id":"` + projectID + `"}}}`
+		`","params":{"project_id":"` + projectID + `"}}}}`
 
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, s.baseURL+"/mcp", strings.NewReader(body))
 	if err != nil {
@@ -273,15 +283,35 @@ func (s *server) callAction(t *testing.T, id int, action, projectID string) {
 	}
 	defer resp.Body.Close()
 	// The body is drained and discarded on purpose. Whether GitLab would have
-	// answered is not what this module tests; a call that reached the handler
-	// produced a span either way, and asserting on the result here would make
-	// this a test of the fake instance below.
-	_, _ = io.Copy(io.Discard, resp.Body)
+	// answered is not what this module tests. What is read here is whether the
+	// call reached a handler at all, which the two checks below decide.
+	payload, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		t.Fatalf("the call was refused with %d, so it never reached the instrumentation and no span exists to assert on. Server output:\n%s",
 			resp.StatusCode, s.logs())
 	}
+
+	// A 200 is not enough, and assuming it was is how the malformed request
+	// above survived. MCP reports a refused call inside a successful response,
+	// so a schema rejection arrives as isError with the reason in the text and
+	// every assertion in this module goes on passing against a server that
+	// never ran a handler.
+	if bytes.Contains(payload, []byte(`"isError":true`)) {
+		t.Fatalf("the server answered with an error result, so no handler ran and no GitLab call was made:\n%s",
+			tailOfPayload(payload))
+	}
+}
+
+// tailOfPayload returns the end of a response body, where the content sits
+// after the server-info preamble every result carries.
+func tailOfPayload(payload []byte) string {
+	const want = 400
+	flat := strings.ReplaceAll(string(payload), "\n", " ")
+	if len(flat) <= want {
+		return flat
+	}
+	return flat[len(flat)-want:]
 }
 
 // startFakeGitLab serves the endpoints the server probes when it builds a pool
@@ -301,6 +331,25 @@ func startFakeGitLab(t *testing.T) string {
 	mux.HandleFunc("/api/v4/user", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"id":7,"username":"collector-e2e"}`))
+	})
+	// The endpoint the driven action actually calls, answered with an empty
+	// page so the tool call succeeds.
+	//
+	// It used to fall through to the 404 below, which made every driven call
+	// fail. That was invisible while the assertions were about the MCP span
+	// alone, and it hid two things the moment anything looked further: a failed
+	// call makes no GitLab request, so no client span exists to check the trace
+	// tree against, and it takes the "tool call completed" record with it, so
+	// there is no correlated log record either. The fake answering the call is
+	// what makes those two observable at all.
+	mux.HandleFunc("/api/v4/projects/", func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/issues") {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-Total", "0")
+		_, _ = w.Write([]byte(`[]`))
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		// Scope and tier probes hit other paths; 404 means "unavailable",

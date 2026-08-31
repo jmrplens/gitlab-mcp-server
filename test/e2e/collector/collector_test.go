@@ -387,6 +387,16 @@ type (
 		// SPAN_KIND_SERVER arrives as 2 rather than by name.
 		Kind       int        `json:"kind"`
 		Attributes []otlpAttr `json:"attributes"`
+		// The identifiers, which are what makes a tree a tree. An empty
+		// parentSpanId is how the exporter writes a root, so the zero value
+		// carries meaning here rather than being an absence.
+		TraceID      string `json:"traceId"`
+		SpanID       string `json:"spanId"`
+		ParentSpanID string `json:"parentSpanId"`
+		Links        []struct {
+			TraceID string `json:"traceId"`
+			SpanID  string `json:"spanId"`
+		} `json:"links"`
 	}
 
 	otlpScopeSpans struct {
