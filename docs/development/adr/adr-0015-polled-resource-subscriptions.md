@@ -34,10 +34,13 @@ bounded.
 Advertise `resources.subscribe` and honor it by polling, under bounds that
 make the worst case something an operator can predict.
 
-- **A whitelist decides what is subscribable.** 26 resource kinds — single
-  objects with a lifecycle worth watching. Collections are excluded: a
-  project's issue list changes for reasons a subscriber did not ask about,
-  and polling one costs a full page read per tick.
+- **A whitelist decides what is subscribable.** 26 resource kinds: single
+  objects with a lifecycle worth watching, plus three lists that hang off one
+  parent — a pipeline's jobs, a merge request's notes and its discussions.
+  Open-ended top-level collections are excluded: a project's issue list changes
+  for reasons a subscriber did not ask about, and polling one costs a full page
+  read per tick. The three admitted lists are bounded by their parent, which is
+  what makes them affordable, and they carry the limitation NEG-005 records.
 - **Cadence follows the resource.** A running pipeline polls at a 5s floor;
   a finished one at 60s; anything without a lifecycle field at 15s. GitLab
   has no terminal state — a retried pipeline reuses its ID and starts

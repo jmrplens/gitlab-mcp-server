@@ -858,7 +858,7 @@ func renderDistribution(metrics repositoryMetrics) string {
 		{layerCore, "Core packages", "shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities"},
 		{layerToolsOrchestration, "Tools orchestration", "registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests"},
 		{layerToolSubpackage, fmt.Sprintf("Tool sub-packages (%d)", countTestedPackages(packagesByLayer(metrics.Packages, layerToolSubpackage))), "domain-specific GitLab tool handlers"},
-		{layerE2E, "E2E integration", "build-tagged real GitLab integration suite"},
+		{layerE2E, "E2E integration", "build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance"},
 		{layerCmd, "cmd packages", "server entry point and developer command utilities"},
 	}
 	for _, row := range rows {
