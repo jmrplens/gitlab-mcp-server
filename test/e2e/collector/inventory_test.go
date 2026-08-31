@@ -91,6 +91,14 @@ var (
 		"mcp.session.id",
 		"jsonrpc.request.id",
 		"mcp.resource.uri",
+		// Added after this list failed to catch the thing it was written for.
+		// The resource attribute reached a metric on the hosted endpoint while
+		// this test passed, because the list named the convention's key and not
+		// the one this server invented for the digest a few commits later. A
+		// closed list only closes over what somebody remembered to write in it,
+		// which is an argument for keeping it short and reviewing it whenever
+		// an attribute is added rather than for trusting it.
+		"gitlab_mcp.resource.ref",
 		"client.address",
 		"client.port",
 	}
