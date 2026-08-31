@@ -46,7 +46,7 @@ func protocolVersionFor(req mcp.Request, allowed map[string]struct{}) string {
 		return ""
 	}
 
-	if params := req.GetParams(); params != nil {
+	if params := paramsOf(req); params != nil {
 		if version, ok := params.GetMeta()[metaProtocolVersionKey].(string); ok {
 			if _, admitted := allowed[version]; admitted {
 				return version

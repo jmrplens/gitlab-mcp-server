@@ -237,7 +237,7 @@ type call struct {
 func describe(method string, req mcp.Request, identifier CallIdentifier, resources ResourceAttributer) call {
 	attrs := []attribute.KeyValue{AttrMCPMethodName.String(method)}
 
-	switch params := req.GetParams().(type) {
+	switch params := paramsOf(req).(type) {
 	case *mcp.CallToolParamsRaw:
 		return describeToolCall(method, params.Name, params.Arguments, attrs, identifier)
 	case *mcp.CallToolParams:

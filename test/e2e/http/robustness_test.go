@@ -384,3 +384,81 @@ func truncate(s string) string {
 	}
 	return s[:limit] + "…"
 }
+
+// TestRobust_AListRequestMayOmitParamsEntirely covers a request that is not
+// hostile at all, which is why nothing here had sent one.
+//
+// `{"jsonrpc":"2.0","id":1,"method":"tools/list"}` is a complete, valid
+// request: the params member is optional for every list method and for
+// notifications/initialized, and clients do omit it. Every test in this module
+// built its body from toolsListBody, which always sends params, so the shape
+// went unexercised until a hosted deployment logged a hundred recovered panics
+// in one day on exactly those methods.
+//
+// Sessions, because that is where the shape is reachable. Under the default
+// stateless transport a bare list request is refused earlier and correctly:
+// each POST must carry the protocol version in _meta, and a request with no
+// params carries no _meta either.
+//
+// The bar here is higher than this file's usual one. A recovered panic already
+// satisfies "the process survives", and satisfying it is what kept this quiet:
+// the server stayed up, the client got an error, and nothing in the surviving
+// half of the system objected. So the assertion is that the request is
+// answered, not that the server is still breathing afterwards.
+func TestRobust_AListRequestMayOmitParamsEntirely(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--stateless=false")
+
+	const version = "2025-06-18"
+	headers := map[string]string{"PRIVATE-TOKEN": "glpat-token", "MCP-Protocol-Version": version}
+
+	opened := srv.do(t, request{
+		method: http.MethodPost, path: "/mcp",
+		body:    `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"` + version + `","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}`,
+		headers: headers,
+	})
+	session := opened.header.Get("Mcp-Session-Id")
+	if session == "" {
+		t.Fatalf("no session was minted: status=%d body=%s", opened.status, opened.body)
+	}
+
+	inSession := map[string]string{
+		"PRIVATE-TOKEN": "glpat-token", "MCP-Protocol-Version": version, "Mcp-Session-Id": session,
+	}
+
+	// The notification the SDK also allows to arrive without params, and one of
+	// the four methods that was panicking.
+	srv.do(t, request{
+		method: http.MethodPost, path: "/mcp",
+		body:    `{"jsonrpc":"2.0","method":"notifications/initialized"}`,
+		headers: inSession,
+	})
+
+	for _, method := range []string{"tools/list", "prompts/list", "resources/list"} {
+		t.Run(method, func(t *testing.T) {
+			got := srv.do(t, request{
+				method:  http.MethodPost,
+				path:    "/mcp",
+				body:    fmt.Sprintf(`{"jsonrpc":"2.0","id":2,"method":%q}`, method),
+				headers: inSession,
+			})
+
+			if got.status != http.StatusOK {
+				t.Fatalf("%s without params: HTTP %d\n%s", method, got.status, got.body)
+			}
+			if strings.Contains(got.body, `"error"`) {
+				t.Errorf("%s without params was answered with an error: %s", method, got.body)
+			}
+			if !strings.Contains(got.body, `"result"`) {
+				t.Errorf("%s without params produced no result: %s", method, got.body)
+			}
+		})
+	}
+
+	// And the server's own output, because the failure mode being guarded is
+	// one the response alone can hide: the panic was recovered, so a client saw
+	// a plain error and only the log said why.
+	if logs := srv.logs(); strings.Contains(logs, "recovered a panic") {
+		t.Errorf("the server recovered a panic while serving a valid request:\n%s", logs)
+	}
+}

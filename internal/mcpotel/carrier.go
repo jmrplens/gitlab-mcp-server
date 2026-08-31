@@ -10,6 +10,8 @@
 package mcpotel
 
 import (
+	"reflect"
+
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/propagation"
 )
@@ -89,17 +91,39 @@ func (c metaCarrier) Keys() []string {
 }
 
 // carrierFor builds a carrier over a request's _meta, or an empty one.
-//
-// Every request type in the SDK embeds Meta and exposes GetMeta, so this cannot
-// fail; the nil check is for a request whose params were never populated, which
-// a test can produce even though the wire cannot.
 func carrierFor(req mcp.Request) propagation.TextMapCarrier {
-	if req == nil {
-		return metaCarrier{}
-	}
-	params := req.GetParams()
+	params := paramsOf(req)
 	if params == nil {
 		return metaCarrier{}
 	}
 	return metaCarrier{meta: params.GetMeta()}
+}
+
+// paramsOf returns a request's parameters, or nil when it carries none.
+//
+// req.GetParams() cannot be compared against nil, and a comment here once
+// claimed the wire could not produce one. It can, and did: `tools/list` with no
+// `params` member at all is a valid request, the SDK allows the member to be
+// missing for every list method and for notifications/initialized, and what a
+// receiving middleware is handed for one is a Params interface holding a typed
+// nil pointer. That is not a nil interface, so `params != nil` is true and the
+// first method called on it dereferences the pointer. A hundred requests a day
+// were panicking on a hosted deployment before this was written, all of them on
+// methods a client issues once at startup.
+//
+// The SDK knows the case exists: Params declares isNil for exactly this. It is
+// unexported, so a middleware outside that package has to ask reflect instead.
+// Registered in docs/development/upstream-bugs.md.
+func paramsOf(req mcp.Request) mcp.Params {
+	if req == nil {
+		return nil
+	}
+	params := req.GetParams()
+	if params == nil {
+		return nil
+	}
+	if value := reflect.ValueOf(params); value.Kind() == reflect.Pointer && value.IsNil() {
+		return nil
+	}
+	return params
 }

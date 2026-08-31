@@ -429,6 +429,38 @@ and `prompts/get`, all three answered `-32020` where the plain-ASCII control was
 served. It is upstream by this file's own test: it happens to any caller of
 `StreamableHTTPHandler` with no setting of ours.
 
+### A middleware cannot ask whether a request carries params
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no, once known. The check is three lines of `reflect` and this
+  server now makes it in one place.
+- **Workaround**: `internal/mcpotel.paramsOf` returns `nil` for a `Params`
+  interface holding a nil pointer, and the three consumers in that package ask
+  through it rather than calling `GetParams` themselves.
+
+**What**: `Params` (mcp/shared.go) declares `GetMeta`, `SetMeta`, `isParams` and
+`isNil`. The last exists because a receiving middleware is handed a typed nil
+whenever the wire omitted the params member, which `serverMethodInfos` permits
+for every list method and for `notifications/initialized`. It is unexported, so
+only the SDK can ask. Outside the package, `req.GetParams() != nil` is true for
+that value, because an interface holding a nil pointer is not a nil interface,
+and `GetMeta` on it dereferences the pointer.
+
+The shape is ordinary: `{"jsonrpc":"2.0","id":1,"method":"tools/list"}` is a
+complete, valid request that clients really send. Nothing in the SDK's own
+documentation for `AddReceivingMiddleware` mentions it, and the accessor named
+after the question is the one thing a middleware cannot reach.
+
+**How we found it**: a hosted deployment logged "recovered a panic while
+handling a request" a hundred times in a day, on `tools/list`, `prompts/list`,
+`resources/list` and `notifications/initialized`, with the stack ending in
+`(*ListToolsParams).GetMeta` called from this repository's trace-context
+carrier. The bug in the carrier is ours, and a comment in it had asserted the
+wire could not produce such a request. Exporting `isNil`, or documenting the
+guarantee, would keep the next middleware from writing the same line.
+
 ### The protocol version is classified by string ordering
 
 - **Reported**: no.
