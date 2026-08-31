@@ -208,3 +208,82 @@ func (c *collector) childOf(t *testing.T, traceID, parentID string, kind int) (o
 
 // spanKindClient is SPAN_KIND_CLIENT in the OTLP enum.
 const spanKindClient = 3
+
+// TestRealCollector_NoExportedLogNamesAResource is the end-to-end form of a
+// leak this module could not have found, because the record was not ours.
+//
+// Subscribing on the hosted deployment produced an exported log record carrying
+// uri = gitlab://project/82077663, while the span for the same subscribe carried
+// the digest. The Go SDK writes that record, through the logger this server
+// installs, and a policy applied only where this repository calls slog leaves a
+// dependency's records untouched.
+//
+// So the assertion is deliberately about the whole log stream rather than about
+// one message: what must hold is that nothing exported names a resource, not
+// that a particular line was fixed.
+func TestRealCollector_NoExportedLogNamesAResource(t *testing.T) {
+	c := startCollector(t)
+	fake := startMutableFakeGitLab(t)
+	srv := startServer(t, telemetryEnv(c),
+		"--gitlab-url="+fake.URL(),
+		// Subscriptions are the path that logs a URI, and they need a session.
+		"--stateless=false",
+	)
+
+	sess := srv.openSession(t)
+	sess.call(t, 2, "resources/subscribe", `{"uri":"`+resourceURI+`"}`)
+	sess.call(t, 3, "resources/read", `{"uri":"`+resourceURI+`"}`)
+	fake.change("changed so the watcher logs about noticing")
+
+	// Wait for the record that carries the URI rather than for any record at
+	// all. The startup lines arrive first and satisfy a "something is here"
+	// wait immediately, which read the stream before the subscribe record was
+	// exported and made this pass against unredacted code.
+	//
+	// Matched on the message, which the redaction leaves alone: only the URI is
+	// replaced, so waiting for the URI itself would be waiting for the defect.
+	if _, ok := c.awaitLog(t, exportDeadline, func(r otlpLogRecord) bool {
+		return strings.Contains(r.Body.StringValue, "subscri")
+	}); !ok {
+		t.Fatalf("no record about the subscription arrived.\nCollector:\n%s\nServer:\n%s",
+			c.containerLogs(t), srv.logs())
+	}
+	sess.close(t)
+
+	for _, record := range allLogRecords(t, c) {
+		rendered := renderLogRecord(record)
+		if strings.Contains(rendered, "some-group") {
+			t.Errorf("an exported log record names the project: %s", rendered)
+		}
+		if strings.Contains(rendered, "gitlab://") && !strings.Contains(rendered, "gitlab://[redacted]") {
+			t.Errorf("an exported log record carries a resource URI: %s", rendered)
+		}
+	}
+}
+
+// allLogRecords returns every record the collector parsed.
+func allLogRecords(t *testing.T, c *collector) []otlpLogRecord {
+	t.Helper()
+
+	var records []otlpLogRecord
+	for _, doc := range documents[logDocument](t, filepath.Join(c.outDir, logsFile)) {
+		for _, rl := range doc.ResourceLogs {
+			for _, sl := range rl.ScopeLogs {
+				records = append(records, sl.LogRecords...)
+			}
+		}
+	}
+	return records
+}
+
+// renderLogRecord flattens a record into one string, so an assertion about what
+// must not appear looks at the message and every attribute rather than at
+// whichever one the author remembered.
+func renderLogRecord(record otlpLogRecord) string {
+	parts := make([]string, 0, len(record.Attributes)+1)
+	parts = append(parts, record.Body.StringValue)
+	for _, kv := range record.Attributes {
+		parts = append(parts, kv.Key+"="+kv.Value.StringValue)
+	}
+	return strings.Join(parts, " ")
+}
