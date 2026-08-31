@@ -198,13 +198,20 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	metricProtocol, err := resolveProtocol(cfg.Protocol, metricsProtocolKey)
-	if err != nil {
-		return nil, err
+	// Only for the signals that are on. Validating a disabled signal's variable
+	// refuses a start over configuration that would never be read: a
+	// metrics-only deployment does not care that OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
+	// is misspelled, and telling it otherwise is a failure it cannot act on.
+	var metricProtocol, logProtocol string
+	if signals.Metrics {
+		if metricProtocol, err = resolveProtocol(cfg.Protocol, metricsProtocolKey); err != nil {
+			return nil, err
+		}
 	}
-	logProtocol, err := resolveProtocol(cfg.Protocol, logsProtocolKey)
-	if err != nil {
-		return nil, err
+	if signals.Logs {
+		if logProtocol, err = resolveProtocol(cfg.Protocol, logsProtocolKey); err != nil {
+			return nil, err
+		}
 	}
 
 	res, err := buildResource(ctx, cfg)

@@ -768,7 +768,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		Stateless:             hcfg.stateless,
 		JSONResponse:          hcfg.jsonResponse,
 		MaxRequestBodyBytes:   hcfg.maxRequestBodyBytes,
-		UploadMaxFileSize:     config.DefaultMaxFileSize,
+		UploadMaxFileSize:     uploadMaxFileSize(),
 		AuthMode:              hcfg.authMode,
 		PublicURL:             hcfg.publicURL,
 		ResourceDocumentation: hcfg.resourceDocumentation,
@@ -3617,4 +3617,21 @@ func buildToolSearchCatalog(tier edition.Tier) (*actioncatalog.Catalog, error) {
 		return nil, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
 	}
 	return withStandalone, nil
+}
+
+// uploadMaxFileSize resolves the upload limit for HTTP mode.
+//
+// A parse failure falls back to the default and says so, rather than refusing
+// to start: this runs while the HTTP configuration is being assembled, and a
+// malformed size is worth a loud line and a working server rather than a dead
+// one. The same value is validated again by config.Config.Validate, which is
+// where an out-of-range limit is rejected.
+func uploadMaxFileSize() int64 {
+	size, err := config.UploadMaxFileSizeFromEnv()
+	if err != nil {
+		slog.Warn("UPLOAD_MAX_FILE_SIZE could not be parsed; using the default",
+			"error", err, "default", config.DefaultMaxFileSize)
+		return config.DefaultMaxFileSize
+	}
+	return size
 }

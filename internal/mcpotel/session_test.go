@@ -132,15 +132,12 @@ func TestSessionDuration_IsSkippedForAStatelessPost(t *testing.T) {
 	// same shape a stateless POST presents to the middleware.
 	driveSession(t, TransportTCP)
 
-	var collected metricdata.ResourceMetrics
-	if err := reader.Collect(context.Background(), &collected); err != nil {
-		t.Fatalf("collecting metrics: %v", err)
-	}
-	for _, scope := range collected.ScopeMetrics {
-		for _, m := range scope.Metrics {
-			if m.Name == "mcp.server.session.duration" {
-				t.Error("a stateless POST was recorded as a session; this duplicates mcp.server.operation.duration under a misleading name")
-			}
-		}
+	// Polled rather than collected once. Today the exclusion means no goroutine
+	// is ever started, so a single Collect would be enough; the regression this
+	// test exists to catch is precisely the one that starts it, and that
+	// goroutine records after Wait unblocks. A single Collect would then run
+	// before the wrong measurement and report success.
+	if _, found := awaitMetric(t, reader, "mcp.server.session.duration"); found {
+		t.Error("a stateless POST was recorded as a session; this duplicates mcp.server.operation.duration under a misleading name")
 	}
 }

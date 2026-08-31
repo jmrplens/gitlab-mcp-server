@@ -41,7 +41,14 @@ func TestMetricName_AnUnknownPromptDoesNotBecomeADimensionValue(t *testing.T) {
 	_, _ = handler(context.Background(), "prompts/get",
 		&mcp.GetPromptRequest{Params: &mcp.GetPromptParams{Name: "not-a-prompt"}})
 
-	for _, value := range dimensionValues(t, reader, "gen_ai.prompt.name") {
+	// The values are collected before they are examined: dimensionValues
+	// returns an empty slice when the metric is absent, and a loop over that
+	// passes while checking nothing at all.
+	values := dimensionValues(t, reader, "gen_ai.prompt.name")
+	if len(values) == 0 {
+		t.Fatal("no gen_ai.prompt.name was recorded, so this assertion would pass without testing the bound")
+	}
+	for _, value := range values {
 		if value == "not-a-prompt" {
 			t.Error("a prompt name that names nothing became a metric dimension value; a caller chooses how many time series this process stores")
 		}
@@ -118,9 +125,16 @@ func TestMetricName_AnUnknownToolDoesNotBecomeADimensionValue(t *testing.T) {
 	_, _ = handler(context.Background(), "tools/call",
 		callToolRequest("gitlab_not_a_tool", map[string]any{}, nil))
 
-	for _, value := range dimensionValues(t, reader, "gen_ai.tool.name") {
+	values := dimensionValues(t, reader, "gen_ai.tool.name")
+	if len(values) == 0 {
+		t.Fatal("no gen_ai.tool.name was recorded, so this assertion would pass without testing the bound")
+	}
+	for _, value := range values {
 		if value == "gitlab_not_a_tool" {
 			t.Error("a tool name that names nothing became a metric dimension value")
+		}
+		if value != unknownName {
+			t.Errorf("gen_ai.tool.name = %q on a failed lookup, want the %q bucket", value, unknownName)
 		}
 	}
 }

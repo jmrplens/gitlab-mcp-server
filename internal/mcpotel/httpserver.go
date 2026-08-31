@@ -52,15 +52,26 @@ func ServerMiddleware(next http.Handler) http.Handler {
 	duration := newHTTPServerDurationHistogram(otel.Meter(scopeName))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method, original := knownMethod(r.Method)
 		attrs := []attribute.KeyValue{
-			attrHTTPRequestMethod.String(r.Method),
+			attrHTTPRequestMethod.String(method),
 			attrURLScheme.String(requestScheme(r)),
 			attrNetworkProtocolName.String("http"),
 		}
 
-		ctx, span := tracer.Start(r.Context(), r.Method,
+		// The original goes on the span and never on the metric. The
+		// convention asks for it when the method was substituted, and the span
+		// is where an unbounded value is affordable: it is the metric's label
+		// space that a caller must not be able to choose.
+		spanAttrs := attrs
+		if original != "" {
+			spanAttrs = append(append([]attribute.KeyValue(nil), attrs...),
+				attrHTTPRequestMethodOriginal.String(original))
+		}
+
+		ctx, span := tracer.Start(r.Context(), method,
 			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(attrs...),
+			trace.WithAttributes(spanAttrs...),
 		)
 		defer span.End()
 
@@ -151,4 +162,29 @@ func newHTTPServerDurationHistogram(meter metric.Meter) metric.Float64Histogram 
 		otel.Handle(err)
 	}
 	return histogram
+}
+
+// knownMethods are the HTTP methods the semantic convention lists by name.
+//
+// Anything else becomes _OTHER, and this is not a stylistic detail: net/http
+// accepts any token as a method, so r.Method is a string the caller chooses. On
+// a metric that is one time series per invented verb, which is the same
+// unbounded label space the tool and prompt names had, reached through a
+// different door and on the one instrument every single request touches.
+var knownMethods = map[string]struct{}{
+	"CONNECT": {}, "DELETE": {}, "GET": {}, "HEAD": {}, "OPTIONS": {},
+	"PATCH": {}, "POST": {}, "PUT": {}, "TRACE": {},
+}
+
+// knownMethod returns the value to record and, when the method was substituted,
+// the original for the span to carry.
+//
+// The comparison is case sensitive, as the convention requires: HTTP methods
+// are case sensitive, so "get" is not GET, and treating it as one would report
+// a request the server itself did not route that way.
+func knownMethod(method string) (recorded, original string) {
+	if _, known := knownMethods[method]; known {
+		return method, ""
+	}
+	return "_OTHER", method
 }

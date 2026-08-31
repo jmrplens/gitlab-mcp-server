@@ -81,7 +81,7 @@ func TestParseToolNamePolicy_RefusesAnUnknownValueByName(t *testing.T) {
 	}
 }
 
-// TestToolNameView_RemovesOnlyTheToolName drives the View through the real SDK,
+// TestToolNameView_RemovesTheToolNameAndTheAction drives the View through the real SDK,
 // because that is the only thing that proves the filter does what it claims.
 //
 // A View is a callback the SDK invokes per instrument, and its AttributeFilter
@@ -89,7 +89,7 @@ func TestParseToolNamePolicy_RefusesAnUnknownValueByName(t *testing.T) {
 // the predicate and nothing about whether the Stream was accepted, whether the
 // filter was applied, or whether the other attributes survived it, which is the
 // half that would break a dashboard silently.
-func TestToolNameView_RemovesOnlyTheToolName(t *testing.T) {
+func TestToolNameView_RemovesTheToolNameAndTheAction(t *testing.T) {
 	reader := sdkmetric.NewManualReader()
 	provider := sdkmetric.NewMeterProvider(
 		sdkmetric.WithReader(reader),
@@ -108,12 +108,24 @@ func TestToolNameView_RemovesOnlyTheToolName(t *testing.T) {
 	))
 
 	found := collectAttributes(t, reader)
-	if _, present := found["gen_ai.tool.name"]; present {
-		t.Error("gen_ai.tool.name survived the view; the individual surface would mint a series per tool")
+
+	// Both, and this test previously asserted the opposite for the action.
+	// Pinning that gitlab_mcp.action survives looked like a guard against the
+	// view turning into an allow-list, and it was really a guard against the
+	// view working: the individual surface projects one visible tool per
+	// catalog action, so the two keys carry the same eleven hundred values and
+	// filtering one of them sheds no series whatever.
+	for _, key := range []string{"gen_ai.tool.name", "gitlab_mcp.action"} {
+		if _, present := found[key]; present {
+			t.Errorf("%s survived the view; on the individual surface it mints one series per tool", key)
+		}
 	}
-	for _, key := range []string{"mcp.method.name", "gitlab_mcp.action"} {
+
+	// The allow-list concern is real and is what this half keeps: an attribute
+	// unrelated to the per-call identity must be untouched.
+	for _, key := range []string{"mcp.method.name"} {
 		if _, present := found[key]; !present {
-			t.Errorf("%s was filtered out as well; the view is an allow-list rather than one rejection", key)
+			t.Errorf("%s was filtered out as well; the view is an allow-list rather than two rejections", key)
 		}
 	}
 }

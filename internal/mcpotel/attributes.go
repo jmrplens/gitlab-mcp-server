@@ -23,6 +23,13 @@ const (
 	TransportPipe = "pipe"
 	TransportTCP  = "tcp"
 
+	// attrHTTPRequestMethodOriginal carries the method a caller actually sent
+	// when it was not one the convention names. Conditionally Required on the
+	// span "if and only if" the recorded method is _OTHER, and deliberately
+	// absent from the metric, where it would be the unbounded dimension the
+	// substitution exists to prevent.
+	attrHTTPRequestMethodOriginal = attribute.Key("http.request.method_original")
+
 	// AttrMCPMethodName is Required: every span and every measurement carries it.
 	AttrMCPMethodName = attribute.Key("mcp.method.name")
 

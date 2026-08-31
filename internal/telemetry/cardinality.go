@@ -73,6 +73,15 @@ func ParseToolNamePolicy(value string) (ToolNamePolicy, error) {
 // a metric has to go on, so dropping it there would cost real information for
 // no benefit.
 //
+// # Two attributes, one decision
+//
+// The drop takes gitlab_mcp.action with it, and it has to. On the individual
+// surface the two are one to one, because that surface projects one visible
+// tool per catalog action, so a filter that removed the tool name and left the
+// action behind shed no series at all: the same eleven hundred values simply
+// arrived under a different key. The budget is a property of the pair, so the
+// decision is one decision.
+//
 // # This is a documented deviation, not a permitted variation
 //
 // gen_ai.tool.name is Conditionally Required in the MCP convention, and the
@@ -94,10 +103,19 @@ func DropToolName(policy ToolNamePolicy, toolSurface string) bool {
 	}
 }
 
-// attrGenAIToolName is the key a dropped tool name is filtered by. Written out
-// rather than imported for the same reason internal/mcpotel writes its keys
-// out: the MCP convention ships as no Go package.
-const attrGenAIToolName = "gen_ai.tool.name"
+// The keys a drop filters out. Written out rather than imported for the same
+// reason internal/mcpotel writes its keys out: the MCP convention ships as no
+// Go package, and gitlab_mcp.action is this server's own.
+const (
+	attrGenAIToolName = "gen_ai.tool.name"
+
+	// attrActionID goes with it, and leaving it behind was the defect. On the
+	// individual surface the two are one to one: every visible tool is one
+	// catalog action, so a metric that dropped the tool name and kept the
+	// action carried exactly the same number of series it was meant to shed.
+	// The View performed its filtering and achieved nothing.
+	attrActionID = "gitlab_mcp.action"
+)
 
 // toolNameView returns the View that removes the tool name from metric
 // attributes.
@@ -147,7 +165,8 @@ func toolNameView() sdkmetric.View {
 			Description: instrument.Description,
 			Unit:        instrument.Unit,
 			AttributeFilter: func(kv attribute.KeyValue) bool {
-				return string(kv.Key) != attrGenAIToolName
+				key := string(kv.Key)
+				return key != attrGenAIToolName && key != attrActionID
 			},
 		}, true
 	}
