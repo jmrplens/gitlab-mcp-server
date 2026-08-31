@@ -415,13 +415,21 @@ func startFakeGitLab(t *testing.T) string {
 	// there is no correlated log record either. The fake answering the call is
 	// what makes those two observable at all.
 	mux.HandleFunc("/api/v4/projects/", func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasSuffix(r.URL.Path, "/issues") {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-Total", "0")
-		_, _ = w.Write([]byte(`[]`))
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/issues"):
+			w.Header().Set("X-Total", "0")
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Count(strings.Trim(r.URL.Path, "/"), "/") == 3:
+			// The project itself, which the gitlab://project/{ref} resource
+			// reads. Enough fields for the handler to render it; the test is
+			// about what telemetry says, not about the payload.
+			_, _ = w.Write([]byte(`{"id":1,"name":"some-project",` +
+				`"path_with_namespace":"some-group/some-project","default_branch":"main",` +
+				`"visibility":"private","web_url":"http://example.invalid/some-group/some-project"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		// Scope and tier probes hit other paths; 404 means "unavailable",
@@ -464,4 +472,208 @@ func removeBuiltBinary() {
 		return
 	}
 	_ = os.RemoveAll(builtDir)
+}
+
+// legacyProtocolVersion is the newest revision that has sessions.
+//
+// Revision 2026-07-28 is stateless only, so a server started with
+// --stateless=false does not advertise it and answers "unsupported protocol
+// version" to a client that insists. Anything about session identity or session
+// duration has to be driven over this one.
+const legacyProtocolVersion = "2025-11-25"
+
+// session is an established MCP session on a stateful deployment.
+type session struct {
+	srv *server
+	id  string
+}
+
+// openSession performs the handshake and returns the session.
+//
+// The initialized notification is not optional: the SDK treats a session as
+// incomplete until it arrives, and a tools/call before it is refused, which
+// would look from here exactly like the refusals this module has already
+// mistaken for success twice.
+func (s *server) openSession(t *testing.T) *session {
+	t.Helper()
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{` +
+		`"protocolVersion":"` + legacyProtocolVersion + `",` +
+		`"capabilities":{},"clientInfo":{"name":"collector-e2e","version":"1"}}}`
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, s.baseURL+"/mcp", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("building the initialize request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", acceptHeader)
+	req.Header.Set("MCP-Protocol-Version", legacyProtocolVersion)
+	req.Header.Set("PRIVATE-TOKEN", "glpat-collector-e2e-token")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST initialize: %v", err)
+	}
+	defer resp.Body.Close()
+	payload, _ := io.ReadAll(resp.Body)
+
+	id := resp.Header.Get("Mcp-Session-Id")
+	if id == "" {
+		t.Fatalf("the deployment issued no session id (status %d); it is not running statefully.\nResponse:\n%s\nServer:\n%s",
+			resp.StatusCode, tailOfPayload(payload), s.logs())
+	}
+
+	sess := &session{srv: s, id: id}
+	sess.notify(t, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+	return sess
+}
+
+// notify posts a notification, which has no response to check.
+func (sess *session) notify(t *testing.T, body string) {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, sess.srv.baseURL+"/mcp", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("building the notification: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", acceptHeader)
+	req.Header.Set("MCP-Protocol-Version", legacyProtocolVersion)
+	req.Header.Set("Mcp-Session-Id", sess.id)
+	req.Header.Set("PRIVATE-TOKEN", "glpat-collector-e2e-token")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST notification: %v", err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+}
+
+// call posts one request inside the session and fails on either kind of
+// refusal, for the reason callTool does.
+func (sess *session) call(t *testing.T, id int, method, params string) []byte {
+	t.Helper()
+
+	body := `{"jsonrpc":"2.0","id":` + strconv.Itoa(id) + `,"method":"` + method + `","params":` + params + `}`
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, sess.srv.baseURL+"/mcp", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("building the %s request: %v", method, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", acceptHeader)
+	req.Header.Set("MCP-Protocol-Version", legacyProtocolVersion)
+	req.Header.Set("Mcp-Session-Id", sess.id)
+	req.Header.Set("PRIVATE-TOKEN", "glpat-collector-e2e-token")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST %s: %v", method, err)
+	}
+	defer resp.Body.Close()
+	payload, _ := io.ReadAll(resp.Body)
+
+	if bytes.Contains(payload, []byte(`"error":{`)) {
+		t.Fatalf("%s was refused with a JSON-RPC error:\n%s", method, tailOfPayload(payload))
+	}
+	return payload
+}
+
+// close ends the session, which is what makes its duration observable.
+//
+// A session that is merely abandoned ends when the idle timeout fires, which is
+// minutes away and longer than any test should wait.
+func (sess *session) close(t *testing.T) {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodDelete, sess.srv.baseURL+"/mcp", nil)
+	if err != nil {
+		t.Fatalf("building the delete: %v", err)
+	}
+	req.Header.Set("MCP-Protocol-Version", legacyProtocolVersion)
+	req.Header.Set("Mcp-Session-Id", sess.id)
+	req.Header.Set("PRIVATE-TOKEN", "glpat-collector-e2e-token")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("DELETE /mcp: %v", err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+}
+
+// post sends one JSON-RPC request and returns the response body, asserting
+// nothing about it.
+//
+// The helpers built on this decide what counts as failure, because they differ:
+// most calls must succeed, and the one driving an unknown prompt must not.
+func (s *server) post(t *testing.T, method, name, body string) []byte {
+	t.Helper()
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, s.baseURL+"/mcp", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("building the %s request: %v", method, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", acceptHeader)
+	req.Header.Set("MCP-Protocol-Version", protocolVersion)
+	req.Header.Set("Mcp-Method", method)
+	if name != "" {
+		req.Header.Set("Mcp-Name", name)
+	}
+	req.Header.Set("PRIVATE-TOKEN", "glpat-collector-e2e-token")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST %s: %v", method, err)
+	}
+	defer resp.Body.Close()
+
+	payload, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		t.Fatalf("%s was refused with %d, so no span exists to assert on. Server output:\n%s",
+			method, resp.StatusCode, s.logs())
+	}
+	return payload
+}
+
+// readResource reads one resource and fails if the read was refused.
+func (s *server) readResource(t *testing.T, id int, uri string) {
+	t.Helper()
+
+	body := `{"jsonrpc":"2.0","id":` + strconv.Itoa(id) +
+		`,"method":"resources/read","params":{` + protocolMeta + `,"uri":"` + uri + `"}}`
+
+	payload := s.post(t, "resources/read", uri, body)
+	if bytes.Contains(payload, []byte(`"error":{`)) {
+		t.Fatalf("the read was refused, so no handler ran:\n%s", tailOfPayload(payload))
+	}
+}
+
+// getPromptExpectingRefusal asks for a prompt by a name this server does not
+// have, and requires the refusal.
+//
+// Named for what it does because it inverts the rule every other helper here
+// follows. The subject is the refusal: a name that names nothing is how a
+// caller would mint metric series, so the assertion is about what the refused
+// call recorded, and a call that unexpectedly succeeded would mean the fixture
+// had stopped being an unknown name.
+func (s *server) getPromptExpectingRefusal(t *testing.T, id int, name string) {
+	t.Helper()
+
+	body := `{"jsonrpc":"2.0","id":` + strconv.Itoa(id) +
+		`,"method":"prompts/get","params":{` + protocolMeta +
+		`,"name":"` + name + `","arguments":{}}}`
+
+	payload := s.post(t, "prompts/get", name, body)
+	if !bytes.Contains(payload, []byte(`"error":{`)) {
+		t.Fatalf("prompts/get %q was served; the fixture is no longer an unknown name:\n%s",
+			name, tailOfPayload(payload))
+	}
+}
+
+// metricsPath is where the collector writes the metric documents.
+func metricsPath(c *collector) string {
+	return filepath.Join(c.outDir, metricsFile)
 }
