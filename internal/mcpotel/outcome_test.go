@@ -6,6 +6,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
 )
 
 // realSubscribeFailure is the message the hosted deployment produced when a
@@ -101,5 +103,33 @@ func TestStatusDescription_SurvivesAnOrdinaryFailure(t *testing.T) {
 
 	if got := span.Status().Description; got != "internal error" {
 		t.Errorf("status description = %q, want the JSON-RPC message unchanged", got)
+	}
+}
+
+// TestRedactResourceURIs_AgreesWithTheHandler guards a rule stated in two
+// places, which is a rule that drifts.
+//
+// The same substitution runs on a span's status description here and on every
+// exported log record in internal/telemetry, and neither package can import the
+// other: this one takes the OpenTelemetry API and never the SDK, and that one is
+// built on the SDK. A test can import both, so the constraint is checkable even
+// though the production code cannot state it.
+func TestRedactResourceURIs_AgreesWithTheHandler(t *testing.T) {
+	inputs := []string{
+		"",
+		"nothing to redact",
+		"read gitlab://project/1",
+		`read "gitlab://project/1/mr/2" failed`,
+		"gitlab://project/1 and gitlab://group/2",
+		"subscriptions: initial read of gitlab://project/jmrp%2Fgitlab-mcp-server: not found",
+	}
+
+	for _, input := range inputs {
+		here := redactResourceURIs(input)
+		there := telemetry.RedactResourceURIs(input)
+		if here != there {
+			t.Errorf("the two implementations disagree on %q: mcpotel gives %q and telemetry gives %q",
+				input, here, there)
+		}
 	}
 }

@@ -1,9 +1,11 @@
 package telemetry
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 
@@ -267,4 +269,144 @@ func recordHasAttr(record sdklog.Record, key, value string) bool {
 		return true
 	})
 	return found
+}
+
+// TestSlogHandler_ExportedRecordsCarryNoResourceURI is the regression for a
+// hole that no care in this repository could have closed.
+//
+// It was found by subscribing on the hosted deployment and reading the
+// collector: an exported record carried uri = gitlab://project/82077663, while
+// the span for the same subscribe carried the digest. The redaction was
+// working, and the log stream went around it.
+//
+// The record is not ours. The Go SDK writes it, with the URI, through the
+// logger this server installs as the default:
+//
+//	s.opts.Logger.Info("resource subscribed", "uri", req.Params.URI, ...)
+//
+// That is not a defect in the SDK. A library logging what it did, to the logger
+// it was handed, at INFO, is a library behaving correctly. What was ours is
+// building a policy for the records we write and then giving a third party the
+// pen, so this is enforced where every exported record passes, and the fixture
+// is that exact call rather than an invented one.
+func TestSlogHandler_ExportedRecordsCarryNoResourceURI(t *testing.T) {
+	tests := []struct {
+		name    string
+		log     func(*slog.Logger)
+		wantOut string
+	}{
+		{
+			name: "the SDK's own subscribe record",
+			log: func(l *slog.Logger) {
+				l.Info("resource subscribed", "uri", "gitlab://project/82077663",
+					"session_id", "ABC", "request_id", 20)
+			},
+			wantOut: "gitlab://[redacted]",
+		},
+		{
+			name: "a URI in the message rather than an attribute",
+			log: func(l *slog.Logger) {
+				l.Info("could not read gitlab://project/1/mr/2")
+			},
+			wantOut: "gitlab://[redacted]",
+		},
+		{
+			name: "a URI inside a group",
+			log: func(l *slog.Logger) {
+				l.Info("watcher stopped", slog.Group("subscription",
+					slog.String("uri", "gitlab://project/1")))
+			},
+			wantOut: "gitlab://[redacted]",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			logger, exp := newRecordingLogger(t)
+			tc.log(logger)
+
+			records := exp.all()
+			if len(records) != 1 {
+				t.Fatalf("exported %d records, want 1", len(records))
+			}
+
+			rendered := renderRecord(records[0])
+			if strings.Contains(rendered, "82077663") || strings.Contains(rendered, "project/1") {
+				t.Errorf("the exported record names a project: %s", rendered)
+			}
+			if !strings.Contains(rendered, tc.wantOut) {
+				t.Errorf("the exported record does not carry the marker; got %s", rendered)
+			}
+		})
+	}
+}
+
+// TestSlogHandler_StderrKeepsTheResourceURI pins the other half, which is the
+// reason this is a redaction on one leg and not a removal.
+//
+// stderr is the operator's own terminal and their container platform's log.
+// Blanking it there would take the diagnosis with it: "could not read
+// gitlab://[redacted]" tells somebody debugging their own deployment nothing
+// they did not already know.
+func TestSlogHandler_StderrKeepsTheResourceURI(t *testing.T) {
+	var out bytes.Buffer
+	base := slog.NewJSONHandler(&out, nil)
+
+	exp := &recordingExporter{}
+	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
+	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
+	previous := global.GetLoggerProvider()
+	global.SetLoggerProvider(lp)
+	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+
+	slog.New(NewSlogHandler(base, slog.LevelInfo)).
+		Info("resource subscribed", "uri", "gitlab://project/82077663")
+
+	if !strings.Contains(out.String(), "gitlab://project/82077663") {
+		t.Errorf("stderr lost the URI, which is where an operator needs it: %s", out.String())
+	}
+}
+
+// TestRedactResourceURIs_LeavesEverythingElseAlone keeps the substitution from
+// becoming a blunt instrument.
+func TestRedactResourceURIs_LeavesEverythingElseAlone(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "empty", in: "", want: ""},
+		{name: "no URI is untouched", in: "rate limit exceeded", want: "rate limit exceeded"},
+		{name: "a bare URI", in: "read gitlab://project/1", want: "read gitlab://[redacted]"},
+		{
+			name: "two in one string",
+			in:   "gitlab://project/1 and gitlab://group/2",
+			want: "gitlab://[redacted] and gitlab://[redacted]",
+		},
+		{
+			name: "a quoted URI stops at the quote",
+			in:   `read "gitlab://project/1" failed`,
+			want: `read "gitlab://[redacted]" failed`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := RedactResourceURIs(tc.in); got != tc.want {
+				t.Errorf("RedactResourceURIs(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// renderRecord flattens a record into one string, so an assertion about what
+// must not appear looks at the message and every attribute rather than at
+// whichever one the author remembered.
+func renderRecord(record sdklog.Record) string {
+	parts := []string{record.Body().AsString()}
+	record.WalkAttributes(func(kv attribute.KeyValue) bool {
+		parts = append(parts, string(kv.Key)+"="+kv.Value.String())
+		return true
+	})
+	return strings.Join(parts, " ")
 }

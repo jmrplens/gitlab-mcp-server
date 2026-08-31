@@ -3,6 +3,7 @@ package telemetry
 import (
 	"context"
 	"log/slog"
+	"strings"
 
 	"go.opentelemetry.io/contrib/bridges/otelslog"
 	"go.opentelemetry.io/otel/log/global"
@@ -92,9 +93,74 @@ func (h *fanOutHandler) Handle(ctx context.Context, record slog.Record) error {
 	err := h.stderr.Handle(ctx, record)
 
 	if h.exported && record.Level >= h.otlpMin {
-		_ = h.otlp.Handle(ctx, record)
+		_ = h.otlp.Handle(ctx, redactRecord(record))
 	}
 	return err
+}
+
+// redactRecord returns the record as it may leave the process.
+//
+// Only resource URIs, and only on the exported copy. The rule is the one the
+// span attributes already follow: which resource a request named is governed by
+// the identity policy, and a value that arrives by another route is a second
+// carrier the policy does not reach.
+//
+// It has to happen here rather than at the call sites because the records are
+// not all ours. The Go SDK logs "resource subscribed" with the URI through the
+// logger this server installs, so a rule applied only where this repository
+// calls slog would leave the dependency's records untouched, which is how this
+// was found: the span carried a digest and the log beside it carried the path.
+//
+// The common case allocates nothing. A record with no URI in it is returned as
+// it came, which is every record this server writes except a handful about
+// subscriptions.
+func redactRecord(record slog.Record) slog.Record {
+	if !recordNeedsRedaction(record) {
+		return record
+	}
+
+	redacted := slog.NewRecord(record.Time, record.Level,
+		RedactResourceURIs(record.Message), record.PC)
+	record.Attrs(func(attr slog.Attr) bool {
+		redacted.AddAttrs(redactAttr(attr))
+		return true
+	})
+	return redacted
+}
+
+// recordNeedsRedaction reports whether anything in the record mentions a
+// resource URI, so the copy above is made only when it changes something.
+func recordNeedsRedaction(record slog.Record) bool {
+	if strings.Contains(record.Message, resourceURIScheme) {
+		return true
+	}
+	found := false
+	record.Attrs(func(attr slog.Attr) bool {
+		if strings.Contains(attr.Value.String(), resourceURIScheme) {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+// redactAttr rewrites one attribute, descending into groups.
+func redactAttr(attr slog.Attr) slog.Attr {
+	if attr.Value.Kind() == slog.KindGroup {
+		group := attr.Value.Group()
+		rewritten := make([]slog.Attr, 0, len(group))
+		for _, inner := range group {
+			rewritten = append(rewritten, redactAttr(inner))
+		}
+		return slog.Attr{Key: attr.Key, Value: slog.GroupValue(rewritten...)}
+	}
+
+	text := attr.Value.String()
+	if !strings.Contains(text, resourceURIScheme) {
+		return attr
+	}
+	return slog.String(attr.Key, RedactResourceURIs(text))
 }
 
 // WithAttrs applies to both legs, so a logger derived from this one keeps

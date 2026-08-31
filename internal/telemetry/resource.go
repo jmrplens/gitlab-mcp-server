@@ -1,6 +1,11 @@
 package telemetry
 
-import "go.opentelemetry.io/otel/attribute"
+import (
+	"regexp"
+	"strings"
+
+	"go.opentelemetry.io/otel/attribute"
+)
 
 const (
 	// AttrResourceURI is the MCP convention's own key, Conditionally Required
@@ -69,4 +74,28 @@ func (r *ResourceRedactor) ResourceAttributes(uri string) []attribute.KeyValue {
 		return nil
 	}
 	return []attribute.KeyValue{attribute.String(AttrResourceRef, digest)}
+}
+
+// resourceURIScheme is the whole vocabulary of resources this server exposes,
+// which is what makes matching them a scheme check rather than a guess.
+const resourceURIScheme = "gitlab://"
+
+// resourceURIPattern matches a resource URI wherever it appears in free text.
+//
+// The run stops at whitespace or a quote, which is how these appear when a
+// message is assembled with %s, %w or a structured attribute.
+var resourceURIPattern = regexp.MustCompile(resourceURIScheme + `[^\s"']+`)
+
+// RedactResourceURIs replaces resource URIs with a marker.
+//
+// Exported because two places need it and neither can import the other: the
+// span status description in internal/mcpotel, which imports the OpenTelemetry
+// API and never the SDK, and the log handler here, which is built on the SDK.
+// A test in internal/mcpotel asserts the two agree, since a rule stated twice is
+// a rule that drifts.
+func RedactResourceURIs(text string) string {
+	if !strings.Contains(text, resourceURIScheme) {
+		return text
+	}
+	return resourceURIPattern.ReplaceAllString(text, resourceURIScheme+"[redacted]")
 }
