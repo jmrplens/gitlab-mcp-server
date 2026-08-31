@@ -386,6 +386,10 @@ func tailOfPayload(payload []byte) string {
 	return flat[len(flat)-want:]
 }
 
+// failingProject is the project id the fake instance answers with a 500, for
+// the cases that need a failure this server counts as its own.
+const failingProject = "always-failing-project"
+
 // startFakeGitLab serves the endpoints the server probes when it builds a pool
 // entry, so a credential is admitted and the call reaches the middleware.
 //
@@ -417,6 +421,14 @@ func startFakeGitLab(t *testing.T) string {
 	mux.HandleFunc("/api/v4/projects/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
+		// One project that fails, so the failure path has somewhere to happen.
+		// Without it every call here either succeeds or is refused for a
+		// caller fault, and this server deliberately records no error.type for
+		// those: a model naming an action that does not exist is an ordinary
+		// event, not a malfunction. So nothing exercised error.type at all.
+		case strings.Contains(r.URL.Path, failingProject):
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"500 Internal Server Error"}`))
 		case strings.HasSuffix(r.URL.Path, "/issues"):
 			w.Header().Set("X-Total", "0")
 			_, _ = w.Write([]byte(`[]`))
