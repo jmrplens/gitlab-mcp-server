@@ -677,3 +677,87 @@ func (s *server) getPromptExpectingRefusal(t *testing.T, id int, name string) {
 func metricsPath(c *collector) string {
 	return filepath.Join(c.outDir, metricsFile)
 }
+
+// callToolTolerant posts a tools/call and requires only that it reached the
+// instrumentation.
+//
+// The counterpart to callTool, for the cases whose subject is a refusal: safe
+// mode answers with a preview and read-only removes the tool, so both come back
+// as failures and neither is a defect. Named for the difference rather than
+// taking a flag, because a boolean at the call site says nothing about which
+// way it points.
+func (s *server) callToolTolerant(t *testing.T, id int, tool, arguments string) {
+	t.Helper()
+
+	body := `{"jsonrpc":"2.0","id":` + strconv.Itoa(id) +
+		`,"method":"tools/call","params":{` + protocolMeta +
+		`,"name":"` + tool + `","arguments":` + arguments + `}}`
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, s.baseURL+"/mcp", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("building the tools/call request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", acceptHeader)
+	req.Header.Set("MCP-Protocol-Version", protocolVersion)
+	req.Header.Set("Mcp-Method", "tools/call")
+	req.Header.Set("Mcp-Name", tool)
+	if action := topLevelAction(arguments); action != "" {
+		req.Header.Set("Mcp-Param-Action", action)
+	}
+	req.Header.Set("PRIVATE-TOKEN", "glpat-collector-e2e-token")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /mcp: %v", err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		t.Fatalf("the call was refused with %d before any instrumentation ran. Server output:\n%s",
+			resp.StatusCode, s.logs())
+	}
+}
+
+// callWithTraceContext posts a tools/call carrying W3C trace context in
+// params._meta.
+//
+// Unprefixed keys, which is the exception MCP grants: "the keys traceparent,
+// tracestate, and baggage are reserved for OpenTelemetry trace context
+// propagation". Sending a DNS-prefixed variant instead would be wrong rather
+// than merely unusual, and would test nothing.
+func (s *server) callWithTraceContext(t *testing.T, id int, traceparent string) {
+	t.Helper()
+
+	body := `{"jsonrpc":"2.0","id":` + strconv.Itoa(id) +
+		`,"method":"tools/call","params":{` +
+		`"_meta":{"io.modelcontextprotocol/protocolVersion":"` + protocolVersion + `",` +
+		`"io.modelcontextprotocol/clientCapabilities":{},` +
+		`"traceparent":"` + traceparent + `"},` +
+		`"name":"gitlab_execute_action","arguments":{"action":"issue.list",` +
+		`"params":{"project_id":"some-group/some-project"}}}}`
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, s.baseURL+"/mcp", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("building the tools/call request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", acceptHeader)
+	req.Header.Set("MCP-Protocol-Version", protocolVersion)
+	req.Header.Set("Mcp-Method", "tools/call")
+	req.Header.Set("Mcp-Name", "gitlab_execute_action")
+	req.Header.Set("Mcp-Param-Action", "issue.list")
+	req.Header.Set("PRIVATE-TOKEN", "glpat-collector-e2e-token")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /mcp: %v", err)
+	}
+	defer resp.Body.Close()
+
+	payload, _ := io.ReadAll(resp.Body)
+	if bytes.Contains(payload, []byte(`"error":{`)) || bytes.Contains(payload, []byte(`"isError":true`)) {
+		t.Fatalf("the call was refused, so no span carries the caller's context:\n%s", tailOfPayload(payload))
+	}
+}
