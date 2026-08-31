@@ -13,6 +13,7 @@ faq:
     a: "No. Un colector caído, que rechaza conexiones o que rechaza tu credencial produce líneas de log en stderr y no cambia nada más: el mismo estado, el mismo cuerpo y la misma latencia para cada cliente. La especificación deja esta decisión abierta, y este servidor elige seguir sirviendo GitLab cuando no puede alcanzar un colector."
 ---
 
+
 import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 Este servidor puede exportar trazas, métricas y logs por OTLP a un colector que
@@ -100,6 +101,18 @@ seleccionar una sola cosa. Falla por su nombre en vez de degradar en silencio.
 
 **No hay opción de usuario y contraseña**, y no falta ninguna: la especificación
 no define esa variable. Todos los esquemas son cabeceras.
+
+Este servidor no rechaza esa configuración, porque un colector en una red privada
+de confianza alcanzado en claro es un despliegue real y el endpoint es cosa tuya.
+Lo que sí hace es decirlo una vez al arrancar, nombrando las señales afectadas:
+
+```text
+level=WARN msg="a collector credential is configured against a plaintext endpoint
+on another host; it crosses the network in the clear on every export" signals=[traces]
+```
+
+El bucle local queda exento: una credencial que nunca sale de la máquina no se
+puede observar en una red, así que un colector adyacente no genera ningún aviso.
 
 | Lo que pide tu colector       | Qué configurar                                                                   |
 | ----------------------------- | -------------------------------------------------------------------------------- |

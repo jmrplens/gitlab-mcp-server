@@ -1,0 +1,131 @@
+package telemetry
+
+import (
+	"slices"
+	"testing"
+)
+
+// TestInsecureCredentialSignals covers the one condition worth a warning and,
+// more importantly, the many that are not.
+//
+// The failure mode this function must avoid is not missing a case. It is
+// warning about a deployment that is fine, because an operator who is told
+// their correct configuration is dangerous learns to ignore the line, and then
+// the one that matters is ignored too.
+func TestInsecureCredentialSignals(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     map[string]string
+		signals Signals
+		want    []string
+	}{
+		{
+			name: "a credential to a plaintext host elsewhere",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":  "authorization=Bearer x",
+				"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector.example:4318",
+			},
+			signals: Signals{Traces: true},
+			want:    []string{"traces"},
+		},
+		{
+			// The deployment this project was validated against, and the reason
+			// this is a warning and never a refusal.
+			name: "no credential, plaintext, private network",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_ENDPOINT": "http://192.168.0.99:4318",
+			},
+			signals: AllSignals(),
+			want:    nil,
+		},
+		{
+			name: "a credential over TLS",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":  "authorization=Bearer x",
+				"OTEL_EXPORTER_OTLP_ENDPOINT": "https://collector.example:4318",
+			},
+			signals: AllSignals(),
+			want:    nil,
+		},
+		{
+			// A credential that never leaves the machine cannot be observed on
+			// a network, so a sidecar collector is not a disclosure.
+			name: "a credential to loopback",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":  "authorization=Bearer x",
+				"OTEL_EXPORTER_OTLP_ENDPOINT": "http://127.0.0.1:4318",
+			},
+			signals: AllSignals(),
+			want:    nil,
+		},
+		{
+			name: "localhost by name is loopback too",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":  "authorization=Bearer x",
+				"OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318",
+			},
+			signals: AllSignals(),
+			want:    nil,
+		},
+		{
+			// The signal-specific variables win, so one signal can be exposed
+			// while the others are not, and naming the wrong one would send an
+			// operator to the wrong place.
+			name: "only the signal whose own endpoint is plaintext",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":          "authorization=Bearer x",
+				"OTEL_EXPORTER_OTLP_ENDPOINT":         "https://collector.example:4318",
+				"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT": "http://metrics.example:4318",
+			},
+			signals: AllSignals(),
+			want:    []string{"metrics"},
+		},
+		{
+			name: "a disabled signal is not reported",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":  "authorization=Bearer x",
+				"OTEL_EXPORTER_OTLP_ENDPOINT": "http://collector.example:4318",
+			},
+			signals: Signals{Metrics: true},
+			want:    []string{"metrics"},
+		},
+		{
+			name:    "nothing configured at all",
+			env:     map[string]string{},
+			signals: AllSignals(),
+			want:    nil,
+		},
+		{
+			// The exporter reports a malformed endpoint on its own. A second
+			// warning guessing at what it meant is noise on top of an error.
+			name: "an unparseable endpoint is left to the exporter",
+			env: map[string]string{
+				"OTEL_EXPORTER_OTLP_HEADERS":  "authorization=Bearer x",
+				"OTEL_EXPORTER_OTLP_ENDPOINT": "://not a url",
+			},
+			signals: AllSignals(),
+			want:    nil,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, key := range []string{
+				"OTEL_EXPORTER_OTLP_HEADERS", "OTEL_EXPORTER_OTLP_ENDPOINT",
+				"OTEL_EXPORTER_OTLP_TRACES_HEADERS", "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+				"OTEL_EXPORTER_OTLP_METRICS_HEADERS", "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+				"OTEL_EXPORTER_OTLP_LOGS_HEADERS", "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
+			} {
+				t.Setenv(key, "")
+			}
+			for key, value := range tc.env {
+				t.Setenv(key, value)
+			}
+
+			got := InsecureCredentialSignals(tc.signals)
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("InsecureCredentialSignals = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

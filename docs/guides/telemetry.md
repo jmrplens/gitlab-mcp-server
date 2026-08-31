@@ -97,6 +97,18 @@ specification defines no such variable. Every scheme is a header.
 | Mutual TLS                | `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE=/path/cert.pem` and `OTEL_EXPORTER_OTLP_CLIENT_KEY=/path/key.pem` |
 | A private CA              | `OTEL_EXPORTER_OTLP_CERTIFICATE=/path/ca.pem`                                                            |
 
+This server does not refuse that configuration, because a collector on a trusted
+private network reached over plaintext is a real deployment and the endpoint is
+yours to choose. It does say so once at startup, naming the signals affected:
+
+```text
+level=WARN msg="a collector credential is configured against a plaintext endpoint
+on another host; it crosses the network in the clear on every export" signals=[traces]
+```
+
+Loopback is exempt: a credential that never leaves the machine cannot be observed
+on a network, so a sidecar collector raises nothing.
+
 **The encoding matters and is the mistake this syntax invites.** The value is
 W3C Baggage format, so it is percent-decoded:
 

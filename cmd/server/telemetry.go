@@ -84,10 +84,24 @@ func startTelemetry(ctx context.Context, serverVersion string) (provider *teleme
 		restoreLogger = installSlogBridge()
 
 		snapshot := provider.Snapshot()
+		// Per signal rather than one value for the process. The two scalars are
+		// empty when the enabled signals disagree, which is the honest answer
+		// for a summary and a useless one for an operator looking at their own
+		// deployment: they want to know which collector each signal will
+		// actually reach, and that is exactly the case where no summary exists.
+		// Said once, at the moment it applies. The guide carries the same
+		// warning in prose, which reaches an operator who read that section.
+		if affected := telemetry.InsecureCredentialSignals(provider.Signals()); len(affected) > 0 {
+			slog.WarnContext(ctx, "a collector credential is configured against a plaintext endpoint on another host; it crosses the network in the clear on every export",
+				"component", "telemetry", "signals", affected)
+		}
+
 		slog.InfoContext(ctx, "telemetry enabled",
 			"component", "telemetry",
 			"protocol", snapshot.Protocol,
 			"endpoint", snapshot.Endpoint,
+			"protocols", snapshot.SignalProtocols,
+			"endpoints", snapshot.SignalEndpoints,
 			"signals", snapshot.Signals)
 	}
 	return provider, func(shutdownCtx context.Context) {

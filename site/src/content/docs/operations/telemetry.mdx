@@ -13,6 +13,7 @@ faq:
     a: "No. A collector that is down, refusing connections or rejecting your credential produces log lines on stderr and changes nothing else: the same status, the same body and the same latency for every client. The specification leaves this choice open, and this server chooses to keep serving GitLab when it cannot reach a collector."
 ---
 
+
 import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
 
 This server can export traces, metrics and logs over OTLP to a collector you
@@ -98,6 +99,18 @@ it selects one thing. It fails by name rather than silently downgrading.
 
 There is **no username and password option**, and none is missing: the
 specification defines no such variable. Every scheme is a header.
+
+This server does not refuse that configuration, because a collector on a trusted
+private network reached over plaintext is a real deployment and the endpoint is
+yours to choose. It does say so once at startup, naming the signals affected:
+
+```text
+level=WARN msg="a collector credential is configured against a plaintext endpoint
+on another host; it crosses the network in the clear on every export" signals=[traces]
+```
+
+Loopback is exempt: a credential that never leaves the machine cannot be observed
+on a network, so a sidecar collector raises nothing.
 
 | What your collector wants | What to set                                                                 |
 | ------------------------- | --------------------------------------------------------------------------- |

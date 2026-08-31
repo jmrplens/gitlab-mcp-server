@@ -161,9 +161,19 @@ type Provider struct {
 	// dropToolName removes gen_ai.tool.name from metric attributes, which the
 	// individual surface needs and the other two do not.
 	dropToolName bool
-	protocol     string
-	signals      Signals
-	endpoint     string
+	// One protocol and one endpoint per signal, because they can differ: the
+	// configuration specification gives each signal its own variables, and
+	// reporting the traces values for the whole process described a
+	// metrics-only deployment by a value it never used.
+	protocol       string
+	metricProtocol string
+	logProtocol    string
+
+	signals Signals
+
+	endpoint       string
+	metricEndpoint string
+	logEndpoint    string
 
 	shutdowns []func(context.Context) error
 }
@@ -220,11 +230,15 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 	}
 
 	p := &Provider{
-		enabled:      true,
-		dropToolName: cfg.DropToolNameFromMetrics,
-		protocol:     traceProtocol,
-		signals:      signals,
-		endpoint:     endpointFromEnv(),
+		enabled:        true,
+		dropToolName:   cfg.DropToolNameFromMetrics,
+		protocol:       traceProtocol,
+		metricProtocol: metricProtocol,
+		logProtocol:    logProtocol,
+		signals:        signals,
+		endpoint:       endpointForSignal(tracesEndpointKey),
+		metricEndpoint: endpointForSignal(metricsEndpointKey),
+		logEndpoint:    endpointForSignal(logsEndpointKey),
 	}
 
 	if startErr := p.startTraces(ctx, res, traceProtocol, signals); startErr != nil {
@@ -345,6 +359,15 @@ func (p *Provider) abandon(ctx context.Context, cause error) error {
 // Enabled reports whether telemetry is running.
 func (p *Provider) Enabled() bool { return p != nil && p.enabled }
 
+// Signals reports which signals this provider exports, so a caller can ask a
+// question about them without reaching into the struct.
+func (p *Provider) Signals() Signals {
+	if p == nil {
+		return Signals{}
+	}
+	return p.signals
+}
+
 // Shutdown flushes and retires every exporter, bounded by [shutdownTimeout].
 //
 // Errors are joined rather than returned on the first failure: each exporter
@@ -375,14 +398,36 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 // It names what is on rather than what the binary can do, matching the
 // subscriptions block: a consumer branches on this deployment's answer.
 type Snapshot struct {
-	Enabled  bool     `json:"enabled"`
+	Enabled bool `json:"enabled"`
+
+	// Protocol is the transport every enabled signal uses, and is empty when
+	// they do not all use the same one.
+	//
+	// Empty rather than one of them. This field used to hold the traces
+	// protocol unconditionally, so a metrics-only deployment exporting over
+	// gRPC published "http/protobuf": a value that was not merely imprecise but
+	// false, in a document a client reads. A consumer now sees either an answer
+	// that holds for the whole process or no answer, and SignalProtocols has
+	// the detail when there is a disagreement to describe.
 	Protocol string   `json:"protocol,omitempty"`
 	Signals  []string `json:"signals,omitempty"`
+
 	// Endpoint is the collector this deployment exports to, when the standard
-	// environment names one. It is the operator's own address and is published
-	// so somebody connecting to a shared endpoint can see where the record of
-	// their calls goes, which is the point of announcing this at all.
+	// environment names one and every enabled signal names the same one. It is
+	// the operator's own address and is reported so somebody connecting to a
+	// shared endpoint can see where the record of their calls goes, which is
+	// the point of announcing this at all.
 	Endpoint string `json:"endpoint,omitempty"`
+
+	// SignalProtocols and SignalEndpoints carry the per-signal answers, keyed
+	// by signal name.
+	//
+	// Never serialized: the server card is a public document and its shape is
+	// worth changing deliberately rather than as a side effect of fixing a
+	// wrong value. These exist for the startup log, where an operator is
+	// looking at their own deployment and detail costs nothing.
+	SignalProtocols map[string]string `json:"-"`
+	SignalEndpoints map[string]string `json:"-"`
 }
 
 // Snapshot returns what to publish about this deployment.
@@ -390,22 +435,63 @@ func (p *Provider) Snapshot() Snapshot {
 	if !p.Enabled() {
 		return Snapshot{Enabled: false}
 	}
+
 	var signals []string
-	if p.signals.Traces {
-		signals = append(signals, "traces")
+	protocols := map[string]string{}
+	endpoints := map[string]string{}
+	for _, signal := range []struct {
+		name     string
+		on       bool
+		protocol string
+		endpoint string
+	}{
+		{"traces", p.signals.Traces, p.protocol, p.endpoint},
+		{"metrics", p.signals.Metrics, p.metricProtocol, p.metricEndpoint},
+		{"logs", p.signals.Logs, p.logProtocol, p.logEndpoint},
+	} {
+		if !signal.on {
+			continue
+		}
+		signals = append(signals, signal.name)
+		if signal.protocol != "" {
+			protocols[signal.name] = signal.protocol
+		}
+		if signal.endpoint != "" {
+			endpoints[signal.name] = signal.endpoint
+		}
 	}
-	if p.signals.Metrics {
-		signals = append(signals, "metrics")
-	}
-	if p.signals.Logs {
-		signals = append(signals, "logs")
-	}
+
 	return Snapshot{
-		Enabled:  true,
-		Protocol: p.protocol,
-		Signals:  signals,
-		Endpoint: p.endpoint,
+		Enabled:         true,
+		Protocol:        agreedValue(protocols, len(signals)),
+		Signals:         signals,
+		Endpoint:        agreedValue(endpoints, len(signals)),
+		SignalProtocols: protocols,
+		SignalEndpoints: endpoints,
 	}
+}
+
+// agreedValue returns the value every enabled signal shares, or "".
+//
+// A value is only shared if every enabled signal reported one and they are all
+// the same. A partial agreement is not an agreement: two signals naming one
+// collector while a third names another has no single answer, and giving one
+// anyway is how the field came to be wrong in the first place.
+func agreedValue(values map[string]string, enabled int) string {
+	if len(values) != enabled || enabled == 0 {
+		return ""
+	}
+	var agreed string
+	for _, value := range values {
+		if agreed == "" {
+			agreed = value
+			continue
+		}
+		if value != agreed {
+			return ""
+		}
+	}
+	return agreed
 }
 
 // current holds what the running providers were started with, for surfaces that
@@ -510,6 +596,10 @@ func resolveProtocol(configured, signalKey string) (string, error) {
 // The signal-specific protocol variables, named once so a typo cannot make one
 // of them quietly unread.
 const (
+	tracesEndpointKey  = "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"
+	metricsEndpointKey = "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"
+	logsEndpointKey    = "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"
+
 	tracesProtocolKey  = "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"
 	metricsProtocolKey = "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL"
 	logsProtocolKey    = "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL"

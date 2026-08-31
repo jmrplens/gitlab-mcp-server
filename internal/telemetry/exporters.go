@@ -62,11 +62,14 @@ func newLogExporter(ctx context.Context, protocol string) (sdklog.Exporter, erro
 // Empty means the exporters fall back to their own default, localhost on the
 // standard port, which is a collector on the same host and not worth
 // publishing as an address.
-func endpointFromEnv() string {
-	for _, key := range []string{
-		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
-		"OTEL_EXPORTER_OTLP_ENDPOINT",
-	} {
+// endpointForSignal resolves the endpoint one signal will actually use.
+//
+// The signal-specific variable wins over the shared one, which is the
+// precedence the configuration specification defines, and the same order the
+// exporters themselves apply. Reading only the traces variable, as this did,
+// described a metrics-only deployment by a value it would never use.
+func endpointForSignal(signalKey string) string {
+	for _, key := range []string{signalKey, "OTEL_EXPORTER_OTLP_ENDPOINT"} {
 		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 			return value
 		}
