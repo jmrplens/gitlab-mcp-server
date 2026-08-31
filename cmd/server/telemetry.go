@@ -65,9 +65,15 @@ func startTelemetry(ctx context.Context, serverVersion string) (provider *teleme
 	if err != nil {
 		slog.ErrorContext(ctx, "telemetry disabled: it could not be started",
 			"component", "telemetry", "error", err)
-		return &telemetry.Provider{}, func(context.Context) {}
+		return &telemetry.Provider{}, func(context.Context) {
+			// Nothing to shut down: the provider never started, and the
+			// caller still defers this unconditionally.
+		}
 	}
-	restoreLogger := func() {}
+	restoreLogger := func() {
+		// Replaced below when the bridge is installed. Until then it is what
+		// the caller defers, so the nil case needs a body rather than a check.
+	}
 	if provider.Enabled() {
 		// The logs signal is only real once something writes into it. Until
 		// this line existed the provider was installed, "logs" was announced
@@ -155,13 +161,17 @@ func installSlogBridge() (restore func()) {
 		// Nothing installed a base handler, so there is no known-safe thing to
 		// wrap. Skipping costs the log export and keeps the process alive,
 		// which is the right trade for a path only reached out of order.
-		return func() {}
+		return func() {
+			// No bridge was installed, so there is nothing to restore.
+		}
 	}
 
 	previous := slog.Default()
 	bridged := telemetry.NewSlogHandler(baseLogHandler, telemetry.DefaultLogSeverity)
 	if bridged == nil {
-		return func() {}
+		return func() {
+			// Same as above: no bridge, nothing to put back.
+		}
 	}
 	slog.SetDefault(slog.New(bridged))
 	return func() { slog.SetDefault(previous) }

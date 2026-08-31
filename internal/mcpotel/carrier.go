@@ -69,7 +69,12 @@ func (c metaCarrier) Get(key string) string {
 }
 
 // Set does nothing. See the type doc: this carrier reads.
-func (metaCarrier) Set(string, string) {}
+func (metaCarrier) Set(string, string) {
+	// Deliberately empty. Writing a traceparent into a response's _meta would
+	// hand a client the identifiers of this server's internal spans, which is
+	// what the W3C security section warns about leaking outward. The propagator
+	// interface requires the method; nothing here may implement it.
+}
 
 // Keys returns the propagation keys present, which is what the interface asks
 // for rather than every key in _meta.

@@ -446,10 +446,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,001 |     206,628 |
-| Unit tests (`_test.go`)  |       570 |     311,807 |
+| Source (`.go`, non-test) |     1,001 |     206,643 |
+| Unit tests (`_test.go`)  |       570 |     311,806 |
 | End-to-end tests         |       197 |      52,588 |
-| **Total**                | **1,768** | **571,023** |
+| **Total**                | **1,768** | **571,037** |
 
 ### Functions
 
@@ -469,7 +469,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.51× more tests than code |
 | Average source file length         |                 ~206 lines |
 | Average test file length           |                 ~547 lines |
-| Comment lines in source            |  27,549 (~13.3% of source) |
+| Comment lines in source            |  27,559 (~13.3% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
@@ -501,7 +501,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,756 pages of A4                                                                                   |
+| Source code printed at 55 lines/page | ~3,757 pages of A4                                                                                   |
 | Source lines mentioning `"gitlab"`   | 12,746 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
