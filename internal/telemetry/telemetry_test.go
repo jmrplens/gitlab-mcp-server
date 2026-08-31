@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -580,4 +581,70 @@ func boundedShutdown(t *testing.T) context.Context {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	t.Cleanup(cancel)
 	return ctx
+}
+
+// TestProviderAbandon_ShutsDownWhatHadAlreadyStarted covers the path a partial
+// failure takes.
+//
+// Start builds the signals in order, so a failure on the third leaves the first
+// two running with nobody holding them: goroutines batching for an exporter
+// that will never be flushed, in a process that thinks telemetry did not start.
+// abandon is what stops that, and it was reached by no test.
+func TestProviderAbandon_ShutsDownWhatHadAlreadyStarted(t *testing.T) {
+	provider, err := Start(context.Background(), Config{Enabled: true, Signals: AllSignals()})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	cause := errors.New("the third signal failed")
+	returned := provider.abandon(boundedShutdown(t), cause)
+
+	if !errors.Is(returned, cause) {
+		t.Errorf("abandon returned %v, which does not wrap the cause; the caller would report the wrong reason", returned)
+	}
+	if provider.Enabled() {
+		t.Error("the provider still reports itself enabled after being abandoned")
+	}
+
+	// Idempotent, because the caller defers a shutdown and abandon has already
+	// run one: a second pass must not report an error the caller would then
+	// log as a failure to clean up.
+	if again := provider.Shutdown(boundedShutdown(t)); again != nil {
+		t.Errorf("shutting down an abandoned provider returned %v", again)
+	}
+}
+
+// TestEnvSwitch_ReadsTheServerOwnVariable covers the switch an operator sets
+// when they do not use the flag.
+//
+// It is this server's own variable rather than a standard one, so nothing else
+// validates its spelling, and it follows the specification's boolean grammar
+// rather than Go's: envBool has its own test for that, and this asserts the
+// wiring reaches it.
+func TestEnvSwitch_ReadsTheServerOwnVariable(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		set   bool
+		want  bool
+	}{
+		{name: "unset is off, which is the default this server promises", want: false},
+		{name: "true", set: true, value: "true", want: true},
+		{name: "TRUE", set: true, value: "TRUE", want: true},
+		{name: "false", set: true, value: "false", want: false},
+		{name: "one is not true here", set: true, value: "1", want: false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.set {
+				t.Setenv(EnvSwitchName, tc.value)
+			} else {
+				os.Unsetenv(EnvSwitchName)
+			}
+			if got := EnvSwitch(); got != tc.want {
+				t.Errorf("EnvSwitch() = %v, want %v", got, tc.want)
+			}
+		})
+	}
 }

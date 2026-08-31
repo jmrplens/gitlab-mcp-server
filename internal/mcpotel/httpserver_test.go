@@ -156,3 +156,60 @@ func TestKnownMethod_QUERYIsKnown(t *testing.T) {
 		t.Errorf("knownMethod(QUERY) = (%q, %q), want (QUERY, \"\")", recorded, original)
 	}
 }
+
+// TestStatusRecorder_ForwardsFlush covers the method whose absence would not
+// look like a bug anywhere.
+//
+// This server's default HTTP mode answers with text/event-stream, so a
+// ResponseWriter wrapper that swallowed Flush would turn every streaming
+// response into a hang: the handler would write, the recorder would hold, and
+// the client would wait on bytes that were already produced. Nothing about that
+// failure names the wrapper.
+func TestStatusRecorder_ForwardsFlush(t *testing.T) {
+	underlying := &flushCountingWriter{ResponseRecorder: httptest.NewRecorder()}
+	recorder := &statusRecorder{ResponseWriter: underlying, status: http.StatusOK}
+
+	recorder.Flush()
+
+	if underlying.flushes != 1 {
+		t.Errorf("the underlying writer was flushed %d times, want 1: a held SSE response is a hang the client cannot diagnose",
+			underlying.flushes)
+	}
+}
+
+// TestStatusRecorder_FlushIsSafeWithoutAFlusher keeps the forwarding from
+// becoming a panic when the writer underneath cannot flush, which is every
+// writer in a test and some in production behind a proxy wrapper.
+func TestStatusRecorder_FlushIsSafeWithoutAFlusher(t *testing.T) {
+	recorder := &statusRecorder{ResponseWriter: nonFlushingWriter{}, status: http.StatusOK}
+	recorder.Flush()
+}
+
+// TestStatusRecorder_WriteMarksTheResponseWritten pins the flag the middleware
+// uses to tell an answered request from an abandoned one.
+func TestStatusRecorder_WriteMarksTheResponseWritten(t *testing.T) {
+	recorder := &statusRecorder{ResponseWriter: httptest.NewRecorder(), status: http.StatusOK}
+
+	if _, err := recorder.Write([]byte("body")); err != nil {
+		t.Fatalf("writing: %v", err)
+	}
+	if !recorder.written {
+		t.Error("a written response is not marked written")
+	}
+}
+
+// flushCountingWriter records how many times it was flushed.
+type flushCountingWriter struct {
+	*httptest.ResponseRecorder
+	flushes int
+}
+
+func (w *flushCountingWriter) Flush() { w.flushes++ }
+
+// nonFlushingWriter is a ResponseWriter that cannot flush, which is what the
+// type assertion in Flush exists for.
+type nonFlushingWriter struct{}
+
+func (nonFlushingWriter) Header() http.Header         { return http.Header{} }
+func (nonFlushingWriter) Write(b []byte) (int, error) { return len(b), nil }
+func (nonFlushingWriter) WriteHeader(int)             {}

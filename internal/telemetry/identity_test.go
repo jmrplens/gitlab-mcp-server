@@ -221,3 +221,60 @@ func TestParseIdentityPolicy_AcceptsTheSpellingsOperatorsWrite(t *testing.T) {
 		}
 	}
 }
+
+// TestPolicyDescription_SaysWhatEachPolicyExports covers the sentence an
+// operator reads at startup, which is the only place the policy explains itself
+// outside the documentation.
+//
+// The assertions are about meaning rather than wording, because the wording is
+// prose and pinning it would make this a change detector. What must hold is that
+// the three are distinguishable and that none of them describes a different
+// policy's behavior: a line telling somebody their deployment records nobody
+// while it records names is worse than no line at all.
+func TestPolicyDescription_SaysWhatEachPolicyExports(t *testing.T) {
+	descriptions := map[IdentityPolicy]string{}
+	for _, policy := range []IdentityPolicy{IdentityNone, IdentityPseudonymous, IdentityFull} {
+		description := PolicyDescription(policy)
+		if description == "" {
+			t.Fatalf("policy %q has no description, so the startup line says nothing", policy)
+		}
+		descriptions[policy] = description
+	}
+
+	t.Run("the three are distinguishable", func(t *testing.T) {
+		seen := map[string]IdentityPolicy{}
+		for policy, description := range descriptions {
+			if other, duplicate := seen[description]; duplicate {
+				t.Errorf("%q and %q share a description, so the startup line cannot tell them apart", policy, other)
+			}
+			seen[description] = policy
+		}
+	})
+
+	t.Run("the default promises nothing about a caller", func(t *testing.T) {
+		// The words that would make it wrong: a default whose description
+		// mentioned a digest would be describing pseudonymous.
+		for _, wrong := range []string{"digest", "username", "user id"} {
+			if strings.Contains(descriptions[IdentityNone], wrong) {
+				t.Errorf("the default's description mentions %q: %q", wrong, descriptions[IdentityNone])
+			}
+		}
+	})
+
+	t.Run("pseudonymous says it is not readable", func(t *testing.T) {
+		if !strings.Contains(descriptions[IdentityPseudonymous], "digest") {
+			t.Errorf("the pseudonymous description does not say what it records: %q",
+				descriptions[IdentityPseudonymous])
+		}
+		if strings.Contains(descriptions[IdentityPseudonymous], "username") {
+			t.Errorf("the pseudonymous description claims a username it does not export: %q",
+				descriptions[IdentityPseudonymous])
+		}
+	})
+
+	t.Run("full says the identity is readable", func(t *testing.T) {
+		if !strings.Contains(descriptions[IdentityFull], "username") {
+			t.Errorf("the full description does not name what it exports: %q", descriptions[IdentityFull])
+		}
+	})
+}

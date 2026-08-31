@@ -447,9 +447,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
 | Source (`.go`, non-test) |     1,002 |     206,897 |
-| Unit tests (`_test.go`)  |       559 |     312,161 |
+| Unit tests (`_test.go`)  |       561 |     312,592 |
 | End-to-end tests         |       197 |      52,588 |
-| **Total**                | **1,758** | **571,646** |
+| **Total**                | **1,760** | **572,077** |
 
 ### Functions
 
@@ -458,8 +458,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Source functions                |  7,785 |
 | — exported (public)             |  2,692 |
 | — unexported (private)          |  5,093 |
-| Unit test functions (`TestXxx`) | 11,717 |
-| Subtests (`t.Run(...)`)         |  3,048 |
+| Unit test functions (`TestXxx`) | 11,728 |
+| Subtests (`t.Run(...)`)         |  3,057 |
 | End-to-end test functions       |    509 |
 
 ### Ratios worth noting
@@ -468,7 +468,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.51× more tests than code |
 | Average source file length         |                 ~206 lines |
-| Average test file length           |                 ~558 lines |
+| Average test file length           |                 ~557 lines |
 | Comment lines in source            |  27,661 (~13.4% of source) |
 | Test functions per source function |                       1.5× |
 
@@ -476,8 +476,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,577 |
-| `defer` statements                 |   995 |
+| `if err != nil` checks             | 6,581 |
+| `defer` statements                 |   998 |
 | `struct` types defined             | 2,753 |
 | `//nolint` suppressions            |   249 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
