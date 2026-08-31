@@ -2,28 +2,19 @@ package telemetry
 
 import (
 	"crypto/hmac"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"sync"
 )
 
-// resourceSalt keys [ResourcePseudonym]. It is generated once per process and
-// never written anywhere, for the same reason the identity salt is: a digest of
-// a small predictable input is not a pseudonym, because every candidate can be
-// hashed and compared in a moment. A GitLab project id is a low integer, so an
-// unkeyed hash of "gitlab://project/82077663" is reversible by anyone who can
-// count.
-//
-// Per process rather than persisted, again for the identity reason: a pseudonym
-// that survives restarts is a durable identifier, which is the thing the mode
-// exists to avoid.
-var (
-	resourceSaltOnce sync.Once
-	resourceSalt     []byte
-)
+// This file is the computation. Where the keys come from and how long they
+// live is [Keyring], in keyring.go.
 
-// ResourcePseudonym returns a stable per-process digest of a resource URI.
+// IdentityPseudonym returns the digest naming a caller.
+func (k *Keyring) IdentityPseudonym(userID string) string {
+	return k.digest(userID, false)
+}
+
+// ResourcePseudonym returns the digest naming a resource URI.
 //
 // # Why a digest rather than the URI
 //
@@ -47,26 +38,44 @@ var (
 //
 // What remains is inherent to pseudonymity rather than to this construction:
 // somebody who can correlate a known subscription with a digest can link the
-// two. Sixteen hex characters is 64 bits, past collision concern for the number
-// of watchers one deployment holds and short enough to read in a trace viewer.
-func ResourcePseudonym(uri string) string {
-	if uri == "" {
-		return ""
-	}
-	resourceSaltOnce.Do(func() {
-		resourceSalt = make([]byte, identitySaltBytes)
-		if _, err := rand.Read(resourceSalt); err != nil {
-			// A process that cannot read randomness cannot pseudonymize, and
-			// falling back to an unkeyed digest would be worse than recording
-			// nothing: it would look like a pseudonym while being reversible.
-			resourceSalt = nil
-		}
-	})
-	if resourceSalt == nil {
+// two.
+func (k *Keyring) ResourcePseudonym(uri string) string {
+	return k.digest(uri, true)
+}
+
+// digest is the one computation, so the two pseudonyms cannot drift apart in
+// length, algorithm, or rotation behavior.
+//
+// Sixteen hex characters is 64 bits: past collision concern for the number of
+// callers or watchers one deployment holds, and short enough to read in a
+// trace viewer.
+func (k *Keyring) digest(value string, forResource bool) string {
+	if k == nil || value == "" {
 		return ""
 	}
 
-	mac := hmac.New(sha256.New, resourceSalt)
-	_, _ = mac.Write([]byte(uri))
+	k.mu.Lock()
+	if k.due() {
+		if err := k.generate(); err != nil {
+			// A process that cannot read randomness cannot pseudonymize, and
+			// continuing with the expired key would hold a pseudonym past the
+			// life the operator asked for. Emitting nothing is the honest
+			// answer; falling back to an unkeyed digest would look like a
+			// pseudonym while being reversible by anyone.
+			k.identity, k.resource = nil, nil
+		}
+	}
+	key := k.identity
+	if forResource {
+		key = k.resource
+	}
+	k.mu.Unlock()
+
+	if key == nil {
+		return ""
+	}
+
+	mac := hmac.New(sha256.New, key)
+	_, _ = mac.Write([]byte(value))
 	return hex.EncodeToString(mac.Sum(nil))[:16]
 }

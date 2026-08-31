@@ -296,6 +296,10 @@ func main() {
 		"Whether the tool name is a metric dimension: auto (default; on for the dynamic and meta surfaces, off for individual, where ~1000 tools would exhaust the cardinality limit), on, or off")
 	telemetryIdentityFlag = flag.String("telemetry-identity", string(telemetry.DefaultIdentityPolicy),
 		"How much telemetry records about who made a call: none (default, records nobody), pseudonymous (a per-process digest that correlates one caller's calls without naming them), or full (the GitLab user id and username)")
+	telemetryIdentityKeyFlag = flag.String("telemetry-identity-key", "",
+		"secret the pseudonymous identity policy derives its keys from; empty generates one per process")
+	telemetryIdentityRotationFlag = flag.String("telemetry-identity-rotation", "",
+		"how long a generated pseudonymisation key lives, e.g. 24h; empty or 0 keeps it for the life of the process")
 	flag.Int64Var(&hcfg.maxRequestBodyBytes, "max-request-body-bytes", 0, "Maximum streamable HTTP request body size in bytes; 0 uses the SDK default (4 MiB)")
 
 	// Settings that used to be reachable only through the environment. See
@@ -489,6 +493,9 @@ FLAGS
  Telemetry
   -telemetry                Export OpenTelemetry traces, metrics and logs over OTLP (default false)
   -telemetry-identity str   What telemetry records about the caller: none|pseudonymous|full (default none)
+  -telemetry-identity-key   Secret the pseudonymous policy derives its keys from (empty generates one per process)
+  -telemetry-identity-rotation str
+                            How long a generated pseudonymisation key lives, e.g. 24h (empty keeps it for the process)
   -telemetry-tool-name str  Whether the tool name is a metric dimension: auto|on|off (default auto:
                             on for dynamic and meta, off for individual, where ~1000 tools would
                             exhaust the cardinality limit and collapse the long tail)

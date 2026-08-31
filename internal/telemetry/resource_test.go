@@ -26,7 +26,7 @@ func attrsOf(r *ResourceRedactor, uri string) map[string]string {
 // Required on a span naming a resource, so this is also the level at which this
 // server satisfies that requirement rather than declining it.
 func TestResourceRedactor_FullExportsTheURI(t *testing.T) {
-	got := attrsOf(NewResourceRedactor(IdentityFull), probeURI)
+	got := attrsOf(NewResourceRedactor(IdentityFull, testKeyring(t)), probeURI)
 
 	if got[AttrResourceURI] != probeURI {
 		t.Errorf("%s = %q, want the URI", AttrResourceURI, got[AttrResourceURI])
@@ -47,7 +47,7 @@ func TestResourceRedactor_FullExportsTheURI(t *testing.T) {
 func TestResourceRedactor_LesserPoliciesExportOnlyADigest(t *testing.T) {
 	for _, policy := range []IdentityPolicy{IdentityNone, IdentityPseudonymous} {
 		t.Run(string(policy), func(t *testing.T) {
-			got := attrsOf(NewResourceRedactor(policy), probeURI)
+			got := attrsOf(NewResourceRedactor(policy, testKeyring(t)), probeURI)
 
 			if value, present := got[AttrResourceURI]; present {
 				t.Errorf("%s = %q under policy %q; the URI names a project", AttrResourceURI, value, policy)
@@ -74,7 +74,7 @@ func TestResourceRedactor_NilAndEmptyRecordNothing(t *testing.T) {
 	if got := nilRedactor.ResourceAttributes(probeURI); got != nil {
 		t.Errorf("a nil redactor produced %v", got)
 	}
-	if got := NewResourceRedactor(IdentityFull).ResourceAttributes(""); got != nil {
+	if got := NewResourceRedactor(IdentityFull, testKeyring(t)).ResourceAttributes(""); got != nil {
 		t.Errorf("an empty URI produced %v", got)
 	}
 }
@@ -83,8 +83,8 @@ func TestResourceRedactor_NilAndEmptyRecordNothing(t *testing.T) {
 // makes one flag enough: the same URI under two policies differs in how it is
 // named and in nothing else.
 func TestResourceRedactor_PolicyIsTheOnlyDifference(t *testing.T) {
-	full := NewResourceRedactor(IdentityFull).ResourceAttributes(probeURI)
-	none := NewResourceRedactor(IdentityNone).ResourceAttributes(probeURI)
+	full := NewResourceRedactor(IdentityFull, testKeyring(t)).ResourceAttributes(probeURI)
+	none := NewResourceRedactor(IdentityNone, testKeyring(t)).ResourceAttributes(probeURI)
 
 	if len(full) != 1 || len(none) != 1 {
 		t.Fatalf("full recorded %d attributes and none recorded %d; each policy records exactly one", len(full), len(none))

@@ -20,9 +20,9 @@ func attrMap(t *testing.T, attrs []attribute.KeyValue) map[string]string {
 // newRedactor builds one or fails the test.
 func newRedactor(t *testing.T, policy IdentityPolicy) *Redactor {
 	t.Helper()
-	redactor, err := NewRedactor(policy)
+	redactor, err := NewRedactor(policy, testKeyring(t))
 	if err != nil {
-		t.Fatalf("NewRedactor(%q): %v", policy, err)
+		t.Fatalf("NewRedactor(%q, testKeyring(t)): %v", policy, err)
 	}
 	return redactor
 }

@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/attribute"
@@ -13,6 +16,112 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+// telemetryIdentityKeyFlag holds --telemetry-identity-key, and
+// telemetryIdentityRotationFlag holds --telemetry-identity-rotation. Pointers,
+// for the same reason the policy flag is one: an explicit empty value on the
+// command line has to beat an environment variable, or the more specific
+// instruction loses.
+var (
+	telemetryIdentityKeyFlag      *string
+	telemetryIdentityRotationFlag *string
+)
+
+// identityKeyring is the process's one keyring, built on first use.
+//
+// One, for the same reason there is one redactor: every pseudonym this process
+// emits has to come from the same secret, or the same caller reads as two
+// people across signals.
+var (
+	identityKeyringOnce sync.Once
+	identityKeyringVal  *Keyring
+)
+
+// Keyring is the local alias, so this file reads without the package prefix on
+// every line.
+type Keyring = telemetry.Keyring
+
+// telemetryIdentityKey resolves the operator's pseudonymisation secret.
+//
+// Empty means none was supplied, which is the default and generates one
+// instead. The flag wins over the environment when it was actually passed.
+func telemetryIdentityKey() string {
+	value := os.Getenv(telemetry.EnvIdentityKeyName)
+	if telemetryIdentityKeyFlag != nil && isFlagPassed("telemetry-identity-key") {
+		value = *telemetryIdentityKeyFlag
+	}
+	return value
+}
+
+// telemetryIdentityRotation resolves how long a generated key lives.
+//
+// Unparseable is fatal rather than silently defaulted, like the policy: an
+// operator who typed "24" meaning hours should be told, not given a key that
+// rotates every twenty-four nanoseconds.
+func telemetryIdentityRotation() (time.Duration, error) {
+	value := os.Getenv(telemetry.EnvIdentityRotationName)
+	if telemetryIdentityRotationFlag != nil && isFlagPassed("telemetry-identity-rotation") {
+		value = *telemetryIdentityRotationFlag
+	}
+	if strings.TrimSpace(value) == "" {
+		return telemetry.DefaultKeyRotation, nil
+	}
+	rotation, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s: %w", telemetry.EnvIdentityRotationName, err)
+	}
+	return rotation, nil
+}
+
+// identityKeyring returns the process's keyring, building it the first time.
+//
+// A failure records nothing rather than stopping the process, matching every
+// other decision in this file: telemetry that cannot pseudonymize must not fall
+// back to naming people, and must not take the server down either.
+func identityKeyring() *Keyring {
+	identityKeyringOnce.Do(func() {
+		rotation, err := telemetryIdentityRotation()
+		if err != nil {
+			slog.Error("telemetry identity key rotation is unusable; recording nothing about callers",
+				"component", "telemetry", "error", err)
+			return
+		}
+
+		secret := telemetryIdentityKey()
+		ring, err := telemetry.NewKeyring(secret, rotation)
+		if err != nil {
+			slog.Error("telemetry pseudonymisation keyring could not be built; recording nothing about callers",
+				"component", "telemetry", "error", err)
+			return
+		}
+
+		logKeyringChoice(ring, rotation)
+		identityKeyringVal = ring
+	})
+	return identityKeyringVal
+}
+
+// logKeyringChoice says what an operator configured, including the case where
+// one setting silently cancels another.
+//
+// The ignored rotation is the line worth having. Somebody who supplied a key
+// and also asked for rotation has expressed two intentions that cannot both
+// hold, and the one this server honors is the key, because rotating a secret
+// its owner supplied would destroy the correlation they configured it for.
+func logKeyringChoice(ring *Keyring, requested time.Duration) {
+	switch {
+	case ring.Configured() && requested > 0:
+		slog.Warn("telemetry pseudonyms use the configured key; the rotation interval is ignored",
+			"component", "telemetry", "requested_rotation", requested,
+			"why", "a key supplied by the operator is theirs to rotate")
+	case ring.Configured():
+		slog.Info("telemetry pseudonyms use the configured key, so they are stable across replicas and restarts",
+			"component", "telemetry")
+	case ring.Rotation() > 0:
+		slog.Info("telemetry pseudonyms use a generated key that rotates",
+			"component", "telemetry", "rotation", ring.Rotation())
+	}
+}
 
 // telemetryIdentityFlag holds --telemetry-identity.
 //
@@ -113,7 +222,7 @@ func identityRedactor() *telemetry.Redactor {
 		if policy == telemetry.IdentityNone {
 			return
 		}
-		redactor, err := telemetry.NewRedactor(policy)
+		redactor, err := telemetry.NewRedactor(policy, identityKeyring())
 		if err != nil {
 			slog.Error("telemetry identity redactor could not be built; recording nothing about callers",
 				"component", "telemetry", "error", err)
@@ -164,5 +273,5 @@ func telemetryResources() mcpotel.ResourceAttributer {
 			"component", "telemetry", "error", err)
 		return nil
 	}
-	return telemetry.NewResourceRedactor(policy)
+	return telemetry.NewResourceRedactor(policy, identityKeyring())
 }

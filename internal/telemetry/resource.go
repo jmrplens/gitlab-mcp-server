@@ -49,11 +49,14 @@ const (
 // are the same picture.
 type ResourceRedactor struct {
 	policy IdentityPolicy
+	// keys is the same keyring the identity redactor uses, so one operator
+	// secret governs both pseudonyms and neither can outlive the other.
+	keys *Keyring
 }
 
 // NewResourceRedactor builds the redactor for a policy.
-func NewResourceRedactor(policy IdentityPolicy) *ResourceRedactor {
-	return &ResourceRedactor{policy: policy}
+func NewResourceRedactor(policy IdentityPolicy, keys *Keyring) *ResourceRedactor {
+	return &ResourceRedactor{policy: policy, keys: keys}
 }
 
 // ResourceAttributes returns what may be recorded about one resource URI.
@@ -69,7 +72,7 @@ func (r *ResourceRedactor) ResourceAttributes(uri string) []attribute.KeyValue {
 	if r.policy == IdentityFull {
 		return []attribute.KeyValue{attribute.String(AttrResourceURI, uri)}
 	}
-	digest := ResourcePseudonym(uri)
+	digest := r.keys.ResourcePseudonym(uri)
 	if digest == "" {
 		return nil
 	}

@@ -228,13 +228,56 @@ showed it: running on `pseudonymous`, which names nobody, its spans carried a
 digest and its logs carried the username in the clear. The policy had been
 applied where it was written and never to the log bridge.
 
-One limit of `pseudonymous` is worth knowing before you build a dashboard on
-it. The digest is keyed with a salt generated per process, so it identifies a
-caller within one process and nowhere else. A deployment running several
-replicas behind a load balancer gives the same person a different digest on each
-one, at the same time, and a restart renumbers everybody. That is the cost of
-not holding a durable identifier, and it is deliberate: a pseudonym that
-survived restarts and spanned replicas would be one.
+By default the digest is keyed with a secret generated at startup and written
+nowhere, so it identifies a caller within one process and nowhere else. A
+deployment running several replicas gives the same person a different digest on
+each, at the same time, and a restart renumbers everybody. For a single
+instance that is usually what you want: nothing to store, nothing to leak.
+
+Two settings change it, and which one you reach for follows from how you run
+the server.
+
+| Setting                                  | What it does                                                                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `GITLAB_MCP_TELEMETRY_IDENTITY_KEY`      | a secret every replica derives its keys from, so one caller carries one digest across the whole deployment and across restarts |
+| `GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION` | how long a generated key lives, such as `24h`; empty keeps it for the life of the process                                      |
+
+Set the key when you run more than one replica, or when a count of distinct
+users has to survive a deploy. Rotation then does not apply: a key you supplied
+is yours to rotate, on your schedule, and this server says so at startup rather
+than rotating it underneath you.
+
+Set the rotation interval when you run one instance and want the pseudonym to
+stop correlating after a while. It is off by default because replicas start at
+different moments, so they would rotate out of phase and a distinct-user count
+would churn without anybody asking for it.
+
+Nothing prescribes either answer. The OpenTelemetry registry defines `user.hash`
+as a value "to correlate information for a user in anonymized form" and says
+nothing about how long it should hold, and neither the specification nor ENISA
+offers guidance on the lifetime of a pseudonymisation secret. What the field
+shows is two coherent designs, and Matomo ships both at once: an
+installation-wide salt that never rotates where a pseudonym must persist, and a
+seed discarded every day where it must not.
+
+### What setting the key means
+
+Say it plainly, because it is a real change in what the export is. A stable
+pseudonym is what the EDPB calls a person pseudonym, which "requires long-term
+storage of the pseudonymisation secrets" and whose "risk of unauthorised
+attribution is comparatively high". Under GDPR Article 4(5) that key is the
+"additional information" that allows attribution, so it has to be kept
+separately from the data it protects.
+
+Concretely: GitLab user ids are small integers, so anyone holding both the key
+and an export recovers the mapping by enumeration, in about two minutes on one
+core. The key must not live where the telemetry lands. An environment variable
+is where this server reads it, with the caveat every environment secret carries:
+it is visible to anything that can read the process environment.
+
+The key is expanded with HKDF-SHA256 into two independent keys, one for callers
+and one for resource URIs, so the value you supply is never used as a key
+itself and a digest of a user cannot be compared against a digest of a resource.
 
 ### What is never recorded
 

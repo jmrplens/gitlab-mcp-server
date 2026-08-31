@@ -6,6 +6,7 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 
@@ -136,4 +137,108 @@ func digestOf(t *testing.T, attrs []attribute.KeyValue) string {
 		}
 	}
 	return ""
+}
+
+// TestIdentityKeyring_AConfiguredKeyIsUsed covers the setting a multi-replica
+// deployment needs, through the accessor rather than the constructor.
+//
+// The value of the setting is that every replica derives the same keys, so the
+// assertion that matters is not "a keyring was built" but "this key produced
+// that digest", which a second process can be checked against.
+func TestIdentityKeyring_AConfiguredKeyIsUsed(t *testing.T) {
+	t.Setenv(telemetry.EnvIdentityKeyName, "a deployment-wide secret")
+	resetIdentityKeyring(t)
+
+	ring := identityKeyring()
+	if ring == nil {
+		t.Fatal("no keyring was built from a configured key")
+	}
+	if !ring.Configured() {
+		t.Error("the keyring does not report the key as configured, so rotation would apply to it")
+	}
+
+	// What a second replica would compute from the same setting.
+	elsewhere, err := telemetry.NewKeyring("a deployment-wide secret", 0)
+	if err != nil {
+		t.Fatalf("NewKeyring: %v", err)
+	}
+	if a, b := ring.IdentityPseudonym("42"), elsewhere.IdentityPseudonym("42"); a != b {
+		t.Errorf("two replicas with the same key gave one caller two digests (%q, %q)", a, b)
+	}
+}
+
+// TestIdentityKeyring_WithoutAKeyNothingIsShared is the default, stated as the
+// property rather than as the absence of a setting.
+func TestIdentityKeyring_WithoutAKeyNothingIsShared(t *testing.T) {
+	t.Setenv(telemetry.EnvIdentityKeyName, "")
+	resetIdentityKeyring(t)
+
+	ring := identityKeyring()
+	if ring == nil {
+		t.Fatal("no keyring was built without a configured key")
+	}
+	if ring.Configured() {
+		t.Error("a generated keyring reports itself as configured")
+	}
+
+	elsewhere, err := telemetry.NewKeyring("", 0)
+	if err != nil {
+		t.Fatalf("NewKeyring: %v", err)
+	}
+	if a, b := ring.IdentityPseudonym("42"), elsewhere.IdentityPseudonym("42"); a == b {
+		t.Errorf("two processes without a shared key produced the same digest %q", a)
+	}
+}
+
+// TestIdentityKeyring_TheRotationIntervalIsParsed covers the second setting,
+// including the failure direction: an unusable value records nothing rather
+// than guessing a duration.
+func TestIdentityKeyring_TheRotationIntervalIsParsed(t *testing.T) {
+	t.Run("a duration is honored", func(t *testing.T) {
+		t.Setenv(telemetry.EnvIdentityRotationName, "24h")
+		resetIdentityKeyring(t)
+
+		ring := identityKeyring()
+		if ring == nil {
+			t.Fatal("no keyring was built")
+		}
+		if got := ring.Rotation(); got != 24*time.Hour {
+			t.Errorf("Rotation() = %s, want 24h", got)
+		}
+	})
+
+	t.Run("an unusable value records nothing", func(t *testing.T) {
+		t.Setenv(telemetry.EnvIdentityRotationName, "24")
+		resetIdentityKeyring(t)
+
+		if ring := identityKeyring(); ring != nil {
+			t.Errorf("a bare number was accepted as a duration; Rotation() = %s", ring.Rotation())
+		}
+	})
+}
+
+// TestIdentityKeyring_OneKeyringServesEveryCaller is the same invariant the
+// redactor has, one layer down: the keyring is where the secret lives now, so a
+// second one would reintroduce the defect the shared redactor fixed.
+func TestIdentityKeyring_OneKeyringServesEveryCaller(t *testing.T) {
+	t.Setenv(telemetry.EnvIdentityKeyName, "")
+	resetIdentityKeyring(t)
+
+	if first, second := identityKeyring(), identityKeyring(); first != second {
+		t.Error("two calls produced two keyrings; one caller would carry two digests")
+	}
+}
+
+// resetIdentityKeyring clears the memoized keyring so a test can build one
+// under its own environment.
+func resetIdentityKeyring(t *testing.T) {
+	t.Helper()
+
+	identityKeyringOnce = sync.Once{}
+	identityKeyringVal = nil
+	resetIdentityRedactor(t)
+	t.Cleanup(func() {
+		identityKeyringOnce = sync.Once{}
+		identityKeyringVal = nil
+	})
 }

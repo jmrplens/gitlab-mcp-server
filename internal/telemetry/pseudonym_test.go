@@ -17,9 +17,11 @@ import (
 // on the worst possible span: a poll repeats for the life of the watch, so one
 // subscription wrote a project id into a backend hundreds of times.
 func TestResourcePseudonym_DoesNotContainTheURI(t *testing.T) {
+	keys := testKeyring(t)
+
 	const uri = "gitlab://project/82077663/mr/42"
 
-	digest := ResourcePseudonym(uri)
+	digest := keys.ResourcePseudonym(uri)
 	if digest == "" {
 		t.Fatal("no digest was produced")
 	}
@@ -47,9 +49,11 @@ func TestResourcePseudonym_DoesNotContainTheURI(t *testing.T) {
 // recognizable as one watcher's polls, or an operator cannot tell a single
 // failing subscription from every subscription failing.
 func TestResourcePseudonym_IsStableWithinAProcess(t *testing.T) {
+	keys := testKeyring(t)
+
 	const uri = "gitlab://project/82077663"
 
-	if first, second := ResourcePseudonym(uri), ResourcePseudonym(uri); first != second {
+	if first, second := keys.ResourcePseudonym(uri), keys.ResourcePseudonym(uri); first != second {
 		t.Errorf("the same URI produced %q and %q; polls of one watcher would not correlate", first, second)
 	}
 }
@@ -58,8 +62,10 @@ func TestResourcePseudonym_IsStableWithinAProcess(t *testing.T) {
 // must not collapse into one label, or the digest would hide exactly the
 // distinction it was added to preserve.
 func TestResourcePseudonym_DistinguishesResources(t *testing.T) {
-	a := ResourcePseudonym("gitlab://project/1")
-	b := ResourcePseudonym("gitlab://project/2")
+	keys := testKeyring(t)
+
+	a := keys.ResourcePseudonym("gitlab://project/1")
+	b := keys.ResourcePseudonym("gitlab://project/2")
 	if a == b {
 		t.Errorf("two URIs produced the same digest %q", a)
 	}
@@ -69,8 +75,10 @@ func TestResourcePseudonym_DistinguishesResources(t *testing.T) {
 // recorded as a digest of the empty string, which would be a constant that looks
 // like a real watcher.
 func TestResourcePseudonym_EmptyURIProducesNothing(t *testing.T) {
-	if got := ResourcePseudonym(""); got != "" {
-		t.Errorf("ResourcePseudonym(\"\") = %q, want the empty string", got)
+	keys := testKeyring(t)
+
+	if got := keys.ResourcePseudonym(""); got != "" {
+		t.Errorf("keys.ResourcePseudonym(\"\") = %q, want the empty string", got)
 	}
 }
 
@@ -85,11 +93,26 @@ func TestResourcePseudonym_EmptyURIProducesNothing(t *testing.T) {
 // The comparison value is computed here rather than pasted, so it stays true
 // whatever the URI in this test becomes.
 func TestResourcePseudonym_IsKeyedNotPlain(t *testing.T) {
+	keys := testKeyring(t)
+
 	const uri = "gitlab://project/1"
 
 	sum := sha256.Sum256([]byte(uri))
 
-	if got := ResourcePseudonym(uri); got == hex.EncodeToString(sum[:])[:16] {
+	if got := keys.ResourcePseudonym(uri); got == hex.EncodeToString(sum[:])[:16] {
 		t.Error("the digest equals an unkeyed hash of the URI, so it is enumerable rather than pseudonymous")
 	}
+}
+
+// testKeyring builds a generated keyring, which is what these tests assume:
+// keys that exist, do not rotate, and are shared by everything the process
+// pseudonymizes.
+func testKeyring(t *testing.T) *Keyring {
+	t.Helper()
+
+	ring, err := NewKeyring("", 0)
+	if err != nil {
+		t.Fatalf("NewKeyring: %v", err)
+	}
+	return ring
 }

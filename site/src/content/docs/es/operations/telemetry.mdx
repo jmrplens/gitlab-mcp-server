@@ -253,13 +253,57 @@ marcha: con la política en `pseudonymous`, que no nombra a nadie, sus spans
 llevaban un digest y sus logs el nombre de usuario en claro. La política se
 había aplicado donde se escribió y nunca al puente de logs.
 
-Conviene conocer un límite de `pseudonymous` antes de montar un panel encima. El
-digest se calcula con una sal generada por proceso, así que identifica a quien
-llama dentro de un proceso y en ningún otro sitio. Un despliegue con varias
-réplicas detrás de un balanceador le da a la misma persona un digest distinto en
-cada una, a la vez, y un reinicio renumera a todo el mundo. Ese es el precio de
-no guardar un identificador duradero, y es deliberado: un seudónimo que
-sobreviviera a los reinicios y cruzara réplicas sería exactamente eso.
+Por defecto el digest se calcula con un secreto generado al arrancar y que no se
+escribe en ningún sitio, así que identifica a quien llama dentro de un proceso y
+en ningún otro lado. Un despliegue con varias réplicas le da a la misma persona
+un digest distinto en cada una, a la vez, y un reinicio renumera a todo el
+mundo. Para una instancia única eso suele ser lo que quieres: nada que guardar,
+nada que filtrar.
+
+Dos ajustes lo cambian, y cuál te toca se deduce de cómo ejecutas el servidor.
+
+| Ajuste                                   | Qué hace                                                                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_MCP_TELEMETRY_IDENTITY_KEY`      | un secreto del que cada réplica deriva sus claves, para que quien llama lleve un único digest en todo el despliegue y entre reinicios |
+| `GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION` | cuánto vive una clave generada, por ejemplo `24h`; vacío la mantiene lo que dure el proceso                                           |
+
+Pon la clave si ejecutas más de una réplica, o si el recuento de usuarios
+distintos tiene que sobrevivir a un despliegue. La rotación entonces no aplica:
+una clave que pusiste tú es tuya y la rotas en tu calendario, y este servidor lo
+dice al arrancar en vez de rotarla por debajo.
+
+Pon el intervalo de rotación si ejecutas una sola instancia y quieres que el
+seudónimo deje de correlacionar pasado un tiempo. Viene desactivado porque las
+réplicas arrancan en instantes distintos, así que rotarían desfasadas y el
+recuento de usuarios se movería sin que nadie lo haya pedido.
+
+Ninguna de las dos respuestas está prescrita. La convención define `user.hash`
+como un valor "to correlate information for a user in anonymized form" y no dice
+nada sobre cuánto debe durar, y ni la especificación ni ENISA dan guía sobre la
+vida de un secreto de seudonimización. Lo que sí hay son dos diseños coherentes,
+y Matomo lleva los dos a la vez: una sal de la instalación que no rota donde el
+seudónimo debe persistir, y una semilla que se descarta cada día donde no debe.
+
+### Qué implica poner la clave
+
+Sin adornos, porque cambia de verdad lo que es el export. Un seudónimo estable
+es lo que el EDPB llama *person pseudonym*, que "requires long-term storage of
+the pseudonymisation secrets" y cuyo "risk of unauthorised attribution is
+comparatively high". Según el Artículo 4(5) del RGPD esa clave es la
+"additional information" que permite la atribución, así que hay que guardarla
+por separado de los datos que protege.
+
+En concreto: los ids de usuario de GitLab son enteros pequeños, así que
+cualquiera que tenga la clave y un export recupera la correspondencia por
+enumeración, en unos dos minutos y en un solo núcleo. La clave no puede vivir
+donde aterriza la telemetría. Este servidor la lee de una variable de entorno,
+con la advertencia que arrastra todo secreto en el entorno: es visible para
+cualquier cosa que pueda leer el entorno del proceso.
+
+La clave se expande con HKDF-SHA256 en dos claves independientes, una para
+quien llama y otra para las URIs de recurso, así que el valor que pones nunca se
+usa como clave directamente y un digest de usuario no se puede comparar con uno
+de recurso.
 
 ### Qué no se registra nunca
 

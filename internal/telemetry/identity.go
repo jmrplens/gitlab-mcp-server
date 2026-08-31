@@ -1,10 +1,6 @@
 package telemetry
 
 import (
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -124,27 +120,20 @@ const identitySaltBytes = 32
 // cannot leak by forgetting.
 type Redactor struct {
 	policy IdentityPolicy
-	// salt keys the digest under [IdentityPseudonymous]. Generated per process
-	// rather than derived from the user id, because an unsalted hash of a small
-	// integer is not a pseudonym: a GitLab user id is a low number and every
-	// candidate can be hashed in a moment. Per process rather than persisted
-	// because a pseudonym that survives restarts is a durable identifier, which
-	// is the thing being avoided; the cost is that traffic cannot be correlated
-	// across a restart, which is the right side to err on.
-	salt []byte
+	// keys holds the secret the digest is computed under, and decides how long
+	// it lives. Shared with every other pseudonym this process emits, because
+	// two keyrings would give one caller two digests that no single signal
+	// could show to be the same person. See [Keyring].
+	keys *Keyring
 }
 
-// NewRedactor builds the redactor for a policy.
-func NewRedactor(policy IdentityPolicy) (*Redactor, error) {
-	r := &Redactor{policy: policy}
-	if policy != IdentityPseudonymous {
-		return r, nil
-	}
-	r.salt = make([]byte, identitySaltBytes)
-	if _, err := rand.Read(r.salt); err != nil {
-		return nil, fmt.Errorf("generating the pseudonymisation salt: %w", err)
-	}
-	return r, nil
+// NewRedactor builds the redactor for a policy, over the process's keyring.
+//
+// A nil keyring is accepted and yields no digest, which is the same answer the
+// zero value gives: a caller that never wired one records nothing rather than
+// emitting something that looks like a pseudonym and is not.
+func NewRedactor(policy IdentityPolicy, keys *Keyring) (*Redactor, error) {
+	return &Redactor{policy: policy, keys: keys}, nil
 }
 
 // Policy reports what this redactor was built for.
@@ -224,7 +213,5 @@ const (
 // for the number of users one deployment sees, and short enough to read in a
 // trace viewer.
 func (r *Redactor) pseudonym(userID string) string {
-	mac := hmac.New(sha256.New, r.salt)
-	_, _ = mac.Write([]byte(userID))
-	return hex.EncodeToString(mac.Sum(nil))[:16]
+	return r.keys.IdentityPseudonym(userID)
 }
