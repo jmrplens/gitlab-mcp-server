@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
@@ -64,5 +65,84 @@ func TestRecordRefusal_AnEmptyReasonRecordsNothing(t *testing.T) {
 		if _, present := attrOf(ended, AttrRefusalReason); present {
 			t.Error("an empty reason was recorded as an attribute")
 		}
+	}
+}
+
+// TestRecordRefusal_ReachesTheDurationMetric covers the half that was missing
+// while the attribute was on the span alone.
+//
+// The reason exists to be counted: a deployment refusing every third call
+// because its clients have not learned the parameter shape looks identical to a
+// healthy one otherwise. Counting is a metric, and a span attribute is not a
+// counter, so recording it only there answered the wrong question.
+//
+// It is affordable because the reasons are a closed set of five, which bounds
+// the label space by construction rather than by hoping.
+func TestRecordRefusal_ReachesTheDurationMetric(t *testing.T) {
+	reader, restore := newMetricRecorder(t)
+	defer restore()
+
+	handler := Middleware(Options{})(
+		func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+			// What a refusing handler does: report the reason and answer with
+			// an error result, which is a successful response carrying a
+			// failure meant for the model.
+			RecordRefusal(ctx, "safe_mode")
+			return &mcp.CallToolResult{IsError: true}, nil
+		},
+	)
+	_, _ = handler(context.Background(), "tools/call",
+		callToolRequest("gitlab_issue", map[string]any{}, nil))
+
+	values := dimensionValues(t, reader, "gitlab_mcp.refusal_reason")
+	if len(values) == 0 {
+		t.Fatal("no metric carries the refusal reason, so a refusal rate cannot be computed")
+	}
+	for _, value := range values {
+		if value != "safe_mode" {
+			t.Errorf("gitlab_mcp.refusal_reason = %q on the metric, want safe_mode", value)
+		}
+	}
+}
+
+// TestRecordRefusal_AnOrdinaryCallCarriesNoReason keeps the dimension from
+// appearing on every measurement.
+//
+// A label present on some data points and absent on others is two series rather
+// than one, which is the intended shape here: the refusals are separable and
+// the ordinary calls are not tagged with an empty reason.
+func TestRecordRefusal_AnOrdinaryCallCarriesNoReason(t *testing.T) {
+	reader, restore := newMetricRecorder(t)
+	defer restore()
+
+	handler := Middleware(Options{})(
+		func(context.Context, string, mcp.Request) (mcp.Result, error) {
+			return &mcp.CallToolResult{}, nil
+		},
+	)
+	_, _ = handler(context.Background(), "tools/call",
+		callToolRequest("gitlab_issue", map[string]any{}, nil))
+
+	if values := dimensionValues(t, reader, "gitlab_mcp.refusal_reason"); len(values) != 0 {
+		t.Errorf("a call that was not refused carries a reason: %v", values)
+	}
+}
+
+// TestRecordRefusal_WithoutTheHolderStillMarksTheSpan pins the fallback, which
+// is what a handler reached from outside this middleware gets.
+//
+// The holder is only in the context when a middleware put it there, so the span
+// attribute has to work on its own rather than depending on it.
+func TestRecordRefusal_WithoutTheHolderStillMarksTheSpan(t *testing.T) {
+	recorder := newRecorder(t)
+
+	ctx, span := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)).
+		Tracer("test").Start(context.Background(), "tools/call")
+	RecordRefusal(ctx, "rate_limited")
+	span.End()
+
+	value, ok := attrOf(recorder.Ended()[0], AttrRefusalReason)
+	if !ok || value.AsString() != "rate_limited" {
+		t.Errorf("the span does not carry the reason without a holder in the context; got %v", value)
 	}
 }

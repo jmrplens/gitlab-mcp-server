@@ -129,18 +129,19 @@ this server's own log output, including when an export fails.
 
 One span per MCP request, plus one child span per GitLab API call it caused.
 
-| Attribute                  | On                       | Meaning                                            |
-| -------------------------- | ------------------------ | -------------------------------------------------- |
-| `mcp.method.name`          | every span               | `tools/call`, `resources/read`, `prompts/get`, …   |
-| `gen_ai.tool.name`         | tool calls               | the tool the client named                          |
-| `gitlab_mcp.action`        | tool calls               | the canonical catalog action, such as `issue.list` |
-| `gitlab_mcp.tool_surface`  | every span               | `dynamic`, `meta` or `individual`                  |
-| `network.transport`        | every span               | `pipe` for stdio, `tcp` for HTTP                   |
-| `gen_ai.prompt.name`       | `prompts/get`            | the prompt the client named                        |
-| `mcp.protocol.version`     | when it is known         | the MCP revision the request is speaking           |
-| `mcp.session.id`           | stateful sessions only   | absent under the default stateless HTTP transport  |
-| `error.type`               | failures only            | a JSON-RPC code, or `tool_error`                   |
-| `rpc.response.status_code` | when a code was returned | the JSON-RPC code                                  |
+| Attribute                   | On                       | Meaning                                            |
+| --------------------------- | ------------------------ | -------------------------------------------------- |
+| `mcp.method.name`           | every span               | `tools/call`, `resources/read`, `prompts/get`, …   |
+| `gen_ai.tool.name`          | tool calls               | the tool the client named                          |
+| `gitlab_mcp.action`         | tool calls               | the canonical catalog action, such as `issue.list` |
+| `gitlab_mcp.tool_surface`   | every span               | `dynamic`, `meta` or `individual`                  |
+| `network.transport`         | every span               | `pipe` for stdio, `tcp` for HTTP                   |
+| `gen_ai.prompt.name`        | `prompts/get`            | the prompt the client named                        |
+| `mcp.protocol.version`      | when it is known         | the MCP revision the request is speaking           |
+| `mcp.session.id`            | stateful sessions only   | absent under the default stateless HTTP transport  |
+| `error.type`                | failures only            | a JSON-RPC code, or `tool_error`                   |
+| `rpc.response.status_code`  | when a code was returned | the JSON-RPC code                                  |
+| `gitlab_mcp.refusal_reason` | refusals                 | why the call was declined without reaching GitLab  |
 
 `gitlab_mcp.action` is the one worth understanding. On the default dynamic
 surface every tool call names the same two tools, so `gen_ai.tool.name` is
@@ -175,6 +176,19 @@ this server does not have is recorded as `_OTHER` rather than under the name it
 sent, so the number of stored time series follows what is registered rather than
 what a client types. The span keeps the name verbatim, which is where you look
 when a client reports that its calls are failing.
+
+A refusal is not an error, which is why it has an attribute of its own. The call
+arrived well formed and this server chose not to run it: safe mode previewing a
+write, a destructive action awaiting confirmation, an action name that does not
+exist, parameters that do not fit, or the deployment's own rate limit. The five
+values are the whole set, which is what makes the attribute affordable as a
+metric dimension as well as a span attribute: a deployment refusing every third
+call looks exactly like a healthy one on a duration histogram alone.
+
+`rate_limited` is the one worth alerting on, because it is the only refusal that
+is not the caller's doing. Its log line is throttled to one every ten seconds,
+so a client in a retry loop cannot flood the terminal; the metric counts them
+all.
 
 ### Logs
 

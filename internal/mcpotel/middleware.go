@@ -162,6 +162,11 @@ func Middleware(opts Options) mcp.Middleware {
 			}
 
 			ctx, span := tracer.Start(ctx, call.spanName, startOpts...)
+
+			// The handler reports a refusal through here, since the middleware
+			// cannot tell one from an ordinary failure by looking at the
+			// result.
+			ctx, refusal := withRefusalHolder(ctx)
 			// Deferred so a panic still ends the span, which is what makes the
 			// SDK record the panic as an exception event before re-panicking.
 			defer span.End()
@@ -194,6 +199,14 @@ func Middleware(opts Options) mcp.Middleware {
 				metricAttrs = append(metricAttrs, AttrMCPProtocolVersion.String(version))
 			}
 			metricAttrs = append(metricAttrs, result.metricAttributes()...)
+			// Bounded by construction: the reasons are a closed set of five, so
+			// this adds at most five label combinations per action rather than
+			// growing with traffic. Counting them is the point of recording
+			// them at all, and a deployment refusing every third call looks
+			// identical to a healthy one without it.
+			if refusal.reason != "" {
+				metricAttrs = append(metricAttrs, AttrRefusalReason.String(refusal.reason))
+			}
 			duration.Record(ctx, time.Since(started).Seconds(), metric.WithAttributes(metricAttrs...))
 
 			return res, err

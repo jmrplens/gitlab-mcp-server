@@ -11,6 +11,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/time/rate"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 )
 
 // RateLimiter enforces a token-bucket rate limit on `tools/call` requests.
@@ -85,6 +87,13 @@ func (r *RateLimiter) reportRefusal(ctx context.Context, tool string) {
 	if r == nil {
 		return
 	}
+
+	// Above the throttle, and deliberately: the log line is throttled because a
+	// flood of identical lines helps nobody, but a metric is an aggregate and a
+	// refusal that is not counted cannot be seen at all. This is also the one
+	// refusal an operator can act on, since it is the deployment's own limit
+	// rejecting a call that was well formed.
+	mcpotel.RecordRefusal(ctx, RefusalRateLimited)
 
 	r.reportMu.Lock()
 	window := r.throttleWindow

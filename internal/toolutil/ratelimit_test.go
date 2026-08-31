@@ -11,7 +11,11 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"golang.org/x/time/rate"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 )
 
 // TestNewRateLimiter_Disabled verifies that a non-positive rps disables the
@@ -431,5 +435,45 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 				assertContains(t, out, want)
 			}
 		})
+	}
+}
+
+// TestRateLimiter_EveryRefusalIsRecordedEvenWhenTheLogIsSuppressed pins the
+// split between the two reporting channels.
+//
+// The log line is throttled to one per window on purpose, because a client in a
+// retry loop would otherwise fill the terminal with the same sentence. A metric
+// is an aggregate, so the same argument does not apply to it: a refusal that is
+// never recorded is one an operator cannot see at any rate. Before this,
+// rate_limited was a declared constant that reached a log field and no signal.
+func TestRateLimiter_EveryRefusalIsRecordedEvenWhenTheLogIsSuppressed(t *testing.T) {
+	recorder := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	limiter := NewRateLimiter(1, 1)
+
+	// A long window, so the second and third refusals are certainly the
+	// suppressed ones and the test asserts suppression rather than racing it.
+	limiter.throttleWindow = time.Hour
+
+	const refusals = 3
+	for range refusals {
+		ctx, span := tp.Tracer("test").Start(context.Background(), "tools/call")
+		limiter.reportRefusal(ctx, "gitlab_execute_action")
+		span.End()
+	}
+
+	marked := 0
+	for _, span := range recorder.Ended() {
+		for _, attr := range span.Attributes() {
+			if attr.Key == mcpotel.AttrRefusalReason && attr.Value.AsString() == RefusalRateLimited {
+				marked++
+			}
+		}
+	}
+	if marked != refusals {
+		t.Errorf("%d of %d refusals carry the reason; the throttle that quiets the log line must not quiet the signal",
+			marked, refusals)
 	}
 }

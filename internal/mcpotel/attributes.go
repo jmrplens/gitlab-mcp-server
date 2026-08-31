@@ -157,9 +157,39 @@ func RecordRefusal(ctx context.Context, reason string) {
 	if reason == "" {
 		return
 	}
-	span := trace.SpanFromContext(ctx)
-	if !span.IsRecording() {
-		return
+	// The metric first, because it is the one that can be missed: the holder is
+	// only in the context when a middleware put it there, and a handler called
+	// from somewhere else still gets the span attribute.
+	if holder, ok := ctx.Value(refusalHolderKey{}).(*refusalHolder); ok {
+		holder.reason = reason
 	}
-	span.SetAttributes(AttrRefusalReason.String(reason))
+	if span := trace.SpanFromContext(ctx); span.IsRecording() {
+		span.SetAttributes(AttrRefusalReason.String(reason))
+	}
+}
+
+// refusalHolderKey is the context key for the holder below. An empty struct
+// type rather than a string, so nothing else can collide with it.
+type refusalHolderKey struct{}
+
+// refusalHolder carries a reason back from the handler to the middleware.
+//
+// The middleware cannot learn it any other way. A refusal travels as a
+// successful JSON-RPC response carrying a failure meant for the model, so from
+// outside the handler it is indistinguishable from a handler that ran and
+// failed, which is the same reason RecordRefusal is called from where the
+// refusal is decided.
+//
+// One holder per request, reachable only through that request's context, so
+// there is nothing to synchronize: the handler writes before it returns and the
+// middleware reads after.
+type refusalHolder struct {
+	reason string
+}
+
+// withRefusalHolder returns a context a handler can report a refusal through,
+// and the holder to read afterwards.
+func withRefusalHolder(ctx context.Context) (context.Context, *refusalHolder) {
+	holder := &refusalHolder{}
+	return context.WithValue(ctx, refusalHolderKey{}, holder), holder
 }

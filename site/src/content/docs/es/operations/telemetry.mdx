@@ -149,18 +149,19 @@ falla una exportación.
 Un span por petición MCP, más un span hijo por cada llamada a la API de GitLab
 que provoque.
 
-| Atributo                   | Dónde                    | Significado                                        |
-| -------------------------- | ------------------------ | -------------------------------------------------- |
-| `mcp.method.name`          | todos los spans          | `tools/call`, `resources/read`, `prompts/get`, …   |
-| `gen_ai.tool.name`         | llamadas a herramienta   | la herramienta que nombró el cliente               |
-| `gitlab_mcp.action`        | llamadas a herramienta   | la acción canónica del catálogo, como `issue.list` |
-| `gitlab_mcp.tool_surface`  | todos los spans          | `dynamic`, `meta` o `individual`                   |
-| `network.transport`        | todos los spans          | `pipe` en stdio, `tcp` en HTTP                     |
-| `gen_ai.prompt.name`       | `prompts/get`            | el prompt que nombró el cliente                    |
-| `mcp.protocol.version`     | cuando se conoce         | la revisión de MCP que habla la petición           |
-| `mcp.session.id`           | solo sesiones con estado | ausente en el HTTP sin estado por defecto          |
-| `error.type`               | solo en fallos           | un código JSON-RPC, o `tool_error`                 |
-| `rpc.response.status_code` | cuando hubo código       | el código JSON-RPC                                 |
+| Atributo                    | Dónde                    | Significado                                        |
+| --------------------------- | ------------------------ | -------------------------------------------------- |
+| `mcp.method.name`           | todos los spans          | `tools/call`, `resources/read`, `prompts/get`, …   |
+| `gen_ai.tool.name`          | llamadas a herramienta   | la herramienta que nombró el cliente               |
+| `gitlab_mcp.action`         | llamadas a herramienta   | la acción canónica del catálogo, como `issue.list` |
+| `gitlab_mcp.tool_surface`   | todos los spans          | `dynamic`, `meta` o `individual`                   |
+| `network.transport`         | todos los spans          | `pipe` en stdio, `tcp` en HTTP                     |
+| `gen_ai.prompt.name`        | `prompts/get`            | el prompt que nombró el cliente                    |
+| `mcp.protocol.version`      | cuando se conoce         | la revisión de MCP que habla la petición           |
+| `mcp.session.id`            | solo sesiones con estado | ausente en el HTTP sin estado por defecto          |
+| `error.type`                | solo en fallos           | un código JSON-RPC, o `tool_error`                 |
+| `rpc.response.status_code`  | cuando hubo código       | el código JSON-RPC                                 |
+| `gitlab_mcp.refusal_reason` | rechazos                 | por qué se declinó la llamada sin llegar a GitLab  |
 
 `gitlab_mcp.action` es el que conviene entender. En la superficie dinámica, que
 es la de por defecto, cada llamada nombra las mismas dos herramientas, así que
@@ -196,6 +197,20 @@ no bajo el nombre que envió, así que el número de series almacenadas depende 
 lo que hay registrado y no de lo que teclee un cliente. El span conserva el
 nombre literal, que es donde hay que mirar cuando un cliente informa de que sus
 llamadas fallan.
+
+Un rechazo no es un error, y por eso tiene un atributo propio. La llamada llegó
+bien formada y este servidor decidió no ejecutarla: el modo seguro previsualizando
+una escritura, una acción destructiva a la espera de confirmación, un nombre de
+acción que no existe, parámetros que no encajan, o el propio límite de tasa del
+despliegue. Los cinco valores son el conjunto completo, y eso es lo que hace que
+el atributo sea asumible también como dimensión de métrica: un despliegue que
+rechaza una de cada tres llamadas es indistinguible de uno sano si solo se mira
+el histograma de duración.
+
+`rate_limited` es el que conviene vigilar, porque es el único rechazo que no
+depende de quien llama. Su línea de log se limita a una cada diez segundos, para
+que un cliente en bucle de reintento no inunde el terminal; la métrica las cuenta
+todas.
 
 ### Registros
 
