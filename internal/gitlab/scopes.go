@@ -15,10 +15,10 @@ import (
 func DetectScopes(ctx context.Context, client *gl.Client) []string {
 	token, _, err := client.PersonalAccessTokens.GetSinglePersonalAccessToken(gl.WithContext(ctx))
 	if err != nil {
-		slog.Warn("failed to detect PAT scopes, all tools will be registered", "error", err)
+		slog.WarnContext(ctx, "failed to detect PAT scopes, all tools will be registered", "error", err)
 		return nil
 	}
-	slog.Info("detected PAT scopes", "scopes", token.Scopes)
+	slog.InfoContext(ctx, "detected PAT scopes", "scopes", token.Scopes)
 	return token.Scopes
 }
 

@@ -81,7 +81,7 @@ func NewRateLimiter(rps float64, burst int) *RateLimiter {
 // WARN rather than INFO: unlike the other refusals, this one is not the
 // caller's doing. The call was well formed and would have succeeded a moment
 // earlier or later, and an operator seeing it may need to raise the limit.
-func (r *RateLimiter) reportRefusal(tool string) {
+func (r *RateLimiter) reportRefusal(ctx context.Context, tool string) {
 	if r == nil {
 		return
 	}
@@ -105,7 +105,7 @@ func (r *RateLimiter) reportRefusal(tool string) {
 	if tool == "" {
 		tool = "tools/call"
 	}
-	slog.Warn("tool call refused: rate limit exceeded",
+	slog.WarnContext(ctx, "tool call refused: rate limit exceeded",
 		"tool", tool,
 		"reason", RefusalRateLimited,
 		"limit_rps", float64(r.limiter.Limit()),
@@ -159,7 +159,7 @@ func AttachRateLimit(server *mcp.Server, limiter *RateLimiter) {
 			case "tools/call":
 				if !limiter.allow() {
 					result := rateLimitedResult(req)
-					limiter.reportRefusal(extractToolName(req))
+					limiter.reportRefusal(ctx, extractToolName(req))
 					return result, nil
 				}
 			case "completion/complete":

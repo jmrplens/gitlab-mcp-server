@@ -20,7 +20,7 @@ import (
 // bindUnixSocket listens on path, warning that the requested mode cannot be
 // enforced on this platform.
 func bindUnixSocket(ctx context.Context, path string, mode os.FileMode) (net.Listener, error) {
-	slog.Warn("unix socket permission mode is not enforceable on Windows; access follows the directory ACL",
+	slog.WarnContext(ctx, "unix socket permission mode is not enforceable on Windows; access follows the directory ACL",
 		"path", path, "requested_mode", mode.Perm().String())
 
 	listener, err := (&net.ListenConfig{}).Listen(ctx, "unix", path)

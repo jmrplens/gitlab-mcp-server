@@ -347,7 +347,7 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 		{
 			name:      "the first refusal in a window is reported",
 			build:     func() *RateLimiter { return NewRateLimiter(1, 1) },
-			refuse:    func(r *RateLimiter) { r.reportRefusal("gitlab_execute_action") },
+			refuse:    func(r *RateLimiter) { r.reportRefusal(context.Background(), "gitlab_execute_action") },
 			wantLines: 1,
 			wantContains: []string{
 				`"level":"WARN"`,
@@ -363,7 +363,7 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 			build: func() *RateLimiter { return NewRateLimiter(10, 40) },
 			refuse: func(r *RateLimiter) {
 				for range 102 {
-					r.reportRefusal("gitlab_execute_action")
+					r.reportRefusal(context.Background(), "gitlab_execute_action")
 				}
 			},
 			wantLines: 1,
@@ -376,12 +376,12 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 				return r
 			},
 			refuse: func(r *RateLimiter) {
-				r.reportRefusal("gitlab_execute_action")
+				r.reportRefusal(context.Background(), "gitlab_execute_action")
 				for range 41 {
-					r.reportRefusal("gitlab_execute_action")
+					r.reportRefusal(context.Background(), "gitlab_execute_action")
 				}
 				time.Sleep(5 * time.Millisecond)
-				r.reportRefusal("gitlab_execute_action")
+				r.reportRefusal(context.Background(), "gitlab_execute_action")
 			},
 			wantLines: 2,
 			// Without the count, an operator reading one line per ten seconds
@@ -391,7 +391,7 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 		{
 			name:      "a nil limiter reports nothing",
 			build:     func() *RateLimiter { return nil },
-			refuse:    func(r *RateLimiter) { r.reportRefusal("gitlab_execute_action") },
+			refuse:    func(r *RateLimiter) { r.reportRefusal(context.Background(), "gitlab_execute_action") },
 			wantLines: 0,
 		},
 		{
@@ -400,7 +400,7 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 			// and the method is the honest fallback.
 			name:         "an unnamed tool still produces a usable line",
 			build:        func() *RateLimiter { return NewRateLimiter(1, 1) },
-			refuse:       func(r *RateLimiter) { r.reportRefusal("") },
+			refuse:       func(r *RateLimiter) { r.reportRefusal(context.Background(), "") },
 			wantLines:    1,
 			wantContains: []string{`"tool":"tools/call"`},
 		},
@@ -411,8 +411,8 @@ func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
 			name:  "a zero window falls back to the default",
 			build: func() *RateLimiter { return &RateLimiter{limiter: rate.NewLimiter(1, 1)} },
 			refuse: func(r *RateLimiter) {
-				r.reportRefusal("gitlab_execute_action")
-				r.reportRefusal("gitlab_execute_action")
+				r.reportRefusal(context.Background(), "gitlab_execute_action")
+				r.reportRefusal(context.Background(), "gitlab_execute_action")
 			},
 			wantLines: 1,
 		},

@@ -156,6 +156,19 @@ The action attribute is the only thing that tells them apart.
 Seconds, not milliseconds. The convention fixes that, and it is the opposite of
 the `duration` field in this server's log records.
 
+### Logs
+
+The third signal is this server's own structured records: the same lines it
+writes to stderr, exported from `INFO` upward. `LOG_LEVEL` still governs the
+terminal; the export floor is separate, so running at `debug` does not send a
+record per GitLab round trip to your collector on top of the span that already
+describes it.
+
+Every record written while serving a request carries the trace and span id of
+that request, so a backend can jump from a slow span straight to the lines
+written inside it. Startup, shutdown and background records carry none, because
+there is no span to belong to.
+
 ### What is never recorded
 
 Not by default and not by any setting, because there is no setting:

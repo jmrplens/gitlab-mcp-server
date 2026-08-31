@@ -178,7 +178,7 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 		return &Provider{}, nil
 	}
 	if SDKDisabledByEnv() {
-		slog.Info("telemetry suppressed by OTEL_SDK_DISABLED", "component", "telemetry")
+		slog.InfoContext(ctx, "telemetry suppressed by OTEL_SDK_DISABLED", "component", "telemetry")
 		return &Provider{}, nil
 	}
 

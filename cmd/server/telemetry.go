@@ -63,7 +63,7 @@ func startTelemetry(ctx context.Context, serverVersion string) (provider *teleme
 		DropToolNameFromMetrics: dropToolNameFromMetrics(),
 	})
 	if err != nil {
-		slog.Error("telemetry disabled: it could not be started",
+		slog.ErrorContext(ctx, "telemetry disabled: it could not be started",
 			"component", "telemetry", "error", err)
 		return &telemetry.Provider{}, func(context.Context) {}
 	}
@@ -78,7 +78,7 @@ func startTelemetry(ctx context.Context, serverVersion string) (provider *teleme
 		restoreLogger = installSlogBridge()
 
 		snapshot := provider.Snapshot()
-		slog.Info("telemetry enabled",
+		slog.InfoContext(ctx, "telemetry enabled",
 			"component", "telemetry",
 			"protocol", snapshot.Protocol,
 			"endpoint", snapshot.Endpoint,
@@ -86,7 +86,7 @@ func startTelemetry(ctx context.Context, serverVersion string) (provider *teleme
 	}
 	return provider, func(shutdownCtx context.Context) {
 		if shutdownErr := provider.Shutdown(shutdownCtx); shutdownErr != nil {
-			slog.Warn("telemetry did not shut down cleanly",
+			slog.WarnContext(ctx, "telemetry did not shut down cleanly",
 				"component", "telemetry", "error", shutdownErr)
 		}
 		// After the provider, so the warning above still reaches a collector

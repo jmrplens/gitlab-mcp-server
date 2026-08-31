@@ -87,7 +87,7 @@ type resolvedServerContextKey struct{}
 func serverFromRequestContext(r *http.Request) *mcp.Server {
 	server, _ := r.Context().Value(resolvedServerContextKey{}).(*mcp.Server)
 	if server == nil {
-		slog.Error("MCP handler reached without a gated server; check handler wiring")
+		slog.ErrorContext(r.Context(), "MCP handler reached without a gated server; check handler wiring")
 	}
 	return server
 }
@@ -164,7 +164,7 @@ func (f *gateFailure) write(w http.ResponseWriter, r *http.Request) {
 		ID:      requestIDFromBody(r),
 		Error:   jsonRPCErrorBody{Code: f.code, Message: f.message},
 	}); err != nil {
-		slog.Error("failed to write gate error response", "error", err)
+		slog.ErrorContext(r.Context(), "failed to write gate error response", "error", err)
 	}
 }
 
@@ -277,7 +277,7 @@ func (g *mcpServerGate) middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		server, failure := g.resolve(r) //nolint:contextcheck // pool bounds per-token scope detection with its own timeout
+		server, failure := g.resolve(r)
 		if failure != nil {
 			failure.write(w, r)
 			return
@@ -368,7 +368,7 @@ func (g *mcpServerGate) checkSessionOwnership(r *http.Request, server *mcp.Serve
 	}
 	owned, found := g.sessionTags.Load(server)
 	if !found || owned != presented {
-		slog.Warn("request rejected: session ID does not belong to the presented credential")
+		slog.WarnContext(r.Context(), "request rejected: session ID does not belong to the presented credential")
 		return sessionOwnershipFailure()
 	}
 	return nil
@@ -388,7 +388,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	ip := clientIP(r, g.trustedProxyHeader)
 
 	if g.limiter != nil && g.limiter.IsBlocked(ip) {
-		slog.Warn("request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
+		slog.WarnContext(r.Context(), "request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
 		return nil, &gateFailure{
 			status:  http.StatusTooManyRequests,
 			code:    errCodeTooManyRequests,
@@ -402,7 +402,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		if g.limiter != nil {
 			g.limiter.RecordFailure(ip)
 		}
-		slog.Info("request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
+		slog.InfoContext(r.Context(), "request rejected: missing authentication token (set PRIVATE-TOKEN header or Authorization: Bearer)")
 		return nil, &gateFailure{
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,
@@ -413,7 +413,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 
 	options, err := serverpool.ResolveRequestOptionsFor(r, g.gitlabURLs)
 	if err != nil {
-		slog.Error("request rejected: invalid GITLAB-URL header", "error", err)
+		slog.ErrorContext(r.Context(), "request rejected: invalid GITLAB-URL header", "error", err)
 		return nil, &gateFailure{
 			status:  http.StatusBadRequest,
 			code:    errCodeInvalidRequest,
@@ -422,7 +422,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 	}
 	logIgnoredRequestOptions(token, options)
 
-	server, err := g.pool.GetOrCreateWithScopes(token, options.GitLabURL, verifiedScopes(r))
+	server, err := g.pool.GetOrCreateWithScopes(token, options.GitLabURL, verifiedScopes(r)) //nolint:contextcheck // the pool bounds per-token scope detection with its own timeout, deliberately outliving this request
 	if errors.Is(err, serverpool.ErrInvalidCredential) {
 		// GitLab itself rejected the token, so this is an authentication
 		// failure in the full sense: 401, and it does count against the
@@ -431,7 +431,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		if g.limiter != nil {
 			g.limiter.RecordFailure(ip)
 		}
-		slog.Info("request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
+		slog.InfoContext(r.Context(), "request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
 		return nil, &gateFailure{
 			status:  http.StatusUnauthorized,
 			code:    errCodeUnauthorized,
@@ -449,7 +449,7 @@ func (g *mcpServerGate) resolve(r *http.Request) (*mcp.Server, *gateFailure) {
 		// could not be built — the credential was never judged. Counting it
 		// would let a GitLab outage lock out clients holding valid tokens,
 		// which is the same conflation of causes this gate exists to remove.
-		slog.Error("failed to create server for token", "error", err)
+		slog.ErrorContext(r.Context(), "failed to create server for token", "error", err)
 		// The pool error can name internal state, so it is logged but not
 		// returned to the caller.
 		return nil, &gateFailure{

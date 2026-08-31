@@ -127,7 +127,7 @@ func (t Tracker) Update(ctx context.Context, progress, total float64, message st
 		t.state.mu.Lock()
 		defer t.state.mu.Unlock()
 		if t.state.started && progress <= t.state.last {
-			slog.Debug("progress: dropping non-monotonic update",
+			slog.DebugContext(ctx, "progress: dropping non-monotonic update",
 				"previous", t.state.last, "attempted", progress)
 			return
 		}
@@ -141,7 +141,7 @@ func (t Tracker) Update(ctx context.Context, progress, total float64, message st
 		Message:       message,
 	}
 	if err := t.session.NotifyProgress(ctx, params); err != nil {
-		slog.Debug("failed to send progress notification", "error", err)
+		slog.DebugContext(ctx, "failed to send progress notification", "error", err)
 	}
 }
 

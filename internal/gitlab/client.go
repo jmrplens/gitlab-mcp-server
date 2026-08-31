@@ -340,11 +340,11 @@ func (c *Client) EnsureInitialized(ctx context.Context) {
 	c.lastInitAttempt = time.Now()
 
 	if _, err := c.Initialize(ctx); err != nil {
-		slog.Debug("lazy re-initialization failed", "error", err)
+		slog.DebugContext(ctx, "lazy re-initialization failed", "error", err)
 		return
 	}
 	c.needsLazyInit.Store(false)
-	slog.Info("gitlab client recovered — lazy initialization succeeded")
+	slog.InfoContext(ctx, "gitlab client recovered — lazy initialization succeeded")
 }
 
 // EnableLazyInit enables lazy re-initialization on subsequent API calls.
@@ -374,17 +374,17 @@ func (c *Client) pingDirect(ctx context.Context) error {
 func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
 	versionInfo, err := c.versionDirect(ctx)
 	if err != nil {
-		slog.Warn("failed to detect GitLab edition, using configured enterprise mode", "error", err, "fallback", fallback)
+		slog.WarnContext(ctx, "failed to detect GitLab edition, using configured enterprise mode", "error", err, "fallback", fallback)
 		c.SetEnterprise(fallback)
 		return fallback
 	}
 	if versionInfo.Enterprise == nil {
-		slog.Debug("GitLab version endpoint did not report edition, using configured enterprise mode", "version", versionInfo.Version, "fallback", fallback)
+		slog.DebugContext(ctx, "GitLab version endpoint did not report edition, using configured enterprise mode", "version", versionInfo.Version, "fallback", fallback)
 		c.SetEnterprise(fallback)
 		return fallback
 	}
 	c.SetEnterprise(*versionInfo.Enterprise)
-	slog.Info("detected GitLab edition", "version", versionInfo.Version, "enterprise", *versionInfo.Enterprise)
+	slog.InfoContext(ctx, "detected GitLab edition", "version", versionInfo.Version, "enterprise", *versionInfo.Enterprise)
 	return *versionInfo.Enterprise
 }
 
@@ -399,19 +399,19 @@ func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
 func (c *Client) DetectTier(ctx context.Context) edition.Tier {
 	lic, _, err := c.inner.License.GetLicense(gl.WithContext(ctx))
 	if err != nil {
-		slog.Debug("failed to detect GitLab tier from license, falling back to free",
+		slog.DebugContext(ctx, "failed to detect GitLab tier from license, falling back to free",
 			"error", err)
 		c.SetTier(edition.Free)
 		return edition.Free
 	}
 	if lic == nil || strings.TrimSpace(lic.Plan) == "" {
-		slog.Debug("GitLab license reported no plan, falling back to free")
+		slog.DebugContext(ctx, "GitLab license reported no plan, falling back to free")
 		c.SetTier(edition.Free)
 		return edition.Free
 	}
 	tier := edition.TierFromPlan(lic.Plan)
 	c.SetTier(tier)
-	slog.Info("detected GitLab tier", "plan", lic.Plan, "tier", tier.String())
+	slog.InfoContext(ctx, "detected GitLab tier", "plan", lic.Plan, "tier", tier.String())
 	return tier
 }
 

@@ -36,7 +36,7 @@ func WrapMutatingToolsForSafeMode(ctx context.Context, server *mcp.Server) int {
 func WrapMutatingToolsForSafeModeExcept(ctx context.Context, server *mcp.Server, exempt map[string]struct{}) int {
 	tools, err := toolutil.ListRegisteredTools(ctx, server, "safemode-filter")
 	if err != nil {
-		slog.Error("WrapMutatingToolsForSafeMode: list registered tools failed", "error", err)
+		slog.ErrorContext(ctx, "WrapMutatingToolsForSafeMode: list registered tools failed", "error", err)
 		return 0
 	}
 
@@ -108,7 +108,7 @@ func safeModeHandler(toolName string) mcp.ToolHandler {
 func RemoveNonReadOnlyTools(ctx context.Context, server *mcp.Server) int {
 	registered, err := toolutil.ListRegisteredTools(ctx, server, "readonly-filter")
 	if err != nil {
-		slog.Error("RemoveNonReadOnlyTools: list registered tools failed", "error", err)
+		slog.ErrorContext(ctx, "RemoveNonReadOnlyTools: list registered tools failed", "error", err)
 		return 0
 	}
 	var toRemove []string

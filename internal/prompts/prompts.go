@@ -199,7 +199,7 @@ func fetchContributionEvents(ctx context.Context, client *gitlabclient.Client, u
 		events, _, err = client.GL().Users.ListUserContributionEvents(userID, eventOpts, gl.WithContext(ctx))
 	}
 	if err != nil {
-		slog.Warn("failed to fetch contribution events", "error", err)
+		slog.WarnContext(ctx, "failed to fetch contribution events", "error", err)
 	}
 	return events
 }
@@ -504,7 +504,7 @@ func fetchMergedMRsForRange(ctx context.Context, client *gitlabclient.Client, pr
 		Sort:         new("desc"),
 	}, gl.WithContext(ctx))
 	if err != nil {
-		slog.Warn("failed to fetch merged MRs for release notes", "error", err)
+		slog.WarnContext(ctx, "failed to fetch merged MRs for release notes", "error", err)
 		return nil
 	}
 

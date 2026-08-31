@@ -46,7 +46,7 @@ func assertNotContains(t *testing.T, output, unwanted string) {
 // with the tool name and duration for a successful call (nil error).
 func TestLogToolCall_Success(t *testing.T) {
 	buf := captureSlog(t)
-	logToolCall("test_tool", time.Now(), false, nil)
+	logToolCall(context.Background(), "test_tool", time.Now(), false, nil)
 	out := buf.String()
 	assertContains(t, out, `"level":"INFO"`)
 	assertContains(t, out, `"msg":"tool call completed"`)
@@ -59,7 +59,7 @@ func TestLogToolCall_Success(t *testing.T) {
 // with the tool name, duration, and error details for a failed call.
 func TestLogToolCall_Error(t *testing.T) {
 	buf := captureSlog(t)
-	logToolCall("test_tool", time.Now(), false, errors.New("something failed"))
+	logToolCall(context.Background(), "test_tool", time.Now(), false, errors.New("something failed"))
 	out := buf.String()
 	assertContains(t, out, `"level":"ERROR"`)
 	assertContains(t, out, `"msg":"tool call failed"`)
@@ -122,7 +122,7 @@ func TestLogToolCallAll_WithAuthenticatedUser(t *testing.T) {
 func TestLogToolCallWithUser_Success(t *testing.T) {
 	buf := captureSlog(t)
 	user := UserIdentity{UserID: "42", Username: "admin"}
-	logToolCallWithUser("user_success_tool", time.Now(), false, nil, user)
+	logToolCallWithUser(context.Background(), "user_success_tool", time.Now(), false, nil, user)
 
 	out := buf.String()
 	assertContains(t, out, `"level":"INFO"`)
@@ -138,7 +138,7 @@ func TestLogToolCallWithUser_Success(t *testing.T) {
 func TestLogToolCallWithUser_Error(t *testing.T) {
 	buf := captureSlog(t)
 	user := UserIdentity{UserID: "42", Username: "admin"}
-	logToolCallWithUser("user_error_tool", time.Now(), false, errors.New("api failure"), user)
+	logToolCallWithUser(context.Background(), "user_error_tool", time.Now(), false, errors.New("api failure"), user)
 
 	out := buf.String()
 	assertContains(t, out, `"level":"ERROR"`)

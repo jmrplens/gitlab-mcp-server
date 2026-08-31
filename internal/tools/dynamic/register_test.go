@@ -4398,9 +4398,9 @@ func TestSearchRuntimeMetrics_RecordQualitySignals(t *testing.T) {
 		{Alias: "danger.delete", Canonical: "package.delete"},
 	})
 
-	registry.searchMatches("zzzzzzzz", 5, false)
-	registry.searchMatches("merje requesy", 5, false)
-	registry.searchMatches("danger.delete", 5, false)
+	registry.searchMatches(context.Background(), "zzzzzzzz", 5, false)
+	registry.searchMatches(context.Background(), "merje requesy", 5, false)
+	registry.searchMatches(context.Background(), "danger.delete", 5, false)
 
 	metrics := SearchRuntimeMetricsSnapshot()
 	if metrics.Searches != 3 {

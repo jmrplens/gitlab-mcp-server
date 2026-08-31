@@ -978,23 +978,23 @@ func runStdio(ctx context.Context) error {
 		return fmt.Errorf("creating gitlab client: %w", err)
 	}
 
-	slog.Info("connecting to gitlab", "url", cfg.GitLabURL, "tls_skip", cfg.SkipTLSVerify)
+	slog.InfoContext(ctx, "connecting to gitlab", "url", cfg.GitLabURL, "tls_skip", cfg.SkipTLSVerify)
 	gitlabVersion, err := client.Initialize(ctx)
 	if err != nil {
-		slog.Warn("gitlab connectivity check failed — server will start in degraded mode",
+		slog.WarnContext(ctx, "gitlab connectivity check failed — server will start in degraded mode",
 			"url", cfg.GitLabURL, "error", err)
 		client.EnableLazyInit()
 	} else {
 		userInfo, userErr := client.CurrentUser(ctx)
 		if userErr != nil {
-			slog.Warn("could not resolve user identity at startup", "error", userErr)
-			slog.Info("gitlab connection verified", "url", cfg.GitLabURL, "version", gitlabVersion)
+			slog.WarnContext(ctx, "could not resolve user identity at startup", "error", userErr)
+			slog.InfoContext(ctx, "gitlab connection verified", "url", cfg.GitLabURL, "version", gitlabVersion)
 		} else {
 			ctx = toolutil.IdentityToContext(ctx, toolutil.UserIdentity{
 				UserID:   strconv.Itoa(userInfo.UserID),
 				Username: userInfo.Username,
 			})
-			slog.Info(
+			slog.InfoContext(ctx,
 				"gitlab connection verified",
 				"url", cfg.GitLabURL,
 				"user", userInfo.Username,
@@ -1019,7 +1019,7 @@ func runStdio(ctx context.Context) error {
 	if !cfg.IgnoreScopes {
 		serverCfg.TokenScopes = gitlabclient.DetectScopes(ctx, client.GL())
 		if serverCfg.TokenScopes == nil {
-			slog.Debug("PAT scope detection unavailable — all tools will be registered")
+			slog.DebugContext(ctx, "PAT scope detection unavailable — all tools will be registered")
 		}
 	}
 
@@ -1329,17 +1329,17 @@ func createServer(
 func applyToolVisibilityConfig(ctx context.Context, server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
 	if len(cfg.ExcludeTools) > 0 {
 		removed := removeExcludedTools(ctx, server, cfg.ExcludeTools)
-		slog.Info("excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
+		slog.InfoContext(ctx, "excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
 	}
 	if cfg.TokenScopes != nil {
 		removed := gitlabtools.RemoveScopeFilteredTools(server, cfg.TokenScopes)
 		if removed > 0 {
-			slog.Info("scope-filtered tools", "removed", removed)
+			slog.InfoContext(ctx, "scope-filtered tools", "removed", removed)
 		}
 	}
 	if cfg.ReadOnly {
 		removed := gitlabtools.RemoveNonReadOnlyTools(ctx, server)
-		slog.Info("read-only mode: removed write tools", "removed", removed)
+		slog.InfoContext(ctx, "read-only mode: removed write tools", "removed", removed)
 		return
 	}
 	if cfg.SafeMode {
@@ -1350,7 +1350,7 @@ func applyToolVisibilityConfig(ctx context.Context, server *mcp.Server, cfg *con
 		// gitlab_interactive_* utilities.
 		exempt := catalogBackedToolNames(surfaceCatalog, toolSurface)
 		wrapped := gitlabtools.WrapMutatingToolsForSafeModeExcept(ctx, server, exempt)
-		slog.Info("safe mode: intercepted mutating operations",
+		slog.InfoContext(ctx, "safe mode: intercepted mutating operations",
 			"surface", toolSurface, "wrapped_tools", wrapped, "catalog_backed_tools", len(exempt))
 	}
 }
@@ -1684,7 +1684,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdl
 // listener is non-nil it is served directly and httpAddr is used only for
 // logging and host validation; when nil, the server binds httpAddr itself.
 func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, listener net.Listener, httpIdleTimeout time.Duration) error {
-	slog.Info(
+	slog.InfoContext(ctx,
 		"starting MCP server in HTTP mode",
 		"addr", httpAddr,
 		"auth_mode", cfg.AuthMode,
@@ -1698,7 +1698,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	)
 
 	if !cfg.Stateless {
-		slog.Warn("stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
+		slog.WarnContext(ctx, "stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
 	}
 
 	// Each pooled entry mints session IDs under its own tag, and sessionTags
@@ -1765,7 +1765,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 				defer close(serverCardDone)
 				cardJSON, err := buildServerCardFn(ctx, cfg)
 				if err != nil {
-					slog.Warn("failed to build server-card.json, endpoint returns 503", "error", err)
+					slog.WarnContext(ctx, "failed to build server-card.json, endpoint returns 503", "error", err)
 					return
 				}
 				serverCardJSON = cardJSON
@@ -1883,7 +1883,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 
 	select {
 	case <-ctx.Done():
-		slog.Info("HTTP server shutdown requested")
+		slog.InfoContext(ctx, "HTTP server shutdown requested")
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), httpShutdownTimeout)
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
@@ -2040,7 +2040,7 @@ func mcpOriginMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 
 // writeUntrustedOrigin refuses a cross-origin request to the MCP endpoint.
 func writeUntrustedOrigin(w http.ResponseWriter, r *http.Request) {
-	slog.Warn("request refused: untrusted Origin on the MCP endpoint", "method", r.Method)
+	slog.WarnContext(r.Context(), "request refused: untrusted Origin on the MCP endpoint", "method", r.Method)
 	(&gateFailure{
 		status:  http.StatusForbidden,
 		code:    errCodeForbidden,
@@ -2166,7 +2166,7 @@ func writeUnsupportedProtocolVersion(w http.ResponseWriter, r *http.Request, sup
 	w.Header().Set(hdrContentType, mimeJSON)
 	w.WriteHeader(http.StatusBadRequest)
 	if err := json.NewEncoder(w).Encode(body); err != nil {
-		slog.Error("failed to write unsupported-protocol-version response", "error", err)
+		slog.ErrorContext(r.Context(), "failed to write unsupported-protocol-version response", "error", err)
 	}
 }
 
@@ -2339,7 +2339,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	}
 	verifier := oauth.NewGitLabVerifierFor(resolveInstance, cfg.SkipTLSVerify, cacheTTL, tokenCache, cfg.OAuthClientUIDs...)
 	if len(cfg.OAuthClientUIDs) > 0 {
-		slog.Info("admitting only tokens issued to the pinned OAuth applications; personal access tokens are refused",
+		slog.InfoContext(ctx, "admitting only tokens issued to the pinned OAuth applications; personal access tokens are refused",
 			"applications", len(cfg.OAuthClientUIDs))
 	}
 	guard := &bearerGuard{
@@ -2383,7 +2383,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	startPeriodicCleanup(ctx, tokenCache.Cleanup)
 	startPeriodicCleanup(ctx, rejectedTokens.Cleanup)
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
-	slog.Info("oauth mode enabled", "cache_ttl", cacheTTL, "resource", resourceID, "metadata_url", resourceMetadataURL)
+	slog.InfoContext(ctx, "oauth mode enabled", "cache_ttl", cacheTTL, "resource", resourceID, "metadata_url", resourceMetadataURL)
 }
 
 // oauthCacheTTL returns a TTL the verifier can actually work with.
@@ -2854,7 +2854,7 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 			host = h
 		}
 		if !allowed[host] {
-			slog.Warn("request blocked: invalid Host header", "host", r.Host) //#nosec G706 -- slog structured args are not interpolated
+			slog.WarnContext(r.Context(), "request blocked: invalid Host header", "host", r.Host) //#nosec G706 -- slog structured args are not interpolated
 			// JSON-RPC rather than http.Error's plain text, for the same
 			// reason the cross-origin refusal is: an unparseable 4xx body
 			// reads to a Streamable HTTP client as a pre-negotiation server.
@@ -3232,7 +3232,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 // serveStdio starts the MCP server using stdio transport.
 // It blocks until the context is canceled or an error occurs.
 func serveStdio(ctx context.Context, server *mcp.Server) error {
-	slog.Info("starting MCP server", "transport", "stdio", "version", version, "commit", commit)
+	slog.InfoContext(ctx, "starting MCP server", "transport", "stdio", "version", version, "commit", commit)
 	// An IOTransport over filtered stdin rather than mcp.StdioTransport, which
 	// wraps os.Stdin directly: the SDK's read loop treats a message it cannot
 	// parse like a closed pipe and ends the session, so one malformed line
@@ -3258,10 +3258,10 @@ func serveStdio(ctx context.Context, server *mcp.Server) error {
 	// client exiting mid-call did not.
 	switch {
 	case reader.clientClosed():
-		slog.Info("client closed stdin, shutting down", "transport", "stdio")
+		slog.InfoContext(ctx, "client closed stdin, shutting down", "transport", "stdio")
 		return nil
 	case errors.Is(err, context.Canceled):
-		slog.Info("signal received, shutting down", "transport", "stdio")
+		slog.InfoContext(ctx, "signal received, shutting down", "transport", "stdio")
 		return nil
 	}
 	return fmt.Errorf("mcp server error: %w", err)
@@ -3467,7 +3467,7 @@ func removeExcludedTools(ctx context.Context, server *mcp.Server, exclude []stri
 
 	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {
-		slog.Error("removeExcludedTools: server connect failed", "error", err)
+		slog.ErrorContext(ctx, "removeExcludedTools: server connect failed", "error", err)
 		return 0
 	}
 	defer serverSession.Close()
@@ -3475,14 +3475,14 @@ func removeExcludedTools(ctx context.Context, server *mcp.Server, exclude []stri
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "exclude-filter", Version: "0"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		slog.Error("removeExcludedTools: client connect failed", "error", err)
+		slog.ErrorContext(ctx, "removeExcludedTools: client connect failed", "error", err)
 		return 0
 	}
 	defer session.Close()
 
 	result, err := session.ListTools(ctx, nil)
 	if err != nil {
-		slog.Error("removeExcludedTools: list tools failed", "error", err)
+		slog.ErrorContext(ctx, "removeExcludedTools: list tools failed", "error", err)
 		return 0
 	}
 

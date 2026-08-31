@@ -156,7 +156,7 @@ func (h *Handler) completeWithProjectID(ctx context.Context, resolvedArgs map[st
 func (h *Handler) completeProjectID(ctx context.Context, query string) (*mcp.CompleteResult, error) {
 	values, total, err := searchProjects(ctx, h.client, query)
 	if err != nil {
-		slog.Debug("completion: project search failed", "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: project search failed", "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResultWithTotal(values, total), nil
@@ -166,7 +166,7 @@ func (h *Handler) completeProjectID(ctx context.Context, query string) (*mcp.Com
 func (h *Handler) completeGroupID(ctx context.Context, query string) (*mcp.CompleteResult, error) {
 	values, total, err := searchGroups(ctx, h.client, query)
 	if err != nil {
-		slog.Debug("completion: group search failed", "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: group search failed", "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResultWithTotal(values, total), nil
@@ -176,7 +176,7 @@ func (h *Handler) completeGroupID(ctx context.Context, query string) (*mcp.Compl
 func (h *Handler) completeMRIID(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
 	values, err := searchMRs(ctx, h.client, projectID, query)
 	if err != nil {
-		slog.Debug("completion: MR search failed", "project", projectID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: MR search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResult(values), nil
@@ -186,7 +186,7 @@ func (h *Handler) completeMRIID(ctx context.Context, projectID, query string) (*
 func (h *Handler) completeIssueIID(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
 	values, err := searchIssues(ctx, h.client, projectID, query)
 	if err != nil {
-		slog.Debug("completion: issue search failed", "project", projectID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: issue search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResult(values), nil
@@ -196,7 +196,7 @@ func (h *Handler) completeIssueIID(ctx context.Context, projectID, query string)
 func (h *Handler) completeUsername(ctx context.Context, query string) (*mcp.CompleteResult, error) {
 	values, total, err := searchUsers(ctx, h.client, query)
 	if err != nil {
-		slog.Debug("completion: user search failed", "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: user search failed", "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResultWithTotal(values, total), nil
@@ -206,14 +206,14 @@ func (h *Handler) completeUsername(ctx context.Context, query string) (*mcp.Comp
 func (h *Handler) completeBranchOrTag(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
 	branches, branchTotal, err := searchBranches(ctx, h.client, projectID, query)
 	if err != nil {
-		slog.Debug("completion: branch search failed", "project", projectID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: branch search failed", "project", projectID, "query", query, "error", err)
 		branches = nil
 		branchTotal = 0
 	}
 
 	tags, tagTotal, err := searchTags(ctx, h.client, projectID, query)
 	if err != nil {
-		slog.Debug("completion: tag search failed", "project", projectID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: tag search failed", "project", projectID, "query", query, "error", err)
 		tags = nil
 		tagTotal = 0
 	}
@@ -226,7 +226,7 @@ func (h *Handler) completeBranchOrTag(ctx context.Context, projectID, query stri
 func (h *Handler) completeTag(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
 	values, total, err := searchTags(ctx, h.client, projectID, query)
 	if err != nil {
-		slog.Debug("completion: tag search failed", "project", projectID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: tag search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResultWithTotal(values, total), nil
@@ -236,7 +236,7 @@ func (h *Handler) completeTag(ctx context.Context, projectID, query string) (*mc
 func (h *Handler) completePipelineID(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
 	values, err := searchPipelines(ctx, h.client, projectID, query)
 	if err != nil {
-		slog.Debug("completion: pipeline search failed", "project", projectID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: pipeline search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResult(values), nil
@@ -246,7 +246,7 @@ func (h *Handler) completePipelineID(ctx context.Context, projectID, query strin
 func (h *Handler) completeSHA(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
 	values, err := searchCommits(ctx, h.client, projectID, query)
 	if err != nil {
-		slog.Debug("completion: commit search failed", "project", projectID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: commit search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResult(values), nil
@@ -256,7 +256,7 @@ func (h *Handler) completeSHA(ctx context.Context, projectID, query string) (*mc
 func (h *Handler) completeBranch(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
 	values, total, err := searchBranches(ctx, h.client, projectID, query)
 	if err != nil {
-		slog.Debug("completion: branch search failed", "project", projectID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: branch search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResultWithTotal(values, total), nil
@@ -266,7 +266,7 @@ func (h *Handler) completeBranch(ctx context.Context, projectID, query string) (
 func (h *Handler) completeLabel(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
 	values, total, err := searchLabels(ctx, h.client, projectID, query)
 	if err != nil {
-		slog.Debug("completion: label search failed", "project", projectID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: label search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResultWithTotal(values, total), nil
@@ -276,7 +276,7 @@ func (h *Handler) completeLabel(ctx context.Context, projectID, query string) (*
 func (h *Handler) completeMilestoneID(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
 	values, total, err := searchMilestones(ctx, h.client, projectID, query)
 	if err != nil {
-		slog.Debug("completion: milestone search failed", "project", projectID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: milestone search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResultWithTotal(values, total), nil
@@ -287,7 +287,7 @@ func (h *Handler) completeMilestoneID(ctx context.Context, projectID, query stri
 func (h *Handler) completeMilestoneTitle(ctx context.Context, projectID, query string) (*mcp.CompleteResult, error) {
 	values, total, err := searchMilestoneTitles(ctx, h.client, projectID, query)
 	if err != nil {
-		slog.Debug("completion: milestone title search failed", "project", projectID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: milestone title search failed", "project", projectID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResultWithTotal(values, total), nil
@@ -299,7 +299,7 @@ func (h *Handler) completeMilestoneTitle(ctx context.Context, projectID, query s
 func (h *Handler) completeGroupMilestoneTitle(ctx context.Context, groupID, query string) (*mcp.CompleteResult, error) {
 	values, total, err := searchGroupMilestoneTitles(ctx, h.client, groupID, query)
 	if err != nil {
-		slog.Debug("completion: group milestone title search failed", "group", groupID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: group milestone title search failed", "group", groupID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResultWithTotal(values, total), nil
@@ -309,12 +309,12 @@ func (h *Handler) completeGroupMilestoneTitle(ctx context.Context, groupID, quer
 func (h *Handler) completeJobID(ctx context.Context, projectID, pipelineIDStr, query string) (*mcp.CompleteResult, error) {
 	plID, err := strconv.ParseInt(pipelineIDStr, 10, 64)
 	if err != nil {
-		slog.Debug("completion: invalid pipeline_id for job search", "pipeline_id", pipelineIDStr, "error", err)
+		slog.DebugContext(ctx, "completion: invalid pipeline_id for job search", "pipeline_id", pipelineIDStr, "error", err)
 		return emptyResult(), nil
 	}
 	values, err := searchJobs(ctx, h.client, projectID, plID, query)
 	if err != nil {
-		slog.Debug("completion: job search failed", "project", projectID, "pipeline_id", plID, "query", query, "error", err)
+		slog.DebugContext(ctx, "completion: job search failed", "project", projectID, "pipeline_id", plID, "query", query, "error", err)
 		return emptyResult(), nil
 	}
 	return toResult(values), nil

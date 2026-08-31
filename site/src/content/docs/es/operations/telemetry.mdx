@@ -162,6 +162,20 @@ distingue.
 Segundos, no milisegundos. Lo fija la convención, y es lo contrario del campo
 `duration` de los registros de log de este servidor.
 
+### Registros
+
+La tercera señal son los registros estructurados del propio servidor: las mismas
+líneas que escribe en stderr, exportadas desde `INFO` hacia arriba. `LOG_LEVEL`
+sigue gobernando el terminal; el umbral de exportación es aparte, así que
+ejecutar en `debug` no manda a tu colector un registro por cada viaje a GitLab
+además del span que ya lo describe.
+
+Cada registro escrito mientras se atiende una petición lleva el identificador de
+traza y de span de esa petición, así que desde un span lento se puede saltar
+directamente a las líneas que se escribieron dentro. Los registros de arranque,
+apagado y tareas de fondo no llevan ninguno, porque no hay span al que
+pertenecer.
+
 ### Qué no se registra nunca
 
 Ni por defecto ni con ningún ajuste, porque no existe tal ajuste:
