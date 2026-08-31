@@ -89,6 +89,7 @@ no significa treinta segundos: no parsea y se mantiene el valor por defecto de
 fácil de pisar, no más difícil.
 </Aside>
 
+
 <Aside type="caution" title="`http/json` se rechaza al arrancar">
 Desde la v1.46.0 el exportador de trazas de Go lo implementa y los de métricas y
 logs no. Honrarlo daría a un mismo despliegue dos codificaciones a la vez, spans
@@ -174,6 +175,14 @@ registrar.
 
 Segundos, no milisegundos. Lo fija la convención, y es lo contrario del campo
 `duration` de los registros de log de este servidor.
+
+Dos de esas dimensiones llevan un nombre que eligió el llamante,
+`gen_ai.tool.name` y `gen_ai.prompt.name`. En una métrica van acotadas: una
+llamada que nombró algo que este servidor no tiene se registra como `_OTHER` y
+no bajo el nombre que envió, así que el número de series almacenadas depende de
+lo que hay registrado y no de lo que teclee un cliente. El span conserva el
+nombre literal, que es donde hay que mirar cuando un cliente informa de que sus
+llamadas fallan.
 
 ### Registros
 

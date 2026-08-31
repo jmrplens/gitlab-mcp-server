@@ -157,6 +157,13 @@ JSON-RPC id of the message it is handling, so there is nothing to record. It is
 Seconds, not milliseconds. The convention fixes that, and it is the opposite of
 the `duration` field in this server's log records.
 
+Two of those dimensions carry a name the caller chose, `gen_ai.tool.name` and
+`gen_ai.prompt.name`. On a metric they are bounded: a call that named something
+this server does not have is recorded as `_OTHER` rather than under the name it
+sent, so the number of stored time series follows what is registered rather than
+what a client types. The span keeps the name verbatim, which is where you look
+when a client reports that its calls are failing.
+
 ### Logs
 
 The third signal is this server's own structured records: the same lines it

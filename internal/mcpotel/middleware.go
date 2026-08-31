@@ -179,7 +179,7 @@ func Middleware(opts Options) mcp.Middleware {
 			// would be silent data destruction rather than an error.
 			metricAttrs := make([]attribute.KeyValue, 0, len(constant)+len(call.attributes)+3)
 			metricAttrs = append(metricAttrs, constant...)
-			metricAttrs = append(metricAttrs, call.attributes...)
+			metricAttrs = append(metricAttrs, boundedMetricName(call, result)...)
 			if version != "" {
 				metricAttrs = append(metricAttrs, AttrMCPProtocolVersion.String(version))
 			}
@@ -193,6 +193,11 @@ func Middleware(opts Options) mcp.Middleware {
 
 // call is what one request turned out to be, resolved before the span starts.
 type call struct {
+	// callerNameKey names the attribute whose value the caller chose, or is
+	// empty when the request carries no such attribute. It exists so the metric
+	// can bound a value the span records verbatim; see boundedMetricName.
+	callerNameKey attribute.Key
+
 	spanName   string
 	attributes []attribute.KeyValue
 }
@@ -220,7 +225,11 @@ func describe(method string, req mcp.Request, identifier CallIdentifier) call {
 		// needs none of the deliberation the tool surfaces do.
 		if params.Name != "" {
 			attrs = append(attrs, AttrGenAIPromptName.String(params.Name))
-			return call{spanName: method + " " + params.Name, attributes: attrs}
+			return call{
+				spanName:      method + " " + params.Name,
+				attributes:    attrs,
+				callerNameKey: AttrGenAIPromptName,
+			}
 		}
 
 	case *mcp.ReadResourceParams:
@@ -268,7 +277,11 @@ func describeToolCall(method, toolName string, arguments any, attrs []attribute.
 		}
 	}
 
-	return call{spanName: method + " " + toolName, attributes: attrs}
+	return call{
+		spanName:      method + " " + toolName,
+		attributes:    attrs,
+		callerNameKey: AttrGenAIToolName,
+	}
 }
 
 // newDurationHistogram builds the convention's server duration instrument.
@@ -298,4 +311,53 @@ func newDurationHistogram(meter metric.Meter) metric.Float64Histogram {
 		otel.Handle(err)
 	}
 	return histogram
+}
+
+// boundedMetricName returns the call's attributes with the caller-supplied name
+// replaced by a single bucket when the call failed the way an unknown name
+// fails.
+//
+// # The hole this closes
+//
+// gen_ai.tool.name and gen_ai.prompt.name are copied off the request, and the
+// convention puts both on the duration metric. Nothing checked that the name
+// referred to anything: a prompts/get for a prompt that does not exist recorded
+// the invented name as a metric dimension value, which was found by driving a
+// real deployment and then reading its collector, where a name that is plainly
+// an argument label sat in the label set. Any client could then mint one time
+// series per string it cared to type, and the SDK's answer to an exhausted
+// series budget is not an error but an otel.metric.overflow bucket that
+// swallows everything after the limit, first-come-wins under cumulative
+// temporality. Silent destruction of the real data, caused by a caller.
+//
+// # Why the outcome and not a registry
+//
+// Membership would mean handing this package the set of registered tool and
+// prompt names for the active surface, which is between two and about eleven
+// hundred entries depending on configuration, rebuilt wherever registration
+// happens and drifting the first time someone adds a name somewhere new.
+//
+// The outcome answers the same question without a second copy of the truth: a
+// name that names nothing cannot succeed. The SDK answers it with invalid-params
+// or method-not-found, both already classified here as caller faults, so the
+// substitution keys off a fact this function already has.
+//
+// The trade is deliberate and small: a real name whose call failed validation is
+// bucketed too, so the metric under-reports it while the span still carries it
+// exactly. Losing one label on a failed call is worth not letting a caller
+// choose how many time series this process stores.
+func boundedMetricName(c call, result outcome) []attribute.KeyValue {
+	if c.callerNameKey == "" || !result.nameIsUnverified() {
+		return c.attributes
+	}
+
+	bounded := make([]attribute.KeyValue, 0, len(c.attributes))
+	for _, kv := range c.attributes {
+		if kv.Key == c.callerNameKey {
+			bounded = append(bounded, kv.Key.String(ErrorTypeOther))
+			continue
+		}
+		bounded = append(bounded, kv)
+	}
+	return bounded
 }

@@ -142,6 +142,21 @@ func classifyClient(err error) outcome {
 	}
 }
 
+// nameIsUnverified reports whether the response is one that a request naming
+// something nonexistent produces.
+//
+// Method-not-found and invalid-params are the two the SDK answers with when the
+// tool or prompt named does not exist. Both are already caller faults rather
+// than failures of this server, so this asks a narrower question of the same
+// classification rather than introducing a second one.
+//
+// A tool result carrying IsError is deliberately not included: the handler ran,
+// which means the name resolved, and the failure is about what the handler
+// found rather than about what it was called.
+func (o outcome) nameIsUnverified() bool {
+	return o.statusCode == codeString(-32601) || o.statusCode == codeString(-32602)
+}
+
 // isErrorResult reports whether a tool call answered with a failure inside a
 // successful response.
 //
