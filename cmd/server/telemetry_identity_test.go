@@ -3,10 +3,14 @@
 package main
 
 import (
+	"context"
 	"sync"
 	"testing"
 
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // TestIdentityRedactor_OneInstanceServesEverySignal is a wiring test, and it
@@ -79,4 +83,57 @@ func resetIdentityRedactor(t *testing.T) {
 		identityRedactorOnce = sync.Once{}
 		identityRedactorVal = nil
 	})
+}
+
+// TestTelemetryUsers_EveryPooledServerAgreesOnTheDigest is the regression for
+// the shape a hosted deployment actually runs.
+//
+// telemetryUsers is called from createServer, and createServer runs once per
+// entry in the HTTP server pool: one per token and GitLab URL, rebuilt whenever
+// an entry is evicted by --pool-idle-timeout or by the size bound. Building a
+// redactor there gave each entry its own salt, so one person carried a
+// different digest per entry, inside one process, with nothing restarted.
+//
+// The collector data that prompted this shows five processes emitting two
+// digests each. Two callers explains that innocently; an evicted and rebuilt
+// entry explains it as a defect, and from the exported data alone the two are
+// indistinguishable, which is exactly why this belongs in a test.
+func TestTelemetryUsers_EveryPooledServerAgreesOnTheDigest(t *testing.T) {
+	t.Setenv(telemetry.EnvIdentityName, string(telemetry.IdentityPseudonymous))
+	resetIdentityRedactor(t)
+
+	// Through telemetryUsers, deliberately: that is the function createServer
+	// calls, and calling the accessor directly would prove the accessor rather
+	// than the path the pool takes.
+	first, second := telemetryUsers(), telemetryUsers()
+	if first == nil || second == nil {
+		t.Fatal("no attributer was built for the pseudonymous policy")
+	}
+
+	// One caller, presented to each entry the way a request presents them.
+	ctx := toolutil.IdentityToContext(context.Background(),
+		toolutil.UserIdentity{UserID: "15767218", Username: "someone"})
+
+	a := digestOf(t, first.UserAttributes(ctx, nil))
+	b := digestOf(t, second.UserAttributes(ctx, nil))
+
+	if a == "" {
+		t.Fatal("the pseudonymous policy produced no digest at all")
+	}
+	if a != b {
+		t.Errorf("one person carries two digests across pool entries (%q, %q); a dashboard grouping by user.hash counts them as two people",
+			a, b)
+	}
+}
+
+// digestOf pulls user.hash out of an attribute set.
+func digestOf(t *testing.T, attrs []attribute.KeyValue) string {
+	t.Helper()
+
+	for _, attr := range attrs {
+		if string(attr.Key) == telemetry.AttrUserHash {
+			return attr.Value.AsString()
+		}
+	}
+	return ""
 }
