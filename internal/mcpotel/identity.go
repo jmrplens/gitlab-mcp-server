@@ -131,3 +131,22 @@ func (noUserAttributes) UserAttributes(context.Context, mcp.Request) []attribute
 type noIdentity struct{}
 
 func (noIdentity) Identify(string, any) (Identity, bool) { return Identity{}, false }
+
+// ResourceAttributer turns a resource URI into the attributes a span may carry
+// for it, subject to the deployment's policy.
+//
+// It is an interface for the same reason [UserAttributer] is: the rule lives in
+// internal/telemetry, which pulls the OpenTelemetry SDK in, and this package
+// imports the API alone. Nil means nothing about which resource was named is
+// ever recorded, which is what a caller that has not thought about it should
+// get.
+type ResourceAttributer interface {
+	// ResourceAttributes returns what a span may record about one resource
+	// URI, which is nothing when the URI is empty or the policy allows none.
+	ResourceAttributes(uri string) []attribute.KeyValue
+}
+
+// noResourceAttributes is the nil-safe default.
+type noResourceAttributes struct{}
+
+func (noResourceAttributes) ResourceAttributes(string) []attribute.KeyValue { return nil }

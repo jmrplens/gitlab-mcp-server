@@ -205,8 +205,9 @@ Ni por defecto ni con ningún ajuste, porque no existe tal ajuste:
 - **Argumentos y resultados de las herramientas.** Las convenciones definen
   atributos `Opt-In` para ambos; este servidor los declina, porque llevan rutas
   de proyecto, cuerpos de incidencia y consultas de búsqueda.
-- **Contenido de los recursos y sus URI**, que incorporan identificadores de
-  proyecto y de grupo.
+- **El contenido de los recursos.** El URI que nombró el recurso sigue la
+  política de identidad: un digest con clave por proceso por defecto, y el URI
+  literal solo bajo `full`, que ya exporta el nombre real de quien llama.
 - **Tu token de GitLab**, ni ninguna cabecera que enviara un cliente.
 - **Cuerpos y mensajes de error de GitLab.** Un fallo registra una clasificación
   como `-32603`, nunca el texto, que puede nombrar rutas privadas.
@@ -229,6 +230,19 @@ Desactivado por defecto, en tres escalones:
 ```
 
 o `GITLAB_MCP_TELEMETRY_IDENTITY`.
+
+La política gobierna una cosa más de lo que sugiere su nombre: **qué recurso
+nombró la petición**. Un URI de recurso aquí lleva ids de proyecto y de grupo,
+así que dice en qué está trabajando quien llama, que es la misma clase de
+revelación que decir quién es. Con `none` y `pseudonymous` el span lleva
+`gitlab_mcp.resource.ref`, un digest con clave por proceso que correlaciona
+lecturas y sondeos de un mismo recurso sin nombrarlo. Con `full` lleva
+`mcp.resource.uri`, el atributo de la propia convención, con el URI dentro.
+
+Una bandera y no dos, porque un despliegue que registrara rutas de proyecto
+mientras dice no registrar a nadie sería el resultado previsible de dejar que
+las dos configuraciones se separen.
+
 
 **`none`** es el valor por defecto porque registrar la identidad de una persona
 es una decisión tuya sobre tus propios usuarios, y un valor por defecto que la

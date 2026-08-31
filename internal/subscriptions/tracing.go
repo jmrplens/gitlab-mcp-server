@@ -45,20 +45,48 @@ func detachSpan(ctx context.Context) context.Context {
 // sending no trace context, has none, and an invalid link is dropped rather
 // than emitted as an empty one.
 //
-// The URI is an attribute and never part of the name: our resource URIs embed
-// project and group identifiers, so a name built from one would mint a distinct
-// span name per project, which is the cardinality trap the conventions name
-// explicitly for exactly this attribute.
+// The URI is never recorded as itself, and never part of the name. Our resource
+// URIs embed project and group identifiers, and this server's documented
+// position is that they are not exported, a position it holds even against the
+// MCP convention's Conditionally Required mcp.resource.uri on a resources/read
+// span. A poll span writing the raw URI would be that same disclosure by
+// another route, repeated for the life of the watch rather than once.
+//
+// What goes on the span instead comes from the resource hook, which the manager
+// receives rather than decides: a keyed digest by default, so two watchers of
+// the same kind stay distinguishable and one watcher stays correlatable across
+// its polls while nothing names a project, and the URI itself only under the
+// identity policy that already exports a caller's real name.
+//
+// Either way it is an attribute and never the span name. A name built per
+// watcher is one span name per project, which is the cardinality trap the
+// conventions name for exactly this attribute.
 func (m *Manager[S]) pollSpan(ctx context.Context, w *watcher[S]) (context.Context, trace.Span) {
+	attrs := []attribute.KeyValue{
+		attribute.String("gitlab_mcp.subscription.kind", w.kind.String()),
+	}
+	attrs = append(attrs, m.resourceAttributes(w.uri)...)
+
 	opts := []trace.SpanStartOption{
 		trace.WithSpanKind(trace.SpanKindInternal),
-		trace.WithAttributes(
-			attribute.String("gitlab_mcp.subscription.kind", w.kind.String()),
-			attribute.String("gitlab_mcp.subscription.uri", w.uri),
-		),
+		trace.WithAttributes(attrs...),
 	}
 	if w.origin.IsValid() {
 		opts = append(opts, trace.WithLinks(trace.Link{SpanContext: w.origin}))
 	}
 	return tracer.Start(ctx, "subscription poll", opts...)
+}
+
+// resourceAttributes says what a poll span may record about the resource it
+// polls, which is a decision this package receives rather than makes.
+//
+// The hook rather than an import: this package depends on the OpenTelemetry API
+// and nothing that pulls the SDK in, and redaction lives in a package that does.
+// A nil hook records nothing, which is right for a manager built without
+// telemetry wiring: the kind alone still says what shape of thing was polled.
+func (m *Manager[S]) resourceAttributes(uri string) []attribute.KeyValue {
+	if m == nil || m.opts.ResourceAttributes == nil {
+		return nil
+	}
+	return m.opts.ResourceAttributes(uri)
 }

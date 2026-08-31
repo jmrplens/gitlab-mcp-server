@@ -634,6 +634,11 @@ func newSubscriptionRuntime(
 	notifier := &serverNotifier{}
 	streams := newListenStreams()
 	opts.OnStop = streams.stopped
+	// The same redactor rule the MCP spans use, so a poll span and the
+	// subscribe span that caused it describe the resource the same way.
+	if redactor := telemetryResources(); redactor != nil {
+		opts.ResourceAttributes = redactor.ResourceAttributes
+	}
 	return &subscriptionRuntime{
 		manager: subscriptions.New[*mcp.ServerSession](
 			resourceReader{index: resources.NewHandlerIndex(client)},

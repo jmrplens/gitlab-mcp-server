@@ -32,6 +32,12 @@ type Options struct {
 	// ever recorded, which is also what the default policy does.
 	Users UserAttributer
 
+	// Resources turns a resource URI into attributes, subject to the
+	// deployment's identity policy. Nil records nothing about which resource a
+	// request named, which is also what the default policy does with the URI
+	// itself: it records a keyed digest instead.
+	Resources ResourceAttributer
+
 	// Surface names the registered tool catalog (dynamic, meta, individual).
 	// It goes on every span because the same request means different things
 	// across the three, and a trace read months later has no other way to tell.
@@ -78,6 +84,10 @@ func Middleware(opts Options) mcp.Middleware {
 	if users == nil {
 		users = noUserAttributes{}
 	}
+	resources := opts.Resources
+	if resources == nil {
+		resources = noResourceAttributes{}
+	}
 	tracer := otel.Tracer(scopeName)
 	meter := otel.Meter(scopeName)
 	duration := newDurationHistogram(meter)
@@ -97,7 +107,7 @@ func Middleware(opts Options) mcp.Middleware {
 
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
-			call := describe(method, req, identifier)
+			call := describe(method, req, identifier, resources)
 
 			// Extract before Start, so the incoming trace context is the
 			// parent rather than a link. A malformed or absent value leaves
@@ -211,7 +221,7 @@ type call struct {
 // span name when it is available but SHOULD NOT include it by default to avoid
 // high cardinality span names." Our resource URIs embed project ids, so that is
 // a trap rather than a nicety.
-func describe(method string, req mcp.Request, identifier CallIdentifier) call {
+func describe(method string, req mcp.Request, identifier CallIdentifier, resources ResourceAttributer) call {
 	attrs := []attribute.KeyValue{AttrMCPMethodName.String(method)}
 
 	switch params := req.GetParams().(type) {
@@ -233,11 +243,24 @@ func describe(method string, req mcp.Request, identifier CallIdentifier) call {
 		}
 
 	case *mcp.ReadResourceParams:
-		// The URI is an attribute and never part of the name. It is also
-		// Opt-In in the convention, and this server declines it: our URIs carry
-		// project and group identifiers, which is exactly the unbounded,
-		// caller-influenced value that both the cardinality guidance and the
-		// privacy position rule out.
+		// The URI is an attribute and never part of the name: a name built from
+		// one is a distinct span name per project, which the convention calls
+		// out for this attribute specifically.
+		//
+		// What the attribute says is the redactor's decision, not this
+		// function's. By default it is a keyed digest, which correlates reads
+		// of one resource without naming it; under the identity policy that
+		// already exports a caller's real name, it is the URI, which is the
+		// convention's Conditionally Required mcp.resource.uri.
+		attrs = append(attrs, resources.ResourceAttributes(params.URI)...)
+		return call{spanName: method, attributes: attrs}
+
+	case *mcp.SubscribeParams:
+		attrs = append(attrs, resources.ResourceAttributes(params.URI)...)
+		return call{spanName: method, attributes: attrs}
+
+	case *mcp.UnsubscribeParams:
+		attrs = append(attrs, resources.ResourceAttributes(params.URI)...)
 		return call{spanName: method, attributes: attrs}
 	}
 

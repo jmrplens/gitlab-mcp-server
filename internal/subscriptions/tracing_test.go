@@ -2,9 +2,11 @@ package subscriptions
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
@@ -158,7 +160,14 @@ func TestPollSpan_DoesNotPutTheURIInTheName(t *testing.T) {
 	})
 
 	const uri = "gitlab://projects/acme-holdings%2Fprivate-repo/issues"
-	manager := &Manager[string]{}
+
+	// The hook stands in for the redactor the server wires in, so this test
+	// asserts the manager consults it rather than reimplementing the rule.
+	manager := &Manager[string]{opts: Options{
+		ResourceAttributes: func(u string) []attribute.KeyValue {
+			return []attribute.KeyValue{attribute.String("gitlab_mcp.resource.ref", "digest-of-"+u[:14])}
+		},
+	}}
 	_, span := manager.pollSpan(context.Background(), &watcher[string]{uri: uri, kind: KindBranch})
 	span.End()
 
@@ -167,13 +176,41 @@ func TestPollSpan_DoesNotPutTheURIInTheName(t *testing.T) {
 		t.Errorf("span name = %q; a URI in the name is one span name per project", recorded.Name())
 	}
 
-	var sawURI bool
+	var sawRef bool
 	for _, kv := range recorded.Attributes() {
-		if kv.Value.AsString() == uri {
-			sawURI = true
+		if strings.Contains(kv.Value.AsString(), "acme-holdings") {
+			t.Errorf("attribute %s carries the project path; a poll repeats for the life of the watch, so this writes it into a backend over and over", kv.Key)
+		}
+		if kv.Key == "gitlab_mcp.resource.ref" {
+			sawRef = true
 		}
 	}
-	if !sawURI {
-		t.Error("the URI is on neither the name nor an attribute, so a trace cannot say what was polled")
+	if !sawRef {
+		t.Error("nothing distinguishes this watcher from another of the same kind, so one failing subscription and all of them look alike")
+	}
+}
+
+// TestPollSpan_WithoutAResourceHookRecordsNoResource pins the default for a
+// manager built without telemetry wiring: the kind still says what shape of
+// thing was polled, and nothing names it.
+func TestPollSpan_WithoutAResourceHookRecordsNoResource(t *testing.T) {
+	recorder := tracetest.NewSpanRecorder()
+	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
+	previousTracer := tracer
+	tracer = provider.Tracer(scopeName)
+	t.Cleanup(func() {
+		tracer = previousTracer
+		_ = provider.Shutdown(context.Background())
+	})
+
+	manager := &Manager[string]{}
+	_, span := manager.pollSpan(context.Background(),
+		&watcher[string]{uri: "gitlab://project/1", kind: KindBranch})
+	span.End()
+
+	for _, kv := range recorder.Ended()[0].Attributes() {
+		if kv.Key != "gitlab_mcp.subscription.kind" {
+			t.Errorf("unexpected attribute %s=%q with no resource hook configured", kv.Key, kv.Value.AsString())
+		}
 	}
 }

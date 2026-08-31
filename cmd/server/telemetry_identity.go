@@ -117,3 +117,25 @@ func telemetryUsers() mcpotel.UserAttributer {
 	logIdentityPolicy(policy)
 	return newUserAttributer(redactor)
 }
+
+// telemetryResources builds the redactor that decides how much a span may say
+// about which resource a request named.
+//
+// It reads the same policy as [telemetryUsers], deliberately: a resource URI in
+// this server embeds project and group identifiers, so it is the same class of
+// disclosure as a caller's name, and an operator has already made that decision
+// once. Two flags would let one deployment export project paths while claiming
+// to record nobody.
+//
+// Unlike the identity case, IdentityNone still gets a redactor rather than nil.
+// Its answer under that policy is a keyed digest, which names no project and is
+// what keeps two watchers of the same kind distinguishable in a trace.
+func telemetryResources() mcpotel.ResourceAttributer {
+	policy, err := telemetryIdentityPolicy()
+	if err != nil {
+		slog.Error("telemetry identity policy is unusable; recording nothing about resources",
+			"component", "telemetry", "error", err)
+		return nil
+	}
+	return telemetry.NewResourceRedactor(policy)
+}

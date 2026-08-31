@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -121,6 +122,15 @@ const (
 // Options configures a [Manager]. The zero value is usable: every field
 // falls back to its documented default.
 type Options struct {
+	// ResourceAttributes says what a poll span may record about the resource
+	// it polls, and is nil by default, which records nothing.
+	//
+	// A function rather than a redactor value: the redaction rules live in a
+	// package that pulls the OpenTelemetry SDK in, and this one deliberately
+	// depends on the API alone. Passing the decision keeps that boundary while
+	// leaving one place where the rule is written.
+	ResourceAttributes func(uri string) []attribute.KeyValue
+
 	// BaseInterval is the polling interval for a resource with no
 	// lifecycle signal. Defaults to [DefaultBaseInterval].
 	BaseInterval time.Duration

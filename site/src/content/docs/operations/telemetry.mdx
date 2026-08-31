@@ -196,7 +196,9 @@ Not by default and not by any setting, because there is no setting:
 - **Tool arguments and results.** The conventions define `Opt-In` attributes for
   both; this server declines them, because they carry project paths, issue
   bodies and search queries.
-- **Resource contents and resource URIs**, which embed project and group ids.
+- **Resource contents.** The URI that named the resource follows the identity
+  policy: a keyed per-process digest by default, and the URI itself only under
+  `full`, which already exports the caller's real name.
 - **Your GitLab token**, or any header a client sent.
 - **GitLab response bodies and error messages.** A failure records a
   classification such as `-32603`, never the text, which can name private paths.
@@ -218,6 +220,18 @@ Off by default, in three steps:
 ```
 
 or `GITLAB_MCP_TELEMETRY_IDENTITY`.
+
+The policy governs one more thing than its name suggests: **which resource a
+request named**. A resource URI here embeds project and group ids, so it says
+what a caller is working on, which is the same class of disclosure as saying who
+they are. Under `none` and `pseudonymous` a span carries
+`gitlab_mcp.resource.ref`, a keyed per-process digest that correlates reads and
+polls of one resource without naming it. Under `full` it carries
+`mcp.resource.uri`, the convention's own attribute, with the URI in it.
+
+One flag rather than two, because a deployment that recorded project paths while
+claiming to record nobody would be the predictable result of letting the two
+settings drift apart.
 
 **`none`** is the default because whether to record a person's identity is your
 decision about your own users, and a default that decides for you is wrong

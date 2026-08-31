@@ -1306,6 +1306,7 @@ func createServer(
 	telemetryOptions := mcpotel.Options{
 		Identifier: gitlabtools.NewCallIdentifier(surfaceCatalog, toolSurface),
 		Users:      telemetryUsers(),
+		Resources:  telemetryResources(),
 		Surface:    toolSurface,
 		Transport:  settings.transport,
 		// The full supported list rather than the narrowed one: this bounds
