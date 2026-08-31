@@ -45,6 +45,7 @@ package collectore2e
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -247,6 +248,77 @@ func waitHealthy(t *testing.T, s *server) {
 // protocol 2026-07-28 makes required on a POST, and the Mcp-Param-Action header
 // mirroring the action argument, without which the transport answers -32020
 // before any middleware sees the request.
+// callTool posts one tools/call with the given tool name and arguments.
+//
+// callAction is this with the dynamic surface's envelope filled in. The meta
+// and individual surfaces name a different tool and nest their parameters
+// differently, and the whole point of covering them is that those shapes are
+// not interchangeable: the surface decides what a call looks like, which is
+// also what decides whether gitlab_mcp.action can be resolved from it.
+func (s *server) callTool(t *testing.T, id int, tool, arguments string) {
+	t.Helper()
+
+	body := `{"jsonrpc":"2.0","id":` + strconv.Itoa(id) +
+		`,"method":"tools/call","params":{` + protocolMeta +
+		`,"name":"` + tool + `","arguments":` + arguments + `}}`
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, s.baseURL+"/mcp", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("building the tools/call request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", acceptHeader)
+	req.Header.Set("MCP-Protocol-Version", protocolVersion)
+	req.Header.Set("Mcp-Method", "tools/call")
+	req.Header.Set("Mcp-Name", tool)
+	if action := topLevelAction(arguments); action != "" {
+		req.Header.Set("Mcp-Param-Action", action)
+	}
+	req.Header.Set("PRIVATE-TOKEN", "glpat-collector-e2e-token")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /mcp: %v", err)
+	}
+	defer resp.Body.Close()
+
+	payload, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		t.Fatalf("the call was refused with %d, so no span exists to assert on. Server output:\n%s",
+			resp.StatusCode, s.logs())
+	}
+	// Both ways a call can fail, because they are different mechanisms and
+	// checking one is how a refusal travels unnoticed: a JSON-RPC error means
+	// the request never reached a handler, and isError means a handler ran and
+	// reported failure to the model.
+	if bytes.Contains(payload, []byte(`"error":{`)) {
+		t.Fatalf("%s was refused with a JSON-RPC error, so no handler ran:\n%s", tool, tailOfPayload(payload))
+	}
+	if bytes.Contains(payload, []byte(`"isError":true`)) {
+		t.Fatalf("%s answered with an error result, so no handler ran:\n%s", tool, tailOfPayload(payload))
+	}
+}
+
+// topLevelAction returns the action named at the top level of a call's
+// arguments, or "".
+//
+// Protocol revision 2026-07-28 mirrors a call's parameters into Mcp-Param-*
+// headers, and the stateless transport requires the ones the tool declares. The
+// dynamic and meta surfaces both take an action there; the individual surface
+// does not, so its calls carry no such header and must not be given one.
+//
+// Read with a decoder rather than by string matching, so a project path that
+// happens to contain the word does not produce a header.
+func topLevelAction(arguments string) string {
+	var decoded struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal([]byte(arguments), &decoded); err != nil {
+		return ""
+	}
+	return decoded.Action
+}
+
 func (s *server) callAction(t *testing.T, id int, action, projectID string) {
 	t.Helper()
 
