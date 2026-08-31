@@ -174,14 +174,19 @@ func driveStatelessNames(t *testing.T, c *collector) {
 	// A tool call, a prompt fetch and a resource read each carry attributes the
 	// others do not.
 	for i := range 3 {
-		srv.callAction(t, i*4+1, "issue.list", "some-group/some-project")
-		srv.readResource(t, i*4+2, resourceURI)
-		srv.getPromptExpectingRefusal(t, i*4+3, "not-a-prompt-this-server-has")
+		srv.callAction(t, i*5+1, "issue.list", "some-group/some-project")
+		srv.readResource(t, i*5+2, resourceURI)
+		srv.getPromptExpectingRefusal(t, i*5+3, "not-a-prompt-this-server-has")
 		// A GitLab failure, which is the only thing that produces error.type:
 		// a caller fault deliberately does not, since a model naming an action
 		// that does not exist is an ordinary event rather than a malfunction.
-		srv.callToolTolerant(t, i*4+4, "gitlab_execute_action",
+		srv.callToolTolerant(t, i*5+4, "gitlab_execute_action",
 			`{"action":"issue.list","params":{"project_id":"`+failingProject+`"}}`)
+		// And a refusal, which is neither of those: the call was well formed
+		// and this server declined it. It carries an attribute the other four
+		// do not, and no error.type, since nothing malfunctioned.
+		srv.callToolTolerant(t, i*5+5, "gitlab_execute_action",
+			`{"action":"no.such.action.exists","params":{}}`)
 	}
 
 	if _, _, ok := c.awaitMetric(t, exportDeadline, durationMetric); !ok {
