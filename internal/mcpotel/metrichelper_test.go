@@ -47,17 +47,9 @@ func collectedAttributes(t *testing.T, reader *metric.ManualReader) []attribute.
 	}
 
 	var attrs []attribute.KeyValue
-	for _, scope := range collected.ScopeMetrics {
-		for _, m := range scope.Metrics {
-			histogram, ok := m.Data.(metricdata.Histogram[float64])
-			if !ok {
-				continue
-			}
-			for _, point := range histogram.DataPoints {
-				attrs = append(attrs, point.Attributes.ToSlice()...)
-			}
-		}
-	}
+	eachDataPointAttributes(collected, func(points []attribute.KeyValue) {
+		attrs = append(attrs, points...)
+	})
 	return attrs
 }
 
@@ -78,4 +70,74 @@ func collectedHistogram(t *testing.T, reader *metric.ManualReader, name string) 
 	}
 	t.Fatalf("no metric named %q was recorded", name)
 	return metricdata.Metrics{}
+}
+
+// eachDataPointAttributes calls fn with the attribute set of every data point,
+// whatever the instrument's type.
+//
+// The type switch rather than one assertion is the whole point. Every
+// instrument this server has today is a Histogram[float64], so a helper that
+// handled only that type was right by accident, and an assertion about what
+// must never appear on a metric would have gone on passing the day somebody
+// added a counter carrying it. The failure would be silent, in the direction of
+// green.
+func eachDataPointAttributes(collected metricdata.ResourceMetrics, fn func([]attribute.KeyValue)) {
+	for _, scope := range collected.ScopeMetrics {
+		for _, m := range scope.Metrics {
+			for _, attrs := range dataPointAttributeSets(m.Data) {
+				fn(attrs)
+			}
+		}
+	}
+}
+
+// dataPointAttributeSets returns the attribute set of every data point in one
+// instrument's aggregation, whatever its type.
+//
+// Split from the sweep above only because the type switch is six near-identical
+// arms and a linter counts that as complexity. It is not: each arm is the same
+// sentence about a different generic instantiation, which Go has no way to say
+// once.
+func dataPointAttributeSets(data metricdata.Aggregation) [][]attribute.KeyValue {
+	var out [][]attribute.KeyValue
+	switch d := data.(type) {
+	case metricdata.Histogram[float64]:
+		for _, p := range d.DataPoints {
+			out = append(out, p.Attributes.ToSlice())
+		}
+	case metricdata.Histogram[int64]:
+		for _, p := range d.DataPoints {
+			out = append(out, p.Attributes.ToSlice())
+		}
+	case metricdata.Sum[float64]:
+		for _, p := range d.DataPoints {
+			out = append(out, p.Attributes.ToSlice())
+		}
+	case metricdata.Sum[int64]:
+		for _, p := range d.DataPoints {
+			out = append(out, p.Attributes.ToSlice())
+		}
+	case metricdata.Gauge[float64]:
+		for _, p := range d.DataPoints {
+			out = append(out, p.Attributes.ToSlice())
+		}
+	case metricdata.Gauge[int64]:
+		for _, p := range d.DataPoints {
+			out = append(out, p.Attributes.ToSlice())
+		}
+	}
+	return out
+}
+
+// eachNamedDataPoint is the same sweep, with the instrument's name, for the
+// assertions that report which metric carried something.
+func eachNamedDataPoint(collected metricdata.ResourceMetrics, fn func(name string, attrs []attribute.KeyValue)) {
+	for _, scope := range collected.ScopeMetrics {
+		for _, m := range scope.Metrics {
+			eachDataPointAttributes(
+				metricdata.ResourceMetrics{ScopeMetrics: []metricdata.ScopeMetrics{{Metrics: []metricdata.Metrics{m}}}},
+				func(attrs []attribute.KeyValue) { fn(m.Name, attrs) },
+			)
+		}
+	}
 }

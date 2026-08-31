@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 )
 
@@ -115,22 +116,14 @@ func metricCarryingValue(t *testing.T, reader interface {
 	if err := reader.Collect(t.Context(), &collected); err != nil {
 		t.Fatalf("collecting metrics: %v", err)
 	}
-	for _, scope := range collected.ScopeMetrics {
-		for _, m := range scope.Metrics {
-			histogram, ok := m.Data.(metricdata.Histogram[float64])
-			if !ok {
-				continue
-			}
-			for _, point := range histogram.DataPoints {
-				for _, kv := range point.Attributes.ToSlice() {
-					if kv.Value.AsString() == value {
-						return m.Name, string(kv.Key)
-					}
-				}
+	eachNamedDataPoint(collected, func(name string, attrs []attribute.KeyValue) {
+		for _, kv := range attrs {
+			if kv.Value.AsString() == value && instrument == "" {
+				instrument, key = name, string(kv.Key)
 			}
 		}
-	}
-	return "", ""
+	})
+	return instrument, key
 }
 
 // TestServerMiddleware_TheSpanNameIsHTTPForASubstitutedMethod pins the naming

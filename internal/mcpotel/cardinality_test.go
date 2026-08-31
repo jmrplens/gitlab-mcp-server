@@ -153,20 +153,12 @@ func dimensionValues(t *testing.T, reader interface {
 	}
 
 	var out []string
-	for _, scope := range collected.ScopeMetrics {
-		for _, m := range scope.Metrics {
-			histogram, ok := m.Data.(metricdata.Histogram[float64])
-			if !ok {
-				continue
-			}
-			for _, point := range histogram.DataPoints {
-				for _, kv := range point.Attributes.ToSlice() {
-					if kv.Key == attribute.Key(key) {
-						out = append(out, kv.Value.AsString())
-					}
-				}
+	eachDataPointAttributes(collected, func(attrs []attribute.KeyValue) {
+		for _, kv := range attrs {
+			if kv.Key == attribute.Key(key) {
+				out = append(out, kv.Value.AsString())
 			}
 		}
-	}
+	})
 	return out
 }

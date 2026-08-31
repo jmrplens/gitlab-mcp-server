@@ -6,7 +6,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
-// TestUploadMaxFileSize_HTTPModeHonorsTheSetting is the regression for a flag
+// TestUploadMaxFileSize_HTTPMode_HonorsTheSetting is the regression for a flag
 // that worked on one transport and silently did nothing on the other.
 //
 // --upload-max-file-size writes UPLOAD_MAX_FILE_SIZE into the environment,
@@ -14,7 +14,7 @@ import (
 // configuration from flags, and that path hardcoded the default. So an operator
 // raising the limit saw it applied over stdio and ignored over HTTP, with
 // nothing anywhere saying which they had got.
-func TestUploadMaxFileSize_HTTPModeHonorsTheSetting(t *testing.T) {
+func TestUploadMaxFileSize_HTTPMode_HonorsTheSetting(t *testing.T) {
 	tests := []struct {
 		name  string
 		set   bool
