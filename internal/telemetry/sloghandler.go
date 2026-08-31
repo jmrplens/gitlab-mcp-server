@@ -52,7 +52,7 @@ const DefaultLogSeverity = slog.LevelInfo
 // written, so a field that must not be exported must not be logged either. A
 // bridge that filtered fields would be a second place to get that wrong, and
 // the two would disagree the first time somebody added a log line.
-func NewSlogHandler(base slog.Handler, floor slog.Level) slog.Handler {
+func NewSlogHandler(base slog.Handler, floor slog.Level, identity *Redactor) slog.Handler {
 	if base == nil {
 		return nil
 	}
@@ -61,6 +61,7 @@ func NewSlogHandler(base slog.Handler, floor slog.Level) slog.Handler {
 		otlp:     otelslog.NewHandler(scopeName, otelslog.WithLoggerProvider(global.GetLoggerProvider())),
 		otlpMin:  floor,
 		exported: true,
+		identity: identity,
 	}
 }
 
@@ -70,6 +71,10 @@ type fanOutHandler struct {
 	otlp     slog.Handler
 	otlpMin  slog.Level
 	exported bool
+	// identity decides what the exported copy of a record may say about who
+	// made the call. Nil redacts everything, which is the zero value's promise
+	// and the right default for a caller that forgot.
+	identity *Redactor
 }
 
 // Enabled asks the stderr handler alone.
@@ -93,7 +98,7 @@ func (h *fanOutHandler) Handle(ctx context.Context, record slog.Record) error {
 	err := h.stderr.Handle(ctx, record)
 
 	if h.exported && record.Level >= h.otlpMin {
-		_ = h.otlp.Handle(ctx, redactRecord(record))
+		_ = h.otlp.Handle(ctx, redactRecord(record, h.identity))
 	}
 	return err
 }
@@ -114,18 +119,50 @@ func (h *fanOutHandler) Handle(ctx context.Context, record slog.Record) error {
 // The common case allocates nothing. A record with no URI in it is returned as
 // it came, which is every record this server writes except a handful about
 // subscriptions.
-func redactRecord(record slog.Record) slog.Record {
-	if !recordNeedsRedaction(record) {
+func redactRecord(record slog.Record, identity *Redactor) slog.Record {
+	names := recordNamesSomebody(record)
+	if !recordNeedsRedaction(record) && !names {
 		return record
 	}
 
 	redacted := slog.NewRecord(record.Time, record.Level,
 		RedactResourceURIs(record.Message), record.PC)
+
+	var userID, username string
 	record.Attrs(func(attr slog.Attr) bool {
-		redacted.AddAttrs(redactAttr(attr))
+		switch attr.Key {
+		case LogFieldUserID:
+			userID = attr.Value.String()
+		case LogFieldUser:
+			username = attr.Value.String()
+		default:
+			redacted.AddAttrs(redactAttr(attr))
+		}
 		return true
 	})
+
+	// Put back whatever the policy allows, under the registry's names rather
+	// than the stderr leg's: this copy is what leaves the process, and the
+	// user.* namespace is what a backend already knows how to join on.
+	for _, attr := range identity.Attributes(userID, username) {
+		redacted.AddAttrs(slog.String(string(attr.Key), attr.Value.AsString()))
+	}
 	return redacted
+}
+
+// recordNamesSomebody reports whether a record carries the identity fields, so
+// the copy above is made when there is a policy to apply even if nothing in it
+// mentions a resource.
+func recordNamesSomebody(record slog.Record) bool {
+	found := false
+	record.Attrs(func(attr slog.Attr) bool {
+		if attr.Key == LogFieldUser || attr.Key == LogFieldUserID {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
 }
 
 // recordNeedsRedaction reports whether anything in the record mentions a

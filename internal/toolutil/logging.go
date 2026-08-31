@@ -9,6 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
 )
 
 // wasCancelled reports whether a tool call ended because its caller went away
@@ -99,7 +100,7 @@ func LogToolRefusal(ctx context.Context, req *mcp.CallToolRequest, tool, reason 
 // so the field would be a constant repeated on every line rather than
 // something to group by. See [UserIdentity.Instance].
 func identityAttrs(user UserIdentity) []any {
-	attrs := []any{"user", user.Username, "user_id", user.UserID}
+	attrs := []any{telemetry.LogFieldUser, user.Username, telemetry.LogFieldUserID, user.UserID}
 	if user.Instance != "" {
 		attrs = append(attrs, "instance", user.Instance)
 	}

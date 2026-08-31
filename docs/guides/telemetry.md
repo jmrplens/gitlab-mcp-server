@@ -217,6 +217,28 @@ that request, so a backend can jump from a slow span straight to the lines
 written inside it. Startup, shutdown and background records carry none, because
 there is no span to belong to.
 
+The identity policy governs these records as well, and the two legs differ on
+purpose. Your terminal keeps `user` and `user_id` whatever the policy says: you
+are reading your own server's output, and a setting about what leaves the
+process has no business editing that. The exported copy carries what the policy
+allows and under the same `user.*` names the spans use, so one query joins them.
+
+That last paragraph was untrue until recently, and a live deployment is what
+showed it: running on `pseudonymous`, which names nobody, its spans carried a
+digest and its logs carried the username in the clear. The policy had been
+applied where it was written and never to the log bridge.
+
+The identity policy governs these records as well, and the two legs differ on
+purpose. Your terminal keeps `user` and `user_id` whatever the policy says: you
+are reading your own server's output, and a setting about what leaves the
+process has no business editing that. The exported copy carries what the policy
+allows and under the same `user.*` names the spans use, so one query joins them.
+
+That last paragraph was untrue until recently, and a live deployment is what
+showed it: running on `pseudonymous`, which names nobody, its spans carried a
+digest and its logs carried the username in the clear. The policy had been
+applied where it was written and never to the log bridge.
+
 ### What is never recorded
 
 Not by default and not by any setting, because there is no setting:

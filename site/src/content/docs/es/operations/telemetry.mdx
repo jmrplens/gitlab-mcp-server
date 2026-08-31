@@ -241,6 +241,18 @@ directamente a las líneas que se escribieron dentro. Los registros de arranque,
 apagado y tareas de fondo no llevan ninguno, porque no hay span al que
 pertenecer.
 
+La política de identidad gobierna también estos registros, y las dos patas se
+comportan distinto a propósito. Tu terminal conserva `user` y `user_id` diga lo
+que diga la política: estás leyendo la salida de tu propio servidor, y un ajuste
+sobre lo que sale del proceso no tiene por qué editarla. La copia exportada
+lleva lo que la política permite, con los mismos nombres `user.*` que usan los
+spans, para que una sola consulta los cruce.
+
+Ese último párrafo no era cierto hasta hace poco, y lo enseñó un despliegue en
+marcha: con la política en `pseudonymous`, que no nombra a nadie, sus spans
+llevaban un digest y sus logs el nombre de usuario en claro. La política se
+había aplicado donde se escribió y nunca al puente de logs.
+
 ### Qué no se registra nunca
 
 Ni por defecto ni con ningún ajuste, porque no existe tal ajuste:

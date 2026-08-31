@@ -59,7 +59,7 @@ func newRecordingLogger(t *testing.T) (*slog.Logger, *recordingExporter) {
 	global.SetLoggerProvider(lp)
 	t.Cleanup(func() { global.SetLoggerProvider(previous) })
 
-	handler := NewSlogHandler(slog.NewJSONHandler(io.Discard, nil), slog.LevelInfo)
+	handler := NewSlogHandler(slog.NewJSONHandler(io.Discard, nil), slog.LevelInfo, nil)
 	return slog.New(handler), exp
 }
 
@@ -143,7 +143,7 @@ func TestSlogHandler_BelowTheFloor_IsNotExported(t *testing.T) {
 	// The stderr leg is set to debug so it accepts the record: the point is that
 	// the OTLP leg declines it on its own floor, not that nobody logged it.
 	base := slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug})
-	logger := slog.New(NewSlogHandler(base, slog.LevelInfo))
+	logger := slog.New(NewSlogHandler(base, slog.LevelInfo, nil))
 
 	logger.DebugContext(context.Background(), "per-request detail")
 
@@ -249,7 +249,7 @@ func TestSlogHandler_ADerivedLoggerKeepsTheExportFloor(t *testing.T) {
 	t.Cleanup(func() { global.SetLoggerProvider(previous) })
 
 	base := slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelDebug})
-	logger := slog.New(NewSlogHandler(base, slog.LevelInfo)).With("component", "telemetry")
+	logger := slog.New(NewSlogHandler(base, slog.LevelInfo, nil)).With("component", "telemetry")
 
 	logger.DebugContext(context.Background(), "per-request detail")
 
@@ -359,7 +359,7 @@ func TestSlogHandler_StderrKeepsTheResourceURI(t *testing.T) {
 	global.SetLoggerProvider(lp)
 	t.Cleanup(func() { global.SetLoggerProvider(previous) })
 
-	slog.New(NewSlogHandler(base, slog.LevelInfo)).
+	slog.New(NewSlogHandler(base, slog.LevelInfo, nil)).
 		Info("resource subscribed", "uri", "gitlab://project/82077663")
 
 	if !strings.Contains(out.String(), "gitlab://project/82077663") {
@@ -409,4 +409,121 @@ func renderRecord(record sdklog.Record) string {
 		return true
 	})
 	return strings.Join(parts, " ")
+}
+
+// TestSlogHandler_TheExportedLegHonorsTheIdentityPolicy covers a gap production
+// found rather than a test did.
+//
+// The hosted deployment ran with the policy on pseudonymous, which by
+// definition names nobody, and exported 48 tool-call records carrying user_id
+// and 38 carrying the username in the clear. The policy had been applied to
+// spans and to metrics; the log bridge was never told about it, so the third
+// signal published what the other two were redacting.
+//
+// The table is the whole policy, because the interesting cases are the two that
+// must remove something, and a test covering only `full` would have passed
+// against the broken code.
+func TestSlogHandler_TheExportedLegHonorsTheIdentityPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		policy  IdentityPolicy
+		wants   []string
+		forbids []string
+	}{
+		{
+			name:    "none records nobody",
+			policy:  IdentityNone,
+			forbids: []string{"jane", "42", AttrUserID, AttrUserName, AttrUserHash},
+		},
+		{
+			name:    "pseudonymous records a digest and no readable identity",
+			policy:  IdentityPseudonymous,
+			wants:   []string{AttrUserHash},
+			forbids: []string{"jane", AttrUserID, AttrUserName},
+		},
+		{
+			name:    "full records the id and the name",
+			policy:  IdentityFull,
+			wants:   []string{AttrUserID, AttrUserName, "jane", "42"},
+			forbids: []string{AttrUserHash},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var redactor *Redactor
+			if tc.policy != IdentityNone {
+				redactor = newRedactor(t, tc.policy)
+			}
+
+			exported := exportedRecord(t, redactor, func(logger *slog.Logger) {
+				logger.Info("tool call completed",
+					"tool", "gitlab_project/get",
+					LogFieldUser, "jane",
+					LogFieldUserID, "42")
+			})
+
+			for _, want := range tc.wants {
+				if !strings.Contains(exported, want) {
+					t.Errorf("%s is absent from the exported record: %s", want, exported)
+				}
+			}
+			for _, forbidden := range tc.forbids {
+				if strings.Contains(exported, forbidden) {
+					t.Errorf("%s reached the collector under policy %q: %s",
+						forbidden, tc.policy, exported)
+				}
+			}
+		})
+	}
+}
+
+// TestSlogHandler_TheTerminalStillNamesTheCaller pins the other half, which is
+// the reason this is a redaction and not a removal.
+//
+// The policy answers "what leaves the process". An operator reading their own
+// stderr is entitled to know who called, and taking that away to satisfy a
+// setting about export would be a regression dressed as a privacy fix.
+func TestSlogHandler_TheTerminalStillNamesTheCaller(t *testing.T) {
+	var terminal bytes.Buffer
+	handler := NewSlogHandler(slog.NewJSONHandler(&terminal, nil), slog.LevelInfo, nil)
+	slog.New(handler).Info("tool call completed", LogFieldUser, "jane", LogFieldUserID, "42")
+
+	written := terminal.String()
+	for _, want := range []string{"jane", "42", LogFieldUser, LogFieldUserID} {
+		if !strings.Contains(written, want) {
+			t.Errorf("stderr lost %q under the strictest policy: %s", want, written)
+		}
+	}
+}
+
+// exportedRecord runs one log call through the fan-out handler under a policy
+// and returns the exported copy rendered as text, body and attributes together.
+//
+// Rendered rather than inspected key by key, because the assertions are about
+// what a collector receives at all: a value that moved to a different attribute
+// would still be a leak.
+func exportedRecord(t *testing.T, identity *Redactor, write func(*slog.Logger)) string {
+	t.Helper()
+
+	exp := &recordingExporter{}
+	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
+	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
+
+	previous := global.GetLoggerProvider()
+	global.SetLoggerProvider(lp)
+	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+
+	handler := NewSlogHandler(slog.NewJSONHandler(io.Discard, nil), slog.LevelInfo, identity)
+	write(slog.New(handler))
+
+	records := exp.all()
+	if len(records) != 1 {
+		t.Fatalf("exported %d records, want 1", len(records))
+	}
+
+	rendered := records[0].Body().AsString()
+	records[0].WalkAttributes(func(kv attribute.KeyValue) bool {
+		rendered += " " + string(kv.Key) + "=" + kv.Value.String()
+		return true
+	})
+	return rendered
 }

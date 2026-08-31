@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.opentelemetry.io/otel/attribute"
@@ -85,6 +86,45 @@ func logIdentityPolicy(policy telemetry.IdentityPolicy) {
 		"exported", telemetry.PolicyDescription(policy))
 }
 
+// identityRedactor is the process's one identity redactor, built on first use.
+//
+// One, deliberately. Each redactor generates its own salt, so a second would
+// give the same person a different user.hash on a log record than on a span:
+// one person appearing as two, which is worse than not recording them at all.
+// It is also what keeps [TestRedactor_PseudonymDoesNotSurviveARestart] honest,
+// since that test uses a new redactor as a stand-in for a new process.
+//
+// Nil under [telemetry.IdentityNone] and after any failure, which every
+// consumer reads as "record nothing": the zero value of the policy.
+var (
+	identityRedactorOnce sync.Once
+	identityRedactorVal  *telemetry.Redactor
+)
+
+// identityRedactor returns it, building it the first time.
+func identityRedactor() *telemetry.Redactor {
+	identityRedactorOnce.Do(func() {
+		policy, err := telemetryIdentityPolicy()
+		if err != nil {
+			slog.Error("telemetry identity policy is unusable; recording nothing about callers",
+				"component", "telemetry", "error", err)
+			return
+		}
+		if policy == telemetry.IdentityNone {
+			return
+		}
+		redactor, err := telemetry.NewRedactor(policy)
+		if err != nil {
+			slog.Error("telemetry identity redactor could not be built; recording nothing about callers",
+				"component", "telemetry", "error", err)
+			return
+		}
+		logIdentityPolicy(policy)
+		identityRedactorVal = redactor
+	})
+	return identityRedactorVal
+}
+
 // telemetryUsers builds the attributer the middleware consults, or the one that
 // answers nothing.
 //
@@ -95,26 +135,13 @@ func logIdentityPolicy(policy telemetry.IdentityPolicy) {
 // to record less rather than to guess or to crash mid-startup. The startup
 // validation is where a typo is meant to be caught loudly.
 func telemetryUsers() mcpotel.UserAttributer {
-	policy, err := telemetryIdentityPolicy()
-	if err != nil {
-		slog.Error("telemetry identity policy is unusable; recording nothing about callers",
-			"component", "telemetry", "error", err)
-		return nil
-	}
-	if policy == telemetry.IdentityNone {
+	redactor := identityRedactor()
+	if redactor == nil {
 		// Nil rather than a redactor that returns nothing: it takes the
 		// middleware's own no-op path and never allocates a salt for a policy
 		// that will not use one.
 		return nil
 	}
-
-	redactor, err := telemetry.NewRedactor(policy)
-	if err != nil {
-		slog.Error("telemetry identity redactor could not be built; recording nothing about callers",
-			"component", "telemetry", "error", err)
-		return nil
-	}
-	logIdentityPolicy(policy)
 	return newUserAttributer(redactor)
 }
 

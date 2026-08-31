@@ -181,7 +181,7 @@ func installSlogBridge() (restore func()) {
 	}
 
 	previous := slog.Default()
-	bridged := telemetry.NewSlogHandler(baseLogHandler, telemetry.DefaultLogSeverity)
+	bridged := telemetry.NewSlogHandler(baseLogHandler, telemetry.DefaultLogSeverity, identityRedactor())
 	if bridged == nil {
 		return func() {
 			// Same as above: no bridge, nothing to put back.

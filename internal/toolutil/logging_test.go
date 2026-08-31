@@ -414,7 +414,7 @@ func TestLogToolCallAll_InsideASpan_ExportsACorrelatedRecord(t *testing.T) {
 	global.SetLoggerProvider(lp)
 	t.Cleanup(func() { global.SetLoggerProvider(previous) })
 
-	handler := telemetry.NewSlogHandler(slog.NewJSONHandler(io.Discard, nil), slog.LevelInfo)
+	handler := telemetry.NewSlogHandler(slog.NewJSONHandler(io.Discard, nil), slog.LevelInfo, nil)
 	previousDefault := slog.Default()
 	slog.SetDefault(slog.New(handler))
 	t.Cleanup(func() { slog.SetDefault(previousDefault) })

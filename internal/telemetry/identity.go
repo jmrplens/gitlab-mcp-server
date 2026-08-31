@@ -100,6 +100,21 @@ func ParseIdentityPolicy(value string) (IdentityPolicy, error) {
 	}
 }
 
+// The slog field names a tool-call record carries on the stderr leg.
+//
+// Declared here rather than where they are written, because the redactor has to
+// find them to apply the policy to the exported copy, and two spellings of the
+// same field would mean the policy silently applies to neither.
+//
+// They are not the user.* names below on purpose: those are the OpenTelemetry
+// registry's, for what leaves the process, while these are what an operator
+// reads in their own terminal. Reconciling the two is a separate change with a
+// dual-emit window, since it breaks whatever parses stderr today.
+const (
+	LogFieldUser   = "user"
+	LogFieldUserID = "user_id"
+)
+
 // identitySaltBytes sizes the pseudonymisation key.
 const identitySaltBytes = 32
 
