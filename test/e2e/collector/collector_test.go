@@ -46,6 +46,9 @@ const collectorImage = "otel/opentelemetry-collector-contrib:0.159.0"
 // appending to one file and the interleaving would be ours to untangle.
 const (
 	collectorOTLPPort = "4318"
+	// The gRPC receiver's port, published alongside the HTTP one so a single
+	// collector serves both protocols and a test picks by endpoint.
+	collectorGRPCPort = "4317"
 	tracesFile        = "traces.json"
 	metricsFile       = "metrics.json"
 	logsFile          = "logs.json"
@@ -73,6 +76,8 @@ const collectorConfig = `receivers:
     protocols:
       http:
         endpoint: 0.0.0.0:` + collectorOTLPPort + `
+      grpc:
+        endpoint: 0.0.0.0:` + collectorGRPCPort + `
 
 exporters:
   file/traces:
@@ -104,6 +109,9 @@ service:
 type collector struct {
 	// endpoint is what OTEL_EXPORTER_OTLP_ENDPOINT is set to.
 	endpoint string
+	// grpcEndpoint is the same collector reached over the other protocol,
+	// which nothing exercised until it existed.
+	grpcEndpoint string
 	// outDir is the host side of the bind mount the file exporters write into.
 	outDir string
 	name   string
@@ -122,6 +130,7 @@ func startCollector(t *testing.T) *collector {
 	requireDocker(t)
 
 	hostPort := freePort(t)
+	grpcPort := freePort(t)
 	dir := t.TempDir()
 	outDir := filepath.Join(dir, "out")
 	if err := os.MkdirAll(outDir, 0o777); err != nil { //#nosec G301 -- a throwaway container writes here as its own user
@@ -142,6 +151,7 @@ func startCollector(t *testing.T) *collector {
 	args := []string{
 		"run", "-d", "--name", name,
 		"-p", "127.0.0.1:" + strconv.Itoa(hostPort) + ":" + collectorOTLPPort,
+		"-p", "127.0.0.1:" + strconv.Itoa(grpcPort) + ":" + collectorGRPCPort,
 	}
 	// Run as the invoking user so the exported files are readable here and
 	// removable by t.TempDir's cleanup. Without this the image's own uid 10001
@@ -177,9 +187,10 @@ func startCollector(t *testing.T) *collector {
 	}
 
 	c := &collector{
-		endpoint: "http://127.0.0.1:" + strconv.Itoa(hostPort),
-		outDir:   outDir,
-		name:     name,
+		endpoint:     "http://127.0.0.1:" + strconv.Itoa(hostPort),
+		grpcEndpoint: "127.0.0.1:" + strconv.Itoa(grpcPort),
+		outDir:       outDir,
+		name:         name,
 	}
 	t.Cleanup(func() {
 		// Not t.Context: cleanup runs after the test context is cancelled, and
