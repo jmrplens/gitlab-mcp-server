@@ -191,13 +191,27 @@ sent, so the number of stored time series follows what is registered rather than
 what a client types. The span keeps the name verbatim, which is where you look
 when a client reports that its calls are failing.
 
-A refusal is not an error, which is why it has an attribute of its own. The call
-arrived well formed and this server chose not to run it: safe mode previewing a
-write, a destructive action awaiting confirmation, an action name that does not
-exist, parameters that do not fit, or the deployment's own rate limit. The five
-values are the whole set, which is what makes the attribute affordable as a
+A refusal is not a malfunction, which is why it has an attribute of its own:
+`error.type` cannot tell a call this server declined from one that broke. The
+call arrived well formed and this server chose not to run it:
+
+| `gitlab_mcp.refusal_reason` | Why                                           |
+| --------------------------- | --------------------------------------------- |
+| `safe_mode`                 | safe mode answered a write with a preview     |
+| `needs_confirmation`        | a destructive action was not confirmed        |
+| `invalid_params`            | the parameters do not fit the action          |
+| `unknown_action`            | no action by that name exists on this surface |
+| `rate_limited`              | the deployment's own limit rejected the call  |
+
+Those five are the whole set, which is what makes the attribute affordable as a
 metric dimension as well as a span attribute: a deployment refusing every third
 call looks exactly like a healthy one on a duration histogram alone.
+
+Some of them carry `error.type` as well, and that is not a contradiction. A
+refusal the caller can fix is answered with an error result, so the model is
+told plainly that its call failed; safe mode answers with a preview instead,
+which is a successful result and sets no `error.type`. Group by the refusal
+reason rather than by `error.type` when you want the declined calls.
 
 `rate_limited` is the one worth alerting on, because it is the only refusal that
 is not the caller's doing. Its log line is throttled to one every ten seconds,

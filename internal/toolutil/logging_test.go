@@ -8,8 +8,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -429,4 +435,81 @@ func TestLogToolCallAll_InsideASpan_ExportsACorrelatedRecord(t *testing.T) {
 	if got := records[0].TraceID(); got != want {
 		t.Errorf("record trace ID = %v, want %v: a tool call log cannot be joined to the span it happened inside", got, want)
 	}
+}
+
+// TestRefusalReasons_EveryOneIsDocumented ties the closed set to the guide that
+// calls it closed.
+//
+// The guide tells an operator these five values are the whole set and that
+// grouping a dashboard by them is safe. That claim is true today and nothing
+// kept it true: a sixth constant added next year would silently give the metric
+// a value no dashboard filters on and no page mentions.
+//
+// The constants are read out of the source rather than listed here, because a
+// list here would be the same drift one file further along.
+func TestRefusalReasons_EveryOneIsDocumented(t *testing.T) {
+	t.Parallel()
+
+	reasons := refusalConstants(t)
+	if len(reasons) < 5 {
+		t.Fatalf("found %d refusal constants, want at least the five this package declares; the parse is probably wrong",
+			len(reasons))
+	}
+
+	guide := readTelemetryGuide(t)
+	for name, value := range reasons {
+		if !strings.Contains(guide, "`"+value+"`") {
+			t.Errorf("%s = %q is a refusal this server can record and the telemetry guide never names it, so an operator cannot filter on it",
+				name, value)
+		}
+	}
+}
+
+// refusalConstants returns every Refusal* constant declared in this package,
+// by name and value.
+func refusalConstants(t *testing.T) map[string]string {
+	t.Helper()
+
+	fileSet := token.NewFileSet()
+	parsed, err := parser.ParseFile(fileSet, "logging.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parsing logging.go: %v", err)
+	}
+
+	out := map[string]string{}
+	ast.Inspect(parsed, func(node ast.Node) bool {
+		spec, ok := node.(*ast.ValueSpec)
+		if !ok {
+			return true
+		}
+		for i, name := range spec.Names {
+			if !strings.HasPrefix(name.Name, "Refusal") || i >= len(spec.Values) {
+				continue
+			}
+			literal, isLiteral := spec.Values[i].(*ast.BasicLit)
+			if !isLiteral || literal.Kind != token.STRING {
+				continue
+			}
+			value, unquoteErr := strconv.Unquote(literal.Value)
+			if unquoteErr != nil {
+				t.Fatalf("unquoting %s: %v", name.Name, unquoteErr)
+			}
+			out[name.Name] = value
+		}
+		return true
+	})
+	return out
+}
+
+// readTelemetryGuide returns the operator guide, located from this package
+// rather than from a working directory a test runner chooses.
+func readTelemetryGuide(t *testing.T) string {
+	t.Helper()
+
+	path := filepath.Join("..", "..", "docs", "guides", "telemetry.md")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading the telemetry guide: %v", err)
+	}
+	return string(content)
 }

@@ -198,14 +198,29 @@ lo que hay registrado y no de lo que teclee un cliente. El span conserva el
 nombre literal, que es donde hay que mirar cuando un cliente informa de que sus
 llamadas fallan.
 
-Un rechazo no es un error, y por eso tiene un atributo propio. La llamada llegó
-bien formada y este servidor decidió no ejecutarla: el modo seguro previsualizando
-una escritura, una acción destructiva a la espera de confirmación, un nombre de
-acción que no existe, parámetros que no encajan, o el propio límite de tasa del
-despliegue. Los cinco valores son el conjunto completo, y eso es lo que hace que
-el atributo sea asumible también como dimensión de métrica: un despliegue que
-rechaza una de cada tres llamadas es indistinguible de uno sano si solo se mira
-el histograma de duración.
+Un rechazo no es una avería, y por eso tiene un atributo propio: `error.type` no
+distingue una llamada que este servidor declinó de una que se rompió. La llamada
+llegó bien formada y este servidor decidió no ejecutarla:
+
+| `gitlab_mcp.refusal_reason` | Por qué                                                         |
+| --------------------------- | --------------------------------------------------------------- |
+| `safe_mode`                 | el modo seguro respondió una escritura con una previsualización |
+| `needs_confirmation`        | una acción destructiva sin confirmar                            |
+| `invalid_params`            | los parámetros no encajan con la acción                         |
+| `unknown_action`            | no existe ninguna acción con ese nombre en esta superficie      |
+| `rate_limited`              | el propio límite de tasa del despliegue rechazó la llamada      |
+
+Esos cinco son el conjunto completo, y eso es lo que hace que el atributo sea
+asumible también como dimensión de métrica: un despliegue que rechaza una de
+cada tres llamadas es indistinguible de uno sano si solo se mira el histograma
+de duración.
+
+Algunos llevan además `error.type`, y no es una contradicción. Un rechazo que
+quien llama puede corregir se responde con un resultado de error, para que el
+modelo sepa sin ambigüedad que su llamada falló; el modo seguro responde con una
+previsualización, que es un resultado correcto y no fija ningún `error.type`.
+Para quedarte con las llamadas declinadas, agrupa por el motivo de rechazo y no
+por `error.type`.
 
 `rate_limited` es el que conviene vigilar, porque es el único rechazo que no
 depende de quien llama. Su línea de log se limita a una cada diez segundos, para
