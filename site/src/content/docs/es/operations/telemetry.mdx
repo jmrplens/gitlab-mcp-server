@@ -253,6 +253,14 @@ marcha: con la política en `pseudonymous`, que no nombra a nadie, sus spans
 llevaban un digest y sus logs el nombre de usuario en claro. La política se
 había aplicado donde se escribió y nunca al puente de logs.
 
+Conviene conocer un límite de `pseudonymous` antes de montar un panel encima. El
+digest se calcula con una sal generada por proceso, así que identifica a quien
+llama dentro de un proceso y en ningún otro sitio. Un despliegue con varias
+réplicas detrás de un balanceador le da a la misma persona un digest distinto en
+cada una, a la vez, y un reinicio renumera a todo el mundo. Ese es el precio de
+no guardar un identificador duradero, y es deliberado: un seudónimo que
+sobreviviera a los reinicios y cruzara réplicas sería exactamente eso.
+
 ### Qué no se registra nunca
 
 Ni por defecto ni con ningún ajuste, porque no existe tal ajuste:
