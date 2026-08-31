@@ -2,6 +2,7 @@ package mcpotel
 
 import (
 	"errors"
+	"regexp"
 	"strconv"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -105,9 +106,11 @@ func classifyError(err error) outcome {
 		failed:     true,
 		errorType:  code,
 		statusCode: code,
-		// The convention asks for the JSONRPCError message here, and it is
-		// safe: these are protocol-level messages this server writes, not
-		// GitLab response bodies.
+		// The convention asks for the JSONRPCError message here. These are
+		// protocol-level messages this server writes rather than GitLab
+		// response bodies, which is what makes recording them defensible, and
+		// it is not the same as saying they carry nothing: a subscribe that
+		// fails names the resource it could not read. See redactResourceURIs.
 		description: wire.Message,
 	}
 }
@@ -190,7 +193,7 @@ func (o outcome) record(span trace.Span) {
 		span.SetAttributes(attrs...)
 	}
 	if o.failed {
-		span.SetStatus(codes.Error, o.description)
+		span.SetStatus(codes.Error, redactResourceURIs(o.description))
 	}
 	// No SetStatus on the success path. See classify.
 }
@@ -222,4 +225,33 @@ func (o outcome) metricAttributes() []attribute.KeyValue {
 // the series.
 func codeString(code int64) string {
 	return strconv.FormatInt(code, 10)
+}
+
+// resourceURIPattern matches this server's resource URIs wherever they appear in
+// free text.
+//
+// Anchored on the scheme, which is the whole vocabulary: every resource this
+// server exposes is a gitlab:// URI, so nothing else has to be guessed at. The
+// run stops at whitespace or a quote, which is how these appear when a message
+// is assembled with %s or %w.
+var resourceURIPattern = regexp.MustCompile(`gitlab://[^\s"']+`)
+
+// redactResourceURIs removes resource URIs from a span status description.
+//
+// # Why the description needs this and the attribute does not
+//
+// Which resource a request named is governed by the identity policy and lands
+// on an attribute that policy chooses: a keyed digest by default, the URI
+// itself only under full. A status description is free text, so a URI embedded
+// in a message would be a second carrier for the same value, arriving whatever
+// the policy said. One governed carrier and one ungoverned one is not a policy.
+//
+// The URI is replaced rather than the message dropped, because the rest of it
+// is the diagnosis: "resource inaccessible: Resource not found" is what an
+// operator needs, and it says the same thing without the path.
+func redactResourceURIs(description string) string {
+	if description == "" {
+		return ""
+	}
+	return resourceURIPattern.ReplaceAllString(description, "gitlab://[redacted]")
 }
