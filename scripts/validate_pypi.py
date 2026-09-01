@@ -230,8 +230,8 @@ def run_handshake(script, version, tmp, label):
         return
     server_info = response.get("result", {}).get("serverInfo", {})
     if server_info.get("version") != version:
-        fail("handshake ({}): serverInfo.version = {!r}, want {!r}".format(label).format(
-            server_info.get("version"), version))
+        fail("handshake ({}): serverInfo.version = {!r}, want {!r}".format(
+            label, server_info.get("version"), version))
     else:
         print("handshake:", label, "answered initialize with version", version)
 

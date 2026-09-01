@@ -24,6 +24,13 @@ DRY_RUN="${3:-}"
 TWINE_VERSION="7.0.0"
 WHEELHOUSE="pypi/dist"
 
+# The token reaches twine and nothing else: the build, the validator and pip
+# all spawn child processes that would otherwise inherit it from the
+# environment. Capture it into a plain shell variable and drop the exported
+# name before the first child starts.
+PYPI_TOKEN_VALUE="${PYPI_TOKEN:-}"
+unset PYPI_TOKEN
+
 python3 scripts/build_pypi.py --binaries "$BINARIES" --version "$VERSION"
 python3 scripts/validate_pypi.py --wheels "$WHEELHOUSE" --version "$VERSION"
 
@@ -32,7 +39,7 @@ if [[ "$DRY_RUN" == "--dry-run" ]]; then
   exit 0
 fi
 
-if [[ -z "${PYPI_TOKEN:-}" ]]; then
+if [[ -z "$PYPI_TOKEN_VALUE" ]]; then
   echo "ERROR: PYPI_TOKEN is not set" >&2
   exit 1
 fi
@@ -42,7 +49,7 @@ trap 'rm -rf "$VENVDIR"' EXIT
 python3 -m venv "$VENVDIR/venv"
 "$VENVDIR/venv/bin/pip" install --quiet "twine==${TWINE_VERSION}"
 
-TWINE_USERNAME="__token__" TWINE_PASSWORD="$PYPI_TOKEN" \
+TWINE_USERNAME="__token__" TWINE_PASSWORD="$PYPI_TOKEN_VALUE" \
   "$VENVDIR/venv/bin/twine" upload --non-interactive --skip-existing "$WHEELHOUSE"/*.whl
 
 echo "publish-pypi: published version $VERSION"
