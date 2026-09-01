@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 )
 
 // resilientStdio builds the reader and writer the stdio transport runs on,
@@ -27,7 +29,7 @@ import (
 // with it, because deciding what a valid message means is the SDK's job and a
 // filter that second-guessed it would be a second, divergent implementation of
 // the protocol.
-func resilientStdio(in io.Reader, out io.Writer) (io.ReadCloser, io.WriteCloser) {
+func resilientStdio(in io.Reader, out io.Writer) (*sanitizedInput, io.WriteCloser) {
 	shared := &lockedWriter{w: out}
 	return &sanitizedInput{in: bufio.NewReader(in), out: shared}, shared
 }
@@ -58,7 +60,23 @@ type sanitizedInput struct {
 	// pending holds the remainder of the line currently being handed over.
 	// Lines are passed through whole, so the SDK's own framing is unchanged.
 	pending []byte
+
+	// closed records that the client closed its end of the pipe.
+	//
+	// This is the only place that fact is observable. The SDK reports it back
+	// as "server is closing: EOF", but the EOF in there is formatted with %v
+	// rather than %w and the sentinel it wraps is in an internal package, so
+	// neither half survives errors.Is and the caller cannot tell a client
+	// hanging up from the transport breaking. Recording it at the read is
+	// exact, and cheaper than matching on the message text.
+	closed atomic.Bool
 }
+
+// clientClosed reports whether stdin reached end of file.
+//
+// The stdio binding calls that the primary graceful-shutdown signal, so the
+// answer is what separates an ordinary stop from a failure.
+func (s *sanitizedInput) clientClosed() bool { return s.closed.Load() }
 
 // Read implements io.Reader, yielding only lines the SDK can parse.
 //
@@ -79,6 +97,9 @@ func (s *sanitizedInput) Read(p []byte) (int, error) {
 			}
 		}
 		if err != nil {
+			if errors.Is(err, io.EOF) {
+				s.closed.Store(true)
+			}
 			if len(s.pending) == 0 {
 				return 0, err
 			}

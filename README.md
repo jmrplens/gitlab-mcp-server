@@ -262,11 +262,11 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ----------------------------------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              1,499 |         8,720 |       10,219 |
+| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              1,499 |         8,781 |       10,280 |
 | `dynamic` / `minimal`                                 | Free/CE  |             2 |               851 | n/a                 |              1,499 |           170 |        1,669 |
-| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              1,499 |         8,720 |       10,219 |
+| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              1,499 |         8,781 |       10,280 |
 | `dynamic` / `minimal`                                 | Premium  |             2 |             1,003 | n/a                 |              1,499 |           170 |        1,669 |
-| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              1,499 |         8,720 |       10,219 |
+| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              1,499 |         8,781 |       10,280 |
 | `dynamic` / `minimal`                                 | Ultimate |             2 |             1,069 | n/a                 |              1,499 |           170 |        1,669 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
@@ -450,21 +450,21 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,001 |     206,590 |
-| Unit tests (`_test.go`)  |       557 |     320,253 |
-| End-to-end tests         |       188 |      50,658 |
-| **Total**                | **1,746** | **577,501** |
+| Source (`.go`, non-test) |     1,003 |     207,203 |
+| Unit tests (`_test.go`)  |       559 |     320,892 |
+| End-to-end tests         |       189 |      51,413 |
+| **Total**                | **1,751** | **579,508** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,837 |
-| — exported (public)             |  2,711 |
-| — unexported (private)          |  5,126 |
-| Unit test functions (`TestXxx`) | 12,084 |
-| Subtests (`t.Run(...)`)         |  3,096 |
-| End-to-end test functions       |    481 |
+| Source functions                |  7,856 |
+| — exported (public)             |  2,715 |
+| — unexported (private)          |  5,141 |
+| Unit test functions (`TestXxx`) | 12,098 |
+| Subtests (`t.Run(...)`)         |  3,109 |
+| End-to-end test functions       |    489 |
 
 ### Ratios worth noting
 
@@ -473,16 +473,16 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.55× more tests than code |
 | Average source file length         |                 ~206 lines |
 | Average test file length           |                 ~574 lines |
-| Comment lines in source            |  25,575 (~12.4% of source) |
+| Comment lines in source            |  25,873 (~12.5% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,814 |
-| `defer` statements                 |   988 |
-| `struct` types defined             | 2,757 |
+| `if err != nil` checks             | 6,815 |
+| `defer` statements                 |   989 |
+| `struct` types defined             | 2,759 |
 | `//nolint` suppressions            |   271 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -498,15 +498,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                                     |
 | ------------------- | -------------------------------------------------------- |
-| Longest source file | `internal/tools/dynamic/register.go` — 3,851 lines       |
+| Longest source file | `internal/tools/dynamic/register.go` — 3,878 lines       |
 | Longest test file   | `internal/tools/projects/projects_test.go` — 8,183 lines |
 
 ### Because why not
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,756 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,835 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,767 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,846 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

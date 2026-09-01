@@ -8,8 +8,10 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"golang.org/x/time/rate"
 )
 
 // TestNewRateLimiter_Disabled verifies that a non-positive rps disables the
@@ -311,4 +313,123 @@ func TestAttachRateLimit_GatesCompletionWithoutBlockingIt(t *testing.T) {
 			t.Error("a disabled limiter must allow everything")
 		}
 	})
+}
+
+// TestRateLimiter_RefusalIsReportedAndSelfSuppressed pins that a throttled
+// deployment says so, without saying it ninety-five times a second.
+//
+// Reproduced on the shipped default before this existed (rps 10, burst 40, no
+// flags, no LOG_LEVEL): 150 concurrent calls gave 102 refusals inside 1.07s and
+// the log for the whole run was session chatter. The 48 served and the 102
+// refused were indistinguishable in it. LOG_LEVEL=debug changed nothing:
+// nothing was written at any level, so there was no level to raise.
+//
+// Suppression is not an optimization. Refusals are unbounded: their rate is
+// the arrival rate minus the limit, so a line per refusal would replace a
+// silent limiter with a flood, which is the failure mode the specification
+// names when it says to rate limit log messages. One line per window carries
+// the count of what it stands for, so nothing is lost.
+func TestRateLimiter_RefusalIsReportedAndSelfSuppressed(t *testing.T) {
+	tests := []struct {
+		name string
+		// build returns the limiter under test. A closure rather than a pair
+		// of numbers because two cases need a limiter the constructor does not
+		// produce: a nil one, and one assembled directly, which is what
+		// scaled() hands the completion bucket.
+		build func() *RateLimiter
+		// refuse drives the refusals this case is about.
+		refuse func(*RateLimiter)
+		// wantLines is how many refusal lines the whole case may emit.
+		wantLines int
+		// wantContains are substrings the output must carry.
+		wantContains []string
+	}{
+		{
+			name:      "the first refusal in a window is reported",
+			build:     func() *RateLimiter { return NewRateLimiter(1, 1) },
+			refuse:    func(r *RateLimiter) { r.reportRefusal("gitlab_execute_action") },
+			wantLines: 1,
+			wantContains: []string{
+				`"level":"WARN"`,
+				`"msg":"tool call refused: rate limit exceeded"`,
+				`"tool":"gitlab_execute_action"`,
+				`"reason":"rate_limited"`,
+				`"limit_rps":1`,
+				`"burst":1`,
+			},
+		},
+		{
+			name:  "a flood inside the window is counted, not logged",
+			build: func() *RateLimiter { return NewRateLimiter(10, 40) },
+			refuse: func(r *RateLimiter) {
+				for range 102 {
+					r.reportRefusal("gitlab_execute_action")
+				}
+			},
+			wantLines: 1,
+		},
+		{
+			name: "the next window reports what the last one absorbed",
+			build: func() *RateLimiter {
+				r := NewRateLimiter(10, 40)
+				r.throttleWindow = time.Millisecond
+				return r
+			},
+			refuse: func(r *RateLimiter) {
+				r.reportRefusal("gitlab_execute_action")
+				for range 41 {
+					r.reportRefusal("gitlab_execute_action")
+				}
+				time.Sleep(5 * time.Millisecond)
+				r.reportRefusal("gitlab_execute_action")
+			},
+			wantLines: 2,
+			// Without the count, an operator reading one line per ten seconds
+			// has no idea whether it stands for one refusal or a thousand.
+			wantContains: []string{`"also_refused_since_last_report":41`},
+		},
+		{
+			name:      "a nil limiter reports nothing",
+			build:     func() *RateLimiter { return nil },
+			refuse:    func(r *RateLimiter) { r.reportRefusal("gitlab_execute_action") },
+			wantLines: 0,
+		},
+		{
+			// extractToolName returns "" for a request shape it does not
+			// recognize. The line has to say something an operator can read,
+			// and the method is the honest fallback.
+			name:         "an unnamed tool still produces a usable line",
+			build:        func() *RateLimiter { return NewRateLimiter(1, 1) },
+			refuse:       func(r *RateLimiter) { r.reportRefusal("") },
+			wantLines:    1,
+			wantContains: []string{`"tool":"tools/call"`},
+		},
+		{
+			// A limiter built without going through NewRateLimiter, which the
+			// scaled() completion limiter is, must not divide by an unset
+			// window.
+			name:  "a zero window falls back to the default",
+			build: func() *RateLimiter { return &RateLimiter{limiter: rate.NewLimiter(1, 1)} },
+			refuse: func(r *RateLimiter) {
+				r.reportRefusal("gitlab_execute_action")
+				r.reportRefusal("gitlab_execute_action")
+			},
+			wantLines: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := captureSlog(t)
+			tt.refuse(tt.build())
+
+			out := buf.String()
+			if got := strings.Count(out, "rate limit exceeded"); got != tt.wantLines {
+				t.Fatalf("%d refusal lines, want %d:\n%s", got, tt.wantLines, out)
+			}
+			for _, want := range tt.wantContains {
+				assertContains(t, out, want)
+			}
+		})
+	}
 }

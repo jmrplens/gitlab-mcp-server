@@ -159,15 +159,31 @@ deployments as stateless.
 #### Cache hints
 
 Every cacheable result carries [SEP-2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549)
-hints. All of them use `cacheScope: private`, because catalogs and resource
-content are filtered by the caller's token scopes and licensing tier and must
-never be served from a shared intermediary cache:
+hints. Almost everything is `private`, because catalogs and resource content are
+filtered by the caller's token scopes and licensing tier and must never be
+served from a shared intermediary cache. The prompt catalog is the exception:
+its 37 prompts are compiled into the binary and no tier, token or surface
+setting alters one, so marking it private would cost every client a round trip
+for a body that could have been shared.
 
-| Result                                                                                        | `ttlMs`              |
-| --------------------------------------------------------------------------------------------- | -------------------- |
-| `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `server/discover` | `300000` (5 minutes) |
-| `resources/read` of static content (guides, schemas, `gitlab://tools` manifests)              | `3600000` (1 hour)   |
-| `resources/read` of live GitLab data                                                          | `0` (always fresh)   |
+The freshness window depends on how the licensing tier was resolved. When it is
+detected from the instance license it can change under a running server, so the
+tool catalog gets a shorter window; `--tier` or `GITLAB_TIER` pins it and lifts
+that to an hour.
+
+| Result                                       | `cacheScope` | `ttlMs`, tier detected | `ttlMs`, tier pinned |
+| -------------------------------------------- | ------------ | ---------------------- | -------------------- |
+| `prompts/list`                               | `public`     | `3600000` (1 hour)     | `3600000` (1 hour)   |
+| `resources/list`, `resources/templates/list` | `private`    | `3600000` (1 hour)     | `3600000` (1 hour)   |
+| `tools/list`, `server/discover`              | `private`    | `300000` (5 minutes)   | `3600000` (1 hour)   |
+| `resources/read` of `gitlab://tools`         | `private`    | `300000` (5 minutes)   | `3600000` (1 hour)   |
+| `resources/read` of a workflow guide         | `private`    | `3600000` (1 hour)     | `3600000` (1 hour)   |
+| `resources/read` of live GitLab data         | `private`    | `0` (always fresh)     | `0` (always fresh)   |
+
+The `gitlab://tools` manifest shares the tool catalog's window rather than the
+static one because it describes that catalog: caching it for an hour while
+`tools/list` refreshed every five minutes would let a client hold two
+disagreeing views of the same thing.
 
 #### Request cancellation
 

@@ -12,6 +12,22 @@ import (
 type UserIdentity struct {
 	UserID   string
 	Username string
+	// Instance is the GitLab instance the identity was resolved against, when
+	// the caller knows it.
+	//
+	// A GitLab user id is unique within an instance and means nothing across
+	// them, so a deployment publishing several through --gitlab-url can log two
+	// different people as user_id 7. ADR-0008 fixes this struct as
+	// {UserID, Username} and motivates it expressly for audit logging, without
+	// recording that limit; an audit trail whose subject is ambiguous is the one
+	// place it matters.
+	//
+	// Empty where there is nothing to say: stdio resolves one identity at
+	// startup against one instance, and a deployment that pins --gitlab-url has
+	// only the one. The field is filled where it is already known rather than
+	// resolved again: the HTTP gate computes the instance per request to pick a
+	// pool entry and used to throw it away.
+	Instance string
 }
 
 // IsAuthenticated returns true if the identity contains a non-empty UserID.

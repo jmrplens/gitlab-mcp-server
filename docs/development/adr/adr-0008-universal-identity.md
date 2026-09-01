@@ -57,6 +57,27 @@ Implement Option 4 with the following architecture:
 ### Identity Types (`internal/toolutil/identity.go`)
 
 - `UserIdentity{UserID string, Username string}` — canonical identity struct.
+
+> **Amended (2026-08)**: the struct carries an optional `Instance` as well. A
+> GitLab user id is unique within an instance and means nothing across them, so
+> a deployment publishing several through a repeated `--gitlab-url` logs two
+> different people as `user_id 7` with nothing separating the lines. This
+> decision names audit logging as its first motivation and did not record that
+> limit, which is the one place an ambiguous subject matters.
+>
+> It is filled where it is already known rather than resolved again: the HTTP
+> gate computes the instance per request to choose a pool entry, and used to
+> discard it. It stays empty, and out of the log line, where there is nothing to
+> distinguish: stdio resolves one identity against one instance at startup, and
+> a deployment that pins a single `--gitlab-url` has only the one, so the field
+> would repeat a constant rather than give something to group by.
+>
+> What remains missing is a per-call correlation id. Two concurrent calls from
+> one user on one instance are still indistinguishable in the log. The SDK's own
+> JSON-RPC id cannot serve: `idContextKey` is unexported with no accessor, and
+> the id is client-chosen, so two clients routinely both send `1`. Minting one
+> server-side is the only viable form and is not done here.
+
 - `IdentityToContext(ctx, identity)` / `IdentityFromContext(ctx)` — context storage for stdio mode.
 - `ResolveIdentity(ctx, req)` — unified resolution: TokenInfo priority, context fallback.
 

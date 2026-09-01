@@ -1515,7 +1515,7 @@ Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
 
 - **URI**: `gitlab://groups`
 - **MIME**: application/json
-- **Description**: List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.
+- **Description**: Groups accessible to the authenticated user, up to one page (100). Returns each group's ID, name, full path, description, visibility level, and web URL.
 
 ### code_review
 
@@ -1575,7 +1575,7 @@ Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
 
 - **URI Template**: `gitlab://group/{group_id}/members`
 - **MIME**: application/json
-- **Description**: List all members of a GitLab group with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members.
+- **Description**: Members of a GitLab group, up to one page (100), with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members.
 
 ### group_milestone
 
@@ -1587,7 +1587,7 @@ Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
 
 - **URI Template**: `gitlab://group/{group_id}/projects`
 - **MIME**: application/json
-- **Description**: List all projects within a GitLab group. Returns each project's ID, name, namespace path, visibility, web URL, description, and default branch.
+- **Description**: Projects within a GitLab group, up to one page (100). Returns each project's ID, name, namespace path, visibility, web URL, description, and default branch.
 
 ### project
 
@@ -1611,7 +1611,7 @@ Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
 
 - **URI Template**: `gitlab://project/{project_id}/branches`
 - **MIME**: application/json
-- **Description**: List all branches in a GitLab project. Returns each branch's name, protection status, merge status, default flag, and web URL.
+- **Description**: Branches in a GitLab project, up to one page (100). Returns each branch's name, protection status, merge status, default flag, and web URL.
 
 ### commit
 
@@ -1659,7 +1659,7 @@ Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
 
 - **URI Template**: `gitlab://project/{project_id}/issues`
 - **MIME**: application/json
-- **Description**: List open issues for a GitLab project. Returns each issue's IID, title, state, labels, assignees, author, web URL, and creation date.
+- **Description**: Open issues for a GitLab project, up to one page (100). Returns each issue's IID, title, state, labels, assignees, author, web URL, and creation date.
 
 ### job
 
@@ -1677,13 +1677,13 @@ Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
 
 - **URI Template**: `gitlab://project/{project_id}/labels`
 - **MIME**: application/json
-- **Description**: List all labels defined in a GitLab project. Returns each label's name, color, description, and counts of open issues and merge requests using the label.
+- **Description**: Labels defined in a GitLab project, up to one page (100). Returns each label's name, color, description, and counts of open issues and merge requests using the label.
 
 ### project_members
 
 - **URI Template**: `gitlab://project/{project_id}/members`
 - **MIME**: application/json
-- **Description**: List all members of a GitLab project with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members from parent groups.
+- **Description**: Members of a GitLab project, up to one page (100), with their access levels (10=guest, 20=reporter, 30=developer, 40=maintainer, 50=owner). Includes inherited members from parent groups.
 
 ### milestone
 
@@ -1695,7 +1695,7 @@ Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
 
 - **URI Template**: `gitlab://project/{project_id}/milestones`
 - **MIME**: application/json
-- **Description**: List all milestones in a GitLab project. Returns each milestone's title, description, state (active/closed), due date, and web URL.
+- **Description**: Milestones in a GitLab project, up to one page (100). Returns each milestone's title, description, state (active/closed), due date, and web URL.
 
 ### merge_request
 
@@ -1725,7 +1725,7 @@ Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
 
 - **URI Template**: `gitlab://project/{project_id}/pipeline/{pipeline_id}/jobs`
 - **MIME**: application/json
-- **Description**: List all jobs for a specific CI/CD pipeline including each job's name, stage, status, duration, failure reason (if failed), and web URL. Subscribable: subscriptions/listen (protocol 2026-07-28); resources/subscribe on stateful sessions.
+- **Description**: Jobs for a specific CI/CD pipeline, up to one page (100), including each job's name, stage, status, duration, failure reason (if failed), and web URL. Subscribable: subscriptions/listen (protocol 2026-07-28); resources/subscribe on stateful sessions.
 
 ### latest_pipeline
 
@@ -1743,7 +1743,7 @@ Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
 
 - **URI Template**: `gitlab://project/{project_id}/releases`
 - **MIME**: application/json
-- **Description**: List all releases for a GitLab project. Returns each release's tag name, name, description, author, and creation/release dates.
+- **Description**: Releases for a GitLab project, up to one page (100). Returns each release's tag name, name, description, author, and creation/release dates.
 
 ### project_snippet
 
@@ -1761,7 +1761,7 @@ Enabled with `TOOL_SURFACE=individual`: 1071 tools, one per operation.
 
 - **URI Template**: `gitlab://project/{project_id}/tags`
 - **MIME**: application/json
-- **Description**: List all repository tags for a GitLab project. Returns each tag's name, message, target commit SHA, protection status, and creation date.
+- **Description**: Repository tags for a GitLab project, up to one page (100). Returns each tag's name, message, target commit SHA, protection status, and creation date.
 
 ### wiki_page
 

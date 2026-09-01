@@ -237,13 +237,18 @@ In stateless mode the legacy `resources/subscribe` request is refused with an ex
 
 ### Cache hints
 
-Every cacheable result carries [SEP-2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549) hints with `cacheScope: private`, because catalogs and resource content are filtered by the caller's token scopes and licensing tier and must never be served from a shared cache:
+Every cacheable result carries [SEP-2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549) hints. Almost everything is `private`, because catalogs and resource content are filtered by the caller's token scopes and licensing tier and must never be served from a shared cache. The prompt catalog is the exception: its prompts are compiled into the binary and no tier, token or surface setting alters one, so marking it private would cost every client a round trip for a body that could have been shared.
 
-| Result                                                                                        | `ttlMs`              |
-| --------------------------------------------------------------------------------------------- | -------------------- |
-| `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `server/discover` | `300000` (5 minutes) |
-| `resources/read` of static content (guides, schemas, `gitlab://tools` manifests)              | `3600000` (1 hour)   |
-| `resources/read` of live GitLab data                                                          | `0` (always fresh)   |
+The freshness window depends on how the licensing tier was resolved. A detected tier can change under a running server, so the tool catalog gets a shorter window; `--tier` or `GITLAB_TIER` pins it and lifts that to an hour.
+
+| Result                                       | `cacheScope` | `ttlMs`, tier detected | `ttlMs`, tier pinned |
+| -------------------------------------------- | ------------ | ---------------------- | -------------------- |
+| `prompts/list`                               | `public`     | `3600000` (1 hour)     | `3600000` (1 hour)   |
+| `resources/list`, `resources/templates/list` | `private`    | `3600000` (1 hour)     | `3600000` (1 hour)   |
+| `tools/list`, `server/discover`              | `private`    | `300000` (5 minutes)   | `3600000` (1 hour)   |
+| `resources/read` of `gitlab://tools`         | `private`    | `300000` (5 minutes)   | `3600000` (1 hour)   |
+| `resources/read` of a workflow guide         | `private`    | `3600000` (1 hour)     | `3600000` (1 hour)   |
+| `resources/read` of live GitLab data         | `private`    | `0` (always fresh)     | `0` (always fresh)   |
 
 ### Request cancellation
 

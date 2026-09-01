@@ -9,6 +9,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -537,11 +538,20 @@ func (r *Registry) Describe(_ context.Context, _ *mcp.CallToolRequest, input Des
 }
 
 // Find searches GitLab catalog actions and includes exact schemas for matches.
-func (r *Registry) Find(_ context.Context, _ *mcp.CallToolRequest, input FindInput) (*mcp.CallToolResult, FindOutput, error) {
+func (r *Registry) Find(ctx context.Context, req *mcp.CallToolRequest, input FindInput) (*mcp.CallToolResult, FindOutput, error) {
+	start := time.Now()
 	query := strings.TrimSpace(input.Query)
 	if query == "" {
+		toolutil.LogToolRefusal(ctx, req, FindActionToolName, toolutil.RefusalInvalidParams)
 		return toolutil.ErrorResult("gitlab_find_action: query is required. Try terms like project create, merge request approve, pipeline retry, or ci variable."), FindOutput{}, nil
 	}
+
+	// Logged like any other tool call, which it had not been. This is the
+	// entry point of the default surface (half of everything a model does
+	// here is a find) and it wrote only a DEBUG line, so at default verbosity
+	// a served call and a refused one were indistinguishable in the log. That
+	// is also the "find query" half of ADR-0011 IMP-008.
+	defer toolutil.LogToolCallAll(ctx, req, FindActionToolName, start, nil, nil)
 
 	matches := r.searchMatches(query, input.Limit, input.Explain)
 	results := make([]FindResult, 0, len(matches))
@@ -580,11 +590,17 @@ func (r *Registry) Find(_ context.Context, _ *mcp.CallToolRequest, input FindInp
 func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input ExecuteInput) (*mcp.CallToolResult, any, error) {
 	id := strings.ToLower(strings.TrimSpace(input.Action))
 	if id == "" {
+		toolutil.LogToolRefusal(ctx, req, ExecuteActionToolName, toolutil.RefusalInvalidParams)
 		return toolutil.ErrorResult("gitlab_execute_action: action is required. Use the registered discovery tool for this surface to find a canonical action ID."), nil, nil
 	}
 	requestedActionID := id
 	entry, ok := r.resolveAction(id)
 	if !ok {
+		// Includes the two narrowing cases: an action the token's scope
+		// withheld and one the operator excluded both arrive here, and an
+		// operator watching a deployment where clients keep asking for a
+		// withheld action has no other way to see it.
+		toolutil.LogToolRefusal(ctx, req, executeCallName(id), toolutil.RefusalUnknownAction)
 		return toolutil.ErrorResult(r.unknownActionMessage("gitlab_execute_action", input.Action)), nil, nil
 	}
 
@@ -611,6 +627,7 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 		slog.Debug("normalized dynamic action params", "action", entry.ID, "normalizations", len(commonParamExplanations)+len(actionParamExplanations))
 	}
 	if result := validateDynamicExecuteParams(entry, params); result != nil {
+		toolutil.LogToolRefusal(ctx, req, executeCallName(entry.ID), toolutil.RefusalInvalidParams)
 		return result, nil, nil
 	}
 	if input.Confirm {
@@ -623,6 +640,16 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 
 	handler := r.handlers[entry.Tool]
 	return handler(ctx, req, toolutil.MetaToolInput{Action: entry.Action, Params: params})
+}
+
+// executeCallName names a dynamic dispatch in a log record, so a refusal reads
+// the same way as the "tool call completed" line the meta handler writes when
+// the same action runs.
+func executeCallName(actionID string) string {
+	if actionID == "" {
+		return ExecuteActionToolName
+	}
+	return ExecuteActionToolName + "/" + actionID
 }
 
 // NormalizeActionScopedParams applies compatibility aliases that are safe only

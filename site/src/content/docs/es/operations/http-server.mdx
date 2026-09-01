@@ -237,13 +237,18 @@ En modo sin estado la petición legada `resources/subscribe` se rechaza con un e
 
 ### Sugerencias de caché
 
-Todos los resultados cacheables llevan sugerencias [SEP-2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549) con `cacheScope: private`, porque los catálogos y el contenido de los recursos se filtran según los ámbitos del token y el nivel de licencia de quien llama, y nunca deben servirse desde una caché compartida:
+Todos los resultados cacheables llevan sugerencias [SEP-2549](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2549). Casi todo es `private`, porque los catálogos y el contenido de los recursos se filtran según los ámbitos del token y el nivel de licencia de quien llama, y nunca deben servirse desde una caché compartida. El catálogo de prompts es la excepción: sus prompts están compilados en el binario y ningún nivel, token ni superficie los altera, así que marcarlo private costaría a cada cliente un viaje de ida y vuelta por un cuerpo que podría haberse compartido.
 
-| Resultado                                                                                     | `ttlMs`              |
-| --------------------------------------------------------------------------------------------- | -------------------- |
-| `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `server/discover` | `300000` (5 minutos) |
-| `resources/read` de contenido estático (guías, esquemas, manifiestos `gitlab://tools`)        | `3600000` (1 hora)   |
-| `resources/read` de datos en vivo de GitLab                                                   | `0` (siempre fresco) |
+La ventana de frescura depende de cómo se resolvió el nivel de licencia. Un nivel detectado puede cambiar con el servidor en marcha, así que el catálogo de herramientas recibe una ventana más corta; `--tier` o `GITLAB_TIER` lo fijan y la elevan a una hora.
+
+| Resultado                                    | `cacheScope` | `ttlMs`, nivel detectado | `ttlMs`, nivel fijado |
+| -------------------------------------------- | ------------ | ------------------------ | --------------------- |
+| `prompts/list`                               | `public`     | `3600000` (1 hora)       | `3600000` (1 hora)    |
+| `resources/list`, `resources/templates/list` | `private`    | `3600000` (1 hora)       | `3600000` (1 hora)    |
+| `tools/list`, `server/discover`              | `private`    | `300000` (5 minutos)     | `3600000` (1 hora)    |
+| `resources/read` de `gitlab://tools`         | `private`    | `300000` (5 minutos)     | `3600000` (1 hora)    |
+| `resources/read` de una guía de trabajo      | `private`    | `3600000` (1 hora)       | `3600000` (1 hora)    |
+| `resources/read` de datos en vivo de GitLab  | `private`    | `0` (siempre fresco)     | `0` (siempre fresco)  |
 
 ### Cancelación de peticiones
 

@@ -81,8 +81,15 @@ func newGateAgainst(t *testing.T, factory serverpool.ServerFactory, gitlabURL st
 	}
 }
 
-// decodeJSONRPCError asserts the body is a JSON-RPC error response and returns it.
-func decodeJSONRPCError(t *testing.T, body string) jsonRPCError {
+// decodeJSONRPCError asserts the body is a JSON-RPC error response and returns
+// it.
+//
+// wantID is the id the response must carry, written as it appears on the wire;
+// omit it for the requests that carry none, where the member must be absent
+// rather than null. Null is what this used to send unconditionally, and it is
+// not a legal RequestId: under 2026-07-28 the member is a string or an integer,
+// and optional so that an unknown id can be left out.
+func decodeJSONRPCError(t *testing.T, body string, wantID ...string) jsonRPCError {
 	t.Helper()
 	var decoded jsonRPCError
 	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
@@ -91,8 +98,16 @@ func decodeJSONRPCError(t *testing.T, body string) jsonRPCError {
 	if decoded.JSONRPC != "2.0" {
 		t.Errorf("jsonrpc = %q, want \"2.0\"", decoded.JSONRPC)
 	}
-	if decoded.ID != nil {
-		t.Errorf("id = %v, want null (the request body was never parsed)", *decoded.ID)
+	want := ""
+	if len(wantID) > 0 {
+		want = wantID[0]
+	}
+	if got := string(decoded.ID); got != want {
+		if want == "" {
+			t.Errorf("id = %s, want the member omitted (the request carried no id)", got)
+		} else {
+			t.Errorf("id = %q, want %q echoed back from the request", got, want)
+		}
 	}
 	if decoded.Error.Message == "" {
 		t.Error("error.message is empty; the rejection must say what went wrong")
@@ -489,7 +504,7 @@ func TestRegisterLegacyMCPHandlers_UnauthenticatedPOST_NeverReturnsNoServerAvail
 	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
 		t.Errorf("Content-Type = %q, want application/json so clients can parse the reason", ct)
 	}
-	decodeJSONRPCError(t, got)
+	decodeJSONRPCError(t, got, "1")
 }
 
 // TestMcpServerGate_WithIdentity_AttachesThePooledUser verifies that HTTP mode

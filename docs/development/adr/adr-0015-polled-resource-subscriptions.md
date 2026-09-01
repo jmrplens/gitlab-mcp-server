@@ -34,10 +34,13 @@ bounded.
 Advertise `resources.subscribe` and honor it by polling, under bounds that
 make the worst case something an operator can predict.
 
-- **A whitelist decides what is subscribable.** 26 resource kinds — single
-  objects with a lifecycle worth watching. Collections are excluded: a
-  project's issue list changes for reasons a subscriber did not ask about,
-  and polling one costs a full page read per tick.
+- **A whitelist decides what is subscribable.** 26 resource kinds: single
+  objects with a lifecycle worth watching, plus three lists that hang off one
+  parent — a pipeline's jobs, a merge request's notes and its discussions.
+  Open-ended top-level collections are excluded: a project's issue list changes
+  for reasons a subscriber did not ask about, and polling one costs a full page
+  read per tick. The three admitted lists are bounded by their parent, which is
+  what makes them affordable, and they carry the limitation NEG-005 records.
 - **Cadence follows the resource.** A running pipeline polls at a 5s floor;
   a finished one at 60s; anything without a lifecycle field at 15s. GitLab
   has no terminal state — a retried pipeline reuses its ID and starts
@@ -100,11 +103,34 @@ make the worst case something an operator can predict.
   request ID when it tears down that subscription stream". This server does not,
   and cannot: `SubscriptionsListenResult` embeds an unexported type, so
   application code cannot construct the message, and the SDK exposes no other
-  way to send one. What a client does get is the graceful completion result the
-  SDK writes when the handler's context ends, which tells a conforming client
-  the stream is over — so the practical gap is small, and it is recorded here
-  rather than left unstated because it is a MUST that nobody in this process
-  satisfies. Raised upstream.
+  way to send one. What a client does get **when a watch retires** is the
+  graceful completion result the SDK writes as that handler's context ends,
+  which tells a conforming client the stream is over, so the practical gap is
+  small. It is recorded here rather than left unstated because it is a MUST that
+  nobody in this process satisfies. Raised upstream.
+
+  That consolation does **not** extend to server shutdown, and this sentence
+  used to read as though it did. Measured on stdio: an open
+  `subscriptions/listen` receives no completion result when stdin closes and
+  none when the process is signalled, while the same server on HTTP delivers one
+  every time. The cause is ordering rather than capability: `attach` retires the
+  streams from a goroutine waiting on the context, and stdin EOF ends
+  `Server.Run` through the session's own wait rather than by cancelling that
+  context, so the retirement never runs. HTTP is reliable because its shutdown
+  path answers `ctx.Done()` with `httpServer.Shutdown`, which drains the
+  in-flight response first.
+
+  Left as it is, deliberately. The clause is a SHOULD, nothing is lost when it
+  is missed (no notification is dropped, the process exits promptly, the stream
+  ends), and the only thing it buys is the client's permission to reconnect,
+  which on stdio is close to inert: on the EOF path the client closed the pipe
+  itself and knows why, and on the signal path the server is genuinely gone.
+  Delivering it would mean sequencing the stream retirement ahead of session
+  close across the input filter, the subscription bridge and the SDK, and then
+  waiting a bounded moment for writes we cannot observe. That is a heuristic
+  bolted into the shutdown path to satisfy a preference, which is a worse trade
+  than saying plainly that the server closes less politely than the
+  specification would like.
 - **Rate limiting pauses every watcher on the manager**, with exponential
   back-off, because GitLab enforces its limits per user.
 - **A watch that ends for a reason the client did not ask for closes the
@@ -161,6 +187,22 @@ make the worst case something an operator can predict.
   watch. That read is what stops the watch.
 - NEG-004: More moving parts: a watcher goroutine per subscription, a
   session bridge, and middleware on the receive path.
+- NEG-005: A watch on one of the three admitted lists (a pipeline's jobs, a
+  merge request's notes, a merge request's discussions) sees only the first
+  page. The reasoning above costed a subscribed collection at "a full page
+  read per tick" and was right about the cost while missing what a page read
+  cannot see: a change past it raises no `notifications/resources/updated` at
+  all. Reproduced against a fake instance holding 25 notes at a 15s cadence:
+  editing note 1 notified at +10.2s, editing note 25 produced nothing across
+  three polls.
+
+  Mitigated rather than removed. The page is now 100 items instead of
+  GitLab's default of 20, which puts every ordinary pipeline and merge
+  request inside it, and every read discloses its own completeness through
+  the `io.github.jmrplens/pageInfo` `_meta` key, so a subscriber can see that
+  what it is watching is partial. Reading a subscribed list to exhaustion was
+  rejected: it multiplies the per-tick cost this ADR bounded, by an amount
+  the client does not choose and the operator cannot predict.
 
 ### Neutral
 

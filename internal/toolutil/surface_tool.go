@@ -51,11 +51,14 @@ func surfaceToolHandler(toolName string, route ActionRoute, formatResult FormatR
 			message := fmt.Sprintf("Confirm destructive action %q?", toolName)
 			guard, guardErr := ConfirmDestructiveAction(ctx, req, input, message)
 			if guardErr != nil {
-				LogToolCallAll(ctx, req, toolName, start, guardErr)
+				LogToolCallAll(ctx, req, toolName, start, nil, guardErr)
 				return nil, nil, guardErr
 			}
 			if guard != nil {
-				LogToolCallAll(ctx, req, toolName, start, nil)
+				// A guard is a refusal, not a completed call. This was the one
+				// place a blocked destructive action was logged, and it was
+				// logged as a success.
+				LogToolRefusal(ctx, req, toolName, RefusalNeedsConfirmation)
 				return guard, nil, nil
 			}
 		}
@@ -63,7 +66,7 @@ func surfaceToolHandler(toolName string, route ActionRoute, formatResult FormatR
 		if inputResult, needsInput := InputRequiredResultFromError(err); needsInput {
 			return inputResult, nil, nil
 		}
-		LogToolCallAll(ctx, req, toolName, start, err)
+		LogToolCallAll(ctx, req, toolName, start, result, err)
 		if err != nil {
 			return nil, nil, err
 		}

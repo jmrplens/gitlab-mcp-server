@@ -795,7 +795,7 @@
       "uri": "gitlab://groups",
       "name": "groups",
       "title": "All Groups",
-      "description": "List all GitLab groups accessible to the authenticated user. Returns each group's ID, name, full path, description, visibility level, and web URL.",
+      "description": "Groups accessible to the authenticated user, up to one page (100). Returns each group's ID, name, full path, description, visibility level, and web URL.",
       "mimeType": "application/json",
       "annotations": {
         "audience": [
