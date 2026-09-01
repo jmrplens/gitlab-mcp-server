@@ -59,6 +59,8 @@ jobs:
         run: make check-test-goroutines
       - name: Check gateway-safe served characters
         run: make check-gateway-chars
+      - name: Check test-file naming convention
+        run: make check-test-file-names
       - name: Check token footprint
         run: make check-footprint
       - name: Check site stats

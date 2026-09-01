@@ -11,7 +11,6 @@
 package packages
 
 import (
-	"context"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -41,7 +40,7 @@ func TestStreamDownload_SyncErrorOnFIFO(t *testing.T) {
 	}
 
 	_, _, err := streamDownloadPackageFile(
-		context.Background(),
+		t.Context(),
 		nil,
 		client,
 		DownloadInput{
