@@ -126,6 +126,7 @@ func (BadType) Run() {}
 	}
 	for _, category := range []string{categoryConstMissing, categoryConstForm, categoryVarMissing, categoryVarForm, categoryFuncMissing, categoryMethodForm} {
 		t.Run(category, func(t *testing.T) {
+			t.Parallel()
 			if !hasCategory(findings, category) {
 				t.Fatalf("missing category %q in %#v", category, findings)
 			}
@@ -207,6 +208,7 @@ func ExampleWidget() {
 	}
 	for _, category := range []string{categoryTestMissing, categoryBenchmarkMissing, categoryFuzzMissing, categoryExampleOutput} {
 		t.Run(category, func(t *testing.T) {
+			t.Parallel()
 			if !hasCategory(withTests, category) {
 				t.Fatalf("missing category %q in %#v", category, withTests)
 			}

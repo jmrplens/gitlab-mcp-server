@@ -4,6 +4,7 @@ package issuelinks
 import (
 	"context"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -145,6 +146,34 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 // Usage (no generic placeholder), natural-language aliases, canonical
 // RelatedActions cross-links, ParameterGuidance, and IndividualTool.Description
 // with "Returns:" / "See also:" guidance for every issue link tool.
+// assertIssueLinkSpecMetadata checks one spec for the metadata every issue
+// link tool must carry: a specific Usage, natural-language aliases, a
+// RelatedActions cross-link to issue.get, parameter guidance, and the
+// Returns/See also description.
+func assertIssueLinkSpecMetadata(t *testing.T, tool string, spec toolutil.ActionSpec) {
+	t.Helper()
+	if spec.Usage == "" || strings.Contains(spec.Usage, "domain action") {
+		t.Errorf("%s: generic or empty Usage: %q", tool, spec.Usage)
+	}
+	// Must have at least one natural-language alias beyond the canonical name.
+	if len(spec.Aliases) < 2 {
+		t.Errorf("%s: missing natural-language aliases: %v", tool, spec.Aliases)
+	}
+	if len(spec.RelatedActions) == 0 {
+		t.Errorf("%s: missing RelatedActions", tool)
+	}
+	if !slices.Contains(spec.RelatedActions, actionIssueGet) {
+		t.Errorf("%s: RelatedActions should cross-link %q: %v", tool, actionIssueGet, spec.RelatedActions)
+	}
+	if len(spec.ParameterGuidance) == 0 {
+		t.Errorf("%s: missing ParameterGuidance", tool)
+	}
+	desc := spec.IndividualTool.Description
+	if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+		t.Errorf("%s: IndividualTool.Description missing Returns/See also: %q", tool, desc)
+	}
+}
+
 func TestActionSpecs_Metadata(t *testing.T) {
 	byTool := issueLinkSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, issueLinksActionHandler())))
 
@@ -153,33 +182,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		"gitlab_issue_link_create", "gitlab_issue_link_delete",
 	} {
 		t.Run(tool, func(t *testing.T) {
-			spec := byTool[tool]
-			if spec.Usage == "" || strings.Contains(spec.Usage, "domain action") {
-				t.Errorf("%s: generic or empty Usage: %q", tool, spec.Usage)
-			}
-			// Must have at least one natural-language alias beyond the canonical name.
-			if len(spec.Aliases) < 2 {
-				t.Errorf("%s: missing natural-language aliases: %v", tool, spec.Aliases)
-			}
-			if len(spec.RelatedActions) == 0 {
-				t.Errorf("%s: missing RelatedActions", tool)
-			}
-			hasIssueGet := false
-			for _, ra := range spec.RelatedActions {
-				if ra == actionIssueGet {
-					hasIssueGet = true
-				}
-			}
-			if !hasIssueGet {
-				t.Errorf("%s: RelatedActions should cross-link %q: %v", tool, actionIssueGet, spec.RelatedActions)
-			}
-			if len(spec.ParameterGuidance) == 0 {
-				t.Errorf("%s: missing ParameterGuidance", tool)
-			}
-			desc := spec.IndividualTool.Description
-			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-				t.Errorf("%s: IndividualTool.Description missing Returns/See also: %q", tool, desc)
-			}
+			assertIssueLinkSpecMetadata(t, tool, byTool[tool])
 		})
 	}
 }

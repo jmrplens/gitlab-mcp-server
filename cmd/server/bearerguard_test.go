@@ -125,6 +125,7 @@ func TestBearerGuard_InvalidToken_ChallengesWithInvalidTokenCode(t *testing.T) {
 	challenge := failure.header.Get("WWW-Authenticate")
 	for _, want := range []string{`error="invalid_token"`, `error_description="`, `resource_metadata="`} {
 		t.Run(want, func(t *testing.T) {
+			t.Parallel()
 			if !strings.Contains(challenge, want) {
 				t.Errorf("challenge %q is missing %s", challenge, want)
 			}
@@ -288,6 +289,7 @@ func TestBearerGuard_NoAPIScope_IsForbiddenNotUnauthorized(t *testing.T) {
 	challenge := failure.header.Get("WWW-Authenticate")
 	for _, want := range []string{`error="insufficient_scope"`, `scope="` + oauth.MinimumScope + `"`} {
 		t.Run(want, func(t *testing.T) {
+			t.Parallel()
 			if !strings.Contains(challenge, want) {
 				t.Errorf("challenge %q is missing %s", challenge, want)
 			}

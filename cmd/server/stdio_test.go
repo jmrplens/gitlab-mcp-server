@@ -255,6 +255,7 @@ func TestScalarID_ObjectsAndArraysAreNotEchoed(t *testing.T) {
 		` {"a":1}`: ``,
 	} {
 		t.Run(raw, func(t *testing.T) {
+			t.Parallel()
 			got := string(scalarID(json.RawMessage(raw)))
 			if got != want {
 				t.Errorf("scalarID(%s) = %q, want %q", raw, got, want)

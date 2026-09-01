@@ -4183,25 +4183,10 @@ func assertExecuteInitializesNilParams(t *testing.T, registry *Registry) {
 // search ranking, examples, confirmations, and Markdown formatting. The cases
 // target defensive branches that are easy to regress while refactoring the low
 // token dynamic action surface.
-func TestRegistry_HelperCoverage(t *testing.T) {
-	t.Run("annotations with nil base", func(t *testing.T) {
-		got := copyAnnotations(nil)
-		if got == nil {
-			t.Fatal("copyAnnotations(nil) = nil, want zero-value annotations")
-		}
-		if got.Title != "" {
-			t.Fatalf("copyAnnotations(nil).Title = %q, want empty", got.Title)
-		}
-	})
-
-	t.Run("dedupe strings trims empty and duplicates", func(t *testing.T) {
-		got := dedupeStrings([]string{" Project ", "", "project", "Issue"})
-		want := []string{"project", "issue"}
-		if strings.Join(got, ",") != strings.Join(want, ",") {
-			t.Fatalf("dedupeStrings() = %v, want %v", got, want)
-		}
-	})
-
+// TestRegistry_ActionTagHints verifies the tag derivation helpers: schema
+// property names contribute their hint words, and protected-environment
+// and member-role actions carry their domain phrases.
+func TestRegistry_ActionTagHints(t *testing.T) {
 	t.Run("action tags include schema property hints", func(t *testing.T) {
 		schema := map[string]any{"properties": map[string]any{
 			"state_event": map[string]any{},
@@ -4227,6 +4212,26 @@ func TestRegistry_HelperCoverage(t *testing.T) {
 		memberRole := actionTags("member_role.create", "member_role", "create", nil)
 		if !stringInSlice(memberRole, "member role") {
 			t.Fatalf("actionTags(member role) = %v, want member role", memberRole)
+		}
+	})
+}
+
+func TestRegistry_HelperCoverage(t *testing.T) {
+	t.Run("annotations with nil base", func(t *testing.T) {
+		got := copyAnnotations(nil)
+		if got == nil {
+			t.Fatal("copyAnnotations(nil) = nil, want zero-value annotations")
+		}
+		if got.Title != "" {
+			t.Fatalf("copyAnnotations(nil).Title = %q, want empty", got.Title)
+		}
+	})
+
+	t.Run("dedupe strings trims empty and duplicates", func(t *testing.T) {
+		got := dedupeStrings([]string{" Project ", "", "project", "Issue"})
+		want := []string{"project", "issue"}
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Fatalf("dedupeStrings() = %v, want %v", got, want)
 		}
 	})
 
@@ -6098,28 +6103,33 @@ func TestRegistrySearch_ProjectListSearchQuery_RanksSearchProjectsFirst(t *testi
 // credential is narrow and reauthorizing would fix it. The two causes carry
 // different remedies, so they get different sentences, and the control case
 // keeps the old message where it is still correct.
-func TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown(t *testing.T) {
-	narrowedCatalog := func(t *testing.T) *actioncatalog.Catalog {
-		t.Helper()
-		routes := testRoutes(t)
-		delete(routes["gitlab_project"], "hook_add")
-		return actioncatalog.FromActionMaps(routes)
-	}
-	executeText := func(t *testing.T, registry *Registry, action string) string {
-		t.Helper()
-		result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: action})
-		if err != nil {
-			t.Fatalf("Execute() error = %v", err)
-		}
-		if result == nil || !result.IsError {
-			t.Fatalf("Execute() result = %+v, want tool error", result)
-		}
-		if output != nil {
-			t.Fatalf("Execute() output = %+v, want nil", output)
-		}
-		return textContent(result)
-	}
+// narrowedCatalog is the standard test catalog with project.hook_add removed,
+// the shape a withheld action leaves behind.
+func narrowedCatalog(t *testing.T) *actioncatalog.Catalog {
+	t.Helper()
+	routes := testRoutes(t)
+	delete(routes["gitlab_project"], "hook_add")
+	return actioncatalog.FromActionMaps(routes)
+}
 
+// executeText runs an action that must fail as a tool error and returns the
+// error text the client would read.
+func executeText(t *testing.T, registry *Registry, action string) string {
+	t.Helper()
+	result, output, err := registry.Execute(t.Context(), nil, ExecuteInput{Action: action})
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil || !result.IsError {
+		t.Fatalf("Execute() result = %+v, want tool error", result)
+	}
+	if output != nil {
+		t.Fatalf("Execute() output = %+v, want nil", output)
+	}
+	return textContent(result)
+}
+
+func TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown(t *testing.T) {
 	t.Run("token scope says reauthorize", func(t *testing.T) {
 		registry := newCatalogRegistry(narrowedCatalog(t),
 			WithWithheldActions([]string{"project.hook_add"}, nil))

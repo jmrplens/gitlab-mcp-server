@@ -328,6 +328,7 @@ func TestRepeatedFlag_AcceptsRepetitionAndCommas(t *testing.T) {
 	}
 	for i, value := range want {
 		t.Run(value, func(t *testing.T) {
+			t.Parallel()
 			if flagValue[i] != value {
 				t.Errorf("entry %d = %q, want %q", i, flagValue[i], value)
 			}

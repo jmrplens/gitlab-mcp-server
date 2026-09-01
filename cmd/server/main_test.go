@@ -3635,6 +3635,7 @@ func TestSecurityHeaders_CoverRejectionsToo(t *testing.T) {
 	}
 	for name, value := range want {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			if got := rr.Header().Get(name); got != value {
 				t.Errorf("%s = %q, want %q", name, got, value)
 			}
@@ -5410,6 +5411,7 @@ func TestCorsMiddleware_TrustedOriginPreflight_IsAnswered(t *testing.T) {
 	}
 	for name, value := range want {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			if got := rec.Header().Get(name); got != value {
 				t.Errorf("%s = %q, want %q", name, got, value)
 			}

@@ -132,6 +132,31 @@ func TestActionSpecs_CallRouteError(t *testing.T) {
 // the natural-language aliases are group-wiki-specific (distinct from the
 // project wikis package), and that decorateGroupWikiMeta is a no-op for an
 // unknown tool.
+// assertGroupWikiSpecMetadata checks one spec for the rich metadata every
+// group wiki tool must carry: a specific Usage, group-specific natural
+// language aliases, related actions, and the Returns/See also description.
+func assertGroupWikiSpecMetadata(t *testing.T, name string, spec toolutil.ActionSpec) {
+	t.Helper()
+	if spec.Usage == "" || spec.Usage == "Use to execute groupwikis domain action." {
+		t.Errorf("%s: generic or empty Usage: %q", name, spec.Usage)
+	}
+	if len(spec.Aliases) == 0 || spec.Aliases[0] == name {
+		t.Errorf("%s: aliases not replaced with natural-language phrases: %v", name, spec.Aliases)
+	}
+	for _, alias := range spec.Aliases {
+		if !containsSubstr(alias, "group") {
+			t.Errorf("%s: alias %q is not group-wiki-specific", name, alias)
+		}
+	}
+	if len(spec.RelatedActions) == 0 {
+		t.Errorf("%s: empty RelatedActions", name)
+	}
+	desc := spec.IndividualTool.Description
+	if !containsSubstr(desc, "Returns:") || !containsSubstr(desc, "See also:") {
+		t.Errorf("%s: description missing Returns:/See also: form: %q", name, desc)
+	}
+}
+
 func TestActionSpecs_RichMetadata(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())
 	byTool := groupWikiSpecsByTool(t, ActionSpecs(client))
@@ -149,24 +174,7 @@ func TestActionSpecs_RichMetadata(t *testing.T) {
 			if !ok {
 				t.Fatalf("missing spec for %s", name)
 			}
-			if spec.Usage == "" || spec.Usage == "Use to execute groupwikis domain action." {
-				t.Errorf("%s: generic or empty Usage: %q", name, spec.Usage)
-			}
-			if len(spec.Aliases) == 0 || spec.Aliases[0] == name {
-				t.Errorf("%s: aliases not replaced with natural-language phrases: %v", name, spec.Aliases)
-			}
-			for _, alias := range spec.Aliases {
-				if !containsSubstr(alias, "group") {
-					t.Errorf("%s: alias %q is not group-wiki-specific", name, alias)
-				}
-			}
-			if len(spec.RelatedActions) == 0 {
-				t.Errorf("%s: empty RelatedActions", name)
-			}
-			desc := spec.IndividualTool.Description
-			if !containsSubstr(desc, "Returns:") || !containsSubstr(desc, "See also:") {
-				t.Errorf("%s: description missing Returns:/See also: form: %q", name, desc)
-			}
+			assertGroupWikiSpecMetadata(t, name, spec)
 		})
 	}
 
