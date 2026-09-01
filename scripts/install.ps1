@@ -13,9 +13,9 @@
 
         claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
 
-    or run the guided setup wizard:
+    or configure another MCP client by hand:
 
-        gitlab-mcp-server --setup
+        https://jmrp.io/docs/gitlab-mcp-server/configuration/
 
 .PARAMETER Version
     Release tag to install (default: latest).
@@ -129,9 +129,9 @@ finally {
 Write-Host @"
 
 Next steps:
-  1. Guided setup (collects your GitLab token, configures your MCP client):
-       $binName --setup
-  2. Or register with Claude Code directly:
+  1. Register with Claude Code:
        claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- $binName
      (self-managed GitLab: add  --env GITLAB_URL=https://gitlab.example.com)
+  2. Or configure another MCP client by hand:
+       https://jmrp.io/docs/gitlab-mcp-server/configuration/
 "@

@@ -350,7 +350,7 @@ Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs
 
 | Document                                              | Description                                                                            |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [Getting Started](docs/getting-started.md)            | Download, setup wizard, per-client configuration                                       |
+| [Getting Started](docs/getting-started.md)            | Install paths, first query, per-client configuration                                   |
 | [IDE Configuration](docs/guides/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                 |
 | [Configuration](docs/reference/configuration.md)      | Environment variables, transport modes, TLS                                            |
 | [Environment Variables](docs/reference/env.md)        | Exhaustive environment variable table with defaults and examples                       |
@@ -412,7 +412,7 @@ The server includes retry logic with backoff for GitLab API rate limits. Errors 
 <details>
 <summary><strong>Which AI clients are supported?</strong></summary>
 
-Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. The built-in setup wizard can auto-configure most clients.
+Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. Each one's configuration snippet is in [Getting Started](docs/getting-started.md), and the one-click buttons above cover the most common ones.
 </details>
 
 ## Building from Source
