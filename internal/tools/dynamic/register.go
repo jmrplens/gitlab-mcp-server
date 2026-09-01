@@ -616,6 +616,7 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 	if stateEvent, lifecycleAlias := issueLifecycleAliasStateEvent(requestedActionID); lifecycleAlias && entry.ID == "issue.update" {
 		if existing, hasStateEvent := params["state_event"]; hasStateEvent {
 			if existingStateEvent, converted := actioncompat.IssueStateEventValue(existing); converted && existingStateEvent != stateEvent {
+				toolutil.LogToolRefusal(ctx, req, executeCallName(entry.ID), toolutil.RefusalInvalidParams)
 				return toolutil.ErrorResult(fmt.Sprintf("gitlab_execute_action: action %q implies state_event=%q, but params.state_event was %q. Use the canonical issue.update action for explicit state_event control.", requestedActionID, stateEvent, existingStateEvent)), nil, nil
 			}
 		} else {
@@ -634,7 +635,10 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 		params["confirm"] = true
 	}
 	if entry.Destructive && !hasExplicitConfirm(params) {
-		slog.WarnContext(ctx, "blocked destructive dynamic action without explicit confirmation", "action", entry.ID)
+		// A refusal like the surface-tool one, and recorded like it: this is
+		// the default surface, so leaving it out meant the most common
+		// needs_confirmation refusals never reached the refusal metric at all.
+		toolutil.LogToolRefusal(ctx, req, executeCallName(entry.ID), toolutil.RefusalNeedsConfirmation)
 		return toolutil.ErrorResult(fmt.Sprintf("gitlab_execute_action: action %q is destructive. Re-send with confirm=true only after the user explicitly approves this operation.", entry.ID)), nil, nil
 	}
 

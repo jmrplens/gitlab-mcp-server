@@ -62,7 +62,7 @@ const (
 	// the Makefile, or the tooling silently measures a smaller project than
 	// the one in the repository. None of these tags gates anything outside
 	// test/e2e, so cmd/ and internal/ resolve identically with them.
-	e2eTags = "e2e,orbitlive,httpe2e,stdioe2e"
+	e2eTags = "e2e,orbitlive,httpe2e,stdioe2e,collectore2e"
 
 	goFileSuffix     = ".go"
 	goTestFileSuffix = "_test.go"

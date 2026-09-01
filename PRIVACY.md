@@ -61,9 +61,11 @@ The full detail, including what each mode exports, is in
   [GitLab Privacy Statement](https://about.gitlab.com/privacy/) (for
   GitLab.com) or by your organization's own policies (for self-managed
   instances).
-Your GitLab instance is the only destination. The server contacts nothing else,
-and nothing it does is optional in that respect: there is no update check, no
-license check, no registry ping and no default that reaches any other host.
+Your GitLab instance is the only destination, with one opt-in exception you
+control: telemetry, when you enable it, exports operation data to the collector
+you configure, described in its own section above. Beyond that the server
+contacts nothing else: there is no update check, no registry ping and no
+default that reaches any other host.
 
 This used to be untrue in one narrow way worth recording rather than quietly
 dropping. The server carried a self-update feature that was **on by default**
@@ -117,7 +119,8 @@ TTL and are never persisted to disk.
 ## Data retention and sharing
 
 The server retains nothing after it exits and shares data with no third
-parties beyond the GitLab instance you explicitly configure.
+parties beyond the GitLab instance you explicitly configure and, if you enable
+telemetry, the collector you explicitly configure.
 
 ## Changes
 

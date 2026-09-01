@@ -371,7 +371,7 @@ Yes. Set `GITLAB_URL` to your instance URL. When `GITLAB_URL` is omitted, stdio 
 <details>
 <summary><strong>Is my data safe?</strong></summary>
 
-When you run it yourself, locally over stdio or on your own infrastructure over HTTP, every request goes to your GitLab instance and nowhere else. There is no update check and no phoning home; telemetry exists but is off by default, and turning it on exports to a collector you configure, never to anyone else.
+When you run it yourself, locally over stdio or on your own infrastructure over HTTP, every request goes to your GitLab instance and nowhere else. There is no update check, no license check and no telemetry: your instance is the only host this server contacts.
 
 The exception is the <a href="#try-it-without-installing-anything-hosted-endpoint">hosted endpoint</a>: using <code>https://mcp.jmrp.io/gitlab</code> means your token and every request pass through that machine. Nothing is stored there, but it is someone else's server, which is why the hosted section says to keep using it locally.
 
@@ -423,11 +423,10 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 ## Privacy Policy
 
-The server runs entirely on your machine and has **no analytics and no backend
-of its own**: data flows only between your MCP client and the GitLab instance
-you configure. OpenTelemetry export exists, off by default, and when you enable
-it the data goes to a collector you run; nothing in any code path carries the
-maintainer's address. Your token is used solely to authenticate GitLab requests
+The server runs entirely on your machine and has **no telemetry, analytics, or
+backend of its own** — data flows only between your MCP client and the GitLab
+instance you configure (plus an optional signed-binary update check against
+GitHub Releases). Your token is used solely to authenticate GitLab requests
 and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 ## Contributing & Security
@@ -447,10 +446,10 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,003 |     207,932 |
+| Source (`.go`, non-test) |     1,003 |     207,936 |
 | Unit tests (`_test.go`)  |       562 |     313,964 |
-| End-to-end tests         |       197 |      52,830 |
-| **Total**                | **1,762** | **574,726** |
+| End-to-end tests         |       211 |      56,515 |
+| **Total**                | **1,776** | **578,415** |
 
 ### Functions
 
@@ -460,8 +459,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | — exported (public)             |  2,702 |
 | — unexported (private)          |  5,119 |
 | Unit test functions (`TestXxx`) | 11,773 |
-| Subtests (`t.Run(...)`)         |  3,068 |
-| End-to-end test functions       |    512 |
+| Subtests (`t.Run(...)`)         |  3,117 |
+| End-to-end test functions       |    537 |
 
 ### Ratios worth noting
 
@@ -470,24 +469,24 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.51× more tests than code |
 | Average source file length         |                 ~207 lines |
 | Average test file length           |                 ~558 lines |
-| Comment lines in source            |  28,096 (~13.5% of source) |
+| Comment lines in source            |  28,099 (~13.5% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,597 |
-| `defer` statements                 | 1,001 |
+| `if err != nil` checks             | 6,626 |
+| `defer` statements                 | 1,018 |
 | `struct` types defined             | 2,757 |
-| `//nolint` suppressions            |   249 |
+| `//nolint` suppressions            |   250 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   238 |
+| Go packages                    |   239 |
 | Direct dependencies (`go.mod`) |    29 |
 | Indirect dependencies          |    31 |
 
@@ -495,7 +494,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Record              | File                                                     |
 | ------------------- | -------------------------------------------------------- |
-| Longest source file | `internal/tools/dynamic/register.go` — 3,878 lines       |
+| Longest source file | `internal/tools/dynamic/register.go` — 3,882 lines       |
 | Longest test file   | `internal/tools/projects/projects_test.go` — 8,183 lines |
 
 ### Because why not
