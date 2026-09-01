@@ -49,7 +49,7 @@ You talk to your AI assistant; it does the GitLab work. No project IDs, API endp
 
 ## Install in 60 seconds
 
-Pick one. Each path ends with you typing a prompt to your assistant.
+Pick one. Each path ends with you typing a prompt to your assistant. Every channel has a full guide: [Installation](https://jmrp.io/docs/gitlab-mcp-server/install/overview/).
 
 > **Want to look before installing?** The [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) signs in with OAuth and calls the [hosted endpoint](#try-it-without-installing-anything-hosted-endpoint) read-only from a browser tab — nothing downloaded. Running it yourself is still the way to keep using it.
 

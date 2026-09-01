@@ -74,7 +74,7 @@ faq:
     a: "A failed connection usually means GitLab MCP Server cannot reach GitLab or cannot authenticate. Confirm that GITLAB_URL is correct and reachable from your machine, that the token carries the api scope (or read_api in read-only mode) and has not expired, and that self-signed certificates are handled by setting GITLAB_SKIP_TLS_VERIFY=true."
 ---
 
-import { Tabs, TabItem, Steps } from "@astrojs/starlight/components";
+import { CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
 import stats from "../../data/stats.json";
 import FAQ from "../../components/FAQ.astro";
 
@@ -110,7 +110,7 @@ For read-only setups, you can use a token with `read_api` scope and enable `GITL
 
 ## Quick install
 
-Pick one — each path ends with you typing a prompt to your assistant. For the full per-client reference, see [Manual configuration](#manual-configuration) below.
+Pick one: each path ends with you typing a prompt to your assistant. Every channel also has its own page with the full set of commands and the verify, upgrade and uninstall steps; start at [Choose a path](/gitlab-mcp-server/install/overview/) if you are not sure which one fits. For the full per-client reference, see [Manual configuration](#manual-configuration) below.
 
 :::tip[Want to look before installing?]
 The [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) signs in with OAuth and calls the [hosted endpoint](#try-it-without-installing-anything-hosted-endpoint) — `https://mcp.jmrp.io/gitlab` — read-only from a browser tab, with nothing downloaded. Running it yourself is still the way to keep using it.
@@ -129,6 +129,8 @@ For **Claude Desktop**, download the [.mcpb desktop extension](/gitlab-mcp-serve
 instead — a native one-click install (macOS universal + Windows) with no Docker
 and the token stored in the OS keychain.
 
+Every button runs the container image; the [Docker](/gitlab-mcp-server/install/docker/) page covers its tags, the HTTP mode and how to update it.
+
 ### Claude Code (`claude mcp add`)
 
 Docker (no install — pulls the image on first run):
@@ -138,34 +140,21 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
 ```
 
+Any other channel registers the same way once `gitlab-mcp-server` is on your PATH: `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`.
+
+<LinkCard
+  title="Docker"
+  href="/gitlab-mcp-server/install/docker/"
+  description="stdio with --http=false, HTTP mode on a port, environment variables, tags, the Docker Hub mirror, updating"
+/>
+
 ### npm / npx (any platform)
 
-Published as [`@jmrp.io/gitlab-mcp-server`](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server). npm downloads only the prebuilt binary for your platform — nothing compiles, and nothing runs at install time, so it works with `--ignore-scripts` and behind a proxy.
-
-<Tabs syncKey="pkg">
-<TabItem label="npx">
+Published as [`@jmrp.io/gitlab-mcp-server`](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server). npm downloads only the prebuilt binary for your platform: nothing compiles, and nothing runs at install time, so it works with `--ignore-scripts` and behind a proxy.
 
 ```bash
-# Zero install — clients can launch it directly
 npx -y @jmrp.io/gitlab-mcp-server
 ```
-
-</TabItem>
-<TabItem label="npm">
-
-```bash
-npm install -g @jmrp.io/gitlab-mcp-server
-```
-
-</TabItem>
-<TabItem label="pnpm">
-
-```bash
-pnpm add -g @jmrp.io/gitlab-mcp-server
-```
-
-</TabItem>
-</Tabs>
 
 Point any MCP client at `npx` with no install at all:
 
@@ -181,34 +170,19 @@ Point any MCP client at `npx` with no install at all:
 }
 ```
 
+<LinkCard
+  title="npm and npx"
+  href="/gitlab-mcp-server/install/npm/"
+  description="Global install with npm or pnpm, the Node.js requirement, the musl caveat, updating and uninstalling"
+/>
+
 ### PyPI / uvx (any platform)
 
-Published as [`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/) using the same model as `uv` and `ruff` (the unprefixed PyPI name is an empty registration by an unrelated account, under PEP 541 reclamation): each platform wheel carries the native binary, the installer places it on the scripts path as the command itself, and no Python runs when the server does.
-
-<Tabs syncKey="pypkg">
-<TabItem label="uvx">
+Published as [`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/) using the same model as `uv` and `ruff`: each platform wheel carries the native binary, the installer places it on the scripts path as the `gitlab-mcp-server` command itself, and no Python runs when the server does.
 
 ```bash
-# Zero install — clients can launch it directly
 uvx jmrplens-gitlab-mcp-server
 ```
-
-</TabItem>
-<TabItem label="pipx">
-
-```bash
-pipx install jmrplens-gitlab-mcp-server
-```
-
-</TabItem>
-<TabItem label="pip">
-
-```bash
-pip install jmrplens-gitlab-mcp-server
-```
-
-</TabItem>
-</Tabs>
 
 ```json
 {
@@ -222,22 +196,42 @@ pip install jmrplens-gitlab-mcp-server
 }
 ```
 
+<LinkCard
+  title="PyPI, uvx and pipx"
+  href="/gitlab-mcp-server/install/pypi/"
+  description="pipx and pip installs, the two installed commands, why the name carries a prefix, updating and uninstalling"
+/>
+
 ### One-line installer (native binary)
 
 Installs the binary onto your PATH, then registers it. Updates come from whatever installed it (`brew upgrade`, `winget upgrade`, or re-running the script); the server does not update itself.
 
 ```bash
-# macOS/Linux (Homebrew)
-brew install jmrplens/tap/gitlab-mcp-server
-# Linux/macOS (script)
+# Linux/macOS (script; verifies the SHA-256 against checksums.txt before installing)
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
-# Windows (winget)
-winget install --id jmrplens.gitlab-mcp-server -e
-# Windows (PowerShell)
-irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 
 claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
 ```
+
+Homebrew, winget and the PowerShell installer put the same binary on your PATH; each has its own page with the command, where the binary lands, and how to upgrade and uninstall:
+
+<CardGrid>
+  <LinkCard
+    title="Native binary"
+    href="/gitlab-mcp-server/install/binary/"
+    description="Install scripts for Linux, macOS and Windows, manual download, checksum and signature verification"
+  />
+  <LinkCard
+    title="Homebrew"
+    href="/gitlab-mcp-server/install/homebrew/"
+    description="brew install jmrplens/tap/gitlab-mcp-server on macOS and Linux"
+  />
+  <LinkCard
+    title="Windows (winget)"
+    href="/gitlab-mcp-server/install/winget/"
+    description="winget install --id jmrplens.gitlab-mcp-server -e, where the portable binary lands, upgrade and uninstall"
+  />
+</CardGrid>
 
 Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs).
 
@@ -267,6 +261,12 @@ The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: 
 
 It is a personal service, run by one person and offered as-is: no SLA, no support channel, and no promise it is unchanged next week. It adds no quota of its own — every call spends GitLab.com's own limits, under your own token. And it tracks the latest release automatically, so what it serves follows the newest tag rather than a pinned version.
 
+<LinkCard
+  title="Hosted endpoint"
+  href="/gitlab-mcp-server/install/hosted/"
+  description="OAuth and token modes, the server card and the browser inspector, what the endpoint cannot do, and how to self-host the same setup"
+/>
+
 ## Download
 
 Prefer to place the binary yourself? Download the latest binary for your platform from the [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest) page:
@@ -294,6 +294,8 @@ Optionally, move it to a directory in your PATH:
 sudo mv gitlab-mcp-server-linux-amd64 /usr/local/bin/gitlab-mcp-server
 ```
 
+Checking the download against `checksums.txt` and its Cosign signature, upgrading and uninstalling are on the [Native binary](/gitlab-mcp-server/install/binary/) page.
+
 ## Running the binary by hand
 
 There is no setup wizard. MCP configuration belongs in your client's own JSON file, which is what [Manual configuration](#manual-configuration) below documents, and a wizard writing a dotfile on one machine could not put it there.
@@ -313,62 +315,28 @@ A `.env` in the working directory takes precedence over it, and an explicit envi
 
 ## Install as an Agent Plugin (Cursor / Claude Code / VS Code)
 
-This repository ships an [Agent Plugins](https://agent-plugins.org/) 1.0 manifest (root `plugin.json` and MCP config `mcp.json`) — plus the legacy Open Plugins manifest (`.plugin/plugin.json`) for older hosts — so the server installs in one step on a conformant host (Cursor, Claude Code, VS Code, OpenCode). Providing the token is a separate step, described below:
+This repository ships an [Agent Plugins](https://agent-plugins.org/) 1.0 manifest (root `plugin.json` and MCP config `mcp.json`), plus the legacy Open Plugins manifest (`.plugin/plugin.json`) for older hosts, so the server installs in one step on a conformant host (Cursor, Claude Code, VS Code, OpenCode). Providing the token is a separate step, described below:
 
 ```bash
 # Cursor / Claude Code (when supported by your version)
 /plugin install jmrplens/gitlab-mcp-server
 ```
 
-The plugin uses the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest` via `docker run -i --rm`, so you need [Docker](https://docs.docker.com/get-docker/) installed and running. The bundled `mcp.json` is configured for stdio MCP clients and passes `--http=false` after the image name to override the Docker image's HTTP default. Keep that override if you copy the Docker configuration into VS Code or another stdio client; otherwise the container will start an HTTP listener and the client will wait forever for a stdio `initialize` response.
+The plugin runs the published Docker image `ghcr.io/jmrplens/gitlab-mcp-server:latest` through `docker run -i --rm`, with `--http=false` after the image name, so you need [Docker](https://docs.docker.com/get-docker/) installed and running. Keep that override if you copy the Docker configuration into VS Code or another stdio client; otherwise the container starts an HTTP listener and the client waits forever for a stdio `initialize` response.
+
+<LinkCard
+  title="Agent Plugins"
+  href="/gitlab-mcp-server/install/agent-plugin/"
+  description="The bundled manifest, every variable it forwards, how the token reaches the server, and swapping Docker for the native binary"
+/>
 
 ### Required environment
 
-The bundled config forwards these variables into the container. **Your host has to put them in the plugin's environment first**: Agent Plugins §9.1 lets a client "inherit, omit, or sanitize" ambient variables, and the spec defines no portable way for a plugin to reference a secret, so a token cannot travel inside `mcp.json` itself. If the server reports an authorization failure, set `GITLAB_TOKEN` the way your host documents, or add it to the `env` block of the installed plugin's local `mcp.json`.
-
-| Variable                 | Required | Description                                                                                                                                                             |
-| ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`             | No       | GitLab instance URL. Defaults to `https://gitlab.com`; set for self-managed instances                                                                                   |
-| `GITLAB_TOKEN`           | Yes      | Personal Access Token (`glpat-...`)                                                                                                                                     |
-| `GITLAB_SKIP_TLS_VERIFY` | No       | `true` for self-signed certs (default `false`)                                                                                                                          |
-| `TOOL_SURFACE`           | No       | Canonical tool catalog selector: `dynamic`, `meta`, or `individual` (default `dynamic`)                                                                                 |
-| `META_TOOLS`             | No       | Deprecated compatibility selector: `true` maps to `meta`, `false` maps to `individual`, and `dynamic` maps to `TOOL_SURFACE=dynamic`                                    |
-| `CAPABILITY_SURFACE`     | No       | Resource and prompt catalog selector: `full` or `minimal` (default `full`)                                                                                              |
-| `GITLAB_TIER`            | No       | GitLab edition: `free`/`ce`, `premium`, or `ultimate`. When unset, detected from `GET /license` (fallback `free`). Replaces the deprecated `GITLAB_ENTERPRISE` boolean. |
-| `GITLAB_READ_ONLY`       | No       | `true` to disable mutating tools (default `false`)                                                                                                                      |
-| `GITLAB_SAFE_MODE`       | No       | `true` to preview mutating tool inputs (default `false`)                                                                                                                |
-| `LOG_LEVEL`              | No       | `debug`, `info`, `warn`, `error` (default `info`)                                                                                                                       |
-
-`TOOL_SURFACE` is the canonical selector and takes precedence over `META_TOOLS` when both are set. Use `TOOL_SURFACE=dynamic` for the default low-token find/execute surface, `TOOL_SURFACE=meta` for consolidated domain meta-tools, and `TOOL_SURFACE=individual` for individual tools. `META_TOOLS` remains supported for compatibility but should be treated as deprecated in favor of the explicit selector.
+`GITLAB_TOKEN` is the one required value; `GITLAB_URL` matters only for a self-managed instance. The bundled config forwards both into the container, but **your host has to put them in the plugin's environment first**: Agent Plugins §9.1 lets a client "inherit, omit, or sanitize" ambient variables, and the spec defines no portable way for a plugin to reference a secret, so a token cannot travel inside `mcp.json` itself. If the server reports an authorization failure, set `GITLAB_TOKEN` the way your host documents, or add it to the `env` block of the installed plugin's local `mcp.json`. The full table of forwarded variables is on the [Agent Plugins](/gitlab-mcp-server/install/agent-plugin/) page.
 
 ### Prefer a native binary instead of Docker?
 
-The Agent Plugins spec runs every entry in the referenced MCP config automatically, so the bundled config uses Docker stdio for portability. For detached HTTP deployments, do not use a stdio client entry; run the Docker image in HTTP mode and configure the MCP client with `type: "http"` and a URL such as `http://localhost:8080/mcp`. See [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/).
-
-If you prefer the native binary, install the plugin, locate the installed `gitlab-mcp-server` plugin directory from your host's plugin UI or installation output, and then edit its local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`) to replace the Docker `command` / `args` with a path to the platform binary you downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
-
-```json
-{
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
-  "mcpServers": {
-    "gitlab": {
-      "type": "stdio",
-      "command": "/usr/local/bin/gitlab-mcp-server"
-    }
-  }
-}
-```
-
-:::caution[How the token reaches the server]
-Agent Plugins expands only `${PLUGIN_ROOT}` and `${PLUGIN_DATA}`; any other
-`${...}` stays literal, so writing `"GITLAB_TOKEN": "${GITLAB_TOKEN}"` hands the
-server that exact string instead of your token. The spec defines no portable way
-to reference a secret, and it lets a client inherit, omit or sanitize the ambient
-environment, so how `GITLAB_TOKEN` arrives is decided by your host: either it
-makes the variable visible to the plugin subprocess, or you put the value in the
-`env` block of this local file yourself. That file is yours, not part of the
-published plugin — keep it out of version control.
-:::
+Install the plugin, then edit the installed plugin's local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`) and replace the Docker `command` / `args` with the path to a binary from any channel above. The [Agent Plugins](/gitlab-mcp-server/install/agent-plugin/) page has the exact file to write, and why a `${GITLAB_TOKEN}` placeholder in it would reach the server literally. For detached HTTP deployments, do not use a stdio entry: run the image in HTTP mode and configure the client with `type: "http"` and a URL such as `http://localhost:8080/mcp`, as described in [HTTP Server Mode](/gitlab-mcp-server/operations/http-server/).
 
 ## Manual configuration
 

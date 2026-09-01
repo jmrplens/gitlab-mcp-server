@@ -588,11 +588,6 @@ export default defineConfig({
 							translations: { es: "Inicio rápido" },
 						},
 						{
-							slug: "claude-desktop",
-							label: "Claude Desktop (.mcpb)",
-							translations: { es: "Claude Desktop (.mcpb)" },
-						},
-						{
 							slug: "configuration",
 							label: "Configuration",
 							translations: { es: "Configuración" },
@@ -606,6 +601,62 @@ export default defineConfig({
 							slug: "compatibility",
 							label: "Compatibility",
 							translations: { es: "Compatibilidad" },
+						},
+					],
+				},
+				{
+					label: "Installation",
+					translations: { es: "Instalación" },
+					items: [
+						{
+							slug: "install/overview",
+							label: "Choose a path",
+							translations: { es: "Elige una vía" },
+						},
+						{
+							slug: "install/binary",
+							label: "Native binary",
+							translations: { es: "Binario nativo" },
+						},
+						{
+							slug: "install/homebrew",
+							label: "Homebrew",
+							translations: { es: "Homebrew" },
+						},
+						{
+							slug: "install/winget",
+							label: "Windows (winget)",
+							translations: { es: "Windows (winget)" },
+						},
+						{
+							slug: "install/docker",
+							label: "Docker",
+							translations: { es: "Docker" },
+						},
+						{
+							slug: "install/npm",
+							label: "npm and npx",
+							translations: { es: "npm y npx" },
+						},
+						{
+							slug: "install/pypi",
+							label: "PyPI, uvx and pipx",
+							translations: { es: "PyPI, uvx y pipx" },
+						},
+						{
+							slug: "claude-desktop",
+							label: "Claude Desktop (.mcpb)",
+							translations: { es: "Claude Desktop (.mcpb)" },
+						},
+						{
+							slug: "install/agent-plugin",
+							label: "Agent Plugins",
+							translations: { es: "Plugins de agente" },
+						},
+						{
+							slug: "install/hosted",
+							label: "Hosted endpoint",
+							translations: { es: "Endpoint alojado" },
 						},
 					],
 				},
