@@ -57,6 +57,8 @@ jobs:
         run: make check-stats
       - name: Check test-goroutine aborts
         run: make check-test-goroutines
+      - name: Check case loops run as subtests
+        run: make check-test-subtests
       - name: Check gateway-safe served characters
         run: make check-gateway-chars
       - name: Check test-file naming convention

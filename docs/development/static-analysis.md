@@ -115,6 +115,8 @@ gotestsum --version
 | `make audit-test-names`      | Audit test function naming convention compliance                                                   |
 | `make audit-test-goroutines` | Report `testing.T` aborts (`t.Fatal`/`FailNow`) made off the test goroutine, with a JSON work list |
 | `make check-test-goroutines` | Fail when any off-goroutine abort site remains (errorf-without-return stays advisory)              |
+| `make audit-test-subtests`   | Report case loops in Test functions that assert without a `t.Run` subtest, with a JSON work list   |
+| `make check-test-subtests`   | Fail when any case loop still asserts without a subtest                                            |
 | `make audit-godocs`          | Generate `dist/analysis/godoc.md` with package, exported symbol, and test documentation findings   |
 | `make audit-godocs-check`    | Run the same Godoc audit and fail if findings remain                                               |
 

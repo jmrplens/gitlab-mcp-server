@@ -9,7 +9,7 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
-	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names \
+	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names audit-test-subtests check-test-subtests \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
@@ -555,12 +555,13 @@ analyze:
 	echo "Go analysis packages: $(GO_ANALYSIS_PKGS)"; \
 	echo "Go analysis build tags: $(GO_ANALYSIS_TAGS)"; \
 	echo ""; \
-	run_check "[1/6] golangci-lint config verify" golangci-lint config verify; \
-	run_check "[2/6] golangci-lint fmt" golangci-lint fmt --diff; \
-	run_check "[3/6] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[4/6] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
-	run_check "[5/6] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
-	run_check "[6/6] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[1/7] golangci-lint config verify" golangci-lint config verify; \
+	run_check "[2/7] golangci-lint fmt" golangci-lint fmt --diff; \
+	run_check "[3/7] golangci-lint run" golangci-lint run --build-tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[4/7] govulncheck" ./scripts/govulncheck.sh -tags $(GO_ANALYSIS_TAGS) $(GO_ANALYSIS_PKGS); \
+	run_check "[5/7] markdownlint" npx markdownlint-cli2 "**/*.md" "#plan"; \
+	run_check "[6/7] test-goroutine aborts" go run ./cmd/audit_test_goroutines --check; \
+	run_check "[7/7] case loops without subtests" go run ./cmd/audit_test_subtests --check; \
 	echo "============================================================"; \
 	if [ "$$analysis_status" -ne 0 ]; then \
 		echo "Analysis failed. Review findings above."; \
@@ -1034,6 +1035,18 @@ audit-test-goroutines:
 ## goroutine. Wired into CI once the sweep lands (phase 4 of the plan).
 check-test-goroutines:
 	go run ./cmd/audit_test_goroutines/ -check
+
+## audit-test-subtests: report case loops in Test functions that assert
+## without opening a t.Run subtest (the table-driven rule), with the JSON work
+## list. `go run ./cmd/audit_test_subtests/ -fix` rewrites the unambiguous
+## sites; a `// sequential:` comment above a loop declares dependent steps.
+audit-test-subtests:
+	go run ./cmd/audit_test_subtests/ -json plan/test-subtests-backlog.json
+
+## check-test-subtests: fail when any case loop still asserts without a
+## subtest. CI gate.
+check-test-subtests:
+	go run ./cmd/audit_test_subtests/ -check
 
 ## audit-gateway-chars: report served descriptions and titles violating the
 ## gateway-safe text policy (pure ASCII prose, no semicolons), across every
