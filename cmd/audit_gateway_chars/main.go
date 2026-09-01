@@ -53,6 +53,10 @@ type offender struct {
 	excerpt string
 }
 
+// fieldDescription suffixes a report location: the same field name exists on
+// every listed surface, and naming it once keeps the report rows uniform.
+const fieldDescription = " description"
+
 func main() {
 	check := flag.Bool("check", false, "exit non-zero if any offending character is served")
 	apply := flag.Bool("apply", false,
@@ -132,7 +136,7 @@ func scanTools(client *gitlabclient.Client) []offender {
 			os.Exit(1)
 		}
 		for _, tool := range listed {
-			found = append(found, scanText(surface, "tool "+tool.Name+" description", tool.Description)...)
+			found = append(found, scanText(surface, "tool "+tool.Name+fieldDescription, tool.Description)...)
 			found = append(found, scanText(surface, "tool "+tool.Name+" title", tool.Title)...)
 			found = append(found, scanSchema(surface, "tool "+tool.Name+" input schema", tool.InputSchema)...)
 			found = append(found, scanSchema(surface, "tool "+tool.Name+" output schema", tool.OutputSchema)...)
@@ -185,7 +189,7 @@ func scanPromptsAndResources(client *gitlabclient.Client) []offender {
 		os.Exit(1)
 	}
 	for _, prompt := range prompts {
-		found = append(found, scanText("prompts", "prompt "+prompt.Name+" description", prompt.Description)...)
+		found = append(found, scanText("prompts", "prompt "+prompt.Name+fieldDescription, prompt.Description)...)
 		for _, arg := range prompt.Arguments {
 			found = append(found, scanText("prompts", "prompt "+prompt.Name+" argument "+arg.Name, arg.Description)...)
 		}
@@ -197,10 +201,10 @@ func scanPromptsAndResources(client *gitlabclient.Client) []offender {
 		os.Exit(1)
 	}
 	for _, resource := range resources {
-		found = append(found, scanText("resources", "resource "+resource.Name+" description", resource.Description)...)
+		found = append(found, scanText("resources", "resource "+resource.Name+fieldDescription, resource.Description)...)
 	}
 	for _, template := range templates {
-		found = append(found, scanText("resources", "resource template "+template.Name+" description", template.Description)...)
+		found = append(found, scanText("resources", "resource template "+template.Name+fieldDescription, template.Description)...)
 	}
 	return found
 }
@@ -220,7 +224,7 @@ func scanSchema(surface, where string, schema any) []offender {
 		return nil
 	}
 	var decoded any
-	if unmarshalErr := json.Unmarshal(raw, &decoded); unmarshalErr != nil {
+	if json.Unmarshal(raw, &decoded) != nil {
 		return nil
 	}
 	var found []offender

@@ -126,7 +126,7 @@ func rewriteSchema(subs []Substitution, schema any) any {
 		return schema
 	}
 	var decoded any
-	if unmarshalErr := json.Unmarshal(raw, &decoded); unmarshalErr != nil {
+	if json.Unmarshal(raw, &decoded) != nil {
 		return schema
 	}
 	if !RewriteSchemaProse(decoded, func(text string) string { return Apply(subs, text) }) {
