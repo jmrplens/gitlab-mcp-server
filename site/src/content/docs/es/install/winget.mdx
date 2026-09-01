@@ -1,0 +1,75 @@
+---
+title: Windows (winget)
+description: Instala GitLab MCP Server en Windows con winget como paquete portable, averigua dónde quedan el ejecutable y su alias en el PATH, actualízalo y desinstálalo, y entiende por qué winget puede ir por detrás de GitHub Releases.
+datePublished: "2026-09-01"
+---
+
+El paquete es `jmrplens.gitlab-mcp-server` en el repositorio comunitario [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs/tree/master/manifests/j/jmrplens/gitlab-mcp-server). Es un paquete **portable**: el instalador es el propio ejecutable de la release, sin programa de instalación, así que winget lo copia a su carpeta de paquetes y crea un alias `gitlab-mcp-server` en tu PATH. El instalador x64 es `gitlab-mcp-server-windows-amd64.exe` y el arm64 es `gitlab-mcp-server-windows-arm64.exe`, ambos descargados de la GitHub Release, y los valores SHA-256 del manifiesto son las entradas del `checksums.txt` de esa release, de modo que lo que winget instala es byte a byte el archivo de la release.
+
+## Instalación
+
+```powershell
+winget install --id jmrplens.gitlab-mcp-server -e
+```
+
+`-e` pide una coincidencia exacta del identificador. winget elige el instalador de tu arquitectura, verifica su hash, lo copia a su sitio y registra el paquete en Aplicaciones y características.
+
+### Dónde queda
+
+- **Ejecutable**: una carpeta por paquete bajo `%LOCALAPPDATA%\Microsoft\WinGet\Packages\` en el ámbito de usuario por defecto, o `%PROGRAMFILES%\WinGet\Packages\` con `--scope machine`.
+- **Alias**: un enlace con el nombre del comando del manifiesto, `gitlab-mcp-server`, en `%LOCALAPPDATA%\Microsoft\WinGet\Links\` (usuario) o `%PROGRAMFILES%\WinGet\Links\` (máquina). winget añade esa carpeta `Links` al PATH si aún no está, y eso es lo que hace que el comando esté disponible en todas partes. `winget install --rename <nombre>` (`-r`) elige otro alias.
+
+:::note[Vuelve a abrir la terminal]
+Un cambio en el PATH solo llega a los procesos nuevos. Cierra y vuelve a abrir PowerShell o Windows Terminal antes de escribir `gitlab-mcp-server`, y reinicia un cliente MCP que ya estuviera abierto para que también vea el alias. `(Get-Command gitlab-mcp-server).Source` imprime la ruta completa del alias una vez es visible.
+:::
+
+## Verificación
+
+```powershell
+winget show --id jmrplens.gitlab-mcp-server -e
+winget list --id jmrplens.gitlab-mcp-server -e
+gitlab-mcp-server --version
+```
+
+`winget show` imprime los metadatos del paquete y el instalador que winget ha elegido para esta máquina, incluidos su URL y su SHA-256, que puedes comparar con el `checksums.txt` de la página de la release; `--versions` lista todas las versiones publicadas en winget. `winget list` imprime la versión instalada y, cuando winget conoce una más nueva, una columna `Available` (`--upgrade-available` filtra por eso). `gitlab-mcp-server --version` responde `gitlab-mcp-server 2.7.5 (commit: <commit>)` para la release actual.
+
+La descripción que imprime winget son metadatos del paquete que se arrastran entre envíos y pueden ir por detrás del software; toma esta página y el README del repositorio como referencia de lo que hace el binario.
+
+## Retraso de versión respecto a GitHub Releases
+
+Publicar en winget es un pull request. El workflow de release abre uno contra microsoft/winget-pkgs con los manifiestos nuevos (mediante winget-releaser, justo después de que salga la GitHub Release), y el pipeline de validación y los moderadores de Microsoft lo revisan y lo fusionan. Hasta esa fusión, `winget upgrade` no conoce la versión nueva, aunque la GitHub Release, Homebrew, npm, PyPI y las imágenes de contenedor ya la tengan. Ese paso de envío además puede fallar sin que falle la release, así que una versión puede no llegar nunca a winget: la 2.7.2 no llegó, mientras que la 2.7.5, la release actual, está publicada. Si necesitas una versión que winget aún no tiene, el [script de instalación o una descarga directa](/gitlab-mcp-server/es/install/binary/) te la dan al momento; eso sí, no mantengas las dos copias en el PATH.
+
+## Configura tu cliente
+
+El alias está en el PATH, así que el comando a secas funciona una vez has reiniciado el cliente:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+Si un cliente sigue sin encontrarlo, usa la ruta completa que imprime `(Get-Command gitlab-mcp-server).Source`, con las barras invertidas duplicadas en el JSON. Añade `"GITLAB_URL": "https://gitlab.example.com"` a `env` para una instancia autogestionada. Con Claude Code el paso es `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`, idéntico al del resto de canales. Las pestañas por cliente están en el [Inicio rápido](/gitlab-mcp-server/es/getting-started/#configuración-manual).
+
+## Actualizar y desinstalar
+
+winget gestiona las actualizaciones; el binario nunca se actualiza a sí mismo.
+
+```powershell
+winget upgrade --id jmrplens.gitlab-mcp-server -e
+```
+
+`update` es un alias de `upgrade`. En un paquete portable, winget descarga el ejecutable nuevo a una ubicación temporal y reemplaza el archivo existente, y después actualiza el alias y la entrada de Aplicaciones y características. Si el servidor está en ejecución en ese momento, winget lo avisa y se detiene; `--force` lo termina primero, así que cierra tu cliente MCP antes de actualizar.
+
+```powershell
+winget uninstall --id jmrplens.gitlab-mcp-server -e
+```
+
+`remove` y `rm` son alias. Desinstalar elimina el ejecutable, su alias y la entrada de Aplicaciones y características, y borra la carpeta del paquete si queda vacía; `--purge` borra todo lo que haya en esa carpeta y `--preserve` conserva los archivos que el paquete haya creado. Ambos flags son solo para paquetes portables. Después quita la entrada `gitlab` de la configuración de tu cliente.

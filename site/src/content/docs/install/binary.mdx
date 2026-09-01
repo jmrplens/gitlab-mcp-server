@@ -1,0 +1,180 @@
+---
+title: Native binary
+description: Download the GitLab MCP Server binary for your platform from GitHub Releases or let the install script place it, verify the checksum and Sigstore signature, put it on your PATH, and upgrade by downloading again.
+datePublished: "2026-09-01"
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+Every release publishes one static binary per platform: Linux, macOS and Windows, on amd64 and arm64, built with `CGO_ENABLED=0` as position-independent executables with the version and commit stamped in. No runtime, no shared libraries, no container. This page covers the two install scripts, downloading by hand, checking what you downloaded, where to keep the file, and how to replace it later.
+
+## Install script
+
+Both scripts do the same four things: detect the platform, download the matching asset from the latest GitHub Release, verify its SHA-256 against the `checksums.txt` of that same release, and copy it to a per-user directory. Verification fails closed: a mismatch, a missing entry, or a `checksums.txt` that cannot be fetched aborts the install rather than skipping the check.
+
+<Tabs>
+<TabItem label="Linux / macOS">
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
+```
+
+The script needs `curl` or `wget`, plus `sha256sum` or `shasum`. It maps `x86_64` to `amd64` and `aarch64` to `arm64`, refuses any other OS or architecture, and installs the file with mode `0755` as `$HOME/.local/bin/gitlab-mcp-server`. An existing binary at that path is removed first, so re-running over a server that is still running does not fail with "Text file busy". If `$HOME/.local/bin` is not on your PATH, the script says so and prints the `export PATH=...` line to add.
+
+| Variable           | Default                      | Effect                                                                   |
+| ------------------ | ---------------------------- | ------------------------------------------------------------------------ |
+| `INSTALL_DIR`      | `$HOME/.local/bin`           | Target directory                                                         |
+| `VERSION`          | `latest`                     | Release tag to install, for example `v2.7.5`                             |
+| `REPO`             | `jmrplens/gitlab-mcp-server` | GitHub repository to download from                                       |
+| `ALLOW_UNVERIFIED` | unset                        | `1` skips the checksum verification, for systems without a SHA-256 tool |
+
+Variables go in front of `sh`, since that is the process running the script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | VERSION=v2.7.5 INSTALL_DIR=/usr/local/bin sh
+```
+
+</TabItem>
+<TabItem label="Windows (PowerShell)">
+
+```powershell
+irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
+```
+
+The script reads the real machine architecture (`PROCESSOR_ARCHITEW6432` first, so a 32-bit PowerShell on 64-bit Windows still picks the right build), downloads `gitlab-mcp-server-windows-amd64.exe` or `gitlab-mcp-server-windows-arm64.exe`, verifies it with `Get-FileHash`, and installs it as `%LOCALAPPDATA%\Programs\gitlab-mcp-server\gitlab-mcp-server.exe`. It then appends that folder to your **user** PATH if it is not there yet. No 32-bit x86 build is published, so the script stops on that architecture.
+
+The same overrides exist as environment variables (`VERSION`, `INSTALL_DIR`, `REPO`, `ALLOW_UNVERIFIED`) and, when you save the script and run it as a file, as parameters (`-Version`, `-InstallDir`, `-Repo`). When piping into `iex`, set the variables first:
+
+```powershell
+$env:VERSION = 'v2.7.5'
+irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
+```
+
+:::note[Reopen your terminal]
+A PATH change only reaches new processes. Close and reopen PowerShell or Windows Terminal before typing `gitlab-mcp-server`, and restart any MCP client that was already open so it sees the new PATH too.
+:::
+
+</TabItem>
+</Tabs>
+
+## Download by hand
+
+The [latest release](https://github.com/jmrplens/gitlab-mcp-server/releases/latest) carries these assets:
+
+| Platform              | Asset                                                                              |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| Linux (x86_64)        | `gitlab-mcp-server-linux-amd64`                                                    |
+| Linux (ARM64)         | `gitlab-mcp-server-linux-arm64`                                                    |
+| macOS (universal)     | `gitlab-mcp-server-darwin-all`                                                     |
+| macOS (Intel)         | `gitlab-mcp-server-darwin-amd64`                                                   |
+| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                   |
+| Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                              |
+| Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                              |
+| Integrity             | `checksums.txt`, `checksums.txt.sigstore.json`                                     |
+| Claude Desktop        | `gitlab-mcp-server.mcpb`, see [Claude Desktop](/gitlab-mcp-server/claude-desktop/) |
+
+`gitlab-mcp-server-darwin-all` is a universal binary (arm64 and amd64 in one file), produced for the Claude Desktop extension because its manifest can only pick a file per operating system, not per architecture. On macOS you can use it or the single-architecture asset; all three are listed in `checksums.txt`.
+
+Two URL forms cover every asset: `releases/latest/download/<asset>` always resolves to the newest release, and `releases/download/v<version>/<asset>` pins one.
+
+```bash
+# Latest release
+curl -fsSLO https://github.com/jmrplens/gitlab-mcp-server/releases/latest/download/gitlab-mcp-server-linux-amd64
+
+# A pinned version
+curl -fsSLO https://github.com/jmrplens/gitlab-mcp-server/releases/download/v2.7.5/gitlab-mcp-server-linux-amd64
+```
+
+### Make it executable (Linux/macOS)
+
+The download arrives without the execute bit. Set it, then move the file to a directory on your PATH, dropping the platform suffix so the command is `gitlab-mcp-server` like on every other channel:
+
+```bash
+chmod +x gitlab-mcp-server-*
+sudo mv gitlab-mcp-server-linux-amd64 /usr/local/bin/gitlab-mcp-server
+```
+
+Without `sudo`, `~/.local/bin/gitlab-mcp-server` works just as well; it is where the install script puts it.
+
+On Windows, rename the file to `gitlab-mcp-server.exe` and place it in a folder that is on your PATH, or reference it by its full path from the client configuration.
+
+## Verify what you downloaded
+
+The install scripts already compare the download with `checksums.txt`. Done by hand, that check plus the signature on the checksums file takes two commands. `checksums.txt` lists the SHA-256 of the seven binaries, and `checksums.txt.sigstore.json` is a keyless [Cosign](https://docs.sigstore.dev/cosign/installation/) signature of that file, made by the release workflow under GitHub's OIDC identity, so there is no key to distribute.
+
+1. Download `checksums.txt` and `checksums.txt.sigstore.json` from the same release as the binary.
+2. Verify the signature. The identity is the release workflow at the tag you downloaded:
+
+   ```bash
+   cosign verify-blob \
+     --bundle checksums.txt.sigstore.json \
+     --certificate-identity "https://github.com/jmrplens/gitlab-mcp-server/.github/workflows/release.yml@refs/tags/v2.7.5" \
+     --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+     checksums.txt
+   ```
+
+   `--certificate-identity-regexp "^https://github.com/jmrplens/gitlab-mcp-server/"` in place of the exact identity accepts any tag signed by this repository's workflows. Either way the expected output is `Verified OK`.
+
+3. Check the binary against the signed list:
+
+   ```bash
+   # Linux
+   sha256sum --check --ignore-missing checksums.txt
+
+   # macOS (shasum has no --ignore-missing; filter the relevant line first)
+   grep "$(ls gitlab-mcp-server-*)" checksums.txt | shasum -a 256 -c
+   ```
+
+   ```powershell
+   # Windows: the two hex strings must match (case aside)
+   (Get-FileHash .\gitlab-mcp-server-windows-amd64.exe -Algorithm SHA256).Hash
+   Select-String gitlab-mcp-server-windows-amd64.exe .\checksums.txt
+   ```
+
+   Expected output on Linux and macOS: `gitlab-mcp-server-linux-amd64: OK`, or the name of your asset.
+
+If either step fails, do not run the file. The full walkthrough, including installing Cosign, is under [Verifying release integrity](/gitlab-mcp-server/operations/security/#verifying-release-integrity).
+
+:::note[Provenance attestations and SBOMs]
+The release workflow now records a build provenance attestation for every asset in `checksums.txt` and emits one SPDX SBOM per binary (`<asset>.sbom.json`), checkable with `gh attestation verify <file> -R jmrplens/gitlab-mcp-server`. Those steps landed after v2.7.5 was tagged, so they apply to the releases published after it; for v2.7.5 itself, the checksum and signature above are the verification available.
+:::
+
+## Where to put it
+
+- **Per user, no `sudo`**: `~/.local/bin` on Linux and macOS (the script's default), `%LOCALAPPDATA%\Programs\gitlab-mcp-server` on Windows (the PowerShell script's default).
+- **System-wide**: `/usr/local/bin` on Linux and macOS.
+
+Clients started from the desktop rather than from a shell do not always inherit your shell's PATH. If a client reports that it cannot find `gitlab-mcp-server`, put the absolute path in its configuration instead of the bare name.
+
+## Check it runs
+
+```bash
+gitlab-mcp-server --version
+```
+
+prints `gitlab-mcp-server 2.7.5 (commit: <commit>)` for the current release. Starting the binary with no arguments in a terminal, or double-clicking it on Windows, without `GITLAB_TOKEN` set prints a short first-run screen naming the two values it needs and waits for Enter; an MCP client never sees it, because it talks to the server over pipes. There is no setup wizard.
+
+## Configure your client
+
+The minimal stdio entry is the path to the binary and the token. Add `GITLAB_URL` to `env` only for a self-managed instance:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "/path/to/gitlab-mcp-server",
+      "env": {
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+With Claude Code the whole step is one command, `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server` (add `--env GITLAB_URL=https://gitlab.example.com` for self-managed GitLab). The per-client tabs, including VS Code's `servers` map with a masked token prompt, are on the [Quick Start](/gitlab-mcp-server/getting-started/#manual-configuration).
+
+## Upgrade and uninstall
+
+The binary never updates itself. To upgrade, run the install script again, which replaces the file in place after verifying the new checksum, or download the newer asset and overwrite the old one. `VERSION=v2.7.5` (or `$env:VERSION` on Windows) pins a specific release when you need to stay put.
+
+To uninstall, delete the file: `rm ~/.local/bin/gitlab-mcp-server` (or wherever you placed it) on Linux and macOS; on Windows, delete `%LOCALAPPDATA%\Programs\gitlab-mcp-server` and remove that folder from your user PATH, which the script appended and never removes. Then drop the `gitlab` entry from your client's configuration.

@@ -1,0 +1,145 @@
+---
+title: Docker
+description: Run GitLab MCP Server from the ghcr.io container image, over stdio with --http=false for a desktop client or as an HTTP service on a port, pass settings through environment variables, pick a tag, and update with docker pull.
+datePublished: "2026-09-01"
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+The image is published as [`ghcr.io/jmrplens/gitlab-mcp-server`](https://github.com/jmrplens/gitlab-mcp-server/pkgs/container/gitlab-mcp-server) and mirrored as `docker.io/jmrplens/gitlab-mcp-server` on [Docker Hub](https://hub.docker.com/r/jmrplens/gitlab-mcp-server), with a `<version>` tag and `latest` on both registries, for `linux/amd64` and `linux/arm64`. Every release builds it with provenance and SBOM attestations and signs it by digest with Cosign. Inside: an Alpine base with CA certificates and time zone data, the binary at `/usr/local/bin/gitlab-mcp-server`, a non-root `appuser` (UID 10001), port 8080 exposed, and a health check against `/health`.
+
+:::caution[The image starts in HTTP mode]
+Its entrypoint is `gitlab-mcp-server` and its default command is `--http --http-addr 0.0.0.0:8080`. Any argument after the image name replaces that command wholesale, so for a desktop client you pass `--http=false` to get the stdio transport. Without it, the container starts an HTTP listener and a stdio client waits forever for the `initialize` response. Keep `docker run -i` in that mode and do not publish port 8080.
+:::
+
+## Stdio: the image as a local MCP server
+
+```bash
+docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+```
+
+`-e GITLAB_TOKEN` with no value forwards the variable from the environment the client gives `docker`, so the token lives in the client's `env` block rather than on the command line. Docker pulls the image on the first run. The client entry that launches this command is under [Configure your client](#configure-your-client) below; with Claude Code it is one line:
+
+```bash
+claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
+  -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+```
+
+The one-click buttons for VS Code, Cursor, LM Studio and Kiro on the [Quick Start](/gitlab-mcp-server/getting-started/#one-click-buttons) register exactly this entry, and the [Agent Plugins](/gitlab-mcp-server/install/agent-plugin/) manifest runs it too.
+
+### Environment variables
+
+In stdio mode every setting is an environment variable, and each one you use needs its own `-e NAME` so Docker copies it into the container. The list the bundled plugin configuration forwards is a good template: `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_SKIP_TLS_VERIFY`, `TOOL_SURFACE`, `CAPABILITY_SURFACE`, `META_PARAM_SCHEMA`, `GITLAB_TIER`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `EMBEDDED_RESOURCES`, `EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `UPLOAD_MAX_FILE_SIZE`, `GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`, `CLIENT_COMPAT` and `LOG_LEVEL`. What each one does is on the [Configuration](/gitlab-mcp-server/configuration/) page.
+
+:::note[Self-signed certificates]
+The container has its own CA store, so a certificate your host trusts is still unknown inside it. Mount the CA and point `SSL_CERT_FILE` at it:
+
+```bash
+docker run -i --rm -e GITLAB_TOKEN -e GITLAB_URL \
+  -v /path/to/ca-bundle.crt:/certs/ca-bundle.crt:ro -e SSL_CERT_FILE=/certs/ca-bundle.crt \
+  ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
+```
+
+`GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative: it disables certificate verification for every GitLab request, and OAuth mode refuses it for a non-loopback instance.
+:::
+
+## HTTP: the image as a service
+
+Run it without extra arguments and the container's default command listens on port 8080:
+
+```bash
+docker run --rm -p 8080:8080 ghcr.io/jmrplens/gitlab-mcp-server:latest
+```
+
+That form passes no `--gitlab-url`, which is multi-instance mode: each request chooses the instance with a `GITLAB-URL` header and falls back to `https://gitlab.com` when it has none. Each client also sends its own GitLab token on every request, and the server stores none of them. To fix the instance and harden the container the way the reference deployment does:
+
+<Tabs>
+<TabItem label="Single instance">
+
+```bash
+docker run -d \
+  --name gitlab-mcp \
+  --read-only \
+  --tmpfs /tmp:rw,size=64m \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges:true \
+  -p 8080:8080 \
+  ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http \
+  --http-addr=0.0.0.0:8080 \
+  --gitlab-url=https://gitlab.com
+```
+
+</TabItem>
+<TabItem label="Multi-instance">
+
+```bash
+# Omit --gitlab-url; clients send the GITLAB-URL header per request
+docker run -d \
+  --name gitlab-mcp \
+  --read-only \
+  --tmpfs /tmp:rw,size=64m \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges:true \
+  -p 8080:8080 \
+  ghcr.io/jmrplens/gitlab-mcp-server:latest \
+  --http \
+  --http-addr=0.0.0.0:8080
+```
+
+</TabItem>
+</Tabs>
+
+An HTTP client then points at `http://localhost:8080/mcp` with `type: "http"` and its own token in a `PRIVATE-TOKEN` header (the legacy authentication mode, which is the default), and `http://localhost:8080/health` answers without a credential:
+
+```bash
+curl -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "PRIVATE-TOKEN: glpat-your-token" \
+  -d '{"jsonrpc":"2.0","method":"tools/list","id":1}'
+```
+
+In HTTP mode configuration comes from flags rather than variables (`--tool-surface`, `--tier`, `--read-only`, `--safe-mode`, `--skip-tls-verify`, and so on), which is what the repository's [`docker-compose.yml`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docker-compose.yml) passes on its `command` line. OAuth mode, rate limiting, TLS on the listener, sizing and the client configuration for this transport are on the [HTTP Server](/gitlab-mcp-server/operations/http-server/) page.
+
+## Tags and registries
+
+- `latest` follows the newest release; `2.7.5` and every other version tag stays put. Pin a version tag in production, or pin the digest for full immutability: `ghcr.io/jmrplens/gitlab-mcp-server:2.7.5@sha256:8eec1825b266712cd544bf1b2144e55c1eb711b4540def40e963a664c4e97168` is the form the MCP Registry's `server.json` uses for the current release.
+- `ghcr.io/jmrplens/gitlab-mcp-server` and `docker.io/jmrplens/gitlab-mcp-server` carry the same images: the `2.7.5` tag resolves to the same digest on both. The documentation uses `ghcr.io`; use the Docker Hub name if that registry is the one your network allows.
+- The image carries the label `io.modelcontextprotocol.server.name=io.github.jmrplens/gitlab-mcp-server`, which is how the MCP Registry validates its ownership.
+
+## Configure your client
+
+The stdio entry for a desktop client is the `docker run` command from above, split into `command` and `args`, with the token in `env`:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest", "--http=false"],
+      "env": {
+        "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"
+      }
+    }
+  }
+}
+```
+
+For a self-managed instance add `"-e", "GITLAB_URL"` to `args` and `"GITLAB_URL": "https://gitlab.example.com"` to `env`: the variable has to be both set and forwarded. The per-client tabs on the [Quick Start](/gitlab-mcp-server/getting-started/#manual-configuration) show where this JSON goes for each client; swap their `command` and `env` for the ones above. VS Code uses a `servers` map with `"type": "stdio"` instead of `mcpServers`.
+
+## Upgrade and uninstall
+
+The server never updates itself, and inside a container it should not: pull the newer image and start a fresh container from it.
+
+```bash
+docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
+```
+
+A stdio client that runs `docker run --rm` picks up the pulled image on its next launch. For an HTTP service, recreate the container (`docker compose pull && docker compose up -d` with the reference Compose file, or `docker rm -f gitlab-mcp` and the `docker run` above). With a version tag, change the tag instead and pull that one. To uninstall, stop any container, then remove the image:
+
+```bash
+docker rmi ghcr.io/jmrplens/gitlab-mcp-server:latest
+```
+
+and drop the `gitlab` entry from your client's configuration. These are the standard Docker commands; nothing about the image changes them.
