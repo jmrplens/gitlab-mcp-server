@@ -239,11 +239,13 @@ func TestMissingDisambiguation_OnlyFlagsNonCRUDVariants(t *testing.T) {
 		t.Fatalf("expected 1 cluster, got %+v", clusters)
 	}
 	for _, spec := range crud {
-		members := clusterMembersFor(clusters, spec.OwnerPackage, spec.Name)
-		finding := analyzeSpec(spec, nil, members, 3)
-		if containsStr(finding.Flags, "missing_disambiguation") {
-			t.Errorf("pure CRUD member %q should NOT be flagged missing_disambiguation: %+v", spec.Name, finding.Flags)
-		}
+		t.Run(spec.Name, func(t *testing.T) {
+			members := clusterMembersFor(clusters, spec.OwnerPackage, spec.Name)
+			finding := analyzeSpec(spec, nil, members, 3)
+			if containsStr(finding.Flags, "missing_disambiguation") {
+				t.Errorf("pure CRUD member %q should NOT be flagged missing_disambiguation: %+v", spec.Name, finding.Flags)
+			}
+		})
 	}
 
 	// Base-vs-variant cluster: link_create (base) + link_create_batch (variant).

@@ -1310,6 +1310,7 @@ func TestSessionBridge_OneListenTeardownKeepsAnothersWatch(t *testing.T) {
 	// Two listen streams, as two subscriptions/listen requests on one session.
 	first := &listenStream{cancel: func() {}}
 	second := &listenStream{cancel: func() {}}
+	// sequential: the second listen joins the watcher the first one created, and the teardown below needs both in place
 	for _, stream := range []*listenStream{first, second} {
 		ctx := withListenStream(context.Background(), stream)
 		if err := bridge.Subscribe(ctx, &mcp.SubscribeRequest{

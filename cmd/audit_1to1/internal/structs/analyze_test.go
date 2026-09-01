@@ -80,29 +80,37 @@ func TestScalarLike_ClassifiesGoScalars(t *testing.T) {
 // int/string, and SDK time types projected onto string. Genuinely divergent
 // struct types are reported as incompatible.
 func TestTypesCompatible_AcceptsKnownProjections(t *testing.T) {
-	compatible := [][2]string{
-		{"string", "*string"},
-		{"int", "int64"},
-		{"int", "*v2.AccessLevelValue"},
-		{"string", "v2.VisibilityValue"},
-		{"string", "*v2.ISOTime"},
-		{"string", "time.Time"},
-		{"bool", "*bool"},
+	compatible := []struct {
+		name, mcpType, sdkType string
+	}{
+		{"string_to_pointer", "string", "*string"},
+		{"int_to_int64", "int", "int64"},
+		{"int_to_access_level_pointer", "int", "*v2.AccessLevelValue"},
+		{"string_to_visibility", "string", "v2.VisibilityValue"},
+		{"string_to_isotime_pointer", "string", "*v2.ISOTime"},
+		{"string_to_time", "string", "time.Time"},
+		{"bool_to_pointer", "bool", "*bool"},
 	}
-	for _, pair := range compatible {
-		if !typesCompatible(pair[0], pair[1]) {
-			t.Errorf("typesCompatible(%q, %q) = false, want true", pair[0], pair[1])
-		}
+	for _, tc := range compatible {
+		t.Run(tc.name, func(t *testing.T) {
+			if !typesCompatible(tc.mcpType, tc.sdkType) {
+				t.Errorf("typesCompatible(%q, %q) = false, want true", tc.mcpType, tc.sdkType)
+			}
+		})
 	}
-	incompatible := [][2]string{
-		{"string", "*v2.Commit"},
-		{"int", "[]string"},
-		{"v2.Foo", "v2.Bar"},
+	incompatible := []struct {
+		name, mcpType, sdkType string
+	}{
+		{"string_vs_struct_pointer", "string", "*v2.Commit"},
+		{"int_vs_string_slice", "int", "[]string"},
+		{"distinct_structs", "v2.Foo", "v2.Bar"},
 	}
-	for _, pair := range incompatible {
-		if typesCompatible(pair[0], pair[1]) {
-			t.Errorf("typesCompatible(%q, %q) = true, want false", pair[0], pair[1])
-		}
+	for _, tc := range incompatible {
+		t.Run(tc.name, func(t *testing.T) {
+			if typesCompatible(tc.mcpType, tc.sdkType) {
+				t.Errorf("typesCompatible(%q, %q) = true, want false", tc.mcpType, tc.sdkType)
+			}
+		})
 	}
 }
 

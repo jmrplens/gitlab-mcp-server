@@ -560,18 +560,21 @@ func TestIssueAge_NilCreatedAt(t *testing.T) {
 // TestReadinessLabel covers all three branches of readinessLabel.
 func TestReadinessLabel(t *testing.T) {
 	tests := []struct {
+		name     string
 		blockers int
 		wantSub  string
 	}{
-		{10, "Not Ready"},
-		{3, "Needs Attention"},
-		{0, "Ready"},
+		{"many_blockers_not_ready", 10, "Not Ready"},
+		{"few_blockers_needs_attention", 3, "Needs Attention"},
+		{"no_blockers_ready", 0, "Ready"},
 	}
 	for _, tt := range tests {
-		got := readinessLabel(tt.blockers)
-		if !strings.Contains(got, tt.wantSub) {
-			t.Errorf("readinessLabel(%d) = %q, want containing %q", tt.blockers, got, tt.wantSub)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			got := readinessLabel(tt.blockers)
+			if !strings.Contains(got, tt.wantSub) {
+				t.Errorf("readinessLabel(%d) = %q, want containing %q", tt.blockers, got, tt.wantSub)
+			}
+		})
 	}
 }
 

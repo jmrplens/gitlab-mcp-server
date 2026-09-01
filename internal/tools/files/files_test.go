@@ -1640,23 +1640,25 @@ func TestFormatRawMarkdown(t *testing.T) {
 // minLen helper
 // ---------------------------------------------------------------------------.
 
-// TestMinLen verifies the MinLen handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts the returned output matches the expected fields.
+// TestMinLen verifies minLen returns the smaller of its two arguments,
+// including when they are equal or one of them is zero.
 func TestMinLen(t *testing.T) {
 	tests := []struct {
+		name       string
 		a, b, want int
 	}{
-		{3, 8, 3},
-		{8, 3, 3},
-		{5, 5, 5},
-		{0, 1, 0},
+		{"first_smaller", 3, 8, 3},
+		{"second_smaller", 8, 3, 3},
+		{"equal", 5, 5, 5},
+		{"zero", 0, 1, 0},
 	}
 	for _, tt := range tests {
-		got := minLen(tt.a, tt.b)
-		if got != tt.want {
-			t.Errorf("minLen(%d, %d) = %d, want %d", tt.a, tt.b, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			got := minLen(tt.a, tt.b)
+			if got != tt.want {
+				t.Errorf("minLen(%d, %d) = %d, want %d", tt.a, tt.b, got, tt.want)
+			}
+		})
 	}
 }
 

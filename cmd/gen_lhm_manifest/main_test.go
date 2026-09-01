@@ -132,10 +132,12 @@ func TestGenerate_DeclaresDefaultDynamicSurface(t *testing.T) {
 	}
 	names := []string{m.Tools[0].Name, m.Tools[1].Name}
 	want := []string{"gitlab_execute_action", "gitlab_find_action"}
-	for i := range want {
-		if names[i] != want[i] {
-			t.Fatalf("tools = %v, want %v", names, want)
-		}
+	for i, name := range want {
+		t.Run(name, func(t *testing.T) {
+			if names[i] != name {
+				t.Fatalf("tools = %v, want %v", names, want)
+			}
+		})
 	}
 }
 
@@ -257,10 +259,12 @@ func TestManifestPrompts_SortedByName(t *testing.T) {
 	})
 
 	want := []string{"audit_project_full", "my_open_mrs", "review_mr"}
-	for i := range want {
-		if got[i].Name != want[i] {
-			t.Fatalf("position %d = %q, want %q", i, got[i].Name, want[i])
-		}
+	for i, name := range want {
+		t.Run(name, func(t *testing.T) {
+			if got[i].Name != name {
+				t.Fatalf("position %d = %q, want %q", i, got[i].Name, name)
+			}
+		})
 	}
 }
 

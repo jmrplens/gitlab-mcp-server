@@ -479,9 +479,11 @@ func TestEnrichSubmoduleCommitSHAs_CancelledContext(t *testing.T) {
 	enrichSubmoduleCommitSHAs(ctx, client, "42", "main", entries)
 
 	for _, e := range entries {
-		if e.CommitSHA != "" {
-			t.Errorf("expected empty CommitSHA for entry %q after cancelled context, got %q", e.Name, e.CommitSHA)
-		}
+		t.Run(e.Name, func(t *testing.T) {
+			if e.CommitSHA != "" {
+				t.Errorf("expected empty CommitSHA for entry %q after cancelled context, got %q", e.Name, e.CommitSHA)
+			}
+		})
 	}
 }
 
