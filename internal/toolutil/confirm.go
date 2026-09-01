@@ -99,7 +99,7 @@ func hasExplicitConfirm(params map[string]any) bool {
 // a destructive action. Returns nil if the user confirmed or elicitation is
 // unsupported (fallback: action proceeds — destructive callers must go
 // through [ConfirmDestructiveAction], which fails closed in that case).
-// Returns a non-error tool result if the user declined or canceled. On sessions negotiated at protocol
+// Returns an error tool result if the user declined or canceled. On sessions negotiated at protocol
 // >= 2026-07-28 the confirmation travels as a multi round-trip input request
 // (SEP-2322): the first pass returns an input-required result and the client
 // retries the call with the user's answer attached.
@@ -139,12 +139,18 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string
 	return nil
 }
 
-// CancelledResult returns a non-error tool result indicating the user canceled.
+// CancelledResult returns an error tool result indicating the user canceled.
 func CancelledResult(message string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: message},
 		},
+		// The operation was declined, so it produced none of the output its
+		// schema describes. A tool that declares an outputSchema MUST return
+		// structured results conforming to it, and a cancellation conforms to
+		// nothing, so this is reported as an error result rather than as a
+		// success carrying only prose.
+		IsError: true,
 	}
 }
 

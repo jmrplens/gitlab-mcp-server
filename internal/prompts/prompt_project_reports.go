@@ -33,7 +33,7 @@ func registerProjectReportPrompts(server *mcp.Server, client *gitlabclient.Clien
 
 // registerBranchMRSummaryPrompt registers the branch_mr_summary prompt.
 func registerBranchMRSummaryPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "branch_mr_summary",
 		Title:       toolutil.TitleFromName("branch_mr_summary"),
 		Description: "List all MRs targeting a specific branch in a project. Shows readiness summary with conflict/draft/approval counts. Ideal for release branch reviews.",
@@ -52,11 +52,11 @@ func registerBranchMRSummaryPrompt(server *mcp.Server, client *gitlabclient.Clie
 func handleBranchMRSummary(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("branch_mr_summary: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("branch_mr_summary: project_id is required"))
 	}
 	targetBranch := req.Params.Arguments[argTargetBranch]
 	if targetBranch == "" {
-		return nil, errors.New("branch_mr_summary: target_branch is required")
+		return nil, toolutil.InvalidParams(errors.New("branch_mr_summary: target_branch is required"))
 	}
 	state := getArgOr(req.Params.Arguments, argState, "opened")
 
@@ -70,7 +70,7 @@ func handleBranchMRSummary(ctx context.Context, client *gitlabclient.Client, req
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MRs targeting %s in %s (%d %s)\n\n", targetBranch, projectID, len(mrs), state)
+	fmt.Fprintf(&b, "# MRs targeting %s in %s (%d %s)\n\n", toolutil.EscapeMdHeading(targetBranch), toolutil.EscapeMdHeading(projectID), len(mrs), state)
 
 	if len(mrs) == 0 {
 		b.WriteString("No merge requests found matching the criteria.\n")
@@ -103,7 +103,7 @@ func handleBranchMRSummary(ctx context.Context, client *gitlabclient.Client, req
 
 // registerProjectActivityReportPrompt registers the project_activity_report prompt.
 func registerProjectActivityReportPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "project_activity_report",
 		Title:       toolutil.TitleFromName("project_activity_report"),
 		Description: "Generate a project activity report including recent events, merged MRs, and open issues. Shows daily activity chart and contributor breakdown.",
@@ -121,7 +121,7 @@ func registerProjectActivityReportPrompt(server *mcp.Server, client *gitlabclien
 func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("project_activity_report: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("project_activity_report: project_id is required"))
 	}
 	days := parseDays(getArgOr(req.Params.Arguments, argDays, "7"), 7)
 	since := sinceDate(days)
@@ -155,7 +155,7 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Activity Report — %s (last %d days)\n\n", projectID, days)
+	fmt.Fprintf(&b, "# Project Activity Report — %s (last %d days)\n\n", toolutil.EscapeMdHeading(projectID), days)
 
 	// Summary
 	b.WriteString(mdSummaryHeader)
@@ -194,7 +194,7 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 
 // registerMRDiscussionHealthPrompt registers the mr_discussion_health prompt.
 func registerMRDiscussionHealthPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "mr_discussion_health",
 		Title:       toolutil.TitleFromName("mr_discussion_health"),
 		Description: "Analyze unresolved discussion threads across open MRs in a project. Use this for review follow-up and merge-readiness cleanup, not approval-rule status.",
@@ -220,7 +220,7 @@ type mrDiscussionInfo struct {
 func handleMRDiscussionHealth(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("mr_discussion_health: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("mr_discussion_health: project_id is required"))
 	}
 
 	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
@@ -234,7 +234,7 @@ func handleMRDiscussionHealth(ctx context.Context, client *gitlabclient.Client, 
 	infos := collectMRDiscussionInfos(ctx, client, projectID, mrs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MR Discussion Health — %s (%d open MRs)\n\n", projectID, len(mrs))
+	fmt.Fprintf(&b, "# MR Discussion Health — %s (%d open MRs)\n\n", toolutil.EscapeMdHeading(projectID), len(mrs))
 
 	if len(infos) == 0 {
 		b.WriteString("No open merge requests found.\n")
@@ -312,7 +312,7 @@ func countDiscussionThreads(info *mrDiscussionInfo, discussions []*gl.Discussion
 
 // registerUnassignedItemsPrompt registers the unassigned_items prompt.
 func registerUnassignedItemsPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "unassigned_items",
 		Title:       toolutil.TitleFromName("unassigned_items"),
 		Description: "Find open MRs and issues in a project that have no assignee. Helps identify ownership gaps and items needing attention.",
@@ -329,7 +329,7 @@ func registerUnassignedItemsPrompt(server *mcp.Server, client *gitlabclient.Clie
 func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("unassigned_items: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("unassigned_items: project_id is required"))
 	}
 
 	// Unassigned MRs
@@ -347,7 +347,7 @@ func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Unassigned Items — %s\n\n", projectID)
+	fmt.Fprintf(&b, "# Unassigned Items — %s\n\n", toolutil.EscapeMdHeading(projectID))
 
 	b.WriteString(mdSummaryHeader)
 	b.WriteString(mdCategoryTableHeader)
@@ -378,7 +378,7 @@ func handleUnassignedItems(ctx context.Context, client *gitlabclient.Client, req
 
 // registerStaleItemsReportPrompt registers the stale_items_report prompt.
 func registerStaleItemsReportPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "stale_items_report",
 		Title:       toolutil.TitleFromName("stale_items_report"),
 		Description: "Find MRs and issues in a project that haven't been updated for a configurable number of days. Helps identify forgotten or blocked items.",
@@ -396,7 +396,7 @@ func registerStaleItemsReportPrompt(server *mcp.Server, client *gitlabclient.Cli
 func handleStaleItemsReport(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("stale_items_report: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("stale_items_report: project_id is required"))
 	}
 	staleDays := parseDays(getArgOr(req.Params.Arguments, "stale_days", "14"), 14)
 	staleDate := time.Now().UTC().AddDate(0, 0, -staleDays)
@@ -416,7 +416,7 @@ func handleStaleItemsReport(ctx context.Context, client *gitlabclient.Client, re
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Stale Items Report — %s (no updates in %d+ days)\n\n", projectID, staleDays)
+	fmt.Fprintf(&b, "# Stale Items Report — %s (no updates in %d+ days)\n\n", toolutil.EscapeMdHeading(projectID), staleDays)
 
 	b.WriteString(mdSummaryHeader)
 	b.WriteString(mdCategoryTableHeader)

@@ -107,7 +107,7 @@ func Register(server *mcp.Server, client *gitlabclient.Client) {
 
 // registerSummarizeMRChangesPrompt registers the summarize_mr_changes prompt.
 func registerSummarizeMRChangesPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "summarize_mr_changes",
 		Title:       toolutil.TitleFromName("summarize_mr_changes"),
 		Description: "Summarize the changed files and key modifications in a merge request. Lists each file with its change type (new/modified/deleted/renamed). Use this to quickly understand the scope of a merge request.",
@@ -127,7 +127,7 @@ func handleSummarizeMRChanges(ctx context.Context, client *gitlabclient.Client, 
 	projectID := args[argProjectID]
 	mrIID := args[argMRIID]
 	if projectID == "" || mrIID == "" {
-		return nil, fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID)
+		return nil, toolutil.InvalidParams(fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID))
 	}
 
 	changes, _, err := client.GL().MergeRequests.ListMergeRequestDiffs(projectID, parseIID(mrIID), nil, gl.WithContext(ctx))
@@ -147,7 +147,7 @@ func handleSummarizeMRChanges(ctx context.Context, client *gitlabclient.Client, 
 
 // registerReviewMRPrompt registers the review_mr prompt.
 func registerReviewMRPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "review_mr",
 		Title:       toolutil.TitleFromName("review_mr"),
 		Description: "Generate a structured code review for a merge request. Files are categorized by risk (high-risk, business logic, tests, documentation) with per-file metrics, branch context, and a review plan. Full diffs are included without truncation.",
@@ -168,7 +168,7 @@ func fetchMRWithDiffs(ctx context.Context, client *gitlabclient.Client, req *mcp
 	projectID := req.Params.Arguments[argProjectID]
 	mrIID := req.Params.Arguments[argMRIID]
 	if projectID == "" || mrIID == "" {
-		return "", nil, nil, fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID)
+		return "", nil, nil, toolutil.InvalidParams(fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID))
 	}
 
 	iid := parseIID(mrIID)
@@ -217,7 +217,7 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 	m := computeDiffMetrics(diffs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Code Review: %s (MR !%d)\n\n", mr.Title, mr.IID)
+	fmt.Fprintf(&b, "# Code Review: %s (MR !%d)\n\n", toolutil.EscapeMdHeading(mr.Title), mr.IID)
 	fmt.Fprintf(&b, "**Branch**: %s → %s\n", mr.SourceBranch, mr.TargetBranch)
 	if mr.Description != "" {
 		fmt.Fprintf(&b, "**Description**: %s\n", mr.Description)
@@ -269,7 +269,7 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 
 // registerSummarizePipelineStatusPrompt registers the summarize_pipeline_status prompt.
 func registerSummarizePipelineStatusPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "summarize_pipeline_status",
 		Title:       toolutil.TitleFromName("summarize_pipeline_status"),
 		Description: "Summarize the latest CI/CD pipeline status for a project. Groups jobs by outcome (failed/passed/other) and includes failure reasons for debugging.",
@@ -287,7 +287,7 @@ func registerSummarizePipelineStatusPrompt(server *mcp.Server, client *gitlabcli
 func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, fmt.Errorf(fmtOneArgRequired, argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf(fmtOneArgRequired, argProjectID))
 	}
 
 	pipeline, _, err := client.GL().Pipelines.GetLatestPipeline(projectID, &gl.GetLatestPipelineOptions{}, gl.WithContext(ctx))
@@ -301,7 +301,7 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Pipeline #%d Status: %s\n\n", pipeline.ID, strings.ToUpper(pipeline.Status))
+	fmt.Fprintf(&b, "# Pipeline #%d Status: %s\n\n", pipeline.ID, toolutil.EscapeMdHeading(strings.ToUpper(pipeline.Status)))
 	fmt.Fprintf(&b, "**Ref**: %s | **SHA**: %s\n", pipeline.Ref, shortSHA(pipeline.SHA))
 	fmt.Fprintf(&b, "**URL**: %s\n\n", pipeline.WebURL)
 
@@ -349,7 +349,7 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 
 // registerSuggestMRReviewersPrompt registers the suggest_mr_reviewers prompt.
 func registerSuggestMRReviewersPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "suggest_mr_reviewers",
 		Title:       toolutil.TitleFromName("suggest_mr_reviewers"),
 		Description: "Suggest suitable merge request reviewers based on the files changed and the list of active project members. Excludes the MR author and asks the model to consider ownership, approval-rule fit, and workload balance.",
@@ -377,7 +377,7 @@ func handleSuggestMRReviewers(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Reviewer Suggestions for MR !%d: %s\n\n", mr.IID, mr.Title)
+	fmt.Fprintf(&b, "# Reviewer Suggestions for MR !%d: %s\n\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
 
 	fmt.Fprintf(&b, "## Changed Files (%d)\n", len(diffs))
 	for _, d := range diffs {
@@ -404,7 +404,7 @@ func handleSuggestMRReviewers(ctx context.Context, client *gitlabclient.Client, 
 
 // registerGenerateReleaseNotesPrompt registers the generate_release_notes prompt.
 func registerGenerateReleaseNotesPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "generate_release_notes",
 		Title:       toolutil.TitleFromName("generate_release_notes"),
 		Description: "Generate comprehensive release notes from commits, merge requests, and file changes between two Git refs (tags, branches, or SHAs). Produces a structured document with commits, merged MRs with labels, contributors, and statistics for organizing into user-friendly release notes.",
@@ -425,7 +425,7 @@ func handleGenerateReleaseNotes(ctx context.Context, client *gitlabclient.Client
 	projectID := req.Params.Arguments[argProjectID]
 	from := req.Params.Arguments["from"]
 	if projectID == "" || from == "" {
-		return nil, fmt.Errorf("%s and from are required", argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf("%s and from are required", argProjectID))
 	}
 	to := req.Params.Arguments["to"]
 	if to == "" {
@@ -441,7 +441,7 @@ func handleGenerateReleaseNotes(ctx context.Context, client *gitlabclient.Client
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Release Notes: %s → %s\n\n", from, to)
+	fmt.Fprintf(&b, "# Release Notes: %s → %s\n\n", toolutil.EscapeMdHeading(from), toolutil.EscapeMdHeading(to))
 
 	// Fetch merged MRs in the commit date range.
 	mergedMRs := fetchMergedMRsForRange(ctx, client, projectID, comparison.Commits)
@@ -564,7 +564,7 @@ func writeReleaseNotesStats(b *strings.Builder, comparison *gl.Compare) {
 
 // registerSummarizeOpenMRsPrompt registers the summarize_open_mrs prompt.
 func registerSummarizeOpenMRsPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "summarize_open_mrs",
 		Title:       toolutil.TitleFromName("summarize_open_mrs"),
 		Description: "Summarize all open merge requests in a project including title, author, branches, age in days, and merge status. Highlights stale MRs (>7 days) and blockers. For one target branch, use branch_mr_summary.",
@@ -582,7 +582,7 @@ func registerSummarizeOpenMRsPrompt(server *mcp.Server, client *gitlabclient.Cli
 func handleSummarizeOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, fmt.Errorf(fmtOneArgRequired, argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf(fmtOneArgRequired, argProjectID))
 	}
 
 	mrs, _, err := client.GL().MergeRequests.ListProjectMergeRequests(projectID, &gl.ListProjectMergeRequestsOptions{
@@ -601,7 +601,7 @@ func handleSummarizeOpenMRs(ctx context.Context, client *gitlabclient.Client, re
 			author = mr.Author.Username
 		}
 		age := time.Since(*mr.CreatedAt).Hours() / 24
-		fmt.Fprintf(&b, "## !%d: %s\n", mr.IID, mr.Title)
+		fmt.Fprintf(&b, "## !%d: %s\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
 		fmt.Fprintf(&b, "- **Author**: %s | **Branch**: %s → %s\n", author, mr.SourceBranch, mr.TargetBranch)
 		fmt.Fprintf(&b, "- **Age**: %.0f days | **Status**: %s\n", age, mr.DetailedMergeStatus)
 		if mr.Description != "" {
@@ -621,7 +621,7 @@ func handleSummarizeOpenMRs(ctx context.Context, client *gitlabclient.Client, re
 
 // registerProjectHealthCheckPrompt registers the project_health_check prompt.
 func registerProjectHealthCheckPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "project_health_check",
 		Title:       toolutil.TitleFromName("project_health_check"),
 		Description: "Comprehensive project health assessment combining latest pipeline status, open merge requests, and branch hygiene (merged/stale branch counts). Provides actionable recommendations for project maintenance.",
@@ -639,7 +639,7 @@ func registerProjectHealthCheckPrompt(server *mcp.Server, client *gitlabclient.C
 func handleProjectHealthCheck(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, fmt.Errorf(fmtOneArgRequired, argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf(fmtOneArgRequired, argProjectID))
 	}
 
 	project, _, err := client.GL().Projects.GetProject(projectID, &gl.GetProjectOptions{}, gl.WithContext(ctx))
@@ -648,7 +648,7 @@ func handleProjectHealthCheck(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Health Check: %s\n\n", project.PathWithNamespace)
+	fmt.Fprintf(&b, "# Project Health Check: %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
 
 	writePipelineSection(ctx, &b, client, projectID)
 	writeOpenMRsSection(ctx, &b, client, projectID)
@@ -666,7 +666,7 @@ func writePipelineSection(ctx context.Context, b *strings.Builder, client *gitla
 		b.WriteString("## Latest Pipeline: N/A\n\n")
 		return
 	}
-	fmt.Fprintf(b, "## Latest Pipeline: %s\n", strings.ToUpper(pipeline.Status))
+	fmt.Fprintf(b, "## Latest Pipeline: %s\n", toolutil.EscapeMdHeading(strings.ToUpper(pipeline.Status)))
 	fmt.Fprintf(b, "- **Ref**: %s | **SHA**: %s\n", pipeline.Ref, shortSHA(pipeline.SHA))
 	fmt.Fprintf(b, "- **URL**: %s\n\n", pipeline.WebURL)
 }
@@ -719,7 +719,7 @@ func countBranchStats(branches []*gl.Branch) (merged, stale int) {
 
 // registerCompareBranchesPrompt registers the compare_branches prompt.
 func registerCompareBranchesPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "compare_branches",
 		Title:       toolutil.TitleFromName("compare_branches"),
 		Description: "Compare commit and file differences between two Git refs. Use for release branch preparation, feature branch divergence analysis, or deciding whether a merge/backport needs deeper review.",
@@ -741,7 +741,7 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 	from := req.Params.Arguments["from"]
 	to := req.Params.Arguments["to"]
 	if projectID == "" || from == "" || to == "" {
-		return nil, fmt.Errorf("%s, from, and to are required", argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf("%s, from, and to are required", argProjectID))
 	}
 
 	comparison, _, err := client.GL().Repositories.Compare(projectID, &gl.CompareOptions{
@@ -753,7 +753,7 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Branch Comparison: %s → %s\n\n", from, to)
+	fmt.Fprintf(&b, "# Branch Comparison: %s → %s\n\n", toolutil.EscapeMdHeading(from), toolutil.EscapeMdHeading(to))
 
 	if comparison.CompareSameRef {
 		b.WriteString("Both refs point to the same commit. No differences.\n")
@@ -787,7 +787,7 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 
 // registerDailyStandupPrompt registers the daily_standup prompt.
 func registerDailyStandupPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "daily_standup",
 		Title:       toolutil.TitleFromName("daily_standup"),
 		Description: "Generate a daily standup summary based on the user's GitLab activity in the last 24 hours: contribution events, authored MRs, assigned MRs, MRs under review, assigned issues, and created issues. Produces a comprehensive report with done/planned/blockers sections.",
@@ -806,7 +806,7 @@ func registerDailyStandupPrompt(server *mcp.Server, client *gitlabclient.Client)
 func handleDailyStandup(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, fmt.Errorf(fmtOneArgRequired, argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf(fmtOneArgRequired, argProjectID))
 	}
 
 	username, userID, isCurrentUser, err := resolveUser(ctx, client, req.Params.Arguments["username"])
@@ -859,7 +859,7 @@ func handleDailyStandup(ctx context.Context, client *gitlabclient.Client, req *m
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Daily Standup for @%s\n\n", username)
+	fmt.Fprintf(&b, "# Daily Standup for @%s\n\n", toolutil.EscapeMdHeading(username))
 
 	// Events section
 	fmt.Fprintf(&b, "## Recent Activity (last 24h)\n")
@@ -909,7 +909,7 @@ func resolveUser(ctx context.Context, client *gitlabclient.Client, username stri
 		return "", 0, false, fmt.Errorf("failed to look up user %q: %w", username, err)
 	}
 	if len(users) == 0 {
-		return "", 0, false, fmt.Errorf("user %q not found", username)
+		return "", 0, false, toolutil.InvalidParams(fmt.Errorf("user %q not found", username))
 	}
 	return users[0].Username, users[0].ID, false, nil
 }
@@ -949,7 +949,7 @@ func writeIssueSection(b *strings.Builder, heading, username string, issues []*g
 
 // registerTeamMemberWorkloadPrompt registers the team_member_workload prompt.
 func registerTeamMemberWorkloadPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "team_member_workload",
 		Title:       toolutil.TitleFromName("team_member_workload"),
 		Description: "Generate a comprehensive workload summary for a specific team member over a configurable time period. Includes contribution events, authored and assigned merge requests, MRs under review, authored and assigned issues. Use this for team management and capacity planning.",
@@ -969,19 +969,19 @@ func registerTeamMemberWorkloadPrompt(server *mcp.Server, client *gitlabclient.C
 func handleTeamMemberWorkload(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, fmt.Errorf(fmtOneArgRequired, argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf(fmtOneArgRequired, argProjectID))
 	}
 
 	usernameArg := req.Params.Arguments["username"]
 	if usernameArg == "" {
-		return nil, errors.New("argument 'username' is required")
+		return nil, toolutil.InvalidParams(errors.New("argument 'username' is required"))
 	}
 
 	days := 7
 	if d := req.Params.Arguments["days"]; d != "" {
 		parsed, err := strconv.Atoi(d)
 		if err != nil || parsed <= 0 {
-			return nil, fmt.Errorf("argument 'days' must be a positive integer, got %q", d)
+			return nil, toolutil.InvalidParams(fmt.Errorf("argument 'days' must be a positive integer, got %q", d))
 		}
 		days = parsed
 	}
@@ -1034,7 +1034,7 @@ func handleTeamMemberWorkload(ctx context.Context, client *gitlabclient.Client, 
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Workload Summary for @%s (last %d days)\n\n", username, days)
+	fmt.Fprintf(&b, "# Workload Summary for @%s (last %d days)\n\n", toolutil.EscapeMdHeading(username), days)
 
 	// Activity summary
 	b.WriteString("## Contribution Events\n")
@@ -1095,7 +1095,7 @@ func writeCountRow(b *strings.Builder, label string, count int, fetchErr error) 
 
 // registerUserStatsPrompt registers the user_stats prompt.
 func registerUserStatsPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "user_stats",
 		Title:       toolutil.TitleFromName("user_stats"),
 		Description: "Generate comprehensive user statistics from GitLab: contribution events breakdown, merge request stats (authored/assigned/reviewed by state), issue stats (authored/assigned by state), daily activity trends, and a Mermaid activity chart. Use this for performance reviews, productivity tracking, or personal dashboards.",
@@ -1115,14 +1115,14 @@ func registerUserStatsPrompt(server *mcp.Server, client *gitlabclient.Client) {
 func handleUserStats(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, fmt.Errorf(fmtOneArgRequired, argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf(fmtOneArgRequired, argProjectID))
 	}
 
 	days := 30
 	if d := req.Params.Arguments["days"]; d != "" {
 		parsed, err := strconv.Atoi(d)
 		if err != nil || parsed <= 0 {
-			return nil, fmt.Errorf("argument 'days' must be a positive integer, got %q", d)
+			return nil, toolutil.InvalidParams(fmt.Errorf("argument 'days' must be a positive integer, got %q", d))
 		}
 		days = parsed
 	}
@@ -1184,7 +1184,7 @@ func handleUserStats(ctx context.Context, client *gitlabclient.Client, req *mcp.
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# User Statistics for @%s (last %d days)\n\n", username, days)
+	fmt.Fprintf(&b, "# User Statistics for @%s (last %d days)\n\n", toolutil.EscapeMdHeading(username), days)
 
 	// Activity summary
 	b.WriteString("## Activity Summary\n")
@@ -1319,7 +1319,7 @@ func safeLen(count int, err error) int {
 
 // registerMRRiskAssessmentPrompt registers the mr_risk_assessment prompt.
 func registerMRRiskAssessmentPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "mr_risk_assessment",
 		Title:       toolutil.TitleFromName("mr_risk_assessment"),
 		Description: "Assess the risk level (LOW/MEDIUM/HIGH/CRITICAL) of a merge request based on size (lines added/removed), number of changed files, new/deleted files, sensitive file patterns (env, auth, migration, CI, security), and conflict status.",
@@ -1344,7 +1344,7 @@ func handleMRRiskAssessment(ctx context.Context, client *gitlabclient.Client, re
 	m := computeDiffMetrics(diffs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MR Risk Assessment: !%d — %s\n\n", mr.IID, mr.Title)
+	fmt.Fprintf(&b, "# MR Risk Assessment: !%d — %s\n\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
 	fmt.Fprintf(&b, "## Metrics\n")
 	fmt.Fprintf(&b, fmtFilesChanged, len(diffs))
 	fmt.Fprintf(&b, "- **Lines added**: %d\n", m.additions)
@@ -1469,7 +1469,7 @@ func writeDiffGroup(b *strings.Builder, heading string, diffs []*gl.MergeRequest
 	fmt.Fprintf(b, "\n## %s (%d)\n\n", heading, len(diffs))
 	for _, d := range diffs {
 		add, del := countDiffLines(d.Diff)
-		fmt.Fprintf(b, "### %s (%s) — +%d / -%d lines\n", d.NewPath, changeType(d), add, del)
+		fmt.Fprintf(b, "### %s (%s) — +%d / -%d lines\n", toolutil.EscapeMdHeading(d.NewPath), toolutil.EscapeMdHeading(changeType(d)), add, del)
 		if d.Diff != "" {
 			fmt.Fprintf(b, "```diff\n%s\n```\n\n", d.Diff)
 		}

@@ -58,8 +58,22 @@ func WrapMutatingToolsForSafeModeExcept(server *mcp.Server, exempt map[string]st
 
 // safeModeHandler returns an [mcp.ToolHandler] that builds a
 // [SafeModePreview] from the request and returns it as JSON text content
-// without executing the real operation. Returns an IsError result when
-// the preview cannot be marshaled to JSON.
+// without executing the real operation.
+//
+// The result carries IsError. The tool did not run, so it produced none of the
+// output its schema describes, and the specification is unconditional about
+// what a declared schema obliges: "If an output schema is provided: Servers
+// MUST provide structured results that conform to this schema." The tool copy
+// keeps its OutputSchema, so a plain success here would be a schema-carrying
+// result with nothing structured in it, across every mutating tool at once,
+// 561 of the 1065 registered on the individual surface at Ultimate. Populating
+// StructuredContent instead is not open to us: the individual schemas are
+// additionalProperties:false with required lists, and a preview satisfies none
+// of them.
+//
+// IsError is also the honest reading. Safe mode intercepts a call rather than
+// serving it, which is what the flag means, and the dynamic surface already
+// answers its destructive guard the same way.
 func safeModeHandler(toolName string) mcp.ToolHandler {
 	return func(_ context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		preview := SafeModePreview{
@@ -80,6 +94,7 @@ func safeModeHandler(toolName string) mcp.ToolHandler {
 
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{&mcp.TextContent{Text: string(data)}},
+			IsError: true,
 		}, nil
 	}
 }

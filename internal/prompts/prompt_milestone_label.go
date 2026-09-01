@@ -64,7 +64,7 @@ func writeDueDateSection(b *strings.Builder, dueDate *gl.ISOTime) {
 
 // registerMilestoneProgressPrompt registers the milestone_progress prompt.
 func registerMilestoneProgressPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "milestone_progress",
 		Title:       toolutil.TitleFromName("milestone_progress"),
 		Description: "Track milestone progress for a project. Shows issue/MR completion, progress bar, and due date risk. Omit milestone argument to see all active milestones.",
@@ -82,7 +82,7 @@ func registerMilestoneProgressPrompt(server *mcp.Server, client *gitlabclient.Cl
 func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("milestone_progress: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("milestone_progress: project_id is required"))
 	}
 	milestoneTitle := req.Params.Arguments[argMilestone]
 
@@ -100,7 +100,7 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Milestone Progress — %s\n\n", projectID)
+	fmt.Fprintf(&b, "# Milestone Progress — %s\n\n", toolutil.EscapeMdHeading(projectID))
 
 	if len(milestones) == 0 {
 		b.WriteString("No active milestones found.\n")
@@ -108,7 +108,7 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 	}
 
 	for _, ms := range milestones {
-		fmt.Fprintf(&b, "## %s\n\n", ms.Title)
+		fmt.Fprintf(&b, "## %s\n\n", toolutil.EscapeMdHeading(ms.Title))
 
 		issues, _, _ := client.GL().Milestones.GetMilestoneIssues(projectID, ms.ID, &gl.GetMilestoneIssuesOptions{
 			PerPage: maxListItems,
@@ -144,7 +144,7 @@ func handleMilestoneProgress(ctx context.Context, client *gitlabclient.Client, r
 
 // registerLabelDistributionPrompt registers the label_distribution prompt.
 func registerLabelDistributionPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "label_distribution",
 		Title:       toolutil.TitleFromName("label_distribution"),
 		Description: "Analyze label usage distribution in a project. Shows open/closed issue counts and open MR counts per label. Zero additional API calls beyond label list.",
@@ -161,7 +161,7 @@ func registerLabelDistributionPrompt(server *mcp.Server, client *gitlabclient.Cl
 func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("label_distribution: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("label_distribution: project_id is required"))
 	}
 
 	labels, _, err := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{
@@ -172,7 +172,7 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Label Distribution — %s (%d labels)\n\n", projectID, len(labels))
+	fmt.Fprintf(&b, "# Label Distribution — %s (%d labels)\n\n", toolutil.EscapeMdHeading(projectID), len(labels))
 
 	if len(labels) == 0 {
 		b.WriteString("No labels found in this project.\n")
@@ -224,7 +224,7 @@ func handleLabelDistribution(ctx context.Context, client *gitlabclient.Client, r
 
 // registerGroupMilestoneProgressPrompt registers the group_milestone_progress prompt.
 func registerGroupMilestoneProgressPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "group_milestone_progress",
 		Title:       toolutil.TitleFromName("group_milestone_progress"),
 		Description: "Track milestone progress across all projects in a group. Shows issue/MR completion per milestone with progress bars.",
@@ -241,7 +241,7 @@ func registerGroupMilestoneProgressPrompt(server *mcp.Server, client *gitlabclie
 func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
-		return nil, errors.New("group_milestone_progress: group_id is required")
+		return nil, toolutil.InvalidParams(errors.New("group_milestone_progress: group_id is required"))
 	}
 
 	milestones, _, err := client.GL().GroupMilestones.ListGroupMilestones(groupID, &gl.ListGroupMilestonesOptions{
@@ -253,7 +253,7 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Group Milestone Progress — %s\n\n", groupID)
+	fmt.Fprintf(&b, "# Group Milestone Progress — %s\n\n", toolutil.EscapeMdHeading(groupID))
 
 	if len(milestones) == 0 {
 		b.WriteString("No active group milestones found.\n")
@@ -261,7 +261,7 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 	}
 
 	for _, ms := range milestones {
-		fmt.Fprintf(&b, "## %s\n\n", ms.Title)
+		fmt.Fprintf(&b, "## %s\n\n", toolutil.EscapeMdHeading(ms.Title))
 
 		issues, _, _ := client.GL().GroupMilestones.GetGroupMilestoneIssues(groupID, ms.ID, &gl.GetGroupMilestoneIssuesOptions{
 			PerPage: maxListItems,
@@ -293,7 +293,7 @@ func handleGroupMilestoneProgress(ctx context.Context, client *gitlabclient.Clie
 
 // registerProjectContributorsPrompt registers the project_contributors prompt.
 func registerProjectContributorsPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "project_contributors",
 		Title:       toolutil.TitleFromName("project_contributors"),
 		Description: "Rank project contributors by commits, additions, and deletions. Uses the repository contributors API for accurate stats.",
@@ -310,7 +310,7 @@ func registerProjectContributorsPrompt(server *mcp.Server, client *gitlabclient.
 func handleProjectContributors(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("project_contributors: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("project_contributors: project_id is required"))
 	}
 
 	contributors, _, err := client.GL().Repositories.Contributors(projectID, &gl.ListContributorsOptions{
@@ -321,7 +321,7 @@ func handleProjectContributors(ctx context.Context, client *gitlabclient.Client,
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Contributors — %s (%d contributors)\n\n", projectID, len(contributors))
+	fmt.Fprintf(&b, "# Project Contributors — %s (%d contributors)\n\n", toolutil.EscapeMdHeading(projectID), len(contributors))
 
 	if len(contributors) == 0 {
 		b.WriteString("No contributors found.\n")

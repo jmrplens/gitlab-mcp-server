@@ -35,7 +35,7 @@ func registerAnalyticsPrompts(server *mcp.Server, client *gitlabclient.Client) {
 
 // registerMergeVelocityPrompt registers the merge_velocity prompt.
 func registerMergeVelocityPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "merge_velocity",
 		Title:       toolutil.TitleFromName("merge_velocity"),
 		Description: "Analyze MR throughput metrics for a project. Shows merge rate, average time-to-merge, and daily merged count chart. Ideal for tracking team delivery pace.",
@@ -53,7 +53,7 @@ func registerMergeVelocityPrompt(server *mcp.Server, client *gitlabclient.Client
 func handleMergeVelocity(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("merge_velocity: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("merge_velocity: project_id is required"))
 	}
 	days := parseDays(getArgOr(req.Params.Arguments, argDays, "30"), 30)
 	since := sinceDate(days)
@@ -68,7 +68,7 @@ func handleMergeVelocity(ctx context.Context, client *gitlabclient.Client, req *
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Merge Velocity — %s (last %d days)\n\n", projectID, days)
+	fmt.Fprintf(&b, "# Merge Velocity — %s (last %d days)\n\n", toolutil.EscapeMdHeading(projectID), days)
 
 	if len(mrs) == 0 {
 		b.WriteString("No merged MRs found in the period.\n")
@@ -142,7 +142,7 @@ func writeDailyMergeChart(b *strings.Builder, mrs []*gl.BasicMergeRequest) {
 
 // registerReleaseReadinessPrompt registers the release_readiness prompt.
 func registerReleaseReadinessPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "release_readiness",
 		Title:       toolutil.TitleFromName("release_readiness"),
 		Description: "Check readiness of a release branch by analyzing open MRs targeting it, draft/conflict counts, and unresolved discussion threads.",
@@ -160,7 +160,7 @@ func registerReleaseReadinessPrompt(server *mcp.Server, client *gitlabclient.Cli
 func handleReleaseReadiness(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("release_readiness: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("release_readiness: project_id is required"))
 	}
 	branch := getArgOr(req.Params.Arguments, "branch", "main")
 
@@ -174,7 +174,7 @@ func handleReleaseReadiness(ctx context.Context, client *gitlabclient.Client, re
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Release Readiness — %s → %s\n\n", projectID, branch)
+	fmt.Fprintf(&b, "# Release Readiness — %s → %s\n\n", toolutil.EscapeMdHeading(projectID), toolutil.EscapeMdHeading(branch))
 
 	if len(mrs) == 0 {
 		b.WriteString("No open MRs targeting this branch. The branch appears ready for release.\n")
@@ -247,7 +247,7 @@ func readinessLabel(blockers int) string {
 
 // registerReleaseCadencePrompt registers the release_cadence prompt.
 func registerReleaseCadencePrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "release_cadence",
 		Title:       toolutil.TitleFromName("release_cadence"),
 		Description: "Analyze release frequency for a project. Shows time between releases, average cadence, and release history chart.",
@@ -265,7 +265,7 @@ func registerReleaseCadencePrompt(server *mcp.Server, client *gitlabclient.Clien
 func handleReleaseCadence(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	projectID := req.Params.Arguments[argProjectID]
 	if projectID == "" {
-		return nil, errors.New("release_cadence: project_id is required")
+		return nil, toolutil.InvalidParams(errors.New("release_cadence: project_id is required"))
 	}
 	days := parseDays(getArgOr(req.Params.Arguments, argDays, "90"), 90)
 	since := sinceDate(days)
@@ -280,7 +280,7 @@ func handleReleaseCadence(ctx context.Context, client *gitlabclient.Client, req 
 	filtered := filterRecentReleases(releases, since)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Release Cadence — %s (last %d days)\n\n", projectID, days)
+	fmt.Fprintf(&b, "# Release Cadence — %s (last %d days)\n\n", toolutil.EscapeMdHeading(projectID), days)
 
 	if len(filtered) == 0 {
 		b.WriteString("No releases found in the analysis period.\n")
@@ -363,7 +363,7 @@ func releaseDate(r *gl.Release) time.Time {
 
 // registerWeeklyTeamRecapPrompt registers the weekly_team_recap prompt.
 func registerWeeklyTeamRecapPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "weekly_team_recap",
 		Title:       toolutil.TitleFromName("weekly_team_recap"),
 		Description: "Generate a comprehensive weekly recap for a team. Combines merged MRs, open MRs, issues activity, and events into a single summary with Mermaid charts.",
@@ -381,7 +381,7 @@ func registerWeeklyTeamRecapPrompt(server *mcp.Server, client *gitlabclient.Clie
 func handleWeeklyTeamRecap(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
-		return nil, errors.New("weekly_team_recap: group_id is required")
+		return nil, toolutil.InvalidParams(errors.New("weekly_team_recap: group_id is required"))
 	}
 	days := parseDays(getArgOr(req.Params.Arguments, argDays, "7"), 7)
 	since := sinceDate(days)
@@ -409,7 +409,7 @@ func handleWeeklyTeamRecap(ctx context.Context, client *gitlabclient.Client, req
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Weekly Team Recap — %s (last %d days)\n\n", groupID, days)
+	fmt.Fprintf(&b, "# Weekly Team Recap — %s (last %d days)\n\n", toolutil.EscapeMdHeading(groupID), days)
 
 	// Summary
 	b.WriteString(mdSummaryHeader)
@@ -424,7 +424,7 @@ func handleWeeklyTeamRecap(ctx context.Context, client *gitlabclient.Client, req
 		b.WriteString("## Merged MRs\n\n")
 		byProject := groupMRsByProject(mergedMRs)
 		for _, k := range sortedKeys(byProject) {
-			fmt.Fprintf(&b, "### %s\n\n", k)
+			fmt.Fprintf(&b, "### %s\n\n", toolutil.EscapeMdHeading(k))
 			writeMRTable(&b, byProject[k])
 			b.WriteString("\n")
 		}

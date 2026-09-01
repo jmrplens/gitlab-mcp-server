@@ -58,30 +58,62 @@ func (r *RateLimiter) allow() bool {
 	return r.limiter.Allow()
 }
 
-// AttachRateLimit registers a receiving middleware that rejects `tools/call`
-// requests when the bucket is empty. Rejection is reported as an MCP tool
-// error result (IsError: true) rather than a JSON-RPC error so the LLM
-// receives a structured, retryable diagnostic and the surrounding agent
-// loop can choose to back off and retry.
+// completionBurstFactor sizes the completion bucket relative to the tool-call
+// one.
 //
-// All other methods (initialize, tools/list, resources/*, prompts/*) bypass
-// the limiter — only tool execution is gated. If limiter is nil, this
-// function is a no-op.
+// Completion is the highest-frequency method a client issues: an editor calls
+// it per keystroke, so a bucket tuned for tool execution would refuse ordinary
+// typing. The specification asks for both ("Servers SHOULD ... Rate limit
+// completion requests", and under Security, "Implementations MUST ... Implement
+// appropriate rate limiting"), so the answer is a looser bucket rather than the
+// same one or none at all.
+const completionBurstFactor = 10
+
+// AttachRateLimit registers a receiving middleware that gates `tools/call` and
+// `completion/complete` when their buckets are empty.
+//
+// The two are gated differently because they fail differently. A refused tool
+// call is reported as an MCP tool error result (IsError: true) rather than a
+// JSON-RPC error, so the model receives a structured, retryable diagnostic and
+// the agent loop can back off. A refused completion returns an empty completion
+// instead: the documented contract for this surface is that autocomplete is
+// never blocked, and an error in a completion popup is worse than no
+// suggestions.
+//
+// Every other method (initialize, tools/list, resources/*, prompts/*) bypasses
+// the limiter. If limiter is nil, this function is a no-op.
 func AttachRateLimit(server *mcp.Server, limiter *RateLimiter) {
 	if server == nil || limiter == nil {
 		return
 	}
+	completions := limiter.scaled(completionBurstFactor)
 	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
-			if method != "tools/call" {
-				return next(ctx, method, req)
-			}
-			if !limiter.allow() {
-				return rateLimitedResult(req), nil
+			switch method {
+			case "tools/call":
+				if !limiter.allow() {
+					return rateLimitedResult(req), nil
+				}
+			case "completion/complete":
+				if !completions.allow() {
+					return &mcp.CompleteResult{Completion: mcp.CompletionResultDetails{Values: []string{}}}, nil
+				}
 			}
 			return next(ctx, method, req)
 		}
 	})
+}
+
+// scaled returns a limiter with the same rate and burst multiplied by factor,
+// for a method that legitimately arrives far more often than a tool call.
+// A nil receiver stays nil, which the middleware treats as disabled.
+func (r *RateLimiter) scaled(factor int) *RateLimiter {
+	if r == nil || r.limiter == nil || factor < 1 {
+		return r
+	}
+	return &RateLimiter{
+		limiter: rate.NewLimiter(r.limiter.Limit()*rate.Limit(factor), r.limiter.Burst()*factor),
+	}
 }
 
 // rateLimitedResult produces an MCP CallToolResult flagged as an error so

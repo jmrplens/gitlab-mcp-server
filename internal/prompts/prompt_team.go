@@ -44,7 +44,7 @@ func registerTeamPrompts(server *mcp.Server, client *gitlabclient.Client) {
 
 // registerUserActivityReportPrompt registers the user_activity_report prompt.
 func registerUserActivityReportPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "user_activity_report",
 		Title:       toolutil.TitleFromName("user_activity_report"),
 		Description: "Generate a detailed activity report for a specific user: contribution events, merged MRs, reviewed MRs, daily activity chart. Designed for managers to review team member productivity.",
@@ -62,7 +62,7 @@ func registerUserActivityReportPrompt(server *mcp.Server, client *gitlabclient.C
 func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	username := req.Params.Arguments[argUsername]
 	if username == "" {
-		return nil, errors.New("user_activity_report: username is required")
+		return nil, toolutil.InvalidParams(errors.New("user_activity_report: username is required"))
 	}
 
 	resolvedUser, userID, isSelf, err := resolveUser(ctx, client, username)
@@ -93,7 +93,7 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Activity Report for @%s (last %d days)\n\n", resolvedUser, days)
+	fmt.Fprintf(&b, "# Activity Report for @%s (last %d days)\n\n", toolutil.EscapeMdHeading(resolvedUser), days)
 
 	// Event breakdown
 	b.WriteString("## Contribution Events\n\n")
@@ -116,7 +116,7 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 	} else {
 		grouped := groupMRsByProject(mergedMRs)
 		for _, proj := range sortedKeys(grouped) {
-			fmt.Fprintf(&b, "### %s\n\n", proj)
+			fmt.Fprintf(&b, "### %s\n\n", toolutil.EscapeMdHeading(proj))
 			writeMRTable(&b, grouped[proj])
 			b.WriteString("\n")
 		}
@@ -129,7 +129,7 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 	} else {
 		grouped := groupMRsByProject(reviewMRs)
 		for _, proj := range sortedKeys(grouped) {
-			fmt.Fprintf(&b, "### %s\n\n", proj)
+			fmt.Fprintf(&b, "### %s\n\n", toolutil.EscapeMdHeading(proj))
 			writeMRTable(&b, grouped[proj])
 			b.WriteString("\n")
 		}
@@ -163,7 +163,7 @@ func handleUserActivityReport(ctx context.Context, client *gitlabclient.Client, 
 
 // registerTeamOverviewPrompt registers the team_overview prompt.
 func registerTeamOverviewPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "team_overview",
 		Title:       toolutil.TitleFromName("team_overview"),
 		Description: "Generate a team dashboard showing all group members with their open MR counts and recently merged MRs. Includes a workload distribution pie chart. Requires a GitLab group ID.",
@@ -181,7 +181,7 @@ func registerTeamOverviewPrompt(server *mcp.Server, client *gitlabclient.Client)
 func handleTeamOverview(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
-		return nil, errors.New("team_overview: group_id is required")
+		return nil, toolutil.InvalidParams(errors.New("team_overview: group_id is required"))
 	}
 	days := parseDays(getArgOr(req.Params.Arguments, argDays, "7"), 7)
 	since := sinceDate(days)
@@ -210,7 +210,7 @@ func handleTeamOverview(ctx context.Context, client *gitlabclient.Client, req *m
 	stats := buildTeamOverviewStats(members, openMRs, mergedMRs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Team Overview — Group %s (last %d days)\n\n", groupID, days)
+	fmt.Fprintf(&b, "# Team Overview — Group %s (last %d days)\n\n", toolutil.EscapeMdHeading(groupID), days)
 	writeTeamOverviewSummary(&b, stats, len(openMRs), len(mergedMRs))
 	writeTeamOverviewWorkload(&b, stats)
 	writeTeamOverviewChart(&b, stats)
@@ -287,7 +287,7 @@ func writeTeamOverviewChart(b *strings.Builder, stats map[string]*teamOverviewMe
 
 // registerGroupMRDashboardPrompt registers the group_mr_dashboard prompt.
 func registerGroupMRDashboardPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "group_mr_dashboard",
 		Title:       toolutil.TitleFromName("group_mr_dashboard"),
 		Description: "List merge requests across a GitLab group with optional state and target branch filters. Shows MRs grouped by project with blocker and readiness summary statistics.",
@@ -306,7 +306,7 @@ func registerGroupMRDashboardPrompt(server *mcp.Server, client *gitlabclient.Cli
 func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
-		return nil, errors.New("group_mr_dashboard: group_id is required")
+		return nil, toolutil.InvalidParams(errors.New("group_mr_dashboard: group_id is required"))
 	}
 
 	state := getArgOr(req.Params.Arguments, argState, "opened")
@@ -328,7 +328,7 @@ func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, re
 	if opts.TargetBranch != nil {
 		branchInfo = " targeting " + *opts.TargetBranch
 	}
-	fmt.Fprintf(&b, "# Group MR Dashboard — %s (%d %s MRs%s)\n\n", groupID, len(mrs), state, branchInfo)
+	fmt.Fprintf(&b, "# Group MR Dashboard — %s (%d %s MRs%s)\n\n", toolutil.EscapeMdHeading(groupID), len(mrs), state, branchInfo)
 
 	if len(mrs) == 0 {
 		b.WriteString("No merge requests found matching the criteria.\n")
@@ -356,7 +356,7 @@ func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, re
 	grouped := groupMRsByProject(mrs)
 	for _, proj := range sortedKeys(grouped) {
 		projMRs := grouped[proj]
-		fmt.Fprintf(&b, "## %s (%d MRs)\n\n", proj, len(projMRs))
+		fmt.Fprintf(&b, "## %s (%d MRs)\n\n", toolutil.EscapeMdHeading(proj), len(projMRs))
 		writeMRTable(&b, projMRs)
 		b.WriteString("\n")
 	}
@@ -368,7 +368,7 @@ func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, re
 
 // registerReviewerWorkloadPrompt registers the reviewer_workload prompt.
 func registerReviewerWorkloadPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "reviewer_workload",
 		Title:       toolutil.TitleFromName("reviewer_workload"),
 		Description: "Analyze review distribution across group members. Shows how many open MRs each member is reviewing and identifies imbalances. Useful for managers to ensure fair review distribution.",
@@ -385,7 +385,7 @@ func registerReviewerWorkloadPrompt(server *mcp.Server, client *gitlabclient.Cli
 func handleReviewerWorkload(ctx context.Context, client *gitlabclient.Client, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	groupID := req.Params.Arguments[argGroupID]
 	if groupID == "" {
-		return nil, errors.New("reviewer_workload: group_id is required")
+		return nil, toolutil.InvalidParams(errors.New("reviewer_workload: group_id is required"))
 	}
 
 	// Group members
@@ -405,7 +405,7 @@ func handleReviewerWorkload(ctx context.Context, client *gitlabclient.Client, re
 	rStats := buildReviewerWorkloadStats(members, openMRs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Reviewer Workload — Group %s\n\n", groupID)
+	fmt.Fprintf(&b, "# Reviewer Workload — Group %s\n\n", toolutil.EscapeMdHeading(groupID))
 	activeReviewers := writeReviewerWorkloadSummary(&b, rStats, len(openMRs))
 	writeReviewerWorkloadTable(&b, rStats)
 	writeReviewerWorkloadChart(&b, rStats, activeReviewers)

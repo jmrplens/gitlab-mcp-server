@@ -319,6 +319,23 @@ func (s *server) do(t *testing.T, r request) response {
 // harness can send the Mcp-Method header a real client sends. A body that is
 // not JSON-RPC yields "", leaving the header unset — which is itself a case
 // some tests want.
+// jsonRPCPayload returns the JSON-RPC message from a response body, whether it
+// arrived as a bare JSON document or inside an SSE frame.
+//
+// The transport decides which: a refusal is written as JSON, while a successful
+// call is streamed as text/event-stream unless --json-response is set. A test
+// that unmarshals the body directly therefore works only for the failure cases,
+// which is why the successful paths went untested for so long.
+func jsonRPCPayload(t *testing.T, body string) string {
+	t.Helper()
+	for line := range strings.SplitSeq(body, "\n") {
+		if after, ok := strings.CutPrefix(line, "data: "); ok {
+			return strings.TrimSpace(after)
+		}
+	}
+	return body
+}
+
 func jsonRPCMethod(body string) string {
 	var msg struct {
 		Method string `json:"method"`

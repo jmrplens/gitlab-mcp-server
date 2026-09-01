@@ -48,13 +48,16 @@ const (
 
 // CancelledResult / UnsupportedResult tests.
 
-// TestCancelledResult verifies the CancelledResult handler.
-// The test exercises the GET path of the underlying GitLab API call.
-// It asserts that a canceled context aborts the call without contacting GitLab.
+// TestCancelledResult verifies the result a cancelled interactive flow returns.
+//
+// It is an error result: the tool did not run, so it produced none of the
+// output its schema declares, and a tool declaring an outputSchema must return
+// structured results conforming to it. The message is what tells the model the
+// user canceled, so it is asserted below rather than left to the flag.
 func TestCancelledResult(t *testing.T) {
 	result := CancelledResult("Operation canceled by user.")
-	if result.IsError {
-		t.Error("CancelledResult.IsError = true, want false")
+	if !result.IsError {
+		t.Error("CancelledResult.IsError = false; a tool declaring an outputSchema returned neither structured content nor an error")
 	}
 	if len(result.Content) != 1 {
 		t.Fatalf("CancelledResult content len = %d, want 1", len(result.Content))
@@ -1880,5 +1883,66 @@ func TestProjectCreate_FinalConfirmCancel(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "project creation canceled") {
 		t.Errorf("error = %q, want 'project creation canceled' wrapper", err)
+	}
+}
+
+// TestResultsForOperationsThatDidNotRun_AreErrorResults is the gate for a
+// specification clause that is easy to break one constructor at a time.
+//
+// The 2026-07-28 tools page is unconditional: "If an output schema is provided:
+// Servers MUST provide structured results that conform to this schema." Most of
+// this server's tools declare one, and several paths return a result without
+// executing the operation at all: a safe-mode preview, a declined confirmation,
+// a client that cannot elicit. None of those can produce conforming structured
+// content, because the individual schemas are additionalProperties:false with
+// required lists, so the only conforming answer is an error result.
+//
+// Each of these was written separately and they had drifted: the
+// unsupported-client result carried IsError, both cancellation results did not,
+// and the safe-mode preview did not. A tool declaring an outputSchema therefore
+// returned neither structured content nor an error, which is the violation.
+//
+// This gate is over the constructors rather than over the ~1065 registered
+// tools, because reaching those needs a GitLab. A new "we did not run it" path
+// belongs in this table.
+func TestResultsForOperationsThatDidNotRun_AreErrorResults(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		result *mcp.CallToolResult
+	}{
+		{
+			name:   "confirmation declined",
+			result: toolutil.CancelledResult("Operation canceled by user."),
+		},
+		{
+			name:   "interactive flow cancelled",
+			result: CancelledResult("Issue creation canceled."),
+		},
+		{
+			name:   "client cannot elicit",
+			result: UnsupportedResult("gitlab_interactive_create_issue"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if tt.result == nil {
+				t.Fatal("result is nil")
+			}
+			if tt.result.StructuredContent != nil {
+				// Also acceptable, but then it has to conform, which these
+				// cannot: they carry no fields the declared schemas require.
+				t.Fatalf("result carries structured content that cannot conform to a required-field schema: %+v", tt.result.StructuredContent)
+			}
+			if !tt.result.IsError {
+				t.Error("the operation did not run, so a tool declaring an outputSchema returned neither structured content nor an error")
+			}
+			if len(tt.result.Content) == 0 {
+				t.Error("an error result still has to say what happened")
+			}
+		})
 	}
 }

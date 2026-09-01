@@ -361,11 +361,17 @@ func ConfirmFailedResult(err error) *mcp.CallToolResult {
 	}
 }
 
-// CancelledResult returns a non-error tool result indicating the user canceled.
+// CancelledResult returns an error tool result indicating the user canceled.
+//
+// It is an error result for the same reason the unsupported-client one beside
+// it is: the operation did not run, so it produced none of the output its
+// schema describes, and a tool declaring an outputSchema must return structured
+// results conforming to it. A cancellation conforms to nothing.
 func CancelledResult(message string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: message},
 		},
+		IsError: true,
 	}
 }

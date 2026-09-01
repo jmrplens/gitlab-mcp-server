@@ -409,9 +409,16 @@ const (
 	timeFormatISO    = "2006-01-02T15:04:05Z"
 )
 
-// wrapErr enriches a GitLab API error with HTTP status classification.
+// wrapErr enriches a GitLab API error with HTTP status classification, and
+// marks it as a JSON-RPC internal error.
+//
+// Without the code it reached the client as 0, which is not an error code. The
+// cause stays wrapped, so toolutil.IsHTTPStatus still classifies it and
+// subscriptions.TranslateReadError still recognizes a 401/403/404; and a
+// resource that is genuinely absent keeps its own code, because those handlers
+// return mcp.ResourceNotFoundError directly rather than passing through here.
 func wrapErr(msg string, err error) error {
-	return fmt.Errorf("%s: %s (%w)", msg, toolutil.ClassifyError(err), err)
+	return toolutil.InternalError(fmt.Errorf("%s: %s (%w)", msg, toolutil.ClassifyError(err), err))
 }
 
 // Register adds every GitLab-backed MCP resource to the given server.

@@ -30,7 +30,7 @@ func registerGitWorkflowPrompts(server *mcp.Server, client *gitlabclient.Client)
 
 // registerAuditCommitHygienePrompt registers the audit_commit_hygiene prompt.
 func registerAuditCommitHygienePrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "audit_commit_hygiene",
 		Title:       toolutil.TitleFromName("audit_commit_hygiene"),
 		Description: "Audit commit message quality between two refs. Scores Conventional Commit usage, merge commits, breaking-change markers, body/detail quality, and linked work references for release and contribution readiness.",
@@ -50,7 +50,7 @@ func handleAuditCommitHygiene(ctx context.Context, client *gitlabclient.Client, 
 	projectID := req.Params.Arguments[argProjectID]
 	from := req.Params.Arguments["from"]
 	if projectID == "" || from == "" {
-		return nil, fmt.Errorf("%s and from are required", argProjectID)
+		return nil, toolutil.InvalidParams(fmt.Errorf("%s and from are required", argProjectID))
 	}
 	to := getArgOr(req.Params.Arguments, "to", "HEAD")
 
@@ -63,7 +63,7 @@ func handleAuditCommitHygiene(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Commit Hygiene Audit: %s → %s\n\n", from, to)
+	fmt.Fprintf(&b, "# Commit Hygiene Audit: %s → %s\n\n", toolutil.EscapeMdHeading(from), toolutil.EscapeMdHeading(to))
 
 	if comparison.CompareSameRef || len(comparison.Commits) == 0 {
 		b.WriteString("No commits found between these refs.\n")
@@ -95,7 +95,7 @@ func handleAuditCommitHygiene(ctx context.Context, client *gitlabclient.Client, 
 
 // registerMRDescriptionQualityPrompt registers the mr_description_quality prompt.
 func registerMRDescriptionQualityPrompt(server *mcp.Server, client *gitlabclient.Client) {
-	server.AddPrompt(&mcp.Prompt{
+	addPrompt(server, &mcp.Prompt{
 		Name:        "mr_description_quality",
 		Title:       toolutil.TitleFromName("mr_description_quality"),
 		Description: "Score a merge request description for reviewer readiness. Checks context, linked work, test evidence, rollout/risk notes, checklists, and whether changed files suggest missing screenshots or migration notes.",
@@ -114,12 +114,12 @@ func handleMRDescriptionQuality(ctx context.Context, client *gitlabclient.Client
 	projectID := req.Params.Arguments[argProjectID]
 	mrIID := req.Params.Arguments[argMRIID]
 	if projectID == "" || mrIID == "" {
-		return nil, fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID)
+		return nil, toolutil.InvalidParams(fmt.Errorf(fmtTwoArgsRequired, argProjectID, argMRIID))
 	}
 
 	iid := parseIID(mrIID)
 	if iid == 0 {
-		return nil, errors.New("merge_request_iid must be a positive integer")
+		return nil, toolutil.InvalidParams(errors.New("merge_request_iid must be a positive integer"))
 	}
 
 	mr, _, err := client.GL().MergeRequests.GetMergeRequest(projectID, iid, &gl.GetMergeRequestsOptions{}, gl.WithContext(ctx))
@@ -135,7 +135,7 @@ func handleMRDescriptionQuality(ctx context.Context, client *gitlabclient.Client
 	metrics := computeDiffMetrics(diffs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MR Description Quality: !%d — %s\n\n", mr.IID, mr.Title)
+	fmt.Fprintf(&b, "# MR Description Quality: !%d — %s\n\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
 	fmt.Fprintf(&b, "**Branch**: %s → %s\n", mr.SourceBranch, mr.TargetBranch)
 	fmt.Fprintf(&b, "**Description length**: %d characters\n", len(strings.TrimSpace(mr.Description)))
 	fmt.Fprintf(&b, "**Files changed**: %d | **Tests changed**: %d | **Docs changed**: %d | **Sensitive files touched**: %d\n\n", len(diffs), countMatchingDiffs(diffs, isTestPath), countMatchingDiffs(diffs, isDocPath), metrics.sensitiveFiles)

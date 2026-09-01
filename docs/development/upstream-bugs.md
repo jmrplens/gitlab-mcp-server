@@ -61,6 +61,7 @@ readable without opening the tracker:
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | No | No | No | No | Yes |
 | 9 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
+| 10 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
 
 States verified against the upstream trackers on 2026-08-29.
 
@@ -227,6 +228,42 @@ the first read rather than after.
 
 **How we found it**: writing `TestSSEKeepAlive_IdleStreamKeepsBytesOnTheWire`.
 The test hung instead of failing, which is how the header-flush half surfaced.
+
+## OpenAI Codex (`openai/codex`)
+
+### A non-integer annotation priority breaks a tool call
+
+- **Reported**: yes,
+  [openai/codex#38979](https://github.com/openai/codex/issues/38979).
+- **In review**: yes, the issue is open and labelled `bug`, `mcp`, `CLI`,
+  `tool-calls`. No fix has been proposed upstream.
+- **Merged**: no.
+- **Blocking**: it was. Every tool call failed with "Unexpected response type",
+  so the server was unusable from Codex rather than degraded.
+- **Workaround**: yes, and it is load-bearing. `internal/clientcompat` detects
+  Codex from `clientInfo` and rounds annotation priorities to 0 or 1, which is
+  spec-legal and parseable by both. `CLIENT_COMPAT=off` disables it. Retire it
+  only once the fixed Codex is widely deployed, not merely released: the
+  affected build ships inside ChatGPT.app, so users do not choose their version.
+
+**What**: the Codex builds bundled with ChatGPT.app reject any MCP result whose
+`annotations.priority` is a non-integer float. `0.6` fails; `1` or an
+audience-only annotation passes. The specification places no such restriction,
+and crates.io `rmcp` 3.0.0 parses floats correctly (`Option<f32>`), so the defect
+is in the patched bundle rather than in the library.
+
+**How we found it**: every tool call from Codex failed with "Unexpected response
+type" and nothing else. Bisected with a Python fake server replaying canned
+`CallToolResult` values until the float was the only variable left.
+
+**Not the cause, though it looks like it**: unknown fields. Neither Codex
+generation used `deny_unknown_fields`, and that hypothesis cost a day before it
+was ruled out.
+
+**Related, and deliberately not worked around**:
+[openai/codex#10334](https://github.com/openai/codex/issues/10334) — Codex sends
+only `structuredContent` to its model when both are present, dropping the
+markdown. We keep emitting both.
 
 ## Other
 

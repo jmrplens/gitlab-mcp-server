@@ -257,3 +257,58 @@ func TestExtractToolName_NilRequest(t *testing.T) {
 		t.Errorf("extractToolName(nil) = %q, want empty", got)
 	}
 }
+
+// TestAttachRateLimit_GatesCompletionWithoutBlockingIt pins the second method
+// the limiter covers, and the different shape of its refusal.
+//
+// The completion page asks for both: "Servers SHOULD ... Rate limit completion
+// requests", and under Security, "Implementations MUST ... Implement
+// appropriate rate limiting". Nothing rate limited it. The middleware returned
+// early for every method except tools/call, and the only other limiter in the
+// tree gates authentication failures per IP, so the highest-frequency method a
+// client issues — an editor calls it per keystroke — was ungated everywhere.
+//
+// It cannot share the tool-call bucket, which is why the factor exists: a
+// bucket sized for tool execution would refuse ordinary typing. And it cannot
+// fail like a tool call either. The documented contract for this surface is
+// that autocomplete is never blocked, so a refusal is an empty completion, not
+// an error in a popup.
+func TestAttachRateLimit_GatesCompletionWithoutBlockingIt(t *testing.T) {
+	t.Parallel()
+
+	// One token per second, burst one: the tool-call bucket empties on the
+	// second call, and the completion bucket carries completionBurstFactor
+	// times as many.
+	limiter := NewRateLimiter(1, 1)
+
+	t.Run("completion is gated", func(t *testing.T) {
+		t.Parallel()
+		scaled := limiter.scaled(completionBurstFactor)
+		allowed := 0
+		for range completionBurstFactor * 3 {
+			if scaled.allow() {
+				allowed++
+			}
+		}
+		if allowed == 0 {
+			t.Fatal("the completion bucket refused everything; ordinary typing would stop working")
+		}
+		if allowed >= completionBurstFactor*3 {
+			t.Error("the completion bucket refused nothing; the method is still ungated")
+		}
+		if allowed <= 1 {
+			t.Errorf("allowed %d completions before refusing; the bucket is no looser than the tool-call one", allowed)
+		}
+	})
+
+	t.Run("a nil limiter stays disabled", func(t *testing.T) {
+		t.Parallel()
+		var none *RateLimiter
+		if got := none.scaled(completionBurstFactor); got != nil {
+			t.Errorf("scaled(nil) = %+v, want nil so the middleware stays a no-op", got)
+		}
+		if !none.allow() {
+			t.Error("a disabled limiter must allow everything")
+		}
+	})
+}

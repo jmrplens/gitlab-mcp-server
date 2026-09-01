@@ -1,5 +1,5 @@
 // action_specs_test.go validates that catalog-backed interactive tools translate
-// elicitation cancellation into non-error CancelledResult responses.
+// elicitation cancellation into CancelledResult responses.
 package elicitationtools
 
 import (
@@ -23,7 +23,7 @@ type roundTripCancelCase struct {
 
 // runRoundTripCancelCase calls the named catalog-backed MCP tool through an
 // in-memory client whose elicitation handler immediately cancels. The tool
-// route translates the wrapped ErrCancelled into a non-error CancelledResult.
+// route translates the wrapped ErrCancelled into a CancelledResult.
 func runRoundTripCancelCase(t *testing.T, tc roundTripCancelCase) {
 	t.Helper()
 
@@ -71,8 +71,20 @@ func runRoundTripCancelCase(t *testing.T, tc roundTripCancelCase) {
 	if res == nil {
 		t.Fatalf("nil result for %s", tc.tool)
 	}
-	if res.IsError {
-		t.Errorf("%s should return IsError=false (cancellation is not an error)", tc.tool)
+	// A cancellation IS an error result, which reverses an earlier decision
+	// here. The old reading was defensible on its own terms: the user chose not
+	// to proceed, so nothing went wrong. It is not compatible with declaring an
+	// outputSchema, which these tools do. "If an output schema is provided:
+	// Servers MUST provide structured results that conform to this schema", and
+	// a cancellation conforms to nothing, so a plain success would be a
+	// schema-carrying result with no structured content in it. The dynamic
+	// surface already answered its own unconfirmed-destructive guard this way,
+	// so this also settles a disagreement between the two surfaces.
+	//
+	// What keeps the model from retrying in a loop is the message, which says
+	// the user canceled, not the flag.
+	if !res.IsError {
+		t.Errorf("%s should return IsError=true: the tool did not run, so it produced none of the output its schema declares", tc.tool)
 	}
 
 	body := contentText(res)
@@ -131,7 +143,7 @@ func TestElicitationRoute_UnmarshalError(t *testing.T) {
 }
 
 // TestCatalogSurface_IssueCancelRoundTrip verifies that the catalog-backed
-// gitlab_interactive_issue_create tool returns a non-error CancelledResult
+// gitlab_interactive_issue_create tool returns a CancelledResult
 // when elicitation is cancelled mid-flow.
 func TestCatalogSurface_IssueCancelRoundTrip(t *testing.T) {
 	runRoundTripCancelCase(t, roundTripCancelCase{

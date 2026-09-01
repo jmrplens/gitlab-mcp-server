@@ -71,8 +71,13 @@ func TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview(t *testing.T) {
 	if n := mutatingCalls.Load(); n != 0 {
 		t.Errorf("mutating handler was called %d time(s) in safe mode", n)
 	}
-	if result.IsError {
-		t.Fatal("safe mode preview should not be an error")
+	// The preview IS an error result. The tool did not run, so it produced none
+	// of the output its schema describes, and a tool that declares an
+	// outputSchema must return structured results conforming to it. A plain
+	// success carrying only prose would violate that on every mutating tool at
+	// once. The preview payload is still the text content, asserted below.
+	if !result.IsError {
+		t.Fatal("safe mode intercepted the call without marking the result as an error, so a tool declaring an outputSchema returned neither structured content nor an error")
 	}
 
 	var preview SafeModePreview
