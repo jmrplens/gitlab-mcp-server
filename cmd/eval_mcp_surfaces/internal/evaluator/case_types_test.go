@@ -144,26 +144,31 @@ func TestExpectedStepTypedAssertionFields_ProjectIntoTaskSteps(t *testing.T) {
 // CaseAssertionType constant introduced for the Phase 11 typed-assertion
 // rules is non-empty so the runtime can dispatch on each rule.
 //
-// The test enumerates the expected assertion type constants and asserts
-// none of them is the empty string. This protects downstream registries
-// from silently dropping a rule when a future rename leaves an empty
-// constant in place.
+// The test enumerates the expected assertion type constants, one subtest
+// per constant, and asserts none of them is the empty string. This protects
+// downstream registries from silently dropping a rule when a future rename
+// leaves an empty constant in place.
 func TestCaseAssertionTypes_CoverPhaseElevenRules(t *testing.T) {
-	want := []CaseAssertionType{
-		CaseAssertionExpectedAction,
-		CaseAssertionRequiredParams,
-		CaseAssertionOptionalParams,
-		CaseAssertionForbiddenParams,
-		CaseAssertionDestructiveConfirm,
-		CaseAssertionOutputContains,
-		CaseAssertionProducedValue,
-		CaseAssertionNoExtraToolCall,
-		CaseAssertionAllowRepair,
+	want := []struct {
+		name  string
+		value CaseAssertionType
+	}{
+		{"expected_action", CaseAssertionExpectedAction},
+		{"required_params", CaseAssertionRequiredParams},
+		{"optional_params", CaseAssertionOptionalParams},
+		{"forbidden_params", CaseAssertionForbiddenParams},
+		{"destructive_confirm", CaseAssertionDestructiveConfirm},
+		{"output_contains", CaseAssertionOutputContains},
+		{"produced_value", CaseAssertionProducedValue},
+		{"no_extra_tool_call", CaseAssertionNoExtraToolCall},
+		{"allow_repair", CaseAssertionAllowRepair},
 	}
-	for _, assertionType := range want {
-		if assertionType == "" {
-			t.Fatalf("empty assertion type in %v", want)
-		}
+	for _, tc := range want {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.value == "" {
+				t.Fatalf("empty assertion type in %v", want)
+			}
+		})
 	}
 }
 

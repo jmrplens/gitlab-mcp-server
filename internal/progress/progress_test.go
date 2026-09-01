@@ -421,14 +421,25 @@ func TestUpdate_MonotonicEnforcement(t *testing.T) {
 
 	mu.Lock()
 	defer mu.Unlock()
-	want := []float64{1, 2, 3}
+	// Each surviving notification is named after the handler's message for
+	// the update that produced it; the regressions between them must be gone.
+	want := []struct {
+		name     string
+		progress float64
+	}{
+		{"first", 1},
+		{"second", 2},
+		{"third", 3},
+	}
 	if len(received) != len(want) {
 		t.Fatalf("received = %v, want %v", received, want)
 	}
-	for i, v := range want {
-		if received[i] != v {
-			t.Errorf("received[%d] = %v, want %v (full=%v)", i, received[i], v, received)
-		}
+	for i, tc := range want {
+		t.Run(tc.name, func(t *testing.T) {
+			if received[i] != tc.progress {
+				t.Errorf("received[%d] = %v, want %v (full=%v)", i, received[i], tc.progress, received)
+			}
+		})
 	}
 }
 

@@ -777,15 +777,20 @@ func importServiceSpecsByTool(t *testing.T, specs []toolutil.ActionSpec) map[str
 // the shared Markdown registry (covering the registration lambdas that adapt
 // the pointer-returning handlers to value-type registry keys).
 func TestMarkdownRegistry_PointerOutputFormatters(t *testing.T) {
-	outputs := []any{
-		GitHubImportOutput{},
-		CancelledImportOutput{},
-		BitbucketCloudImportOutput{},
-		BitbucketServerImportOutput{},
+	outputs := []struct {
+		name string
+		out  any
+	}{
+		{"github", GitHubImportOutput{}},
+		{"cancelled", CancelledImportOutput{}},
+		{"bitbucket_cloud", BitbucketCloudImportOutput{}},
+		{"bitbucket_server", BitbucketServerImportOutput{}},
 	}
-	for _, out := range outputs {
-		if result := toolutil.MarkdownForResult(out); result == nil || len(result.Content) == 0 {
-			t.Errorf("MarkdownForResult(%T) returned empty result", out)
-		}
+	for _, tc := range outputs {
+		t.Run(tc.name, func(t *testing.T) {
+			if result := toolutil.MarkdownForResult(tc.out); result == nil || len(result.Content) == 0 {
+				t.Errorf("MarkdownForResult(%T) returned empty result", tc.out)
+			}
+		})
 	}
 }

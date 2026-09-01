@@ -616,21 +616,24 @@ func TestAuditProject_Full(t *testing.T) {
 // TestAccessLevelName covers AccessLevelName with table-driven subtests.
 func TestAccessLevelName(t *testing.T) {
 	tests := []struct {
+		name  string
 		level gl.AccessLevelValue
 		want  string
 	}{
-		{10, "Guest"},
-		{20, "Reporter"},
-		{30, "Developer"},
-		{40, "Maintainer"},
-		{50, "Owner"},
-		{99, "Unknown(99)"},
+		{"guest", 10, "Guest"},
+		{"reporter", 20, "Reporter"},
+		{"developer", 30, "Developer"},
+		{"maintainer", 40, "Maintainer"},
+		{"owner", 50, "Owner"},
+		{"unknown_level", 99, "Unknown(99)"},
 	}
 	for _, tc := range tests {
-		got := accessLevelName(tc.level)
-		if got != tc.want {
-			t.Errorf("accessLevelName(%d) = %q, want %q", tc.level, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got := accessLevelName(tc.level)
+			if got != tc.want {
+				t.Errorf("accessLevelName(%d) = %q, want %q", tc.level, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -647,20 +650,23 @@ func TestEmptyDash(t *testing.T) {
 // TestFormatBytes covers FormatBytes with table-driven subtests.
 func TestFormatBytes(t *testing.T) {
 	tests := []struct {
+		name  string
 		bytes int64
 		want  string
 	}{
-		{0, "0 B"},
-		{500, "500 B"},
-		{1024, "1.0 KB"},
-		{1048576, "1.0 MB"},
-		{1073741824, "1.0 GB"},
+		{"zero", 0, "0 B"},
+		{"below_one_kilobyte", 500, "500 B"},
+		{"one_kilobyte", 1024, "1.0 KB"},
+		{"one_megabyte", 1048576, "1.0 MB"},
+		{"one_gigabyte", 1073741824, "1.0 GB"},
 	}
 	for _, tc := range tests {
-		got := formatBytes(tc.bytes)
-		if got != tc.want {
-			t.Errorf("formatBytes(%d) = %q, want %q", tc.bytes, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got := formatBytes(tc.bytes)
+			if got != tc.want {
+				t.Errorf("formatBytes(%d) = %q, want %q", tc.bytes, got, tc.want)
+			}
+		})
 	}
 }
 

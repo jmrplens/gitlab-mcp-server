@@ -462,9 +462,11 @@ func TestResolve_AllOutputFields(t *testing.T) {
 		{"ExtractedPath", out.ExtractedPath, "group/subgroup/my-project"},
 	}
 	for _, c := range checks {
-		if c.got != c.want {
-			t.Errorf(fmtWantField, c.field, c.got, c.want)
-		}
+		t.Run(c.field, func(t *testing.T) {
+			if c.got != c.want {
+				t.Errorf(fmtWantField, c.field, c.got, c.want)
+			}
+		})
 	}
 }
 

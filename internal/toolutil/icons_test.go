@@ -170,17 +170,22 @@ func TestAllIcons_SizesAny(t *testing.T) {
 func TestAllIcons_WebPFallbackTheme(t *testing.T) {
 	for name, icons := range allIcons() {
 		t.Run(name, func(t *testing.T) {
-			light, dark := icons[1], icons[2]
-			if light.Theme != mcp.IconThemeLight {
-				t.Errorf("light entry Theme = %q, want %q", light.Theme, mcp.IconThemeLight)
-			}
-			if dark.Theme != mcp.IconThemeDark {
-				t.Errorf("dark entry Theme = %q, want %q", dark.Theme, mcp.IconThemeDark)
-			}
-			for i, ic := range []mcp.Icon{light, dark} {
-				if len(ic.Sizes) != 1 || ic.Sizes[0] != "16x16" {
-					t.Errorf("WebP entry %d Sizes = %v, want [\"16x16\"]", i+1, ic.Sizes)
-				}
+			for i, entry := range []struct {
+				name  string
+				icon  mcp.Icon
+				theme mcp.IconTheme
+			}{
+				{"light", icons[1], mcp.IconThemeLight},
+				{"dark", icons[2], mcp.IconThemeDark},
+			} {
+				t.Run(entry.name, func(t *testing.T) {
+					if entry.icon.Theme != entry.theme {
+						t.Errorf("%s entry Theme = %q, want %q", entry.name, entry.icon.Theme, entry.theme)
+					}
+					if len(entry.icon.Sizes) != 1 || entry.icon.Sizes[0] != "16x16" {
+						t.Errorf("WebP entry %d Sizes = %v, want [\"16x16\"]", i+1, entry.icon.Sizes)
+					}
+				})
 			}
 		})
 	}
@@ -210,22 +215,30 @@ func TestAllIcons_WebPFallbackDecodes(t *testing.T) {
 	const prefix = "data:image/webp;base64,"
 	for name, icons := range allIcons() {
 		t.Run(name, func(t *testing.T) {
-			for i, ic := range []mcp.Icon{icons[1], icons[2]} {
-				payload := strings.TrimPrefix(ic.Source, prefix)
-				decoded, err := base64.StdEncoding.DecodeString(payload)
-				if err != nil {
-					t.Fatalf("entry %d: base64 decode failed: %v", i+1, err)
-				}
-				cfg, format, err := image.DecodeConfig(strings.NewReader(string(decoded)))
-				if err != nil {
-					t.Fatalf("entry %d: image.DecodeConfig failed: %v", i+1, err)
-				}
-				if format != "webp" {
-					t.Errorf("entry %d: decoded format = %q, want %q", i+1, format, "webp")
-				}
-				if cfg.Width != 16 || cfg.Height != 16 {
-					t.Errorf("entry %d: decoded dimensions = %dx%d, want 16x16", i+1, cfg.Width, cfg.Height)
-				}
+			for i, entry := range []struct {
+				name string
+				icon mcp.Icon
+			}{
+				{"light", icons[1]},
+				{"dark", icons[2]},
+			} {
+				t.Run(entry.name, func(t *testing.T) {
+					payload := strings.TrimPrefix(entry.icon.Source, prefix)
+					decoded, err := base64.StdEncoding.DecodeString(payload)
+					if err != nil {
+						t.Fatalf("entry %d: base64 decode failed: %v", i+1, err)
+					}
+					cfg, format, err := image.DecodeConfig(strings.NewReader(string(decoded)))
+					if err != nil {
+						t.Fatalf("entry %d: image.DecodeConfig failed: %v", i+1, err)
+					}
+					if format != "webp" {
+						t.Errorf("entry %d: decoded format = %q, want %q", i+1, format, "webp")
+					}
+					if cfg.Width != 16 || cfg.Height != 16 {
+						t.Errorf("entry %d: decoded dimensions = %dx%d, want 16x16", i+1, cfg.Width, cfg.Height)
+					}
+				})
 			}
 		})
 	}

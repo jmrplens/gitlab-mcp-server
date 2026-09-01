@@ -446,16 +446,19 @@ func TestBearerGuard_Middleware_AuthenticatedRequestContinues(t *testing.T) {
 func TestQuotedStringEscape_EscapesQuotesAndBackslashes(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct{ in, want string }{
-		{"plain", "plain"},
-		{`with "quotes"`, `with \"quotes\"`},
-		{`back\slash`, `back\\slash`},
-		{"", ""},
+	tests := []struct{ name, in, want string }{
+		{"no_special_characters", "plain", "plain"},
+		{"double_quotes", `with "quotes"`, `with \"quotes\"`},
+		{"backslash", `back\slash`, `back\\slash`},
+		{"empty", "", ""},
 	}
 	for _, tt := range tests {
-		if got := quotedStringEscape(tt.in); got != tt.want {
-			t.Errorf("quotedStringEscape(%q) = %q, want %q", tt.in, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if got := quotedStringEscape(tt.in); got != tt.want {
+				t.Errorf("quotedStringEscape(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
 	}
 }
 

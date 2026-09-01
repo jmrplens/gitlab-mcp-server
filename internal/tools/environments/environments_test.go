@@ -1462,32 +1462,35 @@ func TestActionSpecs_UpdateDeleteMetadata(t *testing.T) {
 	byTool := environmentSpecsByTool(t, ActionSpecs(client))
 
 	for _, tt := range []struct {
+		name        string
 		tool        string
 		wantInUsage string
 		wantInDesc  []string
 	}{
-		{"gitlab_environment_update", "Update an existing environment", []string{"Returns:", "See also:", "gitlab_environment_get"}},
-		{"gitlab_environment_delete", "Delete an environment", []string{"Returns:", "See also:", "gitlab_environment_stop"}},
+		{"update", "gitlab_environment_update", "Update an existing environment", []string{"Returns:", "See also:", "gitlab_environment_get"}},
+		{"delete", "gitlab_environment_delete", "Delete an environment", []string{"Returns:", "See also:", "gitlab_environment_stop"}},
 	} {
-		spec := byTool[tt.tool]
-		if !strings.Contains(spec.Usage, tt.wantInUsage) {
-			t.Errorf("%s usage = %q, want substring %q", tt.tool, spec.Usage, tt.wantInUsage)
-		}
-		if strings.Contains(spec.Usage, "Use to execute") {
-			t.Errorf("%s usage still generic: %q", tt.tool, spec.Usage)
-		}
-		for _, a := range spec.Aliases {
-			if a == tt.tool {
-				t.Errorf("%s aliases still contain only the tool name: %v", tt.tool, spec.Aliases)
+		t.Run(tt.name, func(t *testing.T) {
+			spec := byTool[tt.tool]
+			if !strings.Contains(spec.Usage, tt.wantInUsage) {
+				t.Errorf("%s usage = %q, want substring %q", tt.tool, spec.Usage, tt.wantInUsage)
 			}
-		}
-		if len(spec.RelatedActions) == 0 {
-			t.Errorf("%s has empty RelatedActions", tt.tool)
-		}
-		for _, w := range tt.wantInDesc {
-			if !strings.Contains(spec.IndividualTool.Description, w) {
-				t.Errorf("%s description = %q, want substring %q", tt.tool, spec.IndividualTool.Description, w)
+			if strings.Contains(spec.Usage, "Use to execute") {
+				t.Errorf("%s usage still generic: %q", tt.tool, spec.Usage)
 			}
-		}
+			for _, a := range spec.Aliases {
+				if a == tt.tool {
+					t.Errorf("%s aliases still contain only the tool name: %v", tt.tool, spec.Aliases)
+				}
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s has empty RelatedActions", tt.tool)
+			}
+			for _, w := range tt.wantInDesc {
+				if !strings.Contains(spec.IndividualTool.Description, w) {
+					t.Errorf("%s description = %q, want substring %q", tt.tool, spec.IndividualTool.Description, w)
+				}
+			}
+		})
 	}
 }

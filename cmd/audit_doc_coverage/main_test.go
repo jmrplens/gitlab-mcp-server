@@ -271,23 +271,26 @@ Body.
 // trip the auditor.
 func TestTier_Badge_Matches(t *testing.T) {
 	tests := []struct {
+		name    string
 		edition string
 		badge   string
 		want    bool
 	}{
-		{"", "", true},
-		{"", "Premium", true}, // free tools tolerate any badge (no badge expected)
-		{"premium", "Premium", true},
-		{"premium", "Ultimate", false},
-		{"ultimate", "Ultimate", true},
-		{"ultimate", "Premium", false},
-		{"ultimate", "", true}, // missing badge on Ultimate is not flagged here
+		{"free_without_badge", "", "", true},
+		{"free_tolerates_any_badge", "", "Premium", true}, // no badge is expected on a free tool
+		{"premium_matches", "premium", "Premium", true},
+		{"premium_badged_ultimate", "premium", "Ultimate", false},
+		{"ultimate_matches", "ultimate", "Ultimate", true},
+		{"ultimate_badged_premium", "ultimate", "Premium", false},
+		{"ultimate_missing_badge", "ultimate", "", true}, // a missing badge on Ultimate is not flagged here
 	}
 	for _, tc := range tests {
-		got := tierBadgeMatches(tc.badge, tc.edition)
-		if got != tc.want {
-			t.Errorf("tierBadgeMatches(%q, %q) = %v, want %v", tc.badge, tc.edition, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got := tierBadgeMatches(tc.badge, tc.edition)
+			if got != tc.want {
+				t.Errorf("tierBadgeMatches(%q, %q) = %v, want %v", tc.badge, tc.edition, got, tc.want)
+			}
+		})
 	}
 }
 
@@ -504,19 +507,22 @@ func TestCheck_FailsWhenFindingsPresent(t *testing.T) {
 // canonical docs/reference/tools/<name>.md path used everywhere else.
 func TestRelative_DocPath(t *testing.T) {
 	tests := []struct {
+		name string
 		link string
 		want string
 	}{
-		{"projects.md", "docs/reference/tools/projects.md"},
-		{"branch-rules.md", "docs/reference/tools/branch-rules.md"},
-		{"branches.md", "docs/reference/tools/branches.md"},
-		{"", "docs/reference/tools/"},
+		{"plain_doc", "projects.md", "docs/reference/tools/projects.md"},
+		{"hyphenated_doc", "branch-rules.md", "docs/reference/tools/branch-rules.md"},
+		{"sibling_doc", "branches.md", "docs/reference/tools/branches.md"},
+		{"empty_link", "", "docs/reference/tools/"},
 	}
 	for _, tc := range tests {
-		got := relativeDocPath(tc.link)
-		if got != tc.want {
-			t.Errorf("relativeDocPath(%q) = %q, want %q", tc.link, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			got := relativeDocPath(tc.link)
+			if got != tc.want {
+				t.Errorf("relativeDocPath(%q) = %q, want %q", tc.link, got, tc.want)
+			}
+		})
 	}
 }
 

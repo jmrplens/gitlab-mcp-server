@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
@@ -137,14 +138,16 @@ func TestMiddleware_ToolCallSpanShape(t *testing.T) {
 		AttrToolSurface:        "dynamic",
 		AttrNetworkTransport:   "pipe",
 	} {
-		value, ok := attrOf(span, key)
-		if !ok {
-			t.Errorf("%s is absent", key)
-			continue
-		}
-		if value.AsString() != want {
-			t.Errorf("%s = %q, want %q", key, value.AsString(), want)
-		}
+		t.Run(string(key), func(t *testing.T) {
+			value, ok := attrOf(span, key)
+			if !ok {
+				t.Errorf("%s is absent", key)
+				return
+			}
+			if value.AsString() != want {
+				t.Errorf("%s = %q, want %q", key, value.AsString(), want)
+			}
+		})
 	}
 }
 
@@ -342,17 +345,27 @@ func TestMiddleware_AdoptsTraceContextFromMeta(t *testing.T) {
 // sees: refusing a tools/call because its traceparent was malformed would let
 // anyone disable a client by corrupting one header.
 func TestMiddleware_MalformedTraceContextIsIgnored(t *testing.T) {
-	for _, value := range []any{"not-a-traceparent", "", 42, map[string]any{"nested": true}} {
-		span := runOnce(t, Options{}, "tools/call",
-			callToolRequest("gitlab_issue_list", map[string]any{}, map[string]any{"traceparent": value}),
-			&mcp.CallToolResult{}, nil)
+	for _, tc := range []struct {
+		name  string
+		value any
+	}{
+		{"garbage_string", "not-a-traceparent"},
+		{"empty_string", ""},
+		{"integer", 42},
+		{"object", map[string]any{"nested": true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			span := runOnce(t, Options{}, "tools/call",
+				callToolRequest("gitlab_issue_list", map[string]any{}, map[string]any{"traceparent": tc.value}),
+				&mcp.CallToolResult{}, nil)
 
-		if span.Parent().IsValid() {
-			t.Errorf("traceparent %v produced a parent; a malformed value must leave the context untouched", value)
-		}
-		if got := span.Status().Code; got != codes.Unset {
-			t.Errorf("traceparent %v turned a successful call into status %v", value, got)
-		}
+			if span.Parent().IsValid() {
+				t.Errorf("traceparent %v produced a parent; a malformed value must leave the context untouched", tc.value)
+			}
+			if got := span.Status().Code; got != codes.Unset {
+				t.Errorf("traceparent %v turned a successful call into status %v", tc.value, got)
+			}
+		})
 	}
 }
 
@@ -845,10 +858,12 @@ func TestMiddleware_DurationHistogramMatchesTheConvention(t *testing.T) {
 		t.Fatalf("%d bucket boundaries, want %d; the SDK default was used instead of the convention's",
 			len(got), len(want))
 	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("boundary %d = %v, want %v", i, got[i], want[i])
-		}
+	for i, bound := range want {
+		t.Run(fmt.Sprint(bound), func(t *testing.T) {
+			if got[i] != bound {
+				t.Errorf("boundary %d = %v, want %v", i, got[i], bound)
+			}
+		})
 	}
 }
 
