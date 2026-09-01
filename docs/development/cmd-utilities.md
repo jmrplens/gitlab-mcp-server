@@ -682,7 +682,7 @@ Generates a Docker MCP Registry-compatible `tools.json` (flattened name/descript
 #### Usage
 
 ```bash
-# Meta-tools (default)
+# Meta-tools (the generator's default output; the server's default surface is dynamic, which this generator does not emit)
 go run ./cmd/gen_docker_tools/
 
 # Include enterprise meta-tools

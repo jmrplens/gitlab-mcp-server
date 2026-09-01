@@ -4,6 +4,7 @@
 > **Domain**: Access & Authentication
 > **Individual tools**: 62
 > **Meta-tool**: `gitlab_access` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `access.*`, `group.*`, `job.*`, `project.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Access Tokens API](https://docs.gitlab.com/ee/api/project_access_tokens.html), [Deploy Tokens API](https://docs.gitlab.com/ee/api/deploy_tokens.html), [Deploy Keys API](https://docs.gitlab.com/ee/api/deploy_keys.html), [Members API](https://docs.gitlab.com/ee/api/members.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The access & authentication domain covers project/group/personal access tokens, deploy tokens, deploy keys, access requests, invitations, CI/CD job token scope management, and project/group member management.
+
+On the default dynamic surface, these operations are the `access.*`, `group.*`, `job.*`, `project.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, all 62 individual tools below are consolidated into the `gitlab_access` meta-tool. It dispatches access token, deploy token, deploy key, access request, and invitation workflows through action prefixes such as `token_*`, `deploy_token_*`, `deploy_key_*`, `request_*`, `approve_*`, `deny_*`, and `invite_*`.
 

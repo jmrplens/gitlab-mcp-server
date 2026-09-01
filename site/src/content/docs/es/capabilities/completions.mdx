@@ -10,7 +10,7 @@ faq:
   - q: "¿Cómo mejora el autocompletado la precisión del asistente de IA?"
     a: "El autocompletado recorta las llamadas fallidas de cuatro maneras: elimina errores tipográficos porque el asistente elige entre sugerencias validadas; reduce los viajes de ida y vuelta al quitar la necesidad de llamar a `list_projects` antes de `create_issue`; aporta contexto al emparejar IDs con nombres; y ofrece búsqueda en tiempo real actualizada a medida que se escribe. El efecto neto es menos errores por identificadores no válidos."
   - q: "¿Qué ocurre si mi cliente MCP no admite autocompletado?"
-    a: "El autocompletado requiere que el cliente MCP admita el método de protocolo `completion/complete`. Si tu cliente carece de él, GitLab MCP Server simplemente no ofrece sugerencias y la funcionalidad de las herramientas no se ve afectada. Aún puedes descubrir valores válidos llamando a la acción `list` en cualquier meta-herramienta —por ejemplo, listar proyectos, ramas o etiquetas— y luego proporcionar el valor elegido directamente."
+    a: "El autocompletado requiere que el cliente MCP admita el método de protocolo `completion/complete`. Si tu cliente carece de él, GitLab MCP Server simplemente no ofrece sugerencias y la funcionalidad de las herramientas no se ve afectada. Aún puedes descubrir valores válidos ejecutando la acción de listado del dominio (`project.list`, `branch.list` o `project.label_list` mediante `gitlab_execute_action` en la superficie predeterminada, o la acción `list` de la meta-herramienta correspondiente con `TOOL_SURFACE=meta`) y luego proporcionar el valor elegido directamente."
 ---
 
 import stats from "../../../../data/stats.json";
@@ -98,7 +98,7 @@ El autocompletado reduce errores en las llamadas a herramientas de la IA de vari
 4. **Búsqueda en tiempo real** — Los resultados se actualizan mientras el usuario escribe, potenciados por la API de búsqueda de GitLab.
 
 :::tip
-El autocompletado funciona mejor cuando el cliente MCP soporta el método de protocolo `completion/complete`. Si tu cliente no soporta autocompletado, aún puedes descubrir valores usando la acción `list` en cualquier meta-herramienta.
+El autocompletado funciona mejor cuando el cliente MCP soporta el método de protocolo `completion/complete`. Si tu cliente no soporta autocompletado, aún puedes descubrir valores ejecutando la acción de listado del dominio: `project.list`, `branch.list` o `project.label_list` mediante `gitlab_execute_action` en la superficie predeterminada, o la acción `list` de la meta-herramienta correspondiente con `TOOL_SURFACE=meta`.
 :::
 
 <FAQ />

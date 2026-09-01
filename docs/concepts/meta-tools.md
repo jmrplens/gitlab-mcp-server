@@ -59,12 +59,15 @@ The old `META_TOOLS=false` spelling still maps to `TOOL_SURFACE=individual` when
 META_TOOLS=false
 ```
 
+To return to the default dynamic surface, unset `TOOL_SURFACE` (or set `TOOL_SURFACE=dynamic`).
+
 Meta-tools remain available because they are the most broadly compatible consolidated surface.
 
-| Mode             |                                                                                    Tool Count | Best For                                                                   |
-| ---------------- | --------------------------------------------------------------------------------------------: | -------------------------------------------------------------------------- |
-| Meta-tools       |               32 base / 49 self-managed Enterprise/Premium / 50 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
-| Individual tools | 847 CE / 1065 self-managed Enterprise/Premium / 1071 GitLab.com Enterprise/Premium with Orbit | Clients that benefit from one MCP tool per GitLab operation                |
+| Mode              |                                                                                    Tool Count | Best For                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------: | -------------------------------------------------------------------------------- |
+| Dynamic (default) |                                             2 (`gitlab_find_action`, `gitlab_execute_action`) | Any client; lowest startup context, every action reachable by `domain.action` ID |
+| Meta-tools        |               32 base / 49 self-managed Enterprise/Premium / 50 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list       |
+| Individual tools  | 847 CE / 1065 self-managed Enterprise/Premium / 1071 GitLab.com Enterprise/Premium with Orbit | Clients that benefit from one MCP tool per GitLab operation                      |
 
 ---
 

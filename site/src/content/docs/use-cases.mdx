@@ -6,11 +6,11 @@ faq:
   - q: "What can I do with GitLab MCP Server?"
     a: 'GitLab MCP Server lets an AI assistant drive GitLab through natural language across eight common workflows: code review, CI/CD automation, issue management, release management, team management, code search, reports and analytics, and security review. Instead of switching to the GitLab web UI, you describe the outcome — for example, _"Summarize the changes in MR !42 and check for security issues"_ — and the assistant calls the matching GitLab tools, executes them, and returns the result. Every workflow maps to real GitLab REST and GraphQL operations exposed as MCP tools.'
   - q: "Can GitLab MCP Server review merge requests and leave comments?"
-    a: 'Yes. The code review workflow uses the `gitlab_merge_request` and `gitlab_mr_review` tools so an assistant can list MRs awaiting review, summarize diffs, run a security pass, post review comments, and approve. A typical conversation is: _"Show open MRs in my-app that need review"_, then _"Summarize the changes in MR !42"_, _"Check MR !42 for security issues"_, _"Leave a comment suggesting input validation"_, and _"Approve MR !42"_. Each step is a separate tool call against the GitLab API.'
+    a: 'Yes. The code review workflow uses the `merge_request` and `mr_review` action domains (the `gitlab_merge_request` and `gitlab_mr_review` meta-tools when `TOOL_SURFACE=meta`; on the default dynamic surface the assistant reaches the same actions through `gitlab_find_action` and `gitlab_execute_action`) so an assistant can list MRs awaiting review, summarize diffs, run a security pass, post review comments, and approve. A typical conversation is: _"Show open MRs in my-app that need review"_, then _"Summarize the changes in MR !42"_, _"Check MR !42 for security issues"_, _"Leave a comment suggesting input validation"_, and _"Approve MR !42"_. Each step is a separate tool call against the GitLab API.'
   - q: "How does GitLab MCP Server help debug CI/CD pipelines?"
-    a: 'The CI/CD workflow uses `gitlab_pipeline`, `gitlab_job`, and `gitlab_ci_variable` to inspect and recover failing pipelines without leaving the editor. You can ask for the latest pipeline status, list the failed jobs in a specific pipeline, retrieve a job''s logs to find the error, check the project''s CI variables, and retry failed jobs. For example, _"Why did the last pipeline fail on branch feature/auth?"_ returns the failing stage and job so the assistant can explain the error and suggest a fix.'
+    a: 'The CI/CD workflow uses the `pipeline`, `job`, and `ci_variable` domains (`gitlab_pipeline`, `gitlab_job`, and `gitlab_ci_variable` on the meta surface) to inspect and recover failing pipelines without leaving the editor. You can ask for the latest pipeline status, list the failed jobs in a specific pipeline, retrieve a job''s logs to find the error, check the project''s CI variables, and retry failed jobs. For example, _"Why did the last pipeline fail on branch feature/auth?"_ returns the failing stage and job so the assistant can explain the error and suggest a fix.'
   - q: "Can GitLab MCP Server generate reports and release notes?"
-    a: 'Yes. The reports workflow relies on pre-built MCP prompts such as standup, risk-assessment, workload, and milestone-report to produce daily standup summaries, risk assessments, milestone progress reports, and team workload analysis. Release management combines `gitlab_release` (whose `link_*` actions manage release assets) with `gitlab_tag` to create releases, manage tags, and upload assets — for instance, _"Generate release notes comparing v1.0 to v2.0"_ assembles a changelog from the commits between two refs.'
+    a: 'Yes. The reports workflow relies on pre-built MCP prompts such as standup, risk-assessment, workload, and milestone-report to produce daily standup summaries, risk assessments, milestone progress reports, and team workload analysis. Release management combines the `release` domain (whose `link_*` actions manage release assets) with `tag` (`gitlab_release` and `gitlab_tag` on the meta surface) to create releases, manage tags, and upload assets — for instance, _"Generate release notes comparing v1.0 to v2.0"_ assembles a changelog from the commits between two refs.'
 ---
 
 import { Card, CardGrid } from "@astrojs/starlight/components";
@@ -20,11 +20,13 @@ With GitLab MCP Server you can review merge requests, debug failing CI/CD pipeli
 
 ## Workflows
 
+Each card names the catalog domains it uses. On the default dynamic surface the assistant finds and runs their actions through `gitlab_find_action` and `gitlab_execute_action`; with `TOOL_SURFACE=meta` each domain is a `gitlab_<domain>` meta-tool.
+
 <CardGrid>
  <Card title="🔀 Code Review" icon="pencil">
   Review merge requests, analyze changes, check for security issues, and leave comments — all through natural language.
 
-     **Key tools:** `gitlab_merge_request`, `gitlab_mr_review`
+     **Key domains:** `merge_request`, `mr_review`
 
      **Try:** _"Summarize the changes in MR !42 and check for security issues"_
     </Card>
@@ -32,7 +34,7 @@ With GitLab MCP Server you can review merge requests, debug failing CI/CD pipeli
     <Card title="🔄 CI/CD Automation" icon="setting">
      Monitor pipelines, debug failures, manage CI variables, and review pipeline schedules without leaving your editor.
 
-     **Key tools:** `gitlab_pipeline`, `gitlab_job`, `gitlab_ci_variable`
+     **Key domains:** `pipeline`, `job`, `ci_variable`
 
      **Try:** _"Why did the last pipeline fail on branch feature/auth?"_
     </Card>
@@ -40,7 +42,7 @@ With GitLab MCP Server you can review merge requests, debug failing CI/CD pipeli
     <Card title="📋 Issue Management" icon="list-format">
      Create, update, and track issues. Manage labels, milestones, and assignments through conversation.
 
-     **Key tools:** `gitlab_issue`, `gitlab_project` (`label_*` and `milestone_*` actions)
+     **Key domains:** `issue`, `project` (`label_*` and `milestone_*` actions)
 
      **Try:** _"Create a bug report titled 'Fix login page' with label 'bug' and assign to @alice"_
     </Card>
@@ -48,7 +50,7 @@ With GitLab MCP Server you can review merge requests, debug failing CI/CD pipeli
     <Card title="📦 Release Management" icon="rocket">
      Create releases, generate changelogs, manage tags, and upload release assets.
 
-     **Key tools:** `gitlab_release` (including its `link_*` actions), `gitlab_tag`
+     **Key domains:** `release` (including its `link_*` actions), `tag`
 
      **Try:** _"Generate release notes comparing v1.0 to v2.0"_
     </Card>
@@ -56,7 +58,7 @@ With GitLab MCP Server you can review merge requests, debug failing CI/CD pipeli
     <Card title="👥 Team Management" icon="seti:ignored-vscode">
      Manage project members, group memberships, and access levels.
 
-     **Key tools:** `gitlab_user`, `gitlab_group`, `gitlab_project` (`members` and `member_*` actions)
+     **Key domains:** `user`, `group`, `project` (`members` and `member_*` actions)
 
      **Try:** _"Add @bob as a developer to project my-app"_
     </Card>
@@ -64,7 +66,7 @@ With GitLab MCP Server you can review merge requests, debug failing CI/CD pipeli
     <Card title="🔍 Code Search" icon="magnifier">
      Search across code, issues, merge requests, and wikis. Explore repository trees and compare branches.
 
-     **Key tools:** `gitlab_search`, `gitlab_repository` (`tree` and `file_*` actions)
+     **Key domains:** `search`, `repository` (`tree` and `file_*` actions)
 
      **Try:** _"Find all TODO comments across project my-app"_
     </Card>
@@ -80,7 +82,7 @@ With GitLab MCP Server you can review merge requests, debug failing CI/CD pipeli
     <Card title="🛡️ Security Review" icon="approve-check">
      Audit merge requests for security issues, review vulnerabilities, and analyze CI configurations.
 
-     **Key tools:** `gitlab_vulnerability`, `gitlab_audit_event`
+     **Key domains:** `vulnerability`, `audit_event`
 
      **Try:** _"Review MR !42 for security vulnerabilities"_
     </Card>

@@ -120,9 +120,9 @@ GitLab MCP Server define cada operación de GitLab una sola vez y la presenta a 
 
 Cada operación ordinaria de GitLab se define una sola vez en el catálogo de acciones canónico. Las superficies visibles de herramientas son proyecciones de ese catálogo:
 
-- **Meta-herramientas** agrupan acciones relacionadas detrás de herramientas de dominio como `gitlab_issue`.
-- **Herramientas individuales** proyectan una herramienta MCP visible por acción para compatibilidad y pruebas.
-- **Herramientas dinámicas** buscan y ejecutan las mismas entradas del catálogo con una lista visible mucho más pequeña.
+- **Herramientas dinámicas** (predeterminadas) buscan y ejecutan las entradas del catálogo por ID `domain.action` a través de dos herramientas visibles.
+- **Meta-herramientas** (`TOOL_SURFACE=meta`) agrupan acciones relacionadas detrás de herramientas de dominio como `gitlab_issue`.
+- **Herramientas individuales** (`TOOL_SURFACE=individual`) proyectan una herramienta MCP visible por acción para compatibilidad y pruebas.
 
 Como todas las superficies comparten la misma entrada del catálogo, los schemas, el filtrado de solo lectura, las confirmaciones de acciones destructivas, las previsualizaciones de safe mode, el filtrado por scopes, el formato Markdown y la salida JSON se mantienen consistentes entre modos.
 
@@ -138,6 +138,22 @@ graph LR
 ```
 
 Orbit se proyecta a través del mismo catálogo que cualquier otro dominio: en modo meta aparece como la meta-herramienta `gitlab_orbit` con seis acciones; en modo individual aparece como seis herramientas `gitlab_orbit_*`; en modo dinámico sus acciones se descubren como `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` y `orbit.graph_status` mediante `gitlab_find_action`/`gitlab_execute_action`.
+
+### Conjunto de herramientas dinámico (predeterminado)
+
+Por defecto (con `TOOL_SURFACE` sin definir, o con `TOOL_SURFACE=dynamic` para hacerlo explícito), el servidor expone solo `gitlab_find_action` y `gitlab_execute_action`. El mismo catálogo de acciones canónico sigue disponible y se comparte con las meta-herramientas, así que el modo dinámico cambia el descubrimiento, no el comportamiento de GitLab.
+
+```mermaid
+flowchart TD
+    specs[ActionSpecs de dominio] --> catalog[Catálogo de acciones canónico]
+    catalog --> find[gitlab_find_action]
+    catalog --> execute[gitlab_execute_action]
+    execute --> route[ActionRoute compartido]
+    route --> handler[Handler tipado existente]
+    handler --> gitlab[API de GitLab]
+```
+
+El modo dinámico es la superficie predeterminada de bajo consumo de tokens y está documentado en [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/). Las meta-herramientas siguen disponibles con `TOOL_SURFACE=meta`.
 
 ### Modo meta-herramientas
 
@@ -155,16 +171,18 @@ graph TD
     A --> I[wizard_create]
 ```
 
-La IA envía un parámetro `action` para seleccionar la operación:
+La IA envía un parámetro `action` para seleccionar la operación y anida los parámetros propios de la operación en `params` (las meta-herramientas solo aceptan esas dos claves en el nivel superior):
 
 ```json
 {
   "tool": "gitlab_issue",
   "arguments": {
     "action": "create",
-    "project_id": "my-org/backend",
-    "title": "Fix N+1 query in /users",
-    "labels": "bug,performance"
+    "params": {
+      "project_id": "my-org/backend",
+      "title": "Fix N+1 query in /users",
+      "labels": "bug,performance"
+    }
   }
 }
 ```
@@ -174,22 +192,6 @@ Esto reduce el uso de tokens y mejora la precisión de selección de herramienta
 ### Modo de herramientas individuales
 
 Con `TOOL_SURFACE=individual`, se exponen todas las herramientas individuales (p. ej., `gitlab_issue_list`, `gitlab_issue_create`): {stats.tools.ultimate_self_managed} en Enterprise/Premium autoalojado, o {stats.tools.gitlab_com} en GitLab.com Enterprise/Premium con Orbit. Esto puede ser útil para pruebas pero no se recomienda para producción.
-
-### Conjunto de herramientas dinámico
-
-Con `TOOL_SURFACE=dynamic`, el servidor expone solo `gitlab_find_action` y `gitlab_execute_action`. El mismo catálogo de acciones canónico sigue disponible y se comparte con las meta-herramientas, así que el modo dinámico cambia el descubrimiento, no el comportamiento de GitLab.
-
-```mermaid
-flowchart TD
-    specs[ActionSpecs de dominio] --> catalog[Catálogo de acciones canónico]
-    catalog --> find[gitlab_find_action]
-    catalog --> execute[gitlab_execute_action]
-    execute --> route[ActionRoute compartido]
-    route --> handler[Handler tipado existente]
-    handler --> gitlab[API de GitLab]
-```
-
-El modo dinámico es la superficie predeterminada de bajo consumo de tokens y está documentado en [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/). Las meta-herramientas siguen disponibles con `TOOL_SURFACE=meta`.
 
 ## Componentes opcionales
 

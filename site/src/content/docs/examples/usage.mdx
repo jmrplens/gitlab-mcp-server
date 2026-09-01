@@ -39,7 +39,7 @@ import {
   />
 </CardGrid>
 
-This is a quick reference of natural language prompts you can use with any AI assistant connected to GitLab MCP Server, grouped by domain. Type the prompt in plain English and the server translates it into the right GitLab API operation automatically — the tabs below show which meta-tool and `action` each prompt maps to, across project management, code review, CI/CD, releases, and search.
+This is a quick reference of natural language prompts you can use with any AI assistant connected to GitLab MCP Server, grouped by domain. Type the prompt in plain English and the server translates it into the right GitLab API operation automatically. The tabs below show which catalog action each prompt maps to: the `action` you would pass to `gitlab_execute_action` on the default dynamic surface, which is also the matching domain meta-tool's action when `TOOL_SURFACE=meta`. They cover project management, code review, CI/CD, releases, and search.
 
 <Tabs>
   <TabItem label="Project Management">
@@ -48,25 +48,25 @@ This is a quick reference of natural language prompts you can use with any AI as
 
 **Prompt**: "Show me my GitLab projects"
 
-The server calls `gitlab_project` with `action: list`, returning project names, descriptions, and URLs.
+The assistant runs `project.list` (`gitlab_project` with `action: list` when `TOOL_SURFACE=meta`), returning project names, descriptions, and URLs.
 
 ## Create an issue
 
 **Prompt**: "Create a bug report in my-group/my-project titled 'Login page returns 404 after password reset' with labels bug and priority::high"
 
-The server calls `gitlab_issue` with `action: create`, setting the title, description, labels, and project in a single operation.
+The assistant runs `issue.create` (`gitlab_issue` with `action: create` on the meta surface), setting the title, description, labels, and project in a single operation.
 
 ## Manage labels
 
 **Prompt**: "List all labels in the frontend project and create a new label called 'accessibility' with color #0052CC"
 
-The server first calls `gitlab_project` with `action: label_list` to show existing labels, then `action: label_create` to add the new one.
+The assistant first runs `project.label_list` to show existing labels, then `project.label_create` to add the new one (`gitlab_project` with `action: label_list` and `action: label_create` on the meta surface).
 
 ## Track milestones
 
 **Prompt**: "Show me the progress on the Sprint 14 milestone in my-project"
 
-The server calls `gitlab_project` with `action: milestone_get`, returning completion percentage, open/closed issue counts, and due date.
+The assistant runs `project.milestone_get` (`gitlab_project` with `action: milestone_get` on the meta surface), returning completion percentage, open/closed issue counts, and due date.
 
   </TabItem>
   <TabItem label="Code Review">
@@ -75,7 +75,7 @@ The server calls `gitlab_project` with `action: milestone_get`, returning comple
 
 **Prompt**: "Show me all open merge requests assigned to me"
 
-The server calls `gitlab_merge_request` with `action: list`, filtering by assignee and state.
+The assistant runs `merge_request.list` (`gitlab_merge_request` with `action: list` on the meta surface), filtering by assignee and state.
 
   </TabItem>
   <TabItem label="CI/CD">
@@ -84,7 +84,7 @@ The server calls `gitlab_merge_request` with `action: list`, filtering by assign
 
 **Prompt**: "What's the status of the latest pipeline in my-project?"
 
-The server calls `gitlab_pipeline` with `action: list`, returning the most recent pipeline's status, duration, and stages.
+The assistant runs `pipeline.list` (`gitlab_pipeline` with `action: list` on the meta surface), returning the most recent pipeline's status, duration, and stages.
 
   </TabItem>
   <TabItem label="Releases">
@@ -93,7 +93,7 @@ The server calls `gitlab_pipeline` with `action: list`, returning the most recen
 
 **Prompt**: "Create release v2.1.0 from tag v2.1.0 in my-project with release notes about the login fix and performance improvements"
 
-The server calls `gitlab_release` with `action: create`, associating the release with the tag and setting the description.
+The assistant runs `release.create` (`gitlab_release` with `action: create` on the meta surface), associating the release with the tag and setting the description.
 
   </TabItem>
   <TabItem label="Team & Search">
@@ -102,7 +102,7 @@ The server calls `gitlab_release` with `action: create`, associating the release
 
 **Prompt**: "Search for usages of the deprecated `authenticateUser` function across all my projects"
 
-The server calls `gitlab_search` with `action: code`, searching across projects for the specified code pattern.
+The assistant runs `search.code` (`gitlab_search` with `action: code` on the meta surface), searching across projects for the specified code pattern.
 
   </TabItem>
 </Tabs>
@@ -111,11 +111,11 @@ The server calls `gitlab_search` with `action: code`, searching across projects 
 
 **Prompt**: "List all members of the frontend project and their access levels"
 
-The server calls `gitlab_project` with `action: members`, returning team members with their roles and permissions.
+The assistant runs `project.members` (`gitlab_project` with `action: members` on the meta surface), returning team members with their roles and permissions.
 
 ## Dynamic-first tool flow
 
-Dynamic mode is the default, so the prompts above don't reach a named meta-tool directly. Instead the assistant first discovers the action and its schema with `gitlab_find_action`, then runs it with `gitlab_execute_action` using a canonical `domain.action` ID:
+Dynamic mode is the default, so the prompts above never name a tool directly. The assistant first discovers the action and its schema with `gitlab_find_action`, then runs it with `gitlab_execute_action` using a canonical `domain.action` ID:
 
 ```text
 gitlab_find_action → query: "list open merge requests"

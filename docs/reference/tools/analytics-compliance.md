@@ -4,12 +4,15 @@
 > **Domain**: Analytics & Compliance
 > **Individual tools**: 12
 > **Meta-tool**: split across `gitlab_group` (enterprise routes), `gitlab_compliance_policy`, `gitlab_project_alias`
+> **Dynamic IDs**: `compliance_policy.*`, `dora_metrics.*`, `group.*`, `project.*`, `project_alias.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Group Activity Analytics API](https://docs.gitlab.com/ee/api/group_activity_analytics.html), [DORA Metrics API](https://docs.gitlab.com/ee/api/dora/metrics.html), [Compliance Policy API](https://docs.gitlab.com/ee/api/compliance_policy.html), [Project Aliases API](https://docs.gitlab.com/ee/api/project_aliases.html)
 > **Audience**: End users, AI assistant users
 
 ---
 
 Tools for group activity analytics, DORA metrics, project statistics, admin compliance policy settings, and project aliases.
+
+On the default dynamic surface, these operations are the `group.analytics_*`, `dora_metrics.*`, `compliance_policy.*`, `project_alias.*` and `project.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below. The JSON examples on this page show both call shapes: the first block is the meta-tool envelope (`TOOL_SURFACE=meta`, sent to the tool named in the section), the second is the same call as `gitlab_execute_action` arguments on the default surface. Meta-tools accept only `action` and `params` at the top level.
 
 ## Group Activity Analytics (`groupanalytics`)
 
@@ -28,7 +31,7 @@ Retrieve counts of recently created issues, merge requests, and new members for 
 
 Group analytics actions are now enterprise-only routes inside **`gitlab_group`** (requires the Enterprise/Premium catalog).
 
-Actions: `issues_count`, `mr_count`, `members_count`
+Actions: `analytics_issues_count`, `analytics_mr_count`, `analytics_members_count` (canonical IDs `group.analytics_issues_count`, `group.analytics_mr_count`, `group.analytics_members_count`)
 
 ### Examples
 
@@ -36,8 +39,19 @@ Get recently created issues count:
 
 ```json
 {
-  "action": "issues_count",
-  "group_path": "my-group"
+  "action": "analytics_issues_count",
+  "params": {
+    "group_path": "my-group"
+  }
+}
+```
+
+```json
+{
+  "action": "group.analytics_issues_count",
+  "params": {
+    "group_path": "my-group"
+  }
 }
 ```
 
@@ -45,8 +59,19 @@ Get recently created MR count:
 
 ```json
 {
-  "action": "mr_count",
-  "group_path": "my-group"
+  "action": "analytics_mr_count",
+  "params": {
+    "group_path": "my-group"
+  }
+}
+```
+
+```json
+{
+  "action": "group.analytics_mr_count",
+  "params": {
+    "group_path": "my-group"
+  }
 }
 ```
 
@@ -54,8 +79,19 @@ Get recently added members count:
 
 ```json
 {
-  "action": "members_count",
-  "group_path": "parent/child-group"
+  "action": "analytics_members_count",
+  "params": {
+    "group_path": "parent/child-group"
+  }
+}
+```
+
+```json
+{
+  "action": "group.analytics_members_count",
+  "params": {
+    "group_path": "parent/child-group"
+  }
 }
 ```
 
@@ -85,7 +121,7 @@ instance-wide settings that control the compliance security policy project names
 
 **`gitlab_compliance_policy`** — Manage admin compliance policy settings.
 
-Actions: `get`, `update`
+Actions: `get`, `update` (canonical IDs `compliance_policy.get`, `compliance_policy.update`)
 
 ### Examples
 
@@ -93,7 +129,15 @@ Get current settings:
 
 ```json
 {
-  "action": "get"
+  "action": "get",
+  "params": {}
+}
+```
+
+```json
+{
+  "action": "compliance_policy.get",
+  "params": {}
 }
 ```
 
@@ -102,7 +146,18 @@ Update compliance security policy namespace:
 ```json
 {
   "action": "update",
-  "csp_namespace_id": 42
+  "params": {
+    "csp_namespace_id": 42
+  }
+}
+```
+
+```json
+{
+  "action": "compliance_policy.update",
+  "params": {
+    "csp_namespace_id": 42
+  }
 }
 ```
 
@@ -138,7 +193,7 @@ alternative names, providing a convenient shortcut. All operations require admin
 
 **`gitlab_project_alias`** — Manage project aliases (admin-only).
 
-Actions: `list`, `get`, `create`, `delete`
+Actions: `list`, `get`, `create`, `delete` (canonical IDs `project_alias.list`, `project_alias.get`, `project_alias.create`, `project_alias.delete`)
 
 ### Examples
 
@@ -146,7 +201,15 @@ List all aliases:
 
 ```json
 {
-  "action": "list"
+  "action": "list",
+  "params": {}
+}
+```
+
+```json
+{
+  "action": "project_alias.list",
+  "params": {}
 }
 ```
 
@@ -155,7 +218,18 @@ Get an alias:
 ```json
 {
   "action": "get",
-  "name": "my-alias"
+  "params": {
+    "name": "my-alias"
+  }
+}
+```
+
+```json
+{
+  "action": "project_alias.get",
+  "params": {
+    "name": "my-alias"
+  }
 }
 ```
 
@@ -164,8 +238,20 @@ Create an alias:
 ```json
 {
   "action": "create",
-  "name": "my-alias",
-  "project_id": 123
+  "params": {
+    "name": "my-alias",
+    "project_id": 123
+  }
+}
+```
+
+```json
+{
+  "action": "project_alias.create",
+  "params": {
+    "name": "my-alias",
+    "project_id": 123
+  }
 }
 ```
 
@@ -174,7 +260,18 @@ Delete an alias:
 ```json
 {
   "action": "delete",
-  "name": "my-alias"
+  "params": {
+    "name": "my-alias"
+  }
+}
+```
+
+```json
+{
+  "action": "project_alias.delete",
+  "params": {
+    "name": "my-alias"
+  }
 }
 ```
 

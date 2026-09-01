@@ -4,13 +4,13 @@ description: "Ejemplos de gestión de issues con GitLab MCP Server — triar, as
 datePublished: "2026-04-23"
 faq:
   - q: "¿Cómo triago issues de GitLab con un asistente de IA?"
-    a: "Se trabaja de arriba abajo: pide al asistente que liste los issues abiertos que te interesan y después que los asigne, etiquete y enlace. Un ciclo típico son cuatro llamadas: `gitlab_issue` con `action: list` (filtrando por `state: opened` y una etiqueta) para ver el backlog, `action: update` para fijar `assignee_ids`, `labels` y `milestone_id`, `action: link_create` para registrar dependencias, y `action: update` con `state_event: close` al resolverlo. En la superficie dinámica se resuelven como `issue.list`, `issue.update` e `issue.link_create`."
+    a: "Se trabaja de arriba abajo: pide al asistente que liste los issues abiertos que te interesan y después que los asigne, etiquete y enlace. Un ciclo típico son cuatro llamadas: `issue.list` (filtrando por `state: opened` y una etiqueta) para ver el backlog, `issue.update` para fijar `assignee_ids`, `labels` y `milestone_id`, `issue.link_create` para registrar dependencias, y de nuevo `issue.update` con `state_event: close` al resolverlo. En la superficie dinámica predeterminada son acciones de `gitlab_execute_action`, localizables con `gitlab_find_action`; con `TOOL_SURFACE=meta` son las acciones `list`, `update` y `link_create` de la meta-herramienta `gitlab_issue`."
   - q: "¿Cuál es la diferencia entre relates_to, blocks y is_blocked_by?"
-    a: "Son los tres valores de `link_type` que acepta `gitlab_issue` con `action: link_create`. `relates_to` es una asociación simétrica y no bloqueante: ningún issue condiciona al otro. `blocks` significa que el issue de origen debe resolverse antes de que el destino pueda avanzar. `is_blocked_by` es la dirección inversa de esa misma relación, así que crear un enlace `blocks` de #300 a #400 es lo que hace que #400 aparezca como `is_blocked_by` #300. Listar los enlaces con `action: link_list` devuelve el tipo de relación junto a cada issue enlazado."
+    a: "Son los tres valores de `link_type` que acepta `issue.link_create` (`gitlab_issue` con `action: link_create` en la superficie meta). `relates_to` es una asociación simétrica y no bloqueante: ningún issue condiciona al otro. `blocks` significa que el issue de origen debe resolverse antes de que el destino pueda avanzar. `is_blocked_by` es la dirección inversa de esa misma relación, así que crear un enlace `blocks` de #300 a #400 es lo que hace que #400 aparezca como `is_blocked_by` #300. Listar los enlaces con `issue.link_list` devuelve el tipo de relación junto a cada issue enlazado."
   - q: "¿Puede un asistente de IA cerrar un issue por mí?"
-    a: "Sí, pero cerrar es un cambio de estado y sigue las mismas reglas de seguridad que cualquier otra mutación. La llamada es `gitlab_issue` con `action: update` y `state_event: close`. Si el despliegue usa `GITLAB_READ_ONLY=true` la acción ni siquiera se registra, y con `GITLAB_SAFE_MODE=true` el servidor devuelve una previsualización JSON del cambio en lugar de aplicarlo."
+    a: "Sí, pero cerrar es un cambio de estado y sigue las mismas reglas de seguridad que cualquier otra mutación. La llamada es `issue.update` con `state_event: close` (`gitlab_issue`, `action: update`, en la superficie meta). Si el despliegue usa `GITLAB_READ_ONLY=true` la acción ni siquiera se registra, y con `GITLAB_SAFE_MODE=true` el servidor devuelve una previsualización JSON del cambio en lugar de aplicarlo."
   - q: "¿Cómo busco issues en varios proyectos de GitLab a la vez?"
-    a: "Usa `gitlab_search` en lugar de `gitlab_issue`, porque el listado de issues está limitado a un proyecto. La búsqueda acepta alcance de instancia, grupo o proyecto, así que `scope: issues` con un `group_id` busca en todos los proyectos de ese grupo en una sola llamada. Los resultados incluyen la ruta del proyecto en cada coincidencia, de modo que el asistente puede continuar con `gitlab_issue` y `action: get` sobre el proyecto propietario."
+    a: "Usa `search.issues` en lugar de `issue.list` (las meta-herramientas `gitlab_search` y `gitlab_issue` cuando `TOOL_SURFACE=meta`), porque el listado de issues está limitado a un proyecto o a un grupo. La búsqueda acepta alcance de instancia, grupo o proyecto, así que `search.issues` con un `group_id` busca en todos los proyectos de ese grupo en una sola llamada. Los resultados incluyen la ruta del proyecto en cada coincidencia, de modo que el asistente puede continuar con `issue.get` sobre el proyecto propietario."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -34,7 +34,7 @@ import FAQ from "../../../../components/FAQ.astro";
   />
 </CardGrid>
 
-Estos flujos paso a paso cubren la gestión de issues de principio a fin: triar issues abiertos, asignarlos y etiquetarlos, vincular issues relacionados y bloqueantes, seguir el progreso de los milestones, mantener discusiones y buscar entre proyectos. Cada ejemplo combina el prompt que escribes con la acción exacta de meta-tool que el servidor ejecuta, para que puedas reutilizar la llamada directamente.
+Estos flujos paso a paso cubren la gestión de issues de principio a fin: triar issues abiertos, asignarlos y etiquetarlos, vincular issues relacionados y bloqueantes, seguir el progreso de los milestones, mantener discusiones y buscar entre proyectos. Cada ejemplo combina el prompt que escribes con la acción exacta del catálogo que el servidor ejecuta, escrita como `dominio.acción → parámetros`: en la superficie dinámica predeterminada es el `action` que pasas a `gitlab_execute_action`, y con `TOOL_SURFACE=meta` es el `action` de la meta-herramienta `gitlab_<dominio>`, para que puedas reutilizar la llamada directamente.
 
 ## Triaje de issues
 
@@ -59,7 +59,7 @@ flowchart LR
 **Prompt**: "Muéstrame todos los issues abiertos en el proyecto backend con la etiqueta 'bug'"
 
 ```text
-gitlab_issue → action: list, project_id: "my-group/backend",
+issue.list → project_id: "my-group/backend",
   state: "opened", labels: "bug"
 ```
 
@@ -70,7 +70,7 @@ Devuelve: títulos de issues, autores, etiquetas, milestones, asignados y fechas
 **Prompt**: "Asigna el issue #123 a johndoe y añade las etiquetas 'priority::high' y 'team::backend'"
 
 ```text
-gitlab_issue → action: update, project_id: "my-group/backend",
+issue.update → project_id: "my-group/backend",
   issue_iid: 123, assignee_ids: [45], add_labels: "priority::high,team::backend"
 ```
 
@@ -79,7 +79,7 @@ gitlab_issue → action: update, project_id: "my-group/backend",
 **Prompt**: "Muéstrame todos los issues sin asignar en el milestone Sprint 15"
 
 ```text
-gitlab_issue → action: list, project_id: "my-group/backend",
+issue.list → project_id: "my-group/backend",
   milestone: "Sprint 15", assignee_id: 0
 ```
 
@@ -90,9 +90,9 @@ Devuelve: issues sin asignados que necesitan atención antes de que comience el 
 **Prompt**: "Cierra el issue #456 con un comentario explicando la corrección"
 
 ```text
-gitlab_issue → action: note_create, project_id: "my-group/backend",
+issue.note_create → project_id: "my-group/backend",
   issue_iid: 456, body: "Corregido en MR !89 — el timeout era causado por..."
-gitlab_issue → action: update, project_id: "my-group/backend",
+issue.update → project_id: "my-group/backend",
   issue_iid: 456, state_event: "close"
 ```
 
@@ -100,7 +100,7 @@ gitlab_issue → action: update, project_id: "my-group/backend",
 
 ## Análisis de issues con IA
 
-No existe una herramienta de "análisis con IA" dedicada. El análisis asistido por IA ocurre cuando el asistente lee los issues con `gitlab_issue → action: list` o `action: get`, razona sobre su contenido y luego actúa sobre el resultado — asignando, etiquetando, vinculando o comentando con las acciones siguientes. Por ejemplo, _"Encuentra los bugs abiertos en backend, agrúpalos por causa raíz probable y etiqueta los duplicados"_ encadena una acción de lectura con las acciones de triaje de esta guía, todo en una misma conversación.
+No existe una herramienta de "análisis con IA" dedicada. El análisis asistido por IA ocurre cuando el asistente lee los issues con `issue.list` o `issue.get`, razona sobre su contenido y luego actúa sobre el resultado — asignando, etiquetando, vinculando o comentando con las acciones siguientes. Por ejemplo, _"Encuentra los bugs abiertos en backend, agrúpalos por causa raíz probable y etiqueta los duplicados"_ encadena una acción de lectura con las acciones de triaje de esta guía, todo en una misma conversación.
 
 ---
 
@@ -113,7 +113,7 @@ Modela las relaciones entre issues para que las dependencias sean explícitas. M
 **Prompt**: "Vincula el issue #100 como relacionado al issue #200 en el proyecto backend"
 
 ```text
-gitlab_issue → action: link_create, project_id: "my-group/backend",
+issue.link_create → project_id: "my-group/backend",
   issue_iid: 100, target_issue_iid: 200, link_type: "relates_to"
 ```
 
@@ -122,7 +122,7 @@ gitlab_issue → action: link_create, project_id: "my-group/backend",
 **Prompt**: "Marca el issue #300 como bloqueante del issue #400"
 
 ```text
-gitlab_issue → action: link_create, project_id: "my-group/backend",
+issue.link_create → project_id: "my-group/backend",
   issue_iid: 300, target_issue_iid: 400, link_type: "blocks"
 ```
 
@@ -131,7 +131,7 @@ gitlab_issue → action: link_create, project_id: "my-group/backend",
 **Prompt**: "Muéstrame todos los issues relacionados al issue #100"
 
 ```text
-gitlab_issue → action: link_list, project_id: "my-group/backend", issue_iid: 100
+issue.link_list → project_id: "my-group/backend", issue_iid: 100
 ```
 
 Devuelve: issues vinculados con tipos de relación (relates_to, blocks, is_blocked_by).
@@ -157,7 +157,7 @@ Organiza y mide el trabajo con etiquetas y milestones. Crea etiquetas con ámbit
 **Prompt**: "Crea una etiqueta con ámbito 'priority::critical' con color rojo en el proyecto backend"
 
 ```text
-gitlab_project → action: label_create, project_id: "my-group/backend",
+project.label_create → project_id: "my-group/backend",
   name: "priority::critical", color: "#CC0000"
 ```
 
@@ -166,7 +166,7 @@ gitlab_project → action: label_create, project_id: "my-group/backend",
 **Prompt**: "Muéstrame el progreso del milestone Sprint 15"
 
 ```text
-gitlab_project → action: milestone_get, project_id: "my-group/backend", milestone_id: 15
+project.milestone_get → project_id: "my-group/backend", milestone_iid: 15
 ```
 
 Devuelve: porcentaje de completado, conteo de issues abiertos/cerrados, fecha de inicio, fecha límite y días restantes.
@@ -182,7 +182,7 @@ Mantén la conversación en el propio issue. Añade un comentario rápido, abre 
 **Prompt**: "Comenta en el issue #123: 'Reproducido en staging — el error solo ocurre con peticiones concurrentes'"
 
 ```text
-gitlab_issue → action: note_create, project_id: "my-group/backend",
+issue.note_create → project_id: "my-group/backend",
   issue_iid: 123, body: "Reproducido en staging — el error solo ocurre con peticiones concurrentes"
 ```
 
@@ -191,7 +191,7 @@ gitlab_issue → action: note_create, project_id: "my-group/backend",
 **Prompt**: "Crea un hilo de discusión en el issue #123 sobre la arquitectura propuesta"
 
 ```text
-gitlab_issue → action: discussion_create, project_id: "my-group/backend",
+issue.discussion_create → project_id: "my-group/backend",
   issue_iid: 123, body: "Discutamos la arquitectura propuesta para esta funcionalidad..."
 ```
 
@@ -200,7 +200,7 @@ gitlab_issue → action: discussion_create, project_id: "my-group/backend",
 **Prompt**: "Añade una reacción de pulgar arriba al issue #123"
 
 ```text
-gitlab_issue → action: award_emoji_create, project_id: "my-group/backend",
+issue.emoji_issue_create → project_id: "my-group/backend",
   issue_iid: 123, name: "thumbsup"
 ```
 
@@ -215,7 +215,7 @@ Encuentra issues más allá de un solo proyecto. Busca globalmente por palabra c
 **Prompt**: "Busca issues que mencionen 'memory leak' en todos mis proyectos"
 
 ```text
-gitlab_search → scope: "issues", search: "memory leak"
+search.issues → query: "memory leak"
 ```
 
 Devuelve: issues coincidentes en todos los proyectos accesibles con títulos, descripciones y rutas de proyecto.
@@ -225,11 +225,29 @@ Devuelve: issues coincidentes en todos los proyectos accesibles con títulos, de
 **Prompt**: "Encuentra todos los issues abiertos con etiqueta 'security' en el grupo platform"
 
 ```text
-gitlab_issue → action: list, group_id: "platform",
+issue.list_group → group_id: "platform",
   state: "opened", labels: "security"
 ```
 
 Devuelve: issues relacionados con seguridad en todos los proyectos del grupo.
+
+## Llamadas de issues dinámicas primero
+
+En la superficie dinámica predeterminada, el asistente descubre primero la acción de issues y su esquema, y luego la ejecuta, así que cada bloque anterior es el `action` de una llamada a `gitlab_execute_action`. El patrón de dos pasos es buscar y luego ejecutar:
+
+```text
+gitlab_find_action → query: "issues abiertos con una etiqueta"
+gitlab_execute_action → action: "issue.list", params: { project_id: "my-group/backend", state: "opened", labels: "bug" }
+```
+
+Asignar, etiquetar y vincular siguen la misma forma:
+
+```text
+gitlab_execute_action → action: "issue.update", params: { project_id: "my-group/backend", issue_iid: 123, assignee_ids: [45], add_labels: "priority::high,team::backend" }
+gitlab_execute_action → action: "issue.link_create", params: { project_id: "my-group/backend", issue_iid: 300, target_issue_iid: 400, link_type: "blocks" }
+```
+
+Con `TOOL_SURFACE=meta` las mismas llamadas van a la meta-herramienta `gitlab_issue` con `action: list`, `action: update` y `action: link_create`, cada una con los parámetros anidados en `params`.
 
 ---
 

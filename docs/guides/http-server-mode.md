@@ -81,9 +81,9 @@ gitlab-mcp-server --http \
 
 `--tool-surface` selects the visible MCP tool catalog for every HTTP server-pool entry:
 
-- `meta`: domain-level meta-tools, the consolidated catalog.
-- `individual`: every GitLab operation is exposed as its own tool.
-- `dynamic`: the current low-token two-tool surface with `gitlab_find_action` and `gitlab_execute_action`.
+- `dynamic` (default when omitted): the low-token two-tool surface, `gitlab_find_action` and `gitlab_execute_action`.
+- `meta`: domain-level meta-tools, a consolidated catalog that routes on the `action` parameter.
+- `individual`: every GitLab operation exposed as its own tool.
 
 `--capability-surface` controls resources and prompts independently of tools: `full` registers all resources, workflow guides, prompts, and the surface-aware `gitlab://tools` manifest, while `minimal` keeps `gitlab://tools` and omits prompts, workflow guides, and optional GitLab data resources. Dynamic schema discovery still works with `minimal` because `gitlab_find_action` returns schemas inline.
 

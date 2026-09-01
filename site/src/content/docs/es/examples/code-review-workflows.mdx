@@ -4,13 +4,13 @@ description: "Ejemplos de revisión de merge requests con GitLab MCP Server — 
 datePublished: "2026-04-23"
 faq:
   - q: "¿Cómo reviso un merge request de GitLab con un asistente de IA?"
-    a: "Una revisión completa son tres llamadas. `gitlab_merge_request` con `action: list` y `reviewer_id` encuentra los MR que esperan por ti, `action: changes` obtiene el diff para que el asistente lea el código real, y `action: discussion_create` publica comentarios en hilo sobre líneas concretas. En la superficie dinámica se resuelven como `merge_request.list`, `merge_request.changes` y `merge_request.discussion_create`. Revisar un MR de doce ficheros cuesta por tanto tres llamadas, no una por fichero."
+    a: "Una revisión completa son tres llamadas: `merge_request.list` con `reviewer_id` encuentra los MR que esperan por ti, `mr_review.changes_get` obtiene el diff para que el asistente lea el código real, y `mr_review.discussion_create` publica comentarios en hilo sobre líneas concretas. En la superficie dinámica predeterminada son los valores de `action` de `gitlab_execute_action`; con `TOOL_SURFACE=meta` son la acción `list` de la meta-herramienta `gitlab_merge_request` y las acciones `changes_get` y `discussion_create` de `gitlab_mr_review`. Revisar un MR de doce ficheros cuesta por tanto tres llamadas, no una por fichero."
   - q: "¿Cuál es la diferencia entre una nota, una discusión y una nota borrador?"
-    a: "Una nota (`action: note_create`) es un comentario suelto que se publica de inmediato. Una discusión (`action: discussion_create`) abre un hilo resoluble al que otros pueden responder y que cuenta para los hilos sin resolver que condicionan el merge. Una nota borrador (`action: draft_note_create`) queda guardada en privado y es invisible para el autor hasta que publicas toda la revisión de golpe, que es lo que interesa al dejar muchos comentarios: el autor recibe una notificación en vez de veinte."
+    a: "Una nota (`mr_review.note_create`) es un comentario suelto que se publica de inmediato. Una discusión (`mr_review.discussion_create`) abre un hilo resoluble al que otros pueden responder y que cuenta para los hilos sin resolver que condicionan el merge. Una nota borrador (`mr_review.draft_note_create`) queda guardada en privado y es invisible para el autor hasta que publicas toda la revisión de golpe, que es lo que interesa al dejar muchos comentarios: el autor recibe una notificación en vez de veinte."
   - q: "¿Cómo encuentro hilos de revisión sin resolver en un merge request?"
-    a: "Llama a `gitlab_merge_request` con `action: discussion_list` para el MR y filtra los hilos devueltos por `resolved: false`. Las notas creadas con `action: note_create` no son resolubles y nunca aparecen como pendientes, así que aquí solo salen las discusiones. Esta es la comprobación previa al merge cuando el proyecto exige resolver todos los hilos."
+    a: "Ejecuta `mr_review.discussion_list` para el MR (la acción `discussion_list` de `gitlab_mr_review` cuando `TOOL_SURFACE=meta`) y filtra los hilos devueltos por `resolved: false`. Las notas creadas con `mr_review.note_create` no son resolubles y nunca aparecen como pendientes, así que aquí solo salen las discusiones. Esta es la comprobación previa al merge cuando el proyecto exige resolver todos los hilos."
   - q: "¿Puede un asistente de IA aprobar y fusionar un merge request?"
-    a: "Sí, sujeto a los mismos permisos y salvaguardas que cualquier otra mutación. Aprobar es `gitlab_merge_request` con `action: approve` y fusionar es `action: merge`. Ambas se clasifican como mutantes, así que no están disponibles con `GITLAB_READ_ONLY=true` y devuelven una previsualización con `GITLAB_SAFE_MODE=true`. GitLab sigue aplicando sus propias reglas de aprobación: un asistente no puede fusionar un MR que no cumpla las aprobaciones requeridas del proyecto."
+    a: "Sí, sujeto a los mismos permisos y salvaguardas que cualquier otra mutación. Aprobar es `merge_request.approve` y fusionar es `merge_request.merge` (las acciones `approve` y `merge` de `gitlab_merge_request` en la superficie meta). Ambas se clasifican como mutantes, así que no están disponibles con `GITLAB_READ_ONLY=true` y devuelven una previsualización con `GITLAB_SAFE_MODE=true`. GitLab sigue aplicando sus propias reglas de aprobación: un asistente no puede fusionar un MR que no cumpla las aprobaciones requeridas del proyecto."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -34,7 +34,7 @@ import FAQ from "../../../../components/FAQ.astro";
   />
 </CardGrid>
 
-Estos flujos paso a paso cubren el ciclo completo de revisión de merge requests: encontrar los MRs que requieren tu atención, leer sus diffs, comprobar el estado de aprobación, dejar notas y discusiones en hilo y, finalmente, fusionar o rebasar. Cada ejemplo combina el prompt que escribes con la acción exacta de meta-tool que el servidor ejecuta, para que puedas reutilizar la llamada directamente.
+Estos flujos paso a paso cubren el ciclo completo de revisión de merge requests: encontrar los MRs que requieren tu atención, leer sus diffs, comprobar el estado de aprobación, dejar notas y discusiones en hilo y, finalmente, fusionar o rebasar. Cada ejemplo combina el prompt que escribes con la acción exacta del catálogo que el servidor ejecuta, escrita como `dominio.acción → parámetros`: en la superficie dinámica predeterminada es el `action` que pasas a `gitlab_execute_action`, y con `TOOL_SURFACE=meta` es el `action` de la meta-herramienta `gitlab_<dominio>`, para que puedas reutilizar la llamada directamente. Los diffs, notas, discusiones y notas borrador viven en el dominio `mr_review` (`gitlab_mr_review` en la superficie meta); el resto del ciclo de vida del MR, en `merge_request`.
 
 ## Flujo de revisión de MRs
 
@@ -48,17 +48,17 @@ sequenceDiagram
     participant GL as API de GitLab
 
     U->>AI: "Revisa el MR !42"
-    AI->>MCP: gitlab_merge_request (action: list)
+    AI->>MCP: merge_request.list
     MCP->>GL: GET /projects/:id/merge_requests
     GL-->>MCP: Lista de MRs
     MCP-->>AI: MRs abiertos
-    AI->>MCP: gitlab_merge_request (action: changes)
+    AI->>MCP: mr_review.changes_get
     MCP->>GL: GET /projects/:id/merge_requests/:iid/changes
     GL-->>MCP: Datos del diff
     MCP-->>AI: Cambios de archivos
-    AI->>MCP: gitlab_merge_request (action: note_create)
+    AI->>MCP: mr_review.note_create
     MCP->>GL: POST /projects/:id/merge_requests/:iid/notes
-    AI->>MCP: gitlab_merge_request (action: approve)
+    AI->>MCP: merge_request.approve
     MCP->>GL: POST /projects/:id/merge_requests/:iid/approve
     AI->>U: "Revisión completada, MR aprobado"
 ```
@@ -68,7 +68,7 @@ sequenceDiagram
 **Prompt**: "Muéstrame todos los merge requests asignados a mí para revisión en el proyecto backend"
 
 ```text
-gitlab_merge_request → action: list, project_id: "my-group/backend",
+merge_request.list → project_id: "my-group/backend",
   reviewer_username: "johndoe", state: "opened"
 ```
 
@@ -79,7 +79,7 @@ Devuelve: títulos de MRs, autores, ramas, etiquetas y estado de revisión.
 **Prompt**: "Muéstrame los cambios de archivos en el MR !42"
 
 ```text
-gitlab_merge_request → action: changes, project_id: "my-group/backend", merge_request_iid: 42
+mr_review.changes_get → project_id: "my-group/backend", merge_request_iid: 42
 ```
 
 Devuelve: lista de archivos modificados con adiciones, eliminaciones y diffs completos.
@@ -89,7 +89,7 @@ Devuelve: lista de archivos modificados con adiciones, eliminaciones y diffs com
 **Prompt**: "¿Quién ha aprobado el MR !42 y quién falta por aprobar?"
 
 ```text
-gitlab_merge_request → action: approval_state, project_id: "my-group/backend",
+merge_request.approval_state → project_id: "my-group/backend",
   merge_request_iid: 42
 ```
 
@@ -100,7 +100,7 @@ Devuelve: reglas de aprobación, aprobaciones requeridas, aprobaciones actuales 
 **Prompt**: "Aprueba el merge request !42 en el proyecto backend"
 
 ```text
-gitlab_merge_request → action: approve, project_id: "my-group/backend",
+merge_request.approve → project_id: "my-group/backend",
   merge_request_iid: 42
 ```
 
@@ -108,7 +108,7 @@ gitlab_merge_request → action: approve, project_id: "my-group/backend",
 
 ## Revisión de código con IA
 
-No existe una herramienta de "revisión con IA" separada. La revisión asistida por IA ocurre cuando el asistente lee el diff de un MR con `gitlab_merge_request → action: changes`, razona sobre el código y luego escribe sus hallazgos como notas o discusiones en hilo. Una petición típica —_"Lee los cambios del MR !42 y señala cualquier problema de manejo de errores o de seguridad"_— encadena la acción de lectura anterior con las acciones `note_create` y `discussion_create` siguientes, todo dentro de una misma conversación.
+No existe una herramienta de "revisión con IA" separada. La revisión asistida por IA ocurre cuando el asistente lee el diff de un MR con `mr_review.changes_get`, razona sobre el código y luego escribe sus hallazgos como notas o discusiones en hilo. Una petición típica, _"Lee los cambios del MR !42 y señala cualquier problema de manejo de errores o de seguridad"_, encadena la acción de lectura anterior con las acciones `mr_review.note_create` y `mr_review.discussion_create` siguientes, todo dentro de una misma conversación.
 
 ---
 
@@ -118,11 +118,11 @@ Comparte el feedback de revisión directamente en el MR. Publica un único comen
 
 Los tres tipos de comentario se comportan de forma distinta, y elegir mal es el error de revisión más habitual:
 
-| Tipo          | Acción              | ¿Resoluble?       | ¿Visible al instante?         | Úsalo para                                         |
-| ------------- | ------------------- | ----------------- | ----------------------------- | -------------------------------------------------- |
-| Nota          | `note_create`       | No                | Sí                            | Un comentario suelto                               |
-| Discusión     | `discussion_create` | Sí                | Sí                            | Feedback que debe resolverse antes del merge       |
-| Nota borrador | `draft_note_create` | Sí, al publicarse | No — en espera hasta publicar | Una revisión de varios comentarios publicada junta |
+| Tipo          | Acción                        | ¿Resoluble?       | ¿Visible al instante?         | Úsalo para                                         |
+| ------------- | ----------------------------- | ----------------- | ----------------------------- | -------------------------------------------------- |
+| Nota          | `mr_review.note_create`       | No                | Sí                            | Un comentario suelto                               |
+| Discusión     | `mr_review.discussion_create` | Sí                | Sí                            | Feedback que debe resolverse antes del merge       |
+| Nota borrador | `mr_review.draft_note_create` | Sí, al publicarse | No — en espera hasta publicar | Una revisión de varios comentarios publicada junta |
 
 Solo las discusiones cuentan para el control de hilos sin resolver. Las notas borrador evitan que el autor reciba una notificación por cada comentario mientras revisas un MR grande.
 
@@ -131,7 +131,7 @@ Solo las discusiones cuentan para el control de hilos sin resolver. Las notas bo
 **Prompt**: "Añade un comentario al MR !42 diciendo 'El manejo de errores en auth.go necesita un mecanismo de reintento'"
 
 ```text
-gitlab_merge_request → action: note_create, project_id: "my-group/backend",
+mr_review.note_create → project_id: "my-group/backend",
   merge_request_iid: 42, body: "El manejo de errores en auth.go necesita un mecanismo de reintento"
 ```
 
@@ -140,7 +140,7 @@ gitlab_merge_request → action: note_create, project_id: "my-group/backend",
 **Prompt**: "Inicia una discusión en el MR !42 sobre la estrategia de migración de base de datos"
 
 ```text
-gitlab_merge_request → action: discussion_create, project_id: "my-group/backend",
+mr_review.discussion_create → project_id: "my-group/backend",
   merge_request_iid: 42, body: "Discutamos la estrategia de migración de base de datos..."
 ```
 
@@ -149,7 +149,7 @@ gitlab_merge_request → action: discussion_create, project_id: "my-group/backen
 **Prompt**: "Muéstrame todos los hilos de discusión sin resolver en el MR !42"
 
 ```text
-gitlab_merge_request → action: discussion_list, project_id: "my-group/backend",
+mr_review.discussion_list → project_id: "my-group/backend",
   merge_request_iid: 42
 ```
 
@@ -160,11 +160,11 @@ Filtra los resultados por hilos donde `resolved: false` para encontrar elementos
 **Prompt**: "Crea una nota de revisión en borrador en el MR !42 — publicaré todos mis comentarios juntos"
 
 ```text
-gitlab_merge_request → action: draft_note_create, project_id: "my-group/backend",
+mr_review.draft_note_create → project_id: "my-group/backend",
   merge_request_iid: 42, note: "Considera usar un context timeout aquí..."
 ```
 
-Las notas borrador solo son visibles para ti hasta que las publiques todas a la vez con `action: draft_note_publish_all`.
+Las notas borrador solo son visibles para ti hasta que las publiques todas a la vez con `mr_review.draft_note_publish_all`.
 
 ---
 
@@ -177,7 +177,7 @@ Lleva un merge request por todo su ciclo de vida: ábrelo desde una rama de func
 **Prompt**: "Crea un merge request de la rama feature/auth-refactor a main en el proyecto backend"
 
 ```text
-gitlab_merge_request → action: create, project_id: "my-group/backend",
+merge_request.create → project_id: "my-group/backend",
   source_branch: "feature/auth-refactor", target_branch: "main",
   title: "Refactorizar módulo de autenticación"
 ```
@@ -187,7 +187,7 @@ gitlab_merge_request → action: create, project_id: "my-group/backend",
 **Prompt**: "Fusiona el MR !42 usando squash commit"
 
 ```text
-gitlab_merge_request → action: merge, project_id: "my-group/backend",
+merge_request.merge → project_id: "my-group/backend",
   merge_request_iid: 42, squash: true
 ```
 
@@ -196,7 +196,7 @@ gitlab_merge_request → action: merge, project_id: "my-group/backend",
 **Prompt**: "Haz rebase del MR !42 contra la última rama main"
 
 ```text
-gitlab_merge_request → action: rebase, project_id: "my-group/backend",
+merge_request.rebase → project_id: "my-group/backend",
   merge_request_iid: 42
 ```
 
@@ -205,7 +205,7 @@ gitlab_merge_request → action: rebase, project_id: "my-group/backend",
 **Prompt**: "Cierra el MR `!99`, el enfoque fue reemplazado por el MR `!105`"
 
 ```text
-gitlab_merge_request → action: update, project_id: "my-group/backend",
+merge_request.update → project_id: "my-group/backend",
   merge_request_iid: 99, state_event: "close"
 ```
 
@@ -220,11 +220,30 @@ Antes de abrir o fusionar un MR, compara dos ramas para ver exactamente qué cam
 **Prompt**: "Compara la rama develop con main en el proyecto backend"
 
 ```text
-gitlab_repository → action: compare, project_id: "my-group/backend",
+repository.compare → project_id: "my-group/backend",
   from: "main", to: "develop"
 ```
 
 Devuelve: lista de commits, archivos modificados y estadísticas del diff entre las dos ramas.
+
+## Llamadas de revisión dinámicas primero
+
+En la superficie dinámica predeterminada, el asistente descubre primero la acción de revisión y su esquema, y luego la ejecuta, así que cada bloque anterior es el `action` de una llamada a `gitlab_execute_action`. El patrón de dos pasos es buscar y luego ejecutar:
+
+```text
+gitlab_find_action → query: "merge requests pendientes de mi revisión"
+gitlab_execute_action → action: "merge_request.list", params: { project_id: "my-group/backend", reviewer_username: "johndoe", state: "opened" }
+```
+
+Leer un diff y publicar un comentario en hilo siguen la misma forma:
+
+```text
+gitlab_find_action → query: "diff de un merge request"
+gitlab_execute_action → action: "mr_review.changes_get", params: { project_id: "my-group/backend", merge_request_iid: 42 }
+gitlab_execute_action → action: "mr_review.discussion_create", params: { project_id: "my-group/backend", merge_request_iid: 42, body: "Discutamos la estrategia de migración de base de datos..." }
+```
+
+Con `TOOL_SURFACE=meta` las mismas llamadas van a `gitlab_merge_request` con `action: list` y a `gitlab_mr_review` con `action: changes_get` y `action: discussion_create`, cada una con los parámetros anidados en `params`.
 
 ---
 

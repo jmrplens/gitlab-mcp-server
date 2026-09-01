@@ -4,6 +4,7 @@
 > **Domain**: Orbit Knowledge Graph
 > **Individual tools**: 6
 > **Meta-tool**: `gitlab_orbit` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `orbit.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Orbit API](https://docs.gitlab.com/api/orbit/)
 > **Availability**: GitLab.com only; Enterprise/Premium catalog; experimental `knowledge_graph` feature
 > **Audience**: 👤 End users, AI assistant users
@@ -16,16 +17,18 @@ The Orbit domain exposes GitLab's experimental Knowledge Graph API for GitLab.co
 
 The upstream Orbit API is moving quickly. This MCP surface follows the latest GitLab client and CLI coverage, including `graph_status`; GitLab's public API reference may lag behind that endpoint. For schema formatting, the live API currently uses the `format` query parameter, while this server also accepts `response_format` as an input alias for compatibility with public documentation wording.
 
+On the default dynamic surface, these operations are the `orbit.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
+
 With `TOOL_SURFACE=meta`, all six individual tools below are consolidated into the `gitlab_orbit` meta-tool with an `action` parameter.
 
-| Meta-tool Action | Individual Tool             | Purpose                                                           |
-| ---------------- | --------------------------- | ----------------------------------------------------------------- |
-| `status`         | `gitlab_orbit_status`       | Check Orbit service health and backend components                 |
-| `schema`         | `gitlab_orbit_schema`       | Inspect the graph ontology and optionally expand node definitions |
-| `tools`          | `gitlab_orbit_tools`        | Discover the live Orbit query manifest                            |
-| `dsl`            | `gitlab_orbit_dsl`          | Retrieve the Orbit query DSL schema or LLM grammar                |
-| `query`          | `gitlab_orbit_query`        | Run a read-only Knowledge Graph query object                      |
-| `graph_status`   | `gitlab_orbit_graph_status` | Inspect indexing status for one namespace, project, or full path  |
+| Canonical ID         | Meta-tool action | Individual tool             | Purpose                                                           |
+| -------------------- | ---------------- | --------------------------- | ----------------------------------------------------------------- |
+| `orbit.status`       | `status`         | `gitlab_orbit_status`       | Check Orbit service health and backend components                 |
+| `orbit.schema`       | `schema`         | `gitlab_orbit_schema`       | Inspect the graph ontology and optionally expand node definitions |
+| `orbit.tools`        | `tools`          | `gitlab_orbit_tools`        | Discover the live Orbit query manifest                            |
+| `orbit.dsl`          | `dsl`            | `gitlab_orbit_dsl`          | Retrieve the Orbit query DSL schema or LLM grammar                |
+| `orbit.query`        | `query`          | `gitlab_orbit_query`        | Run a read-only Knowledge Graph query object                      |
+| `orbit.graph_status` | `graph_status`   | `gitlab_orbit_graph_status` | Inspect indexing status for one namespace, project, or full path  |
 
 ### Common Questions
 

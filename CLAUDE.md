@@ -646,6 +646,8 @@ Plus enterprise-only routes injected into 3 base meta-tools:
 - `gitlab_group` → iterations, epics, wikis, protected branches/envs, releases, LDAP, SAML, SSH certs, credentials, analytics, service accounts
 - `gitlab_issue` → iterations
 
+**Dynamic mode** (default) — the same catalog gating applies: `gitlab_find_action` never lists and `gitlab_execute_action` never runs an action above the resolved tier, so the tier changes which `domain.action` IDs exist rather than which tools are registered.
+
 ### OAuth admission, per-action write gating, and HTTP routing
 
 Three invariants of HTTP mode that are easy to break by touching the wrong layer:
@@ -692,7 +694,7 @@ curl -X POST http://localhost:8080/mcp -H "Content-Type: application/json" -H "A
 
 - **TLS errors**: Set `GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs
 - **Tool not found**: Check the action's `ActionSpec`, catalog aggregation, `action_catalog.go`, and `docs/development/tool-surfaces-and-action-core.md` for surface ownership rules
-- **Meta-tools disabled**: legacy `META_TOOLS=false` maps to `TOOL_SURFACE=individual`; prefer setting `TOOL_SURFACE=meta` explicitly
+- **Meta-tools disabled**: legacy `META_TOOLS=false` maps to `TOOL_SURFACE=individual`; unset both to get the default dynamic surface, or set `TOOL_SURFACE=meta` explicitly when meta-tools are what you want
 - **Dynamic mode shows only two tools**: this is expected by default. Use `gitlab_find_action` and `gitlab_execute_action`; set `TOOL_SURFACE=meta` to use meta-tools.
 - **Pagination missing**: Ensure tool uses `buildPaginationResponse()` helper for list operations
 - **Test mocking**: All tests use `httptest.NewServer` — check URL routing in mock handler

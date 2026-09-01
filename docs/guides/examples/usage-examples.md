@@ -68,13 +68,15 @@ The individual tool names below assume `TOOL_SURFACE=individual`. On the default
 
 ### 1. Project Discovery
 
-Discover what a meta-tool covers through the `gitlab://tools` manifest:
+Discover what a domain covers on the default dynamic surface:
 
 ```text
 User: "What tools are available for merge requests?"
-→ Read the resource gitlab://tools/gitlab_merge_request
-→ Returns: every MR action with its guidance; gitlab://tools/gitlab_merge_request.<action> has the per-action schema
+→ Call gitlab_find_action(query="merge request") for ranked actions with inline schemas, or read gitlab://tools and filter the merge_request.* entries
+→ Read gitlab://tools/merge_request.list for one action's call shape and schema
 ```
+
+With `TOOL_SURFACE=meta` the same information is under `gitlab://tools/gitlab_merge_request.<action>`, and the `gitlab_merge_request` tool description carries the action list.
 
 Individual tool approach:
 

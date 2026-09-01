@@ -25,22 +25,22 @@ import stats from "../../data/stats.json";
 
 ## GitLab edition compatibility
 
-GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The Enterprise/Premium catalog unlocks {stats.meta.self_managed_enterprise - stats.meta.base} additional enterprise-only meta-tools: set `GITLAB_TIER=premium` (or `GITLAB_TIER=ultimate`) in stdio mode, use `--tier=premium`/`--tier=ultimate` in HTTP mode, or rely on auto-detection from `GET /license` (fallback `free`). The deprecated `GITLAB_ENTERPRISE=true` environment variable is still honored when `GITLAB_TIER` is unset (it maps to `ultimate`) and logs a warning. There is no `--enterprise` flag in HTTP mode — passing one aborts startup; use `--tier`.
+GitLab MCP Server works with both Community Edition (CE) and Enterprise Edition (EE). The Enterprise/Premium catalog unlocks {stats.meta.self_managed_enterprise - stats.meta.base} additional enterprise-only domains, registered as extra meta-tools with `TOOL_SURFACE=meta`, extra `gitlab_*` tools with `TOOL_SURFACE=individual`, and extra catalog actions on the default dynamic surface: set `GITLAB_TIER=premium` (or `GITLAB_TIER=ultimate`) in stdio mode, use `--tier=premium`/`--tier=ultimate` in HTTP mode, or rely on auto-detection from `GET /license` (fallback `free`). The deprecated `GITLAB_ENTERPRISE=true` environment variable is still honored when `GITLAB_TIER` is unset (it maps to `ultimate`) and logs a warning. There is no `--enterprise` flag in HTTP mode — passing one aborts startup; use `--tier`.
 
-| Feature                                                                       | Community (CE) | Enterprise (EE) |
-| ----------------------------------------------------------------------------- | :------------: | :-------------: |
-| Projects, Issues, MRs, Pipelines, CI/CD                                       |       ✅        |        ✅        |
-| Wikis, Labels, Milestones, Releases                                           |       ✅        |        ✅        |
-| Users, Groups, Members, Search                                                |       ✅        |        ✅        |
-| Deployments, Environments, Packages                                           |       ✅        |        ✅        |
-| {stats.meta.base} base meta-tools                                             |       ✅        |        ✅        |
-| {stats.resources} resources, {stats.prompts} prompts                          |       ✅        |        ✅        |
-| Merge Trains                                                                  |       ❌        |        ✅        |
-| DORA Metrics                                                                  |       ❌        |        ✅        |
-| Vulnerability Management                                                      |       ❌        |        ✅        |
-| Audit Events                                                                  |       ❌        |        ✅        |
-| Compliance Policies                                                           |       ❌        |        ✅        |
-| +{stats.meta.self_managed_enterprise - stats.meta.base} enterprise meta-tools |       ❌        |        ✅        |
+| Feature                                                                    | Community (CE) | Enterprise (EE) |
+| -------------------------------------------------------------------------- | :------------: | :-------------: |
+| Projects, Issues, MRs, Pipelines, CI/CD                                    |       ✅        |        ✅        |
+| Wikis, Labels, Milestones, Releases                                        |       ✅        |        ✅        |
+| Users, Groups, Members, Search                                             |       ✅        |        ✅        |
+| Deployments, Environments, Packages                                        |       ✅        |        ✅        |
+| {stats.meta.base} base domains (meta-tools with `TOOL_SURFACE=meta`)       |       ✅        |        ✅        |
+| {stats.resources} resources, {stats.prompts} prompts                       |       ✅        |        ✅        |
+| Merge Trains                                                               |       ❌        |        ✅        |
+| DORA Metrics                                                               |       ❌        |        ✅        |
+| Vulnerability Management                                                   |       ❌        |        ✅        |
+| Audit Events                                                               |       ❌        |        ✅        |
+| Compliance Policies                                                        |       ❌        |        ✅        |
+| +{stats.meta.self_managed_enterprise - stats.meta.base} enterprise domains |       ❌        |        ✅        |
 
 To enable enterprise features in stdio mode, set `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`. In HTTP mode, set `--tier=premium`/`--tier=ultimate` to force the Enterprise/Premium catalog, or omit it to let the server auto-detect CE/EE per token+URL entry when GitLab reports edition. The deprecated `GITLAB_ENTERPRISE=true` variable still works when `GITLAB_TIER` is unset; there is no `--enterprise` flag — use `--tier`.
 

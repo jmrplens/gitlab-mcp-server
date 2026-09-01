@@ -4,6 +4,7 @@
 > **Domain**: Administration
 > **Individual tools**: 75
 > **Meta-tool**: `gitlab_admin` (`TOOL_SURFACE=meta` catalog) — one tool for the whole domain, Terraform states, cluster agents and the dependency proxy included
+> **Dynamic IDs**: `admin.*`, `audit_event.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Settings](https://docs.gitlab.com/ee/api/settings.html) · [Appearance](https://docs.gitlab.com/ee/api/appearance.html) · [Broadcast Messages](https://docs.gitlab.com/ee/api/broadcast_messages.html) · [Features](https://docs.gitlab.com/ee/api/features.html) · [License](https://docs.gitlab.com/ee/api/license.html) · [System Hooks](https://docs.gitlab.com/ee/api/system_hooks.html) · [Sidekiq](https://docs.gitlab.com/ee/api/sidekiq_metrics.html) · [Plan Limits](https://docs.gitlab.com/ee/api/plan_limits.html) · [Usage Data](https://docs.gitlab.com/ee/api/usage_data.html) · [Audit Events](https://docs.gitlab.com/ee/api/audit_events.html) · [Terraform States](https://docs.gitlab.com/ee/api/terraform_state.html) · [Cluster Agents](https://docs.gitlab.com/ee/api/cluster_agents.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The administration domain covers instance-level settings, appearance, broadcast messages, admin feature flags, licensing, system hooks, Sidekiq metrics, plan limits, usage data, database migrations, OAuth2 applications, application statistics, instance metadata, custom attributes, bulk imports, dependency proxy, audit events, Terraform states, and cluster agents.
+
+On the default dynamic surface, these operations are the `admin.*`, `audit_event.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, every sub-package on this page is consolidated into a single `gitlab_admin` meta-tool that dispatches by `action` parameter. Terraform states, cluster agents and the dependency proxy have no meta-tool of their own — they are actions on `gitlab_admin`, such as `terraform_state_list`, `cluster_agent_get` and `dependency_proxy_delete`.
 

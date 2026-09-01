@@ -673,29 +673,31 @@ Si obtienes errores de conexión, comprueba:
 
 :::
 
-## Entendiendo las meta-herramientas
+## Entendiendo las superficies de herramientas
 
-Por defecto, el servidor funciona en **modo dinámico find/execute** con `gitlab_find_action` y `gitlab_execute_action`. Establece `TOOL_SURFACE=meta` para usar **{stats.meta.base} meta-herramientas por dominio** ({stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado, {stats.meta.gitlab_com} en GitLab.com Enterprise/Premium con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio.
-
-Por ejemplo, en lugar de herramientas separadas `gitlab_issue_list`, `gitlab_issue_create` y `gitlab_issue_update`, hay una única herramienta `gitlab_issue` con un parámetro `action`:
+Por defecto, el servidor funciona en **modo dinámico find/execute** con `gitlab_find_action` y `gitlab_execute_action`. Cada operación de GitLab es una acción del catálogo con un ID canónico `domain.action`: el asistente localiza la que necesita (con su schema exacto de parámetros) y después la ejecuta. Crear un issue tiene esta forma:
 
 ```json
 {
-  "tool": "gitlab_issue",
+  "tool": "gitlab_execute_action",
   "arguments": {
-    "action": "create",
-    "project": "my-group/my-project",
-    "title": "Fix login redirect"
+    "action": "issue.create",
+    "params": {
+      "project_id": "my-group/my-project",
+      "title": "Fix login redirect"
+    }
   }
 }
 ```
 
-Esto es transparente para ti — tu cliente de IA maneja el enrutamiento automáticamente. Solo pregunta de forma natural: _"crea un issue para el bug del login"_ y el LLM selecciona la meta-herramienta y acción correctas.
+Establece `TOOL_SURFACE=meta` para usar **{stats.meta.base} meta-herramientas por dominio** ({stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado, {stats.meta.gitlab_com} en GitLab.com Enterprise/Premium con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio. En lugar de herramientas separadas `gitlab_issue_list`, `gitlab_issue_create` y `gitlab_issue_update` (la forma de `TOOL_SURFACE=individual`), hay una única herramienta `gitlab_issue` con un parámetro `action`: la misma llamada va a `gitlab_issue` como `{ "action": "create", "params": { ... } }`. Las meta-herramientas solo aceptan `action` y `params` en el nivel superior, así que los parámetros van anidados en `params` en ambas superficies.
+
+Esto es transparente para ti: tu cliente de IA se encarga del enrutamiento. Solo pregunta de forma natural, _"crea un issue para el bug del login"_, y en la superficie dinámica predeterminada el asistente localiza `issue.create` y la ejecuta; con `TOOL_SURFACE=meta` elige la meta-herramienta `gitlab_issue` y la acción `create`.
 
 :::tip
-Las meta-herramientas reducen el número de herramientas visibles en más de un 95%, y el coste en tokens de los esquemas en torno a tres cuartas partes, sin perder funcionalidad. Consulta [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) para la referencia completa.
+No necesitas configurar nada para obtener el catálogo de dos herramientas: la superficie dinámica es la predeterminada y `TOOL_SURFACE=dynamic` solo lo hace explícito. El servidor expone solo `gitlab_find_action` y `gitlab_execute_action`, respaldadas por el mismo catálogo canónico de acciones de GitLab. Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para ver cómo funcionan el descubrimiento y la ejecución.
 
-Para el catálogo visible estable más pequeño, establece `TOOL_SURFACE=dynamic`. El servidor expone solo `gitlab_find_action` y `gitlab_execute_action`, respaldadas por el mismo catálogo canónico de acciones de GitLab.
+Las meta-herramientas reducen el número de herramientas visibles en más de un 95% respecto a las herramientas individuales, y el coste en tokens de los esquemas en torno a tres cuartas partes, sin perder funcionalidad. Consulta [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) para la referencia completa.
 
 Combina el modo dinámico con `CAPABILITY_SURFACE=minimal` para mantener solo workspace roots y `gitlab://tools`, y omitir recursos opcionales, guías y prompts cuando necesites el contexto MCP inicial más pequeño. Dynamic conserva schemas inline mediante `gitlab_find_action`.
 :::
@@ -705,7 +707,8 @@ Combina el modo dinámico con `CAPABILITY_SURFACE=minimal` para mantener solo wo
 ## Próximos pasos
 
 - [Configuración](/gitlab-mcp-server/es/configuration/) — Ajusta las variables de entorno y funciones opcionales
-- [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — Entiende cómo se organizan las herramientas y descubre todas las operaciones disponibles
+- [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) — Cómo la superficie find/execute predeterminada descubre y ejecuta cualquier operación
+- [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — Los despachadores consolidados por dominio de `TOOL_SURFACE=meta`
 - [Arquitectura](/gitlab-mcp-server/es/architecture/) — Comprende cómo funciona el servidor internamente
 - [Referencia de herramientas](/gitlab-mcp-server/es/tools/overview/) — Explora todas las herramientas disponibles por dominio
 

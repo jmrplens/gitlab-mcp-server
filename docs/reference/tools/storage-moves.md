@@ -4,6 +4,7 @@
 > **Domain**: Repository Storage Moves
 > **Individual tools**: 18
 > **Meta-tool**: `gitlab_storage_move` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `storage_move.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Project Repository Storage Moves](https://docs.gitlab.com/ee/api/project_repository_storage_moves.html) · [Group Repository Storage Moves](https://docs.gitlab.com/ee/api/group_repository_storage_moves.html) · [Snippet Repository Storage Moves](https://docs.gitlab.com/ee/api/snippet_repository_storage_moves.html)
 > **Audience**: 👤 GitLab administrators
 
@@ -14,6 +15,8 @@
 Repository storage moves allow GitLab administrators to migrate repositories between storage shards. Three entity types support storage moves: projects, groups, and snippets. Each entity type provides six operations: list all moves, list moves for a specific entity, get a single move, get a move for a specific entity, schedule a move, and schedule moves for all entities.
 
 All operations require **admin access**.
+
+On the default dynamic surface, these operations are the `storage_move.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, repository storage move tools are consolidated into a single `gitlab_storage_move` meta-tool with an `action` parameter. Project and snippet storage move actions are available in the base catalog; group storage move actions require the Enterprise/Premium catalog.
 
