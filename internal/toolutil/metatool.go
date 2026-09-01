@@ -2586,7 +2586,7 @@ func BuildMetaToolSchema(routes ActionMap, mode string) map[string]any {
 			"action": map[string]any{
 				"type":        "string",
 				"enum":        actions,
-				"description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object — see the tool description for the per-action parameter list.",
+				"description": "Action to perform. Pick exactly one of the values in `enum`. Each action expects its own `params` object. See the tool description for the per-action parameter list.",
 			},
 			"params": map[string]any{
 				"type":                 "object",

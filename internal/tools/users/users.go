@@ -422,8 +422,8 @@ type ContributionEventsOutput struct {
 // ListContributionEventsInput holds parameters for listing user contribution events.
 type ListContributionEventsInput struct {
 	UserID     int64  `json:"user_id" jsonschema:"The ID of the user whose events to retrieve,required"`
-	Action     string `json:"action,omitempty" jsonschema:"Filter by action type: created | updated | closed | reopened | pushed | commented | merged | joined | left | destroyed | expired | approved"`
-	TargetType string `json:"target_type,omitempty" jsonschema:"Filter by target type: Issue | Milestone | MergeRequest | Note | Project | Snippet | User"`
+	Action     string `json:"action,omitempty" jsonschema:"Filter by event action type"`
+	TargetType string `json:"target_type,omitempty" jsonschema:"Filter by event target type"`
 	Before     string `json:"before,omitempty" jsonschema:"Only events before this date (YYYY-MM-DD)"`
 	After      string `json:"after,omitempty" jsonschema:"Only events after this date (YYYY-MM-DD)"`
 	Scope      string `json:"scope,omitempty" jsonschema:"Include all events across a user's projects (e.g. 'all')"`

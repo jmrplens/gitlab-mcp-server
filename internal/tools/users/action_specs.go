@@ -516,6 +516,17 @@ func userInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOverr
 				"description": "Runner scope: instance_type (shared), group_type (requires group_id), or project_type (requires project_id).",
 			}),
 		}
+	case "gitlab_list_user_contribution_events":
+		// Docs: https://docs.gitlab.com/ee/api/events.html#list-a-user-contribution-events
+		// SDK: ListContributionEventsOptions.Action *EventTypeValue,
+		// ListContributionEventsOptions.TargetType *EventTargetTypeValue (types.go)
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("action",
+				"created", "updated", "closed", "reopened", "pushed", "commented",
+				"merged", "joined", "left", "destroyed", "expired", "approved"),
+			toolutil.SchemaEnumOverride("target_type",
+				"Issue", "Milestone", "MergeRequest", "Note", "Project", "Snippet", "User"),
+		}
 	case "gitlab_get_user_memberships":
 		// Docs: https://docs.gitlab.com/ee/api/users.html#list-user-memberships
 		// SDK: GetUserMembershipOptions.Type *string (no consts, string param)
