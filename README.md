@@ -110,6 +110,10 @@ Or install the native binary first, then register it:
 npx -y @jmrp.io/gitlab-mcp-server          # zero install; clients launch it directly
 npm install -g @jmrp.io/gitlab-mcp-server  # or install globally (npm)
 pnpm add -g @jmrp.io/gitlab-mcp-server     # or globally (pnpm)
+# Any platform (Python: uv/pipx/pip) — platform wheel carrying the same native binary
+uvx gitlab-mcp-server                      # zero install; clients launch it directly
+pipx install gitlab-mcp-server             # or install globally (pipx)
+pip install gitlab-mcp-server              # or into the active environment (pip)
 # macOS/Linux (Homebrew)
 brew install jmrplens/tap/gitlab-mcp-server
 # Linux/macOS (script)

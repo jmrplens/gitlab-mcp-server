@@ -240,6 +240,24 @@ jobs:
           npm install -g npm@11.5.1
           bash scripts/publish-npm.sh dist "${GITHUB_REF#refs/tags/v}"
 
+      # PyPI wheels are assembled from the same staged dist/ binaries the npm
+      # step reads: one wheel per platform with the native binary in
+      # .data/scripts (the uv/ruff model), validated before upload because a
+      # published PyPI file name is burned forever even if the release is
+      # deleted.
+      - name: Build and validate PyPI wheels
+        run: make validate-pypi-local PYPI_BINARIES=dist
+
+      # OIDC trusted publisher — no stored token, PEP 740 attestations
+      # attached automatically, and skip-existing means a re-run of this job
+      # lands on already-uploaded files without failing. SHA-pinned: the
+      # action receives the job's OIDC credential and uploads artifacts.
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: pypi/dist
+          skip-existing: true
+
       - name: Update Homebrew tap formula
         env:
           TAP_DEPLOY_KEY_B64: ${{ secrets.TAP_DEPLOY_KEY_B64 }}

@@ -182,6 +182,47 @@ Apunta cualquier cliente MCP a `npx` sin instalar nada:
 }
 ```
 
+### PyPI / uvx (cualquier plataforma)
+
+Publicado como [`gitlab-mcp-server`](https://pypi.org/project/gitlab-mcp-server/) con el mismo modelo que `uv` y `ruff`: cada wheel de plataforma lleva el binario nativo, el instalador lo coloca en la ruta de scripts como el propio comando, y no se ejecuta Python cuando corre el servidor.
+
+<Tabs syncKey="pypkg">
+<TabItem label="uvx">
+
+```bash
+# Sin instalación — los clientes pueden lanzarlo directamente
+uvx gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pipx">
+
+```bash
+pipx install gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pip">
+
+```bash
+pip install gitlab-mcp-server
+```
+
+</TabItem>
+</Tabs>
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "uvx",
+      "args": ["gitlab-mcp-server"],
+      "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
+    }
+  }
+}
+```
+
 ### Instalador de una línea (binario nativo)
 
 Instala el binario en tu PATH y lo registra. Las actualizaciones vienen de lo que lo instaló (`brew upgrade`, `winget upgrade` o volver a ejecutar el script); el servidor no se actualiza a sí mismo.

@@ -11,7 +11,7 @@
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
 	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names \
 	audit-doc-coverage audit-doc-coverage-check \
-	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
+	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm gen-pypi validate-pypi validate-pypi-local publish-pypi-dry publish-pypi publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
        docker-build docker-push docker-run \
        inspector inspector-stop help
@@ -811,6 +811,51 @@ publish-npm-dry:
 publish-npm:
 	@test -n "$(NPM_BINARIES)" || { echo "ERROR: set NPM_BINARIES=<dir of release binaries>"; exit 1; }
 	scripts/publish-npm.sh "$(NPM_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
+
+## gen-pypi: assemble the PyPI wheelhouse (six platform wheels) from release
+## binaries. The wheels carry the native binary in .data/scripts, the uv/ruff
+## model: the installer puts it on the scripts path as the command itself.
+##   make gen-pypi PYPI_BINARIES=dist
+gen-pypi:
+	@command -v python3 >/dev/null || { echo "ERROR: Python 3 is required"; exit 1; }
+	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
+	python3 scripts/build_pypi.py --binaries "$(PYPI_BINARIES)" --version "$$(tr -d '[:space:]' < VERSION)"
+
+## validate-pypi: build the wheels and validate them inside a clean
+## python:3.14-slim container: RECORD hashes, metadata, ownership token,
+## binary magic and glibc floor for all six, plus a real venv install and MCP
+## initialize handshake for the container's native platform.
+##   make validate-pypi PYPI_BINARIES=dist
+validate-pypi:
+	@command -v docker >/dev/null || { echo "ERROR: Docker is required for isolated validation (or use validate-pypi-local)"; exit 1; }
+	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
+	@VER=$$(tr -d '[:space:]' < VERSION); \
+	docker run --rm \
+		-v "$(CURDIR):/work" -v "$(abspath $(PYPI_BINARIES)):/binaries:ro" \
+		-w /work python:3.14-slim sh -euc ' \
+			python3 scripts/build_pypi.py --binaries /binaries --version '"$$VER"' && \
+			python3 scripts/validate_pypi.py --wheels pypi/dist --version '"$$VER"
+
+## validate-pypi-local: same validation without Docker, for the ephemeral CI
+## runner (already disposable). Builds wheels from PYPI_BINARIES, then validates.
+validate-pypi-local:
+	@command -v python3 >/dev/null || { echo "ERROR: Python 3 is required"; exit 1; }
+	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
+	@VER=$$(tr -d '[:space:]' < VERSION); \
+	python3 scripts/build_pypi.py --binaries "$(PYPI_BINARIES)" --version "$$VER" && \
+	python3 scripts/validate_pypi.py --wheels pypi/dist --version "$$VER"
+
+## publish-pypi-dry: assemble and validate the PyPI wheelhouse without uploading.
+publish-pypi-dry:
+	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
+	scripts/publish-pypi.sh "$(PYPI_BINARIES)" "$$(tr -d '[:space:]' < VERSION)" --dry-run
+
+## publish-pypi: assemble, validate and publish the PyPI wheels out of band.
+## Auth via PYPI_TOKEN. The release workflow publishes through the OIDC
+## trusted publisher instead; this target is for bootstrap/manual publishes.
+publish-pypi:
+	@test -n "$(PYPI_BINARIES)" || { echo "ERROR: set PYPI_BINARIES=<dir of release binaries>"; exit 1; }
+	scripts/publish-pypi.sh "$(PYPI_BINARIES)" "$$(tr -d '[:space:]' < VERSION)"
 
 ## publish-lobehub: push the current version of the existing LobeHub listing.
 ## Reads lhm.plugin.json (version kept in sync by scripts/update-server-json-sha.sh
