@@ -11,14 +11,16 @@ mcp-name: io.github.jmrplens/gitlab-mcp-server
 Run it directly with [uv](https://docs.astral.sh/uv/):
 
 ```bash
-GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx uvx gitlab-mcp-server
+GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx uvx jmrplens-gitlab-mcp-server
 ```
 
 Or install it on your PATH:
 
 ```bash
-pipx install gitlab-mcp-server   # or: pip install gitlab-mcp-server
+pipx install jmrplens-gitlab-mcp-server   # or: pip install jmrplens-gitlab-mcp-server
 ```
+
+Either way the installed command is `gitlab-mcp-server` (the native binary); the `jmrplens-` prefixed command also works, which is what lets `uvx` resolve it by distribution name. About the name: the unprefixed `gitlab-mcp-server` project on PyPI is an empty registration held by an unrelated account and is under a PEP 541 reclamation request; this author-prefixed distribution is the official one meanwhile.
 
 Typical MCP client configuration (stdio):
 
@@ -27,7 +29,7 @@ Typical MCP client configuration (stdio):
   "mcpServers": {
     "gitlab": {
       "command": "uvx",
-      "args": ["gitlab-mcp-server"],
+      "args": ["jmrplens-gitlab-mcp-server"],
       "env": {
         "GITLAB_URL": "https://gitlab.com",
         "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx"

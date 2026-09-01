@@ -28,8 +28,16 @@ import shutil
 import sys
 import zipfile
 
-DIST_NAME = "gitlab-mcp-server"
+# The unprefixed name gitlab-mcp-server is registered empty on PyPI by an
+# unrelated account and is under PEP 541 reclamation; until that resolves,
+# the distribution ships under the author-prefixed name. The IMPORT package
+# and the native command keep the unprefixed name, so client configurations
+# never change: uvx matches the distribution name through a console-script
+# wrapper, and the reclaimed name will slot in as a rename of DIST_NAME.
+DIST_NAME = "jmrplens-gitlab-mcp-server"
+NORM_NAME = DIST_NAME.replace("-", "_")
 PKG_NAME = "gitlab_mcp_server"
+COMMAND = "gitlab-mcp-server"
 
 # Release-asset name fragments mapped to wheel platform tags. The Linux
 # binaries are PIE executables linked against glibc, so the wheels carry
@@ -159,8 +167,8 @@ def add_file(zf, records, arcname, data, executable=False):
 
 
 def build_wheel(out_dir, version, plat_key, tag, binary_path, readme):
-    dist_info = "{}-{}.dist-info".format(PKG_NAME, version)
-    wheel_name = "{}-{}-py3-none-{}.whl".format(PKG_NAME, version, tag)
+    dist_info = "{}-{}.dist-info".format(NORM_NAME, version)
+    wheel_name = "{}-{}-py3-none-{}.whl".format(NORM_NAME, version, tag)
     wheel_path = os.path.join(out_dir, wheel_name)
 
     with open(binary_path, "rb") as fh:
@@ -172,7 +180,7 @@ def build_wheel(out_dir, version, plat_key, tag, binary_path, readme):
     # executable bit set. A binary inside the package directory does not get
     # that guarantee: pip installed it without +x and the launcher died with
     # PermissionError, which is exactly why uv and ruff ship theirs this way.
-    data_scripts = "{}-{}.data/scripts".format(PKG_NAME, version)
+    data_scripts = "{}-{}.data/scripts".format(NORM_NAME, version)
 
     records = []
     with zipfile.ZipFile(wheel_path, "w") as zf:
@@ -181,6 +189,8 @@ def build_wheel(out_dir, version, plat_key, tag, binary_path, readme):
         add_file(zf, records, data_scripts + "/" + bin_name, binary, executable=True)
         add_file(zf, records, dist_info + "/METADATA", build_metadata(version, readme))
         add_file(zf, records, dist_info + "/WHEEL", wheel_file(tag))
+        add_file(zf, records, dist_info + "/entry_points.txt",
+                 "[console_scripts]\n{} = {}:main\n".format(DIST_NAME, PKG_NAME))
         record_name = dist_info + "/RECORD"
         records.append("{},,".format(record_name))
         record_data = "\n".join(records) + "\n"
@@ -214,7 +224,7 @@ def main():
     built = []
     for plat_key, tag in PLATFORMS.items():
         suffix = ".exe" if plat_key.startswith("windows") else ""
-        binary_path = os.path.join(args.binaries, "{}-{}{}".format(DIST_NAME, plat_key, suffix))
+        binary_path = os.path.join(args.binaries, "{}-{}{}".format(COMMAND, plat_key, suffix))
         if not os.path.isfile(binary_path):
             sys.exit("build_pypi: missing release binary {}".format(binary_path))
         built.append(build_wheel(args.out, args.version, plat_key, tag, binary_path, readme))

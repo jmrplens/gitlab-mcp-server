@@ -275,8 +275,40 @@ while IFS=$'\t' read -r identifier version; do
   fi
 done < <(jq -r '.packages[] | select(.registryType == "npm") | [.identifier, (.version // "null")] | @tsv' "$SERVER_JSON")
 
+# --- pypi packages: the registry validates ownership through an
+# "mcp-name: <server-name>" token in the published version's README
+# (long_description), fetched from the PyPI JSON API. fileSha256 is
+# rejected server-side like the other non-mcpb types.
+while IFS=$'\t' read -r identifier version; do
+  checked=$((checked + 1))
+  echo "pypi package: $identifier@$version"
+
+  banned=$(jq -r --arg id "$identifier" \
+    '[.packages[] | select(.registryType == "pypi" and .identifier == $id) | to_entries[]
+      | select(.key == "fileSha256") | .key] | join(", ")' "$SERVER_JSON")
+  if [[ -n "$banned" ]]; then
+    fail "carries field(s) the registry rejects for pypi packages: $banned"
+  fi
+
+  if [[ -z "$version" || "$version" == "null" ]]; then
+    fail "declares no version (the registry requires one for pypi entries)"
+    continue
+  fi
+
+  if ! meta=$(curl "${CURL_META[@]}" -fsSL "https://pypi.org/pypi/${identifier}/${version}/json"); then
+    fail "version $version not found on pypi.org"
+    continue
+  fi
+  published_desc=$(echo "$meta" | jq -r '.info.description // ""')
+  if ! grep -qE "(^|[[:space:]])mcp-name: ${server_name}([[:space:]]|$)" <<<"$published_desc"; then
+    fail "published README lacks the \"mcp-name: ${server_name}\" ownership token the registry validates"
+  else
+    echo "  OK: published version carries the mcp-name ownership token"
+  fi
+done < <(jq -r '.packages[] | select(.registryType == "pypi") | [.identifier, (.version // "null")] | @tsv' "$SERVER_JSON")
+
 if [[ "$checked" -eq 0 ]]; then
-  echo "ERROR: no mcpb, oci or npm packages found in $SERVER_JSON" >&2
+  echo "ERROR: no mcpb, oci, npm or pypi packages found in $SERVER_JSON" >&2
   exit 1
 fi
 

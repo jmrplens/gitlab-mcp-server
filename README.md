@@ -10,6 +10,7 @@
 
 [![GitHub Release](https://img.shields.io/github/v/release/jmrplens/gitlab-mcp-server?style=flat&logo=github&label=Release)](https://github.com/jmrplens/gitlab-mcp-server/releases/latest)
 [![npm](https://img.shields.io/npm/v/@jmrp.io/gitlab-mcp-server?style=flat&logo=npm&label=npm)](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server)
+[![PyPI](https://img.shields.io/pypi/v/jmrplens-gitlab-mcp-server?style=flat&logo=pypi&label=PyPI)](https://pypi.org/project/jmrplens-gitlab-mcp-server/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/Windows%20%7C%20Linux%20%7C%20macOS-amd64%20%26%20arm64-lightgrey?style=flat&logo=windows-terminal&logoColor=white)
 <!-- Quality -->
@@ -111,9 +112,9 @@ npx -y @jmrp.io/gitlab-mcp-server          # zero install; clients launch it dir
 npm install -g @jmrp.io/gitlab-mcp-server  # or install globally (npm)
 pnpm add -g @jmrp.io/gitlab-mcp-server     # or globally (pnpm)
 # Any platform (Python: uv/pipx/pip) — platform wheel carrying the same native binary
-uvx gitlab-mcp-server                      # zero install; clients launch it directly
-pipx install gitlab-mcp-server             # or install globally (pipx)
-pip install gitlab-mcp-server              # or into the active environment (pip)
+uvx jmrplens-gitlab-mcp-server             # zero install; clients launch it directly
+pipx install jmrplens-gitlab-mcp-server    # or install globally (pipx)
+pip install jmrplens-gitlab-mcp-server     # or into the active environment (pip)
 # macOS/Linux (Homebrew)
 brew install jmrplens/tap/gitlab-mcp-server
 # Linux/macOS (script)

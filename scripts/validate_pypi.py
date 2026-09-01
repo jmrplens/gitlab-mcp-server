@@ -36,7 +36,9 @@ import tempfile
 import venv
 import zipfile
 
-DIST = "gitlab_mcp_server"
+DIST_NAME = "jmrplens-gitlab-mcp-server"
+DIST = DIST_NAME.replace("-", "_")
+COMMAND = "gitlab-mcp-server"
 MCP_NAME_TOKEN = "mcp-name: io.github.jmrplens/gitlab-mcp-server"
 MIN_BINARY_BYTES = 20 * 1024 * 1024
 GLIBC_CEILING = (2, 17)
@@ -121,12 +123,16 @@ def validate_wheel(path, version, tag):
                 fail("{}: RECORD mismatch for {}".format(name, arc))
 
         metadata = zf.read(dist_info + "/METADATA").decode("utf-8")
-        for needle in ("Name: gitlab-mcp-server", "Version: " + version,
+        for needle in ("Name: " + DIST_NAME, "Version: " + version,
                        "Description-Content-Type: text/markdown"):
             if needle not in metadata:
                 fail("{}: METADATA missing {!r}".format(name, needle))
         if not re.search(r"(^|\s)" + re.escape(MCP_NAME_TOKEN) + r"(\s|$)", metadata):
             fail("{}: METADATA description lost the MCP Registry ownership token".format(name))
+
+        entry = zf.read(dist_info + "/entry_points.txt").decode("utf-8")
+        if DIST_NAME + " = gitlab_mcp_server:main" not in entry:
+            fail("{}: console-script wrapper named after the distribution missing (uvx name matching)".format(name))
 
         wheel_meta = zf.read(dist_info + "/WHEEL").decode("utf-8")
         if "Tag: py3-none-" + tag not in wheel_meta:
@@ -166,7 +172,7 @@ def host_tag():
     return None
 
 
-def handshake(wheel_path, version):
+def handshake(wheel_path, version, commands=(COMMAND, DIST_NAME)):
     tmp = tempfile.mkdtemp(prefix="pypi-validate-")
     env_dir = os.path.join(tmp, "venv")
     venv.create(env_dir, with_pip=True)
@@ -174,7 +180,11 @@ def handshake(wheel_path, version):
     pip = os.path.join(env_dir, bin_dir, "pip")
     subprocess.run([pip, "install", "--quiet", "--no-index", wheel_path], check=True)
 
-    script = os.path.join(env_dir, bin_dir, "gitlab-mcp-server")
+    for command in commands:
+        run_handshake(os.path.join(env_dir, bin_dir, command), version, tmp, command)
+
+
+def run_handshake(script, version, tmp, label):
     request = json.dumps({
         "jsonrpc": "2.0", "id": 1, "method": "initialize",
         "params": {"protocolVersion": "2025-11-25", "capabilities": {},
@@ -210,20 +220,20 @@ def handshake(wheel_path, version):
     if not line_holder or not line_holder[0]:
         with open(stderr_path, "rb") as fh:
             tail = fh.read()[-800:]
-        fail("handshake: server did not answer initialize within 60s; stderr tail: {!r}".format(tail))
+        fail("handshake ({}): no answer within 60s; stderr tail: {!r}".format(label, tail))
         return
     line = line_holder[0].rstrip(b"\n")
     try:
         response = json.loads(line)
     except ValueError:
-        fail("handshake: stdout is not pure JSON-RPC: {!r}".format(line[:120]))
+        fail("handshake ({}): stdout is not pure JSON-RPC: {!r}".format(label, line[:120]))
         return
     server_info = response.get("result", {}).get("serverInfo", {})
     if server_info.get("version") != version:
-        fail("handshake: serverInfo.version = {!r}, want {!r}".format(
+        fail("handshake ({}): serverInfo.version = {!r}, want {!r}".format(label).format(
             server_info.get("version"), version))
     else:
-        print("handshake: console script answered initialize with version", version)
+        print("handshake:", label, "answered initialize with version", version)
 
 
 def main():

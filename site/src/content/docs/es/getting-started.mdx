@@ -184,28 +184,28 @@ Apunta cualquier cliente MCP a `npx` sin instalar nada:
 
 ### PyPI / uvx (cualquier plataforma)
 
-Publicado como [`gitlab-mcp-server`](https://pypi.org/project/gitlab-mcp-server/) con el mismo modelo que `uv` y `ruff`: cada wheel de plataforma lleva el binario nativo, el instalador lo coloca en la ruta de scripts como el propio comando, y no se ejecuta Python cuando corre el servidor.
+Publicado como [`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/) con el mismo modelo que `uv` y `ruff` (el nombre sin prefijo en PyPI es un registro vacío de una cuenta ajena, en proceso de reclamación PEP 541): cada wheel de plataforma lleva el binario nativo, el instalador lo coloca en la ruta de scripts como el propio comando, y no se ejecuta Python cuando corre el servidor.
 
 <Tabs syncKey="pypkg">
 <TabItem label="uvx">
 
 ```bash
 # Sin instalación — los clientes pueden lanzarlo directamente
-uvx gitlab-mcp-server
+uvx jmrplens-gitlab-mcp-server
 ```
 
 </TabItem>
 <TabItem label="pipx">
 
 ```bash
-pipx install gitlab-mcp-server
+pipx install jmrplens-gitlab-mcp-server
 ```
 
 </TabItem>
 <TabItem label="pip">
 
 ```bash
-pip install gitlab-mcp-server
+pip install jmrplens-gitlab-mcp-server
 ```
 
 </TabItem>
@@ -216,7 +216,7 @@ pip install gitlab-mcp-server
   "mcpServers": {
     "gitlab": {
       "command": "uvx",
-      "args": ["gitlab-mcp-server"],
+      "args": ["jmrplens-gitlab-mcp-server"],
       "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
     }
   }
