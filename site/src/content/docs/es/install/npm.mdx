@@ -1,0 +1,207 @@
+---
+title: npm y npx
+description: Instala GitLab MCP Server desde npm como un paquete lanzador más un binario precompilado para tu plataforma, ejecútalo con npx sin instalar nada y mantenlo al día con npm update.
+datePublished: "2026-09-01"
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+GitLab MCP Server está publicado en npm como
+[`@jmrp.io/gitlab-mcp-server`](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server).
+Es el mismo binario nativo en Go que distribuyen todos los demás canales,
+empaquetado para que `npx` pueda lanzarlo sin paso de instalación y
+`npm install -g` pueda ponerlo en tu PATH. No se compila nada y nada se
+ejecuta durante la instalación.
+
+## Qué obtienes
+
+El conjunto publicado es un lanzador más seis paquetes por plataforma,
+siguiendo el modelo que usan esbuild y Biome:
+
+- **`@jmrp.io/gitlab-mcp-server`** es un pequeño shim de Node.js (`cli.js`)
+  registrado como el comando `gitlab-mcp-server`. Resuelve el binario de la
+  plataforma actual, lo arranca con tu stdio y tus argumentos intactos, y
+  replica el código de salida y la señal de terminación del binario, de modo
+  que el cliente ve el resultado real.
+- **`@jmrp.io/gitlab-mcp-server-<plataforma>`** son los paquetes que llevan
+  el binario en sí, uno por plataforma: `linux-x64`, `linux-arm64`,
+  `darwin-x64`, `darwin-arm64`, `win32-x64` y `win32-arm64`. Se declaran
+  como dependencias opcionales del lanzador, fijadas a su versión exacta, y
+  cada uno está limitado por `os` y `cpu`, así que npm instala exactamente
+  uno: el que coincide con tu máquina.
+
+Como el binario llega dentro de un paquete corriente, no hay script de
+postinstalación, no se descarga nada después de instalar y no se compila
+nada. Por eso la instalación funciona con `--ignore-scripts`, tras un proxy
+y en un job de CI gobernado por un lockfile.
+
+Requisitos: Node.js 18 o superior. Los paquetes de Linux declaran
+`libc: ["glibc"]` porque los binarios son ejecutables independientes de la
+posición (PIE) que necesitan el cargador dinámico de glibc, así que en
+distribuciones musl como Alpine npm los omite a propósito. Usa ahí la
+[imagen Docker](/gitlab-mcp-server/es/install/docker/), que está basada en
+musl.
+
+## Instalación
+
+<Tabs syncKey="pkg">
+<TabItem label="npx">
+
+Sin instalar nada: el cliente lanza el comando directamente, y npx conserva
+una copia en su caché tras la primera ejecución.
+
+```bash
+npx -y @jmrp.io/gitlab-mcp-server
+```
+
+La opción `-y` suprime la pregunta de npx de si quieres instalar el paquete,
+que un cliente MCP no tiene forma de responder.
+
+</TabItem>
+<TabItem label="npm">
+
+```bash
+npm install -g @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pnpm">
+
+```bash
+pnpm add -g @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="yarn">
+
+```bash
+# Yarn 2 y posteriores: se ejecuta en un entorno temporal, sin instalar nada
+yarn dlx @jmrp.io/gitlab-mcp-server
+# Yarn 1 (Classic): instalación global
+yarn global add @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+</Tabs>
+
+Tras una instalación global, el comando en tu PATH es `gitlab-mcp-server`:
+
+```bash
+gitlab-mcp-server --version
+# gitlab-mcp-server 2.7.5 (commit: ...)
+```
+
+Si lo arrancas en una terminal sin `GITLAB_TOKEN` definido, el binario
+imprime qué es y los dos valores que necesita, y después espera a que pulses
+Enter. Es la pantalla de primer arranque, no un error: un cliente MCP
+conecta tuberías en lugar de una terminal y nunca la ve. No hay asistente de
+configuración; la configuración va en el JSON de tu cliente, más abajo.
+
+### Si el lanzador no encuentra su binario
+
+`gitlab-mcp-server: the @jmrp.io/gitlab-mcp-server-<plataforma> package is not installed`
+significa que la plataforma está soportada pero su paquete se omitió. Las
+causas habituales son una instalación con `--no-optional`, un lockfile
+generado en otro sistema operativo o un sistema musl. Reinstala sin
+`--no-optional`, o borra `node_modules` y el lockfile e instala de nuevo.
+En una plataforma sin binario precompilado el lanzador termina con un
+mensaje que apunta a los
+[binarios de la release](https://github.com/jmrplens/gitlab-mcp-server/releases)
+y a compilar desde el código fuente.
+
+## Configura tu cliente
+
+La forma portable no necesita instalar nada. Apunta el cliente a `npx`:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "npx",
+      "args": ["-y", "@jmrp.io/gitlab-mcp-server"],
+      "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+Tras una instalación global, usa el comando en su lugar:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "gitlab-mcp-server",
+      "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+`GITLAB_TOKEN` es el único valor obligatorio: un token de acceso personal con
+el scope `api` (`read_api` también sirve y da una superficie de herramientas
+de solo lectura). `GITLAB_URL` usa por defecto `https://gitlab.com`; añádela
+a `env` solo para una instancia autogestionada. Un cliente que no herede el
+PATH de tu shell puede necesitar la ruta completa al comando;
+`which gitlab-mcp-server` (o `where gitlab-mcp-server` en Windows) la
+imprime. Para fijar una release en lugar de seguir la más reciente, nómbrala
+en el argumento: `"@jmrp.io/gitlab-mcp-server@2.7.5"`.
+
+Las rutas de archivo y las formas de cada cliente (VS Code usa `servers` con
+`"type": "stdio"`, Zed usa `context_servers`) están en las
+<a href="/gitlab-mcp-server/es/getting-started/#configuración-manual">pestañas por cliente del Inicio rápido</a>.
+
+## Actualizar y desinstalar
+
+El servidor nunca comprueba si hay actualizaciones ni reemplaza su propio
+binario; aquí es npm quien lo gestiona, igual que cada canal gestiona lo que
+instaló. Cada release mueve a la vez el lanzador y sus seis paquetes de
+plataforma con versiones fijadas de forma exacta, así que actualizar el
+lanzador actualiza el binario, y un lanzador antiguo nunca resuelve un
+binario más nuevo ni al revés.
+
+<Tabs syncKey="pkg">
+<TabItem label="npx">
+
+npx resuelve la versión publicada más reciente en una ejecución en frío y
+reutiliza su caché después. Para forzar la última release, nómbrala
+explícitamente:
+
+```bash
+npx -y @jmrp.io/gitlab-mcp-server@latest
+```
+
+No se instaló nada, así que no hay nada que desinstalar más allá de la
+entrada en la configuración de tu cliente.
+
+</TabItem>
+<TabItem label="npm">
+
+```bash
+npm update -g @jmrp.io/gitlab-mcp-server
+npm uninstall -g @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pnpm">
+
+```bash
+pnpm update -g @jmrp.io/gitlab-mcp-server
+pnpm remove -g @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="yarn">
+
+```bash
+# Yarn 1 (Classic)
+yarn global upgrade @jmrp.io/gitlab-mcp-server
+yarn global remove @jmrp.io/gitlab-mcp-server
+```
+
+`yarn dlx` no instala nada, así que no hay nada que quitar.
+
+</TabItem>
+</Tabs>
+
+El resto de canales se comparan en la [vista general de instalación](/gitlab-mcp-server/es/install/overview/).

@@ -1,0 +1,191 @@
+---
+title: Agent Plugins
+description: Install GitLab MCP Server as an Agent Plugin in Cursor, Claude Code, VS Code or OpenCode from the manifest this repository ships, and learn how your token reaches the server.
+datePublished: "2026-09-01"
+---
+
+[Agent Plugins](https://agent-plugins.org/) is an open, vendor-neutral
+standard for packaging reusable components, MCP servers included, into
+portable plugins. This repository ships an Agent Plugins 1.0 manifest at its
+root: `plugin.json` names the plugin and its version, and `mcp.json` next to
+it is the MCP server configuration a conformant host starts. For hosts that
+still read the older Open Plugins format, `.plugin/plugin.json` points at the
+same `mcp.json`, so both generations of hosts install the same thing.
+
+## Which clients
+
+The project documents Cursor, Claude Code, VS Code and OpenCode as conformant
+hosts. Distribution and installation are outside the specification itself,
+so the exact command belongs to your host and its version; the form the
+project documents is:
+
+```bash
+# Cursor / Claude Code (when supported by your version)
+/plugin install jmrplens/gitlab-mcp-server
+```
+
+The install brings the manifest and `mcp.json` into your host. Providing the
+token is a separate step, described below, because the manifest cannot carry
+it.
+
+## What the plugin runs
+
+The bundled `mcp.json` has a single stdio entry that runs the published
+Docker image, so Docker has to be installed and running:
+
+```json
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "gitlab": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "GITLAB_URL",
+        "-e", "GITLAB_TOKEN",
+        "-e", "GITLAB_SKIP_TLS_VERIFY",
+        "-e", "TOOL_SURFACE",
+        "ghcr.io/jmrplens/gitlab-mcp-server:latest",
+        "--http=false"
+      ]
+    }
+  }
+}
+```
+
+The real file forwards a longer list with the same `-e NAME` pattern:
+`GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_SKIP_TLS_VERIFY`, `TOOL_SURFACE`,
+`CAPABILITY_SURFACE`, `META_PARAM_SCHEMA`, `GITLAB_TIER`,
+`GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `EMBEDDED_RESOURCES`,
+`EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `UPLOAD_MAX_FILE_SIZE`,
+`GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`,
+`CLIENT_COMPAT` and `LOG_LEVEL`. A bare `-e NAME` copies the variable into
+the container from the environment `docker` itself runs in, and only when it
+is set there, so unset ones cost nothing. Only `GITLAB_TOKEN` is required; `GITLAB_URL` defaults to
+`https://gitlab.com` and matters only for a self-managed instance. Every
+variable is described in [Configuration](/gitlab-mcp-server/configuration/).
+
+Two details of that entry are load-bearing:
+
+- **`--http=false` after the image name.** The image's default command
+  starts an HTTP listener, and any argument placed after the image name
+  replaces that default wholesale. Without the flag a stdio client waits
+  forever for the `initialize` response. Keep it if you copy this entry into
+  a client's own JSON.
+- **The Agent Plugins specification starts every entry automatically** and
+  has no per-runtime variants, which is why the bundled entry uses Docker:
+  it is the one command that behaves the same on every platform.
+
+The image is pulled on the first run and reused afterwards. On the pull
+policy and how to update it, see [Upgrade and uninstall](#upgrade-and-uninstall).
+
+## How the token reaches the server
+
+A token cannot travel inside `mcp.json`. The specification (§9.2) expands
+exactly two placeholders, `${PLUGIN_ROOT}` and `${PLUGIN_DATA}`, and says
+that any other placeholder-like text must stay literal, so writing
+`"GITLAB_TOKEN": "${GITLAB_TOKEN}"` hands the server that exact string
+instead of your token. It also lets the host choose the base environment
+(§9.1): a client "MAY inherit, omit, or sanitize ambient variables". How
+`GITLAB_TOKEN` arrives is therefore decided by your host:
+
+1. **The host makes the variable visible to the plugin subprocess.** Set
+   `GITLAB_TOKEN` (and `GITLAB_URL` for a self-managed instance) the way
+   your host documents; the `-e` entries then forward it into the container.
+2. **You put the value in the installed plugin's local copy.** Locate the
+   installed plugin directory from your host's plugin UI or the install
+   output (commonly under `.agents/plugins/gitlab-mcp-server/`) and add an
+   `env` block to its `mcp.json`:
+
+   ```json
+   {
+     "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+     "mcpServers": {
+       "gitlab": {
+         "type": "stdio",
+         "command": "docker",
+         "args": ["run", "-i", "--rm", "-e", "GITLAB_TOKEN", "ghcr.io/jmrplens/gitlab-mcp-server:latest", "--http=false"],
+         "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx" }
+       }
+     }
+   }
+   ```
+
+:::caution[That local file is yours]
+The edited `mcp.json` is a copy on your machine, not part of the published
+plugin, and it now holds a credential. Keep it out of version control.
+:::
+
+If the server reports an authorization failure right after the install, the
+token did not arrive: check which of the two paths your host follows.
+
+## Prefer the native binary instead of Docker
+
+Install the plugin, then edit the same local `mcp.json` and replace the
+Docker `command` and `args` with the path to a binary installed through any
+other channel ([native binary](/gitlab-mcp-server/install/binary/),
+[Homebrew](/gitlab-mcp-server/install/homebrew/),
+[npm](/gitlab-mcp-server/install/npm/) or [PyPI](/gitlab-mcp-server/install/pypi/)):
+
+```json
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "gitlab": {
+      "type": "stdio",
+      "command": "/usr/local/bin/gitlab-mcp-server",
+      "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+The token question is the same as above: either the host exposes the
+variable or you write it into this file.
+
+For a detached HTTP deployment do not use a stdio entry at all. Run the
+image in HTTP mode and configure the client with `"type": "http"` and a URL
+such as `http://localhost:8080/mcp`, as described in
+[HTTP Server Mode](/gitlab-mcp-server/operations/http-server/).
+
+## Configure your client
+
+For this channel the plugin's `mcp.json` is the client configuration: the
+host reads it and starts the entry. The minimal working shape is the one
+with the `env` block shown above (the Docker command, `GITLAB_TOKEN`, and
+`GITLAB_URL` only for a self-managed instance).
+
+On a host without plugin support, the same Docker entry pasted into the
+client's own configuration works identically; the per-client file locations
+and shapes are in the
+[Quick Start's client tabs](/gitlab-mcp-server/getting-started/#manual-configuration),
+and the image itself is documented on the [Docker](/gitlab-mcp-server/install/docker/)
+page.
+
+## Upgrade and uninstall
+
+The manifest's version is stamped with each release, but what the plugin
+actually starts is the image tag `latest`, and `docker run` pulls only when
+the image is missing locally (its `--pull` option defaults to `missing`). A
+plugin installed weeks ago therefore keeps running the image it pulled on
+day one until you refresh it:
+
+```bash
+docker pull ghcr.io/jmrplens/gitlab-mcp-server:latest
+```
+
+The next start uses the new image. The server never checks for updates and
+never replaces its own binary; here Docker owns it. To pin a version rather
+than follow `latest`, change the tag in your local `mcp.json` to
+`ghcr.io/jmrplens/gitlab-mcp-server:2.7.5` and update it by hand.
+
+To uninstall, remove the plugin the way your host documents (its plugin UI
+or command), delete the local `mcp.json` copy if you wrote a token into it,
+and free the image if nothing else uses it:
+
+```bash
+docker rmi ghcr.io/jmrplens/gitlab-mcp-server:latest
+```
+
+Other channels are compared in the [installation overview](/gitlab-mcp-server/install/overview/).
