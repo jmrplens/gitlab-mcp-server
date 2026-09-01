@@ -223,13 +223,14 @@ func (w *lockedWriter) Write(p []byte) (int, error) {
 // already said why and nobody should have to go looking.
 func waitHealthy(t *testing.T, s *server) {
 	t.Helper()
+	healthClient := &http.Client{Timeout: 5 * time.Second}
 	deadline := time.Now().Add(45 * time.Second)
 	for time.Now().Before(deadline) {
 		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, s.baseURL+"/health", http.NoBody)
 		if err != nil {
 			t.Fatalf("building the health request: %v", err)
 		}
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := healthClient.Do(req)
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -283,7 +284,10 @@ func (s *server) callTool(t *testing.T, id int, tool, arguments string) {
 	}
 	defer resp.Body.Close()
 
-	payload, _ := io.ReadAll(resp.Body)
+	payload, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		t.Fatalf("reading the MCP response: %v (got %d bytes)", readErr, len(payload))
+	}
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		t.Fatalf("the call was refused with %d, so no span exists to assert on. Server output:\n%s",
 			resp.StatusCode, s.logs())
@@ -460,7 +464,7 @@ func startMutableFakeGitLab(t *testing.T) *fakeGitLab {
 		case strings.HasSuffix(r.URL.Path, "/issues"):
 			w.Header().Set("X-Total", "0")
 			_, _ = w.Write([]byte(`[]`))
-		case strings.Count(strings.Trim(r.URL.Path, "/"), "/") == 3:
+		case strings.Count(strings.Trim(r.URL.EscapedPath(), "/"), "/") == 3:
 			// The project itself, which the gitlab://project/{ref} resource
 			// reads. Enough fields for the handler to render it; the test is
 			// about what telemetry says, not about the payload.

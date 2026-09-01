@@ -214,11 +214,15 @@ func assertInventory(t *testing.T, what string, got, want []string) {
 func dataPointAttributes(t *testing.T, m otlpMetric) [][]otlpAttr {
 	t.Helper()
 
-	if m.Histogram == nil {
-		return nil
+	var raws []json.RawMessage
+	for _, body := range []*otlpMetricBody{m.Histogram, m.Sum, m.Gauge, m.ExponentialHistogram} {
+		if body != nil {
+			raws = append(raws, body.DataPoints...)
+		}
 	}
-	out := make([][]otlpAttr, 0, len(m.Histogram.DataPoints))
-	for _, raw := range m.Histogram.DataPoints {
+
+	out := make([][]otlpAttr, 0, len(raws))
+	for _, raw := range raws {
 		var point struct {
 			Attributes []otlpAttr `json:"attributes"`
 		}

@@ -3,6 +3,7 @@
 package collectore2e
 
 import (
+	"errors"
 	"maps"
 	"os"
 	"path/filepath"
@@ -172,8 +173,13 @@ func assertNothingExported(t *testing.T, c *collector, srv *server) {
 	for _, name := range []string{tracesFile, metricsFile, logsFile} {
 		path := filepath.Join(c.outDir, name)
 		info, err := os.Stat(path)
-		if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
 			continue // never created, which is the expected outcome
+		}
+		if err != nil {
+			// Any other failure means the output cannot be inspected, and a
+			// test that treats that as "nothing was exported" passes blind.
+			t.Fatalf("inspecting %s: %v", name, err)
 		}
 		if info.Size() > 0 {
 			t.Errorf("%s holds %d bytes; the deployment exported telemetry it was not asked for.\nServer:\n%s",

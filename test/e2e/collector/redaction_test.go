@@ -110,8 +110,10 @@ func assertResourceAttribute(t *testing.T, span otlpSpan, wantKey, absentKey, id
 		}
 		return
 	}
-	if strings.Contains(value, "some-group") {
-		t.Errorf("the digest %q contains the project path it stands for", value)
+	for _, component := range []string{"some-group", "some-project"} {
+		if strings.Contains(value, component) {
+			t.Errorf("the digest %q contains %q, part of the project path it stands for", value, component)
+		}
 	}
 }
 

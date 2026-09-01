@@ -428,14 +428,17 @@ type (
 		Name string `json:"name"`
 	}
 
-	otlpHistogram struct {
+	otlpMetricBody struct {
 		DataPoints []json.RawMessage `json:"dataPoints"`
 	}
 
 	otlpMetric struct {
-		Name      string         `json:"name"`
-		Unit      string         `json:"unit"`
-		Histogram *otlpHistogram `json:"histogram"`
+		Name                 string          `json:"name"`
+		Unit                 string          `json:"unit"`
+		Histogram            *otlpMetricBody `json:"histogram"`
+		Sum                  *otlpMetricBody `json:"sum"`
+		Gauge                *otlpMetricBody `json:"gauge"`
+		ExponentialHistogram *otlpMetricBody `json:"exponentialHistogram"`
 	}
 
 	otlpScopeMetrics struct {
