@@ -879,7 +879,7 @@ func enrichDynamicSchema(schema map[string]any, action actioncatalog.Action) map
 		schema["x_destructive"] = true
 		schema["x_confirmation"] = map[string]any{
 			"location":    "gitlab_execute_action.confirm",
-			"description": "Set top-level confirm=true on gitlab_execute_action after explicit user approval; do not put confirm inside params.",
+			"description": "Set top-level confirm=true on gitlab_execute_action after explicit user approval. Do not put confirm inside params.",
 		}
 	}
 	return schema

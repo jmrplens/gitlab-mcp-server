@@ -23,7 +23,7 @@
     {
       "name": "gitlab_execute_action",
       "title": "GitLab Execute Action",
-      "description": "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear.",
+      "description": "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object. Destructive actions require top-level confirm=true. Use find first only when action or params are unclear.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
@@ -33,7 +33,7 @@
             "x-mcp-header": "Action"
           },
           "confirm": {
-            "description": "Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_action.",
+            "description": "Set top-level confirm=true to explicitly approve destructive actions. Do not put confirm inside params for gitlab_execute_action.",
             "type": "boolean"
           },
           "params": {
@@ -59,7 +59,7 @@
     {
       "name": "gitlab_find_action",
       "title": "GitLab Find Action",
-      "description": "Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples.",
+      "description": "Search the local GitLab action catalog. Read-only and no GitLab API call. Use when the action ID or params are unclear. Returns schemas, hints, destructive flags, and execute examples.",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {

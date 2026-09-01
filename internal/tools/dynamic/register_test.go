@@ -2490,7 +2490,7 @@ func TestRegisterCatalogFindExecuteTools_ExposesDynamicTools(t *testing.T) {
 		t.Fatalf("tool count = %d, want 2", len(tools.Tools))
 	}
 	findTool := listedTool(t, tools.Tools, findToolName)
-	if findTool.Description != findToolDescription || !strings.Contains(findTool.Description, "read-only") {
+	if findTool.Description != findToolDescription || !strings.Contains(strings.ToLower(findTool.Description), "read-only") {
 		t.Fatalf("gitlab_find_action description = %q, want read-only lookup guidance", findTool.Description)
 	}
 	findSchema := listedToolInputSchema(t, tools.Tools, findToolName)

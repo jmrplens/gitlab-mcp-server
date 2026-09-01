@@ -10,7 +10,7 @@ Dynamic mode is the default when `TOOL_SURFACE` is unset or set to `dynamic`. It
 
 **GitLab Find Action**
 
-Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples.
+Search the local GitLab action catalog. Read-only and no GitLab API call. Use when the action ID or params are unclear. Returns schemas, hints, destructive flags, and execute examples.
 
 **Parameters:**
 
@@ -24,12 +24,12 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 **GitLab Execute Action**
 
-Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear.
+Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object. Destructive actions require top-level confirm=true. Use find first only when action or params are unclear.
 
 **Parameters:**
 
 - `action` (string) (required): Canonical action ID returned by gitlab_find_action, or a supported compatibility alias, such as project.list, issue.update, or issue.close.
-- `confirm` (boolean): Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_action.
+- `confirm` (boolean): Set top-level confirm=true to explicitly approve destructive actions. Do not put confirm inside params for gitlab_execute_action.
 - `params` (object) (required): Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters.
 
 Annotations: readOnly=false, destructive=true, idempotent=false, openWorld=true
