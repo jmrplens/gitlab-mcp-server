@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"go.opentelemetry.io/otel"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
 // TestSetDiagnosticSinks_ErrorHandlerReachesTheLogger covers the first of the
@@ -62,7 +63,11 @@ func TestSetDiagnosticSinks_ErrorHandlerReachesTheLogger(t *testing.T) {
 // Without this wiring the failure is a stdlib log line rather than a record.
 func TestSetDiagnosticSinks_LogrStreamReachesTheLogger(t *testing.T) {
 	var buf bytes.Buffer
-	setDiagnosticSinks(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	// Info, deliberately, because it is the default LOG_LEVEL. The SDK emits
+	// this warning at V(1), which logr maps below Info, so without the
+	// verbosity clamp the wiring delivered it to a handler that dropped every
+	// one and this test only passed by running at debug.
+	setDiagnosticSinks(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
 	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "30s")
 	if _, err := newTraceExporter(context.Background(), ProtocolHTTP); err != nil {
@@ -120,5 +125,29 @@ func TestInstallDiagnostics_IsIdempotent(t *testing.T) {
 
 	if second.Len() != 0 {
 		t.Errorf("the second call replaced the sinks; got %q", second.String())
+	}
+}
+
+// TestSetDiagnosticSinks_TheSDKWarnChannelSurvivesTheDefaultLevel covers the
+// channel the default configuration silently discarded.
+//
+// The SDK documents its own map: "To see Warn messages use a logger with
+// l.V(1).Enabled() == true". Through logr that is slog level -1, which the
+// default Info handler refuses, so every warning the SDK raised vanished at
+// LOG_LEVEL=info while errors and nothing else got through. The provocation is
+// real: an empty meter name makes the pinned SDK call global.Warn.
+func TestSetDiagnosticSinks_TheSDKWarnChannelSurvivesTheDefaultLevel(t *testing.T) {
+	var buf bytes.Buffer
+	setDiagnosticSinks(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+
+	provider := sdkmetric.NewMeterProvider()
+	t.Cleanup(func() { _ = provider.Shutdown(context.Background()) })
+	_ = provider.Meter("")
+
+	if !strings.Contains(buf.String(), "Invalid Meter name") {
+		t.Errorf("the SDK's warn channel did not reach an Info-level handler; got %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), `"level":"WARN"`) {
+		t.Errorf("the SDK warning arrived at the wrong level: %q", buf.String())
 	}
 }

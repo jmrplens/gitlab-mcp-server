@@ -1021,3 +1021,31 @@ func eachNamedDataPoint(collected metricdata.ResourceMetrics, fn func(name strin
 		}
 	}
 }
+
+// TestMiddleware_AnInventedActionStillNamesItsDomain covers the half of
+// Identity nothing consumed.
+//
+// Both ends documented the intent: the resolver returns a bare domain when a
+// model invents an action, "still true and still worth recording", and the
+// Identity type calls the domain "the dimension worth grouping by". No
+// production code read the field, so a meta-tool call whose action did not
+// resolve recorded nothing at all.
+func TestMiddleware_AnInventedActionStillNamesItsDomain(t *testing.T) {
+	identifier := IdentifierFunc(func(string, any) (Identity, bool) {
+		return Identity{Domain: "issue"}, true
+	})
+
+	span := runOnce(t,
+		Options{Identifier: identifier},
+		"tools/call",
+		callToolRequest("gitlab_issue", map[string]any{"action": "not.an.action"}, nil),
+		&mcp.CallToolResult{}, nil)
+
+	if value, ok := attrOf(span, AttrDomain); !ok || value.AsString() != "issue" {
+		t.Errorf("gitlab_mcp.domain = %v (present=%v), want issue: an invented action must still name the domain it hit",
+			value, ok)
+	}
+	if _, ok := attrOf(span, AttrActionID); ok {
+		t.Error("an unresolved action recorded an action id anyway")
+	}
+}

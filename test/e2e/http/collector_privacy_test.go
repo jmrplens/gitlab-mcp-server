@@ -146,11 +146,13 @@ func TestCollectorPrivacy_TheActionIsRecordedAndTheArgumentsAreNot(t *testing.T)
 // falls out of where the instrumentation is mounted, and that is worth having
 // on purpose rather than by accident.
 //
-// The middleware sits inside the authentication gate, so a request refused at
-// the door never reaches it. An unauthenticated scanner therefore cannot make
-// this server emit spans, which matters for a published endpoint: telemetry
-// volume is a cost, and anonymous traffic being able to drive it is a way to
-// spend somebody else's money.
+// The MCP middleware sits inside the authentication gate, so a request refused
+// at the door never reaches it and no MCP span exists for it. The HTTP span for
+// the refusal itself does exist, deliberately: refusals are the request rate an
+// operator most wants to see, and that span carries method and status and
+// nothing a caller chose. What an unauthenticated scanner cannot do is drive
+// the expensive, attribute-rich MCP telemetry, which is where volume costs
+// money on a published endpoint.
 //
 // The refusal is still visible, in the server's own structured log, so nothing
 // is hidden. It is the exported telemetry that stays quiet.

@@ -111,6 +111,15 @@ const (
 	// issues from deleting a branch.
 	AttrActionID = attribute.Key("gitlab_mcp.action")
 
+	// AttrDomain is the catalog domain of a tool call, such as issue.
+	//
+	// Coarser than the action id and bounded by the catalog's domain count,
+	// which is what makes it the dimension worth grouping by where the action
+	// id is too many values. It is also what remains of a call whose action
+	// does not resolve: a model that invents an action still named a real
+	// domain, and recording that beats recording nothing.
+	AttrDomain = attribute.Key("gitlab_mcp.domain")
+
 	// AttrToolSurface records which catalog the deployment registered, because
 	// the same request means different things across the three and a trace read
 	// months later has no other way to tell.

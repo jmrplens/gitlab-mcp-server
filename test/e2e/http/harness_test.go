@@ -295,6 +295,14 @@ func (s *server) do(t *testing.T, r request) response {
 		}
 	}
 	for k, v := range r.headers {
+		// Host is not a header on an outgoing request in Go: the client reads
+		// Request.Host and ignores a map entry of that name entirely. A test
+		// that sets it through the map believes it spoofed the Host and sent
+		// nothing, which made one privacy assertion vacuous.
+		if strings.EqualFold(k, "Host") {
+			req.Host = v
+			continue
+		}
 		// An empty value deletes the header rather than sending it empty, so a
 		// test can express "this client sends no such header" for one the
 		// harness sets by default. A pre-negotiation client sends no

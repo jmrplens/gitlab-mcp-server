@@ -2,6 +2,7 @@ package mcpotel
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -69,12 +70,26 @@ func SendingMiddleware(opts Options) mcp.Middleware {
 			defer span.End()
 
 			started := time.Now()
-			res, err := next(ctx, method, req)
-			result := classifyClient(err)
+			recorded := false
+			record := func(result outcome) {
+				recorded = true
+				result.record(span)
+				duration.Record(ctx, time.Since(started).Seconds(),
+					metric.WithAttributes(append(attrs, result.metricAttributes()...)...))
+			}
+			// A panic unwinding through here would end the span with no
+			// outcome and skip the metric, so the client instrument would
+			// undercount exactly the calls most worth counting. The panic
+			// itself is not recovered: the span's own End records it, and
+			// whoever is below this middleware decides what a panic means.
+			defer func() {
+				if !recorded {
+					record(classifyClient(errPanicked))
+				}
+			}()
 
-			result.record(span)
-			duration.Record(ctx, time.Since(started).Seconds(),
-				metric.WithAttributes(append(attrs, result.metricAttributes()...)...))
+			res, err := next(ctx, method, req)
+			record(classifyClient(err))
 
 			return res, err
 		}
@@ -112,3 +127,8 @@ func newClientDurationHistogram(meter metric.Meter) metric.Float64Histogram {
 	}
 	return histogram
 }
+
+// errPanicked stands in for an outcome when a panic unwinds through the
+// middleware: there is no error value to classify, and inventing one keeps the
+// classification bounded.
+var errPanicked = errors.New("panic")

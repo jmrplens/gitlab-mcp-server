@@ -144,19 +144,20 @@ never appears in this server's own log output, including when an export fails.
 
 One span per MCP request, plus one child span per GitLab API call it caused.
 
-| Attribute                   | On                       | Meaning                                            |
-| --------------------------- | ------------------------ | -------------------------------------------------- |
-| `mcp.method.name`           | every span               | `tools/call`, `resources/read`, `prompts/get`, …   |
-| `gen_ai.tool.name`          | tool calls               | the tool the client named                          |
-| `gitlab_mcp.action`         | tool calls               | the canonical catalog action, such as `issue.list` |
-| `gitlab_mcp.tool_surface`   | every span               | `dynamic`, `meta` or `individual`                  |
-| `network.transport`         | every span               | `pipe` for stdio, `tcp` for HTTP                   |
-| `gen_ai.prompt.name`        | `prompts/get`            | the prompt the client named                        |
-| `mcp.protocol.version`      | when it is known         | the MCP revision the request is speaking           |
-| `mcp.session.id`            | stateful sessions only   | absent under the default stateless HTTP transport  |
-| `error.type`                | failures only            | a JSON-RPC code, or `tool_error`                   |
-| `rpc.response.status_code`  | when a code was returned | the JSON-RPC code                                  |
-| `gitlab_mcp.refusal_reason` | refusals                 | why the call was declined without reaching GitLab  |
+| Attribute                   | On                       | Meaning                                                                                                        |
+| --------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `mcp.method.name`           | every span               | `tools/call`, `resources/read`, `prompts/get`, …                                                               |
+| `gen_ai.tool.name`          | tool calls               | the tool the client named                                                                                      |
+| `gitlab_mcp.action`         | tool calls               | the canonical catalog action, such as `issue.list`                                                             |
+| `gitlab_mcp.tool_surface`   | every span               | `dynamic`, `meta` or `individual`                                                                              |
+| `network.transport`         | every span               | `pipe` for stdio, `tcp` for HTTP                                                                               |
+| `gen_ai.prompt.name`        | `prompts/get`            | the prompt the client named                                                                                    |
+| `mcp.protocol.version`      | when it is known         | the MCP revision the request is speaking                                                                       |
+| `mcp.session.id`            | stateful sessions only   | absent under the default stateless HTTP transport                                                              |
+| `error.type`                | failures only            | a JSON-RPC code, or `tool_error`                                                                               |
+| `rpc.response.status_code`  | when a code was returned | the JSON-RPC code                                                                                              |
+| `gitlab_mcp.domain`         | tool calls               | the catalog domain, such as `issue`; bounded, so it survives on metrics where the action id is too many values |
+| `gitlab_mcp.refusal_reason` | refusals                 | why the call was declined without reaching GitLab                                                              |
 
 `gitlab_mcp.action` is the one worth understanding. On the default dynamic
 surface every tool call names the same two tools, so `gen_ai.tool.name` is

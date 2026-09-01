@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"context"
 	"log/slog"
 	"sync"
 
@@ -87,9 +88,58 @@ func setDiagnosticSinks(logger *slog.Logger) {
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
 		logger.Error("opentelemetry sdk error", "component", "telemetry", "error", err)
 	}))
-	otel.SetLogger(logr.FromSlogHandler(logger.Handler()))
+	otel.SetLogger(logr.FromSlogHandler(&sdkVerbosityHandler{Handler: logger.Handler()}))
 }
 
 // diagnosticsOnce guards the single permitted call, for the delegation reason
 // in [installDiagnostics].
 var diagnosticsOnce sync.Once
+
+// sdkVerbosityHandler maps the SDK's logr verbosities to the slog levels its
+// own documentation names.
+//
+// otel/internal/global spells the map out: "To see Warn messages use a logger
+// with l.V(1).Enabled() == true", Info is V(4) and Debug is V(8).
+// logr.FromSlogHandler turns V(n) into slog level -n, so without this the
+// SDK's warn channel landed at -1, below Info, and the default handler dropped
+// every warning the SDK ever raised; its debug channel landed at -8, below
+// Debug, and was invisible even to LOG_LEVEL=debug. Each channel now arrives
+// at the level its name promises: Warn at Warn, Info and Debug at Debug, which
+// is where a stream the SDK itself calls chatty belongs.
+type sdkVerbosityHandler struct {
+	slog.Handler
+}
+
+func (h *sdkVerbosityHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.Handler.Enabled(ctx, clampSDKLevel(level))
+}
+
+func (h *sdkVerbosityHandler) Handle(ctx context.Context, record slog.Record) error {
+	record.Level = clampSDKLevel(record.Level)
+	return h.Handler.Handle(ctx, record)
+}
+
+func (h *sdkVerbosityHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &sdkVerbosityHandler{Handler: h.Handler.WithAttrs(attrs)}
+}
+
+func (h *sdkVerbosityHandler) WithGroup(name string) slog.Handler {
+	return &sdkVerbosityHandler{Handler: h.Handler.WithGroup(name)}
+}
+
+// clampSDKLevel maps a logr-derived level to the slog level the SDK's channel
+// naming promises. Levels at Info and above pass through: they are not the
+// SDK's verbosity scheme.
+func clampSDKLevel(level slog.Level) slog.Level {
+	switch {
+	case level >= slog.LevelInfo:
+		return level
+	case level > slog.LevelDebug:
+		// V(1) through V(3): the SDK's warn channel.
+		return slog.LevelWarn
+	default:
+		// V(4) and beyond: the SDK's info and debug channels, both of which
+		// its docs describe as internal detail.
+		return slog.LevelDebug
+	}
+}

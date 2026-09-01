@@ -149,19 +149,20 @@ falla una exportación.
 Un span por petición MCP, más un span hijo por cada llamada a la API de GitLab
 que provoque.
 
-| Atributo                    | Dónde                    | Significado                                        |
-| --------------------------- | ------------------------ | -------------------------------------------------- |
-| `mcp.method.name`           | todos los spans          | `tools/call`, `resources/read`, `prompts/get`, …   |
-| `gen_ai.tool.name`          | llamadas a herramienta   | la herramienta que nombró el cliente               |
-| `gitlab_mcp.action`         | llamadas a herramienta   | la acción canónica del catálogo, como `issue.list` |
-| `gitlab_mcp.tool_surface`   | todos los spans          | `dynamic`, `meta` o `individual`                   |
-| `network.transport`         | todos los spans          | `pipe` en stdio, `tcp` en HTTP                     |
-| `gen_ai.prompt.name`        | `prompts/get`            | el prompt que nombró el cliente                    |
-| `mcp.protocol.version`      | cuando se conoce         | la revisión de MCP que habla la petición           |
-| `mcp.session.id`            | solo sesiones con estado | ausente en el HTTP sin estado por defecto          |
-| `error.type`                | solo en fallos           | un código JSON-RPC, o `tool_error`                 |
-| `rpc.response.status_code`  | cuando hubo código       | el código JSON-RPC                                 |
-| `gitlab_mcp.refusal_reason` | rechazos                 | por qué se declinó la llamada sin llegar a GitLab  |
+| Atributo                    | Dónde                    | Significado                                                                                                                |
+| --------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `mcp.method.name`           | todos los spans          | `tools/call`, `resources/read`, `prompts/get`, …                                                                           |
+| `gen_ai.tool.name`          | llamadas a herramienta   | la herramienta que nombró el cliente                                                                                       |
+| `gitlab_mcp.action`         | llamadas a herramienta   | la acción canónica del catálogo, como `issue.list`                                                                         |
+| `gitlab_mcp.tool_surface`   | todos los spans          | `dynamic`, `meta` o `individual`                                                                                           |
+| `network.transport`         | todos los spans          | `pipe` en stdio, `tcp` en HTTP                                                                                             |
+| `gen_ai.prompt.name`        | `prompts/get`            | el prompt que nombró el cliente                                                                                            |
+| `mcp.protocol.version`      | cuando se conoce         | la revisión de MCP que habla la petición                                                                                   |
+| `mcp.session.id`            | solo sesiones con estado | ausente en el HTTP sin estado por defecto                                                                                  |
+| `error.type`                | solo en fallos           | un código JSON-RPC, o `tool_error`                                                                                         |
+| `rpc.response.status_code`  | cuando hubo código       | el código JSON-RPC                                                                                                         |
+| `gitlab_mcp.domain`         | llamadas a herramientas  | el dominio del catálogo, como `issue`; acotado, así que sobrevive en métricas donde el id de acción son demasiados valores |
+| `gitlab_mcp.refusal_reason` | rechazos                 | por qué se declinó la llamada sin llegar a GitLab                                                                          |
 
 `gitlab_mcp.action` es el que conviene entender. En la superficie dinámica, que
 es la de por defecto, cada llamada nombra las mismas dos herramientas, así que

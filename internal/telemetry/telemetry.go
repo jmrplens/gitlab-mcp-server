@@ -76,12 +76,15 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/log/global"
+	nooplog "go.opentelemetry.io/otel/log/noop"
+	noopmetric "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/propagation"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
+	nooptrace "go.opentelemetry.io/otel/trace/noop"
 )
 
 // Protocol selects the OTLP transport.
@@ -355,6 +358,15 @@ func envBool(key string) bool {
 // abandon retires whatever started before an error, so a partial failure does
 // not leave exporters running with no owner.
 func (p *Provider) abandon(ctx context.Context, cause error) error {
+	// The globals first: a signal that started before a later one failed has
+	// already installed its provider, and shutting the exporter down while
+	// leaving that provider registered would hand every instrument in the
+	// process a dead pipeline. The no-ops are what an untelemetered process
+	// has anyway.
+	otel.SetTracerProvider(nooptrace.NewTracerProvider())
+	otel.SetMeterProvider(noopmetric.NewMeterProvider())
+	global.SetLoggerProvider(nooplog.NewLoggerProvider())
+
 	if err := p.Shutdown(ctx); err != nil {
 		return errors.Join(cause, err)
 	}

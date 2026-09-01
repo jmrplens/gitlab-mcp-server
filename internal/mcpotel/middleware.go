@@ -311,6 +311,9 @@ func describeToolCall(method, toolName string, arguments any, attrs []attribute.
 		if identity.ActionID != "" {
 			attrs = append(attrs, AttrActionID.String(identity.ActionID))
 		}
+		if identity.Domain != "" {
+			attrs = append(attrs, AttrDomain.String(identity.Domain))
+		}
 	}
 
 	return call{
