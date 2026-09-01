@@ -4,6 +4,7 @@
 > **Domain**: Templates
 > **Individual tools**: 12
 > **Meta-tool**: `gitlab_template` (`TOOL_SURFACE=meta` catalog — also includes CI lint actions from the `cilint` sub-package)
+> **Dynamic IDs**: `ci_catalog.*`, `pipeline.*`, `repository.*`, `template.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [CI YAML Templates](https://docs.gitlab.com/ee/api/templates/gitlab_ci_ymls.html) · [CI Lint API](https://docs.gitlab.com/ee/api/lint.html) · [Dockerfile Templates](https://docs.gitlab.com/ee/api/templates/dockerfiles.html) · [Gitignore Templates](https://docs.gitlab.com/ee/api/templates/gitignores.html) · [License Templates](https://docs.gitlab.com/ee/api/templates/licenses.html) · [Project Templates](https://docs.gitlab.com/ee/api/project_templates.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The templates domain provides access to GitLab's built-in template libraries for CI YAML, Dockerfiles, gitignore files, open-source licenses, and project-level templates. The domain also exposes CI lint actions that validate `.gitlab-ci.yml` content (inline or committed) without executing pipelines. All tools are read-only.
+
+On the default dynamic surface, these operations are the `ci_catalog.*`, `pipeline.*`, `repository.*`, `template.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, all 12 template tools are consolidated into a single `gitlab_template` meta-tool. The meta-tool also includes CI lint actions (`lint`, `lint_project`) from the `cilint` sub-package for convenience.
 

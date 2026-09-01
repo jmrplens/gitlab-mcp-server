@@ -39,7 +39,7 @@ import {
   />
 </CardGrid>
 
-Esta es una referencia rápida de prompts en lenguaje natural que puedes usar con cualquier asistente de IA conectado a GitLab MCP Server, agrupados por dominio. Escribe el prompt en lenguaje natural y el servidor lo traduce automáticamente a la operación correcta de la API de GitLab — las pestañas siguientes muestran a qué meta-herramienta y `action` se asigna cada prompt, en gestión de proyectos, revisión de código, CI/CD, releases y búsqueda.
+Esta es una referencia rápida de prompts en lenguaje natural que puedes usar con cualquier asistente de IA conectado a GitLab MCP Server, agrupados por dominio. Escribe el prompt en lenguaje natural y el servidor lo traduce automáticamente a la operación correcta de la API de GitLab. Las pestañas siguientes muestran a qué acción del catálogo se asigna cada prompt: el `action` que pasarías a `gitlab_execute_action` en la superficie dinámica predeterminada, que es también la acción de la meta-herramienta de dominio correspondiente cuando `TOOL_SURFACE=meta`. Cubren gestión de proyectos, revisión de código, CI/CD, releases y búsqueda.
 
 <Tabs>
   <TabItem label="Gestión de Proyectos">
@@ -48,25 +48,25 @@ Esta es una referencia rápida de prompts en lenguaje natural que puedes usar co
 
 **Prompt**: "Muéstrame mis proyectos de GitLab"
 
-El servidor llama a `gitlab_project` con `action: list`, devolviendo nombres de proyectos, descripciones y URLs.
+El asistente ejecuta `project.list` (`gitlab_project` con `action: list` cuando `TOOL_SURFACE=meta`), devolviendo nombres de proyectos, descripciones y URLs.
 
 ## Crear un issue
 
 **Prompt**: "Crea un reporte de bug en my-group/my-project titulado 'Login page returns 404 after password reset' con etiquetas bug y priority::high"
 
-El servidor llama a `gitlab_issue` con `action: create`, estableciendo el título, descripción, etiquetas y proyecto en una única operación.
+El asistente ejecuta `issue.create` (`gitlab_issue` con `action: create` en la superficie meta), estableciendo el título, descripción, etiquetas y proyecto en una única operación.
 
 ## Gestionar etiquetas
 
 **Prompt**: "Lista todas las etiquetas en el proyecto frontend y crea una nueva etiqueta llamada 'accessibility' con color #0052CC"
 
-El servidor primero llama a `gitlab_project` con `action: label_list` para mostrar las etiquetas existentes, y luego `action: label_create` para añadir la nueva.
+El asistente ejecuta primero `project.label_list` para mostrar las etiquetas existentes y luego `project.label_create` para añadir la nueva (`gitlab_project` con `action: label_list` y `action: label_create` en la superficie meta).
 
 ## Seguir milestones
 
 **Prompt**: "Muéstrame el progreso del milestone Sprint 14 en my-project"
 
-El servidor llama a `gitlab_project` con `action: milestone_get`, devolviendo el porcentaje de completado, conteos de issues abiertos/cerrados y fecha límite.
+El asistente ejecuta `project.milestone_get` (`gitlab_project` con `action: milestone_get` en la superficie meta), devolviendo el porcentaje de completado, conteos de issues abiertos/cerrados y fecha límite.
 
   </TabItem>
   <TabItem label="Revisión de Código">
@@ -75,7 +75,7 @@ El servidor llama a `gitlab_project` con `action: milestone_get`, devolviendo el
 
 **Prompt**: "Muéstrame todos los merge requests abiertos asignados a mí"
 
-El servidor llama a `gitlab_merge_request` con `action: list`, filtrando por asignado y estado.
+El asistente ejecuta `merge_request.list` (`gitlab_merge_request` con `action: list` en la superficie meta), filtrando por asignado y estado.
 
   </TabItem>
   <TabItem label="CI/CD">
@@ -84,7 +84,7 @@ El servidor llama a `gitlab_merge_request` con `action: list`, filtrando por asi
 
 **Prompt**: "¿Cuál es el estado del último pipeline en my-project?"
 
-El servidor llama a `gitlab_pipeline` con `action: list`, devolviendo el estado, duración y etapas del pipeline más reciente.
+El asistente ejecuta `pipeline.list` (`gitlab_pipeline` con `action: list` en la superficie meta), devolviendo el estado, duración y etapas del pipeline más reciente.
 
   </TabItem>
   <TabItem label="Releases">
@@ -93,7 +93,7 @@ El servidor llama a `gitlab_pipeline` con `action: list`, devolviendo el estado,
 
 **Prompt**: "Crea el release v2.1.0 desde el tag v2.1.0 en my-project con notas de release sobre la corrección de login y mejoras de rendimiento"
 
-El servidor llama a `gitlab_release` con `action: create`, asociando el release con el tag y estableciendo la descripción.
+El asistente ejecuta `release.create` (`gitlab_release` con `action: create` en la superficie meta), asociando el release con el tag y estableciendo la descripción.
 
   </TabItem>
   <TabItem label="Equipo y Búsqueda">
@@ -102,7 +102,7 @@ El servidor llama a `gitlab_release` con `action: create`, asociando el release 
 
 **Prompt**: "Busca usos de la función obsoleta `authenticateUser` en todos mis proyectos"
 
-El servidor llama a `gitlab_search` con `action: code`, buscando en todos los proyectos el patrón de código especificado.
+El asistente ejecuta `search.code` (`gitlab_search` con `action: code` en la superficie meta), buscando en todos los proyectos el patrón de código especificado.
 
   </TabItem>
 </Tabs>
@@ -111,11 +111,11 @@ El servidor llama a `gitlab_search` con `action: code`, buscando en todos los pr
 
 **Prompt**: "Lista todos los miembros del proyecto frontend y sus niveles de acceso"
 
-El servidor llama a `gitlab_project` con `action: members`, devolviendo los miembros del equipo con sus roles y permisos.
+El asistente ejecuta `project.members` (`gitlab_project` con `action: members` en la superficie meta), devolviendo los miembros del equipo con sus roles y permisos.
 
 ## Flujo de herramientas dinámico primero
 
-El modo dinámico es el predeterminado, así que los prompts anteriores no llegan directamente a una meta-herramienta con nombre. En su lugar, el asistente descubre primero la acción y su esquema con `gitlab_find_action` y luego la ejecuta con `gitlab_execute_action` usando un ID canónico `domain.action`:
+El modo dinámico es el predeterminado, así que los prompts anteriores nunca nombran una herramienta directamente. El asistente descubre primero la acción y su esquema con `gitlab_find_action` y luego la ejecuta con `gitlab_execute_action` usando un ID canónico `domain.action`:
 
 ```text
 gitlab_find_action → query: "listar merge requests abiertas"

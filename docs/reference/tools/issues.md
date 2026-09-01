@@ -4,6 +4,7 @@
 > **Domain**: Issues
 > **Individual tools**: 49
 > **Meta-tool**: `gitlab_issue` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `issue.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Issues API](https://docs.gitlab.com/ee/api/issues.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The issues domain covers the full lifecycle of GitLab issues: creation, retrieval, listing, updating, deletion, reordering, moving between projects, subscriptions, to-do creation, time tracking, participants, related merge requests, notes (comments), issue links, discussion threads, issue statistics, and work items.
+
+On the default dynamic surface, these operations are the `issue.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, the whole domain is one `gitlab_issue` meta-tool that dispatches by `action` parameter — notes, links, work items, award emoji, resource events, discussions and statistics included. There is no separate discussion or statistics meta-tool; those are actions on `gitlab_issue` (`discussion_list`, `statistics_get`).
 
@@ -507,4 +510,4 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - [GitLab Issue Links API](https://docs.gitlab.com/ee/api/issue_links.html)
 - [GitLab Discussions API](https://docs.gitlab.com/ee/api/discussions.html#issues)
 - [GitLab Issue Statistics API](https://docs.gitlab.com/ee/api/issues_statistics.html)
-- [GitLab Work Items API](https://docs.gitlab.com/ee/api/work_items.html)
+- [GitLab Work Items API](https://docs.gitlab.com/api/graphql/reference/#workitem)

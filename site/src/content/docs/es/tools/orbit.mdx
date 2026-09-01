@@ -4,17 +4,17 @@ description: Seis herramientas MCP de solo lectura para la API experimental Know
 datePublished: "2026-05-06"
 faq:
   - q: "¿Qué es Orbit en GitLab MCP Server?"
-    a: "Orbit expone la API experimental Knowledge Graph de GitLab.com mediante seis herramientas MCP de solo lectura: status, schema, tools, dsl, query y graph_status. Estas herramientas permiten a un asistente de IA comprobar la salud del servicio, inspeccionar la ontología del grafo, descubrir el manifiesto vivo de consultas, obtener el DSL de consulta, ejecutar consultas de solo lectura sobre el Knowledge Graph y comprobar el estado de indexación. Orbit no realiza escrituras. Solo se registra cuando el servidor se conecta a https://gitlab.com y el catálogo Enterprise/Premium está habilitado con Ultimate, y aparece como la meta-herramienta gitlab_orbit con seis acciones o como seis herramientas individuales gitlab_orbit_*."
+    a: "Orbit expone la API experimental Knowledge Graph de GitLab.com mediante seis herramientas MCP de solo lectura: status, schema, tools, dsl, query y graph_status. Estas herramientas permiten a un asistente de IA comprobar la salud del servicio, inspeccionar la ontología del grafo, descubrir el manifiesto vivo de consultas, obtener el DSL de consulta, ejecutar consultas de solo lectura sobre el Knowledge Graph y comprobar el estado de indexación. Orbit no realiza escrituras. Solo se registra cuando el servidor se conecta a https://gitlab.com y el catálogo Enterprise/Premium está habilitado con Ultimate: sus seis acciones son las entradas orbit.* del catálogo en la superficie dinámica predeterminada, la meta-herramienta gitlab_orbit con TOOL_SURFACE=meta o seis herramientas gitlab_orbit_* con TOOL_SURFACE=individual."
   - q: "¿Orbit está disponible en GitLab autoalojado?"
     a: "No. Orbit solo está disponible cuando GitLab MCP Server se conecta a `https://gitlab.com`. Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuando el catálogo Enterprise/Premium está habilitado, porque la API experimental Knowledge Graph subyacente está alojada en GitLab.com. No existe ningún flag que añada Orbit a una conexión autoalojada."
   - q: "¿Qué licencia y configuración requiere Orbit?"
-    a: "Orbit requiere GitLab Ultimate en una conexión a GitLab.com. Actívalo con `GITLAB_TIER=ultimate` en modo stdio o `--tier=ultimate` en modo HTTP. La variable de entorno heredada `GITLAB_ENTERPRISE=true` sigue funcionando en modo stdio como alternativa, pero está deprecada; el modo HTTP solo lee `--tier`. Cuando se cumplen estas condiciones, Orbit aparece como la meta-herramienta `gitlab_orbit` (seis acciones) o seis herramientas individuales `gitlab_orbit_*`."
+    a: "Orbit requiere GitLab Ultimate en una conexión a GitLab.com. Actívalo con `GITLAB_TIER=ultimate` en modo stdio o `--tier=ultimate` en modo HTTP. La variable de entorno heredada `GITLAB_ENTERPRISE=true` sigue funcionando en modo stdio como alternativa, pero está deprecada; el modo HTTP solo lee `--tier`. Cuando se cumplen estas condiciones, las seis acciones de Orbit están disponibles como `orbit.status`, `orbit.schema`, `orbit.tools`, `orbit.dsl`, `orbit.query` y `orbit.graph_status` en la superficie dinámica predeterminada, como la meta-herramienta `gitlab_orbit` con `TOOL_SURFACE=meta`, o como seis herramientas `gitlab_orbit_*` con `TOOL_SURFACE=individual`."
   - q: "¿Orbit es de solo lectura?"
     a: "Sí. Las seis herramientas Orbit son de solo lectura. `status`, `schema`, `tools`, `dsl` y `graph_status` solo inspeccionan salud, ontología, manifiesto, DSL y estado de indexación, y `query` ejecuta objetos de consulta de solo lectura sobre el Knowledge Graph contra el índice. Ninguna acción de Orbit modifica datos de GitLab, así que Orbit es seguro de exponer incluso en despliegues cautelosos."
   - q: "¿Cuáles son las cuatro variantes de query_type de Orbit?"
     a: "La acción `query` acepta un objeto JSON de consulta cuyo `query_type` selecciona una de cuatro variantes: **traversal** (recorrer nodos por entity, `node_ids`, `filters` o `id_range`), **aggregation** (agrupar y agregar sobre nodos), **neighbors** (expandir los vecinos de un nodo acotado) y **path_finding** (encontrar caminos entre dos o más nodos acotados, con `max_depth` de 1 a 3). Las cuatro comparten el único discriminador `query_type` y solo divergen en sus claves hermanas."
   - q: "¿Cómo conozco los parámetros exactos de una acción Orbit?"
-    a: 'En modo meta-herramientas, lee el recurso MCP por acción: por ejemplo, `gitlab://tools/gitlab_orbit.query` devuelve el schema de parámetros de la acción `query`. Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` o `minimal` y en cualquier modo de `META_PARAM_SCHEMA`. También puedes llamar a `action: "tools"` para obtener el manifiesto vivo de consultas servido por GitLab.com antes de construir una consulta.'
+    a: 'En la superficie dinámica predeterminada, `gitlab_find_action` con una consulta como "orbit query" devuelve el schema exacto de `params` inline; el mismo schema se puede leer como el recurso `gitlab://tools/orbit.query` (`gitlab://tools/gitlab_orbit.query` con `TOOL_SURFACE=meta`). Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` o `minimal` y en cualquier modo de `META_PARAM_SCHEMA`. También puedes ejecutar la acción `tools` para obtener el manifiesto vivo de consultas servido por GitLab.com antes de construir una consulta.'
 ---
 
 import FAQ from "../../../../components/FAQ.astro";
@@ -27,38 +27,41 @@ Para la referencia generada completa, consulta [`docs/tools/orbit.md`](https://g
 
 ## ¿Cuándo está disponible Orbit?
 
-Orbit solo se registra en conexiones a GitLab.com Ultimate. Requiere el host `https://gitlab.com` **y** el catálogo Enterprise/Premium habilitado con Ultimate. En modo meta-herramientas aparece como la única herramienta `gitlab_orbit` con seis acciones; en modo individual aparece como seis herramientas `gitlab_orbit_*`. Todas las herramientas Orbit son de solo lectura.
+Orbit solo se registra en conexiones a GitLab.com Ultimate. Requiere el host `https://gitlab.com` **y** el catálogo Enterprise/Premium habilitado con Ultimate. En la superficie dinámica predeterminada sus seis acciones son las entradas `orbit.*` del catálogo, accesibles con `gitlab_find_action` y `gitlab_execute_action`; con `TOOL_SURFACE=meta` es la única herramienta `gitlab_orbit` con seis acciones; con `TOOL_SURFACE=individual` son seis herramientas `gitlab_orbit_*`. Todas las herramientas Orbit son de solo lectura.
 
-| Requisito                   | Valor                              |
-| --------------------------- | ---------------------------------- |
-| Host de GitLab              | `https://gitlab.com`               |
-| Catálogo                    | Enterprise/Premium                 |
-| Modo meta-herramientas      | `gitlab_orbit` con seis acciones   |
-| Modo individual             | Seis herramientas `gitlab_orbit_*` |
-| Comportamiento de escritura | Solo lectura                       |
+| Requisito                            | Valor                                               |
+| ------------------------------------ | --------------------------------------------------- |
+| Host de GitLab                       | `https://gitlab.com`                                |
+| Catálogo                             | Enterprise/Premium                                  |
+| Superficie dinámica (predeterminada) | Acciones `orbit.*` mediante `gitlab_execute_action` |
+| Modo meta-herramientas               | `gitlab_orbit` con seis acciones                    |
+| Modo individual                      | Seis herramientas `gitlab_orbit_*`                  |
+| Comportamiento de escritura          | Solo lectura                                        |
 
 Las instancias GitLab autoalojadas no registran herramientas Orbit, incluso cuando el catálogo Enterprise/Premium está habilitado.
 
 ## Acciones
 
-| Acción         | Herramienta individual      | Propósito                                                                      |
-| -------------- | --------------------------- | ------------------------------------------------------------------------------ |
-| `status`       | `gitlab_orbit_status`       | Comprobar la salud del servicio Orbit y el estado de sus componentes           |
-| `schema`       | `gitlab_orbit_schema`       | Inspeccionar la ontología del grafo y ampliar definiciones de nodos            |
-| `tools`        | `gitlab_orbit_tools`        | Descubrir el manifiesto vivo de consultas Orbit                                |
-| `dsl`          | `gitlab_orbit_dsl`          | Obtener el esquema DSL o gramática LLM de Orbit                                |
-| `query`        | `gitlab_orbit_query`        | Ejecutar un objeto de consulta de solo lectura sobre el Knowledge Graph        |
-| `graph_status` | `gitlab_orbit_graph_status` | Inspeccionar el estado de indexación de un namespace, proyecto o ruta completa |
+| Acción         | ID canónico          | Herramienta individual      | Propósito                                                                      |
+| -------------- | -------------------- | --------------------------- | ------------------------------------------------------------------------------ |
+| `status`       | `orbit.status`       | `gitlab_orbit_status`       | Comprobar la salud del servicio Orbit y el estado de sus componentes           |
+| `schema`       | `orbit.schema`       | `gitlab_orbit_schema`       | Inspeccionar la ontología del grafo y ampliar definiciones de nodos            |
+| `tools`        | `orbit.tools`        | `gitlab_orbit_tools`        | Descubrir el manifiesto vivo de consultas Orbit                                |
+| `dsl`          | `orbit.dsl`          | `gitlab_orbit_dsl`          | Obtener el esquema DSL o gramática LLM de Orbit                                |
+| `query`        | `orbit.query`        | `gitlab_orbit_query`        | Ejecutar un objeto de consulta de solo lectura sobre el Knowledge Graph        |
+| `graph_status` | `orbit.graph_status` | `gitlab_orbit_graph_status` | Inspeccionar el estado de indexación de un namespace, proyecto o ruta completa |
+
+El nombre de la acción es lo que la meta-herramienta `gitlab_orbit` recibe en `action`; el ID canónico es lo que recibe `gitlab_execute_action` en la superficie dinámica predeterminada.
 
 ## ¿Cuál es el flujo típico?
 
 El flujo típico de Orbit descubre primero el esquema vivo y luego ejecuta una consulta tipada —nunca al revés—, porque la ontología y el DSL que sirve GitLab.com pueden cambiar. Confirma que el servicio está activo con `status`, inspecciona el grafo con `schema`, obtén el manifiesto vivo de consultas con `tools`, opcionalmente recupera la gramática DSL con `dsl`, y luego envía un objeto de consulta a `query`.
 
-1. Llama a `gitlab_orbit` con `action: "status"` para confirmar que el servicio está disponible.
-2. Llama a `action: "schema"` para inspeccionar dominios, nodos y relaciones del grafo.
-3. Llama a `action: "tools"` antes de `action: "query"` para obtener el schema vivo de consultas servido por GitLab.com.
-4. (Opcional) Llama a `action: "dsl"` para obtener el esquema DSL o gramática LLM de Orbit.
-5. Pasa un objeto JSON de consulta a `action: "query"` con `response_format` en `raw` o `llm`.
+1. Ejecuta la acción `status` (`gitlab_execute_action` con `action: "orbit.status"` en la superficie predeterminada; `gitlab_orbit` con `action: "status"` cuando `TOOL_SURFACE=meta`) para confirmar que el servicio está disponible.
+2. Ejecuta `schema` para inspeccionar dominios, nodos y relaciones del grafo.
+3. Ejecuta `tools` antes de `query` para obtener el schema vivo de consultas servido por GitLab.com.
+4. (Opcional) Ejecuta `dsl` para obtener el esquema DSL o gramática LLM de Orbit.
+5. Pasa un objeto JSON de consulta a `query` con `response_format` en `raw` o `llm`.
 
 ### Variantes del DSL de consulta
 
@@ -102,13 +105,16 @@ sequenceDiagram
     MCP-->>LLM: resultado + markdown
 ```
 
+Los ejemplos siguientes usan la superficie dinámica predeterminada; con `TOOL_SURFACE=meta` llama a `gitlab_orbit` en lugar de `gitlab_execute_action` y quita el prefijo `orbit.` de `action`.
+
 ### Ejemplo: Comprobar estado de Orbit
 
 ```json
 {
-  "tool": "gitlab_orbit",
+  "tool": "gitlab_execute_action",
   "arguments": {
-    "action": "status"
+    "action": "orbit.status",
+    "params": {}
   }
 }
 ```
@@ -117,9 +123,9 @@ sequenceDiagram
 
 ```json
 {
-  "tool": "gitlab_orbit",
+  "tool": "gitlab_execute_action",
   "arguments": {
-    "action": "schema",
+    "action": "orbit.schema",
     "params": {
       "expand": ["Project", "User"],
       "response_format": "llm"
@@ -132,9 +138,10 @@ sequenceDiagram
 
 ```json
 {
-  "tool": "gitlab_orbit",
+  "tool": "gitlab_execute_action",
   "arguments": {
-    "action": "tools"
+    "action": "orbit.tools",
+    "params": {}
   }
 }
 ```
@@ -143,9 +150,9 @@ sequenceDiagram
 
 ```json
 {
-  "tool": "gitlab_orbit",
+  "tool": "gitlab_execute_action",
   "arguments": {
-    "action": "dsl",
+    "action": "orbit.dsl",
     "params": {
       "response_format": "llm"
     }
@@ -157,9 +164,9 @@ sequenceDiagram
 
 ```json
 {
-  "tool": "gitlab_orbit",
+  "tool": "gitlab_execute_action",
   "arguments": {
-    "action": "query",
+    "action": "orbit.query",
     "params": {
       "query": {
         "query_type": "traversal",
@@ -182,9 +189,9 @@ sequenceDiagram
 
 ```json
 {
-  "tool": "gitlab_orbit",
+  "tool": "gitlab_execute_action",
   "arguments": {
-    "action": "graph_status",
+    "action": "orbit.graph_status",
     "params": {
       "project_id": 278964,
       "response_format": "llm"
@@ -233,16 +240,16 @@ Devuelve el estado de indexación del grafo para un namespace, proyecto o ruta. 
 
 ## ¿Cómo descubro los schemas de consulta?
 
-En modo meta-herramientas, los schemas de parámetros por acción están disponibles como recursos MCP: léelos para conocer la forma exacta de `params` de cada acción Orbit sin expandir todos los schemas en `tools/list`. Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` o `minimal` en cualquier modo de `META_PARAM_SCHEMA`.
+En cualquier superficie, los schemas de parámetros por acción están disponibles como recursos MCP, así que puedes conocer la forma exacta de `params` de cada acción Orbit sin expandir todos los schemas en `tools/list`; en la superficie dinámica `gitlab_find_action` devuelve el mismo schema inline. Estos recursos siguen disponibles con `CAPABILITY_SURFACE=full` o `minimal` en cualquier modo de `META_PARAM_SCHEMA`. La tabla lista los IDs de la superficie predeterminada; con `TOOL_SURFACE=meta` la entrada es `gitlab://tools/gitlab_orbit.<acción>`.
 
-| Recurso                                    | Propósito                                            |
-| ------------------------------------------ | ---------------------------------------------------- |
-| `gitlab://tools/gitlab_orbit.status`       | Parámetros para comprobar salud del servicio         |
-| `gitlab://tools/gitlab_orbit.schema`       | Parámetros para inspeccionar la ontología            |
-| `gitlab://tools/gitlab_orbit.tools`        | Parámetros para descubrir el manifiesto de consultas |
-| `gitlab://tools/gitlab_orbit.dsl`          | Parámetros para el esquema DSL/gramática             |
-| `gitlab://tools/gitlab_orbit.query`        | Parámetros para consultas Knowledge Graph            |
-| `gitlab://tools/gitlab_orbit.graph_status` | Parámetros para comprobar estado de indexación       |
+| Recurso                             | Propósito                                            |
+| ----------------------------------- | ---------------------------------------------------- |
+| `gitlab://tools/orbit.status`       | Parámetros para comprobar salud del servicio         |
+| `gitlab://tools/orbit.schema`       | Parámetros para inspeccionar la ontología            |
+| `gitlab://tools/orbit.tools`        | Parámetros para descubrir el manifiesto de consultas |
+| `gitlab://tools/orbit.dsl`          | Parámetros para el esquema DSL/gramática             |
+| `gitlab://tools/orbit.query`        | Parámetros para consultas Knowledge Graph            |
+| `gitlab://tools/orbit.graph_status` | Parámetros para comprobar estado de indexación       |
 
 ## ¿Cómo ejecuto las pruebas en vivo?
 

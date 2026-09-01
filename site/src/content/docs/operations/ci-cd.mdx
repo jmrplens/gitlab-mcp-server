@@ -8,7 +8,7 @@ faq:
   - q: "Which GitLab token type should I use in CI/CD pipelines?"
     a: "Use a **Project Access Token** scoped to a single project and store it as a masked CI/CD variable, never committed to the repository. Choose the `api` scope for full access or `read_api` for read-only workflows, set a maximum 90-day expiration, and rotate the token before it expires. For workflows that span several projects, use a **Group Access Token** instead."
   - q: "How do I block a CI script until a GitLab pipeline finishes?"
-    a: "Call the `gitlab_pipeline` meta-tool with the `wait` action. It polls the pipeline until it reaches a terminal state (success, failed, or canceled), which lets a CI script block until a triggered pipeline completes. The `gitlab_job` meta-tool offers an equivalent `wait` action for individual jobs."
+    a: "Run the pipeline `wait` action: `gitlab_execute_action` with `action: 'pipeline.wait'` on the default dynamic surface, or the `gitlab_pipeline` meta-tool with `action: 'wait'` when `TOOL_SURFACE=meta`. It polls the pipeline until it reaches a terminal state (success, failed, or canceled), which lets a CI script block until a triggered pipeline completes. The `job.wait` action (`gitlab_job` with `wait` on the meta surface) does the same for individual jobs."
   - q: "Should I use stdio or HTTP transport in CI?"
     a: "Use stdio for occasional tool calls, because each call spawns and tears down a server process. For pipelines that make many tool calls, start the server once in HTTP mode with `--http` and call it over `http://127.0.0.1:8080/mcp` to avoid per-call process startup overhead. Both transports authenticate with a Personal Access Token or Project Access Token."
 ---
@@ -261,7 +261,7 @@ Beyond running the server in pipelines, GitLab MCP Server provides comprehensive
 
 ### Pipelines
 
-The `gitlab_pipeline` meta-tool manages the full pipeline lifecycle:
+The `pipeline` domain manages the full pipeline lifecycle. Its actions are `pipeline.<action>` IDs for `gitlab_execute_action` on the default dynamic surface and the `action` values of the `gitlab_pipeline` meta-tool with `TOOL_SURFACE=meta`:
 
 | Action                | Description                                                                              |
 | --------------------- | ---------------------------------------------------------------------------------------- |
@@ -284,7 +284,7 @@ The `wait` action polls a pipeline until it reaches a terminal state (success, f
 
 ### Jobs
 
-The `gitlab_job` meta-tool provides complete job management:
+The `job` domain provides complete job management. Its actions are `job.<action>` IDs for `gitlab_execute_action` on the default dynamic surface and the `action` values of the `gitlab_job` meta-tool with `TOOL_SURFACE=meta`:
 
 | Action              | Description                              |
 | ------------------- | ---------------------------------------- |
@@ -301,30 +301,34 @@ The `gitlab_job` meta-tool provides complete job management:
 
 ### CI/CD configuration
 
-| Meta-tool            | Actions                                                             | Description                         |
-| -------------------- | ------------------------------------------------------------------- | ----------------------------------- |
-| `gitlab_template`    | `lint`, `lint_project`                                              | Validate `.gitlab-ci.yml` syntax    |
-| `gitlab_ci_variable` | `list`, `get`, `create`, `update`, `delete`                         | Manage CI/CD variables              |
-| `gitlab_environment` | `list`, `get`, `create`, `update`, `delete`, `stop`, `deployment_*` | Manage environments and deployments |
+| Domain (meta-tool)                   | Actions                                                             | Description                         |
+| ------------------------------------ | ------------------------------------------------------------------- | ----------------------------------- |
+| `template` (`gitlab_template`)       | `lint`, `lint_project`                                              | Validate `.gitlab-ci.yml` syntax    |
+| `ci_variable` (`gitlab_ci_variable`) | `list`, `get`, `create`, `update`, `delete`                         | Manage CI/CD variables              |
+| `environment` (`gitlab_environment`) | `list`, `get`, `create`, `update`, `delete`, `stop`, `deployment_*` | Manage environments and deployments |
 
 ### Pipeline with variables example
 
-Trigger a pipeline with custom variables using JSON-RPC:
+Trigger a pipeline with custom variables on the default dynamic surface:
 
 ```json
 {
-  "tool": "gitlab_pipeline",
+  "tool": "gitlab_execute_action",
   "arguments": {
-    "action": "create",
-    "project": "my-group/my-project",
-    "ref": "main",
-    "variables": [
-      { "key": "DEPLOY_ENV", "value": "staging", "variable_type": "env_var" },
-      { "key": "CONFIG", "value": "...", "variable_type": "file" }
-    ]
+    "action": "pipeline.create",
+    "params": {
+      "project_id": "my-group/my-project",
+      "ref": "main",
+      "variables": [
+        { "key": "DEPLOY_ENV", "value": "staging", "variable_type": "env_var" },
+        { "key": "CONFIG", "value": "...", "variable_type": "file" }
+      ]
+    }
   }
 }
 ```
+
+With `TOOL_SURFACE=meta` the same call is `gitlab_pipeline` with `{ "action": "create", "params": { ... } }`; meta-tools accept only `action` and `params` at the top level, so the parameters stay nested under `params` on both surfaces.
 
 For the complete tool reference, see [Tools Overview](/gitlab-mcp-server/tools/overview/).
 

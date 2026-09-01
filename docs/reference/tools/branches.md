@@ -4,6 +4,7 @@
 > **Domain**: Branches
 > **Individual tools**: 10
 > **Meta-tool**: `gitlab_branch` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `branch.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Branches API](https://docs.gitlab.com/ee/api/branches.html), [Protected Branches API](https://docs.gitlab.com/ee/api/protected_branches.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The branches domain covers Git branch management in GitLab projects: retrieving, creating, listing, and deleting branches, as well as protecting and unprotecting branches with configurable access levels. Protected branch tools allow inspecting and updating push/merge access restrictions.
+
+On the default dynamic surface, these operations are the `branch.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, all 10 individual tools below are consolidated into a single `gitlab_branch` meta-tool that dispatches by `action` parameter.
 

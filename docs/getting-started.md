@@ -21,7 +21,7 @@ A step-by-step tutorial to get gitlab-mcp-server running and make your first Git
 
 ## Fastest path
 
-If you just want it running, pick one of these and skip the manual steps below.
+If you just want it running, pick one of these and skip the manual steps below. Every channel has a full section in the [Installation guide](guides/installation.md): what it needs, where the binary lands, how to verify a download, and how to upgrade or uninstall.
 
 ### One-click buttons
 
@@ -75,6 +75,7 @@ The server is also published as [`jmrplens-gitlab-mcp-server`](https://pypi.org/
 uvx jmrplens-gitlab-mcp-server             # zero install; clients launch it directly
 pipx install jmrplens-gitlab-mcp-server    # or install globally (pipx)
 pip install jmrplens-gitlab-mcp-server     # or into the active environment (pip)
+# Linux wheels need glibc; on musl systems such as Alpine use the Docker image instead
 ```
 
 ```json
@@ -159,7 +160,7 @@ On Linux/macOS, make it executable:
 chmod +x gitlab-mcp-server-linux-amd64
 ```
 
-Every release also ships `checksums.txt`, a keyless Cosign signature (`checksums.txt.sigstore.json`), one SPDX SBOM per binary, and a SLSA build provenance attestation you can check with `gh attestation verify <file> -R jmrplens/gitlab-mcp-server` — steps in [release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity). The `install.sh` and `install.ps1` scripts verify the SHA-256 against `checksums.txt` before installing and abort on a mismatch.
+Every release also ships `checksums.txt` and a keyless Cosign signature (`checksums.txt.sigstore.json`); releases after v2.7.5 add one SPDX SBOM per binary and a SLSA build provenance attestation you can check with `gh attestation verify <file> -R jmrplens/gitlab-mcp-server` (steps in [release integrity](https://jmrp.io/docs/gitlab-mcp-server/operations/security/#verifying-release-integrity), and the per-release detail in the [Installation guide](guides/installation.md#verify-a-download)). The `install.sh` and `install.ps1` scripts verify the SHA-256 against `checksums.txt` before installing and abort on a mismatch.
 
 ---
 

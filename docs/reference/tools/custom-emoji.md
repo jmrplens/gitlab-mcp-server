@@ -4,6 +4,7 @@
 > **Domain**: Custom Emoji
 > **Individual tools**: 3
 > **Meta-tool**: `gitlab_custom_emoji` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `custom_emoji.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Custom Emoji GraphQL API](https://docs.gitlab.com/ee/api/graphql/reference/#groupcustomemoji)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The custom emoji domain provides management of group-level custom emoji via the GitLab GraphQL API. Custom emoji are distinct from award emoji (reactions on issues/MRs) — they are custom images uploaded to a group that can be used as reactions or in Markdown text across the group's projects.
+
+On the default dynamic surface, these operations are the `custom_emoji.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, all 3 individual tools below are consolidated into a single `gitlab_custom_emoji` meta-tool that dispatches by `action` parameter.
 

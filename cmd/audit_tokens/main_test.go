@@ -425,12 +425,20 @@ func TestRenderReadmeFootprint_DynamicOnlyRows_KeepsOneRowPerTier(t *testing.T) 
 
 // TestFootprintStaleTargets_DriftPerTarget_NamesOnlyTheDivergingFile verifies
 // the drift detector backing -footprint -check: it reports no stale targets
-// when the README section and detailed doc match the rendered content, and
-// names exactly the target that diverges otherwise.
+// when both README blocks, the detailed doc and the site data match the
+// rendered content, and names exactly the target that diverges otherwise. A
+// README that lacks the token-claim markers is a stale target, not an error,
+// while missing footprint markers still abort the check.
 func TestFootprintStaleTargets_DriftPerTarget_NamesOnlyTheDivergingFile(t *testing.T) {
 	rows := completeFootprintRows()
-	// A README whose managed section already holds the rendered content.
-	readme := footprintStartMarker + "\n\n" + renderReadmeFootprint(rows) + "\n" + footprintEndMarker + "\n"
+	claim, claimErr := renderReadmeTokenClaim(rows)
+	if claimErr != nil {
+		t.Fatalf("renderReadmeTokenClaim() error: %v", claimErr)
+	}
+	claimBlock := claimStartMarker + "\n\n" + claim + "\n" + claimEndMarker + "\n"
+	footprintBlock := footprintStartMarker + "\n\n" + renderReadmeFootprint(rows) + "\n" + footprintEndMarker + "\n"
+	// A README whose two managed blocks already hold the rendered content.
+	readme := claimBlock + "\n" + footprintBlock
 	detailed := renderDetailedFootprint(rows)
 	siteJSON, renderErr := renderSiteFootprintJSON(rows)
 	if renderErr != nil {
@@ -444,12 +452,15 @@ func TestFootprintStaleTargets_DriftPerTarget_NamesOnlyTheDivergingFile(t *testi
 		detailed  string
 		site      string
 		wantErr   bool
-		wantStale string // substring the single stale target must contain; "" means none
+		wantStale string // the single stale target expected; "" means none
 	}{
 		{name: "current content reports no stale targets", readme: readme, detailed: detailed, site: site},
+		{name: "README footprint drift reports only the footprint section", readme: strings.Replace(readme, "Rows use the base", "Rows use the stale", 1), detailed: detailed, site: site, wantStale: readmePath + " token-footprint section"},
+		{name: "README claim drift reports only the claim block", readme: strings.Replace(readme, "Two tools reach", "Three tools reach", 1), detailed: detailed, site: site, wantStale: readmePath + " token-claim block"},
+		{name: "missing claim markers reports the claim block as stale", readme: footprintBlock, detailed: detailed, site: site, wantStale: readmePath + " token-claim block (markers missing)"},
 		{name: "detailed-doc drift reports only the detailed doc", readme: readme, detailed: detailed + "\nextra drift\n", site: site, wantStale: detailedFootprintPath},
 		{name: "site JSON drift reports only the site data file", readme: readme, detailed: detailed, site: `{"tokenizer":"stale"}`, wantStale: siteFootprintPath},
-		{name: "missing README markers returns an error", readme: "no markers here", detailed: detailed, site: site, wantErr: true},
+		{name: "missing footprint markers returns an error", readme: claimBlock, detailed: detailed, site: site, wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -470,8 +481,109 @@ func TestFootprintStaleTargets_DriftPerTarget_NamesOnlyTheDivergingFile(t *testi
 				}
 				return
 			}
-			if len(stale) != 1 || !strings.Contains(stale[0], tt.wantStale) {
+			if len(stale) != 1 || stale[0] != tt.wantStale {
 				t.Fatalf("stale = %v, want only %q", stale, tt.wantStale)
+			}
+		})
+	}
+}
+
+// TestRenderReadmeTokenClaim_TiersAgree_StatesOneFigure verifies the README
+// headline claim quotes one startup total when every tier's dynamic rows cost
+// the same, says that the tiers agree, quotes the minimal capability surface
+// beside it, and points at the footprint section that backs it.
+func TestRenderReadmeTokenClaim_TiersAgree_StatesOneFigure(t *testing.T) {
+	got, err := renderReadmeTokenClaim(completeFootprintRows())
+	if err != nil {
+		t.Fatalf("renderReadmeTokenClaim() error: %v", err)
+	}
+	// 2,180 tool schema tokens + 31,758 shared (full) and + 1,088 shared (minimal).
+	wantPrefix := "**33,938 tokens of startup context by default, the same on every GitLab tier (3,268 with `CAPABILITY_SURFACE=minimal`).**"
+	if !strings.HasPrefix(got, wantPrefix) {
+		t.Fatalf("renderReadmeTokenClaim() = %q, want prefix %q", got, wantPrefix)
+	}
+	for _, want := range []string{"cl100k_base", "[How it is measured](#token-footprint)"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("renderReadmeTokenClaim() missing %q in %q", want, got)
+		}
+	}
+	if strings.Contains(got, "from ") || strings.Contains(got, "From ") {
+		t.Errorf("renderReadmeTokenClaim() = %q, must not render a span when the tiers agree", got)
+	}
+	// One trailing newline: ComputeReplacedSection adds the blank line before
+	// the end marker itself, so a second one would leave the block drifting.
+	if !strings.HasSuffix(got, "\n") || strings.HasSuffix(got, "\n\n") {
+		t.Errorf("renderReadmeTokenClaim() = %q, want exactly one trailing newline", got)
+	}
+}
+
+// TestRenderReadmeTokenClaim_TiersDiffer_StatesTheSpan verifies the claim
+// switches to a "from X to Y" span, and stops saying every tier agrees, as soon
+// as one tier's dynamic total diverges. The default and minimal figures are
+// spanned independently, so a divergence in one does not fabricate one in the
+// other.
+func TestRenderReadmeTokenClaim_TiersDiffer_StatesTheSpan(t *testing.T) {
+	tests := []struct {
+		name          string
+		tier          string
+		configuration string
+		sharedDelta   int
+		wantPrefix    string
+	}{
+		{
+			name: "default total differs", tier: "Premium", configuration: dynamicDefaultConfiguration, sharedDelta: 100,
+			wantPrefix: "**From 33,938 to 34,038 tokens of startup context by default, depending on the GitLab tier (3,268 with `CAPABILITY_SURFACE=minimal`).**",
+		},
+		{
+			name: "minimal total differs", tier: "Free/CE", configuration: dynamicMinimalConfiguration, sharedDelta: 7,
+			wantPrefix: "**33,938 tokens of startup context by default, the same on every GitLab tier (from 3,268 to 3,275 with `CAPABILITY_SURFACE=minimal`).**",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rows := completeFootprintRows()
+			for i := range rows {
+				if rows[i].Tier == tt.tier && rows[i].Configuration == tt.configuration {
+					rows[i].SharedTokens += tt.sharedDelta
+				}
+			}
+			got, err := renderReadmeTokenClaim(rows)
+			if err != nil {
+				t.Fatalf("renderReadmeTokenClaim() error: %v", err)
+			}
+			if !strings.HasPrefix(got, tt.wantPrefix) {
+				t.Fatalf("renderReadmeTokenClaim() = %q, want prefix %q", got, tt.wantPrefix)
+			}
+		})
+	}
+}
+
+// TestRenderReadmeTokenClaim_MissingDynamicRows_ReturnsError verifies the claim
+// refuses to render, rather than quoting zero tokens, when either dynamic
+// configuration has no measured row to draw on.
+func TestRenderReadmeTokenClaim_MissingDynamicRows_ReturnsError(t *testing.T) {
+	tests := []struct {
+		name string
+		rows []tokenFootprintRow
+	}{
+		{name: "no rows at all", rows: nil},
+		{
+			name: "only the individual surface",
+			rows: []tokenFootprintRow{{Tier: ultimateTierLabel, Configuration: individualConfiguration, VisibleTools: 1065, ToolSchemaTokens: 966698, SharedTokens: 31758}},
+		},
+		{
+			name: "minimal capability surface missing",
+			rows: slices.DeleteFunc(completeFootprintRows(), func(r tokenFootprintRow) bool {
+				return r.Configuration == dynamicMinimalConfiguration
+			}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := renderReadmeTokenClaim(tt.rows); err == nil {
+				t.Fatal("renderReadmeTokenClaim() error = nil, want error")
 			}
 		})
 	}
@@ -568,6 +680,46 @@ func TestRenderSiteFootprintJSON_IncompleteMatrix_ReturnsError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := renderSiteFootprintJSON(tt.rows); err == nil {
 				t.Fatal("renderSiteFootprintJSON() error = nil, want error")
+			}
+		})
+	}
+}
+
+// TestRenderSiteFootprintJSON_TierDependentDynamic_ReturnsError verifies the
+// site data refuses to quote one dynamic figure for every tier once any tier's
+// dynamic row diverges from the Ultimate one: the landing page says in words
+// that the default cost holds on every tier, and that sentence must fail to
+// generate before it can become false.
+func TestRenderSiteFootprintJSON_TierDependentDynamic_ReturnsError(t *testing.T) {
+	tests := []struct {
+		name          string
+		configuration string
+		field         string
+	}{
+		{name: "default shared tokens differ", configuration: dynamicDefaultConfiguration, field: "shared"},
+		{name: "minimal shared tokens differ", configuration: dynamicMinimalConfiguration, field: "shared"},
+		{name: "tool schema tokens differ", configuration: dynamicDefaultConfiguration, field: "schema"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rows := completeFootprintRows()
+			for i := range rows {
+				if rows[i].Tier != "Premium" || rows[i].Configuration != tt.configuration {
+					continue
+				}
+				if tt.field == "shared" {
+					rows[i].SharedTokens++
+				} else {
+					rows[i].ToolSchemaTokens++
+				}
+			}
+			_, err := renderSiteFootprintJSON(rows)
+			if err == nil {
+				t.Fatal("renderSiteFootprintJSON() error = nil, want error")
+			}
+			if !strings.Contains(err.Error(), "Premium") {
+				t.Fatalf("renderSiteFootprintJSON() error = %q, want it to name the diverging tier", err)
 			}
 		})
 	}

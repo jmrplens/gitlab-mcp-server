@@ -892,11 +892,11 @@ update-all: gen-footprint gen-stats gen-site-stats gen-llms gen-lhm-manifest gen
 	go run ./cmd/format_md_tables/
 	@echo "All generators and formatters complete."
 
-## gen-footprint: measure token footprint and write the README section + token-footprint.md.
+## gen-footprint: measure token footprint and write the README token-claim block and footprint section, token-footprint.md and site/src/data/token-footprint.json.
 gen-footprint:
 	go run ./cmd/audit_tokens/ -footprint
 
-## check-footprint: verify the README token-footprint section and token-footprint.md are current.
+## check-footprint: verify the README token-claim block and footprint section, token-footprint.md and site/src/data/token-footprint.json are current.
 check-footprint:
 	go run ./cmd/audit_tokens/ -footprint -check
 

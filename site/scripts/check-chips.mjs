@@ -9,7 +9,8 @@
 //     added to one locale alone is exactly the structural drift the
 //     data-driven landing was built to remove.
 //   - EXISTENCE: every chip href resolves to a content page, and so does
-//     every absolute href the landing data module (home.ts) declares. The
+//     every absolute href the landing data module (home.ts) declares; an
+//     href with a fragment must also name a heading of that page. The
 //     links validator only sees the content AST; frontmatter and data-module
 //     hrefs are invisible to it. ES-only pages are swept too, so a chip
 //     cannot escape by living outside the EN-driven pair walk.
@@ -71,12 +72,53 @@ function chipsOf(path) {
  * missing translation cannot hide behind its English twin. */
 function hrefExists(href) {
 	if (!href.startsWith(BASE + "/")) return false;
-	const rel = href.slice(BASE.length + 1).replace(/\/$/, "");
-	return ["mdx", "md"].some(
-		(ext) =>
-			existsSync(join(ROOT, `${rel}.${ext}`)) ||
-			existsSync(join(ROOT, rel, `index.${ext}`)),
-	);
+	const [path, fragment] = href.split("#", 2);
+	const rel = path.slice(BASE.length + 1).replace(/\/$/, "");
+	const file = ["mdx", "md"]
+		.flatMap((ext) => [
+			join(ROOT, `${rel}.${ext}`),
+			join(ROOT, rel, `index.${ext}`),
+		])
+		.find((candidate) => existsSync(candidate));
+	if (!file) return false;
+	// A fragment must name a heading of that page. The slug follows the rules
+	// Astro applies (github-slugger): lowercase, punctuation dropped, accents
+	// kept, spaces to hyphens. So a deep link into a section is checked
+	// against the section, not waved through on the page alone.
+	return !fragment || headingSlugs(file).has(decodeURIComponent(fragment));
+}
+
+/** The github-slugger form of every Markdown heading in a page, code fences
+ * excluded. */
+function headingSlugs(file) {
+	const slugs = new Set();
+	let inFence = false;
+	for (const line of readFileSync(file, "utf8").split("\n")) {
+		if (/^\s*(```|~~~)/.test(line)) {
+			inFence = !inFence;
+			continue;
+		}
+		if (inFence) continue;
+		const heading = /^#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
+		if (!heading) continue;
+		const custom = /\{#([^}]+)\}\s*$/.exec(heading[1]);
+		if (custom) {
+			slugs.add(custom[1]);
+			continue;
+		}
+		const text = heading[1]
+			.replace(/`([^`]*)`/g, "$1")
+			.replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+			.replace(/[*_]/g, "");
+		slugs.add(
+			text
+				.toLowerCase()
+				.replace(/[^\p{L}\p{N}\s-]/gu, "")
+				.trim()
+				.replace(/\s+/g, "-"),
+		);
+	}
+	return slugs;
 }
 
 let failures = 0;
@@ -96,7 +138,7 @@ let homeHrefs = 0;
 for (const [, href] of homeTs.matchAll(/"(\/gitlab-mcp-server\/[^"\s]*)"/g)) {
 	homeHrefs++;
 	if (!hrefExists(href)) {
-		fail(`home.ts: href ${href} resolves to no page`);
+		fail(`home.ts: href ${href} resolves to no page or heading`);
 	}
 }
 
@@ -152,7 +194,7 @@ for (const page of en) {
 		]) {
 			if (href && !hrefExists(href)) {
 				fail(
-					`${rel}: ${locale} chip ${i + 1} href ${href} resolves to no page`,
+					`${rel}: ${locale} chip ${i + 1} href ${href} resolves to no page or heading`,
 				);
 			}
 		}

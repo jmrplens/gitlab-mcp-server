@@ -4,13 +4,13 @@ description: "Issue management examples with GitLab MCP Server — triage, assig
 datePublished: "2026-04-23"
 faq:
   - q: "How do I triage GitLab issues with an AI assistant?"
-    a: "Ask your assistant to list the open issues you care about, then to assign, label, and link them. A typical triage loop is four calls: `gitlab_issue` with `action: list` (filtered by `state: opened` and a label) to see the backlog, `action: update` to set `assignee_ids`, `labels`, and `milestone_id`, `action: link_create` to record dependencies, and `action: update` with `state_event: close` once resolved. In the default dynamic surface the same operations resolve through `gitlab_find_action` as `issue.list`, `issue.update`, and `issue.link_create`."
+    a: "Ask your assistant to list the open issues you care about, then to assign, label, and link them. A typical triage loop is four calls: `issue.list` (filtered by `state: opened` and a label) to see the backlog, `issue.update` to set `assignee_ids`, `labels`, and `milestone_id`, `issue.link_create` to record dependencies, and `issue.update` again with `state_event: close` once resolved. On the default dynamic surface these are `gitlab_execute_action` actions, discoverable through `gitlab_find_action`; with `TOOL_SURFACE=meta` they are the `gitlab_issue` meta-tool's `list`, `update`, and `link_create` actions."
   - q: "What is the difference between relates_to, blocks, and is_blocked_by?"
-    a: "They are the three `link_type` values accepted by `gitlab_issue` with `action: link_create`. `relates_to` is a symmetric, non-blocking association — neither issue gates the other. `blocks` means the source issue must be resolved before the target can proceed. `is_blocked_by` is the inverse direction of the same relationship, so creating a `blocks` link from #300 to #400 is what makes #400 report `is_blocked_by` #300. Listing links with `action: link_list` returns the relationship type alongside each linked issue."
+    a: "They are the three `link_type` values accepted by `issue.link_create` (`gitlab_issue` with `action: link_create` on the meta surface). `relates_to` is a symmetric, non-blocking association — neither issue gates the other. `blocks` means the source issue must be resolved before the target can proceed. `is_blocked_by` is the inverse direction of the same relationship, so creating a `blocks` link from #300 to #400 is what makes #400 report `is_blocked_by` #300. Listing links with `issue.link_list` returns the relationship type alongside each linked issue."
   - q: "Can an AI assistant close a GitLab issue for me?"
-    a: "Yes, but closing is a state change, so it follows the same safety rules as any other mutation. The call is `gitlab_issue` with `action: update` and `state_event: close`. If the deployment runs with `GITLAB_READ_ONLY=true` the action is not registered at all, and under `GITLAB_SAFE_MODE=true` the server returns a JSON preview of the change instead of applying it."
+    a: "Yes, but closing is a state change, so it follows the same safety rules as any other mutation. The call is `issue.update` with `state_event: close` (`gitlab_issue`, `action: update`, on the meta surface). If the deployment runs with `GITLAB_READ_ONLY=true` the action is not registered at all, and under `GITLAB_SAFE_MODE=true` the server returns a JSON preview of the change instead of applying it."
   - q: "How do I search issues across several GitLab projects at once?"
-    a: "Use `gitlab_search` rather than `gitlab_issue`, because issue listing is scoped to one project. Search accepts an instance, group, or project scope, so `scope: issues` with a `group_id` searches every project in that group in one call. Results come back with the project path on each hit, so an assistant can follow up with `gitlab_issue` `action: get` on whichever project owns the issue."
+    a: "Use `search.issues` rather than `issue.list` (the `gitlab_search` and `gitlab_issue` meta-tools when `TOOL_SURFACE=meta`), because issue listing is scoped to one project or group. Search accepts an instance, group, or project scope, so `search.issues` with a `group_id` searches every project in that group in one call. Results come back with the project path on each hit, so an assistant can follow up with `issue.get` on whichever project owns the issue."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -34,7 +34,7 @@ import FAQ from "../../../components/FAQ.astro";
   />
 </CardGrid>
 
-These step-by-step workflows cover issue management end to end: triaging open issues, assigning and labeling them, linking related and blocking issues, tracking milestone progress, holding discussions, and searching across projects. Each example pairs the prompt you type with the exact meta-tool action the server runs, so you can reuse the call directly.
+These step-by-step workflows cover issue management end to end: triaging open issues, assigning and labeling them, linking related and blocking issues, tracking milestone progress, holding discussions, and searching across projects. Each example pairs the prompt you type with the exact catalog action the server runs, written as `domain.action → parameters`: on the default dynamic surface that is the `action` you pass to `gitlab_execute_action`, and with `TOOL_SURFACE=meta` it is the `action` of the `gitlab_<domain>` meta-tool, so you can reuse the call directly.
 
 ## Issue triage
 
@@ -59,7 +59,7 @@ flowchart LR
 **Prompt**: "Show me all open issues in the backend project with label 'bug'"
 
 ```text
-gitlab_issue → action: list, project_id: "my-group/backend",
+issue.list → project_id: "my-group/backend",
   state: "opened", labels: "bug"
 ```
 
@@ -70,7 +70,7 @@ Returns: issue titles, authors, labels, milestones, assignees, and creation date
 **Prompt**: "Assign issue #123 to johndoe and add labels 'priority::high' and 'team::backend'"
 
 ```text
-gitlab_issue → action: update, project_id: "my-group/backend",
+issue.update → project_id: "my-group/backend",
   issue_iid: 123, assignee_ids: [45], add_labels: "priority::high,team::backend"
 ```
 
@@ -79,7 +79,7 @@ gitlab_issue → action: update, project_id: "my-group/backend",
 **Prompt**: "Show me all unassigned issues in the Sprint 15 milestone"
 
 ```text
-gitlab_issue → action: list, project_id: "my-group/backend",
+issue.list → project_id: "my-group/backend",
   milestone: "Sprint 15", assignee_id: 0
 ```
 
@@ -90,9 +90,9 @@ Returns: issues without assignees that need attention before the sprint starts.
 **Prompt**: "Close issue #456 with a comment explaining the fix"
 
 ```text
-gitlab_issue → action: note_create, project_id: "my-group/backend",
+issue.note_create → project_id: "my-group/backend",
   issue_iid: 456, body: "Fixed in MR !89 — the timeout was caused by..."
-gitlab_issue → action: update, project_id: "my-group/backend",
+issue.update → project_id: "my-group/backend",
   issue_iid: 456, state_event: "close"
 ```
 
@@ -100,7 +100,7 @@ gitlab_issue → action: update, project_id: "my-group/backend",
 
 ## AI-powered issue analysis
 
-There is no dedicated "AI analysis" tool. AI-powered analysis happens when the assistant reads issues with `gitlab_issue → action: list` or `action: get`, reasons over their content, and then acts on the result — assigning, labeling, linking, or commenting with the actions below. For example, _"Find the open bugs in backend, group them by likely root cause, and label the duplicates"_ chains a read action with the triage actions in this guide, all within one conversation.
+There is no dedicated "AI analysis" tool. AI-powered analysis happens when the assistant reads issues with `issue.list` or `issue.get`, reasons over their content, and then acts on the result — assigning, labeling, linking, or commenting with the actions below. For example, _"Find the open bugs in backend, group them by likely root cause, and label the duplicates"_ chains a read action with the triage actions in this guide, all within one conversation.
 
 ---
 
@@ -113,7 +113,7 @@ Model relationships between issues so dependencies are explicit. Mark issues as 
 **Prompt**: "Link issue #100 as related to issue #200 in the backend project"
 
 ```text
-gitlab_issue → action: link_create, project_id: "my-group/backend",
+issue.link_create → project_id: "my-group/backend",
   issue_iid: 100, target_issue_iid: 200, link_type: "relates_to"
 ```
 
@@ -122,7 +122,7 @@ gitlab_issue → action: link_create, project_id: "my-group/backend",
 **Prompt**: "Mark issue #300 as blocking issue #400"
 
 ```text
-gitlab_issue → action: link_create, project_id: "my-group/backend",
+issue.link_create → project_id: "my-group/backend",
   issue_iid: 300, target_issue_iid: 400, link_type: "blocks"
 ```
 
@@ -131,7 +131,7 @@ gitlab_issue → action: link_create, project_id: "my-group/backend",
 **Prompt**: "Show me all issues related to issue #100"
 
 ```text
-gitlab_issue → action: link_list, project_id: "my-group/backend", issue_iid: 100
+issue.link_list → project_id: "my-group/backend", issue_iid: 100
 ```
 
 Returns: linked issues with relationship types (relates_to, blocks, is_blocked_by).
@@ -157,7 +157,7 @@ Organize and measure work with labels and milestones. Create scoped labels to ca
 **Prompt**: "Create a scoped label 'priority::critical' with red color in the backend project"
 
 ```text
-gitlab_project → action: label_create, project_id: "my-group/backend",
+project.label_create → project_id: "my-group/backend",
   name: "priority::critical", color: "#CC0000"
 ```
 
@@ -166,7 +166,7 @@ gitlab_project → action: label_create, project_id: "my-group/backend",
 **Prompt**: "Show me the progress of milestone Sprint 15"
 
 ```text
-gitlab_project → action: milestone_get, project_id: "my-group/backend", milestone_id: 15
+project.milestone_get → project_id: "my-group/backend", milestone_iid: 15
 ```
 
 Returns: completion percentage, open/closed issue counts, start date, due date, and remaining days.
@@ -182,7 +182,7 @@ Keep the conversation on the issue itself. Add a quick comment, open a threaded 
 **Prompt**: "Comment on issue #123: 'Reproduced on staging — the error only occurs with concurrent requests'"
 
 ```text
-gitlab_issue → action: note_create, project_id: "my-group/backend",
+issue.note_create → project_id: "my-group/backend",
   issue_iid: 123, body: "Reproduced on staging — the error only occurs with concurrent requests"
 ```
 
@@ -191,7 +191,7 @@ gitlab_issue → action: note_create, project_id: "my-group/backend",
 **Prompt**: "Create a discussion thread on issue #123 about the proposed architecture"
 
 ```text
-gitlab_issue → action: discussion_create, project_id: "my-group/backend",
+issue.discussion_create → project_id: "my-group/backend",
   issue_iid: 123, body: "Let's discuss the proposed architecture for this feature..."
 ```
 
@@ -200,7 +200,7 @@ gitlab_issue → action: discussion_create, project_id: "my-group/backend",
 **Prompt**: "Add a thumbs-up reaction to issue #123"
 
 ```text
-gitlab_issue → action: award_emoji_create, project_id: "my-group/backend",
+issue.emoji_issue_create → project_id: "my-group/backend",
   issue_iid: 123, name: "thumbsup"
 ```
 
@@ -215,7 +215,7 @@ Find issues beyond a single project. Search globally by keyword across every pro
 **Prompt**: "Search for issues mentioning 'memory leak' across all my projects"
 
 ```text
-gitlab_search → scope: "issues", search: "memory leak"
+search.issues → query: "memory leak"
 ```
 
 Returns: matching issues across all accessible projects with titles, descriptions, and project paths.
@@ -225,11 +225,29 @@ Returns: matching issues across all accessible projects with titles, description
 **Prompt**: "Find all open issues with label 'security' in the platform group"
 
 ```text
-gitlab_issue → action: list, group_id: "platform",
+issue.list_group → group_id: "platform",
   state: "opened", labels: "security"
 ```
 
 Returns: security-related issues across all projects in the group.
+
+## Dynamic-first issue calls
+
+On the default dynamic surface the assistant discovers the issue action and its schema first, then executes it, so every block above is the `action` of a `gitlab_execute_action` call. The two-step pattern is find, then execute:
+
+```text
+gitlab_find_action → query: "open issues with a label"
+gitlab_execute_action → action: "issue.list", params: { project_id: "my-group/backend", state: "opened", labels: "bug" }
+```
+
+Assigning, labeling and linking follow the same shape:
+
+```text
+gitlab_execute_action → action: "issue.update", params: { project_id: "my-group/backend", issue_iid: 123, assignee_ids: [45], add_labels: "priority::high,team::backend" }
+gitlab_execute_action → action: "issue.link_create", params: { project_id: "my-group/backend", issue_iid: 300, target_issue_iid: 400, link_type: "blocks" }
+```
+
+With `TOOL_SURFACE=meta` the same calls go to the `gitlab_issue` meta-tool with `action: list`, `action: update` and `action: link_create`, each with the parameters nested under `params`.
 
 ---
 

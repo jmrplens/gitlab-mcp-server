@@ -191,10 +191,12 @@ El modo meta-herramientas (`TOOL_SURFACE=meta`) consolida operaciones relacionad
   "tool": "gitlab_issue",
   "arguments": {
     "action": "create",
-    "project": "my-group/my-project",
-    "title": "Fix login redirect",
-    "description": "Users are redirected to 404 after login",
-    "labels": "bug,priority::high"
+    "params": {
+      "project_id": "my-group/my-project",
+      "title": "Fix login redirect",
+      "description": "Users are redirected to 404 after login",
+      "labels": ["bug", "priority::high"]
+    }
   }
 }
 ```
@@ -228,7 +230,7 @@ flowchart LR
 	B --> C[Handler de GitLab existente]
 ```
 
-Como las meta-herramientas y el modo dinámico comparten el catálogo canónico de acciones, **el comportamiento de seguridad se mantiene coherente entre ambos modos**: el filtrado de solo lectura, las vistas previas de modo seguro, el filtrado por alcance de token, las confirmaciones de acciones destructivas, los esquemas y el formato de resultados son idénticos.
+Como los tres modos comparten el catálogo canónico de acciones, **el comportamiento de seguridad se mantiene coherente en todas las superficies**: el filtrado de solo lectura, las vistas previas de modo seguro, el filtrado por alcance de token, las confirmaciones de acciones destructivas, los esquemas y el formato de resultados son idénticos.
 
 <Facts>
 	<Fact kind="exposes">

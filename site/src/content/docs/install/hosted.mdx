@@ -1,0 +1,165 @@
+---
+title: Hosted endpoint
+description: Use the public GitLab MCP Server instance at mcp.jmrp.io with nothing installed, signing in with OAuth or sending a GitLab.com token, and understand what that trade-off means before relying on it.
+datePublished: "2026-09-01"
+---
+
+A public, ready-to-use instance of this server runs at
+**`https://mcp.jmrp.io/gitlab`**. There is nothing to install and no
+account to create beyond your own GitLab.com token: point an HTTP-capable
+MCP client at the URL and the whole catalog is available. It is the fastest
+way to try the server, and the [caveats](#caveats-read-them-before-relying-on-it)
+below explain why running it locally is still the way to keep using it.
+
+## Point a client at it
+
+Any client that speaks streamable HTTP can use it. The generic shape:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.jmrp.io/gitlab",
+      "headers": { "Authorization": "Bearer glpat-xxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+The endpoint runs in OAuth mode, which gives you two ways in:
+
+- **Sign in with OAuth, no header at all.** A client that speaks the OAuth
+  flow (VS Code, Claude Code, Cursor) sends its first request without a
+  credential, receives a `401` carrying an RFC 9728 challenge that points at
+  `https://mcp.jmrp.io/.well-known/oauth-protected-resource/gitlab`,
+  discovers `https://gitlab.com` as the authorization server there, and
+  opens the browser for you to authorize. The client keeps its own token
+  from then on.
+- **Send a personal access token as `Authorization: Bearer glpat-...`.**
+  For a client with no OAuth flow, or for headless use, a GitLab.com
+  personal access token in that header is verified exactly like an OAuth
+  token. It travels with every request and is never stored on the server.
+
+:::note[OAuth clients need the client ID]
+The [server card](https://mcp.jmrp.io/servers/gitlab/) carries copy-paste
+configuration for Claude Code, Cursor and VS Code, including the OAuth
+client ID those clients need. Without it they fall back to dynamic client
+registration, which GitLab restricts to the `mcp` scope, a scope this server
+cannot use, so every action would fail.
+:::
+
+## Tokens and what they unlock
+
+| Credential                      | Result                                                                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token with the `api` scope      | The full tool surface.                                                                                                                                              |
+| Token with the `read_api` scope | Admitted and served a read-only tool surface. The write check is per action, so a credential that cannot change anything is a supported way in, not a rejected one. |
+| `PRIVATE-TOKEN` header          | Not accepted. It is the legacy-mode header; the endpoint is Bearer-only.                                                                                            |
+| `GITLAB-URL` header             | Ignored. The instance is fixed to `https://gitlab.com`, so a self-managed instance cannot be reached through this endpoint.                                         |
+| No credential                   | Any method answers `401` with `WWW-Authenticate: Bearer ... resource_metadata=...`, the challenge an OAuth client follows.                                          |
+
+Use a token scoped to what you actually need. A hosted endpoint sees every
+request you send through it; `read_api` is the right choice when you only
+want to read.
+
+## What the endpoint is
+
+| Property        | Value                                                                                                                                                                      |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| URL             | `https://mcp.jmrp.io/gitlab`                                                                                                                                               |
+| Transport       | Stateless streamable HTTP. `POST` is the transport; an authenticated `GET` or `DELETE` answers `405` by design.                                                            |
+| Tool surface    | The default `dynamic` surface: `gitlab_find_action` and `gitlab_execute_action`, reaching every catalog action by its canonical id.                                        |
+| Authentication  | OAuth mode. `Authorization: Bearer` per request, verified against GitLab.com, never stored server-side.                                                                    |
+| Health          | `GET https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",...}`.                                                                  |
+| Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/): the whole catalog and per-client configuration, unauthenticated.                             |
+| MCP server card | `GET https://mcp.jmrp.io/gitlab/server-card`, unauthenticated.                                                                                                             |
+| Directory       | [mcp.jmrp.io](https://mcp.jmrp.io/) lists the MCP servers the author maintains; [`servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients. |
+
+A bare `curl` that gets `401` is the endpoint working, not failing. The
+health URL is the one to probe when you want a `200`.
+
+## Try it from a browser first
+
+The [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) signs
+in with OAuth and calls this same endpoint read-only from a browser tab:
+pick a tool, run it, read the raw JSON-RPC it returns, with nothing
+installed. The [server card](https://mcp.jmrp.io/servers/gitlab/) lists the
+whole catalog with no credential at all.
+
+## Caveats: read them before relying on it
+
+- **Your token and every request pass through someone else's machine.**
+  That is the one concrete reason to run the server locally once you have
+  decided to keep using it: locally, both stay on your own computer. It is
+  also the only sensible option for a private self-managed instance, which
+  this endpoint cannot reach anyway.
+- **It is a personal service, run by one person, offered as-is.** No SLA, no
+  support channel, and no promise it is unchanged next week.
+- **It adds no quota of its own.** Every call spends GitLab.com's own rate
+  limits, under your own token.
+- **It runs whatever the maintainer deploys, never a pinned version.**
+  Normally that is the newest release, occasionally a pre-release branch;
+  `GET https://mcp.jmrp.io/gitlab/health` reports the `version` and `commit`
+  actually serving. If you need a version that stays put, run it yourself.
+- **It is deployed out of band.** The deployment lives with the
+  [mcp.jmrp.io](https://github.com/jmrplens/mcp.jmrp.io) host; this
+  repository publishes artifacts and deploys nothing.
+
+## Run the same setup yourself
+
+The endpoint is this binary in HTTP mode with OAuth turned on. The same
+deployment on your own host is:
+
+```bash
+gitlab-mcp-server --http --auth-mode=oauth \
+  --gitlab-url=https://gitlab.com \
+  --public-url=https://mcp.example.com/mcp
+```
+
+Both flags are required: OAuth needs a fixed instance, and `--public-url` is
+the RFC 9728 resource identifier, so it has to be exactly the URL your
+clients are configured with. Creating the GitLab OAuth application and the
+per-client configuration are covered in
+[HTTP Server Mode](/gitlab-mcp-server/operations/http-server/#oauth-mode) and
+[`docs/guides/oauth-app-setup.md`](https://github.com/jmrplens/gitlab-mcp-server/blob/main/docs/guides/oauth-app-setup.md).
+
+## Configure your client
+
+This channel is HTTP rather than stdio, so the entry carries a `url` and,
+for a token, a `headers` block instead of a `command` and `env`:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "type": "http",
+      "url": "https://mcp.jmrp.io/gitlab",
+      "headers": { "Authorization": "Bearer glpat-xxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+VS Code uses a `servers` map with `"type": "http"`, and for the OAuth sign-in
+an `oauth` block with the client ID from the server card instead of
+`headers`. `GITLAB_URL` does not apply here: the instance is fixed to
+`https://gitlab.com`.
+
+The file each client reads is listed in the
+[Quick Start's client tabs](/gitlab-mcp-server/getting-started/#manual-configuration);
+the HTTP shapes for VS Code, OpenCode and `curl` are in
+[HTTP Server Mode](/gitlab-mcp-server/operations/http-server/#client-configuration).
+
+## Upgrade and uninstall
+
+There is nothing to upgrade: the endpoint moves on its own, normally to the
+newest release, which is one of the caveats above as much as a convenience.
+
+To stop using it, delete the entry from your client's configuration. Then
+revoke whatever you handed it: a personal access token is revoked in GitLab
+under **Edit profile > Access > Personal access tokens**, and an OAuth
+authorization under **Edit profile > Access > Applications**, in the
+**Authorized applications** section.
+
+Other channels are compared in the [installation overview](/gitlab-mcp-server/install/overview/).

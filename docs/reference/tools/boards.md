@@ -4,6 +4,7 @@
 > **Domain**: Boards, Labels & Milestones
 > **Individual tools**: 25
 > **Meta-tool**: `gitlab_project` (`TOOL_SURFACE=meta` catalog) — boards, labels and milestones are all routes on it
+> **Dynamic IDs**: `project.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Issue Boards API](https://docs.gitlab.com/ee/api/boards.html), [Labels API](https://docs.gitlab.com/ee/api/labels.html), [Milestones API](https://docs.gitlab.com/ee/api/milestones.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The boards domain covers project issue boards (board CRUD and board list management), project labels (CRUD, subscription, promotion), and project milestones (CRUD, associated issues, and merge requests). Boards organize issues into columns; labels and milestones are key attributes used to filter and categorize board lists.
+
+On the default dynamic surface, these operations are the `project.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, all 25 tools on this page are reached through the `gitlab_project` meta-tool, which dispatches by `action` parameter: boards as `board_list`, `board_get`, `board_list_create`, …; labels as `label_list`, `label_promote`, …; milestones as `milestone_list`, `milestone_issues`, …. There is no boards-only, labels-only or milestones-only meta-tool. The group-scoped equivalents are actions on `gitlab_group` and are documented in [groups.md](groups.md).
 

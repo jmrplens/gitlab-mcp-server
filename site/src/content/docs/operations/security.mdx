@@ -231,14 +231,14 @@ Allowing the origin is only half of what a browser needs. Before it sends a cros
 Every GitHub Release ships with three integrity artifacts:
 
 - `checksums.txt` — SHA-256 hashes for every binary in the release
-- `checksums.txt.sigstore.json` — keyless [Cosign](https://docs.sigstore.dev/cosign/installation/) / Sigstore signature bundle (GitHub OIDC, no key distribution required)
+- `checksums.txt.sigstore.json` — keyless [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) / Sigstore signature bundle (GitHub OIDC, no key distribution required)
 - `<asset>.sbom.json` — an SPDX software bill of materials for each binary
 
 Nothing verifies these for you: the server never downloads or replaces its own binary, so whoever puts a binary on the machine is the one who checks it. Package managers do their own verification (Homebrew pins a checksummed formula, npm and the container registry pin digests). For a binary you download yourself, verify both the signature and the checksum before running it.
 
 ### 1. Install Cosign
 
-Follow the [official installation guide](https://docs.sigstore.dev/cosign/installation/). Quick install:
+Follow the [official installation guide](https://docs.sigstore.dev/cosign/system_config/installation/). Quick install:
 
 ```bash
 # macOS

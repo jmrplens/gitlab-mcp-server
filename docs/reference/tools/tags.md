@@ -4,6 +4,7 @@
 > **Domain**: Tags
 > **Individual tools**: 9
 > **Meta-tool**: `gitlab_tag` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `tag.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Tags API](https://docs.gitlab.com/ee/api/tags.html), [Protected Tags API](https://docs.gitlab.com/ee/api/protected_tags.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The tags domain covers Git tag management in GitLab projects: creating, retrieving, listing, and deleting tags, verifying tag signatures, and managing protected tag rules with configurable access levels.
+
+On the default dynamic surface, these operations are the `tag.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, all 9 individual tools below are consolidated into a single `gitlab_tag` meta-tool that dispatches by `action` parameter.
 

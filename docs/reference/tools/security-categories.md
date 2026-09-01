@@ -4,6 +4,7 @@
 > **Domain**: Security Categories
 > **Individual tools**: 3
 > **Meta-tool**: `gitlab_security_category` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `security_category.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [SecurityCategory GraphQL object](https://docs.gitlab.com/api/graphql/reference/#securitycategory) · [Create](https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorycreate) · [Update](https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategoryupdate) · [Delete](https://docs.gitlab.com/api/graphql/reference/#mutationsecuritycategorydestroy)
 > **Audience**: End users, AI assistant users
 > **Requires**: GitLab Ultimate or Premium
@@ -13,6 +14,8 @@
 ## Overview
 
 Security categories group namespace-level security attributes. A category controls whether multiple attributes can be selected for the same target, and deleting a category also deletes the security attributes associated with it.
+
+On the default dynamic surface, these operations are the `security_category.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 Use security categories before creating security attributes. Use security attributes to classify projects and groups once the category exists.
 

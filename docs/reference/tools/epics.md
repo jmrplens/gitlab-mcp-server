@@ -4,6 +4,7 @@
 > **Domain**: Epics, Epic Issues, Epic Notes, Epic Discussions & Epic Boards
 > **Individual tools**: 17
 > **Meta-tool**: `gitlab_group` (epic routes in the `TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `group.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Work Items API (GraphQL)](https://docs.gitlab.com/ee/api/graphql/reference/#workitem) · [Epic Links API (REST)](https://docs.gitlab.com/ee/api/epic_links.html) · [Epic Boards API (REST)](https://docs.gitlab.com/ee/api/group_boards.html)
 > **Audience**: 👤 End users, AI assistant users
 > **Tier**: GitLab Premium / Ultimate
@@ -13,6 +14,8 @@
 ## Overview
 
 The epics domain covers managing GitLab group epics — high-level planning items that can span multiple projects and group issues together. This includes CRUD operations on epics, managing epic-issue assignments, commenting on epics via notes, and listing epic boards.
+
+On the default dynamic surface, these operations are the `group.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 Epics require GitLab Premium or Ultimate and are always scoped to a group.
 

@@ -321,6 +321,7 @@ const jsonLd = JSON.stringify({
 				"https://enterprisedna.co/directories/mcp/jmrplens-gitlab-mcp-server",
 				"https://lobehub.com/mcp/jmrplens-gitlab-mcp-server",
 				"https://mcpmarket.com/server/gitlab-32",
+				"https://mcptoplist.com/server/io.github.jmrplens%2Fgitlab-mcp-server",
 				// VerifyMCP probes ~23,800 servers daily and publishes a scored
 				// page per artifact rather than per project. This is the hosted
 				// endpoint's page: it is the one that reflects a live handshake,
@@ -329,6 +330,11 @@ const jsonLd = JSON.stringify({
 				// Package/registry authorities. These outlast individual MCP
 				// directories and carry entity weight of their own — they matter
 				// more now that the project has no Wikidata item.
+				// Distribution channels a client installs from; each is a registry
+				// page the project owns, so they anchor the entity as firmly as
+				// the source repository does.
+				"https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server",
+				"https://pypi.org/project/jmrplens-gitlab-mcp-server/",
 				"https://pkg.go.dev/github.com/jmrplens/gitlab-mcp-server/v2",
 				"https://deps.dev/go/github.com%2Fjmrplens%2Fgitlab-mcp-server%2Fv2",
 				"https://libraries.io/go/github.com%2Fjmrplens%2Fgitlab-mcp-server",
@@ -582,11 +588,6 @@ export default defineConfig({
 							translations: { es: "Inicio rápido" },
 						},
 						{
-							slug: "claude-desktop",
-							label: "Claude Desktop (.mcpb)",
-							translations: { es: "Claude Desktop (.mcpb)" },
-						},
-						{
 							slug: "configuration",
 							label: "Configuration",
 							translations: { es: "Configuración" },
@@ -600,6 +601,62 @@ export default defineConfig({
 							slug: "compatibility",
 							label: "Compatibility",
 							translations: { es: "Compatibilidad" },
+						},
+					],
+				},
+				{
+					label: "Installation",
+					translations: { es: "Instalación" },
+					items: [
+						{
+							slug: "install/overview",
+							label: "Choose a path",
+							translations: { es: "Elige una vía" },
+						},
+						{
+							slug: "install/binary",
+							label: "Native binary",
+							translations: { es: "Binario nativo" },
+						},
+						{
+							slug: "install/homebrew",
+							label: "Homebrew",
+							translations: { es: "Homebrew" },
+						},
+						{
+							slug: "install/winget",
+							label: "Windows (winget)",
+							translations: { es: "Windows (winget)" },
+						},
+						{
+							slug: "install/docker",
+							label: "Docker",
+							translations: { es: "Docker" },
+						},
+						{
+							slug: "install/npm",
+							label: "npm and npx",
+							translations: { es: "npm y npx" },
+						},
+						{
+							slug: "install/pypi",
+							label: "PyPI, uvx and pipx",
+							translations: { es: "PyPI, uvx y pipx" },
+						},
+						{
+							slug: "claude-desktop",
+							label: "Claude Desktop (.mcpb)",
+							translations: { es: "Claude Desktop (.mcpb)" },
+						},
+						{
+							slug: "install/agent-plugin",
+							label: "Agent Plugins",
+							translations: { es: "Plugins de agente" },
+						},
+						{
+							slug: "install/hosted",
+							label: "Hosted endpoint",
+							translations: { es: "Endpoint alojado" },
 						},
 					],
 				},

@@ -91,9 +91,9 @@ Lo que significa `GITLAB-URL` depende de cuántas instancias publique el desplie
 
 `--tool-surface` selecciona el catálogo de herramientas MCP visible para cada entrada del pool del servidor HTTP:
 
-- `meta`: meta-herramientas por dominio, el catálogo consolidado por defecto.
+- `dynamic` (predeterminada cuando se omite): la superficie de bajo consumo con dos herramientas, `gitlab_find_action` y `gitlab_execute_action`.
+- `meta`: meta-herramientas por dominio, un catálogo consolidado que enruta por el parámetro `action`.
 - `individual`: cada operación de GitLab se expone como una herramienta independiente.
-- `dynamic`: la superficie actual de bajo consumo con dos herramientas: `gitlab_find_action` y `gitlab_execute_action`.
 
 `--capability-surface` controla recursos y prompts de forma independiente a las herramientas: `full` registra todos los recursos, guías de flujo, prompts y el manifiesto `gitlab://tools`, mientras que `minimal` conserva el manifiesto `gitlab://tools`, y omite prompts, guías y recursos opcionales de GitLab. El descubrimiento de schemas dinámicos sigue funcionando con `minimal` porque find devuelve schemas inline.
 
@@ -496,7 +496,7 @@ La imagen sigue las guías OWASP Docker Top 10:
 | Imagen base             | `alpine:3.24` (mínima, parcheada regularmente)                                |
 | Usuario                 | `appuser` (UID 10001, no-root)                                                |
 | Sistema de archivos     | Solo lectura con `tmpfs` escribible para `/tmp`                               |
-| Capabilities            | Todas eliminadas (`--cap-drop=ALL`)                                           |
+| Capacidades de Linux    | Todas eliminadas (`--cap-drop=ALL`)                                           |
 | Escalada de privilegios | Deshabilitada (`no-new-privileges:true`)                                      |
 | Flags de compilación    | `-trimpath -buildmode=pie` (binario PIE, sin rutas de fuente en stack traces) |
 | Etiquetas OCI           | `org.opencontainers.image.*` con versión, commit, URL de origen               |

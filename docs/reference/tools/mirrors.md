@@ -4,6 +4,7 @@
 > **Domain**: Project Mirrors
 > **Individual tools**: 7
 > **Meta-tool**: Routes inside `gitlab_project` (enterprise-only, requires the Enterprise/Premium catalog)
+> **Dynamic IDs**: `project.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Remote Mirrors API](https://docs.gitlab.com/ee/api/remote_mirrors.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The mirrors domain covers remote mirror management for GitLab projects: listing, retrieving, creating, editing, deleting mirrors, forcing push synchronization, and retrieving SSH public keys for authentication.
+
+On the default dynamic surface, these operations are the `project.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled, the 7 individual tools below are available as enterprise-only routes inside the `gitlab_project` meta-tool.
 

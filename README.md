@@ -41,6 +41,12 @@
 
 You talk to your AI assistant; it does the GitLab work. No project IDs, API endpoints, or JSON to remember.
 
+<!-- START TOKEN CLAIM -->
+
+**10,333 tokens of startup context by default, the same on every GitLab tier (1,671 with `CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)
+
+<!-- END TOKEN CLAIM -->
+
 > "Review merge request !15 — is it safe to merge?" · "Why did the last pipeline fail?" · "List open issues assigned to me" · "Generate release notes from v1.0 to v2.0"
 
 ---
@@ -49,7 +55,7 @@ You talk to your AI assistant; it does the GitLab work. No project IDs, API endp
 
 ## Install in 60 seconds
 
-Pick one. Each path ends with you typing a prompt to your assistant.
+Pick one. Each path ends with you typing a prompt to your assistant. Every channel has a full guide: [Installation](https://jmrp.io/docs/gitlab-mcp-server/install/overview/).
 
 > **Want to look before installing?** The [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) signs in with OAuth and calls the [hosted endpoint](#try-it-without-installing-anything-hosted-endpoint) read-only from a browser tab — nothing downloaded. Running it yourself is still the way to keep using it.
 
@@ -115,6 +121,7 @@ pnpm add -g @jmrp.io/gitlab-mcp-server     # or globally (pnpm)
 uvx jmrplens-gitlab-mcp-server             # zero install; clients launch it directly
 pipx install jmrplens-gitlab-mcp-server    # or install globally (pipx)
 pip install jmrplens-gitlab-mcp-server     # or into the active environment (pip)
+# Linux wheels need glibc; on musl systems such as Alpine use the Docker image instead
 # macOS/Linux (Homebrew)
 brew install jmrplens/tap/gitlab-mcp-server
 # Linux/macOS (script)
@@ -216,7 +223,7 @@ It is the fastest way to try the server, and the right way to keep using it is s
 
 The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport and an _authenticated_ `GET` answers `405` by design; with no credential, any method answers `401` carrying the RFC 6750 challenge an OAuth client follows — a bare `curl` that gets `401` is the endpoint working, not failing. `https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",…}`. A self-hosted HTTP deployment can also run `--auth-mode=oauth --gitlab-url=https://gitlab.com --public-url=https://mcp.example.com/mcp` (both are required: OAuth needs a fixed instance, and `--public-url` is the RFC 9728 resource identifier — pass exactly the URL your clients are configured with, since a client discards metadata naming a different one), where clients discover GitLab as the authorization server through that metadata and authorize in the browser instead of copying tokens — see [OAuth App Setup](docs/guides/oauth-app-setup.md). It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers I maintain, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
 
-It is a personal service, run by one person and offered as-is: no SLA, no support channel, and no promise it is unchanged next week. It adds no quota of its own — every call spends GitLab.com's own limits, under your own token. And it tracks the latest release automatically, so what it serves follows the newest tag rather than a pinned version.
+It is a personal service, run by one person and offered as-is: no SLA, no support channel, and no promise it is unchanged next week. It adds no quota of its own — every call spends GitLab.com's own limits, under your own token. And it moves on its own, normally to the newest release, so what it serves is never a pinned version.
 
 **Then just ask:** open your AI client and try _"List my GitLab projects."_ See the [Getting Started guide](https://jmrp.io/docs/gitlab-mcp-server/getting-started/) for per-client details and [more example prompts](docs/guides/examples/usage-examples.md).
 
@@ -342,28 +349,29 @@ The published model-evaluation set covers 124 task attempts and 808 expected MCP
 
 Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs/gitlab-mcp-server)**. Use this map for the source-of-truth reference on a specific area:
 
-| Document                                              | Description                                                                            |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [Getting Started](docs/getting-started.md)            | Download, setup wizard, per-client configuration                                       |
-| [IDE Configuration](docs/guides/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                 |
-| [Configuration](docs/reference/configuration.md)      | Environment variables, transport modes, TLS                                            |
-| [Environment Variables](docs/reference/env.md)        | Exhaustive environment variable table with defaults and examples                       |
-| [CLI Reference](docs/reference/cli.md)                | All command-line flags, exit codes, and runtime examples                               |
-| [HTTP Server Mode](docs/guides/http-server-mode.md)   | Shared HTTP deployments, authentication, server pool isolation                         |
-| [OAuth App Setup](docs/guides/oauth-app-setup.md)     | GitLab OAuth application, scopes, redirect URIs, and which clients can complete a flow |
-| [CI/CD](docs/guides/ci-cd.md)                         | Running the server inside GitLab CI and GitHub Actions pipelines                       |
-| [Output Format](docs/reference/output-format.md)      | The response contract every tool follows: content blocks, pagination, next steps       |
-| [Error Handling](docs/concepts/error-handling.md)     | Error classification, GitLab message extraction, and the hints tools return            |
-| [Tools Reference](docs/reference/tools/README.md)     | All individual tools with input/output schemas, including GitLab.com-only Orbit        |
-| [Meta-Tools](docs/concepts/meta-tools.md)             | 32/49/50 domain meta-tools with action dispatching                                     |
-| [Dynamic Toolset](docs/concepts/dynamic-tools.md)     | 2-tool low-token mode with canonical action catalog, safety model, and examples        |
-| [Resources](docs/reference/resources.md)              | All 45 resources with URI templates                                                    |
-| [Prompts](docs/reference/prompts.md)                  | All 37 prompts with arguments and output format                                        |
-| [Testing](docs/development/testing/README.md)         | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results |
-| [Security](docs/concepts/security.md)                 | Security model, token scopes, input validation                                         |
-| [Architecture](docs/concepts/architecture.md)         | System architecture, component design, data flow                                       |
-| [Development Guide](docs/development/development.md)  | Building, testing, CI/CD, contributing                                                 |
-| [Troubleshooting](docs/guides/troubleshooting.md)     | Common startup, token, TLS, transport, and tool-discovery issues                       |
+| Document                                              | Description                                                                                                                              |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [Getting Started](docs/getting-started.md)            | Install paths, first query, per-client configuration                                                                                     |
+| [Installation](docs/guides/installation.md)           | Every install channel (binary, Homebrew, winget, Docker, npm, PyPI, `.mcpb`, Agent Plugins, hosted), verification, upgrade and uninstall |
+| [IDE Configuration](docs/guides/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                                                                   |
+| [Configuration](docs/reference/configuration.md)      | Environment variables, transport modes, TLS                                                                                              |
+| [Environment Variables](docs/reference/env.md)        | Exhaustive environment variable table with defaults and examples                                                                         |
+| [CLI Reference](docs/reference/cli.md)                | All command-line flags, exit codes, and runtime examples                                                                                 |
+| [HTTP Server Mode](docs/guides/http-server-mode.md)   | Shared HTTP deployments, authentication, server pool isolation                                                                           |
+| [OAuth App Setup](docs/guides/oauth-app-setup.md)     | GitLab OAuth application, scopes, redirect URIs, and which clients can complete a flow                                                   |
+| [CI/CD](docs/guides/ci-cd.md)                         | Running the server inside GitLab CI and GitHub Actions pipelines                                                                         |
+| [Output Format](docs/reference/output-format.md)      | The response contract every tool follows: content blocks, pagination, next steps                                                         |
+| [Error Handling](docs/concepts/error-handling.md)     | Error classification, GitLab message extraction, and the hints tools return                                                              |
+| [Tools Reference](docs/reference/tools/README.md)     | All individual tools with input/output schemas, including GitLab.com-only Orbit                                                          |
+| [Meta-Tools](docs/concepts/meta-tools.md)             | 32/49/50 domain meta-tools with action dispatching                                                                                       |
+| [Dynamic Toolset](docs/concepts/dynamic-tools.md)     | 2-tool low-token mode with canonical action catalog, safety model, and examples                                                          |
+| [Resources](docs/reference/resources.md)              | All 45 resources with URI templates                                                                                                      |
+| [Prompts](docs/reference/prompts.md)                  | All 37 prompts with arguments and output format                                                                                          |
+| [Testing](docs/development/testing/README.md)         | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results                                                   |
+| [Security](docs/concepts/security.md)                 | Security model, token scopes, input validation                                                                                           |
+| [Architecture](docs/concepts/architecture.md)         | System architecture, component design, data flow                                                                                         |
+| [Development Guide](docs/development/development.md)  | Building, testing, CI/CD, contributing                                                                                                   |
+| [Troubleshooting](docs/guides/troubleshooting.md)     | Common startup, token, TLS, transport, and tool-discovery issues                                                                         |
 
 ## FAQ
 
@@ -406,7 +414,7 @@ The server includes retry logic with backoff for GitLab API rate limits. Errors 
 <details>
 <summary><strong>Which AI clients are supported?</strong></summary>
 
-Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. The built-in setup wizard can auto-configure most clients.
+Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. Each one's configuration snippet is in [Getting Started](docs/getting-started.md), and the one-click buttons above cover the most common ones.
 </details>
 
 ## Building from Source
@@ -451,20 +459,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,008 |     209,045 |
-| Unit tests (`_test.go`)  |       561 |     314,674 |
+| Source (`.go`, non-test) |     1,008 |     209,160 |
+| Unit tests (`_test.go`)  |       561 |     314,826 |
 | End-to-end tests         |       212 |      56,627 |
-| **Total**                | **1,781** | **580,346** |
+| **Total**                | **1,781** | **580,613** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,859 |
+| Source functions                |  7,863 |
 | . Exported (public)             |  2,712 |
-| . Unexported (private)          |  5,147 |
-| Unit test functions (`TestXxx`) | 11,789 |
-| Subtests (`t.Run(...)`)         |  3,122 |
+| . Unexported (private)          |  5,151 |
+| Unit test functions (`TestXxx`) | 11,793 |
+| Subtests (`t.Run(...)`)         |  3,125 |
 | End-to-end test functions       |    539 |
 
 ### Ratios worth noting
@@ -473,15 +481,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.51× more tests than code |
 | Average source file length         |                 ~207 lines |
-| Average test file length           |                 ~560 lines |
-| Comment lines in source            |  28,389 (~13.6% of source) |
+| Average test file length           |                 ~561 lines |
+| Comment lines in source            |  28,422 (~13.6% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,652 |
+| `if err != nil` checks             | 6,656 |
 | `defer` statements                 | 1,022 |
 | `struct` types defined             | 2,763 |
 | `//nolint` suppressions            |   250 |
@@ -506,8 +514,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,800 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,785 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,802 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,787 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

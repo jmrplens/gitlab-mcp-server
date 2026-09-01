@@ -4,6 +4,7 @@
 > **Domain**: Users & Todos
 > **Individual tools**: 64
 > **Meta-tools**: `gitlab_user` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `user.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Users API](https://docs.gitlab.com/ee/api/users.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The users domain covers user profile retrieval, status management, SSH keys, GPG keys, emails, avatars, account lifecycle (create/modify/delete/block/ban/activate), association counts, contribution events, membership reports, personal access tokens, user-scoped runners, to-do management, project/user events, SSH key lookups, namespace operations, and instance-level service accounts.
+
+On the default dynamic surface, these operations are the `user.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, the individual tools below are consolidated into domain-specific meta-tools that dispatch by `action` parameter.
 
@@ -632,8 +635,8 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 
 - [GitLab Users API](https://docs.gitlab.com/ee/api/users.html)
 - [GitLab User Keys (SSH) API](https://docs.gitlab.com/ee/api/user_keys.html)
-- [GitLab User GPG Keys API](https://docs.gitlab.com/ee/api/user_gpg_keys.html)
-- [GitLab Emails API](https://docs.gitlab.com/ee/api/email.html)
+- [GitLab User GPG Keys API](https://docs.gitlab.com/api/user_keys/)
+- [GitLab Emails API](https://docs.gitlab.com/api/user_email_addresses/)
 - [GitLab Avatars API](https://docs.gitlab.com/ee/api/avatar.html)
 - [GitLab To-Dos API](https://docs.gitlab.com/ee/api/todos.html)
 - [GitLab Events API](https://docs.gitlab.com/ee/api/events.html)

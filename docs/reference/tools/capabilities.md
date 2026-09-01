@@ -4,6 +4,7 @@
 > **Domain**: MCP Capabilities (Elicitation, Health)
 > **Individual tools**: 15
 > **Meta-tool**: elicitation tools are always registered individually; health is included in `gitlab_server` meta-tool as `status` action
+> **Dynamic IDs**: `interactive.*`, `server.*` (default surface, via `gitlab_execute_action`)
 > **MCP Protocol**: [Elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The MCP capabilities domain covers special tools that leverage Model Context Protocol capabilities rather than standard GitLab REST API endpoints. These tools use **MCP elicitation** (interactive step-by-step user prompts for resource creation), and **health diagnostics** (server connectivity checks).
+
+On the default dynamic surface, these operations are the `interactive.*`, `server.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 Elicitation tools require the MCP client to support the elicitation capability. If the client does not support the required capability, the tool returns an informational message instead of failing.
 

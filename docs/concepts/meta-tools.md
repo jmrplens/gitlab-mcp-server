@@ -8,7 +8,7 @@ Meta-tools group related GitLab operations under a single MCP tool with an `acti
 
 In meta-tool mode (`TOOL_SURFACE=meta`), the server registers **32 base GitLab/interactive tools**: 28 catalog-backed meta-tools plus 4 interactive elicitation tools. The Enterprise/Premium catalog registers 17 additional enterprise inline meta-tools for **49 tools** on self-managed GitLab, and GitLab.com Enterprise/Premium adds the experimental `gitlab_orbit` meta-tool for **50 tools**. The default tool surface is now dynamic find/execute; set `TOOL_SURFACE=meta` when you want this consolidated domain dispatcher catalog.
 
-The `gitlab_server` update helper is registered separately for server maintenance actions and is not included in the 32/49/50 GitLab action catalog counts.
+The `gitlab_server` meta-tool (actions `status` and `health_check`) is registered separately for server diagnostics and is not included in the 32/49/50 GitLab action catalog counts.
 
 Stdio mode enables the Enterprise/Premium catalog with `GITLAB_TIER=premium` or `GITLAB_TIER=ultimate`. HTTP mode can force the tier with `--tier`, and otherwise detects it per token+URL pool entry from the instance license (fallback `free`).
 
@@ -59,12 +59,15 @@ The old `META_TOOLS=false` spelling still maps to `TOOL_SURFACE=individual` when
 META_TOOLS=false
 ```
 
+To return to the default dynamic surface, unset `TOOL_SURFACE` (or set `TOOL_SURFACE=dynamic`).
+
 Meta-tools remain available because they are the most broadly compatible consolidated surface.
 
-| Mode             |                                                                                    Tool Count | Best For                                                                   |
-| ---------------- | --------------------------------------------------------------------------------------------: | -------------------------------------------------------------------------- |
-| Meta-tools       |               32 base / 49 self-managed Enterprise/Premium / 50 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list |
-| Individual tools | 847 CE / 1065 self-managed Enterprise/Premium / 1071 GitLab.com Enterprise/Premium with Orbit | Clients that benefit from one MCP tool per GitLab operation                |
+| Mode              |                                                                                    Tool Count | Best For                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------: | -------------------------------------------------------------------------------- |
+| Dynamic (default) |                                             2 (`gitlab_find_action`, `gitlab_execute_action`) | Any client; lowest startup context, every action reachable by `domain.action` ID |
+| Meta-tools        |               32 base / 49 self-managed Enterprise/Premium / 50 GitLab.com Enterprise/Premium | LLM clients that need the complete GitLab surface with a compact tool list       |
+| Individual tools  | 847 CE / 1065 self-managed Enterprise/Premium / 1071 GitLab.com Enterprise/Premium with Orbit | Clients that benefit from one MCP tool per GitLab operation                      |
 
 ---
 

@@ -1,0 +1,58 @@
+---
+title: Instalación
+description: Todas las formas de instalar GitLab MCP Server, desde un binario nativo, Homebrew o winget hasta Docker, npm, PyPI, un plugin de agente, la extensión para Claude Desktop o el endpoint alojado, y cómo se actualiza cada canal.
+datePublished: "2026-09-01"
+---
+
+import { CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+GitLab MCP Server es un único binario autocontenido escrito en Go. Todos los canales de esta página entregan ese mismo binario, o un contenedor que lo envuelve, y el mismo comando `gitlab-mcp-server`, así que la elección depende de lo que ya tengas en la máquina y de cómo quieras recibir las actualizaciones, no de las funcionalidades. Elijas lo que elijas, el servidor necesita un solo valor para arrancar: un personal access token de GitLab en `GITLAB_TOKEN` (scope `api`; un token `read_api` también sirve y recibe una superficie de herramientas de solo lectura). `GITLAB_URL` usa `https://gitlab.com` por defecto, así que solo la estableces para una instancia autogestionada.
+
+## Elige un canal
+
+| Canal                                                            | Qué obtienes                                                                                       | Necesita                                                           | Vía de actualización                                                                                             | Plataformas                                                     |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| [Binario nativo](/gitlab-mcp-server/es/install/binary/)          | El binario de la release, colocado por un script de instalación o a mano                           | Nada (el script necesita `curl` o `wget`; PowerShell en Windows)   | Vuelve a ejecutar el script, o descarga la release nueva                                                         | Linux, macOS, Windows; amd64 y arm64                            |
+| [Homebrew](/gitlab-mcp-server/es/install/homebrew/)              | El binario de la release, instalado por una fórmula del tap `jmrplens/tap`                         | Homebrew                                                           | `brew upgrade`                                                                                                   | macOS y Linux; Apple Silicon, Intel y arm64                     |
+| [Windows (winget)](/gitlab-mcp-server/es/install/winget/)        | El ejecutable de la release como paquete portable con un alias en el PATH                          | winget                                                             | `winget upgrade`                                                                                                 | Windows; x64 y arm64                                            |
+| [Docker](/gitlab-mcp-server/es/install/docker/)                  | Una imagen de contenedor en GHCR, replicada en Docker Hub                                          | Docker o un runtime compatible                                     | Descarga una etiqueta más nueva y recrea el contenedor                                                           | Imágenes `linux/amd64` y `linux/arm64`, allá donde corra Docker |
+| [npm y npx](/gitlab-mcp-server/es/install/npm/)                  | Un paquete lanzador más un paquete de plataforma que lleva el binario                              | Node.js 18 o superior                                              | `npm update -g`; `npx -y` resuelve la versión más nueva en cada arranque en frío                                 | Linux (glibc), macOS, Windows; x64 y arm64                      |
+| [PyPI, uvx y pipx](/gitlab-mcp-server/es/install/pypi/)          | Una wheel que coloca el binario en la ruta de scripts del entorno                                  | Python 3.9 o superior (uv o pipx opcionales)                       | `pipx upgrade`, `pip install -U` o `uv tool upgrade`; `uvx` resuelve la versión más nueva en un arranque en frío | Linux (glibc), macOS 11 o superior, Windows; x64 y arm64        |
+| [Plugins de agente](/gitlab-mcp-server/es/install/agent-plugin/) | Un manifiesto de plugin que ejecuta la imagen Docker sobre stdio                                   | Un host conforme (Cursor, Claude Code, VS Code, OpenCode) y Docker | La etiqueta `latest` de la imagen, descargada de nuevo                                                           | Allá donde corran el host y Docker                              |
+| [Claude Desktop (.mcpb)](/gitlab-mcp-server/es/claude-desktop/)  | Una extensión de escritorio que empaqueta el binario universal de macOS y el ejecutable de Windows | Claude Desktop 0.10.0 o superior                                   | Con cada release se publica una versión nueva de la extensión                                                    | macOS (Apple Silicon e Intel), Windows (x64)                    |
+| [Endpoint alojado](/gitlab-mcp-server/es/install/hosted/)        | Nada instalado: un endpoint público de streamable HTTP                                             | Un cliente MCP con soporte HTTP y un token de GitLab.com           | Avanza por sí solo, normalmente a la última release                                                              | Cualquiera                                                      |
+
+:::note[El servidor no se actualiza a sí mismo]
+Nunca comprueba si hay actualizaciones ni reemplaza su propio binario, en ningún canal. Las actualizaciones vienen de lo que lo instaló: `brew upgrade`, `winget upgrade`, `npm update`, una etiqueta de imagen más nueva, una versión nueva de la extensión o una descarga nueva. `gitlab-mcp-server --version` imprime `gitlab-mcp-server <versión> (commit: <commit>)`, así que siempre puedes ver qué tienes.
+:::
+
+## ¿Cuál elegir?
+
+- **Quieres la huella más pequeña y ningún runtime.** El binario nativo. Homebrew y winget instalan ese mismo binario y se ocupan de las actualizaciones.
+- **Tu cliente ya lanza servidores con `npx` o `uvx`.** Los paquetes de npm y PyPI: nada que instalar de antemano, y el cliente resuelve la versión más nueva por su cuenta.
+- **Prefieres no poner nada en el host, o despliegas para un equipo.** Docker, sobre stdio para un cliente o en modo HTTP tras un puerto.
+- **Usas Claude Desktop.** La extensión `.mcpb`: un clic, y el token vive en el llavero del sistema operativo.
+- **Solo quieres echar un vistazo.** El endpoint alojado, desde cualquier cliente con soporte HTTP o directamente desde el inspector del navegador.
+
+<CardGrid>
+  <LinkCard title="Binario nativo" description="Script de instalación, una línea de PowerShell o una descarga desde GitHub Releases. Verifica el checksum y la firma." href="/gitlab-mcp-server/es/install/binary/" />
+  <LinkCard title="Homebrew" description="brew install jmrplens/tap/gitlab-mcp-server en macOS o Linux; se actualiza con brew upgrade." href="/gitlab-mcp-server/es/install/homebrew/" />
+  <LinkCard title="Windows (winget)" description="winget install --id jmrplens.gitlab-mcp-server -e, un paquete portable con un alias en el PATH." href="/gitlab-mcp-server/es/install/winget/" />
+  <LinkCard title="Docker" description="ghcr.io/jmrplens/gitlab-mcp-server sobre stdio con --http=false, o como servicio HTTP en un puerto." href="/gitlab-mcp-server/es/install/docker/" />
+  <LinkCard title="npm y npx" description="npx -y @jmrp.io/gitlab-mcp-server, o una instalación global; solo se descarga el binario de tu plataforma." href="/gitlab-mcp-server/es/install/npm/" />
+  <LinkCard title="PyPI, uvx y pipx" description="uvx jmrplens-gitlab-mcp-server, pipx o pip; la wheel lleva el binario nativo." href="/gitlab-mcp-server/es/install/pypi/" />
+  <LinkCard title="Plugins de agente" description="/plugin install jmrplens/gitlab-mcp-server en Cursor, Claude Code, VS Code u OpenCode." href="/gitlab-mcp-server/es/install/agent-plugin/" />
+  <LinkCard title="Claude Desktop (.mcpb)" description="La extensión de escritorio de un clic para macOS y Windows, con el token en el llavero del sistema." href="/gitlab-mcp-server/es/claude-desktop/" />
+  <LinkCard title="Endpoint alojado" description="https://mcp.jmrp.io/gitlab: prueba el servidor sin instalar nada, y luego ejecútalo en local." href="/gitlab-mcp-server/es/install/hosted/" />
+</CardGrid>
+
+## Después de instalar
+
+Todos los canales terminan en el mismo sitio: tu cliente MCP lanza `gitlab-mcp-server` (o el comando `docker`, `npx` o `uvx` que lo envuelve) con `GITLAB_TOKEN` en su entorno. Cada página de canal cierra con el fragmento mínimo de cliente para su comando, y el [Inicio rápido](/gitlab-mcp-server/es/getting-started/#configuración-manual) tiene las pestañas por cliente para VS Code, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains, Zed, Kiro y Cline.
+
+Dos cosas que conviene saber antes de la primera ejecución:
+
+- Si arrancas el binario en una terminal, o le haces doble clic en Windows, sin `GITLAB_URL` y `GITLAB_TOKEN` definidos, imprime qué es y los dos valores que necesita, y espera a que pulses Enter. Un cliente MCP nunca ve esa pantalla, porque se conecta por tuberías y no por una terminal. No hay asistente de configuración.
+- El token puede quedarse fuera del JSON del cliente por completo: una variable de entorno explícita gana a un `.env` en el directorio de trabajo, que gana a `~/.gitlab-mcp-server.env` (un `CLAVE=valor` por línea). Consulta [Configuración](/gitlab-mcp-server/es/configuration/).
+
+Después abre tu cliente y pregunta _"¿Quién soy en GitLab?"_. En la superficie `dynamic` por defecto, el asistente llama a `gitlab_find_action` y después a `gitlab_execute_action` con la acción `user.current`, y responde con tu perfil de GitLab.

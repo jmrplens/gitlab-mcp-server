@@ -4,6 +4,7 @@
 > **Domain**: Releases & Release Links
 > **Individual tools**: 12
 > **Meta-tool**: `gitlab_release` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `release.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Releases API](https://docs.gitlab.com/ee/api/releases/) · [Release Links API](https://docs.gitlab.com/ee/api/releases/links.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The releases domain covers the full lifecycle of GitLab releases and their associated asset links: creating releases for existing tags, retrieving release details, listing releases, updating metadata, deleting releases, and managing asset links attached to releases.
+
+On the default dynamic surface, these operations are the `release.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, all 12 individual tools below are consolidated into a single `gitlab_release` meta-tool that dispatches by `action` parameter.
 

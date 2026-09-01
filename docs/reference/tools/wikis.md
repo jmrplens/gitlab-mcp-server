@@ -4,6 +4,7 @@
 > **Domain**: Wikis
 > **Individual tools**: 6
 > **Meta-tool**: `gitlab_wiki` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `wiki.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Project Wikis API](https://docs.gitlab.com/ee/api/wikis.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The wikis domain covers the full lifecycle of GitLab project wiki pages: listing, retrieving, creating, updating, deleting, and uploading file attachments. Supports Markdown, RDoc, AsciiDoc, and Org formats.
+
+On the default dynamic surface, these operations are the `wiki.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, all 6 individual tools below are consolidated into a single `gitlab_wiki` meta-tool that dispatches by `action` parameter.
 

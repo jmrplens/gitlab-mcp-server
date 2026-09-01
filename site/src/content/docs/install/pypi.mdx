@@ -1,0 +1,209 @@
+---
+title: PyPI, uvx and pipx
+description: Install GitLab MCP Server from PyPI as a platform wheel that carries the native binary, run it with uvx without installing anything, or put it on your PATH with pipx, uv tool or pip.
+datePublished: "2026-09-01"
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+GitLab MCP Server is published on PyPI as
+[`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/).
+The wheels follow the model `uv` and `ruff` use: each one carries the native
+Go binary for one platform, the installer places that binary on the
+environment's scripts path as the command itself, and no Python runs while
+the server does.
+
+## What you get
+
+Six platform wheels, one per operating system and architecture, tagged
+`py3-none` (no dependency on a Python ABI) and requiring Python 3.9 or
+newer:
+
+| Platform                    | Wheel platform tag       |
+| --------------------------- | ------------------------ |
+| Linux x86_64 (glibc 2.17+)  | `manylinux_2_17_x86_64`  |
+| Linux aarch64 (glibc 2.17+) | `manylinux_2_17_aarch64` |
+| macOS Intel                 | `macosx_11_0_x86_64`     |
+| macOS Apple Silicon         | `macosx_11_0_arm64`      |
+| Windows x64                 | `win_amd64`              |
+| Windows ARM64               | `win_arm64`              |
+
+Inside each wheel the binary sits in the `.data/scripts` directory, which
+the wheel specification obliges the installer to place on the environment's
+scripts path (`bin/` or `Scripts/`) with the executable bit set. That makes
+it the `gitlab-mcp-server` command directly. The wheel also ships a tiny
+`gitlab_mcp_server` Python package with two jobs: a
+`jmrplens-gitlab-mcp-server` console script that hands over to the binary,
+which is what lets `uvx` resolve the tool by its distribution name, and
+`python -m gitlab_mcp_server` for programmatic lookup.
+
+Two commands therefore appear after an install:
+
+| Command                      | What it is                                                                                         |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| `gitlab-mcp-server`          | The native binary. Use this one in client configuration.                                           |
+| `jmrplens-gitlab-mcp-server` | A Python wrapper that execs the binary. It exists so `uvx` can find the tool by distribution name. |
+
+### Why the name carries a prefix
+
+The unprefixed `gitlab-mcp-server` name on PyPI is an empty registration
+held by an unrelated account, and a PEP 541 reclamation request for it is
+open. Until that resolves, the author-prefixed distribution is the official
+one. The import package and the native command already use the unprefixed
+name, so client configuration built on `gitlab-mcp-server` will not change
+when the distribution is renamed; only the name you type into `uvx`, `pipx`
+or `pip` will.
+
+### Linux needs glibc
+
+The Linux wheels are `manylinux_2_17`: the binaries are position-independent
+executables that need the glibc dynamic loader. On musl systems such as
+Alpine, use the container image `ghcr.io/jmrplens/gitlab-mcp-server`
+instead; see [Docker](/gitlab-mcp-server/install/docker/).
+
+## Install
+
+<Tabs syncKey="pypkg">
+<TabItem label="uvx">
+
+Nothing to install: uv fetches the wheel into its cache and runs the
+command. Clients can launch it this way directly.
+
+```bash
+uvx jmrplens-gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pipx">
+
+```bash
+pipx install jmrplens-gitlab-mcp-server
+```
+
+pipx creates an isolated environment for the distribution and links its
+apps into `~/.local/bin`, so both commands land on your PATH.
+
+</TabItem>
+<TabItem label="uv tool">
+
+```bash
+uv tool install jmrplens-gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pip">
+
+```bash
+pip install jmrplens-gitlab-mcp-server
+```
+
+Installs into the active environment; the commands land on that
+environment's scripts path, so activate it (or use its full path) when you
+configure the client.
+
+</TabItem>
+</Tabs>
+
+Check the install:
+
+```bash
+gitlab-mcp-server --version
+# gitlab-mcp-server 2.7.5 (commit: ...)
+```
+
+With `uvx` no command lands on your PATH; `uvx jmrplens-gitlab-mcp-server --version`
+runs the same check. Started in a terminal without both `GITLAB_URL` and
+`GITLAB_TOKEN` set, the binary prints what it is and the two values it needs, then waits for Enter.
+That is the first-run screen, not an error: an MCP client connects pipes
+rather than a terminal and never sees it. There is no setup wizard;
+configuration lives in your client's JSON, below.
+
+## Configure your client
+
+The portable form needs no install at all. Point the client at `uvx`:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "uvx",
+      "args": ["jmrplens-gitlab-mcp-server"],
+      "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+After an install with pipx, uv tool or pip, use the native command instead:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "gitlab-mcp-server",
+      "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+`GITLAB_TOKEN` is the only required value: a personal access token with the
+`api` scope (`read_api` also works and yields a read-only tool surface).
+`GITLAB_URL` defaults to `https://gitlab.com`; add it to `env` only for a
+self-managed instance. A client that does not inherit your shell's PATH may
+need the full path to the command; `which gitlab-mcp-server` (or
+`where gitlab-mcp-server` on Windows) prints it. To pin a release rather
+than follow the newest one with `uvx`, name it in the argument:
+`"jmrplens-gitlab-mcp-server@2.7.5"`.
+
+Per-client file locations and shapes (VS Code uses `servers` with
+`"type": "stdio"`, Zed uses `context_servers`) are in the
+[Quick Start's client tabs](/gitlab-mcp-server/getting-started/#manual-configuration).
+
+## Upgrade and uninstall
+
+The server never checks for updates and never replaces its own binary; the
+Python tool you installed it with owns it, as each channel owns what it
+installed.
+
+<Tabs syncKey="pypkg">
+<TabItem label="uvx">
+
+uv resolves the newest published version on a cold run and reuses its cache
+afterwards. To force the latest release, name it explicitly:
+
+```bash
+uvx jmrplens-gitlab-mcp-server@latest
+```
+
+Nothing was installed, so there is nothing to uninstall beyond the entry in
+your client's configuration.
+
+</TabItem>
+<TabItem label="pipx">
+
+```bash
+pipx upgrade jmrplens-gitlab-mcp-server
+pipx uninstall jmrplens-gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="uv tool">
+
+```bash
+uv tool upgrade jmrplens-gitlab-mcp-server
+uv tool uninstall jmrplens-gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pip">
+
+```bash
+pip install -U jmrplens-gitlab-mcp-server
+pip uninstall jmrplens-gitlab-mcp-server
+```
+
+</TabItem>
+</Tabs>
+
+Other channels are compared in the [installation overview](/gitlab-mcp-server/install/overview/).

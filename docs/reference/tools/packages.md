@@ -4,6 +4,7 @@
 > **Domain**: Packages, Container Registry & Package Protection Rules
 > **Individual tools**: 33
 > **Meta-tool**: `gitlab_package` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `dependency.*`, `package.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Packages API](https://docs.gitlab.com/ee/api/packages.html), [Container Registry API](https://docs.gitlab.com/ee/api/container_registry.html), [Package Protection Rules API](https://docs.gitlab.com/ee/api/project_packages_protection_rules.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The packages domain covers the GitLab Generic Package Registry (publish, download, list, delete packages and files) and the Container Registry (repositories, tags, protection rules). It also includes composite operations like publish-and-link (publish a file and create a release asset link in one step) and publish-directory (batch-publish files from a local directory).
+
+On the default dynamic surface, these operations are the `dependency.*`, `package.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, the package-domain tools below are consolidated into the `gitlab_package` meta-tool. It includes generic package actions (`publish`, `download`, `list`, `group_list`, `file_list`, delete actions), container registry actions with `registry_*` prefixes, container registry protection actions with `registry_rule_*` prefixes, and package protection actions with `protection_rule_*` prefixes. Enterprise/Premium dependency tools remain gated by `GITLAB_TIER` (Premium or Ultimate).
 
@@ -365,8 +368,8 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 ## Related
 
 - [GitLab Packages API](https://docs.gitlab.com/ee/api/packages.html)
-- [GitLab Generic Packages API](https://docs.gitlab.com/ee/api/packages/generic.html)
+- [GitLab Generic Packages API](https://docs.gitlab.com/user/packages/generic_packages/)
 - [GitLab Container Registry API](https://docs.gitlab.com/ee/api/container_registry.html)
-- [GitLab Container Registry Protection Rules API](https://docs.gitlab.com/ee/api/container_registry_protection_rules.html)
+- [GitLab Container Registry Protection Rules API](https://docs.gitlab.com/api/container_repository_protection_rules/)
 - [GitLab Dependencies API](https://docs.gitlab.com/ee/api/dependencies.html)
 - [GitLab Dependency List Export API](https://docs.gitlab.com/ee/api/dependency_list_export.html)

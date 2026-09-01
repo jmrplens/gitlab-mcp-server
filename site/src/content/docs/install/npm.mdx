@@ -1,0 +1,204 @@
+---
+title: npm and npx
+description: Install GitLab MCP Server from npm as a launcher package plus a prebuilt binary for your platform, run it with npx without installing anything, and keep it current with npm update.
+datePublished: "2026-09-01"
+---
+
+import { Tabs, TabItem } from "@astrojs/starlight/components";
+
+GitLab MCP Server is published on npm as
+[`@jmrp.io/gitlab-mcp-server`](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server).
+It is the same native Go binary every other channel ships, packaged so that
+`npx` can launch it with no install step and `npm install -g` can put it on
+your PATH. Nothing compiles and nothing runs at install time.
+
+## What you get
+
+The published set is one launcher plus six per-platform packages, following
+the model esbuild and Biome use:
+
+- **`@jmrp.io/gitlab-mcp-server`** is a small Node.js shim (`cli.js`)
+  registered as the `gitlab-mcp-server` command. It resolves the binary for
+  the current platform, starts it with your stdio and arguments untouched,
+  and mirrors the binary's exit code and terminating signal, so the client
+  sees the real outcome.
+- **`@jmrp.io/gitlab-mcp-server-<platform>`** packages carry the binary
+  itself, one per platform: `linux-x64`, `linux-arm64`, `darwin-x64`,
+  `darwin-arm64`, `win32-x64` and `win32-arm64`. They are declared as
+  optional dependencies of the launcher, pinned to its exact version, and
+  each is gated by `os` and `cpu`, so npm installs exactly one of them: the
+  one that matches your machine.
+
+Because the binary arrives inside an ordinary package, there is no
+postinstall script, nothing is downloaded after the install and nothing is
+compiled. That is why the install works with `--ignore-scripts`, behind a
+proxy and in a lockfile-driven CI job.
+
+Requirements: Node.js 18 or newer, and glibc on Linux: the binaries are
+position-independent executables that need the glibc dynamic loader. From the
+first release after 2.7.5 the Linux packages declare `libc: ["glibc"]`, so npm
+skips them on musl distributions such as Alpine and the launcher points you at
+the [Docker image](/gitlab-mcp-server/install/docker/), which is musl-based.
+On 2.7.5 the package installs on Alpine and the binary then fails to start
+with "no such file or directory"; use the Docker image there.
+
+## Install
+
+<Tabs syncKey="pkg">
+<TabItem label="npx">
+
+Nothing to install: the client launches the command directly, and npx keeps
+a copy in its cache after the first run.
+
+```bash
+npx -y @jmrp.io/gitlab-mcp-server
+```
+
+The `-y` flag suppresses npx's "install this package?" prompt, which an MCP
+client has no way to answer.
+
+</TabItem>
+<TabItem label="npm">
+
+```bash
+npm install -g @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pnpm">
+
+```bash
+pnpm add -g @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="yarn">
+
+```bash
+# Yarn 2 and later: run in a temporary environment, nothing installed
+yarn dlx @jmrp.io/gitlab-mcp-server
+# Yarn 1 (Classic): global install
+yarn global add @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+</Tabs>
+
+After a global install the command on your PATH is `gitlab-mcp-server`:
+
+```bash
+gitlab-mcp-server --version
+# gitlab-mcp-server 2.7.5 (commit: ...)
+```
+
+Started in a terminal without both `GITLAB_URL` and `GITLAB_TOKEN` set, the binary prints what it
+is and the two values it needs, then waits for Enter. That is the first-run
+screen, not an error: an MCP client connects pipes rather than a terminal
+and never sees it. There is no setup wizard; configuration lives in your
+client's JSON, below.
+
+### If the launcher cannot find its binary
+
+`gitlab-mcp-server: the @jmrp.io/gitlab-mcp-server-<platform> package is not installed`
+means the platform is supported but its package was skipped. The usual
+causes are an install with `--no-optional`, a lockfile generated on another
+operating system, or a musl system. Reinstall without `--no-optional`, or
+delete `node_modules` and the lockfile and install again. On a platform with
+no prebuilt binary the launcher exits with a message pointing at the
+[release binaries](https://github.com/jmrplens/gitlab-mcp-server/releases)
+and at building from source.
+
+## Configure your client
+
+The portable form needs no install at all. Point the client at `npx`:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "npx",
+      "args": ["-y", "@jmrp.io/gitlab-mcp-server"],
+      "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+After a global install, use the command instead:
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "gitlab-mcp-server",
+      "env": { "GITLAB_TOKEN": "glpat-xxxxxxxxxxxxxxxxxxxx" }
+    }
+  }
+}
+```
+
+`GITLAB_TOKEN` is the only required value: a personal access token with the
+`api` scope (`read_api` also works and yields a read-only tool surface).
+`GITLAB_URL` defaults to `https://gitlab.com`; add it to `env` only for a
+self-managed instance. A client that does not inherit your shell's PATH may
+need the full path to the command; `which gitlab-mcp-server` (or
+`where gitlab-mcp-server` on Windows) prints it. To pin a release rather
+than follow the newest one, name it in the argument:
+`"@jmrp.io/gitlab-mcp-server@2.7.5"`.
+
+Per-client file locations and shapes (VS Code uses `servers` with
+`"type": "stdio"`, Zed uses `context_servers`) are in the
+[Quick Start's client tabs](/gitlab-mcp-server/getting-started/#manual-configuration).
+
+## Upgrade and uninstall
+
+The server never checks for updates and never replaces its own binary; npm
+owns it here, as each channel owns what it installed. Every release moves
+the launcher and its six platform packages together with exact pins, so
+updating the launcher updates the binary, and an old launcher never resolves
+a newer binary or the other way round.
+
+<Tabs syncKey="pkg">
+<TabItem label="npx">
+
+npx resolves the newest published version on a cold run and reuses its
+cache afterwards. To force the latest release, name it explicitly:
+
+```bash
+npx -y @jmrp.io/gitlab-mcp-server@latest
+```
+
+Nothing was installed, so there is nothing to uninstall beyond the entry in
+your client's configuration.
+
+</TabItem>
+<TabItem label="npm">
+
+```bash
+npm update -g @jmrp.io/gitlab-mcp-server
+npm uninstall -g @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pnpm">
+
+```bash
+pnpm update -g @jmrp.io/gitlab-mcp-server
+pnpm remove -g @jmrp.io/gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="yarn">
+
+```bash
+# Yarn 1 (Classic)
+yarn global upgrade @jmrp.io/gitlab-mcp-server
+yarn global remove @jmrp.io/gitlab-mcp-server
+```
+
+`yarn dlx` installs nothing, so there is nothing to remove.
+
+</TabItem>
+</Tabs>
+
+Other channels are compared in the [installation overview](/gitlab-mcp-server/install/overview/).

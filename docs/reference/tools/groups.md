@@ -4,6 +4,7 @@
 > **Domain**: Groups
 > **Individual tools**: 104
 > **Meta-tool**: `gitlab_group` (`TOOL_SURFACE=meta` catalog) — one tool for the whole domain, including members, labels, milestones, boards, push rules, protected branches and environments, releases, service accounts, wikis, relations export and markdown uploads
+> **Dynamic IDs**: `group.*`, `issue.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Groups API](https://docs.gitlab.com/ee/api/groups.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The groups domain covers the full lifecycle of GitLab groups: creation, retrieval, listing, updating, deletion, restoration, archiving, searching, transfers, subgroup management, webhooks (including custom headers, URL variables, and test/resend operations), push rules, protected branches, protected environments, releases, service accounts and their personal access tokens, group wikis, sharing with other groups, label events on group epics, and markdown uploads.
+
+On the default dynamic surface, these operations are the `group.*`, `issue.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, the 104 individual tools below collapse into the single `gitlab_group` meta-tool, which dispatches by `action` parameter. Labels, milestones, boards, members, wikis and the rest have no meta-tool of their own — each is a set of actions on `gitlab_group`, such as `group_label_list`, `group_milestone_create`, `group_board_get` and `group_member_add`. Group SCIM is the one exception — it ships as its own `gitlab_group_scim` meta-tool and is documented in [identity-security.md](identity-security.md).
 
@@ -1040,7 +1043,7 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - [GitLab Group Milestones API](https://docs.gitlab.com/ee/api/group_milestones.html)
 - [GitLab Group Import/Export API](https://docs.gitlab.com/ee/api/group_import_export.html)
 - [GitLab Group Issue Boards API](https://docs.gitlab.com/ee/api/group_boards.html)
-- [GitLab Group Webhooks API](https://docs.gitlab.com/ee/api/group_hooks.html)
+- [GitLab Group Webhooks API](https://docs.gitlab.com/api/group_webhooks/)
 - [GitLab Protected Branches API](https://docs.gitlab.com/ee/api/protected_branches.html)
 - [GitLab Push Rules API](https://docs.gitlab.com/ee/api/protected_branches.html#push-rules)
 - [GitLab Group Wikis API](https://docs.gitlab.com/ee/api/wikis.html)

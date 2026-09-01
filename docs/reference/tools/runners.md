@@ -4,6 +4,7 @@
 > **Domain**: Runners
 > **Individual tools**: 34
 > **Meta-tool**: `gitlab_runner` (`TOOL_SURFACE=meta` catalog, 34 actions)
+> **Dynamic IDs**: `runner.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Runners API](https://docs.gitlab.com/ee/api/runners.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The runners domain covers CI/CD runner management (listing, registration, configuration, removal, token management, manager inspection) and the admin-only runner controller control plane for Ultimate-tier GitLab instances. Runners can be scoped to instances, groups, or projects. The runner controller API is experimental and admin-only.
+
+On the default dynamic surface, these operations are the `runner.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, the 34 individual tools below are consolidated into a single `gitlab_runner` meta-tool that dispatches by `action` parameter.
 

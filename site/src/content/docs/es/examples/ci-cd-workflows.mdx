@@ -4,13 +4,13 @@ description: "Ejemplos CI/CD con GitLab MCP Server — diagnosticar pipelines fa
 datePublished: "2026-04-23"
 faq:
   - q: "¿Cómo depuro un pipeline de GitLab que falla con un asistente de IA?"
-    a: "Se baja desde el pipeline hasta el log del job. Llama a `gitlab_pipeline` con `action: list` y `status: failed` para localizar la ejecución, a `gitlab_job` con `action: list` y el ID del pipeline para ver qué job falló, y después a `gitlab_job` con `action: trace` para obtener la traza de ese job y que el asistente lea el error real. En la superficie dinámica son `pipeline.list`, `job.list` y `job.trace`. Leer el log es el paso decisivo: el estado del pipeline rara vez explica el fallo."
+    a: "Se baja desde el pipeline hasta el log del job. Ejecuta `pipeline.list` con `status: failed` para localizar la ejecución, `job.list` con el ID del pipeline para ver qué job falló, y después `job.trace` para obtener la traza de ese job y que el asistente lea el error real. En la superficie dinámica predeterminada son acciones de `gitlab_execute_action`; con `TOOL_SURFACE=meta` son la acción `list` de `gitlab_pipeline` y las acciones `list` y `trace` de `gitlab_job`. Leer el log es el paso decisivo: el estado del pipeline rara vez explica el fallo."
   - q: "¿Puede un asistente de IA reintentar o cancelar un pipeline?"
-    a: "Sí. `gitlab_pipeline` acepta `action: retry` y `action: cancel`, y `gitlab_job` admite las mismas dos para un job concreto. Reintentar un pipeline vuelve a ejecutar solo sus jobs fallidos, mientras que reintentar un job vuelve a ejecutar únicamente ese job. Ambas son acciones mutantes, así que no están disponibles con `GITLAB_READ_ONLY=true` y devuelven una previsualización con `GITLAB_SAFE_MODE=true`."
+    a: "Sí. `pipeline.retry` y `pipeline.cancel` actúan sobre un pipeline, y `job.retry` y `job.cancel` sobre un job concreto (las acciones `retry` y `cancel` de las meta-herramientas `gitlab_pipeline` y `gitlab_job` cuando `TOOL_SURFACE=meta`). Reintentar un pipeline vuelve a ejecutar solo sus jobs fallidos, mientras que reintentar un job vuelve a ejecutar únicamente ese job. Ambas son acciones mutantes, así que no están disponibles con `GITLAB_READ_ONLY=true` y devuelven una previsualización con `GITLAB_SAFE_MODE=true`."
   - q: "¿Cómo valido mi configuración de CI antes de hacer push?"
-    a: "Usa `gitlab_ci_lint` para validar `.gitlab-ci.yml` contra el propio linter de GitLab sin llegar a commitear nada. Informa de errores de sintaxis y de la configuración fusionada tras resolver los `include:`, que es la forma más rápida de detectar un `extends:` roto o una errata en el nombre de un job. Como solo valida, está disponible en despliegues de solo lectura."
+    a: "Usa la acción `template.lint` (`gitlab_execute_action` en la superficie predeterminada; `gitlab_template` con `action: lint` cuando `TOOL_SURFACE=meta`; la herramienta `gitlab_ci_lint` en la superficie individual) para validar `.gitlab-ci.yml` contra el propio linter de GitLab sin llegar a commitear nada. Informa de errores de sintaxis y de la configuración fusionada tras resolver los `include:`, que es la forma más rápida de detectar un `extends:` roto o una errata en el nombre de un job. Como solo valida, está disponible en despliegues de solo lectura."
   - q: "¿El asistente de IA puede ver los valores de las variables CI/CD?"
-    a: "Listar variables con `gitlab_ci_variable` y `action: list` devuelve los valores que el token tenga permiso para leer, así que trata esa salida como sensible: las variables enmascaradas y protegidas se rigen por las reglas de GitLab, no por el servidor MCP. Si un asistente no debe verlas nunca, usa un token sin el scope necesario, o ejecuta con `GITLAB_READ_ONLY=true` para que ninguna variable pueda crearse ni modificarse."
+    a: "Listar variables con `ci_variable.list` (`gitlab_ci_variable` con `action: list` en la superficie meta) devuelve los valores que el token tenga permiso para leer, así que trata esa salida como sensible: las variables enmascaradas y protegidas se rigen por las reglas de GitLab, no por el servidor MCP. Si un asistente no debe verlas nunca, usa un token sin el scope necesario, o ejecuta con `GITLAB_READ_ONLY=true` para que ninguna variable pueda crearse ni modificarse."
 ---
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
@@ -34,7 +34,7 @@ import FAQ from "../../../../components/FAQ.astro";
   />
 </CardGrid>
 
-Estos flujos CI/CD paso a paso muestran cómo diagnosticar fallos de pipelines, gestionar variables CI/CD, programar builds, controlar entornos, validar la configuración y leer métricas DORA — todo en lenguaje natural. Cada ejemplo combina el prompt que escribes con la acción exacta de meta-tool que el servidor ejecuta, para que veas con precisión qué ocurre por debajo y puedas reutilizar la llamada directamente.
+Estos flujos CI/CD paso a paso muestran cómo diagnosticar fallos de pipelines, gestionar variables CI/CD, programar builds, controlar entornos, validar la configuración y leer métricas DORA — todo en lenguaje natural. Cada ejemplo combina el prompt que escribes con la acción exacta del catálogo que el servidor ejecuta, escrita como `dominio.acción → parámetros`: en la superficie dinámica predeterminada es el `action` que pasas a `gitlab_execute_action`, y con `TOOL_SURFACE=meta` es el `action` de la meta-herramienta `gitlab_<dominio>`, para que veas con precisión qué ocurre por debajo y puedas reutilizar la llamada directamente.
 
 ## Diagnosticar un pipeline fallido
 
@@ -48,17 +48,17 @@ sequenceDiagram
     participant GL as API de GitLab
 
     U->>AI: "Muéstrame pipelines fallidos"
-    AI->>MCP: gitlab_pipeline (action: list)
+    AI->>MCP: pipeline.list
     MCP->>GL: GET /projects/:id/pipelines
     GL-->>MCP: Lista de pipelines
     MCP-->>AI: Pipelines fallidos
     AI->>U: "Se encontraron 2 pipelines fallidos"
     U->>AI: "Muéstrame los jobs fallidos en #45892"
-    AI->>MCP: gitlab_job (action: list)
+    AI->>MCP: job.list
     MCP->>GL: GET /projects/:id/pipelines/:id/jobs
     GL-->>MCP: Detalles de jobs
     MCP-->>AI: Jobs fallidos
-    AI->>MCP: gitlab_job (action: trace)
+    AI->>MCP: job.trace
     MCP->>GL: GET /projects/:id/jobs/:id/trace
     GL-->>MCP: Salida del log
     MCP-->>AI: Logs del job
@@ -70,7 +70,7 @@ sequenceDiagram
 **Prompt**: "Muéstrame todos los pipelines fallidos en my-group/backend"
 
 ```text
-gitlab_pipeline → action: list, project_id: "my-group/backend", status: "failed"
+pipeline.list → project_id: "my-group/backend", status: "failed"
 ```
 
 Devuelve: IDs de pipelines, ramas, razones de fallo y duraciones.
@@ -80,7 +80,7 @@ Devuelve: IDs de pipelines, ramas, razones de fallo y duraciones.
 **Prompt**: "Muéstrame los jobs fallidos en el pipeline #45892"
 
 ```text
-gitlab_job → action: list, project_id: "my-group/backend", pipeline_id: 45892, scope: "failed"
+job.list → project_id: "my-group/backend", pipeline_id: 45892, scope: "failed"
 ```
 
 Devuelve: nombres de jobs, stages, mensajes de error e información del runner.
@@ -90,7 +90,7 @@ Devuelve: nombres de jobs, stages, mensajes de error e información del runner.
 **Prompt**: "Obtén la salida del log del job 'test-integration' en el pipeline #45892"
 
 ```text
-gitlab_job → action: trace, project_id: "my-group/backend", job_id: 98765
+job.trace → project_id: "my-group/backend", job_id: 98765
 ```
 
 Devuelve: salida completa del log del job. Útil para diagnosticar fallos en tests sin abrir la interfaz de GitLab.
@@ -106,7 +106,7 @@ Configura el entorno en el que se ejecutan tus pipelines listando, creando y aco
 **Prompt**: "¿Qué variables CI/CD están configuradas en el proyecto backend?"
 
 ```text
-gitlab_ci_variable → action: project_list, project_id: "my-group/backend"
+ci_variable.list → project_id: "my-group/backend"
 ```
 
 Devuelve: claves de variables, estado de protección, estado de enmascaramiento y ámbitos de entorno. Los valores están enmascarados por seguridad.
@@ -116,7 +116,7 @@ Devuelve: claves de variables, estado de protección, estado de enmascaramiento 
 **Prompt**: "Añade una variable CI/CD DEPLOY_TOKEN con valor 'abc123' al proyecto backend, enmascarada y protegida"
 
 ```text
-gitlab_ci_variable → action: project_create, project_id: "my-group/backend",
+ci_variable.create → project_id: "my-group/backend",
   key: "DEPLOY_TOKEN", value: "abc123", masked: true, protected: true
 ```
 
@@ -125,7 +125,7 @@ gitlab_ci_variable → action: project_create, project_id: "my-group/backend",
 **Prompt**: "Actualiza la variable DATABASE_URL en backend para que solo aplique al entorno de producción"
 
 ```text
-gitlab_ci_variable → action: project_update, project_id: "my-group/backend",
+ci_variable.update → project_id: "my-group/backend",
   key: "DATABASE_URL", environment_scope: "production"
 ```
 
@@ -140,7 +140,7 @@ Automatiza pipelines recurrentes con programaciones basadas en cron —por ejemp
 **Prompt**: "Crea una programación de pipeline que se ejecute cada noche a las 2 AM UTC en la rama main"
 
 ```text
-gitlab_pipeline → action: schedule_create, project_id: "my-group/backend",
+pipeline.schedule_create → project_id: "my-group/backend",
   description: "Nightly build", ref: "main", cron: "0 2 * * *", cron_timezone: "UTC"
 ```
 
@@ -149,7 +149,7 @@ gitlab_pipeline → action: schedule_create, project_id: "my-group/backend",
 **Prompt**: "Muéstrame todas las programaciones de pipeline en el proyecto backend"
 
 ```text
-gitlab_pipeline → action: schedule_list, project_id: "my-group/backend"
+pipeline.schedule_list → project_id: "my-group/backend"
 ```
 
 Devuelve: descripciones, expresiones cron, próximas ejecuciones e información del propietario.
@@ -165,7 +165,7 @@ Controla y sigue dónde se despliega tu código. Lista los entornos para ver su 
 **Prompt**: "Muéstrame todos los entornos del proyecto backend"
 
 ```text
-gitlab_environment → action: list, project_id: "my-group/backend"
+environment.list → project_id: "my-group/backend"
 ```
 
 Devuelve: nombres de entornos, URLs externas, información del último despliegue y estado.
@@ -175,7 +175,7 @@ Devuelve: nombres de entornos, URLs externas, información del último despliegu
 **Prompt**: "Muéstrame los despliegues recientes al entorno de producción"
 
 ```text
-gitlab_environment → action: deployment_list, project_id: "my-group/backend", environment: "production"
+environment.deployment_list → project_id: "my-group/backend", environment: "production"
 ```
 
 ### Detener un entorno de revisión
@@ -183,7 +183,7 @@ gitlab_environment → action: deployment_list, project_id: "my-group/backend", 
 **Prompt**: "Detén el entorno review/feature-login en el proyecto backend"
 
 ```text
-gitlab_environment → action: stop, project_id: "my-group/backend", environment_id: 42
+environment.stop → project_id: "my-group/backend", environment_id: 42
 ```
 
 ---
@@ -197,7 +197,7 @@ Detecta errores de `.gitlab-ci.yml` antes de que rompan un pipeline validando la
 **Prompt**: "Valida el .gitlab-ci.yml en my-group/backend buscando errores de sintaxis"
 
 ```text
-gitlab_template → action: ci_lint, project_id: "my-group/backend"
+template.lint_project → project_id: "my-group/backend"
 ```
 
 Devuelve: estado de validación, YAML fusionado, advertencias y detalles de errores.
@@ -213,7 +213,7 @@ Mide el rendimiento de entrega con las cuatro métricas DORA —frecuencia de de
 **Prompt**: "Muéstrame las métricas DORA del proyecto backend en los últimos 30 días"
 
 ```text
-gitlab_dora_metrics → action: project, project_id: "my-group/backend",
+dora_metrics.project → project_id: "my-group/backend",
   metric: "all", start_date: "2024-01-01", end_date: "2024-01-31"
 ```
 
@@ -224,7 +224,7 @@ Devuelve: frecuencia de despliegue, tiempo de entrega para cambios, tiempo de re
 **Prompt**: "Compara las métricas DORA entre todos los proyectos del grupo platform"
 
 ```text
-gitlab_dora_metrics → action: group, group_id: "platform",
+dora_metrics.group → group_id: "platform",
   metric: "all", interval: "monthly"
 ```
 
@@ -232,7 +232,7 @@ Devuelve: métricas agregadas para todo el grupo, útil para dashboards de lider
 
 ## Llamadas CI/CD dinámicas primero
 
-En la superficie dinámica predeterminada, el asistente descubre primero la acción CI/CD exacta y su esquema, y luego la ejecuta — así los prompts anteriores se resuelven a IDs canónicos `domain.action` en lugar de a meta-herramientas con nombre. El patrón de dos pasos es buscar y luego ejecutar:
+En la superficie dinámica predeterminada, el asistente descubre primero la acción CI/CD exacta y su esquema, y luego la ejecuta, así que los IDs `domain.action` anteriores son exactamente lo que pasa a `gitlab_execute_action`. El patrón de dos pasos es buscar y luego ejecutar:
 
 ```text
 gitlab_find_action → query: "estado del último pipeline del proyecto"

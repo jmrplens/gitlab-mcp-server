@@ -44,13 +44,13 @@ MCP lista por separado los recursos fijos y las plantillas de URI. En modo full,
 | --------------------- | ---------------------------------------------------------------------------------- |
 | `gitlab://tools/{id}` | Forma de llamada aceptada y schema de entrada para una entrada de `gitlab://tools` |
 
-Usa el manifiesto de herramientas cuando un cliente necesite la forma exacta de los parámetros de una acción de meta-herramienta sin expandir todos los schemas en `tools/list`, o cuando quiera enumerar entradas dinámicas e individuales con un formato consistente.
+Usa el manifiesto de herramientas cuando un cliente necesite la forma exacta de los parámetros de una entrada en cualquier superficie sin expandir todos los schemas en `tools/list`: IDs canónicos `domain.action` en la superficie dinámica predeterminada, entradas `gitlab_<domain>.<action>` con `TOOL_SURFACE=meta` y nombres de herramienta con `TOOL_SURFACE=individual`.
 
 1. Lee `gitlab://tools` para obtener la superficie activa, herramientas visibles y entradas ejecutables.
 2. Sustituye `{id}` en `gitlab://tools/{id}` para leer el JSON Schema y la forma de llamada de esa entrada.
-3. Llama a la meta-herramienta con la estructura normal `{ "action": "...", "params": { ... } }`.
+3. Llama a la herramienta que indica la forma `call` devuelta: `gitlab_execute_action` con `{ "action": "merge_request.create", "params": { ... } }` en la superficie dinámica, o la meta-herramienta con `{ "action": "create", "params": { ... } }` cuando `TOOL_SURFACE=meta`.
 
-Por ejemplo, `gitlab://tools/gitlab_merge_request.create` devuelve el schema de parámetros y la forma de llamada para la acción `create` de `gitlab_merge_request`. Estos recursos de manifiesto están disponibles con `CAPABILITY_SURFACE=full` o `minimal`, sin importar el modo de `META_PARAM_SCHEMA`. Los clientes dinámicos también pueden usar `gitlab_find_action` para descubrimiento ordenado y schemas inline.
+Por ejemplo, `gitlab://tools/merge_request.create` devuelve el schema de parámetros y la forma de llamada de `merge_request.create` en la superficie predeterminada; con `TOOL_SURFACE=meta` la misma acción es `gitlab://tools/gitlab_merge_request.create`. Estos recursos de manifiesto están disponibles con `CAPABILITY_SURFACE=full` o `minimal`, sin importar el modo de `META_PARAM_SCHEMA`. `gitlab_find_action` devuelve el mismo schema inline en la superficie dinámica, con descubrimiento ordenado además.
 
 ### Plantillas de recursos de proyecto (23)
 
@@ -159,10 +159,12 @@ Para inspeccionar las formas de llamada aceptadas, lee primero el manifiesto de 
 {
   "method": "resources/read",
   "params": {
-    "uri": "gitlab://tools/gitlab_merge_request.create"
+    "uri": "gitlab://tools/merge_request.create"
   }
 }
 ```
+
+Con `TOOL_SURFACE=meta` la entrada es `gitlab://tools/gitlab_merge_request.create`, y con `TOOL_SURFACE=individual` es el nombre de la herramienta, `gitlab://tools/gitlab_mr_create`: usa el ID que `gitlab://tools` haya listado para la superficie activa.
 
 ## ¿Qué son los prompts MCP?
 

@@ -4,6 +4,7 @@
 > **Domain**: Search
 > **Individual tools**: 11
 > **Meta-tool**: `gitlab_search` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `search.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Search API](https://docs.gitlab.com/ee/api/search.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The search domain provides keyword-based search across GitLab resources: code (blobs), merge requests, issues, commits, milestones, notes (comments), projects, snippets, users, and wiki pages. Each search tool supports scoping by project, group, or global, with paginated results. Search tools also accept optional `search_type` (`basic`, `advanced`, or `zoekt`) when the GitLab instance supports selecting the search backend. The schemas expose those three values as an enum; if GitLab rejects a valid value because the backend is not enabled for the instance or scope, retry without `search_type` or use `basic`.
+
+On the default dynamic surface, these operations are the `search.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, all 10 individual tools below are consolidated into a single `gitlab_search` meta-tool that dispatches by `action` parameter.
 

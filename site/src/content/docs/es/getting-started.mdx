@@ -44,7 +44,7 @@ head:
             "@type": "HowToStep",
             "position": 2,
             "name": "Instalar el servidor",
-            "text": "Elige una vía de instalación. Los botones de un clic registran un servidor basado en Docker que descarga la imagen en la primera ejecución. El instalador de una línea coloca el binario nativo en tu PATH mediante Homebrew, winget o un script de shell. Claude Desktop tiene una extensión nativa .mcpb que guarda el token en el llavero del sistema. También puedes descargar el binario para tu plataforma desde GitHub Releases.",
+            "text": "Elige una vía de instalación. Los botones de un clic registran un servidor basado en Docker que descarga la imagen en la primera ejecución. El instalador de una línea coloca el binario nativo en tu PATH mediante Homebrew, winget o un script de shell. Claude Desktop tiene una extensión nativa .mcpb que guarda el token en el llavero del sistema. Los lanzadores de npm (npx) y PyPI (uvx) lo ejecutan sin un paso de instalación aparte. También puedes descargar el binario para tu plataforma desde GitHub Releases.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#instalación-rápida"
           },
           {
@@ -74,13 +74,13 @@ faq:
     a: "Una conexión fallida suele significar que GitLab MCP Server no puede alcanzar GitLab o no puede autenticarse. Comprueba que `GITLAB_URL` es correcta y accesible desde tu máquina, que el token tiene el scope `api` (o `read_api` en modo solo lectura) y no ha caducado, y que los certificados autofirmados se gestionan estableciendo `GITLAB_SKIP_TLS_VERIFY=true`."
 ---
 
-import { Tabs, TabItem, Steps } from "@astrojs/starlight/components";
+import { CardGrid, LinkCard, Steps, TabItem, Tabs } from "@astrojs/starlight/components";
 import FAQ from "../../../components/FAQ.astro";
 import stats from "../../../data/stats.json";
 
 :::tip[De un vistazo]
 
-- **Cuatro formas de instalarlo**: una imagen Docker, un único binario nativo, el lanzador de npm o las wheels de PyPI (uvx/pipx).
+- **Nueve formas de instalarlo**: un binario nativo (descarga directa o el script de instalación), Homebrew, winget, Docker, el lanzador de npm, las wheels de PyPI, la extensión para Claude Desktop, los Agent Plugins o el endpoint alojado. [Elige una vía](/gitlab-mcp-server/es/install/overview/).
 - **La configuración mínima es un solo valor**: un token de acceso personal de GitLab con scope `api` en `GITLAB_TOKEN`. Define `GITLAB_URL` solo para instancias autogestionadas.
 - **La superficie predeterminada es el modo dinámico**: tu cliente ve dos herramientas, y con ellas alcanza cualquier operación de GitLab bajo demanda.
 
@@ -110,7 +110,7 @@ Para configuraciones de solo lectura, puedes usar un token con scope `read_api` 
 
 ## Instalación rápida
 
-Elige una — cada vía termina contigo escribiendo un prompt a tu asistente. Para la referencia completa por cliente, consulta <a href="#configuración-manual">Configuración manual</a> más abajo.
+Elige una: cada vía termina contigo escribiendo un prompt a tu asistente. Cada canal tiene además su propia página con todos los comandos y los pasos de verificación, actualización y desinstalación; empieza por [Elige una vía](/gitlab-mcp-server/es/install/overview/) si no tienes claro cuál te encaja. Para la referencia completa por cliente, consulta <a href="#configuración-manual">Configuración manual</a> más abajo.
 
 :::tip[¿Quieres verlo antes de instalar?]
 El [inspector del navegador](https://mcp.jmrp.io/es/inspector/?server=gitlab) inicia sesión con OAuth y llama al <a href="#pruébalo-sin-instalar-nada-endpoint-alojado">endpoint alojado</a> — `https://mcp.jmrp.io/gitlab` — en modo solo lectura desde una pestaña, sin descargar nada. Ejecutarlo tú sigue siendo la forma de usarlo a diario.
@@ -130,6 +130,8 @@ Para **Claude Desktop**, descarga en su lugar la
 instalación nativa en un clic (macOS universal + Windows) sin Docker y con el
 token guardado en el llavero del sistema.
 
+Todos los botones ejecutan la imagen del contenedor; la página [Docker](/gitlab-mcp-server/es/install/docker/) cubre sus etiquetas, el modo HTTP y cómo actualizarla.
+
 ### Claude Code (`claude mcp add`)
 
 Docker (sin instalar nada — descarga la imagen en la primera ejecución):
@@ -139,34 +141,21 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx --transport stdio \
   -- docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false
 ```
 
+Cualquier otro canal se registra igual en cuanto `gitlab-mcp-server` está en tu PATH: `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`.
+
+<LinkCard
+  title="Docker"
+  href="/gitlab-mcp-server/es/install/docker/"
+  description="stdio con --http=false, modo HTTP en un puerto, variables de entorno, etiquetas, la réplica en Docker Hub y cómo actualizar"
+/>
+
 ### npm / npx (cualquier plataforma)
 
-Publicado como [`@jmrp.io/gitlab-mcp-server`](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server). npm descarga solo el binario precompilado de tu plataforma — no compila nada, y nada se ejecuta durante la instalación, así que funciona con `--ignore-scripts` y tras un proxy.
-
-<Tabs syncKey="pkg">
-<TabItem label="npx">
+Publicado como [`@jmrp.io/gitlab-mcp-server`](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server). npm descarga solo el binario precompilado de tu plataforma: no compila nada, y nada se ejecuta durante la instalación, así que funciona con `--ignore-scripts` y tras un proxy.
 
 ```bash
-# Sin instalar nada — los clientes lo lanzan directamente
 npx -y @jmrp.io/gitlab-mcp-server
 ```
-
-</TabItem>
-<TabItem label="npm">
-
-```bash
-npm install -g @jmrp.io/gitlab-mcp-server
-```
-
-</TabItem>
-<TabItem label="pnpm">
-
-```bash
-pnpm add -g @jmrp.io/gitlab-mcp-server
-```
-
-</TabItem>
-</Tabs>
 
 Apunta cualquier cliente MCP a `npx` sin instalar nada:
 
@@ -182,34 +171,19 @@ Apunta cualquier cliente MCP a `npx` sin instalar nada:
 }
 ```
 
+<LinkCard
+  title="npm y npx"
+  href="/gitlab-mcp-server/es/install/npm/"
+  description="Instalación global con npm o pnpm, el requisito de Node.js, la salvedad de musl, actualización y desinstalación"
+/>
+
 ### PyPI / uvx (cualquier plataforma)
 
-Publicado como [`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/) con el mismo modelo que `uv` y `ruff` (el nombre sin prefijo en PyPI es un registro vacío de una cuenta ajena, en proceso de reclamación PEP 541): cada wheel de plataforma lleva el binario nativo, el instalador lo coloca en la ruta de scripts como el propio comando, y no se ejecuta Python cuando corre el servidor.
-
-<Tabs syncKey="pypkg">
-<TabItem label="uvx">
+Publicado como [`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/) con el mismo modelo que `uv` y `ruff`: cada wheel de plataforma lleva el binario nativo, el instalador lo coloca en la ruta de scripts como el propio comando `gitlab-mcp-server`, y no se ejecuta Python cuando corre el servidor. Las wheels de Linux necesitan glibc; en sistemas musl como Alpine, usa la imagen Docker en su lugar.
 
 ```bash
-# Sin instalación — los clientes pueden lanzarlo directamente
 uvx jmrplens-gitlab-mcp-server
 ```
-
-</TabItem>
-<TabItem label="pipx">
-
-```bash
-pipx install jmrplens-gitlab-mcp-server
-```
-
-</TabItem>
-<TabItem label="pip">
-
-```bash
-pip install jmrplens-gitlab-mcp-server
-```
-
-</TabItem>
-</Tabs>
 
 ```json
 {
@@ -223,22 +197,42 @@ pip install jmrplens-gitlab-mcp-server
 }
 ```
 
+<LinkCard
+  title="PyPI, uvx y pipx"
+  href="/gitlab-mcp-server/es/install/pypi/"
+  description="Instalación con pipx y pip, los dos comandos instalados, por qué el nombre lleva prefijo, actualización y desinstalación"
+/>
+
 ### Instalador de una línea (binario nativo)
 
 Instala el binario en tu PATH y lo registra. Las actualizaciones vienen de lo que lo instaló (`brew upgrade`, `winget upgrade` o volver a ejecutar el script); el servidor no se actualiza a sí mismo.
 
 ```bash
-# macOS/Linux (Homebrew)
-brew install jmrplens/tap/gitlab-mcp-server
-# Linux/macOS (script)
+# Linux/macOS (script; comprueba el SHA-256 contra checksums.txt antes de instalar)
 curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.sh | sh
-# Windows (winget)
-winget install --id jmrplens.gitlab-mcp-server -e
-# Windows (PowerShell)
-irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/install.ps1 | iex
 
 claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
 ```
+
+Homebrew, winget y el instalador de PowerShell dejan el mismo binario en tu PATH; cada uno tiene su propia página con el comando, dónde queda el binario y cómo actualizarlo y desinstalarlo:
+
+<CardGrid>
+  <LinkCard
+    title="Binario nativo"
+    href="/gitlab-mcp-server/es/install/binary/"
+    description="Scripts de instalación para Linux, macOS y Windows, descarga manual, verificación de checksum y firma"
+  />
+  <LinkCard
+    title="Homebrew"
+    href="/gitlab-mcp-server/es/install/homebrew/"
+    description="brew install jmrplens/tap/gitlab-mcp-server en macOS y Linux"
+  />
+  <LinkCard
+    title="Windows (winget)"
+    href="/gitlab-mcp-server/es/install/winget/"
+    description="winget install --id jmrplens.gitlab-mcp-server -e, dónde queda el binario portable, actualización y desinstalación"
+  />
+</CardGrid>
 
 ¿GitLab autoalojado? Añade `--env GITLAB_URL=https://gitlab.example.com` (y `--env GITLAB_SKIP_TLS_VERIFY=true` para certificados autofirmados).
 
@@ -266,7 +260,13 @@ Es la forma más rápida de probar el servidor, y la forma correcta de usarlo a 
 
 El endpoint es **streamable HTTP sin estado** sobre la superficie `dynamic` por defecto: `POST` es el transporte y un `GET` _autenticado_ responde `405` por diseño; sin credencial, cualquier método responde `401` con el desafío RFC 6750 que sigue un cliente OAuth — un `curl` a secas que recibe `401` es el endpoint funcionando, no fallando. `https://mcp.jmrp.io/gitlab/health` no necesita credencial y responde `200` con `{"status":"ok",…}`. Es uno de los servidores listados en [mcp.jmrp.io](https://mcp.jmrp.io/), un directorio de los servidores MCP que mantiene el autor, cada uno accesible en su propio endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) es esa misma lista para clientes automáticos.
 
-Es un servicio personal, mantenido por una sola persona y ofrecido tal cual: sin SLA, sin canal de soporte y sin garantía de que siga igual la semana que viene. No añade cuota propia — cada llamada se descuenta de los límites de la propia GitLab.com, con tu token. Y sigue automáticamente la última release, así que lo que sirve va con la etiqueta más reciente, no con una versión fijada.
+Es un servicio personal, mantenido por una sola persona y ofrecido tal cual: sin SLA, sin canal de soporte y sin garantía de que siga igual la semana que viene. No añade cuota propia — cada llamada se descuenta de los límites de la propia GitLab.com, con tu token. Y avanza por sí solo, normalmente a la última release, así que lo que sirve nunca es una versión fijada.
+
+<LinkCard
+  title="Endpoint alojado"
+  href="/gitlab-mcp-server/es/install/hosted/"
+  description="Modos OAuth y token, la ficha del servidor y el inspector del navegador, lo que el endpoint no puede hacer y cómo autoalojar la misma configuración"
+/>
 
 ## Descarga
 
@@ -295,6 +295,8 @@ Opcionalmente, muévelo a un directorio en tu PATH:
 sudo mv gitlab-mcp-server-linux-amd64 /usr/local/bin/gitlab-mcp-server
 ```
 
+Comprobar la descarga contra `checksums.txt` y su firma Cosign, actualizar y desinstalar están en la página [Binario nativo](/gitlab-mcp-server/es/install/binary/).
+
 ## Ejecutar el binario a mano
 
 No hay asistente de configuración. La configuración MCP va en el propio archivo JSON de tu cliente, que es lo que documenta <a href="#configuración-manual">Configuración manual</a> más abajo, y un asistente que escribe un dotfile en una máquina no podía ponerla ahí.
@@ -314,62 +316,28 @@ Un `.env` en el directorio de trabajo tiene prioridad sobre él, y una variable 
 
 ## Instalar como Agent Plugin (Cursor / Claude Code / VS Code)
 
-Este repositorio incluye un manifest [Agent Plugins](https://agent-plugins.org/) 1.0 (`plugin.json` en la raíz y la configuración MCP `mcp.json`) — más el manifest legado de Open Plugins (`.plugin/plugin.json`) para hosts antiguos — para que el servidor se instale en un solo paso en un host compatible (Cursor, Claude Code, VS Code, OpenCode). Suministrar el token es un paso aparte, explicado más abajo:
+Este repositorio incluye un manifest [Agent Plugins](https://agent-plugins.org/) 1.0 (`plugin.json` en la raíz y la configuración MCP `mcp.json`), más el manifest legado de Open Plugins (`.plugin/plugin.json`) para hosts antiguos, para que el servidor se instale en un solo paso en un host compatible (Cursor, Claude Code, VS Code, OpenCode). Suministrar el token es un paso aparte, explicado más abajo:
 
 ```bash
 # Cursor / Claude Code (cuando lo soporte tu versión)
 /plugin install jmrplens/gitlab-mcp-server
 ```
 
-El plugin usa la imagen Docker publicada `ghcr.io/jmrplens/gitlab-mcp-server:latest` mediante `docker run -i --rm`, por lo que necesitas [Docker](https://docs.docker.com/get-docker/) instalado y en ejecución. El `mcp.json` incluido está configurado para clientes MCP stdio y pasa `--http=false` después del nombre de la imagen para sobrescribir el modo HTTP predeterminado de la imagen Docker. Mantén esa opción si copias la configuración Docker en VS Code u otro cliente stdio; de lo contrario, el contenedor iniciará un listener HTTP y el cliente esperará indefinidamente una respuesta stdio a `initialize`.
+El plugin ejecuta la imagen Docker publicada `ghcr.io/jmrplens/gitlab-mcp-server:latest` mediante `docker run -i --rm`, con `--http=false` después del nombre de la imagen, por lo que necesitas [Docker](https://docs.docker.com/get-docker/) instalado y en ejecución. Mantén esa opción si copias la configuración Docker en VS Code u otro cliente stdio; de lo contrario, el contenedor inicia un listener HTTP y el cliente espera indefinidamente una respuesta stdio a `initialize`.
+
+<LinkCard
+  title="Plugins de agente"
+  href="/gitlab-mcp-server/es/install/agent-plugin/"
+  description="El manifest incluido, todas las variables que reenvía, cómo llega el token al servidor y cómo cambiar Docker por el binario nativo"
+/>
 
 ### Variables de entorno requeridas
 
-La configuración incluida reenvía estas variables al contenedor. **Tu host tiene que ponerlas antes en el entorno del plugin**: la §9.1 de Agent Plugins permite al cliente «heredar, omitir o sanear» las variables del entorno ambiente, y la spec no define ninguna forma portable de que un plugin referencie un secreto, así que el token no puede viajar dentro del propio `mcp.json`. Si el servidor devuelve un fallo de autorización, define `GITLAB_TOKEN` como documente tu host, o añádelo al bloque `env` del `mcp.json` local del plugin instalado.
-
-| Variable                 | Obligatoria | Descripción                                                                                                                                                                         |
-| ------------------------ | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GITLAB_URL`             | No          | URL de la instancia GitLab. Por defecto usa `https://gitlab.com`; establécela para instancias autogestionadas                                                                       |
-| `GITLAB_TOKEN`           | Sí          | Personal Access Token (`glpat-...`)                                                                                                                                                 |
-| `GITLAB_SKIP_TLS_VERIFY` | No          | `true` para certificados autofirmados (por defecto `false`)                                                                                                                         |
-| `TOOL_SURFACE`           | No          | Selector canónico del catálogo: `dynamic`, `meta` o `individual` (por defecto `dynamic`)                                                                                            |
-| `META_TOOLS`             | No          | Selector de compatibilidad deprecado: `true` mapea a `meta`, `false` mapea a `individual`, y dynamic al valor equivalente de `TOOL_SURFACE`                                         |
-| `CAPABILITY_SURFACE`     | No          | Selector del catálogo de recursos y prompts: `full` o `minimal` (por defecto `full`)                                                                                                |
-| `GITLAB_TIER`            | No          | Edición de GitLab: `free`/`ce`, `premium` o `ultimate`. Cuando se omite, se detecta desde `GET /license` (por defecto `free`). Reemplaza al booleano deprecado `GITLAB_ENTERPRISE`. |
-| `GITLAB_READ_ONLY`       | No          | `true` para deshabilitar herramientas de escritura (por defecto `false`)                                                                                                            |
-| `GITLAB_SAFE_MODE`       | No          | `true` para previsualizar entradas de herramientas mutantes (por defecto `false`)                                                                                                   |
-| `LOG_LEVEL`              | No          | `debug`, `info`, `warn`, `error` (por defecto `info`)                                                                                                                               |
-
-`TOOL_SURFACE` tiene precedencia sobre `META_TOOLS` cuando ambos están definidos. Usa `TOOL_SURFACE` en configuraciones nuevas: `dynamic` es la superficie predeterminada de bajo consumo con find/execute, `meta` expone meta-herramientas consolidadas por dominio e `individual` expone cada herramienta por separado. `META_TOOLS` sigue funcionando por compatibilidad, pero se recomienda tratarlo como deprecado frente al selector explícito.
+`GITLAB_TOKEN` es el único valor obligatorio; `GITLAB_URL` solo importa para una instancia autogestionada. La configuración incluida reenvía ambas al contenedor, pero **tu host tiene que ponerlas antes en el entorno del plugin**: la §9.1 de Agent Plugins permite al cliente «heredar, omitir o sanear» las variables del entorno ambiente, y la spec no define ninguna forma portable de que un plugin referencie un secreto, así que el token no puede viajar dentro del propio `mcp.json`. Si el servidor devuelve un fallo de autorización, define `GITLAB_TOKEN` como documente tu host, o añádelo al bloque `env` del `mcp.json` local del plugin instalado. La tabla completa de variables reenviadas está en la página [Plugins de agente](/gitlab-mcp-server/es/install/agent-plugin/).
 
 ### ¿Prefieres binario nativo en lugar de Docker?
 
-La spec de Agent Plugins arranca automáticamente cada entrada de la configuración MCP referenciada, así que la configuración incluida usa Docker stdio por portabilidad. Para despliegues HTTP en segundo plano, no uses una entrada de cliente stdio; ejecuta la imagen Docker en modo HTTP y configura el cliente MCP con `type: "http"` y una URL como `http://localhost:8080/mcp`. Consulta [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/).
-
-Si prefieres el binario nativo, instala el plugin, localiza el directorio del plugin instalado `gitlab-mcp-server` desde la interfaz de plugins de tu host o la salida de instalación, y después edita su `mcp.json` local (habitualmente en `.agents/plugins/gitlab-mcp-server/`) para sustituir el `command` / `args` de Docker por la ruta al binario que hayas descargado desde [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest):
-
-```json
-{
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
-  "mcpServers": {
-    "gitlab": {
-      "type": "stdio",
-      "command": "/usr/local/bin/gitlab-mcp-server"
-    }
-  }
-}
-```
-
-:::caution[Cómo llega el token al servidor]
-Agent Plugins solo expande `${PLUGIN_ROOT}` y `${PLUGIN_DATA}`; cualquier otro
-`${...}` se queda literal, así que escribir `"GITLAB_TOKEN": "${GITLAB_TOKEN}"`
-le entrega al servidor esa cadena exacta en vez de tu token. La spec no define
-ninguna forma portable de referenciar un secreto, y permite que el cliente
-herede, omita o sanee el entorno ambiente, de modo que cómo llega `GITLAB_TOKEN`
-lo decide tu host: o hace visible la variable al subproceso del plugin, o pones
-tú el valor en el bloque `env` de este fichero local. Ese fichero es tuyo, no
-forma parte del plugin publicado — mantenlo fuera del control de versiones.
-:::
+Instala el plugin y después edita el `mcp.json` local del plugin instalado (habitualmente en `.agents/plugins/gitlab-mcp-server/`) para sustituir el `command` / `args` de Docker por la ruta a un binario de cualquiera de los canales anteriores. La página [Plugins de agente](/gitlab-mcp-server/es/install/agent-plugin/) tiene el archivo exacto que escribir, y por qué un marcador `${GITLAB_TOKEN}` en él llegaría al servidor de forma literal. Para despliegues HTTP en segundo plano, no uses una entrada stdio: ejecuta la imagen en modo HTTP y configura el cliente con `type: "http"` y una URL como `http://localhost:8080/mcp`, como describe [Modo servidor HTTP](/gitlab-mcp-server/es/operations/http-server/).
 
 ## Configuración manual
 
@@ -705,29 +673,31 @@ Si obtienes errores de conexión, comprueba:
 
 :::
 
-## Entendiendo las meta-herramientas
+## Entendiendo las superficies de herramientas
 
-Por defecto, el servidor funciona en **modo dinámico find/execute** con `gitlab_find_action` y `gitlab_execute_action`. Establece `TOOL_SURFACE=meta` para usar **{stats.meta.base} meta-herramientas por dominio** ({stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado, {stats.meta.gitlab_com} en GitLab.com Enterprise/Premium con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio.
-
-Por ejemplo, en lugar de herramientas separadas `gitlab_issue_list`, `gitlab_issue_create` y `gitlab_issue_update`, hay una única herramienta `gitlab_issue` con un parámetro `action`:
+Por defecto, el servidor funciona en **modo dinámico find/execute** con `gitlab_find_action` y `gitlab_execute_action`. Cada operación de GitLab es una acción del catálogo con un ID canónico `domain.action`: el asistente localiza la que necesita (con su schema exacto de parámetros) y después la ejecuta. Crear un issue tiene esta forma:
 
 ```json
 {
-  "tool": "gitlab_issue",
+  "tool": "gitlab_execute_action",
   "arguments": {
-    "action": "create",
-    "project": "my-group/my-project",
-    "title": "Fix login redirect"
+    "action": "issue.create",
+    "params": {
+      "project_id": "my-group/my-project",
+      "title": "Fix login redirect"
+    }
   }
 }
 ```
 
-Esto es transparente para ti — tu cliente de IA maneja el enrutamiento automáticamente. Solo pregunta de forma natural: _"crea un issue para el bug del login"_ y el LLM selecciona la meta-herramienta y acción correctas.
+Establece `TOOL_SURFACE=meta` para usar **{stats.meta.base} meta-herramientas por dominio** ({stats.meta.self_managed_enterprise} en Enterprise/Premium autoalojado, {stats.meta.gitlab_com} en GitLab.com Enterprise/Premium con Orbit) que cubren la misma funcionalidad mediante despachadores consolidados por dominio. En lugar de herramientas separadas `gitlab_issue_list`, `gitlab_issue_create` y `gitlab_issue_update` (la forma de `TOOL_SURFACE=individual`), hay una única herramienta `gitlab_issue` con un parámetro `action`: la misma llamada va a `gitlab_issue` como `{ "action": "create", "params": { ... } }`. Las meta-herramientas solo aceptan `action` y `params` en el nivel superior, así que los parámetros van anidados en `params` en ambas superficies.
+
+Esto es transparente para ti: tu cliente de IA se encarga del enrutamiento. Solo pregunta de forma natural, _"crea un issue para el bug del login"_, y en la superficie dinámica predeterminada el asistente localiza `issue.create` y la ejecuta; con `TOOL_SURFACE=meta` elige la meta-herramienta `gitlab_issue` y la acción `create`.
 
 :::tip
-Las meta-herramientas reducen el número de herramientas visibles en más de un 95%, y el coste en tokens de los esquemas en torno a tres cuartas partes, sin perder funcionalidad. Consulta [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) para la referencia completa.
+No necesitas configurar nada para obtener el catálogo de dos herramientas: la superficie dinámica es la predeterminada y `TOOL_SURFACE=dynamic` solo lo hace explícito. El servidor expone solo `gitlab_find_action` y `gitlab_execute_action`, respaldadas por el mismo catálogo canónico de acciones de GitLab. Consulta [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) para ver cómo funcionan el descubrimiento y la ejecución.
 
-Para el catálogo visible estable más pequeño, establece `TOOL_SURFACE=dynamic`. El servidor expone solo `gitlab_find_action` y `gitlab_execute_action`, respaldadas por el mismo catálogo canónico de acciones de GitLab.
+Las meta-herramientas reducen el número de herramientas visibles en más de un 95% respecto a las herramientas individuales, y el coste en tokens de los esquemas en torno a tres cuartas partes, sin perder funcionalidad. Consulta [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) para la referencia completa.
 
 Combina el modo dinámico con `CAPABILITY_SURFACE=minimal` para mantener solo workspace roots y `gitlab://tools`, y omitir recursos opcionales, guías y prompts cuando necesites el contexto MCP inicial más pequeño. Dynamic conserva schemas inline mediante `gitlab_find_action`.
 :::
@@ -737,7 +707,8 @@ Combina el modo dinámico con `CAPABILITY_SURFACE=minimal` para mantener solo wo
 ## Próximos pasos
 
 - [Configuración](/gitlab-mcp-server/es/configuration/) — Ajusta las variables de entorno y funciones opcionales
-- [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — Entiende cómo se organizan las herramientas y descubre todas las operaciones disponibles
+- [Conjunto de herramientas dinámico](/gitlab-mcp-server/es/tools/dynamic-tools/) — Cómo la superficie find/execute predeterminada descubre y ejecuta cualquier operación
+- [Meta-herramientas](/gitlab-mcp-server/es/tools/meta-tools/) — Los despachadores consolidados por dominio de `TOOL_SURFACE=meta`
 - [Arquitectura](/gitlab-mcp-server/es/architecture/) — Comprende cómo funciona el servidor internamente
 - [Referencia de herramientas](/gitlab-mcp-server/es/tools/overview/) — Explora todas las herramientas disponibles por dominio
 

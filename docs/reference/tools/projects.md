@@ -4,6 +4,7 @@
 > **Domain**: Projects
 > **Individual tools**: 91
 > **Meta-tool**: `gitlab_project` (`TOOL_SURFACE=meta` catalog)
+> **Dynamic IDs**: `project.*` (default surface, via `gitlab_execute_action`)
 > **GitLab API**: [Projects API](https://docs.gitlab.com/ee/api/projects.html)
 > **Audience**: 👤 End users, AI assistant users
 
@@ -12,6 +13,8 @@
 ## Overview
 
 The projects domain covers the full lifecycle of GitLab projects (repositories): creation, retrieval, listing, updating, deletion, forking, starring, archiving, transferring, webhook management, user/group listings, project members, project service accounts, push rule configuration, Pages settings and custom domains, integrations, approvals, pull mirroring, target branch rules, fork relations, avatars, housekeeping, repository storage, and uploads (Markdown attachments + avatars).
+
+On the default dynamic surface, these operations are the `project.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below.
 
 With `TOOL_SURFACE=meta`, project actions are consolidated into a single `gitlab_project` meta-tool that dispatches by `action` parameter.
 
@@ -920,14 +923,14 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 ## Related
 
 - [GitLab Projects API](https://docs.gitlab.com/ee/api/projects.html)
-- [GitLab Project Webhooks API](https://docs.gitlab.com/ee/api/project_hooks.html)
+- [GitLab Project Webhooks API](https://docs.gitlab.com/api/project_webhooks/)
 - [GitLab Service Accounts API](https://docs.gitlab.com/api/service_accounts/)
 - [GitLab Push Rules API](https://docs.gitlab.com/ee/api/project_push_rules.html)
-- [GitLab Uploads API](https://docs.gitlab.com/ee/api/project_uploads.html)
+- [GitLab Uploads API](https://docs.gitlab.com/api/project_markdown_uploads/)
 - [GitLab Project Import/Export API](https://docs.gitlab.com/ee/api/project_import_export.html)
 - [GitLab Pages API](https://docs.gitlab.com/ee/api/pages.html)
 - [GitLab Pages Domains API](https://docs.gitlab.com/ee/api/pages_domains.html)
-- [GitLab Integrations API](https://docs.gitlab.com/ee/api/integrations.html)
+- [GitLab Integrations API](https://docs.gitlab.com/api/project_integrations/)
 - [GitLab Group Integrations API](https://docs.gitlab.com/ee/api/group_integrations.html)
 - [GitLab Members API](https://docs.gitlab.com/ee/api/members.html)
 - [GitLab Approvals API](https://docs.gitlab.com/ee/api/merge_request_approvals.html)

@@ -4,13 +4,16 @@
 > **Domain**: Enterprise Users & Attestations
 > **Individual tools**: 6
 > **Meta-tool**: `gitlab_enterprise_user`, `gitlab_attestation`
-> **GitLab API**: [Enterprise Users API](https://docs.gitlab.com/ee/api/enterprise_users.html), [Attestations API](https://docs.gitlab.com/ee/api/attestations.html)
+> **Dynamic IDs**: `attestation.*`, `enterprise_user.*` (default surface, via `gitlab_execute_action`)
+> **GitLab API**: [Enterprise Users API](https://docs.gitlab.com/api/group_enterprise_users/), [Attestations API](https://docs.gitlab.com/ee/api/attestations.html)
 > **Audience**: End users, AI assistant users
 > **Tier**: Premium (enterprise users), Ultimate (attestations)
 
 ---
 
 Tools for managing enterprise users at the group level and build attestations at the project level.
+
+On the default dynamic surface, these operations are the `enterprise_user.*` and `attestation.*` entries of the canonical action catalog: find them with `gitlab_find_action` and run them with `gitlab_execute_action` by `domain.action` ID. With `TOOL_SURFACE=individual`, each is the tool named in the tables below. The JSON examples on this page show both call shapes: the first block is the meta-tool envelope (`TOOL_SURFACE=meta`, sent to the tool named in the section), the second is the same call as `gitlab_execute_action` arguments on the default surface. Meta-tools accept only `action` and `params` at the top level.
 
 ## Enterprise Users (`enterpriseusers`)
 
@@ -30,7 +33,7 @@ or direct group management.
 
 **`gitlab_enterprise_user`** — Manage enterprise users for a GitLab group.
 
-Actions: `list`, `get`, `disable_2fa`, `delete`
+Actions: `list`, `get`, `disable_2fa`, `delete` (canonical IDs `enterprise_user.list`, `enterprise_user.get`, `enterprise_user.disable_2fa`, `enterprise_user.delete`)
 
 ### Examples
 
@@ -39,9 +42,22 @@ List enterprise users:
 ```json
 {
   "action": "list",
-  "group_id": "my-group",
-  "search": "alice",
-  "active": true
+  "params": {
+    "group_id": "my-group",
+    "search": "alice",
+    "active": true
+  }
+}
+```
+
+```json
+{
+  "action": "enterprise_user.list",
+  "params": {
+    "group_id": "my-group",
+    "search": "alice",
+    "active": true
+  }
 }
 ```
 
@@ -50,8 +66,20 @@ Get a specific user:
 ```json
 {
   "action": "get",
-  "group_id": "my-group",
-  "user_id": 42
+  "params": {
+    "group_id": "my-group",
+    "user_id": 42
+  }
+}
+```
+
+```json
+{
+  "action": "enterprise_user.get",
+  "params": {
+    "group_id": "my-group",
+    "user_id": 42
+  }
 }
 ```
 
@@ -60,8 +88,20 @@ Disable 2FA for a user:
 ```json
 {
   "action": "disable_2fa",
-  "group_id": "my-group",
-  "user_id": 42
+  "params": {
+    "group_id": "my-group",
+    "user_id": 42
+  }
+}
+```
+
+```json
+{
+  "action": "enterprise_user.disable_2fa",
+  "params": {
+    "group_id": "my-group",
+    "user_id": 42
+  }
 }
 ```
 
@@ -70,9 +110,22 @@ Hard delete a user:
 ```json
 {
   "action": "delete",
-  "group_id": "my-group",
-  "user_id": 42,
-  "hard_delete": true
+  "params": {
+    "group_id": "my-group",
+    "user_id": 42,
+    "hard_delete": true
+  }
+}
+```
+
+```json
+{
+  "action": "enterprise_user.delete",
+  "params": {
+    "group_id": "my-group",
+    "user_id": 42,
+    "hard_delete": true
+  }
 }
 ```
 
@@ -119,7 +172,7 @@ information for CI/CD builds. They are scoped to a project and identified by sub
 
 **`gitlab_attestation`** — Manage build attestations for a GitLab project.
 
-Actions: `list`, `download`
+Actions: `list`, `download` (canonical IDs `attestation.list`, `attestation.download`)
 
 ### Examples
 
@@ -128,8 +181,20 @@ List attestations by digest:
 ```json
 {
   "action": "list",
-  "project_id": "my-project",
-  "subject_digest": "sha256:abc123def456"
+  "params": {
+    "project_id": "my-project",
+    "subject_digest": "sha256:abc123def456"
+  }
+}
+```
+
+```json
+{
+  "action": "attestation.list",
+  "params": {
+    "project_id": "my-project",
+    "subject_digest": "sha256:abc123def456"
+  }
 }
 ```
 
@@ -138,8 +203,20 @@ Download an attestation:
 ```json
 {
   "action": "download",
-  "project_id": "my-project",
-  "attestation_iid": 1
+  "params": {
+    "project_id": "my-project",
+    "attestation_iid": 1
+  }
+}
+```
+
+```json
+{
+  "action": "attestation.download",
+  "params": {
+    "project_id": "my-project",
+    "attestation_iid": 1
+  }
 }
 ```
 
