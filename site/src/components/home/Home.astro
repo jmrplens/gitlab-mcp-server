@@ -12,12 +12,14 @@
  * All the text comes from src/data/home.ts, one object per locale, so the
  * English and Spanish landings cannot drift apart structurally. Every number
  * comes from src/data/stats.json — the file `make gen-site-stats` derives
- * from the live catalog — and is read here, never typed, so a catalog change
- * updates the landing by itself.
+ * from the live catalog — or from src/data/token-footprint.json, the file
+ * `make gen-footprint` measures with the tokenizer, and is read here, never
+ * typed, so a catalog change updates the landing by itself.
  */
 import { Code } from "@astrojs/starlight/components";
 import type { HomeContent } from "../../data/home";
 import stats from "../../data/stats.json";
+import footprint from "../../data/token-footprint.json";
 
 interface Props {
 	content: HomeContent;
@@ -25,8 +27,17 @@ interface Props {
 
 const { content } = Astro.props;
 
-// Read, not typed. The readout states the extremes: the two-tool default and
-// the widest projection the catalog reaches.
+// Startup context of the default configuration (dynamic surface, full
+// capability surface) and of `CAPABILITY_SURFACE=minimal`: the visible tool
+// schemas plus the shared resources and prompts, as measured. The generator
+// refuses to write the JSON unless every tier's dynamic rows agree, which is
+// what lets the sentence under the readout say "on every GitLab tier".
+const defaultContext = footprint.dynamic.tool_schema_tokens + footprint.shared.full;
+const minimalContext = footprint.dynamic.tool_schema_tokens + footprint.shared.minimal;
+const formatCount = (n: number): string => n.toLocaleString(content.numberLocale);
+
+// Read, not typed. The readout states the extremes: the two-tool default, what
+// it costs, and the widest projection the catalog reaches.
 const readout = [
 	{
 		value: String(stats.dynamic),
@@ -34,7 +45,12 @@ const readout = [
 		href: content.statHrefs.dynamic,
 	},
 	{
-		value: String(stats.tools.gitlab_com),
+		value: formatCount(defaultContext),
+		label: content.statLabels.context,
+		href: content.statHrefs.context,
+	},
+	{
+		value: formatCount(stats.tools.gitlab_com),
 		label: content.statLabels.tools,
 		href: content.statHrefs.tools,
 	},
@@ -50,6 +66,10 @@ const readout = [
 	},
 ];
 
+const contextClaim = content.contextClaim
+	.replace("{default}", formatCount(defaultContext))
+	.replace("{minimal}", formatCount(minimalContext));
+
 // Per-surface tool counts, as a Free/CE → widest-tier range where the tier
 // moves the number.
 const surfaceCounts: Record<string, string> = {
@@ -60,17 +80,20 @@ const surfaceCounts: Record<string, string> = {
 ---
 
 <div class="home">
-	<section class="readout" aria-label={content.statsLabel}>
-		{
-			readout.map((s) => (
-				<div class="readout-cell">
-					<span class="readout-value">{s.value}</span>
-					<span class="readout-label">
-						<a href={s.href}>{s.label}</a>
-					</span>
-				</div>
-			))
-		}
+	<section class="readout-block" aria-label={content.statsLabel}>
+		<div class="readout">
+			{
+				readout.map((s) => (
+					<div class="readout-cell">
+						<span class="readout-value">{s.value}</span>
+						<span class="readout-label">
+							<a href={s.href}>{s.label}</a>
+						</span>
+					</div>
+				))
+			}
+		</div>
+		<p class="readout-claim" set:html={contextClaim} />
 	</section>
 
 	<section class="block">
@@ -207,3 +230,30 @@ const surfaceCounts: Record<string, string> = {
 		</div>
 	</section>
 </div>
+
+<style>
+	/*
+	 * The readout is five cells now, and five is prime: whatever column count
+	 * an auto-fit grid settles on below the full width, the last row ends
+	 * short and the ruled ground shows through where a cell should be. A
+	 * wrapping flex row has no such hole, because the cells of a short row grow
+	 * to fill it. The shared rule in styles/home.css keeps the ground, the
+	 * hairline gap and the radius; `.home` is in the selector so this override
+	 * outranks that rule's single class whatever order the stylesheets load in.
+	 */
+	.home .readout {
+		display: flex;
+		flex-wrap: wrap;
+	}
+	.home .readout-cell {
+		flex: 1 1 10rem;
+	}
+	/* The sentence the figures add up to, set like a lead but tighter to the strip. */
+	.home .readout-claim {
+		margin-top: 0.75rem;
+		max-width: 62ch;
+		font-size: var(--sl-text-sm);
+		line-height: 1.5;
+		color: var(--sl-color-gray-3);
+	}
+</style>

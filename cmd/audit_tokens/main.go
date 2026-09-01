@@ -17,6 +17,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -81,8 +82,8 @@ type resourceRegistrationOptions struct {
 // (formerly the standalone audit_meta_schema binary), comparing the byte cost of
 // each META_PARAM_SCHEMA mode (opaque/full/compact).
 func main() {
-	footprint := flag.Bool("footprint", false, "measure all tiers \u00d7 surfaces \u00d7 META_PARAM_SCHEMA modes and write the README token-footprint section + docs/development/token-footprint.md")
-	check := flag.Bool("check", false, "with -footprint, verify the README token-footprint section and docs/development/token-footprint.md are current without writing (exits non-zero on drift)")
+	footprint := flag.Bool("footprint", false, "measure all tiers \u00d7 surfaces \u00d7 META_PARAM_SCHEMA modes and write the README token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json")
+	check := flag.Bool("check", false, "with -footprint, verify the README token-claim block and token-footprint section, docs/development/token-footprint.md and site/src/data/token-footprint.json are current without writing (exits non-zero on drift)")
 	compareSchemas := flag.Bool("compare-schemas", false, "compare META_PARAM_SCHEMA modes (opaque/full/compact) for meta-tool InputSchema sizing instead of the normal token audit")
 	topTools := flag.Int("top-tools", 30, "number of individual tools to list by token cost")
 	topDomains := flag.Int("top-domains", 20, "number of domains to list by token cost")
@@ -754,6 +755,13 @@ const (
 	footprintEndMarker    = "<!-- END TOKEN FOOTPRINT -->"
 	detailedFootprintPath = "docs/development/token-footprint.md"
 	readmePath            = "README.md"
+	// The token claim is the one-paragraph headline near the top of the README:
+	// the startup cost of the default configuration, stated before the reader
+	// has scrolled anywhere. It is rendered from the same measured rows as the
+	// footprint table, so the two blocks cannot disagree, and it has its own
+	// marker pair because it lives several sections away from the table.
+	claimStartMarker = "<!-- START TOKEN CLAIM -->"
+	claimEndMarker   = "<!-- END TOKEN CLAIM -->"
 	// siteFootprintPath receives the headline figures the documentation site
 	// quotes. The site used to carry the startup-context reduction only as text
 	// baked into a social-card image, with no measured figure anywhere in the
@@ -865,10 +873,16 @@ func runFootprintCheck(client *gitlabclient.Client) error {
 	return nil
 }
 
-// footprintStaleTargets compares the live README text and detailed-doc text
-// against the freshly rendered footprint content and returns the human-readable
-// names of any targets that are out of date. An empty slice means both are
-// current. Kept pure (no I/O) so the drift logic is unit-testable.
+// footprintStaleTargets compares the live README text, detailed-doc text and
+// site data against the freshly rendered footprint content and returns the
+// human-readable names of any targets that are out of date. An empty slice
+// means everything is current. Kept pure (no I/O) so the drift logic is
+// unit-testable.
+//
+// The README token-claim block is reported as stale, not as an error, when
+// its markers are missing: a README without the block is precisely the
+// "not current" state the check exists to catch, and the fix is the same
+// generator run either way.
 func footprintStaleTargets(readmeText, detailedText, siteText string, rows []tokenFootprintRow) ([]string, error) {
 	var stale []string
 
@@ -878,6 +892,15 @@ func footprintStaleTargets(readmeText, detailedText, siteText string, rows []tok
 	}
 	if updated != readmeText {
 		stale = append(stale, readmePath+" token-footprint section")
+	}
+	claim, err := renderReadmeTokenClaim(rows)
+	if err != nil {
+		return nil, err
+	}
+	if claimed, claimErr := docgen.ComputeReplacedSection(readmeText, claimStartMarker, claimEndMarker, claim); claimErr != nil {
+		stale = append(stale, readmePath+" token-claim block (markers missing)")
+	} else if claimed != readmeText {
+		stale = append(stale, readmePath+" token-claim block")
 	}
 	if detailedText != renderDetailedFootprint(rows) {
 		stale = append(stale, detailedFootprintPath)
@@ -893,11 +916,19 @@ func footprintStaleTargets(readmeText, detailedText, siteText string, rows []tok
 }
 
 // runFootprint measures the full tier \u00d7 surface \u00d7 mode matrix and writes the
-// README managed section plus the detailed reference doc.
+// README managed sections (the headline claim and the footprint table) plus
+// the detailed reference doc and the site data file.
 func runFootprint(client *gitlabclient.Client) error {
 	rows, err := measureTokenFootprintRows(client)
 	if err != nil {
 		return fmt.Errorf("measuring token footprint: %w", err)
+	}
+	claim, err := renderReadmeTokenClaim(rows)
+	if err != nil {
+		return err
+	}
+	if replaceErr := docgen.ReplaceSection(readmePath, claimStartMarker, claimEndMarker, claim); replaceErr != nil {
+		return replaceErr
 	}
 	if replaceErr := docgen.ReplaceSection(readmePath, footprintStartMarker, footprintEndMarker, renderReadmeFootprint(rows)); replaceErr != nil {
 		return replaceErr
@@ -913,7 +944,7 @@ func runFootprint(client *gitlabclient.Client) error {
 	if writeErr := os.WriteFile(filepath.Clean(siteFootprintPath), siteDoc, 0o600); writeErr != nil { //#nosec G306,G703 -- generated data path is a compile-time constant
 		return fmt.Errorf("writing %s: %w", siteFootprintPath, writeErr)
 	}
-	fmt.Printf("Updated %s token-footprint section, %s and %s (%d rows across all tiers/surfaces/modes)\n", readmePath, detailedFootprintPath, siteFootprintPath, len(rows))
+	fmt.Printf("Updated %s token-claim block and token-footprint section, %s and %s (%d rows across all tiers/surfaces/modes)\n", readmePath, detailedFootprintPath, siteFootprintPath, len(rows))
 	return nil
 }
 
@@ -976,6 +1007,12 @@ func renderSiteFootprintJSON(rows []tokenFootprintRow) ([]byte, error) {
 		return nil, fmt.Errorf("missing shared token counts for the %s tier (full=%d, minimal=%d)",
 			ultimateTierLabel, shared.Full, shared.Minimal)
 	}
+	// The site quotes the dynamic figures once, for every tier, and its landing
+	// says so in words. Refuse to publish that sentence the day it stops being
+	// true rather than let one tier's numbers stand for all of them.
+	if err := requireTierInvariantDynamic(rows, dynamic.ToolSchemaTokens, shared); err != nil {
+		return nil, err
+	}
 
 	individual := make(map[string]siteFootprintIndividual, len(tierKeys))
 	for _, r := range rows {
@@ -1003,6 +1040,26 @@ func renderSiteFootprintJSON(rows []tokenFootprintRow) ([]byte, error) {
 		return nil, fmt.Errorf("marshal site footprint: %w", err)
 	}
 	return append(raw, '\n'), nil
+}
+
+// requireTierInvariantDynamic returns an error naming the first dynamic-surface
+// row whose figures differ from the ones the site data quotes for every tier.
+func requireTierInvariantDynamic(rows []tokenFootprintRow, toolSchemaTokens int, shared siteFootprintShared) error {
+	expectedShared := map[string]int{
+		dynamicDefaultConfiguration: shared.Full,
+		dynamicMinimalConfiguration: shared.Minimal,
+	}
+	for _, r := range rows {
+		wantShared, ok := expectedShared[r.Configuration]
+		if !ok {
+			continue
+		}
+		if r.ToolSchemaTokens != toolSchemaTokens || r.SharedTokens != wantShared {
+			return fmt.Errorf("%s tier %s differs from %s (tool schema %d vs %d, shared %d vs %d); the site data quotes one dynamic figure for every tier",
+				r.Tier, r.Configuration, ultimateTierLabel, r.ToolSchemaTokens, toolSchemaTokens, r.SharedTokens, wantShared)
+		}
+	}
+	return nil
 }
 
 func measureTokenFootprintRows(client *gitlabclient.Client) ([]tokenFootprintRow, error) {
@@ -1172,6 +1229,64 @@ func renderReadmeFootprint(rows []tokenFootprintRow) string {
 	))
 	b.WriteString("\nRows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.\n")
 	return b.String()
+}
+
+// renderReadmeTokenClaim renders the README's headline paragraph: what the
+// default configuration (dynamic surface, full capability surface) costs in
+// startup context, and what the minimal capability surface costs instead.
+// Both figures are the per-tier totals of the same measured rows the footprint
+// table prints, so the claim can never say something the table does not.
+//
+// When every tier costs the same the claim states one figure and says so;
+// when the tiers ever diverge it states the span ("from X to Y") instead of
+// picking a tier, so a future tier-dependent cost cannot make the sentence
+// quietly wrong.
+func renderReadmeTokenClaim(rows []tokenFootprintRow) (string, error) {
+	defaultLo, defaultHi, ok := dynamicTotalSpan(rows, dynamicDefaultConfiguration)
+	if !ok {
+		return "", fmt.Errorf("token claim: no %s row to quote", dynamicDefaultConfiguration)
+	}
+	minimalLo, minimalHi, ok := dynamicTotalSpan(rows, dynamicMinimalConfiguration)
+	if !ok {
+		return "", fmt.Errorf("token claim: no %s row to quote", dynamicMinimalConfiguration)
+	}
+
+	tierClause := "the same on every GitLab tier"
+	if defaultLo != defaultHi {
+		tierClause = "depending on the GitLab tier"
+	}
+	return fmt.Sprintf(
+		"**%s tokens of startup context by default, %s (%s with `CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)\n",
+		fmtTokenSpan(defaultLo, defaultHi, "From"),
+		tierClause,
+		fmtTokenSpan(minimalLo, minimalHi, "from"),
+	), nil
+}
+
+// dynamicTotalSpan returns the smallest and largest startup total (tool schemas
+// plus shared resources and prompts) among the rows of one configuration
+// across all tiers. ok is false when no row carries that configuration.
+func dynamicTotalSpan(rows []tokenFootprintRow, configuration string) (lo, hi int, ok bool) {
+	var totals []int
+	for _, r := range rows {
+		if r.Configuration == configuration {
+			totals = append(totals, r.totalTokens())
+		}
+	}
+	if len(totals) == 0 {
+		return 0, 0, false
+	}
+	return slices.Min(totals), slices.Max(totals), true
+}
+
+// fmtTokenSpan renders a single thousands-separated figure when lo and hi
+// agree, and "<from> lo to hi" otherwise. from is the word that opens the
+// span, capitalised or not depending on where the caller places it.
+func fmtTokenSpan(lo, hi int, from string) string {
+	if lo == hi {
+		return fmtNum(lo)
+	}
+	return fmt.Sprintf("%s %s to %s", from, fmtNum(lo), fmtNum(hi))
 }
 
 // renderDetailedFootprint renders the full token matrix to a standalone doc

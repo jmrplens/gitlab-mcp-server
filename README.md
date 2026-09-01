@@ -41,6 +41,12 @@
 
 You talk to your AI assistant; it does the GitLab work. No project IDs, API endpoints, or JSON to remember.
 
+<!-- START TOKEN CLAIM -->
+
+**10,333 tokens of startup context by default, the same on every GitLab tier (1,671 with `CAPABILITY_SURFACE=minimal`).** Two tools reach the whole catalog; measured with the cl100k_base tokenizer and verified in CI on every commit. [How it is measured](#token-footprint)
+
+<!-- END TOKEN CLAIM -->
+
 > "Review merge request !15 — is it safe to merge?" · "Why did the last pipeline fail?" · "List open issues assigned to me" · "Generate release notes from v1.0 to v2.0"
 
 ---

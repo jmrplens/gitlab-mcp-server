@@ -7,8 +7,11 @@
  * added to one is a type error until it is added to the other.
  *
  * Numbers are not written here. They come from src/data/stats.json — the
- * file `make gen-site-stats` derives from the live catalog — and are read in
- * Home.astro, so a catalog change updates the landing by itself.
+ * file `make gen-site-stats` derives from the live catalog — and from
+ * src/data/token-footprint.json, which `make gen-footprint` measures with the
+ * tokenizer; both are read in Home.astro, so a catalog change updates the
+ * landing by itself. The one sentence here that carries figures is a template
+ * whose placeholders Home.astro fills from that measurement.
  */
 
 export interface Step {
@@ -28,20 +31,36 @@ export interface SurfaceRow {
 }
 
 export interface HomeContent {
+	/**
+	 * BCP 47 tag the counted values are formatted with, so a thousands
+	 * separator follows the locale's convention ("10,333" against "10.333").
+	 */
+	numberLocale: "en-US" | "es-ES";
 	statsLabel: string;
-	/** The four labels the readout pairs with counted values. */
+	/** The five labels the readout pairs with counted values. */
 	statLabels: {
 		dynamic: string;
+		/** The measured startup context of the default configuration. */
+		context: string;
 		tools: string;
 		prompts: string;
 		resources: string;
 	};
 	statHrefs: {
 		dynamic: string;
+		context: string;
 		tools: string;
 		prompts: string;
 		resources: string;
 	};
+	/**
+	 * The one-sentence claim under the readout. `{default}` and `{minimal}`
+	 * are replaced in Home.astro with the measured startup totals of the
+	 * default configuration and of `CAPABILITY_SURFACE=minimal`, taken from
+	 * src/data/token-footprint.json. Rendered as HTML so the link to the
+	 * methodology survives.
+	 */
+	contextClaim: string;
 	what: { title: string; body: string[] };
 	who: { title: string; items: string[] };
 	honest: { title: string; items: string[] };
@@ -75,19 +94,25 @@ const INSTALL = `claude mcp add gitlab --env GITLAB_URL=https://gitlab.example.c
   ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false`;
 
 export const en: HomeContent = {
+	numberLocale: "en-US",
 	statsLabel: "GitLab MCP Server at a glance",
 	statLabels: {
 		dynamic: "tools in the default dynamic surface",
+		context: "tokens of startup context by default",
 		tools: "individual tools at the widest tier",
 		prompts: "guided prompts",
 		resources: "MCP resources",
 	},
 	statHrefs: {
 		dynamic: "/gitlab-mcp-server/tools/dynamic-tools/",
+		context:
+			"/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save",
 		tools: "/gitlab-mcp-server/tools/overview/",
 		prompts: "/gitlab-mcp-server/tools/resources-prompts/",
 		resources: "/gitlab-mcp-server/tools/resources-prompts/",
 	},
+	contextClaim:
+		'The default configuration costs {default} tokens of context on every GitLab tier; {minimal} with <code>CAPABILITY_SURFACE=minimal</code>. <a href="/gitlab-mcp-server/tools/dynamic-tools/#how-much-startup-context-does-dynamic-mode-save">Measured</a>, not estimated.',
 	what: {
 		title: "What it is",
 		body: [
@@ -201,19 +226,25 @@ export const en: HomeContent = {
 };
 
 export const es: HomeContent = {
+	numberLocale: "es-ES",
 	statsLabel: "GitLab MCP Server de un vistazo",
 	statLabels: {
 		dynamic: "tools en la superficie dinámica por defecto",
+		context: "tokens de contexto inicial por defecto",
 		tools: "tools individuales en el tier más amplio",
 		prompts: "prompts guiados",
 		resources: "recursos MCP",
 	},
 	statHrefs: {
 		dynamic: "/gitlab-mcp-server/es/tools/dynamic-tools/",
+		context:
+			"/gitlab-mcp-server/es/tools/dynamic-tools/#cuánto-contexto-de-arranque-ahorra-el-modo-dinámico",
 		tools: "/gitlab-mcp-server/es/tools/overview/",
 		prompts: "/gitlab-mcp-server/es/tools/resources-prompts/",
 		resources: "/gitlab-mcp-server/es/tools/resources-prompts/",
 	},
+	contextClaim:
+		'La configuración por defecto cuesta {default} tokens de contexto en todos los tiers de GitLab; {minimal} con <code>CAPABILITY_SURFACE=minimal</code>. <a href="/gitlab-mcp-server/es/tools/dynamic-tools/#cuánto-contexto-de-arranque-ahorra-el-modo-dinámico">Medido</a>, no estimado.',
 	what: {
 		title: "Qué es",
 		body: [
