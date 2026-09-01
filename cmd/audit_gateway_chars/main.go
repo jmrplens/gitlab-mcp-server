@@ -10,6 +10,11 @@
 // description is assembled from several source strings, and a semicolon that
 // survives assembly is a rejection wherever it came from.
 //
+// The policy it enforces is pure ASCII prose plus a short list of rejected
+// ASCII characters (the semicolon): a validator that refuses "unsafe
+// characters" usually matches a character class, so holding a class is the
+// only version of clean that the next gateway cannot surprise.
+//
 // With -check it exits non-zero when any offending character is served, which
 // is the CI gate; without it, it prints every offender with enough context to
 // find the source string.
@@ -21,8 +26,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -34,8 +41,12 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 )
 
-// offendingChars is what gateway validators are known to reject in served
-// text. One entry today; the audit is a list so the next report is one line.
+// offendingChars lists the ASCII characters gateway validators are known to
+// reject in served text. Anything above U+007F is rejected as a class, not
+// listed here: the served-prose policy is pure ASCII, because a validator
+// that refuses "unsafe characters" usually matches a character class rather
+// than a codepoint list, and a class is a property the next gateway cannot
+// surprise.
 var offendingChars = []rune{';'}
 
 // appliedSubstitutions holds the operator's substitutions when -apply is
@@ -236,23 +247,27 @@ func scanSchema(surface, where string, schema any) []offender {
 }
 
 // scanText reports each offending character in one served string, once per
-// string, with an excerpt centered on the first hit. With -apply, the
-// operator's substitutions run first, so the scan judges the text a gateway
-// would actually receive.
+// string, with an excerpt centered on the first hit. A hit is any listed
+// ASCII character or any rune above U+007F. With -apply, the operator's
+// substitutions run first, so the scan judges the text a gateway would
+// actually receive.
 func scanText(surface, where, text string) []offender {
 	text = gatewaycompat.Apply(appliedSubstitutions, text)
-	for _, ch := range offendingChars {
-		index := strings.IndexRune(text, ch)
-		if index < 0 {
-			continue
+	index := -1
+	for i, r := range text {
+		if r > unicode.MaxASCII || slices.Contains(offendingChars, r) {
+			index = i
+			break
 		}
-		start := max(index-30, 0)
-		end := min(index+30, len(text))
-		excerpt := strings.ReplaceAll(text[start:end], "\n", " ")
-		if fullStrings {
-			excerpt = strings.ReplaceAll(text, "\n", "\\n")
-		}
-		return []offender{{surface: surface, where: where, excerpt: excerpt}}
 	}
-	return nil
+	if index < 0 {
+		return nil
+	}
+	start := max(index-30, 0)
+	end := min(index+30, len(text))
+	excerpt := strings.ReplaceAll(text[start:end], "\n", " ")
+	if fullStrings {
+		excerpt = strings.ReplaceAll(text, "\n", "\\n")
+	}
+	return []offender{{surface: surface, where: where, excerpt: excerpt}}
 }

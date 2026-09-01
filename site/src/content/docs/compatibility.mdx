@@ -97,7 +97,7 @@ Keep the default `dynamic` tool surface for clients with tool-count limits (Curs
 
 ### MCP gateway validators
 
-An MCP gateway validates a server's catalog before admitting it, under rules its operator chooses — one production gateway (IBM [mcp-context-forge](https://github.com/IBM/mcp-context-forge) before 0.7.0) rejected any tool description containing a semicolon. The server keeps everything it lists free of semicolons on every surface, and a substitution knob lets a deployment meet the next gateway rule without waiting for a release:
+An MCP gateway validates a server's catalog before admitting it, under rules its operator chooses — one production gateway (IBM [mcp-context-forge](https://github.com/IBM/mcp-context-forge) before 0.7.0) rejected any tool description containing a semicolon. The server keeps everything it lists pure ASCII with no semicolons, on every surface (a character class holds against the next rule better than a codepoint list), and a substitution knob lets a deployment meet a new gateway rule without waiting for a release:
 
 ```bash
 # Rewrite listed descriptions and titles: comma-separated old=new pairs,

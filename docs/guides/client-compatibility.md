@@ -40,11 +40,16 @@ All N tools failed validation ... Description contains unsafe characters
 
 This server responds on two fronts:
 
-- **Its own text is kept clean.** Nothing served by `tools/list` (on any
-  surface), `prompts/list`, `resources/list`, or `resources/templates/list`
-  carries a semicolon — descriptions, titles, and the schema-embedded
-  descriptions included. `make check-gateway-chars` gates this in CI, and
-  `go run ./cmd/audit_gateway_chars/` prints any offender with context.
+- **Its own text is kept clean.** Everything served by `tools/list` (on any
+  surface), `prompts/list`, `resources/list`, and `resources/templates/list`
+  is pure ASCII prose with no semicolons — descriptions, titles, and the
+  schema-embedded descriptions included. A class is stronger than a list: a
+  validator that refuses "unsafe characters" usually matches a character
+  class, and ASCII-only is the one clean the next rule cannot surprise.
+  `make check-gateway-chars` gates this in CI, and
+  `go run ./cmd/audit_gateway_chars/` prints any offender with context. The
+  same style is applied to payload prose (prompt bodies, result markdown),
+  though the gate measures the listed catalog.
 - **The next rule is yours to meet without waiting for a release.** The
   substitution knob rewrites listed catalog text on the way out.
 

@@ -990,9 +990,9 @@ audit-test-goroutines:
 check-test-goroutines:
 	go run ./cmd/audit_test_goroutines/ -check
 
-## audit-gateway-chars: report served descriptions and titles carrying
-## characters MCP gateway validators are known to reject (semicolons today),
-## across every tool surface plus prompts and resources.
+## audit-gateway-chars: report served descriptions and titles violating the
+## gateway-safe text policy (pure ASCII prose, no semicolons), across every
+## tool surface plus prompts and resources.
 audit-gateway-chars:
 	go run ./cmd/audit_gateway_chars/
 
