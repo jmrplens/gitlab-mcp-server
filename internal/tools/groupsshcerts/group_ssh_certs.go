@@ -102,7 +102,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 		listQueryParameters(in),
 	)
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group SSH certificates", err, http.StatusNotFound, "verify group_id \u2014 requires Owner role or admin access")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list group SSH certificates", err, http.StatusNotFound, "verify group_id. Requires Owner role or admin access")
 	}
 	out := ListOutput{Certificates: make([]Output, 0, len(certs))}
 	for _, c := range certs {

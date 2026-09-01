@@ -60,7 +60,7 @@ func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {
 				SemanticRole:     "scope_group",
 				ValueSource:      "Top-level group numeric ID or full path with SAML SSO configured.",
 				ExampleBinding:   `params.group_id:"my-org"`,
-				CommonConfusions: []string{"Only top-level groups with SAML SSO have SAML users. Subgroups return nothing.", "This lists users, not the SAML group links — use gitlab_group_saml_link_list for the link mappings."},
+				CommonConfusions: []string{"Only top-level groups with SAML SSO have SAML users. Subgroups return nothing.", "This lists users, not the SAML group links. Use gitlab_group_saml_link_list for the link mappings."},
 			},
 			"username": {
 				ValueSource:    "Exact username to filter to a single SAML user.",

@@ -118,9 +118,9 @@ func FormatBlobMarkdown(out BlobOutput) string {
 	switch out.ContentCategory {
 	case "image":
 		fmt.Fprintf(&b, "- **Content type**: image (%s)\n", out.ImageMIMEType)
-		b.WriteString("\n> 🖼️ Image content is attached below as ImageContent for multimodal viewing.\n")
+		b.WriteString("\n> \U0001F5BC\uFE0F Image content is attached below as ImageContent for multimodal viewing.\n")
 	case "binary":
-		b.WriteString("- **Content type**: binary (content omitted — not viewable as text)\n")
+		b.WriteString("- **Content type**: binary (content omitted, not viewable as text)\n")
 	default:
 		fmt.Fprintf(&b, "- **Content**: text (%d chars)\n", len(out.Content))
 	}
@@ -140,9 +140,9 @@ func FormatRawBlobContentMarkdown(out RawBlobContentOutput) string {
 	switch out.ContentCategory {
 	case "image":
 		fmt.Fprintf(&b, "- **Content type**: image (%s)\n", out.ImageMIMEType)
-		b.WriteString("\n> 🖼️ Image content is attached below as ImageContent for multimodal viewing.\n")
+		b.WriteString("\n> \U0001F5BC\uFE0F Image content is attached below as ImageContent for multimodal viewing.\n")
 	case "binary":
-		b.WriteString("- **Content type**: binary (content omitted — not viewable as text)\n")
+		b.WriteString("- **Content type**: binary (content omitted, not viewable as text)\n")
 	default:
 		b.WriteString("\n```\n")
 		b.WriteString(out.Content)

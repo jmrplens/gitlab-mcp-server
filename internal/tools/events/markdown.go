@@ -69,7 +69,7 @@ func formatEventListMarkdown(title, emptyText string, events []markdownEvent, pa
 	for _, e := range events {
 		target := formatTarget(e.TargetType, e.TargetIID, e.TargetTitle, e.TargetURL)
 		author := formatAuthor(e.AuthorUsername)
-		fmt.Fprintf(&b, "- **%s**%s by %s — %s\n", e.ActionName, target, author, toolutil.FormatTime(e.CreatedAt))
+		fmt.Fprintf(&b, "- **%s**%s by %s, %s\n", e.ActionName, target, author, toolutil.FormatTime(e.CreatedAt))
 	}
 	b.WriteString(toolutil.FormatPagination(pagination))
 	toolutil.WriteHints(

@@ -137,7 +137,7 @@ func handleSummarizeMRChanges(ctx context.Context, client *gitlabclient.Client, 
 
 	var summary []string
 	for _, c := range changes {
-		line := fmt.Sprintf("- %s → %s (%s)", c.OldPath, c.NewPath, changeType(c))
+		line := fmt.Sprintf("- %s -> %s (%s)", c.OldPath, c.NewPath, changeType(c))
 		summary = append(summary, line)
 	}
 	msg := "Changed files:\n" + strings.Join(summary, "\n")
@@ -218,7 +218,7 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Code Review: %s (MR !%d)\n\n", toolutil.EscapeMdHeading(mr.Title), mr.IID)
-	fmt.Fprintf(&b, "**Branch**: %s → %s\n", mr.SourceBranch, mr.TargetBranch)
+	fmt.Fprintf(&b, "**Branch**: %s -> %s\n", mr.SourceBranch, mr.TargetBranch)
 	if mr.Description != "" {
 		fmt.Fprintf(&b, "**Description**: %s\n", mr.Description)
 	}
@@ -232,10 +232,10 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 
 	// Review plan
 	fmt.Fprintf(&b, "\n## Review Plan\n")
-	fmt.Fprintf(&b, "1. **High-risk files** (%d) — security, config, migrations, CI\n", len(highRisk))
-	fmt.Fprintf(&b, "2. **Business logic** (%d) — core application code\n", len(logic))
-	fmt.Fprintf(&b, "3. **Tests** (%d) — test files and specs\n", len(tests))
-	fmt.Fprintf(&b, "4. **Documentation** (%d) — docs, README, comments\n", len(docs))
+	fmt.Fprintf(&b, "1. **High-risk files** (%d): security, config, migrations, CI\n", len(highRisk))
+	fmt.Fprintf(&b, "2. **Business logic** (%d): core application code\n", len(logic))
+	fmt.Fprintf(&b, "3. **Tests** (%d): test files and specs\n", len(tests))
+	fmt.Fprintf(&b, "4. **Documentation** (%d): docs, README, comments\n", len(docs))
 	b.WriteString("\nReview each group in order, then provide a global assessment.\n")
 
 	// Write each group with full diffs
@@ -255,14 +255,14 @@ func handleReviewMR(ctx context.Context, client *gitlabclient.Client, req *mcp.G
 	b.WriteString("Use the batch review workflow to avoid sending one notification per comment:\n")
 	b.WriteString("1. For each finding, call `gitlab_mr_review` with action=`draft_note_create` and include the `position` object for inline comments on specific diff lines.\n")
 	b.WriteString("   Position fields: base_sha, start_sha, head_sha, new_path, old_path, and EITHER new_line OR old_line (not both).\n")
-	b.WriteString("   - Modified/added line → set `new_line` only (line number in the new file).\n")
-	b.WriteString("   - Removed line → set `old_line` only (line number in the old file).\n")
-	b.WriteString("   - Unchanged context line → set both `old_line` and `new_line`.\n")
+	b.WriteString("   - Modified/added line -> set `new_line` only (line number in the new file).\n")
+	b.WriteString("   - Removed line -> set `old_line` only (line number in the old file).\n")
+	b.WriteString("   - Unchanged context line -> set both `old_line` and `new_line`.\n")
 	fmt.Fprintf(&b, "   Use base_sha=`%s`, start_sha=`%s`, head_sha=`%s` from this MR.\n", mr.DiffRefs.BaseSha, mr.DiffRefs.StartSha, mr.DiffRefs.HeadSha)
 	b.WriteString("2. For general comments not tied to a specific line, call `draft_note_create` without the position field.\n")
 	b.WriteString("3. To reply to existing open discussions, call `draft_note_create` with `in_reply_to_discussion_id` set to the discussion ID. You can also set `resolve_discussion: true` to resolve it when published.\n")
 	b.WriteString("4. After ALL comments and replies are created as draft notes, call `draft_note_publish_all` ONCE to publish them all at once (single notification to the MR author).\n")
-	b.WriteString("5. Do NOT use `discussion_create`, `discussion_reply`, or `note_create` for review comments — those publish immediately and generate one notification each.\n")
+	b.WriteString("5. Do NOT use `discussion_create`, `discussion_reply`, or `note_create` for review comments. Those publish immediately and generate one notification each.\n")
 
 	return promptResult(b.String()), nil
 }
@@ -309,7 +309,7 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 	for _, j := range jobs {
 		line := fmt.Sprintf("- **%s** (%s): %s", j.Name, j.Stage, j.Status)
 		if j.FailureReason != "" {
-			line += " — reason: " + j.FailureReason
+			line += ", reason: " + j.FailureReason
 		}
 		switch j.Status {
 		case "failed":
@@ -339,7 +339,7 @@ func handleSummarizePipelineStatus(ctx context.Context, client *gitlabclient.Cli
 		// Still moving. Pointing at the subscription beats teaching the
 		// model to re-invoke this prompt on a timer, which is the pattern
 		// resource subscriptions exist to replace.
-		fmt.Fprintf(&b, "This pipeline is still in progress — if your client supports MCP resource "+
+		fmt.Fprintf(&b, "This pipeline is still in progress. If your client supports MCP resource "+
 			"subscriptions, subscribe to gitlab://project/%s/pipelines/latest to be notified when it "+
 			"changes instead of re-invoking this prompt.\n", projectID)
 	}
@@ -394,7 +394,7 @@ func handleSuggestMRReviewers(ctx context.Context, client *gitlabclient.Client, 
 		if m.Username == authorName || m.State != "active" {
 			continue
 		}
-		fmt.Fprintf(&b, "- **%s** (%s) — access level: %d\n", m.Name, m.Username, m.AccessLevel)
+		fmt.Fprintf(&b, "- **%s** (%s), access level: %d\n", m.Name, m.Username, m.AccessLevel)
 	}
 
 	b.WriteString("\nBased on the changed files and project members, suggest the most suitable reviewers and explain why.")
@@ -441,7 +441,7 @@ func handleGenerateReleaseNotes(ctx context.Context, client *gitlabclient.Client
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Release Notes: %s → %s\n\n", toolutil.EscapeMdHeading(from), toolutil.EscapeMdHeading(to))
+	fmt.Fprintf(&b, "# Release Notes: %s -> %s\n\n", toolutil.EscapeMdHeading(from), toolutil.EscapeMdHeading(to))
 
 	// Fetch merged MRs in the commit date range.
 	mergedMRs := fetchMergedMRsForRange(ctx, client, projectID, comparison.Commits)
@@ -450,7 +450,7 @@ func handleGenerateReleaseNotes(ctx context.Context, client *gitlabclient.Client
 	fmt.Fprintf(&b, "## Commits (%d)\n\n", len(comparison.Commits))
 	for _, c := range comparison.Commits {
 		title, _, _ := strings.Cut(c.Title, "\n")
-		fmt.Fprintf(&b, "- %s — %s (%s)\n", shortSHA(c.ID), title, c.AuthorName)
+		fmt.Fprintf(&b, "- %s: %s (%s)\n", shortSHA(c.ID), title, c.AuthorName)
 	}
 
 	fmt.Fprintf(&b, "\n## Files Changed (%d)\n\n", len(comparison.Diffs))
@@ -535,7 +535,7 @@ func writeReleaseNotesMRs(b *strings.Builder, mrs []*gl.BasicMergeRequest) {
 		if len(mr.Labels) > 0 {
 			labels = " [" + strings.Join(mr.Labels, ", ") + "]"
 		}
-		fmt.Fprintf(b, "- !%d — %s (@%s)%s\n", mr.IID, mr.Title, author, labels)
+		fmt.Fprintf(b, "- !%d: %s (@%s)%s\n", mr.IID, mr.Title, author, labels)
 		if mr.Description != "" {
 			desc, _, _ := strings.Cut(mr.Description, "\n")
 			if len(desc) > 200 {
@@ -602,7 +602,7 @@ func handleSummarizeOpenMRs(ctx context.Context, client *gitlabclient.Client, re
 		}
 		age := time.Since(*mr.CreatedAt).Hours() / 24
 		fmt.Fprintf(&b, "## !%d: %s\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
-		fmt.Fprintf(&b, "- **Author**: %s | **Branch**: %s → %s\n", author, mr.SourceBranch, mr.TargetBranch)
+		fmt.Fprintf(&b, "- **Author**: %s | **Branch**: %s -> %s\n", author, mr.SourceBranch, mr.TargetBranch)
 		fmt.Fprintf(&b, "- **Age**: %.0f days | **Status**: %s\n", age, mr.DetailedMergeStatus)
 		if mr.Description != "" {
 			desc := mr.Description
@@ -753,7 +753,7 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Branch Comparison: %s → %s\n\n", toolutil.EscapeMdHeading(from), toolutil.EscapeMdHeading(to))
+	fmt.Fprintf(&b, "# Branch Comparison: %s -> %s\n\n", toolutil.EscapeMdHeading(from), toolutil.EscapeMdHeading(to))
 
 	if comparison.CompareSameRef {
 		b.WriteString("Both refs point to the same commit. No differences.\n")
@@ -763,7 +763,7 @@ func handleCompareBranches(ctx context.Context, client *gitlabclient.Client, req
 	fmt.Fprintf(&b, "## Commits (%d)\n\n", len(comparison.Commits))
 	for _, c := range comparison.Commits {
 		title, _, _ := strings.Cut(c.Title, "\n")
-		fmt.Fprintf(&b, "- %s — %s (%s)\n", shortSHA(c.ID), title, c.AuthorName)
+		fmt.Fprintf(&b, "- %s: %s (%s)\n", shortSHA(c.ID), title, c.AuthorName)
 	}
 
 	fmt.Fprintf(&b, "\n## File Changes (%d)\n\n", len(comparison.Diffs))
@@ -926,7 +926,7 @@ func writeMRSection(b *strings.Builder, heading, username string, mrs []*gl.Basi
 	}
 	fmt.Fprintf(b, "\n## %s @%s (%d)\n", heading, username, len(mrs))
 	for _, mr := range mrs {
-		fmt.Fprintf(b, "- !%d: %s (%s → %s) — %s\n", mr.IID, mr.Title, mr.SourceBranch, mr.TargetBranch, mr.DetailedMergeStatus)
+		fmt.Fprintf(b, "- !%d: %s (%s -> %s), %s\n", mr.IID, mr.Title, mr.SourceBranch, mr.TargetBranch, mr.DetailedMergeStatus)
 	}
 }
 
@@ -1344,7 +1344,7 @@ func handleMRRiskAssessment(ctx context.Context, client *gitlabclient.Client, re
 	m := computeDiffMetrics(diffs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MR Risk Assessment: !%d — %s\n\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
+	fmt.Fprintf(&b, "# MR Risk Assessment: !%d - %s\n\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
 	fmt.Fprintf(&b, "## Metrics\n")
 	fmt.Fprintf(&b, fmtFilesChanged, len(diffs))
 	fmt.Fprintf(&b, "- **Lines added**: %d\n", m.additions)
@@ -1469,7 +1469,7 @@ func writeDiffGroup(b *strings.Builder, heading string, diffs []*gl.MergeRequest
 	fmt.Fprintf(b, "\n## %s (%d)\n\n", heading, len(diffs))
 	for _, d := range diffs {
 		add, del := countDiffLines(d.Diff)
-		fmt.Fprintf(b, "### %s (%s) — +%d / -%d lines\n", toolutil.EscapeMdHeading(d.NewPath), toolutil.EscapeMdHeading(changeType(d)), add, del)
+		fmt.Fprintf(b, "### %s (%s): +%d / -%d lines\n", toolutil.EscapeMdHeading(d.NewPath), toolutil.EscapeMdHeading(changeType(d)), add, del)
 		if d.Diff != "" {
 			fmt.Fprintf(b, "```diff\n%s\n```\n\n", d.Diff)
 		}

@@ -647,9 +647,9 @@ func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 		"dev1",
 		"dev2",
 		"dev3",
-		"feat-a → main",
-		"fix-b → develop",
-		"hotfix-c → main",
+		"feat-a -> main",
+		"fix-b -> develop",
+		"hotfix-c -> main",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("markdown missing %q:\n%s", want, text)

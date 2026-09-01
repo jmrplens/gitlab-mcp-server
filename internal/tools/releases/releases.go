@@ -169,7 +169,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		switch {
 		case toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("releaseCreate", err, "a release for this tag may already exist — use gitlab_release_update to modify it, or choose a different tag_name")
+			return Output{}, toolutil.WrapErrWithHint("releaseCreate", err, "a release for this tag may already exist. Use gitlab_release_update to modify it, or choose a different tag_name")
 		case toolutil.IsHTTPStatus(err, http.StatusForbidden):
 			return Output{}, toolutil.WrapErrWithHint("releaseCreate", err, "creating releases requires Developer role or higher")
 		default:

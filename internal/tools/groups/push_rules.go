@@ -76,7 +76,7 @@ func GetPushRules(ctx context.Context, client *gitlabclient.Client, input GetPus
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
 			return PushRuleOutput{}, toolutil.WrapErrWithHint("groupGetPushRules", err,
-				"no push rules configured on this group, or the feature requires GitLab Premium/Ultimate — use gitlab_group_add_push_rule to create one")
+				"no push rules configured on this group, or the feature requires GitLab Premium/Ultimate. Use gitlab_group_add_push_rule to create one")
 		}
 		return PushRuleOutput{}, toolutil.WrapErrWithStatusHint("groupGetPushRules", err, http.StatusForbidden,
 			"reading group push rules requires Premium/Ultimate licensing and Owner role on the group")
@@ -264,7 +264,7 @@ func EditPushRule(ctx context.Context, client *gitlabclient.Client, input EditPu
 				"one of the regex patterns is invalid (use a Go-compatible regex syntax), or the field requires Premium/Ultimate")
 		}
 		return PushRuleOutput{}, toolutil.WrapErrWithStatusHint("groupEditPushRule", err, http.StatusNotFound,
-			"no push rules currently exist on this group — use gitlab_group_add_push_rule first")
+			"no push rules currently exist on this group. Use gitlab_group_add_push_rule first")
 	}
 	return pushRuleOutputFromGL(rule), nil
 }
@@ -285,7 +285,7 @@ func DeletePushRule(ctx context.Context, client *gitlabclient.Client, input Dele
 	_, err := client.GL().Groups.DeleteGroupPushRule(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("groupDeletePushRule", err, http.StatusNotFound,
-			"no push rules currently configured on this group — nothing to delete")
+			"no push rules currently configured on this group. Nothing to delete")
 	}
 	return nil
 }

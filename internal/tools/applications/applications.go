@@ -98,7 +98,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 
 	app, _, err := client.GL().Applications.CreateApplication(opts, gl.WithContext(ctx))
 	if err != nil {
-		return CreateOutput{}, toolutil.WrapErrWithStatusHint("create_application", err, http.StatusBadRequest, "verify redirect_uri is a valid URL and scopes are valid \u2014 requires administrator access")
+		return CreateOutput{}, toolutil.WrapErrWithStatusHint("create_application", err, http.StatusBadRequest, "verify redirect_uri is a valid URL and scopes are valid. Requires administrator access")
 	}
 
 	return CreateOutput{ApplicationItem: toItem(app)}, nil
@@ -129,7 +129,7 @@ func RenewSecret(ctx context.Context, client *gitlabclient.Client, input RenewSe
 	}
 	app, _, err := client.GL().Applications.RenewApplicationSecret(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return RenewSecretOutput{}, toolutil.WrapErrWithStatusHint("renew_application_secret", err, http.StatusNotFound, "verify application id with gitlab_list_applications — requires administrator access")
+		return RenewSecretOutput{}, toolutil.WrapErrWithStatusHint("renew_application_secret", err, http.StatusNotFound, "verify application id with gitlab_list_applications. Requires administrator access")
 	}
 	return RenewSecretOutput{ApplicationItem: toItem(app)}, nil
 }

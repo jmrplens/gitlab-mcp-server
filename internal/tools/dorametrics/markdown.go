@@ -12,7 +12,7 @@ func FormatMarkdown(out Output, metric string) string {
 	var sb strings.Builder
 	title := "DORA Metrics"
 	if metric != "" {
-		title = "DORA Metrics — " + toolutil.EscapeMdTableCell(metric)
+		title = "DORA Metrics: " + toolutil.EscapeMdTableCell(metric)
 	}
 	fmt.Fprintf(&sb, "## %s\n\n", title)
 	if len(out.Metrics) == 0 {

@@ -127,14 +127,14 @@ func main() {
 	dynamicBaseRoutes := dynamicBaseCatalog.ActionMaps()
 	dynamicEnterpriseRoutes := dynamicEnterpriseCatalog.ActionMaps()
 
-	cmdutil.Progressf("audit_tokens: enumerating tools across individual/meta/dynamic surfaces…")
+	cmdutil.Progressf("audit_tokens: enumerating tools across individual/meta/dynamic surfaces...")
 	individualTools := listTools(client, config.ToolSurfaceIndividual, true)
 	metaBaseTools := listTools(client, config.ToolSurfaceMeta, false)
 	metaEnterpriseTools := listTools(client, config.ToolSurfaceMeta, true)
 	dynamicBaseTools := listDynamicTools(dynamicBaseCatalog)
 	dynamicEnterpriseTools := listDynamicTools(dynamicEnterpriseCatalog)
 
-	cmdutil.Progressf("audit_tokens: measuring token cost (tools, resources, prompts)…")
+	cmdutil.Progressf("audit_tokens: measuring token cost (tools, resources, prompts)...")
 	individualInfo := measureTools(individualTools)
 	metaBaseInfo := measureTools(metaBaseTools)
 	metaEnterpriseInfo := measureTools(metaEnterpriseTools)
@@ -190,7 +190,7 @@ func main() {
 	}
 
 	fmt.Println("=" + strings.Repeat("=", 69))
-	fmt.Println("  gitlab-mcp-server — Token Overhead Audit")
+	fmt.Println("  gitlab-mcp-server. Token Overhead Audit")
 	fmt.Println("=" + strings.Repeat("=", 69))
 	fmt.Println()
 
@@ -198,7 +198,7 @@ func main() {
 	fmt.Println()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tw, "  Mode\tTools\tReachable actions\tTokens\tBytes\n")
-	fmt.Fprintf(tw, "  ────\t─────\t──────────────\t──────\t─────\n")
+	fmt.Fprintf(tw, "  ----\t-----\t--------------\t------\t-----\n")
 	fmt.Fprintf(tw, "  Individual (all)\t%d\t%d\t%s\t%s\n", len(individualInfo), len(individualInfo), fmtNum(indTotal), fmtNum(totalBytes(individualInfo)))
 	fmt.Fprintf(tw, "  Meta-tools (base)\t%d\t%d\t%s\t%s\n", len(metaBaseInfo), baseReachableActions, fmtNum(metaTotal), fmtNum(totalBytes(metaBaseInfo)))
 	fmt.Fprintf(tw, "  Meta-tools (enterprise)\t%d\t%d\t%s\t%s\n", len(metaEnterpriseInfo), enterpriseReachableActions, fmtNum(metaEntTotal), fmtNum(totalBytes(metaEnterpriseInfo)))
@@ -537,7 +537,7 @@ func printTopTools(infos []toolTokenInfo, n int) {
 	}
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tw, "  #\tTokens\tBytes\tTool Name\n")
-	fmt.Fprintf(tw, "  ─\t──────\t─────\t─────────\n")
+	fmt.Fprintf(tw, "  -\t------\t-----\t---------\n")
 	for i := range n {
 		fmt.Fprintf(tw, "  %d\t%s\t%s\t%s\n", i+1, fmtNum(infos[i].Tokens), fmtNum(infos[i].Bytes), infos[i].Name)
 	}
@@ -574,7 +574,7 @@ func printDomainTotals(infos []toolTokenInfo, n int) {
 
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(tw, "  #\tDomain\tTools\tTokens\n")
-	fmt.Fprintf(tw, "  ─\t──────\t─────\t──────\n")
+	fmt.Fprintf(tw, "  -\t------\t-----\t------\n")
 	for i := range n {
 		fmt.Fprintf(tw, "  %d\t%s\t%d\t%s\n", i+1, entries[i].Domain, entries[i].Count, fmtNum(entries[i].Tokens))
 	}
@@ -710,7 +710,7 @@ func runMetaSchemaSizing() error {
 	fmt.Println("============================================================")
 	fmt.Println()
 	fmt.Printf("%-46s %7s %10s %10s %10s %10s\n",
-		"meta-tool", "actions", "opaque", "full", "compact", "Δ full")
+		"meta-tool", "actions", "opaque", "full", "compact", "delta full")
 	fmt.Println(strings.Repeat("-", 96))
 	for _, r := range rows {
 		fmt.Printf("%-46s %7d %10s %10s %10s %+10s\n",
@@ -741,7 +741,7 @@ func humanBytes(n int) string {
 	}
 }
 
-// ─── Token footprint mode (-footprint) ────────────────────────────────────────
+// --- Token footprint mode (-footprint) ----------------------------------------
 //
 // The footprint mode measures every tier \u00d7 surface \u00d7 META_PARAM_SCHEMA
 // combination and writes the README managed section plus the standalone
@@ -1017,7 +1017,7 @@ func measureTokenFootprintRows(client *gitlabclient.Client) ([]tokenFootprintRow
 	}
 
 	for i, t := range tiers {
-		cmdutil.Progressf("audit_tokens: measuring footprint [%d/%d] %s tier (all surfaces × schema modes)…", i+1, len(tiers), t.label)
+		cmdutil.Progressf("audit_tokens: measuring footprint [%d/%d] %s tier (all surfaces x schema modes)...", i+1, len(tiers), t.label)
 		rows, err := measureTierFootprint(client, t.tier, t.label)
 		if err != nil {
 			return nil, err
@@ -1175,7 +1175,7 @@ func renderDetailedFootprint(rows []tokenFootprintRow) string {
 	b.WriteString("---\n\n")
 
 	b.WriteString("## How tokens are counted\n\n")
-	b.WriteString("Token counts use the **cl100k_base** tokenizer (the GPT-4 / GPT-3.5 encoding) via [`github.com/tiktoken-go/tokenizer`](https://github.com/tiktoken-go/tokenizer) \u2014 a pure Go port of OpenAI's tiktoken. The vocabulary is embedded at compile time (~4 MB). This is significantly more accurate than the `bytes \u00f7 4` heuristic for JSON-dense content like MCP tool schemas, which contain many braces, identifiers, and nested objects.\n\n")
+	b.WriteString("Token counts use the **cl100k_base** tokenizer (the GPT-4 / GPT-3.5 encoding) via [`github.com/tiktoken-go/tokenizer`](https://github.com/tiktoken-go/tokenizer). A pure Go port of OpenAI's tiktoken. The vocabulary is embedded at compile time (~4 MB). This is significantly more accurate than the `bytes \u00f7 4` heuristic for JSON-dense content like MCP tool schemas, which contain many braces, identifiers, and nested objects.\n\n")
 
 	b.WriteString("## What each column means\n\n")
 	// Rendered through docgen (not hand-written) so the emitted table is already
@@ -1222,7 +1222,7 @@ func renderDetailedFootprint(rows []tokenFootprintRow) string {
 	b.WriteString("\n## Interpretation guide\n\n")
 	b.WriteString("- **Dynamic mode** (default) exposes only 2 tools (`gitlab_find_action` + `gitlab_execute_action`) but reaches all catalog actions via routing. This is the lowest-token surface.\n")
 	b.WriteString("- **Meta mode** exposes one dispatcher per domain (e.g. `gitlab_branch`, `gitlab_issue`). The `META_PARAM_SCHEMA` controls whether the action parameter's schema is generic (`opaque`) or detailed (`compact`/`full`). `full` doubles the token cost vs `opaque` but gives the LLM exact per-action input shapes.\n")
-	b.WriteString("- **Individual mode** exposes every action as its own tool. This is the highest-fidelity but most expensive surface \u2014 suitable only for clients with large context windows.\n")
+	b.WriteString("- **Individual mode** exposes every action as its own tool. This is the highest-fidelity but most expensive surface. Suitable only for clients with large context windows.\n")
 	b.WriteString("- **Tier scaling**: Free/CE has the fewest actions. Premium adds enterprise features. Ultimate includes everything. The token cost scales with the number of available actions.\n")
 	b.WriteString("- **Shared tokens** are dominated by MCP resources (`gitlab://tools` template, workflow guides) and prompts. The `minimal` capability surface strips these to just `gitlab://tools`, cutting shared overhead by ~90%%.\n")
 	return b.String()

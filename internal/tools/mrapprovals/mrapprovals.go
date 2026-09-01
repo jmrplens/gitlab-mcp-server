@@ -351,7 +351,7 @@ func Config(ctx context.Context, client *gitlabclient.Client, input ConfigInput)
 			return ConfigOutput{}, fmt.Errorf("mrApprovalConfig: merge request approval configuration requires GitLab Premium or higher. This instance appears to be running Community Edition: %w", err)
 		}
 		return ConfigOutput{}, toolutil.WrapErrWithStatusHint("mrApprovalConfig", err, http.StatusForbidden,
-			"requires Maintainer role; approvals_required is deprecated \u2014 prefer approval rules; verify project_id + merge_request_iid")
+			"requires Maintainer role; approvals_required is deprecated. Prefer approval rules; verify project_id + merge_request_iid")
 	}
 	return configToOutput(cfg), nil
 }
@@ -374,7 +374,7 @@ func Reset(ctx context.Context, client *gitlabclient.Client, input ResetInput) e
 				"endpoint requires a bot user backed by a project/group access token; verify project_id + merge_request_iid and that the caller authenticates with a project or group access token (PATs from human users are not accepted)")
 		}
 		return toolutil.WrapErrWithStatusHint("mrApprovalReset", err, http.StatusForbidden,
-			"requires Maintainer role; resets all approvals on the MR \u2014 cannot be undone; verify project_id + merge_request_iid")
+			"requires Maintainer role; resets all approvals on the MR. Cannot be undone; verify project_id + merge_request_iid")
 	}
 	return nil
 }

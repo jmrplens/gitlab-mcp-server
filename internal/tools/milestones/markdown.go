@@ -31,7 +31,7 @@ func FormatListMarkdownString(v ListOutput) string {
 	b.WriteString("| IID | Title | State | Due Date | Expired |\n")
 	b.WriteString("| --- | --- | --- | --- | --- |\n")
 	for _, m := range v.Milestones {
-		due := "—"
+		due := "-"
 		if m.DueDate != "" {
 			due = toolutil.FormatTime(m.DueDate)
 		}
@@ -106,7 +106,7 @@ func FormatIssuesMarkdownString(v MilestoneIssuesOutput) string {
 	b.WriteString("| IID | Title | State | Created |\n")
 	b.WriteString("| --- | --- | --- | --- |\n")
 	for _, issue := range v.Issues {
-		created := "—"
+		created := "-"
 		if issue.CreatedAt != "" {
 			created = issue.CreatedAt
 		}
@@ -144,7 +144,7 @@ func FormatMergeRequestsMarkdownString(v MilestoneMergeRequestsOutput) string {
 	b.WriteString("| IID | Title | State | Source | Target | Created |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, mr := range v.MergeRequests {
-		created := "—"
+		created := "-"
 		if mr.CreatedAt != "" {
 			created = mr.CreatedAt
 		}

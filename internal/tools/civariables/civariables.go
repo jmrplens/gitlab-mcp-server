@@ -337,7 +337,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"deleting CI/CD variables requires Maintainer or Owner role")
 		}
 		return toolutil.WrapErrWithStatusHint(opDeleteCIVariable, err, http.StatusNotFound,
-			"the variable may already be deleted \u2014 verify with gitlab_ci_variable_list")
+			"the variable may already be deleted. Verify with gitlab_ci_variable_list")
 	}
 	return nil
 }

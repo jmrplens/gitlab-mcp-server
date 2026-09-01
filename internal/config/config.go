@@ -1096,13 +1096,13 @@ func validatePublicURL(raw string) error {
 		return fmt.Errorf("--public-url %q is not an absolute URL", raw)
 	}
 	if u.Fragment != "" {
-		return fmt.Errorf("--public-url %q must not carry a fragment (RFC 9728 §1.2)", raw)
+		return fmt.Errorf("--public-url %q must not carry a fragment (RFC 9728 section 1.2)", raw)
 	}
 	if strings.HasSuffix(u.Path, "/") {
 		return fmt.Errorf("--public-url %q must not end in a slash", raw)
 	}
 	if u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname())) {
-		return fmt.Errorf("--public-url %q must use https (RFC 9728 §1.2; http is allowed only for loopback development)", raw)
+		return fmt.Errorf("--public-url %q must use https (RFC 9728 section 1.2; http is allowed only for loopback development)", raw)
 	}
 	return nil
 }

@@ -475,7 +475,7 @@ func Diff(ctx context.Context, client *gitlabclient.Client, input DiffInput) (Di
 	diffs, resp, err := client.GL().Commits.GetCommitDiff(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return DiffOutput{}, toolutil.WrapErrWithStatusHint("commitDiff", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get; large diffs may be truncated by GitLab \u2014 use unidiff=true for git-compatible format")
+			"verify SHA with gitlab_commit_get; large diffs may be truncated by GitLab. Use unidiff=true for git-compatible format")
 	}
 
 	out := make([]toolutil.DiffOutput, len(diffs))
@@ -537,7 +537,7 @@ func GetRefs(ctx context.Context, client *gitlabclient.Client, input RefsInput) 
 	refs, resp, err := client.GL().Commits.GetCommitRefs(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return RefsOutput{}, toolutil.WrapErrWithStatusHint("getCommitRefs", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get \u2014 refs lists branches/tags containing the commit")
+			"verify SHA with gitlab_commit_get. Refs lists branches/tags containing the commit")
 	}
 	out := make([]RefOutput, len(refs))
 	for i, r := range refs {
@@ -744,7 +744,7 @@ func GetStatuses(ctx context.Context, client *gitlabclient.Client, input Statuse
 	statuses, resp, err := client.GL().Commits.GetCommitStatuses(string(input.ProjectID), input.SHA, opts, gl.WithContext(ctx))
 	if err != nil {
 		return StatusesOutput{}, toolutil.WrapErrWithStatusHint("getCommitStatuses", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get \u2014 statuses are populated by CI jobs and external integrations")
+			"verify SHA with gitlab_commit_get. Statuses are populated by CI jobs and external integrations")
 	}
 	out := make([]StatusOutput, len(statuses))
 	for i, s := range statuses {
@@ -834,7 +834,7 @@ func SetStatus(ctx context.Context, client *gitlabclient.Client, input SetStatus
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return StatusOutput{}, toolutil.WrapErrWithHint("setCommitStatus", err,
-				"state must be one of: pending, running, success, failed, canceled, skipped \u2014 status names are case-sensitive")
+				"state must be one of: pending, running, success, failed, canceled, skipped. Status names are case-sensitive")
 		}
 		return StatusOutput{}, toolutil.WrapErrWithStatusHint("setCommitStatus", err, http.StatusNotFound,
 			"verify SHA with gitlab_commit_get")
@@ -881,7 +881,7 @@ func ListMRsByCommit(ctx context.Context, client *gitlabclient.Client, input MRs
 	mrs, _, err := client.GL().Commits.ListMergeRequestsByCommit(string(input.ProjectID), input.SHA, gl.WithContext(ctx))
 	if err != nil {
 		return MRsByCommitOutput{}, toolutil.WrapErrWithStatusHint("listMergeRequestsByCommit", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get \u2014 returns MRs that include this commit")
+			"verify SHA with gitlab_commit_get. Returns MRs that include this commit")
 	}
 	out := make([]BasicMROutput, len(mrs))
 	for i, mr := range mrs {
@@ -938,7 +938,7 @@ func CherryPick(ctx context.Context, client *gitlabclient.Client, input CherryPi
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return Output{}, toolutil.WrapErrWithHint("cherryPickCommit", err, "the commit may produce an empty cherry-pick or the branch may not exist")
 		case toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("cherryPickCommit", err, "cherry-pick has merge conflicts — resolve manually or cherry-pick to a different branch")
+			return Output{}, toolutil.WrapErrWithHint("cherryPickCommit", err, "cherry-pick has merge conflicts. Resolve manually or cherry-pick to a different branch")
 		default:
 			return Output{}, toolutil.WrapErrWithMessage("cherryPickCommit", err)
 		}
@@ -974,7 +974,7 @@ func Revert(ctx context.Context, client *gitlabclient.Client, input RevertInput)
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return Output{}, toolutil.WrapErrWithHint("revertCommit", err, "the commit may already be reverted or the branch may not exist")
 		case toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("revertCommit", err, "revert has merge conflicts — resolve manually or revert on a different branch")
+			return Output{}, toolutil.WrapErrWithHint("revertCommit", err, "revert has merge conflicts. Resolve manually or revert on a different branch")
 		default:
 			return Output{}, toolutil.WrapErrWithMessage("revertCommit", err)
 		}
@@ -1094,7 +1094,7 @@ func GetGPGSignature(ctx context.Context, client *gitlabclient.Client, input GPG
 	sig, _, err := rawGetGPGSignature(ctx, client, input.ProjectID, input.SHA)
 	if err != nil {
 		return GPGSignatureOutput{}, toolutil.WrapErrWithStatusHint("getGPGSignature", err, http.StatusNotFound,
-			"verify SHA with gitlab_commit_get \u2014 404 also returned for unsigned commits or unsupported signature types")
+			"verify SHA with gitlab_commit_get. 404 also returned for unsigned commits or unsupported signature types")
 	}
 	return GPGSignatureOutput{
 		SignatureType:      sig.SignatureType,

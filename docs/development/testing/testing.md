@@ -314,7 +314,7 @@
 | cmd/audit_string_dupes                         |    91.1% |
 | cmd/audit_surface_quality                      |    63.6% |
 | cmd/audit_test_goroutines                      |    65.2% |
-| cmd/audit_test_names                           |    38.2% |
+| cmd/audit_test_names                           |    37.6% |
 | cmd/audit_tokens                               |    51.2% |
 | cmd/eval_mcp_surfaces/internal/evalrun         |    88.9% |
 | cmd/eval_mcp_surfaces/internal/evaluator       |    80.5% |
@@ -549,7 +549,7 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/audit_1to1** (34.8%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_action_catalog_manifest** (35.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/gen_stats** (36.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/audit_test_names** (38.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/audit_test_names** (37.6%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/eval_mcp_surfaces/internal/termio** (45.7%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_dynamic_aliases** (48.4%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_tokens** (51.2%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.

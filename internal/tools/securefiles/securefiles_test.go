@@ -433,7 +433,7 @@ func TestFormatShowMarkdown_FullMetadata(t *testing.T) {
 }
 
 // TestFormatListMarkdown_ExpiresColumn verifies the list table renders the
-// Expires At column, including the "—" placeholder for files without expiry.
+// Expires At column, including the "-" placeholder for files without expiry.
 func TestFormatListMarkdown_ExpiresColumn(t *testing.T) {
 	expires := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
 	md := FormatListMarkdown(ListOutput{Files: []SecureFileItem{
@@ -446,7 +446,7 @@ func TestFormatListMarkdown_ExpiresColumn(t *testing.T) {
 	if !strings.Contains(md, "2025-01-02T03:04:05Z") {
 		t.Errorf("missing rendered expiry:\n%s", md)
 	}
-	if !strings.Contains(md, "—") {
+	if !strings.Contains(md, "| - |") {
 		t.Errorf("missing placeholder for absent expiry:\n%s", md)
 	}
 }

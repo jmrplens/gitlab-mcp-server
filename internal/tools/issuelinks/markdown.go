@@ -22,7 +22,7 @@ func FormatOutputMarkdown(v Output) string {
 	return b.String()
 }
 
-// issueRefLine renders an issue reference ("IID N (project M) — Title") for a
+// issueRefLine renders an issue reference ("IID N (project M) - Title") for a
 // source/target issue object, or a placeholder when the object is absent.
 func issueRefLine(ref *IssueRefOutput) string {
 	if ref == nil {
@@ -52,13 +52,13 @@ func FormatListMarkdown(out ListOutput) string {
 	return b.String()
 }
 
-// issueRefSuffix renders a " — Title" suffix for a source/target issue object,
+// issueRefSuffix renders a " - Title" suffix for a source/target issue object,
 // or "" when the object is absent.
 func issueRefSuffix(ref *IssueRefOutput) string {
 	if ref == nil || ref.Title == "" {
 		return ""
 	}
-	return " — " + ref.Title
+	return " - " + ref.Title
 }
 
 func init() {

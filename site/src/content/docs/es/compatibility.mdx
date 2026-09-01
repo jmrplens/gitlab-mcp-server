@@ -97,7 +97,7 @@ Mantén la superficie de herramientas `dynamic` por defecto para clientes con l�
 
 ### Validadores de pasarelas MCP
 
-Una pasarela (gateway) MCP valida el catálogo de un servidor antes de admitirlo, con reglas que decide su operador: una pasarela en producción (IBM [mcp-context-forge](https://github.com/IBM/mcp-context-forge) antes de 0.7.0) rechazaba cualquier descripción de herramienta que contuviera un punto y coma. El servidor mantiene todo lo que lista libre de puntos y coma en todas las superficies, y un mecanismo de sustituciones permite a un despliegue cumplir la siguiente regla de pasarela sin esperar a una nueva versión:
+Una pasarela (gateway) MCP valida el catálogo de un servidor antes de admitirlo, con reglas que decide su operador: una pasarela en producción (IBM [mcp-context-forge](https://github.com/IBM/mcp-context-forge) antes de 0.7.0) rechazaba cualquier descripción de herramienta que contuviera un punto y coma. El servidor mantiene todo lo que lista en ASCII puro y sin puntos y coma, en todas las superficies (una clase de caracteres resiste la siguiente regla mejor que una lista de codepoints), y un mecanismo de sustituciones permite a un despliegue cumplir una regla nueva de pasarela sin esperar a una versión:
 
 ```bash
 # Reescribe descripciones y títulos listados: pares old=new separados por

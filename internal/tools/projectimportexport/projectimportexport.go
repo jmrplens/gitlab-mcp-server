@@ -78,7 +78,7 @@ func ScheduleExport(ctx context.Context, client *gitlabclient.Client, input Sche
 	_, err := client.GL().ProjectImportExport.ScheduleExport(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ScheduleExportOutput{}, toolutil.WrapErrWithStatusHint("schedule_export", err, http.StatusForbidden,
-			"requires Owner role on the project; only one export at a time per project \u2014 wait for the previous to finish or use gitlab_get_project_export_status to check")
+			"requires Owner role on the project; only one export at a time per project. Wait for the previous to finish or use gitlab_get_project_export_status to check")
 	}
 	return ScheduleExportOutput{Message: "Export scheduled successfully"}, nil
 }
@@ -159,7 +159,7 @@ func ExportDownload(ctx context.Context, client *gitlabclient.Client, input Expo
 	data, _, err := client.GL().ProjectImportExport.ExportDownload(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
 		return ExportDownloadOutput{}, toolutil.WrapErrWithStatusHint("export_download", err, http.StatusNotFound,
-			"export must be in 'finished' state \u2014 check gitlab_get_project_export_status first; archives are kept for 24 hours after generation")
+			"export must be in 'finished' state. Check gitlab_get_project_export_status first; archives are kept for 24 hours after generation")
 	}
 	return ExportDownloadOutput{
 		ContentBase64: base64.StdEncoding.EncodeToString(data),

@@ -74,7 +74,7 @@ func enterpriseReadEvalCases() []Case {
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-2",
-			"First look up project `my-org/tools/gitlab-mcp-server` with project.get to confirm it exists, then pull the deployment-frequency DORA metric for that project over the last 30 days. Today is 2026-06-04, so compute the start_date and end_date as YYYY-MM-DD strings and pass them; interval is `daily`. Do not use a `days` or `days_back` parameter — only the computed start_date and end_date are accepted.",
+			"First look up project `my-org/tools/gitlab-mcp-server` with project.get to confirm it exists, then pull the deployment-frequency DORA metric for that project over the last 30 days. Today is 2026-06-04, so compute the start_date and end_date as YYYY-MM-DD strings and pass them; interval is `daily`. Do not use a `days` or `days_back` parameter. Only the computed start_date and end_date are accepted.",
 			readStep("gitlab_project", "get", params("project_id"), nil),
 			readStep("gitlab_dora_metrics", "project", params("project_id", "metric", "start_date", "end_date", "interval"), nil),
 		),
@@ -92,7 +92,7 @@ func enterpriseReadEvalCases() []Case {
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-4",
-			"For project `my-org/tools/gitlab-mcp-server`: first get the count of critical and high severity vulnerabilities (the dedicated severity-count endpoint, not a paginated list), then list the project's vulnerabilities using GraphQL-style pagination (pass `first=5` for the page size — do not pass `per_page`, that param is for REST-only endpoints).",
+			"For project `my-org/tools/gitlab-mcp-server`: first get the count of critical and high severity vulnerabilities (the dedicated severity-count endpoint, not a paginated list), then list the project's vulnerabilities using GraphQL-style pagination (pass `first=5` for the page size, do not pass `per_page`, that param is for REST-only endpoints).",
 			readStep("gitlab_vulnerability", "severity_count", params("project_path"), nil),
 			readStep("gitlab_vulnerability", "list", params("project_path"), params("state", "first")),
 		),
@@ -113,13 +113,13 @@ func enterpriseReadEvalCases() []Case {
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-7",
-			"For group `my-org`: first list the open epics using GraphQL-style pagination (pass `first=5` for the page size — do not pass `per_page`, that param is for REST-only endpoints), then fetch the current group iterations in any state.",
+			"For group `my-org`: first list the open epics using GraphQL-style pagination (pass `first=5` for the page size, do not pass `per_page`, that param is for REST-only endpoints), then fetch the current group iterations in any state.",
 			readStep("gitlab_group", "epic_list", params("full_path"), params("state", "first")),
 			readStep("gitlab", "issue.iteration_list_group", params("group_id"), params("per_page")),
 		),
 		baseEnterpriseReadEvalCase(
 			"MS-ENT-DYN-8",
-			"List the Geo sites configured on this GitLab instance (Geo may be unconfigured in the fixture — explain the result either way), then list all snippet repository storage moves recorded on the instance.",
+			"List the Geo sites configured on this GitLab instance (Geo may be unconfigured in the fixture, explain the result either way), then list all snippet repository storage moves recorded on the instance.",
 			// The Geo API on a single-node GitLab EE fixture has no
 			// primary Geo site registered, so geo.get by id is
 			// inherently 404. Use list (which returns an empty array

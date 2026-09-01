@@ -48,9 +48,9 @@ func FormatOutputMarkdown(out Output) string {
 	fmt.Fprintf(&sb, toolutil.FmtMdID, out.ID)
 	fmt.Fprintf(&sb, "| Status | %s |\n", out.Status)
 	fmt.Fprintf(&sb, "| Target Branch | %s |\n", out.TargetBranch)
-	mr := fmt.Sprintf("!%d — %s", out.MergeRequest.IID, toolutil.EscapeMdTableCell(out.MergeRequest.Title))
+	mr := fmt.Sprintf("!%d - %s", out.MergeRequest.IID, toolutil.EscapeMdTableCell(out.MergeRequest.Title))
 	if out.MergeRequest.WebURL != "" {
-		mr = fmt.Sprintf("[!%d](%s) — %s", out.MergeRequest.IID, out.MergeRequest.WebURL, toolutil.EscapeMdTableCell(out.MergeRequest.Title))
+		mr = fmt.Sprintf("[!%d](%s) - %s", out.MergeRequest.IID, out.MergeRequest.WebURL, toolutil.EscapeMdTableCell(out.MergeRequest.Title))
 	}
 	fmt.Fprintf(&sb, "| Merge Request | %s |\n", mr)
 	if name := userName(out.User); name != "" {

@@ -344,7 +344,7 @@ func (c *Client) EnsureInitialized(ctx context.Context) {
 		return
 	}
 	c.needsLazyInit.Store(false)
-	slog.InfoContext(ctx, "gitlab client recovered — lazy initialization succeeded")
+	slog.InfoContext(ctx, "gitlab client recovered. Lazy initialization succeeded")
 }
 
 // EnableLazyInit enables lazy re-initialization on subsequent API calls.

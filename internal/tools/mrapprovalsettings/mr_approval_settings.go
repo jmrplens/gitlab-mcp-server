@@ -107,7 +107,7 @@ func GetGroupSettings(ctx context.Context, client *gitlabclient.Client, input Gr
 	}
 	settings, _, err := client.GL().MergeRequestApprovalSettings.GetGroupMergeRequestApprovalSettings(string(input.GroupID), gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_get_group_mr_approval_settings", err, http.StatusNotFound, "verify group_id \u2014 requires Owner or Maintainer role")
+		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_get_group_mr_approval_settings", err, http.StatusNotFound, "verify group_id. Requires Owner or Maintainer role")
 	}
 	return toOutput(settings), nil
 }
@@ -129,7 +129,7 @@ func UpdateGroupSettings(ctx context.Context, client *gitlabclient.Client, input
 	}
 	settings, _, err := client.GL().MergeRequestApprovalSettings.UpdateGroupMergeRequestApprovalSettings(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_update_group_mr_approval_settings", err, http.StatusNotFound, "verify group_id \u2014 requires Owner role to update approval settings")
+		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_update_group_mr_approval_settings", err, http.StatusNotFound, "verify group_id. Requires Owner role to update approval settings")
 	}
 	return toOutput(settings), nil
 }
@@ -144,7 +144,7 @@ func GetProjectSettings(ctx context.Context, client *gitlabclient.Client, input 
 	}
 	settings, _, err := client.GL().MergeRequestApprovalSettings.GetProjectMergeRequestApprovalSettings(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_mr_approval_settings", err, http.StatusNotFound, "verify project_id \u2014 requires Maintainer or Owner role")
+		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_get_project_mr_approval_settings", err, http.StatusNotFound, "verify project_id. Requires Maintainer or Owner role")
 	}
 	return toOutput(settings), nil
 }
@@ -167,7 +167,7 @@ func UpdateProjectSettings(ctx context.Context, client *gitlabclient.Client, inp
 	}
 	settings, _, err := client.GL().MergeRequestApprovalSettings.UpdateProjectMergeRequestApprovalSettings(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_update_project_mr_approval_settings", err, http.StatusNotFound, "verify project_id \u2014 requires Maintainer or Owner role")
+		return Output{}, toolutil.WrapErrWithStatusHint("gitlab_update_project_mr_approval_settings", err, http.StatusNotFound, "verify project_id. Requires Maintainer or Owner role")
 	}
 	return toOutput(settings), nil
 }

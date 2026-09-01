@@ -101,7 +101,7 @@ func ListUserLists(ctx context.Context, client *gitlabclient.Client, input ListI
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return ListOutput{}, toolutil.WrapErrWithHint("ff_user_list_list", err,
-				"feature flag user lists require GitLab Premium/Ultimate \u2014 verify the project tier and that you have Developer+ role")
+				"feature flag user lists require GitLab Premium/Ultimate. Verify the project tier and that you have Developer+ role")
 		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("ff_user_list_list", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get")
@@ -129,7 +129,7 @@ func GetUserList(ctx context.Context, client *gitlabclient.Client, input GetInpu
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("ff_user_list_get", err, http.StatusNotFound,
-			"verify user_list_iid with gitlab_ff_user_list_list \u2014 user lists are scoped per-project and require Premium/Ultimate")
+			"verify user_list_iid with gitlab_ff_user_list_list. User lists are scoped per-project and require Premium/Ultimate")
 	}
 	return convertUserList(l), nil
 }

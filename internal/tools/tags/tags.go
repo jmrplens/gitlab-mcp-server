@@ -165,9 +165,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		switch {
 		case toolutil.ContainsAny(err, "already exists"):
-			return Output{}, toolutil.WrapErrWithHint("tagCreate", err, "a tag with this name already exists — use gitlab_tag_get to view it")
+			return Output{}, toolutil.WrapErrWithHint("tagCreate", err, "a tag with this name already exists. Use gitlab_tag_get to view it")
 		case toolutil.ContainsAny(err, "Target", "is invalid"):
-			return Output{}, toolutil.WrapErrWithHint("tagCreate", err, "the ref does not exist — use gitlab_branch_list or gitlab_tag_list to verify")
+			return Output{}, toolutil.WrapErrWithHint("tagCreate", err, "the ref does not exist. Use gitlab_branch_list or gitlab_tag_list to verify")
 		default:
 			return Output{}, toolutil.WrapErrWithMessage("tagCreate", err)
 		}
@@ -446,7 +446,7 @@ func GetProtectedTag(ctx context.Context, client *gitlabclient.Client, input Get
 	pt, _, err := client.GL().ProtectedTags.GetProtectedTag(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
 		return ProtectedTagOutput{}, toolutil.WrapErrWithStatusHint("tagGetProtected", err, http.StatusNotFound,
-			"the tag may not be protected \u2014 use gitlab_tag_list_protected to verify")
+			"the tag may not be protected. Use gitlab_tag_list_protected to verify")
 	}
 	return protectedTagOutputFromGL(pt), nil
 }
@@ -519,7 +519,7 @@ func UnprotectTag(ctx context.Context, client *gitlabclient.Client, input Unprot
 	_, err := client.GL().ProtectedTags.UnprotectRepositoryTags(string(input.ProjectID), input.TagName, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("tagUnprotect", err, http.StatusForbidden,
-			"unprotecting tags requires Maintainer or Owner role; the tag may not be protected \u2014 use gitlab_tag_list_protected to verify")
+			"unprotecting tags requires Maintainer or Owner role; the tag may not be protected. Use gitlab_tag_list_protected to verify")
 	}
 	return nil
 }

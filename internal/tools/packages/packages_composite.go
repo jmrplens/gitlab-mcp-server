@@ -29,7 +29,7 @@ type PublishAndLinkInput struct {
 	ContentBase64  string               `json:"content_base64,omitempty" jsonschema:"Base64-encoded file content. Alternative to file_path."`
 	Status         string               `json:"status,omitempty" jsonschema:"Package status: default or hidden"`
 	TagName        string               `json:"tag_name" jsonschema:"Tag name of the release to link the package file to,required"`
-	LinkName       string               `json:"link_name,omitempty" jsonschema:"Display name of the release link. Defaults to file_name if omitted. MUST be the exact filename — never add descriptive suffixes."`
+	LinkName       string               `json:"link_name,omitempty" jsonschema:"Display name of the release link. Defaults to file_name if omitted. MUST be the exact filename. Never add descriptive suffixes."`
 	LinkType       string               `json:"link_type,omitempty" jsonschema:"Type of the release link: package, runbook, image, or other. Defaults to package."`
 }
 

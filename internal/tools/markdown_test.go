@@ -1027,7 +1027,7 @@ func TestFormatMilestone_ListMarkdown(t *testing.T) {
 			Pagination: toolutil.PaginationOutput{Page: 1, TotalPages: 1, TotalItems: 1, PerPage: 20},
 		}
 		md := milestones.FormatListMarkdownString(out)
-		if !strings.Contains(md, "| \u2014 |") {
+		if !strings.Contains(md, "| - |") {
 			t.Error("missing dash for empty due date")
 		}
 	})
@@ -1198,7 +1198,7 @@ func TestFormatSearch_MRsMarkdown(t *testing.T) {
 		if !strings.Contains(md, "## MR Search Results (1)") {
 			t.Error(errMissingHeader)
 		}
-		if !strings.Contains(md, "feat \u2192 main") {
+		if !strings.Contains(md, "feat -> main") {
 			t.Error("missing branch arrow")
 		}
 	})
@@ -1279,7 +1279,7 @@ func TestMarkdownForResult_DispatchCompleteness(t *testing.T) {
 			// Verify no panic and non-nil result from the dispatch chain.
 			result := markdownForResult(tt.result)
 			if result == nil {
-				t.Fatalf("markdownForResult(%T) returned nil — type not matched in dispatch", tt.result)
+				t.Fatalf("markdownForResult(%T) returned nil: type not matched in dispatch", tt.result)
 			}
 		})
 	}
@@ -1651,7 +1651,7 @@ func TestMarkdownAudit_DispatchCoverage(t *testing.T) {
 			result := markdownForResult(fix.result)
 			if result == nil {
 				missing = append(missing, fix.name)
-				t.Logf("FINDING: markdownForResult returned nil — type not dispatched")
+				t.Logf("FINDING: markdownForResult returned nil: type not dispatched")
 				return
 			}
 			if len(result.Content) == 0 {
@@ -1988,7 +1988,7 @@ func TestMarkdownForResult_QualityPatterns(t *testing.T) {
 			// 2. No raw ISO timestamps (should be formatted by FormatTime).
 			if rawISOTimestampRE.MatchString(md) {
 				match := rawISOTimestampRE.FindString(md)
-				t.Errorf("raw ISO timestamp found: %q — use toolutil.FormatTime", match)
+				t.Errorf("raw ISO timestamp found: %q. Use toolutil.FormatTime", match)
 			}
 
 			// 3. Web URL expected for detail entities.

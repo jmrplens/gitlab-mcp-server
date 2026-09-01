@@ -23,7 +23,7 @@ func FormatListMarkdownString(out ListOutput) string {
 	fmt.Fprintf(&b, "## Namespaces (%d)\n\n", len(out.Namespaces))
 	toolutil.WriteListSummary(&b, len(out.Namespaces), out.Pagination)
 	for _, ns := range out.Namespaces {
-		fmt.Fprintf(&b, "- **%s** (ID: %d) — kind: %s, path: `%s`\n", ns.Name, ns.ID, ns.Kind, ns.FullPath)
+		fmt.Fprintf(&b, "- **%s** (ID: %d), kind: %s, path: `%s`\n", ns.Name, ns.ID, ns.Kind, ns.FullPath)
 	}
 	b.WriteString(toolutil.FormatPagination(out.Pagination))
 	toolutil.WriteHints(&b, "Use `gitlab_namespace_get` to view details of a specific namespace")

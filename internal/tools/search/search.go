@@ -74,7 +74,7 @@ func wrapSearchErr(op string, err error) error {
 	}
 	if toolutil.IsHTTPStatus(err, 422) {
 		return toolutil.WrapErrWithHint(op, err,
-			"check the search query format — GitLab advanced search supports specific scopes and operators; retry without search_type if the selected backend does not support the query")
+			"check the search query format. GitLab advanced search supports specific scopes and operators; retry without search_type if the selected backend does not support the query")
 	}
 	return toolutil.WrapErrWithMessage(op, err)
 }
@@ -459,7 +459,7 @@ func Notes(ctx context.Context, client *gitlabclient.Client, input NotesInput) (
 // ProjectsInput defines parameters for searching projects.
 // Scope: group_id (optional) — omit for global search.
 type ProjectsInput struct {
-	GroupID toolutil.StringOrInt `json:"group_id,omitempty" jsonschema:"Group ID or URL-encoded path (optional — omit for global search)"`
+	GroupID toolutil.StringOrInt `json:"group_id,omitempty" jsonschema:"Group ID or URL-encoded path (optional, omit for global search)"`
 	Query   string               `json:"query"              jsonschema:"Search query string,required"`
 	TypeInput
 	toolutil.PaginationInput

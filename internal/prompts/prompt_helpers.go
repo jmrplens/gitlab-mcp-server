@@ -264,7 +264,7 @@ func writeMRTable(b *strings.Builder, mrs []*gl.BasicMergeRequest) {
 		if mr.Author != nil {
 			author = "@" + mr.Author.Username
 		}
-		branch := fmt.Sprintf("%s → %s", mr.SourceBranch, mr.TargetBranch)
+		branch := fmt.Sprintf("%s -> %s", mr.SourceBranch, mr.TargetBranch)
 		status := mrStatus(mr)
 		fmt.Fprintf(b, "| !%d | %s | %s | %s | %s | %s |\n",
 			mr.IID, mr.Title, author, branch, mrAge(mr), status)
@@ -280,15 +280,15 @@ func writeIssueTable(b *strings.Builder, issues []*gl.Issue) {
 	b.WriteString("| Issue | Title | Labels | Milestone | Age | Due |\n")
 	b.WriteString("|-------|-------|--------|-----------|-----|-----|\n")
 	for _, issue := range issues {
-		labels := "—"
+		labels := "-"
 		if len(issue.Labels) > 0 {
 			labels = strings.Join(issue.Labels, ", ")
 		}
-		milestone := "—"
+		milestone := "-"
 		if issue.Milestone != nil {
 			milestone = issue.Milestone.Title
 		}
-		due := "—"
+		due := "-"
 		if issue.DueDate != nil {
 			due = time.Time(*issue.DueDate).Format("2006-01-02")
 		}
@@ -343,7 +343,7 @@ func mrStatus(mr *gl.BasicMergeRequest) string {
 		parts = append(parts, mr.DetailedMergeStatus)
 	}
 	if len(parts) == 0 {
-		return "—"
+		return "-"
 	}
 	return strings.Join(parts, ", ")
 }
@@ -352,11 +352,11 @@ func mrStatus(mr *gl.BasicMergeRequest) string {
 var promptPipelineEmojis = map[string]string{
 	"success":   toolutil.EmojiSuccess,
 	"failed":    toolutil.EmojiCross,
-	"running":   "⏳",
-	"pending":   "⏳",
+	"running":   "\u23F3", // hourglass
+	"pending":   "\u23F3", // hourglass
 	"canceled":  toolutil.EmojiProhibited,
 	"cancelled": toolutil.EmojiProhibited,
-	"skipped":   "⏭️",
+	"skipped":   "\u23ED\uFE0F", // next track
 }
 
 // pipelineEmoji converts a pipeline status string to a corresponding emoji.
@@ -379,7 +379,7 @@ func mergeDuration(mr *gl.BasicMergeRequest) time.Duration {
 // formatDuration converts a duration to a human-readable string (e.g. "2d 5h", "3h 20m").
 func formatDuration(d time.Duration) string {
 	if d <= 0 {
-		return "—"
+		return "-"
 	}
 	hours := int(d.Hours())
 	days := hours / 24
@@ -430,16 +430,23 @@ func medianDuration(durations []time.Duration) time.Duration {
 	return sorted[n/2]
 }
 
+// Block glyphs for progressBar, written as escape sequences so the source
+// stays ASCII while the rendered bar is unchanged.
+const (
+	barFilled = "\u2588" // full block
+	barEmpty  = "\u2591" // light shade
+)
+
 // progressBar returns an ASCII progress bar like [████████░░] 80%.
 func progressBar(done, total int) string {
 	if total == 0 {
-		return "[░░░░░░░░░░] 0%"
+		return "[" + strings.Repeat(barEmpty, 10) + "] 0%"
 	}
 	pct := float64(done) / float64(total) * 100
 	filled := min(int(math.Round(pct/10)), 10)
 	return fmt.Sprintf("[%s%s] %.0f%%",
-		strings.Repeat("█", filled),
-		strings.Repeat("░", 10-filled),
+		strings.Repeat(barFilled, filled),
+		strings.Repeat(barEmpty, 10-filled),
 		pct)
 }
 

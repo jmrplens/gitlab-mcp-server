@@ -217,7 +217,7 @@ func ScheduleAll(ctx context.Context, client *gitlabclient.Client, in ScheduleAl
 	_, err := client.GL().SnippetRepositoryStorageMove.ScheduleAllStorageMoves(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ScheduleAllOutput{}, toolutil.WrapErrWithStatusHint("schedule all snippet storage moves", err, http.StatusBadRequest,
-			"requires admin; source_storage_name and destination_storage_name must reference configured Gitaly shards; bulk operation \u2014 may schedule many concurrent moves")
+			"requires admin; source_storage_name and destination_storage_name must reference configured Gitaly shards; bulk operation. May schedule many concurrent moves")
 	}
 	return ScheduleAllOutput{Message: "All snippet repository storage moves have been scheduled"}, nil
 }

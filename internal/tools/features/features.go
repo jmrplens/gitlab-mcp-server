@@ -128,7 +128,7 @@ func List(ctx context.Context, client *gitlabclient.Client, _ ListInput) (ListOu
 	features, _, err := client.GL().Features.ListFeatures(gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("feature_list", err, http.StatusForbidden,
-			"requires administrator access; feature flags are instance-wide on self-managed; only set features (not all definitions) are returned \u2014 use feature_list_definitions for the catalog")
+			"requires administrator access; feature flags are instance-wide on self-managed; only set features (not all definitions) are returned. Use feature_list_definitions for the catalog")
 	}
 
 	items := make([]FeatureItem, 0, len(features))

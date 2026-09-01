@@ -236,7 +236,7 @@ func (g *bearerGuard) classify(err error, ip, instance, token string) *gateFailu
 		return &gateFailure{
 			status:  http.StatusServiceUnavailable,
 			code:    errCodeUpstreamUnavailable,
-			message: "GitLab could not verify this token right now; the instance is unreachable or throttling. Retry shortly — the token itself has not been rejected.",
+			message: "GitLab could not verify this token right now; the instance is unreachable or throttling. Retry shortly. The token itself has not been rejected.",
 			header:  newHeader(headerRetryAfter, strconv.Itoa(int(delay.Seconds()))),
 		}
 	}
@@ -279,7 +279,7 @@ func (g *bearerGuard) classify(err error, ip, instance, token string) *gateFailu
 		return &gateFailure{
 			status:  http.StatusServiceUnavailable,
 			code:    errCodeUpstreamUnavailable,
-			message: "This deployment admits only tokens issued to specific OAuth applications, and GitLab did not answer the introspection request needed to check this one. Retry shortly — the token itself has not been rejected.",
+			message: "This deployment admits only tokens issued to specific OAuth applications, and GitLab did not answer the introspection request needed to check this one. Retry shortly. The token itself has not been rejected.",
 			header:  newHeader(headerRetryAfter, strconv.Itoa(int(upstreamRetryAfter.Seconds()))),
 		}
 	}
@@ -320,7 +320,7 @@ func (g *bearerGuard) classify(err error, ip, instance, token string) *gateFailu
 	return &gateFailure{
 		status:  http.StatusServiceUnavailable,
 		code:    errCodeUpstreamUnavailable,
-		message: "GitLab could not verify this token right now. Retry shortly — the token itself has not been rejected.",
+		message: "GitLab could not verify this token right now. Retry shortly. The token itself has not been rejected.",
 		header:  newHeader(headerRetryAfter, strconv.Itoa(int(upstreamRetryAfter.Seconds()))),
 	}
 }

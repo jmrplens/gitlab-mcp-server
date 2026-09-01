@@ -340,7 +340,7 @@ type MergeInput struct {
 	ShouldRemoveSourceBranch  *bool                `json:"should_remove_source_branch,omitempty"   jsonschema:"Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
 	AutoMerge                 *bool                `json:"auto_merge,omitempty"                     jsonschema:"Automatically merge when pipeline succeeds (auto-merge)"`
 	MergeWhenPipelineSucceeds *bool                `json:"merge_when_pipeline_succeeds,omitempty"   jsonschema:"Deprecated alias for auto_merge: merge when the pipeline succeeds. Prefer auto_merge"`
-	SHA                       string               `json:"sha,omitempty"                            jsonschema:"Head SHA of the merge request — merge only if HEAD matches (safety check)"`
+	SHA                       string               `json:"sha,omitempty"                            jsonschema:"Head SHA of the merge request. Merge only if HEAD matches (safety check)"`
 	SquashCommitMessage       string               `json:"squash_commit_message,omitempty"          jsonschema:"Custom squash commit message (used when squash is enabled)"`
 }
 
@@ -348,7 +348,7 @@ type MergeInput struct {
 type ApproveInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
-	SHA       string               `json:"sha,omitempty"         jsonschema:"Head SHA of the merge request — approve only if HEAD matches (safety check, applies to approve only)"`
+	SHA       string               `json:"sha,omitempty"         jsonschema:"Head SHA of the merge request. Approve only if HEAD matches (safety check, applies to approve only)"`
 }
 
 // ApproveOutput holds the approval state after approve/unapprove.
@@ -960,7 +960,7 @@ func Pipelines(ctx context.Context, client *gitlabclient.Client, input Pipelines
 	pipelineList, _, err := client.GL().MergeRequests.ListMergeRequestPipelines(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return PipelinesOutput{}, toolutil.WrapErrWithStatusHint("mrPipelines", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with gitlab_mr_get \u2014 the MR may have no pipelines yet (use gitlab_mr_create_pipeline to trigger one)")
+			"verify project_id and merge_request_iid with gitlab_mr_get. The MR may have no pipelines yet (use gitlab_mr_create_pipeline to trigger one)")
 	}
 
 	out := make([]pipelines.Output, len(pipelineList))
@@ -1302,7 +1302,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	mrs, resp, err := client.GL().MergeRequests.ListGroupMergeRequests(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrListGroup", err, http.StatusNotFound,
-			"verify the group exists with gitlab_group_get \u2014 use full_path or numeric ID")
+			"verify the group exists with gitlab_group_get. Use full_path or numeric ID")
 	}
 	out := make([]Output, len(mrs))
 	for i, m := range mrs {
@@ -1437,7 +1437,7 @@ func Reviewers(ctx context.Context, client *gitlabclient.Client, input Participa
 	reviewers, _, err := client.GL().MergeRequests.GetMergeRequestReviewers(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return ReviewersOutput{}, toolutil.WrapErrWithStatusHint("mrReviewers", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with gitlab_mr_get \u2014 use gitlab_mr_update with reviewer_ids to assign reviewers")
+			"verify project_id and merge_request_iid with gitlab_mr_get. Use gitlab_mr_update with reviewer_ids to assign reviewers")
 	}
 	out := make([]ReviewerOutput, len(reviewers))
 	for i, r := range reviewers {
@@ -1864,7 +1864,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 		if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotModified {
 			err = &gl.ErrorResponse{Response: resp.Response, Message: "a pending todo for this MR already exists"}
 			return CreateTodoOutput{}, toolutil.WrapErrWithHint("mrCreateTodo", err,
-				"a pending todo for this MR already exists for the authenticated user \u2014 use gitlab_todo_list to inspect it")
+				"a pending todo for this MR already exists for the authenticated user. Use gitlab_todo_list to inspect it")
 		}
 		return CreateTodoOutput{}, toolutil.WrapErrWithStatusHint("mrCreateTodo", err, http.StatusNotFound,
 			hintVerifyMR)
@@ -1944,7 +1944,7 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return DependencyOutput{}, toolutil.WrapErrWithHint("mrCreateDependency", err,
-				"dependency would create a cycle, the blocking MR does not exist, or this dependency already exists \u2014 use gitlab_mr_dependencies_list to inspect current dependencies")
+				"dependency would create a cycle, the blocking MR does not exist, or this dependency already exists. Use gitlab_mr_dependencies_list to inspect current dependencies")
 		}
 		return DependencyOutput{}, toolutil.WrapErrWithStatusHint("mrCreateDependency", err, http.StatusNotFound,
 			"verify project_id and merge_request_iid with gitlab_mr_get; blocking_merge_request_id is a global database ID, not an IID")
@@ -1977,7 +1977,7 @@ func DeleteDependency(ctx context.Context, client *gitlabclient.Client, input De
 				"MR dependencies require GitLab Premium or Ultimate")
 		}
 		return toolutil.WrapErrWithStatusHint("mrDeleteDependency", err, http.StatusNotFound,
-			"dependency not currently active \u2014 use gitlab_mr_dependencies_list to inspect existing dependencies")
+			"dependency not currently active. Use gitlab_mr_dependencies_list to inspect existing dependencies")
 	}
 	return nil
 }
@@ -2074,7 +2074,7 @@ func diagnoseMergeBlocker(mrIID int64, mr *gl.MergeRequest, originalErr error) e
 		return toolutil.WrapErrWithMessage(op, originalErr)
 	}
 
-	return fmt.Errorf("%s: merge request !%d cannot be merged — %s: %w",
+	return fmt.Errorf("%s: merge request !%d cannot be merged (%s): %w",
 		op, mrIID, strings.Join(reasons, "; "), originalErr)
 }
 

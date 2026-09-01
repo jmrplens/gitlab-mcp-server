@@ -11,7 +11,7 @@ import (
 )
 
 // hintVerifyGroupPathPremium is the 404 hint shared by group analytics tools.
-const hintVerifyGroupPathPremium = "verify group_path \u2014 requires Premium license"
+const hintVerifyGroupPathPremium = "verify group_path. Requires Premium license"
 
 // IssuesCountInput holds parameters for retrieving recently created issues count.
 type IssuesCountInput struct {

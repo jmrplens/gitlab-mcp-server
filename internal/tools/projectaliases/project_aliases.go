@@ -96,7 +96,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, in CreateInput) (O
 	}
 	alias, _, err := client.GL().ProjectAliases.CreateProjectAlias(opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, toolutil.WrapErrWithStatusHint("create project alias", err, http.StatusBadRequest, "verify the project_id exists and alias name is unique \u2014 requires administrator access")
+		return Output{}, toolutil.WrapErrWithStatusHint("create project alias", err, http.StatusBadRequest, "verify the project_id exists and alias name is unique. Requires administrator access")
 	}
 
 	return toOutput(alias), nil

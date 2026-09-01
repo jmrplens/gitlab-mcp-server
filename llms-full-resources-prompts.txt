@@ -1,10 +1,10 @@
-# gitlab-mcp-server — Resources and Prompts Reference
+# gitlab-mcp-server. Resources and Prompts Reference
 
 > Version 2.7.5 | up to 1071 tools | 32 base meta-tools; 49 self-managed enterprise meta-tools; 50 GitLab.com Enterprise meta-tools | 2 dynamic tools | 45 resources | 37 prompts
 
 ## Resources
 
-45 resources: read-only GitLab data (projects, pipelines, issues, merge requests, files, and more), five static workflow guides, and server metadata (the gitlab://tools manifest). 26 resource kinds are subscribable — subscriptions/listen on protocol 2026-07-28, resources/subscribe on stateful sessions: the server polls them and sends notifications/resources/updated on change.
+45 resources: read-only GitLab data (projects, pipelines, issues, merge requests, files, and more), five static workflow guides, and server metadata (the gitlab://tools manifest). 26 resource kinds are subscribable. Subscriptions/listen on protocol 2026-07-28, resources/subscribe on stateful sessions: the server polls them and sends notifications/resources/updated on change.
 
 ### groups
 

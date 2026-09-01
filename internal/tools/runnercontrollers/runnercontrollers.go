@@ -101,7 +101,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	controllers, resp, err := client.GL().RunnerControllers.ListRunnerControllers(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list runner controllers", err, http.StatusForbidden,
-			"runner controllers are an admin-only API \u2014 verify your token has admin scope")
+			"runner controllers are an admin-only API. Verify your token has admin scope")
 	}
 
 	items := make([]Output, len(controllers))
@@ -240,7 +240,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"deleting runner controllers requires admin privileges")
 		}
 		return toolutil.WrapErrWithStatusHint("delete runner controller", err, http.StatusNotFound,
-			"the controller may already be deleted \u2014 verify controller_id with gitlab_runner_controller_list")
+			"the controller may already be deleted. Verify controller_id with gitlab_runner_controller_list")
 	}
 	return nil
 }

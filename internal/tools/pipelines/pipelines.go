@@ -192,7 +192,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Deta
 	p, _, err := client.GL().Pipelines.GetPipeline(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
 		return DetailOutput{}, toolutil.WrapErrWithStatusHint("pipelineGet", err, http.StatusNotFound,
-			"verify pipeline_id with gitlab_pipeline_list \u2014 pipeline IDs are project-scoped")
+			"verify pipeline_id with gitlab_pipeline_list. Pipeline IDs are project-scoped")
 	}
 	return DetailToOutput(p), nil
 }
@@ -346,7 +346,7 @@ func GetVariables(ctx context.Context, client *gitlabclient.Client, input GetInp
 	vars, _, err := client.GL().Pipelines.GetPipelineVariables(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
 		return VariablesOutput{}, toolutil.WrapErrWithStatusHint("pipelineGetVariables", err, http.StatusNotFound,
-			"verify pipeline_id with gitlab_pipeline_list \u2014 reading variables requires Maintainer+ role on the project")
+			"verify pipeline_id with gitlab_pipeline_list. Reading variables requires Maintainer+ role on the project")
 	}
 	out := make([]VariableOutput, len(vars))
 	for i, v := range vars {
@@ -396,7 +396,7 @@ func GetTestReport(ctx context.Context, client *gitlabclient.Client, input GetIn
 	report, _, err := client.GL().Pipelines.GetPipelineTestReport(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
 		return TestReportOutput{}, toolutil.WrapErrWithStatusHint("pipelineGetTestReport", err, http.StatusNotFound,
-			"verify pipeline_id with gitlab_pipeline_list \u2014 test reports require at least one job that uploaded a JUnit-format artifact")
+			"verify pipeline_id with gitlab_pipeline_list. Test reports require at least one job that uploaded a JUnit-format artifact")
 	}
 	suites := make([]TestSuiteOutput, len(report.TestSuites))
 	for i, s := range report.TestSuites {
@@ -459,7 +459,7 @@ func GetTestReportSummary(ctx context.Context, client *gitlabclient.Client, inpu
 	summary, _, err := client.GL().Pipelines.GetPipelineTestReportSummary(string(input.ProjectID), input.PipelineID, gl.WithContext(ctx))
 	if err != nil {
 		return TestReportSummaryOutput{}, toolutil.WrapErrWithStatusHint("pipelineGetTestReportSummary", err, http.StatusNotFound,
-			"verify pipeline_id with gitlab_pipeline_list \u2014 test report summary requires JUnit artifacts uploaded by pipeline jobs")
+			"verify pipeline_id with gitlab_pipeline_list. Test report summary requires JUnit artifacts uploaded by pipeline jobs")
 	}
 	suites := make([]TestSuiteSummaryOutput, len(summary.TestSuites))
 	for i, s := range summary.TestSuites {

@@ -7160,7 +7160,7 @@ func TestFormatListApprovalRulesMarkdown_AllFields(t *testing.T) {
 	if !strings.Contains(md, "devs") {
 		t.Error("missing Groups in table")
 	}
-	if !strings.Contains(md, "—") {
+	if !strings.Contains(md, "| - | - |") {
 		t.Error("missing dash for empty RuleType/Users/Groups")
 	}
 }

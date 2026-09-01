@@ -87,7 +87,7 @@ func ImportFromGitHub(ctx context.Context, client *gitlabclient.Client, input Im
 	result, _, err := client.GL().Import.ImportRepositoryFromGitHub(opts, gl.WithContext(ctx))
 	if err != nil {
 		return nil, toolutil.WrapErrWithStatusHint("gitlab_import_from_github", err, http.StatusBadRequest,
-			"personal_access_token must be a valid GitHub PAT with repo scope; repo_id is the GitHub numeric repo ID; target_namespace must exist in GitLab \u2014 import is async, poll status with gitlab_project_get")
+			"personal_access_token must be a valid GitHub PAT with repo scope; repo_id is the GitHub numeric repo ID; target_namespace must exist in GitLab. Import is async, poll status with gitlab_project_get")
 	}
 	return &GitHubImportOutput{
 		ID:                    result.ID,
@@ -326,7 +326,7 @@ func FormatCancelledImport(out *CancelledImportOutput) string {
 	fmt.Fprintf(&sb, fmtIDRow, out.ID)
 	fmt.Fprintf(&sb, fmtNameRow, toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(&sb, fmtImportStatusRow, toolutil.EscapeMdTableCell(out.ImportStatus))
-	toolutil.WriteHints(&sb, "Import has been cancelled — start a new import if needed")
+	toolutil.WriteHints(&sb, "Import has been cancelled. Start a new import if needed")
 	return sb.String()
 }
 

@@ -249,7 +249,7 @@ func GetAgentToken(ctx context.Context, client *gitlabclient.Client, input GetAg
 	t, _, err := client.GL().ClusterAgents.GetAgentToken(string(input.ProjectID), input.AgentID, input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return AgentTokenItem{}, toolutil.WrapErrWithStatusHint("gitlab_get_cluster_agent_token", err, http.StatusNotFound,
-			"verify token_id with gitlab_list_cluster_agent_tokens; the token value is only returned at creation \u2014 stored tokens show metadata only")
+			"verify token_id with gitlab_list_cluster_agent_tokens; the token value is only returned at creation. Stored tokens show metadata only")
 	}
 	return agentTokenItem(t), nil
 }
@@ -278,7 +278,7 @@ func CreateAgentToken(ctx context.Context, client *gitlabclient.Client, input Cr
 	t, _, err := client.GL().ClusterAgents.CreateAgentToken(string(input.ProjectID), input.AgentID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return AgentTokenItem{}, toolutil.WrapErrWithStatusHint("gitlab_create_cluster_agent_token", err, http.StatusBadRequest,
-			"name must be unique within the agent; max 2 active tokens per agent (revoke an existing token first); save the returned token value \u2014 it cannot be retrieved later")
+			"name must be unique within the agent; max 2 active tokens per agent (revoke an existing token first); save the returned token value. It cannot be retrieved later")
 	}
 	return agentTokenItem(t), nil
 }
@@ -303,7 +303,7 @@ func RevokeAgentToken(ctx context.Context, client *gitlabclient.Client, input Re
 	_, err := client.GL().ClusterAgents.RevokeAgentToken(string(input.ProjectID), input.AgentID, input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("gitlab_revoke_cluster_agent_token", err, http.StatusForbidden,
-			"revoking cluster agent tokens requires Maintainer role; revocation is irreversible \u2014 the token cannot be reactivated")
+			"revoking cluster agent tokens requires Maintainer role; revocation is irreversible. The token cannot be reactivated")
 	}
 	return nil
 }

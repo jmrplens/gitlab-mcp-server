@@ -274,7 +274,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 		description: "Revoke an existing group-to-group share (destructive, requires confirmation). Returns: a delete confirmation. See also: gitlab_group_share, gitlab_group_get, gitlab_group_members_list.",
 	},
 	"gitlab_list_billable_group_members": {
-		usage:   "List the billable members of a group — the users who count toward the group's seat usage, including members inherited from subgroups and shared projects. Use this to audit license/seat consumption (Premium/Ultimate). Filter with search and order with sort.",
+		usage:   "List the billable members of a group: the users who count toward the group's seat usage, including members inherited from subgroups and shared projects. Use this to audit license/seat consumption (Premium/Ultimate). Filter with search and order with sort.",
 		aliases: []string{"list billable group members", "show seats used in group", "audit billable members", "list licensed users in group"},
 		related: []string{actionBillableMemberMemberships, actionBillableMemberRemove, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -295,7 +295,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 		description: "List the billable members of a group (Premium/Ultimate). Returns: each member's id, username, name, state, email, membership type, removable flag, is_last_owner, last activity, and last login, plus pagination. See also: gitlab_list_billable_member_memberships, gitlab_remove_billable_group_member, gitlab_group_members_list.",
 	},
 	"gitlab_list_billable_member_memberships": {
-		usage:   "List the memberships through which a single billable member counts toward a group's seats — the source groups/projects and their access levels. Use this to understand why a user is billable before removing them (Premium/Ultimate). Supply group_id plus the billable member's user_id.",
+		usage:   "List the memberships through which a single billable member counts toward a group's seats: the source groups/projects and their access levels. Use this to understand why a user is billable before removing them (Premium/Ultimate). Supply group_id plus the billable member's user_id.",
 		aliases: []string{"list billable member memberships", "why is user billable", "show member seat sources", "list user memberships in group"},
 		related: []string{actionBillableMembers, actionBillableMemberRemove, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{

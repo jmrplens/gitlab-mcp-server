@@ -49,7 +49,7 @@ func runValidateDocs(ctx context.Context, root string, fetcher *apidocs.Fetcher)
 	}
 
 	rep := docValidationReport{SchemaVersion: shared.SchemaVersion, Checked: len(areas)}
-	cmdutil.Progressf("audit_1to1: validating %d cited API docs against the live source…", len(areas))
+	cmdutil.Progressf("audit_1to1: validating %d cited API docs against the live source...", len(areas))
 	for _, area := range areas {
 		content, fetchErr := fetcher.Fetch(ctx, area)
 		switch {

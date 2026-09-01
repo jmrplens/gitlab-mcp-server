@@ -163,7 +163,7 @@ func FormatFileListMarkdown(out FileListOutput) string {
 	for _, f := range out.Files {
 		sha := f.SHA256
 		if len(sha) > 12 {
-			sha = sha[:12] + "…"
+			sha = sha[:12] + "..."
 		}
 		fmt.Fprintf(
 			&b, "| %d | %s | %d | %s |\n",
@@ -219,7 +219,7 @@ func FormatPublishDirMarkdown(out PublishDirOutput) string {
 		for _, p := range out.Published {
 			sha := p.SHA256
 			if len(sha) > 12 {
-				sha = sha[:12] + "…"
+				sha = sha[:12] + "..."
 			}
 			fmt.Fprintf(
 				&b, "| %s | %d | %s |\n",

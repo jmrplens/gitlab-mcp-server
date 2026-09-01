@@ -106,7 +106,7 @@ func GetProjectMetrics(ctx context.Context, client *gitlabclient.Client, input P
 	opts := buildOpts(input.Metric, input.StartDate, input.EndDate, input.Interval, input.EnvironmentTiers)
 	metrics, _, err := client.GL().DORAMetrics.GetProjectDORAMetrics(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, wrapMetricsError("doraProjectMetrics", err, "verify project_id with gitlab_project_get \u2014 DORA metrics require Ultimate license", "project")
+		return Output{}, wrapMetricsError("doraProjectMetrics", err, "verify project_id with gitlab_project_get. DORA metrics require Ultimate license", "project")
 	}
 	return toOutput(metrics), nil
 }
@@ -122,7 +122,7 @@ func GetGroupMetrics(ctx context.Context, client *gitlabclient.Client, input Gro
 	opts := buildOpts(input.Metric, input.StartDate, input.EndDate, input.Interval, input.EnvironmentTiers)
 	metrics, _, err := client.GL().DORAMetrics.GetGroupDORAMetrics(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return Output{}, wrapMetricsError("doraGroupMetrics", err, "verify group_id with gitlab_group_get \u2014 DORA metrics require Ultimate license", "group")
+		return Output{}, wrapMetricsError("doraGroupMetrics", err, "verify group_id with gitlab_group_get. DORA metrics require Ultimate license", "group")
 	}
 	return toOutput(metrics), nil
 }

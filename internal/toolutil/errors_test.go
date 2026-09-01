@@ -548,7 +548,7 @@ func TestExtractGitLabMessage(t *testing.T) {
 				Response: &http.Response{StatusCode: http.StatusBadRequest},
 				Message:  strings.Repeat("a", 400),
 			},
-			want: strings.Repeat("a", 300) + "…",
+			want: strings.Repeat("a", 300) + "...",
 		},
 		{
 			name: "array error with brackets preserved",

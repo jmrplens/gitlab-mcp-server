@@ -52,13 +52,13 @@ func formatApplicationDetail(heading string, item ApplicationItem, secretLabel, 
 // FormatCreateMarkdown formats a created application as markdown.
 func FormatCreateMarkdown(out CreateOutput) string {
 	return formatApplicationDetail("Application Created", out.ApplicationItem, "Secret",
-		"Store the application secret securely — it cannot be retrieved later")
+		"Store the application secret securely. It cannot be retrieved later")
 }
 
 // FormatRenewSecretMarkdown formats a renewed application secret as markdown.
 func FormatRenewSecretMarkdown(out RenewSecretOutput) string {
 	return formatApplicationDetail("Application Secret Renewed", out.ApplicationItem, "New Secret",
-		"Store the new secret securely — the previous secret is now invalid and any client using it must be updated")
+		"Store the new secret securely. The previous secret is now invalid and any client using it must be updated")
 }
 
 func init() {

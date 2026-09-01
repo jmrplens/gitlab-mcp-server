@@ -204,7 +204,7 @@ func testSuiteSummaryOutputs(suites []TestSuiteSummaryOutput) []testSuiteMarkdow
 func FormatWaitMarkdown(out WaitOutput) string {
 	var b strings.Builder
 	if out.TimedOut {
-		fmt.Fprintf(&b, "## ⏰ Pipeline #%d: Timed Out (current: %s)\n\n", out.Pipeline.ID, out.Pipeline.Status)
+		fmt.Fprintf(&b, "## \u23F0 Pipeline #%d: Timed Out (current: %s)\n\n", out.Pipeline.ID, out.Pipeline.Status)
 	} else {
 		fmt.Fprintf(&b, "## %s Pipeline #%d: %s\n\n", toolutil.PipelineStatusEmoji(out.FinalStatus), out.Pipeline.ID, out.FinalStatus)
 	}
@@ -218,7 +218,7 @@ func FormatWaitMarkdown(out WaitOutput) string {
 	if out.TimedOut {
 		toolutil.WriteHints(
 			&b,
-			"Pipeline is still running — call gitlab_pipeline_wait again to continue waiting",
+			"Pipeline is still running. Call gitlab_pipeline_wait again to continue waiting",
 			"Use gitlab_pipeline_cancel to abort the pipeline",
 		)
 	} else if out.FinalStatus == "failed" {

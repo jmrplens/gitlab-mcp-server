@@ -100,7 +100,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return ListOutput{}, toolutil.WrapErrWithHint("list runner controller tokens", err,
-				"runner controllers and their tokens are an admin-only API \u2014 verify your token has admin scope")
+				"runner controllers and their tokens are an admin-only API. Verify your token has admin scope")
 		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list runner controller tokens", err, http.StatusNotFound,
 			"verify controller_id with gitlab_runner_controller_list")
@@ -205,7 +205,7 @@ func Rotate(ctx context.Context, client *gitlabclient.Client, input RotateInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnauthorized) {
 			return Output{}, toolutil.WrapErrWithHint("rotate runner controller token", err,
-				"the token may already be revoked or expired \u2014 a fresh token must be created via gitlab_runner_controller_token_create")
+				"the token may already be revoked or expired. A fresh token must be created via gitlab_runner_controller_token_create")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("rotate runner controller token", err, http.StatusNotFound,
 			"verify token_id with gitlab_runner_controller_token_list; admin-only API")
@@ -242,7 +242,7 @@ func Revoke(ctx context.Context, client *gitlabclient.Client, input RevokeInput)
 				"revoking runner controller tokens requires admin privileges")
 		}
 		return toolutil.WrapErrWithStatusHint("revoke runner controller token", err, http.StatusNotFound,
-			"the token may already be revoked or never existed \u2014 verify token_id with gitlab_runner_controller_token_list")
+			"the token may already be revoked or never existed. Verify token_id with gitlab_runner_controller_token_list")
 	}
 	return nil
 }

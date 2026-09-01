@@ -322,7 +322,7 @@ func DeleteProject(ctx context.Context, client *gitlabclient.Client, input Delet
 	_, err := client.GL().DeployTokens.DeleteProjectDeployToken(string(input.ProjectID), input.DeployTokenID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("deploy_token_delete_project", err, http.StatusForbidden,
-			"deleting project deploy tokens requires Maintainer role; deletion is irreversible \u2014 the token cannot be recovered")
+			"deleting project deploy tokens requires Maintainer role; deletion is irreversible. The token cannot be recovered")
 	}
 
 	return nil
@@ -340,7 +340,7 @@ func DeleteGroup(ctx context.Context, client *gitlabclient.Client, input DeleteG
 	_, err := client.GL().DeployTokens.DeleteGroupDeployToken(string(input.GroupID), input.DeployTokenID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("deploy_token_delete_group", err, http.StatusForbidden,
-			"deleting group deploy tokens requires Owner role; deletion is irreversible \u2014 the token cannot be recovered")
+			"deleting group deploy tokens requires Owner role; deletion is irreversible. The token cannot be recovered")
 	}
 
 	return nil

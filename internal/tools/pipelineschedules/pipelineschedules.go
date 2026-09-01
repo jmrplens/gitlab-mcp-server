@@ -212,7 +212,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	s, err := rawGetSchedule(ctx, client, string(input.ProjectID), input.ScheduleID)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get pipeline schedule", err, http.StatusNotFound,
-			"verify schedule_id with gitlab_pipeline_schedule_list \u2014 schedule_id is the database ID, not a name")
+			"verify schedule_id with gitlab_pipeline_schedule_list. schedule_id is the database ID, not a name")
 	}
 
 	return toOutputAPI(s), nil
@@ -304,7 +304,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint("update pipeline schedule", err,
-				"only the schedule owner can edit \u2014 use gitlab_pipeline_schedule_take_ownership first (requires Maintainer+) to become the owner")
+				"only the schedule owner can edit. Use gitlab_pipeline_schedule_take_ownership first (requires Maintainer+) to become the owner")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("update pipeline schedule", err, http.StatusNotFound,
 			hintVerifyScheduleID)
@@ -353,11 +353,11 @@ func Run(ctx context.Context, client *gitlabclient.Client, input RunInput) (Outp
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return Output{}, toolutil.WrapErrWithHint(opRunPipelineSchedule, err,
-				"only the schedule owner can manually trigger a schedule \u2014 use gitlab_pipeline_schedule_take_ownership first if you have Maintainer+ role")
+				"only the schedule owner can manually trigger a schedule. Use gitlab_pipeline_schedule_take_ownership first if you have Maintainer+ role")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusTooManyRequests) {
 			return Output{}, toolutil.WrapErrWithHint(opRunPipelineSchedule, err,
-				"manual schedule runs are rate-limited (1 per minute by default) \u2014 wait and retry")
+				"manual schedule runs are rate-limited (1 per minute by default). Wait and retry")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint(opRunPipelineSchedule, err, http.StatusNotFound,
 			hintVerifyScheduleID)
@@ -452,11 +452,11 @@ func CreateVariable(ctx context.Context, client *gitlabclient.Client, input Crea
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return VariableOutput{}, toolutil.WrapErrWithHint("create_pipeline_schedule_variable", err,
-				"variable key must match /^[A-Za-z_][A-Za-z0-9_]*$/ and may already exist on this schedule \u2014 use gitlab_pipeline_schedule_edit_variable to update existing keys")
+				"variable key must match /^[A-Za-z_][A-Za-z0-9_]*$/ and may already exist on this schedule. Use gitlab_pipeline_schedule_edit_variable to update existing keys")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return VariableOutput{}, toolutil.WrapErrWithHint("create_pipeline_schedule_variable", err,
-				"only the schedule owner can manage variables \u2014 take ownership first if you are Maintainer+")
+				"only the schedule owner can manage variables. Take ownership first if you are Maintainer+")
 		}
 		return VariableOutput{}, toolutil.WrapErrWithStatusHint("create_pipeline_schedule_variable", err, http.StatusNotFound,
 			hintVerifyScheduleID)
@@ -501,7 +501,7 @@ func EditVariable(ctx context.Context, client *gitlabclient.Client, input EditVa
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return VariableOutput{}, toolutil.WrapErrWithHint("edit_pipeline_schedule_variable", err,
-				"only the schedule owner can manage variables \u2014 take ownership first if you are Maintainer+")
+				"only the schedule owner can manage variables. Take ownership first if you are Maintainer+")
 		}
 		return VariableOutput{}, toolutil.WrapErrWithStatusHint("edit_pipeline_schedule_variable", err, http.StatusNotFound,
 			"verify the variable key exists on this schedule with gitlab_pipeline_schedule_get")

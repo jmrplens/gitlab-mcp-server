@@ -452,7 +452,7 @@ func PublishAll(ctx context.Context, client *gitlabclient.Client, input PublishA
 	_, err := client.GL().DraftNotes.PublishAllDraftNotes(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("draftNotePublishAll", err, http.StatusForbidden,
-			"publishes all current user's draft notes on the MR \u2014 cannot be undone; verify project_id + merge_request_iid; use gitlab_mr_draft_note_list first to review pending drafts")
+			"publishes all current user's draft notes on the MR. Cannot be undone; verify project_id + merge_request_iid; use gitlab_mr_draft_note_list first to review pending drafts")
 	}
 	return nil
 }
@@ -481,7 +481,7 @@ func validatePosition(ctx context.Context, client *gitlabclient.Client, projectI
 	}
 	if fileDiff == "" {
 		return fmt.Errorf(
-			"file %q is not in the merge request diff — inline comments can only be placed on changed files. "+
+			"file %q is not in the merge request diff. Inline comments can only be placed on changed files. "+
 				"Omit the position parameter to create a general (non-inline) comment instead", targetPath,
 		)
 	}

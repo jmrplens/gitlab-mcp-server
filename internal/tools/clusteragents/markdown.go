@@ -81,7 +81,7 @@ func FormatTokenMarkdown(t AgentTokenItem) string {
 	if t.Token != "" {
 		fmt.Fprintf(&sb, "- **Token**: %s\n", t.Token)
 	}
-	toolutil.WriteHints(&sb, "Store the token value securely — it cannot be retrieved later")
+	toolutil.WriteHints(&sb, "Store the token value securely. It cannot be retrieved later")
 	return sb.String()
 }
 

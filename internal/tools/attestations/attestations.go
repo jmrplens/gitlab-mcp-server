@@ -99,7 +99,7 @@ func List(ctx context.Context, client *gitlabclient.Client, in ListInput) (ListO
 				return ListOutput{Attestations: []Output{}}, nil
 			}
 		}
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("list attestations", err, http.StatusNotFound, "verify project_id with gitlab_project_get \u2014 attestations require Ultimate license")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("list attestations", err, http.StatusNotFound, "verify project_id with gitlab_project_get. Attestations require Ultimate license")
 	}
 	out := ListOutput{Attestations: make([]Output, 0, len(atts))}
 	for _, a := range atts {

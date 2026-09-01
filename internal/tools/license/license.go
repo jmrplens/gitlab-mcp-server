@@ -142,7 +142,7 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (AddO
 	}
 	lic, _, err := client.GL().License.AddLicense(opts, gl.WithContext(ctx))
 	if err != nil {
-		return AddOutput{}, toolutil.WrapErrWithStatusHint("license_add", err, http.StatusBadRequest, "verify the license key is valid \u2014 requires administrator access")
+		return AddOutput{}, toolutil.WrapErrWithStatusHint("license_add", err, http.StatusBadRequest, "verify the license key is valid. Requires administrator access")
 	}
 	return AddOutput{License: toItem(lic)}, nil
 }
@@ -155,7 +155,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	}
 	_, err := client.GL().License.DeleteLicense(input.ID, gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("license_delete", err, http.StatusNotFound, "verify license_id \u2014 requires administrator access")
+		return toolutil.WrapErrWithStatusHint("license_delete", err, http.StatusNotFound, "verify license_id. Requires administrator access")
 	}
 	return nil
 }

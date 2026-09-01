@@ -41,7 +41,7 @@ func TestAuditCommitHygiene_Success(t *testing.T) {
 
 	text := result.Messages[0].Content.(*mcp.TextContent).Text
 	checks := []string{
-		"Commit Hygiene Audit: v1.0.0 → main",
+		"Commit Hygiene Audit: v1.0.0 -> main",
 		"Conventional titles | 2",
 		"Merge commits | 1",
 		"Breaking-change markers | 1",

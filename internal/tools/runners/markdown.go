@@ -31,7 +31,7 @@ func FormatOutputMarkdown(out Output) string {
 // FormatDetailsMarkdown renders detailed runner information as Markdown.
 func FormatDetailsMarkdown(out DetailsOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runner #%d — Details\n\n", out.ID)
+	fmt.Fprintf(&b, "## Runner #%d: Details\n\n", out.ID)
 	b.WriteString("| Field | Value |\n")
 	b.WriteString(toolutil.TblSep2Col)
 	fmt.Fprintf(&b, "| Name | %s |\n", toolutil.EscapeMdTableCell(out.Name))

@@ -98,7 +98,7 @@ func ChangeApprovalConfig(ctx context.Context, client *gitlabclient.Client, inpu
 	approvals, _, err := client.GL().Projects.ChangeApprovalConfiguration(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ApprovalConfigOutput{}, toolutil.WrapErrWithStatusHint("projectChangeApprovalConfig", err, http.StatusForbidden,
-			"requires Maintainer role; approvals_before_merge is deprecated \u2014 use approval rules instead; approval features require Premium/Ultimate")
+			"requires Maintainer role; approvals_before_merge is deprecated. Use approval rules instead; approval features require Premium/Ultimate")
 	}
 	return approvalConfigToOutput(approvals), nil
 }

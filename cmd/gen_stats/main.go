@@ -517,8 +517,8 @@ func renderStats(s *repoStats) string {
 		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignRight},
 		[][]string{
 			{"Source functions", fmtInt(srcFuncs)},
-			{"\u2014 exported (public)", fmtInt(s.ExportedFuncs)},
-			{"\u2014 unexported (private)", fmtInt(s.UnexportedFuncs)},
+			{". Exported (public)", fmtInt(s.ExportedFuncs)},
+			{". Unexported (private)", fmtInt(s.UnexportedFuncs)},
 			{"Unit test functions (`TestXxx`)", fmtInt(s.TestFuncs)},
 			{"Subtests (`t.Run(...)`)", fmtInt(s.Subtests)},
 			{"End-to-end test functions", fmtInt(s.E2ETestFuncs)},
@@ -571,8 +571,8 @@ func renderStats(s *repoStats) string {
 		[]string{"Record", "File"},
 		[]docgen.Alignment{docgen.AlignLeft, docgen.AlignLeft},
 		[][]string{
-			{"Longest source file", fmt.Sprintf("`%s` \u2014 %s lines", s.LargestSrcFile, fmtInt(s.LargestSrcLines))},
-			{"Longest test file", fmt.Sprintf("`%s` \u2014 %s lines", s.LargestTestFile, fmtInt(s.LargestTestLines))},
+			{"Longest source file", fmt.Sprintf("`%s`. %s lines", s.LargestSrcFile, fmtInt(s.LargestSrcLines))},
+			{"Longest test file", fmt.Sprintf("`%s`. %s lines", s.LargestTestFile, fmtInt(s.LargestTestLines))},
 		},
 	))
 	b.WriteByte('\n')

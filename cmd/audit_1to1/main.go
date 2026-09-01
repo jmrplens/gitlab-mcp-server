@@ -109,22 +109,22 @@ func runMerged(gapsOnly bool) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("find repository root: %w", err)
 	}
-	cmdutil.Progressf("audit_1to1: [1/3] analyzing struct field mapping (R-INPUT/R-OUTPUT)…")
+	cmdutil.Progressf("audit_1to1: [1/3] analyzing struct field mapping (R-INPUT/R-OUTPUT)...")
 	structBytes, err := structs.Run(root, gapsOnly)
 	if err != nil {
 		return nil, fmt.Errorf("struct report: %w", err)
 	}
-	cmdutil.Progressf("audit_1to1: [2/3] analyzing action coverage (R-ACTION)…")
+	cmdutil.Progressf("audit_1to1: [2/3] analyzing action coverage (R-ACTION)...")
 	actionBytes, err := actions.Run(root, gapsOnly)
 	if err != nil {
 		return nil, fmt.Errorf("action report: %w", err)
 	}
-	cmdutil.Progressf("audit_1to1: [3/3] analyzing discovery metadata (R-META)…")
+	cmdutil.Progressf("audit_1to1: [3/3] analyzing discovery metadata (R-META)...")
 	metadataBytes, err := metadata.Run(gapsOnly)
 	if err != nil {
 		return nil, fmt.Errorf("metadata report: %w", err)
 	}
-	cmdutil.Progressf("audit_1to1: merging backlog…")
+	cmdutil.Progressf("audit_1to1: merging backlog...")
 	return merge.BuildBacklogFromBytes(structBytes, actionBytes, metadataBytes)
 }
 

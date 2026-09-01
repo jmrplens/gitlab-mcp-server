@@ -59,7 +59,7 @@ func main() {
 		cmdutil.Fatalf("-top-domains must be >= 0")
 	}
 
-	cmdutil.Progressf("audit_metrics: building catalog and counting tools/resources/prompts across surfaces…")
+	cmdutil.Progressf("audit_metrics: building catalog and counting tools/resources/prompts across surfaces...")
 	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
@@ -139,7 +139,7 @@ func main() {
 	}
 
 	fmt.Println("=" + strings.Repeat("=", 59))
-	fmt.Println("  gitlab-mcp-server — MCP Server Metrics Audit")
+	fmt.Println("  gitlab-mcp-server. MCP Server Metrics Audit")
 	fmt.Println("=" + strings.Repeat("=", 59))
 	fmt.Println()
 

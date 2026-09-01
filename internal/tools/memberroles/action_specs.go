@@ -144,7 +144,7 @@ var baseAccessLevelConfusion = []string{"Use a valid numeric level (5/10/15/20/2
 // dynamic find ranking and the individual-tool descriptions (1:1 audit R-META).
 var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 	"list_instance": {
-		usage:       "Lists all custom member roles defined at the instance level (Ultimate on self-managed, all tiers on GitLab.com). Use this when the prompt asks for custom member roles in general — list_group is deprecated on self-managed 17+ and returns 400 in that environment.",
+		usage:       "Lists all custom member roles defined at the instance level (Ultimate on self-managed, all tiers on GitLab.com). Use this when the prompt asks for custom member roles in general, because list_group is deprecated on self-managed 17+ and returns 400 in that environment.",
 		aliases:     []string{"list instance member roles", "list custom roles", "show instance member roles", "list member roles"},
 		related:     []string{actionMRListGroup, actionMRCreateInstance, actionMRDeleteInstance},
 		description: "List instance-level custom member roles. Returns: each role with id, name, description, base_access_level, and its enabled permission flags. See also: gitlab_create_instance_member_role, gitlab_delete_instance_member_role, gitlab_list_group_member_roles.",
@@ -158,7 +158,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 				SemanticRole:     "scope_group",
 				ValueSource:      "Top-level group ID or full group path whose custom member roles should be listed.",
 				ExampleBinding:   `params.group_id:"my-group"`,
-				CommonConfusions: []string{"Use a top-level group, not a subgroup or project. Group-level roles are deprecated on self-managed — use list_instance there."},
+				CommonConfusions: []string{"Use a top-level group, not a subgroup or project. Group-level roles are deprecated on self-managed. Use list_instance there."},
 			},
 		},
 		description: "List group-level custom member roles. Returns: each role with id, name, description, base_access_level, and its enabled permission flags. See also: gitlab_list_instance_member_roles, gitlab_create_group_member_role, gitlab_delete_group_member_role.",
@@ -191,7 +191,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 				SemanticRole:     "scope_group",
 				ValueSource:      "Top-level group ID or full group path that will own the custom role.",
 				ExampleBinding:   `params.group_id:"my-group"`,
-				CommonConfusions: []string{"Use a top-level group, not a subgroup or project. Group-level roles are deprecated on self-managed — use create_instance there."},
+				CommonConfusions: []string{"Use a top-level group, not a subgroup or project. Group-level roles are deprecated on self-managed. Use create_instance there."},
 			},
 			"name": {
 				SemanticRole:   "member_role_name",

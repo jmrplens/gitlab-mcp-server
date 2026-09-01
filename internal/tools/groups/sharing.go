@@ -83,7 +83,7 @@ func ShareGroupWithGroup(ctx context.Context, client *gitlabclient.Client, input
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return ShareGroupOutput{}, toolutil.WrapErrWithHint("groupShareWithGroup", err,
-				"group_access must be 10/20/30/40/50 (Guest/Reporter/Developer/Maintainer/Owner); expires_at must be YYYY-MM-DD; the group may already be shared with this group — use gitlab_group_shared_with_list to verify")
+				"group_access must be 10/20/30/40/50 (Guest/Reporter/Developer/Maintainer/Owner); expires_at must be YYYY-MM-DD; the group may already be shared with this group. Use gitlab_group_shared_with_list to verify")
 		}
 		return ShareGroupOutput{}, toolutil.WrapErrWithStatusHint("groupShareWithGroup", err, http.StatusNotFound,
 			"verify group_id and shared_group_id with gitlab_group_get")
@@ -121,7 +121,7 @@ func UnshareGroupFromGroup(ctx context.Context, client *gitlabclient.Client, inp
 	_, err := client.GL().Groups.UnshareGroupFromGroup(string(input.GroupID), input.SharedGroupID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("groupUnshareFromGroup", err, http.StatusNotFound,
-			"the group is not shared with this group, or the IDs are wrong — use gitlab_group_shared_with_list to verify; requires Owner role")
+			"the group is not shared with this group, or the IDs are wrong. Use gitlab_group_shared_with_list to verify; requires Owner role")
 	}
 	return nil
 }
@@ -207,7 +207,7 @@ func ListSharedProjects(ctx context.Context, client *gitlabclient.Client, input 
 	projects, resp, err := client.GL().Groups.ListGroupSharedProjects(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return SharedProjectsListOutput{}, toolutil.WrapErrWithStatusHint("groupListSharedProjects", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get — shared projects are projects shared *into* this group from elsewhere, not the group's own projects")
+			"verify group_id with gitlab_group_get. Shared projects are projects shared *into* this group from elsewhere, not the group's own projects")
 	}
 	return SharedProjectsListOutput{Projects: projectItemsFromGroup(projects), Pagination: toolutil.PaginationFromResponse(resp)}, nil
 }

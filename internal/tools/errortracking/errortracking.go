@@ -169,7 +169,7 @@ func DeleteClientKey(ctx context.Context, client *gitlabclient.Client, input Del
 	_, err := client.GL().ErrorTracking.DeleteClientKey(string(input.ProjectID), input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("gitlab_delete_error_tracking_client_key", err, http.StatusForbidden,
-			"requires Maintainer role; verify key_id with gitlab_list_error_tracking_client_keys; deletion is irreversible \u2014 SDK clients using the key will stop receiving events")
+			"requires Maintainer role; verify key_id with gitlab_list_error_tracking_client_keys; deletion is irreversible. SDK clients using the key will stop receiving events")
 	}
 	return nil
 }

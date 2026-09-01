@@ -310,7 +310,7 @@ func TestGenerateReleaseNotesPrompt_Success(t *testing.T) {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
 	text := result.Messages[0].Content.(*mcp.TextContent).Text
-	if !strings.Contains(text, "v1.0 → v2.0") {
+	if !strings.Contains(text, "v1.0 -> v2.0") {
 		t.Errorf("expected release range in output")
 	}
 	if !strings.Contains(text, "feat: add login") {
@@ -408,7 +408,7 @@ func TestCompareBranchesPrompt_Success(t *testing.T) {
 		t.Fatalf(fmtUnexpectedErr, err)
 	}
 	text := result.Messages[0].Content.(*mcp.TextContent).Text
-	if !strings.Contains(text, "main → develop") {
+	if !strings.Contains(text, "main -> develop") {
 		t.Errorf("expected branch comparison heading")
 	}
 	if !strings.Contains(text, "file.go") {

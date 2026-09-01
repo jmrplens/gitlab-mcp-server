@@ -28,7 +28,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, _ GetInput) (output G
 	settings, _, err := client.GL().Settings.GetSettings(gl.WithContext(ctx))
 	if err != nil {
 		return output, toolutil.WrapErrWithStatusHint("settings_get", err, http.StatusForbidden,
-			"requires administrator access; this is an instance-wide endpoint \u2014 not available on GitLab.com SaaS")
+			"requires administrator access; this is an instance-wide endpoint. Not available on GitLab.com SaaS")
 	}
 
 	raw, err := json.Marshal(settings)

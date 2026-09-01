@@ -298,7 +298,7 @@ func TestWriteMRTable_Format(t *testing.T) {
 	if !strings.Contains(output, "@alice") {
 		t.Error("expected author @alice")
 	}
-	if !strings.Contains(output, "feature/fix → develop") {
+	if !strings.Contains(output, "feature/fix -> develop") {
 		t.Error("expected branch info")
 	}
 }
@@ -372,7 +372,7 @@ func TestMRStatusDraft_WithConflicts(t *testing.T) {
 func TestMRStatus_NoFlags(t *testing.T) {
 	mr := &gl.BasicMergeRequest{}
 	got := mrStatus(mr)
-	if got != "—" {
+	if got != "-" {
 		t.Errorf("expected dash, got %q", got)
 	}
 }
@@ -403,7 +403,7 @@ func TestFormatDuration(t *testing.T) {
 		d        time.Duration
 		expected string
 	}{
-		{"zero", 0, "—"},
+		{"zero", 0, "-"},
 		{"minutes", 45 * time.Minute, "45m"},
 		{"hours", 3*time.Hour + 20*time.Minute, "3h 20m"},
 		{"days", 50 * time.Hour, "2d 2h"},
@@ -670,8 +670,8 @@ func TestAccessLevelIcon(t *testing.T) {
 
 // TestFormatAuditDate covers both branches.
 func TestFormatAuditDate(t *testing.T) {
-	if got := formatAuditDate(nil); got != "—" {
-		t.Errorf("formatAuditDate(nil) = %q, want %q", got, "—")
+	if got := formatAuditDate(nil); got != "-" {
+		t.Errorf("formatAuditDate(nil) = %q, want %q", got, "-")
 	}
 	now := time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC)
 	if got := formatAuditDate(&now); got != "2025-03-15" {
@@ -1052,8 +1052,8 @@ func TestWriteFullPushRulesSection(t *testing.T) {
 // TestFormatAccessLevels verifies access level formatting for protected branches.
 func TestFormatAccessLevels(t *testing.T) {
 	t.Run("empty_levels", func(t *testing.T) {
-		if got := formatAccessLevels(nil); got != "—" {
-			t.Errorf("formatAccessLevels(nil) = %q, want %q", got, "—")
+		if got := formatAccessLevels(nil); got != "-" {
+			t.Errorf("formatAccessLevels(nil) = %q, want %q", got, "-")
 		}
 	})
 

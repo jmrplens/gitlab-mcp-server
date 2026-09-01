@@ -70,7 +70,7 @@ func ListMetricImages(ctx context.Context, client *gitlabclient.Client, input Li
 	toolutil.ApplyListOptions(&opts.ListOptions, input.PaginationInput, input.KeysetPaginationInput)
 	images, resp, err := client.GL().AlertManagement.ListMetricImages(string(input.ProjectID), input.AlertIID, opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListMetricImagesOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_alert_metric_images", err, http.StatusNotFound, "verify project_id and alert_iid \u2014 check alerts with the project's alert management")
+		return ListMetricImagesOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_alert_metric_images", err, http.StatusNotFound, "verify project_id and alert_iid. Check alerts with the project's alert management")
 	}
 	items := make([]MetricImageItem, 0, len(images))
 	for _, img := range images {

@@ -46,12 +46,12 @@ When to use: at session start to confirm the GitLab token works, when diagnosing
 NOT for: resolving a git remote URL to a project (use gitlab_discover_project), GitLab instance admin (use gitlab_admin), per-project membership/permissions (use gitlab_project / gitlab_user), CI runner health (use gitlab_runner).
 
 Returns: {status, mcp_server_version, gitlab_url, gitlab_version, gitlab_revision, authenticated (bool), username, user_id, response_time_ms, error}. Authentication and connectivity failures are surfaced inside this diagnostics object (status / error fields), not as a tool-level JSON-RPC error.
-Errors: tool-level errors are rare — inspect the returned status / error fields. Network errors include the GitLab URL verbatim.
+Errors: tool-level errors are rare. Inspect the returned status / error fields. Network errors include the GitLab URL verbatim.
 
-- status: (no params) — returns the diagnostics object above.
+- status: (no params), returns the diagnostics object above.
 - health_check: alias for status. (no params)
 
-See also: gitlab_discover_project (resolve git remote URL → project_id), gitlab_admin (instance admin), gitlab_user (current user details and impersonation tokens).`
+See also: gitlab_discover_project (resolve git remote URL -> project_id), gitlab_admin (instance admin), gitlab_user (current user details and impersonation tokens).`
 
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{
 		ToolName:    "gitlab_server",

@@ -88,17 +88,17 @@ func ClassifyError(err error) string {
 
 // httpStatusDescriptions maps HTTP status codes to semantic descriptions.
 var httpStatusDescriptions = map[int]string{
-	400: "bad request — check your input parameters",
-	401: "authentication failed — GITLAB_TOKEN may be invalid or expired",
-	403: "access denied — your token lacks the required permissions. This can mean: (1) missing API scope on the token, (2) insufficient project role (some operations require Maintainer or Owner), or (3) the feature is restricted by instance admin settings",
-	404: "not found — the requested resource does not exist, you lack access, or the feature requires a higher GitLab tier. Verify the ID/path is correct",
-	405: "method not allowed — the action cannot be performed on this resource in its current state",
-	409: "conflict — the resource already exists or there is a state conflict",
-	422: "validation failed — GitLab rejected the request due to invalid data",
-	429: "rate limited — too many requests, please wait before retrying",
-	500: "GitLab internal server error — the server encountered an unexpected condition",
-	502: "GitLab is temporarily unavailable (bad gateway) — try again shortly",
-	503: "GitLab is under maintenance or overloaded (service unavailable) — try again shortly",
+	400: "bad request: check your input parameters",
+	401: "authentication failed: GITLAB_TOKEN may be invalid or expired",
+	403: "access denied: your token lacks the required permissions. This can mean: (1) missing API scope on the token, (2) insufficient project role (some operations require Maintainer or Owner), or (3) the feature is restricted by instance admin settings",
+	404: "not found: the requested resource does not exist, you lack access, or the feature requires a higher GitLab tier. Verify the ID/path is correct",
+	405: "method not allowed: the action cannot be performed on this resource in its current state",
+	409: "conflict: the resource already exists or there is a state conflict",
+	422: "validation failed: GitLab rejected the request due to invalid data",
+	429: "rate limited: too many requests, please wait before retrying",
+	500: "GitLab internal server error: the server encountered an unexpected condition",
+	502: "GitLab is temporarily unavailable (bad gateway): try again shortly",
+	503: "GitLab is under maintenance or overloaded (service unavailable): try again shortly",
 }
 
 // ClassifyHTTPStatus returns a semantic description for common HTTP status codes.
@@ -176,7 +176,7 @@ func (e *DetailedError) Markdown() string {
 	fmt.Fprintf(&b, "## "+EmojiCross+" Error: %s/%s\n\n", e.Domain, e.Action)
 	fmt.Fprintf(&b, "**Message**: %s\n", e.Message)
 	if e.GitLabStatus > 0 {
-		fmt.Fprintf(&b, "**HTTP Status**: %d — %s\n", e.GitLabStatus, ClassifyHTTPStatus(e.GitLabStatus))
+		fmt.Fprintf(&b, "**HTTP Status**: %d (%s)\n", e.GitLabStatus, ClassifyHTTPStatus(e.GitLabStatus))
 	}
 	if e.Details != "" {
 		fmt.Fprintf(&b, "**Details**: %s\n", e.Details)
@@ -302,7 +302,7 @@ func ExtractGitLabMessage(err error) string {
 	}
 	const maxLen = 300
 	if len(msg) > maxLen {
-		msg = msg[:maxLen] + "…"
+		msg = msg[:maxLen] + "..."
 	}
 	return msg
 }
@@ -320,7 +320,7 @@ func WrapErrWithMessage(operation string, err error) error {
 	semantic := ClassifyError(err)
 	glMsg := ExtractGitLabMessage(err)
 	if glMsg != "" {
-		return fmt.Errorf("%s: %s — %s: %w", operation, semantic, glMsg, err)
+		return fmt.Errorf("%s: %s (%s): %w", operation, semantic, glMsg, err)
 	}
 	return fmt.Errorf("%s: %s: %w", operation, semantic, err)
 }
@@ -337,7 +337,7 @@ func WrapErrWithHint(operation string, err error, hint string) error {
 	semantic := ClassifyError(err)
 	glMsg := ExtractGitLabMessage(err)
 	if glMsg != "" {
-		return fmt.Errorf("%s: %s — %s. Suggestion: %s: %w", operation, semantic, glMsg, hint, err)
+		return fmt.Errorf("%s: %s (%s). Suggestion: %s: %w", operation, semantic, glMsg, hint, err)
 	}
 	return fmt.Errorf("%s: %s. Suggestion: %s: %w", operation, semantic, hint, err)
 }

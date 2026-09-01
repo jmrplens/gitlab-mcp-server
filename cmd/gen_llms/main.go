@@ -323,7 +323,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	b.WriteString("\n")
 
 	b.WriteString("Resources:\n\n")
-	fmt.Fprintf(&b, "%d read-only resources (26 resource kinds are subscribable — subscriptions/listen on protocol 2026-07-28, resources/subscribe on stateful sessions; change detection honored by polling):\n\n", resourceCount)
+	fmt.Fprintf(&b, "%d read-only resources (26 resource kinds are subscribable, subscriptions/listen on protocol 2026-07-28, resources/subscribe on stateful sessions; change detection honored by polling):\n\n", resourceCount)
 	for _, r := range catalog.Resources {
 		fmt.Fprintf(&b, llmsSummaryItemFormat, r.URI, r.Name)
 	}
@@ -359,7 +359,7 @@ func writeLLMSTxt(version string, catalog llmsCatalog, checkOnly bool) error {
 	writeLLMSLink(&b, "Prompts", "docs/reference/prompts.md", "Reusable MCP prompt templates")
 
 	b.WriteString("\n## Optional\n\n")
-	writeLLMSLink(&b, "Medium LLM reference", siteBaseURL+llmsMediumFileName, "Every tool and action with descriptions, without per-action schemas — sized to load into a context window")
+	writeLLMSLink(&b, "Medium LLM reference", siteBaseURL+llmsMediumFileName, "Every tool and action with descriptions, without per-action schemas. Sized to load into a context window")
 	writeLLMSLink(&b, "Full LLM reference", siteBaseURL+llmsFullFileName, "Complete reference with every per-action JSON schema; large, best used with search or retrieval")
 	writeLLMSLink(&b, "Meta-tools reference", siteBaseURL+llmsFullMetaFileName, "Full schemas for the dynamic and meta-tool surfaces only")
 	writeLLMSLink(&b, "Individual tools reference", siteBaseURL+llmsFullIndividualFileName, "Full schemas for the one-tool-per-operation surface only")
@@ -514,7 +514,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error
 	// propagates a wrong number into model answers.
 	resourceCount := len(catalog.Resources) + len(catalog.ResourceTemplates)
 
-	b.WriteString("# gitlab-mcp-server — Full Reference\n\n")
+	b.WriteString("# gitlab-mcp-server. Full Reference\n\n")
 	fmt.Fprintf(&b, "> Version %s | up to %d tools | %d base meta-tools; %d self-managed enterprise meta-tools; %d GitLab.com Enterprise meta-tools | %d dynamic tools | %d resources | %d prompts\n\n",
 		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise), len(catalog.MetaGitLabComEnterprise), len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
 
@@ -539,7 +539,7 @@ func writeLLMSFullTxt(version string, catalog llmsCatalog, checkOnly bool) error
 // opens with, so a consumer that fetched only one of them still knows the
 // version and the shape of the surface it is reading.
 func llmsHeader(b *strings.Builder, version, subtitle string, catalog llmsCatalog, resourceCount int) {
-	fmt.Fprintf(b, "# gitlab-mcp-server — %s\n\n", subtitle)
+	fmt.Fprintf(b, "# gitlab-mcp-server. %s\n\n", subtitle)
 	fmt.Fprintf(b, "> Version %s | up to %d tools | %d base meta-tools; %d self-managed enterprise meta-tools; %d GitLab.com Enterprise meta-tools | %d dynamic tools | %d resources | %d prompts\n\n",
 		version, len(catalog.Individual), len(catalog.MetaBase), len(catalog.MetaEnterprise),
 		len(catalog.MetaGitLabComEnterprise), len(catalog.Dynamic), resourceCount, len(catalog.Prompts))
@@ -746,7 +746,7 @@ func writeLLMSFullDynamicTools(b *strings.Builder, dynamicTools []*mcp.Tool) {
 
 func writeLLMSFullResources(b *strings.Builder, catalog llmsCatalog, resourceCount int) {
 	b.WriteString("## Resources\n\n")
-	fmt.Fprintf(b, "%d resources: read-only GitLab data (projects, pipelines, issues, merge requests, files, and more), five static workflow guides, and server metadata (the gitlab://tools manifest). 26 resource kinds are subscribable — subscriptions/listen on protocol 2026-07-28, resources/subscribe on stateful sessions: the server polls them and sends notifications/resources/updated on change.\n\n", resourceCount)
+	fmt.Fprintf(b, "%d resources: read-only GitLab data (projects, pipelines, issues, merge requests, files, and more), five static workflow guides, and server metadata (the gitlab://tools manifest). 26 resource kinds are subscribable. Subscriptions/listen on protocol 2026-07-28, resources/subscribe on stateful sessions: the server polls them and sends notifications/resources/updated on change.\n\n", resourceCount)
 	for _, resource := range catalog.Resources {
 		writeLLMSResource(b, resource.Name, resource.URI, "URI", resource.MIMEType, resource.Description)
 	}

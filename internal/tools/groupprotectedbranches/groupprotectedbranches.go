@@ -196,7 +196,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	b, _, err := client.GL().GroupProtectedBranches.GetProtectedBranch(string(input.GroupID), input.Branch, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("getGroupProtectedBranch", err, http.StatusNotFound,
-			"verify group_id and name (branch name or wildcard like 'release/*'); name supports wildcards but matching is exact \u2014 use gitlab_group_protected_branch_list to enumerate")
+			"verify group_id and name (branch name or wildcard like 'release/*'); name supports wildcards but matching is exact. Use gitlab_group_protected_branch_list to enumerate")
 	}
 	return toOutput(b), nil
 }
@@ -264,7 +264,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	b, _, err := client.GL().GroupProtectedBranches.UpdateProtectedBranch(string(input.GroupID), input.Branch, opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("updateGroupProtectedBranch", err, http.StatusBadRequest,
-			"verify name with gitlab_group_protected_branch_list; partial updates merge with existing config \u2014 unset fields keep current values; provide _destroy=true to remove access level entries")
+			"verify name with gitlab_group_protected_branch_list; partial updates merge with existing config. Unset fields keep current values; provide _destroy=true to remove access level entries")
 	}
 	return toOutput(b), nil
 }
@@ -283,7 +283,7 @@ func Unprotect(ctx context.Context, client *gitlabclient.Client, input Unprotect
 	_, err := client.GL().GroupProtectedBranches.UnprotectRepositoryBranches(string(input.GroupID), input.Branch, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("unprotectGroupBranch", err, http.StatusForbidden,
-			"requires Owner + Premium/Ultimate; verify name with gitlab_group_protected_branch_list; unprotection cascades and removes restrictions on all subgroup projects \u2014 irreversible")
+			"requires Owner + Premium/Ultimate; verify name with gitlab_group_protected_branch_list; unprotection cascades and removes restrictions on all subgroup projects. Irreversible")
 	}
 	return nil
 }

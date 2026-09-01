@@ -75,10 +75,10 @@ func FormatListMarkdown(out ListOutput) string {
 
 // accessLevelsSummary renders a compact comma-separated list of the numeric
 // access levels in a protected branch access-level array (e.g. "30, 40"), or
-// "—" when the array is empty.
+// "-" when the array is empty.
 func accessLevelsSummary(levels []BranchAccessDescriptionOutput) string {
 	if len(levels) == 0 {
-		return "—"
+		return "-"
 	}
 	parts := make([]string, 0, len(levels))
 	for _, l := range levels {

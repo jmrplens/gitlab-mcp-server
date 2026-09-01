@@ -1071,7 +1071,7 @@ func runStdio(ctx context.Context) error {
 	slog.InfoContext(ctx, "connecting to gitlab", "url", cfg.GitLabURL, "tls_skip", cfg.SkipTLSVerify)
 	gitlabVersion, err := client.Initialize(ctx)
 	if err != nil {
-		slog.WarnContext(ctx, "gitlab connectivity check failed — server will start in degraded mode",
+		slog.WarnContext(ctx, "gitlab connectivity check failed. Server will start in degraded mode",
 			"url", cfg.GitLabURL, "error", err)
 		client.EnableLazyInit()
 	} else {
@@ -1109,7 +1109,7 @@ func runStdio(ctx context.Context) error {
 	if !cfg.IgnoreScopes {
 		serverCfg.TokenScopes = gitlabclient.DetectScopes(ctx, client.GL())
 		if serverCfg.TokenScopes == nil {
-			slog.DebugContext(ctx, "PAT scope detection unavailable — all tools will be registered")
+			slog.DebugContext(ctx, "PAT scope detection unavailable. All tools will be registered")
 		}
 	}
 

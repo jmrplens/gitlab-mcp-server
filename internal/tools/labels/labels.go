@@ -159,7 +159,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		switch {
 		case toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("labelCreate", err, "a label with this name already exists — use gitlab_label_update to modify it, or gitlab_label_list to see existing labels")
+			return Output{}, toolutil.WrapErrWithHint("labelCreate", err, "a label with this name already exists. Use gitlab_label_update to modify it, or gitlab_label_list to see existing labels")
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return Output{}, toolutil.WrapErrWithHint("labelCreate", err, "check the color format (#RRGGBB) and that the name is not empty")
 		default:

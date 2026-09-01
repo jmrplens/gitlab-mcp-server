@@ -173,7 +173,7 @@ func ListFeatureFlags(ctx context.Context, client *gitlabclient.Client, input Li
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return ListOutput{}, toolutil.WrapErrWithHint("feature_flag_list", err,
-				"feature flags require GitLab Premium/Ultimate \u2014 verify the project's tier and that you have Developer+ role")
+				"feature flags require GitLab Premium/Ultimate. Verify the project's tier and that you have Developer+ role")
 		}
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("feature_flag_list", err, http.StatusNotFound,
 			"verify the project exists with gitlab_project_get")
@@ -201,7 +201,7 @@ func GetFeatureFlag(ctx context.Context, client *gitlabclient.Client, input GetI
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("feature_flag_get", err, http.StatusNotFound,
-			"verify the flag name with gitlab_feature_flag_list \u2014 names are case-sensitive")
+			"verify the flag name with gitlab_feature_flag_list. Names are case-sensitive")
 	}
 	return convertFeatureFlag(flag), nil
 }
@@ -242,7 +242,7 @@ func CreateFeatureFlag(ctx context.Context, client *gitlabclient.Client, input C
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return Output{}, toolutil.WrapErrWithHint("feature_flag_create", err,
-				"name may already exist or a strategy is invalid \u2014 valid strategy names: 'default', 'gradualRolloutUserId', 'userWithId', 'gitlabUserList', 'flexibleRollout'")
+				"name may already exist or a strategy is invalid. Valid strategy names: 'default', 'gradualRolloutUserId', 'userWithId', 'gitlabUserList', 'flexibleRollout'")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("feature_flag_create", err)
 	}
@@ -282,7 +282,7 @@ func UpdateFeatureFlag(ctx context.Context, client *gitlabclient.Client, input U
 				"updating feature flags requires Developer+ role on a Premium/Ultimate project")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("feature_flag_update", err, http.StatusNotFound,
-			"verify the flag name with gitlab_feature_flag_list \u2014 names are case-sensitive")
+			"verify the flag name with gitlab_feature_flag_list. Names are case-sensitive")
 	}
 	return convertFeatureFlag(flag), nil
 }

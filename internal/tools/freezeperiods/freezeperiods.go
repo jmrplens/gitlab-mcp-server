@@ -129,7 +129,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 				"creating freeze periods requires Maintainer or Owner role")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("freeze_period_create", err, http.StatusBadRequest,
-			"freeze_start and freeze_end must be valid POSIX cron strings (e.g. '0 23 * * 5'); cron_timezone defaults to UTC \u2014 use IANA names like 'Europe/Madrid' or POSIX offsets")
+			"freeze_start and freeze_end must be valid POSIX cron strings (e.g. '0 23 * * 5'); cron_timezone defaults to UTC. Use IANA names like 'Europe/Madrid' or POSIX offsets")
 	}
 	return toOutput(fp), nil
 }
@@ -179,7 +179,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"deleting freeze periods requires Maintainer or Owner role")
 		}
 		return toolutil.WrapErrWithStatusHint("freeze_period_delete", err, http.StatusNotFound,
-			"the freeze period may already be deleted \u2014 verify with gitlab_list_freeze_periods")
+			"the freeze period may already be deleted. Verify with gitlab_list_freeze_periods")
 	}
 	return nil
 }

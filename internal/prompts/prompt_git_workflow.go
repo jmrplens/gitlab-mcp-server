@@ -63,7 +63,7 @@ func handleAuditCommitHygiene(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Commit Hygiene Audit: %s → %s\n\n", toolutil.EscapeMdHeading(from), toolutil.EscapeMdHeading(to))
+	fmt.Fprintf(&b, "# Commit Hygiene Audit: %s -> %s\n\n", toolutil.EscapeMdHeading(from), toolutil.EscapeMdHeading(to))
 
 	if comparison.CompareSameRef || len(comparison.Commits) == 0 {
 		b.WriteString("No commits found between these refs.\n")
@@ -135,8 +135,8 @@ func handleMRDescriptionQuality(ctx context.Context, client *gitlabclient.Client
 	metrics := computeDiffMetrics(diffs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# MR Description Quality: !%d — %s\n\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
-	fmt.Fprintf(&b, "**Branch**: %s → %s\n", mr.SourceBranch, mr.TargetBranch)
+	fmt.Fprintf(&b, "# MR Description Quality: !%d - %s\n\n", mr.IID, toolutil.EscapeMdHeading(mr.Title))
+	fmt.Fprintf(&b, "**Branch**: %s -> %s\n", mr.SourceBranch, mr.TargetBranch)
 	fmt.Fprintf(&b, "**Description length**: %d characters\n", len(strings.TrimSpace(mr.Description)))
 	fmt.Fprintf(&b, "**Files changed**: %d | **Tests changed**: %d | **Docs changed**: %d | **Sensitive files touched**: %d\n\n", len(diffs), countMatchingDiffs(diffs, isTestPath), countMatchingDiffs(diffs, isDocPath), metrics.sensitiveFiles)
 

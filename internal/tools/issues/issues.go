@@ -502,7 +502,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	issues, resp, err := client.GL().Issues.ListProjectIssues(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("issueList", err, http.StatusNotFound,
-			"verify the project exists with gitlab_project_get \u2014 issues must be enabled in project settings")
+			"verify the project exists with gitlab_project_get. Issues must be enabled in project settings")
 	}
 	out := make([]Output, len(issues))
 	for i, issue := range issues {
@@ -678,7 +678,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	issues, resp, err := client.GL().Issues.ListGroupIssues(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListGroupOutput{}, toolutil.WrapErrWithStatusHint("issueListGroup", err, http.StatusNotFound,
-			"verify the group exists with gitlab_group_get \u2014 use full_path or numeric ID")
+			"verify the group exists with gitlab_group_get. Use full_path or numeric ID")
 	}
 
 	out := make([]Output, len(issues))

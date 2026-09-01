@@ -28,7 +28,7 @@ func FormatOutputMarkdown(out Output) string {
 // FormatDetailsMarkdown renders detailed runner controller info as Markdown.
 func FormatDetailsMarkdown(out DetailsOutput) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Runner Controller #%d — Details\n\n", out.ID)
+	fmt.Fprintf(&b, "## Runner Controller #%d: Details\n\n", out.ID)
 	fmt.Fprintf(&b, toolutil.FmtMdDescription, out.Description)
 	fmt.Fprintf(&b, toolutil.FmtMdState, out.State)
 	fmt.Fprintf(&b, "- **Connected**: %t\n", out.Connected)

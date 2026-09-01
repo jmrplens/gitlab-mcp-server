@@ -42,7 +42,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	opts := iterationdata.NewProjectListOptions(input.Page, input.PerPage, input.State, input.Search, input.IncludeAncestors)
 	items, resp, err := client.GL().ProjectIterations.ListProjectIterations(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_project_iterations", err, http.StatusNotFound, "verify project_id with gitlab_project_get \u2014 iterations require Premium license")
+		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_project_iterations", err, http.StatusNotFound, "verify project_id with gitlab_project_get. Iterations require Premium license")
 	}
 	out := ListOutput{
 		Iterations: make([]Output, 0, len(items)),

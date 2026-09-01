@@ -292,7 +292,7 @@ var userToolMetadata = map[string]userToolMeta{
 		usage:          "Set or replace the current authenticated user's avatar image. Provide a filename plus exactly one of file_path (a local image on the MCP server) or content_base64 (base64-encoded JPG/PNG/GIF under 200 KB). Targets the token's own user. There is no user_id parameter.",
 		aliases:        []string{"upload my avatar", "set current user avatar", "change my profile picture", "update user avatar"},
 		relatedActions: []string{actionUserCurrent, actionUserModify, actionUserCurrentStatus},
-		description:    "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty — use gitlab_user_current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
+		description:    "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty. Use gitlab_user_current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
 	},
 	"gitlab_delete_user_identity": {
 		usage:          "Delete a user's external authentication identity by user_id and provider name (admin only). Use when the prompt asks to unlink an SSO/LDAP identity from a user.",
@@ -515,6 +515,17 @@ func userInputSchemaOverrides(individualTool string) []toolutil.InputSchemaOverr
 				"enum":        []any{"instance_type", "group_type", "project_type"},
 				"description": "Runner scope: instance_type (shared), group_type (requires group_id), or project_type (requires project_id).",
 			}),
+		}
+	case "gitlab_list_user_contribution_events":
+		// Docs: https://docs.gitlab.com/ee/api/events.html#list-a-user-contribution-events
+		// SDK: ListContributionEventsOptions.Action *EventTypeValue,
+		// ListContributionEventsOptions.TargetType *EventTargetTypeValue (types.go)
+		return []toolutil.InputSchemaOverride{
+			toolutil.SchemaEnumOverride("action",
+				"created", "updated", "closed", "reopened", "pushed", "commented",
+				"merged", "joined", "left", "destroyed", "expired", "approved"),
+			toolutil.SchemaEnumOverride("target_type",
+				"Issue", "Milestone", "MergeRequest", "Note", "Project", "Snippet", "User"),
 		}
 	case "gitlab_get_user_memberships":
 		// Docs: https://docs.gitlab.com/ee/api/users.html#list-user-memberships

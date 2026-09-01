@@ -428,7 +428,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			scope:  "Project",
 			output: Output{AllowAuthorApproval: SettingOutput{Value: false, Locked: false, InheritedFrom: ""}},
 			wantContain: []string{
-				"—",
+				"| - |",
 			},
 		},
 	}

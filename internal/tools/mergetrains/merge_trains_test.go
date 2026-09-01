@@ -775,7 +775,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				MergeRequest: MergeRequestOutput{IID: 7, Title: "Update docs"},
 			},
 			contains: []string{
-				"!7 — Update docs",
+				"!7 - Update docs",
 			},
 			absent: []string{
 				"[!7](",

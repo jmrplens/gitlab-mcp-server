@@ -48,7 +48,7 @@ func targetSchemaOverrides() []toolutil.InputSchemaOverride {
 func attachSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := scanProfileOptions(individualTool, description)
 	options.InputSchemaOverrides = targetSchemaOverrides()
-	options.Usage = "Attach a security scan profile to one or more projects and/or groups. Supply security_scan_profile_id (a built-in scan type — dependency_scanning, sast, secret_detection, or container_scanning — which creates the namespace's default profile on the fly) and at least one of project_ids or group_ids. Targets must belong to a group namespace (not a personal namespace) and share one root namespace. Requires Maintainer or Owner on the targets."
+	options.Usage = "Attach a security scan profile to one or more projects and/or groups. Supply security_scan_profile_id (a built-in scan type such as dependency_scanning, sast, secret_detection, or container_scanning, which creates the namespace's default profile on the fly) and at least one of project_ids or group_ids. Targets must belong to a group namespace (not a personal namespace) and share one root namespace. Requires Maintainer or Owner on the targets."
 	options.Aliases = []string{"attach security scan profile", "enable scan profile on project", "assign scan profile to group", "apply security scan configuration"}
 	options.RelatedActions = []string{actionDetach, actionListProjectStatuses, actionProjectGet}
 	return toolutil.NewCreateActionSpec(name, route, options)
