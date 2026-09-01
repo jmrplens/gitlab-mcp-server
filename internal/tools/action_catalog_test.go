@@ -167,9 +167,11 @@ func TestBuildActionCatalog_EnterpriseAndGitLabDotComGates(t *testing.T) {
 	}
 
 	for _, actionID := range []actioncatalog.ActionID{"orbit.status", "orbit.dsl"} {
-		assertCatalogMissingAction(t, base, actionID)
-		assertCatalogMissingAction(t, enterprise, actionID)
-		assertCatalogHasAction(t, gitLabDotComEnterprise, actionID)
+		t.Run(string(actionID), func(t *testing.T) {
+			assertCatalogMissingAction(t, base, actionID)
+			assertCatalogMissingAction(t, enterprise, actionID)
+			assertCatalogHasAction(t, gitLabDotComEnterprise, actionID)
+		})
 	}
 }
 
@@ -707,29 +709,24 @@ func TestCentralTierFilter_Invariants(t *testing.T) {
 	// Landmark actions: canonical IDs that must resolve to a specific tier. These
 	// encode the audited Wave 1/2 decisions (see cmd/audit_edition_tier).
 	landmarks := []struct {
+		name      string
 		id        actioncatalog.ActionID
 		freeOK    bool // present on a Free instance
 		premiumOK bool // present on a Premium instance
 	}{
-		{"issue.list", true, true},                          // core, all tiers
-		{"merge_request.approval_config", true, true},       // basic approval state is Free
-		{"project.service_account_list", true, true},        // service accounts are Free
-		{"group.epic_list", false, true},                    // epics are Premium
-		{"merge_request.approval_rule_create", false, true}, // approval rules are Premium
-		{"vulnerability.list", false, false},                // Ultimate only
-		{"dependency.list", false, false},                   // Ultimate only
-		{"security_finding.list", false, false},             // Ultimate only
+		{name: "core_action_on_every_tier", id: "issue.list", freeOK: true, premiumOK: true},
+		{name: "basic_approval_state_is_free", id: "merge_request.approval_config", freeOK: true, premiumOK: true},
+		{name: "service_accounts_are_free", id: "project.service_account_list", freeOK: true, premiumOK: true},
+		{name: "epics_are_premium", id: "group.epic_list", freeOK: false, premiumOK: true},
+		{name: "approval_rules_are_premium", id: "merge_request.approval_rule_create", freeOK: false, premiumOK: true},
+		{name: "vulnerabilities_are_ultimate", id: "vulnerability.list", freeOK: false, premiumOK: false},
+		{name: "dependencies_are_ultimate", id: "dependency.list", freeOK: false, premiumOK: false},
+		{name: "security_findings_are_ultimate", id: "security_finding.list", freeOK: false, premiumOK: false},
 	}
 	for _, lm := range landmarks {
-		if _, ok := free.Action(lm.id); ok != lm.freeOK {
-			t.Errorf("Free: action %s present=%v, want %v", lm.id, ok, lm.freeOK)
-		}
-		if _, ok := premium.Action(lm.id); ok != lm.premiumOK {
-			t.Errorf("Premium: action %s present=%v, want %v", lm.id, ok, lm.premiumOK)
-		}
-		if _, ok := ultimate.Action(lm.id); !ok {
-			t.Errorf("Ultimate: action %s must be present", lm.id)
-		}
+		t.Run(lm.name, func(t *testing.T) {
+			assertLandmarkTiers(t, free, premium, ultimate, lm.id, lm.freeOK, lm.premiumOK)
+		})
 	}
 
 	// Field-level (Phase 3): issue.create exists in all tiers, but its Premium
@@ -749,12 +746,29 @@ func TestCentralTierFilter_Invariants(t *testing.T) {
 	// reviewer_assignment_strategy (client-go v2.46.0) is Premium: pruned from
 	// the Free project.create/project.update input schemas, present on Premium.
 	for _, id := range []actioncatalog.ActionID{"project.create", "project.update"} {
-		if actionHasInputProp(t, free, id, "reviewer_assignment_strategy") {
-			t.Errorf("Free %s schema must not advertise Premium field reviewer_assignment_strategy", id)
-		}
-		if !actionHasInputProp(t, premium, id, "reviewer_assignment_strategy") {
-			t.Errorf("Premium %s schema must include field reviewer_assignment_strategy", id)
-		}
+		t.Run(string(id), func(t *testing.T) {
+			if actionHasInputProp(t, free, id, "reviewer_assignment_strategy") {
+				t.Errorf("Free %s schema must not advertise Premium field reviewer_assignment_strategy", id)
+			}
+			if !actionHasInputProp(t, premium, id, "reviewer_assignment_strategy") {
+				t.Errorf("Premium %s schema must include field reviewer_assignment_strategy", id)
+			}
+		})
+	}
+}
+
+// assertLandmarkTiers checks one landmark action against the three tier
+// catalogs: present on Free and Premium exactly as declared, always on Ultimate.
+func assertLandmarkTiers(t *testing.T, free, premium, ultimate *actioncatalog.Catalog, id actioncatalog.ActionID, freeOK, premiumOK bool) {
+	t.Helper()
+	if _, ok := free.Action(id); ok != freeOK {
+		t.Errorf("Free: action %s present=%v, want %v", id, ok, freeOK)
+	}
+	if _, ok := premium.Action(id); ok != premiumOK {
+		t.Errorf("Premium: action %s present=%v, want %v", id, ok, premiumOK)
+	}
+	if _, ok := ultimate.Action(id); !ok {
+		t.Errorf("Ultimate: action %s must be present", id)
 	}
 }
 

@@ -114,10 +114,12 @@ func TestExtractIcons_FindsSVGConstantsInDeclarationOrder(t *testing.T) {
 	if len(names) != len(want) {
 		t.Fatalf("extractIcons() names = %v, want %v", names, want)
 	}
-	for i := range want {
-		if names[i] != want[i] {
-			t.Fatalf("extractIcons() names = %v, want %v", names, want)
-		}
+	for i, name := range want {
+		t.Run(name, func(t *testing.T) {
+			if names[i] != name {
+				t.Fatalf("extractIcons() names = %v, want %v", names, want)
+			}
+		})
 	}
 	if icons[0].svg != "<svg>branch</svg>" {
 		t.Errorf("icons[0].svg = %q, want %q", icons[0].svg, "<svg>branch</svg>")

@@ -766,10 +766,12 @@ func TestPrefixAt(t *testing.T) {
 	if len(got) != len(want) {
 		t.Fatalf("prefixAt length = %d, want %d", len(got), len(want))
 	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("prefixAt[%d] = %q, want %q", i, got[i], want[i])
-		}
+	for i, w := range want {
+		t.Run(w, func(t *testing.T) {
+			if got[i] != w {
+				t.Errorf("prefixAt[%d] = %q, want %q", i, got[i], w)
+			}
+		})
 	}
 }
 

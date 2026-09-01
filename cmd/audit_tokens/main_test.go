@@ -757,14 +757,16 @@ func TestMeasureTokenFootprintRows_AllTiersAllModes_CoversEveryCombination(t *te
 		})
 	}
 	// Verify mode ordering within each tier: opaque < compact < full tokens.
-	for ti := range tiers {
-		base := ti * 9
-		opaque := rows[base+2].ToolSchemaTokens
-		compact := rows[base+4].ToolSchemaTokens
-		full := rows[base+6].ToolSchemaTokens
-		if compact <= opaque || full <= compact {
-			t.Fatalf("tier %s: meta tokens not increasing opaque(%d) < compact(%d) < full(%d)", tiers[ti], opaque, compact, full)
-		}
+	for ti, tier := range tiers {
+		t.Run(tier+" meta modes increase", func(t *testing.T) {
+			base := ti * 9
+			opaque := rows[base+2].ToolSchemaTokens
+			compact := rows[base+4].ToolSchemaTokens
+			full := rows[base+6].ToolSchemaTokens
+			if compact <= opaque || full <= compact {
+				t.Fatalf("tier %s: meta tokens not increasing opaque(%d) < compact(%d) < full(%d)", tier, opaque, compact, full)
+			}
+		})
 	}
 	// Verify tier scaling: Free individual tools < Premium < Ultimate.
 	freeIndiv := rows[8].VisibleTools
@@ -793,11 +795,13 @@ func TestMeasureToolSchemaTokens_RealTokenizer_ReturnsNonZeroCounts(t *testing.T
 
 	fallback := 0
 	for _, tl := range toolList {
-		b, marshalErr := json.Marshal(tl)
-		if marshalErr != nil {
-			t.Fatalf("marshal: %v", marshalErr)
-		}
-		fallback += len(b) / 4
+		t.Run(tl.Name, func(t *testing.T) {
+			b, marshalErr := json.Marshal(tl)
+			if marshalErr != nil {
+				t.Fatalf("marshal: %v", marshalErr)
+			}
+			fallback += len(b) / 4
+		})
 	}
 	if got == fallback {
 		t.Fatalf("measureToolSchemaTokens() = %d == bytes/4 fallback; cl100k_base tokenizer did not engage", got)

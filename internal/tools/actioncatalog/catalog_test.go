@@ -504,10 +504,11 @@ func TestCatalog_FiltersCloneWithoutMutatingSource(t *testing.T) {
 	readGroup.SetAction(Action{Name: "code", Route: testRoute(false)})
 	writeGroup := NewGroup(GroupOptions{ToolName: "gitlab_project"})
 	writeGroup.SetAction(Action{Name: "create", Route: testRoute(false)})
-	for _, group := range []Group{readGroup, writeGroup} {
-		if err := catalog.AddGroup(group); err != nil {
-			t.Fatalf("AddGroup() error = %v", err)
-		}
+	if err := catalog.AddGroup(readGroup); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+	if err := catalog.AddGroup(writeGroup); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
 	}
 
 	if got := catalog.FilterExcludedTools([]string{"gitlab_project"}).CountGroups(); got != 1 {
@@ -596,10 +597,14 @@ func TestCatalog_FilterReadOnlyActionsKeepsReadsInMixedGroups(t *testing.T) {
 	readOnly := NewGroup(GroupOptions{ToolName: "gitlab_search", ReadOnly: true})
 	readOnly.SetAction(Action{Name: "code", Route: testRoute(false), ReadOnly: true})
 
-	for _, group := range []Group{mixed, writeOnly, readOnly} {
-		if err := catalog.AddGroup(group); err != nil {
-			t.Fatalf("AddGroup() error = %v", err)
-		}
+	if err := catalog.AddGroup(mixed); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+	if err := catalog.AddGroup(writeOnly); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
+	}
+	if err := catalog.AddGroup(readOnly); err != nil {
+		t.Fatalf("AddGroup() error = %v", err)
 	}
 
 	filtered := catalog.FilterReadOnlyActions()

@@ -4545,12 +4545,21 @@ func TestDynamicParamValidation_DefensiveBranches(t *testing.T) {
 // helpers for issue state events, GitLab access levels, and boolean strings. It
 // covers accepted inputs and rejected edge cases without external fixtures.
 func TestActionScopedParamValueConversions(t *testing.T) {
-	stateCases := map[any]string{"closed": "close", "OPEN": "reopen"}
-	for input, want := range stateCases {
-		got, ok := actioncompat.IssueStateEventValue(input)
-		if !ok || got != want {
-			t.Fatalf("issueStateEventValue(%v) = %q, %t; want %q, true", input, got, ok, want)
-		}
+	stateCases := []struct {
+		name  string
+		input any
+		want  string
+	}{
+		{name: "state_closed_becomes_close", input: "closed", want: "close"},
+		{name: "state_uppercase_open_becomes_reopen", input: "OPEN", want: "reopen"},
+	}
+	for _, tc := range stateCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := actioncompat.IssueStateEventValue(tc.input)
+			if !ok || got != tc.want {
+				t.Fatalf("issueStateEventValue(%v) = %q, %t; want %q, true", tc.input, got, ok, tc.want)
+			}
+		})
 	}
 	if _, ok := actioncompat.IssueStateEventValue(123); ok {
 		t.Fatal("issueStateEventValue(non-string) converted unexpectedly")
@@ -4559,36 +4568,64 @@ func TestActionScopedParamValueConversions(t *testing.T) {
 		t.Fatal("issueStateEventValue(archived) converted unexpectedly")
 	}
 
-	accessCases := map[any]int{
-		10:             10,
-		int64(20):      20,
-		float64(30):    30,
-		"40":           40,
-		"guest":        10,
-		"reporter":     20,
-		"developer":    30,
-		" maintainer ": 40,
-		"owner":        50,
+	accessCases := []struct {
+		name  string
+		input any
+		want  int
+	}{
+		{name: "access_int", input: 10, want: 10},
+		{name: "access_int64", input: int64(20), want: 20},
+		{name: "access_float64", input: float64(30), want: 30},
+		{name: "access_numeric_string", input: "40", want: 40},
+		{name: "access_guest", input: "guest", want: 10},
+		{name: "access_reporter", input: "reporter", want: 20},
+		{name: "access_developer", input: "developer", want: 30},
+		{name: "access_padded_maintainer", input: " maintainer ", want: 40},
+		{name: "access_owner", input: "owner", want: 50},
 	}
-	for input, want := range accessCases {
-		got, ok := actioncompat.GitLabAccessLevelValue(input)
-		if !ok || got != want {
-			t.Fatalf("gitlabAccessLevelValue(%v) = %d, %t; want %d, true", input, got, ok, want)
-		}
+	for _, tc := range accessCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := actioncompat.GitLabAccessLevelValue(tc.input)
+			if !ok || got != tc.want {
+				t.Fatalf("gitlabAccessLevelValue(%v) = %d, %t; want %d, true", tc.input, got, ok, tc.want)
+			}
+		})
 	}
-	for _, input := range []any{float64(30.5), 70, int64(70), "70", "admin", true} {
-		if got, ok := actioncompat.GitLabAccessLevelValue(input); ok {
-			t.Fatalf("gitlabAccessLevelValue(%v) = %d, true; want false", input, got)
-		}
+	rejectedAccess := []struct {
+		name  string
+		input any
+	}{
+		{name: "access_rejects_fractional_float", input: float64(30.5)},
+		{name: "access_rejects_unknown_int", input: 70},
+		{name: "access_rejects_unknown_int64", input: int64(70)},
+		{name: "access_rejects_unknown_numeric_string", input: "70"},
+		{name: "access_rejects_admin", input: "admin"},
+		{name: "access_rejects_bool", input: true},
+	}
+	for _, tc := range rejectedAccess {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, ok := actioncompat.GitLabAccessLevelValue(tc.input); ok {
+				t.Fatalf("gitlabAccessLevelValue(%v) = %d, true; want false", tc.input, got)
+			}
+		})
 	}
 
 	if value, ok := actioncompat.BoolStringValue(" true "); !ok || !value {
 		t.Fatalf("boolStringValue(true) = %t, %t; want true, true", value, ok)
 	}
-	for _, input := range []any{true, "not-bool"} {
-		if _, ok := actioncompat.BoolStringValue(input); ok {
-			t.Fatalf("boolStringValue(%v) converted unexpectedly", input)
-		}
+	rejectedBools := []struct {
+		name  string
+		input any
+	}{
+		{name: "bool_rejects_true_not_string", input: true},
+		{name: "bool_rejects_unrecognized_string", input: "not-bool"},
+	}
+	for _, tc := range rejectedBools {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, ok := actioncompat.BoolStringValue(tc.input); ok {
+				t.Fatalf("boolStringValue(%v) converted unexpectedly", tc.input)
+			}
+		})
 	}
 }
 
@@ -4877,24 +4914,27 @@ func TestNormalization_FormattingBranches(t *testing.T) {
 
 	t.Run("explicit confirm parses supported values", func(t *testing.T) {
 		cases := []struct {
+			name   string
 			params map[string]any
 			want   bool
 		}{
-			{params: nil, want: false},
-			{params: map[string]any{"confirm": false}, want: false},
-			{params: map[string]any{"confirm": true}, want: true},
-			{params: map[string]any{"confirm": " true "}, want: true},
-			{params: map[string]any{"confirm": "yes"}, want: false},
-			{params: map[string]any{"confirm": "no"}, want: false},
-			{params: map[string]any{"confirm": 1}, want: false},
-			{params: map[string]any{"confirm": int64(1)}, want: false},
-			{params: map[string]any{"confirm": 1.0}, want: false},
-			{params: map[string]any{"confirm": 2}, want: false},
+			{name: "nil_params", params: nil, want: false},
+			{name: "bool_false", params: map[string]any{"confirm": false}, want: false},
+			{name: "bool_true", params: map[string]any{"confirm": true}, want: true},
+			{name: "padded_true_string", params: map[string]any{"confirm": " true "}, want: true},
+			{name: "yes_string", params: map[string]any{"confirm": "yes"}, want: false},
+			{name: "no_string", params: map[string]any{"confirm": "no"}, want: false},
+			{name: "int_one", params: map[string]any{"confirm": 1}, want: false},
+			{name: "int64_one", params: map[string]any{"confirm": int64(1)}, want: false},
+			{name: "float_one", params: map[string]any{"confirm": 1.0}, want: false},
+			{name: "int_two", params: map[string]any{"confirm": 2}, want: false},
 		}
 		for _, tt := range cases {
-			if got := hasExplicitConfirm(tt.params); got != tt.want {
-				t.Fatalf("hasExplicitConfirm(%v) = %v, want %v", tt.params, got, tt.want)
-			}
+			t.Run(tt.name, func(t *testing.T) {
+				if got := hasExplicitConfirm(tt.params); got != tt.want {
+					t.Fatalf("hasExplicitConfirm(%v) = %v, want %v", tt.params, got, tt.want)
+				}
+			})
 		}
 	})
 

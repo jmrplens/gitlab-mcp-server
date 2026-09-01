@@ -156,12 +156,16 @@ func TestTelemetry_AnUnreachableCollectorChangesNoResponse(t *testing.T) {
 
 	// Nothing about the collector may reach a client, whatever the outcome was.
 	for _, tc := range cases {
-		body := strings.ToLower(instrumented.do(t, tc.call).body)
-		for _, leak := range []string{"127.0.0.1:1", "otlp", "collector", "telemetry"} {
-			if strings.Contains(body, leak) {
-				t.Errorf("%q reached a client response: %s", leak, body)
+		t.Run(subtestName(tc.call)+" leaks nothing", func(t *testing.T) {
+			body := strings.ToLower(instrumented.do(t, tc.call).body)
+			for _, leak := range []string{"127.0.0.1:1", "otlp", "collector", "telemetry"} {
+				t.Run(leak, func(t *testing.T) {
+					if strings.Contains(body, leak) {
+						t.Errorf("%q reached a client response: %s", leak, body)
+					}
+				})
 			}
-		}
+		})
 	}
 }
 

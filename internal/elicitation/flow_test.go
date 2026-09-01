@@ -993,19 +993,25 @@ func TestConfirmSchema_DefaultsToDeclining(t *testing.T) {
 		t.Errorf("default = %v, want false: a destructive dialog must not open pre-approved", value)
 	}
 
-	for _, other := range []map[string]any{
-		textSchema("m", "f"),
-		selectOneSchema("m", []string{"a"}),
-		numberSchema("m", "f", 0, 10),
-	} {
-		otherProps, _ := other["properties"].(map[string]any)
-		for name, raw := range otherProps {
-			if otherField, isMap := raw.(map[string]any); isMap {
-				if _, hasDefault := otherField["default"]; hasDefault {
-					t.Errorf("%q carries a default; only the confirmation is meant to suggest an answer", name)
+	others := []struct {
+		name   string
+		schema map[string]any
+	}{
+		{name: "text", schema: textSchema("m", "f")},
+		{name: "select_one", schema: selectOneSchema("m", []string{"a"})},
+		{name: "number", schema: numberSchema("m", "f", 0, 10)},
+	}
+	for _, tc := range others {
+		t.Run(tc.name, func(t *testing.T) {
+			otherProps, _ := tc.schema["properties"].(map[string]any)
+			for name, raw := range otherProps {
+				if otherField, isMap := raw.(map[string]any); isMap {
+					if _, hasDefault := otherField["default"]; hasDefault {
+						t.Errorf("%q carries a default; only the confirmation is meant to suggest an answer", name)
+					}
 				}
 			}
-		}
+		})
 	}
 }
 

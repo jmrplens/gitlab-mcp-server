@@ -1312,10 +1312,12 @@ func TestGitLabRoleAccessLevelStringAliases(t *testing.T) {
 		{"MAINTAINER", 40},
 	}
 	for _, tc := range cases {
-		got, ok := gitLabRoleAccessLevel(tc.role)
-		if !ok || got != tc.want {
-			t.Errorf("gitLabRoleAccessLevel(%q) = %d/%v, want %d/true", tc.role, got, ok, tc.want)
-		}
+		t.Run(tc.role, func(t *testing.T) {
+			got, ok := gitLabRoleAccessLevel(tc.role)
+			if !ok || got != tc.want {
+				t.Errorf("gitLabRoleAccessLevel(%q) = %d/%v, want %d/true", tc.role, got, ok, tc.want)
+			}
+		})
 	}
 
 	// unknown role → rejected
