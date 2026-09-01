@@ -132,7 +132,7 @@ func TestActionSpecs_Metadata(t *testing.T) {
 	}
 	desc := spec.IndividualTool.Description
 	if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-		t.Errorf("IndividualTool.Description must use the \"Returns: … See also: …\" form, got %q", desc)
+		t.Errorf("IndividualTool.Description must use the \"Returns: ... See also: ...\" form, got %q", desc)
 	}
 }
 

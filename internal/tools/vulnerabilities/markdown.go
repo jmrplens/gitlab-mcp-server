@@ -198,15 +198,15 @@ func FormatMutationMarkdown(out MutationOutput, action string) string {
 func severityBadge(severity string) string {
 	switch strings.ToUpper(severity) {
 	case "CRITICAL":
-		return "🔴 CRITICAL"
+		return "\U0001F534 CRITICAL"
 	case "HIGH":
-		return "🟠 HIGH"
+		return "\U0001F7E0 HIGH"
 	case "MEDIUM":
-		return "🟡 MEDIUM"
+		return "\U0001F7E1 MEDIUM"
 	case "LOW":
-		return "🔵 LOW"
+		return "\U0001F535 LOW"
 	case "INFO":
-		return "ℹ️ INFO"
+		return "\u2139\uFE0F INFO"
 	default:
 		return severity
 	}
@@ -226,12 +226,12 @@ func FormatSeverityCountMarkdown(out SeverityCountOutput) string {
 	sb.WriteString("## Vulnerability Severity Counts\n\n")
 	sb.WriteString("| Severity | Count |\n")
 	sb.WriteString("|----------|-------|\n")
-	fmt.Fprintf(&sb, "| 🔴 CRITICAL | %d |\n", out.Critical)
-	fmt.Fprintf(&sb, "| 🟠 HIGH | %d |\n", out.High)
-	fmt.Fprintf(&sb, "| 🟡 MEDIUM | %d |\n", out.Medium)
-	fmt.Fprintf(&sb, "| 🔵 LOW | %d |\n", out.Low)
-	fmt.Fprintf(&sb, "| ℹ️ INFO | %d |\n", out.Info)
-	fmt.Fprintf(&sb, "| ❓ UNKNOWN | %d |\n", out.Unknown)
+	fmt.Fprintf(&sb, "| \U0001F534 CRITICAL | %d |\n", out.Critical)
+	fmt.Fprintf(&sb, "| \U0001F7E0 HIGH | %d |\n", out.High)
+	fmt.Fprintf(&sb, "| \U0001F7E1 MEDIUM | %d |\n", out.Medium)
+	fmt.Fprintf(&sb, "| \U0001F535 LOW | %d |\n", out.Low)
+	fmt.Fprintf(&sb, "| \u2139\uFE0F INFO | %d |\n", out.Info)
+	fmt.Fprintf(&sb, "| \u2753 UNKNOWN | %d |\n", out.Unknown)
 	fmt.Fprintf(&sb, "| **Total** | **%d** |\n", out.Total)
 	toolutil.WriteHints(
 		&sb,

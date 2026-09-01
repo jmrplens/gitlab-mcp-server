@@ -75,15 +75,15 @@ func init() {
 func severityBadge(severity string) string {
 	switch strings.ToUpper(severity) {
 	case "CRITICAL":
-		return "🔴 CRITICAL"
+		return "\U0001F534 CRITICAL"
 	case "HIGH":
-		return "🟠 HIGH"
+		return "\U0001F7E0 HIGH"
 	case "MEDIUM":
-		return "🟡 MEDIUM"
+		return "\U0001F7E1 MEDIUM"
 	case "LOW":
-		return "🔵 LOW"
+		return "\U0001F535 LOW"
 	case "INFO":
-		return "ℹ️ INFO"
+		return "\u2139\uFE0F INFO"
 	default:
 		return severity
 	}

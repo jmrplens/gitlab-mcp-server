@@ -384,7 +384,7 @@ func FormatPushRuleMarkdown(out PushRuleOutput) string {
 	for _, r := range rules {
 		val := r.val
 		if val == "" {
-			val = "—"
+			val = "-"
 		}
 		fmt.Fprintf(&b, "| %s | %s |\n", r.name, val)
 	}
@@ -491,13 +491,13 @@ func FormatListApprovalRulesMarkdown(out ListApprovalRulesOutput) string {
 	for _, r := range out.Rules {
 		ruleType := r.RuleType
 		if ruleType == "" {
-			ruleType = "—"
+			ruleType = "-"
 		}
-		users := "—"
+		users := "-"
 		if names := userNames(r.Users); len(names) > 0 {
 			users = strings.Join(names, ", ")
 		}
-		groups := "—"
+		groups := "-"
 		if names := groupNames(r.Groups); len(names) > 0 {
 			groups = strings.Join(names, ", ")
 		}

@@ -31,7 +31,7 @@ func FormatLicenseMarkdown(item Item) *mcp.CallToolResult {
 	if item.CreatedAt != "" {
 		fmt.Fprintf(&sb, "| Created At | %s |\n", toolutil.FormatTime(item.CreatedAt))
 	}
-	fmt.Fprintf(&sb, "| Licensee | %s (%s) — %s |\n",
+	fmt.Fprintf(&sb, "| Licensee | %s (%s) - %s |\n",
 		item.Licensee.Name, item.Licensee.Company, item.Licensee.Email)
 	toolutil.WriteHints(&sb, "Check license expiry date and plan for renewal if needed")
 	return toolutil.ToolResultWithMarkdown(sb.String())

@@ -14,7 +14,7 @@ func FormatOutputMarkdown(o Output) string {
 		return ""
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Member Role #%d — %s\n\n", o.ID, o.Name)
+	fmt.Fprintf(&b, "## Member Role #%d: %s\n\n", o.ID, o.Name)
 	if o.Description != "" {
 		fmt.Fprintf(&b, "- **Description**: %s\n", o.Description)
 	}
@@ -52,9 +52,11 @@ func FormatOutputMarkdown(o Output) string {
 	return b.String()
 }
 
+// writePermRow appends a table row for an enabled permission. The value cell
+// holds a check mark (✓), written as an escape so the source stays ASCII.
 func writePermRow(b *strings.Builder, name string, val *bool) {
 	if val != nil && *val {
-		fmt.Fprintf(b, "| %s | ✓ |\n", name)
+		fmt.Fprintf(b, "| %s | \u2713 |\n", name)
 	}
 }
 
@@ -68,7 +70,7 @@ func FormatListMarkdown(out ListOutput) string {
 	b.WriteString("| ID | Name | Base Level | Group ID |\n")
 	b.WriteString("| --: | ---- | ---------: | -------: |\n")
 	for _, r := range out.Roles {
-		gid := "—"
+		gid := "-"
 		if r.GroupID != 0 {
 			gid = strconv.FormatInt(r.GroupID, 10)
 		}

@@ -33,7 +33,7 @@ func userNames(users []*BasicUserOutput) []string {
 // FormatOutputMarkdown renders a single epic as a Markdown summary.
 func FormatOutputMarkdown(e Output) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## Epic &%d — %s\n\n", e.IID, toolutil.EscapeMdTableCell(e.Title))
+	fmt.Fprintf(&b, "## Epic &%d: %s\n\n", e.IID, toolutil.EscapeMdTableCell(e.Title))
 	fmt.Fprintf(&b, toolutil.FmtMdState, e.State)
 	if e.Status != "" {
 		fmt.Fprintf(&b, "- **Status**: %s\n", e.Status)

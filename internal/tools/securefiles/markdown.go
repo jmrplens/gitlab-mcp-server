@@ -8,11 +8,11 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// expiryOrDash formats an optional expiry timestamp as RFC 3339, or "—" when nil.
-// The em dash is used in table cells to signal "no expiry set" rather than an empty cell.
+// expiryOrDash formats an optional expiry timestamp as RFC 3339, or "-" when nil.
+// The dash is used in table cells to signal "no expiry set" rather than an empty cell.
 func expiryOrDash(t *time.Time) string {
 	if t == nil {
-		return "—"
+		return "-"
 	}
 	return toolutil.FormatTimePtr(t)
 }

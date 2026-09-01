@@ -24,7 +24,7 @@ func FormatOutputMarkdown(out Output) string {
 	if out.CreatedAt != "" {
 		fmt.Fprintf(&b, "- **Created At**: %s\n", toolutil.FormatTime(out.CreatedAt))
 	}
-	toolutil.WriteHints(&b, "Store the token value securely — it cannot be retrieved later")
+	toolutil.WriteHints(&b, "Store the token value securely. It cannot be retrieved later")
 	return b.String()
 }
 

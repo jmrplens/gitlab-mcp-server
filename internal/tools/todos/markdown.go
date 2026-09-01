@@ -111,7 +111,7 @@ func FormatMarkDoneMarkdown(v MarkDoneOutput) *mcp.CallToolResult {
 func FormatMarkAllDoneMarkdownString(v MarkAllDoneOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s", toolutil.EmojiSuccess, v.Message)
-	toolutil.WriteHints(&b, "All to-do items cleared — use action 'list' to confirm")
+	toolutil.WriteHints(&b, "All to-do items cleared. Use action 'list' to confirm")
 	return b.String()
 }
 

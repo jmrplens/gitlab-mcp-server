@@ -444,7 +444,7 @@ func TestIssueRefSuffix(t *testing.T) {
 	if got := issueRefSuffix(&IssueRefOutput{Title: ""}); got != "" {
 		t.Errorf("issueRefSuffix(empty title) = %q, want empty", got)
 	}
-	if got := issueRefSuffix(&IssueRefOutput{Title: "Hello"}); got != " — Hello" {
+	if got := issueRefSuffix(&IssueRefOutput{Title: "Hello"}); got != " - Hello" {
 		t.Errorf("issueRefSuffix = %q", got)
 	}
 }

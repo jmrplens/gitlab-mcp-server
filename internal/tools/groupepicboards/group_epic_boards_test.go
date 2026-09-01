@@ -482,7 +482,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				},
 			},
 			contains: []string{
-				"## Epic Board #1 — Sprint Board",
+				"## Epic Board #1: Sprint Board",
 				"**Labels**: Priority, Bug",
 				"### Board Lists",
 				"| 100 | Priority | 0 |",
@@ -495,7 +495,7 @@ func TestFormatOutputMarkdown(t *testing.T) {
 				ID:   2,
 				Name: "Empty Board",
 			},
-			contains: []string{"## Epic Board #2 — Empty Board"},
+			contains: []string{"## Epic Board #2: Empty Board"},
 			excludes: []string{"**Labels**", "### Board Lists"},
 		},
 		{

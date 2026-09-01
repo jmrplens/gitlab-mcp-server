@@ -39,7 +39,7 @@ func FormatMarkdown(mr Output) string {
 	if mr.Draft {
 		fmt.Fprintf(&b, "- %s **Draft** merge request\n", toolutil.EmojiDraft)
 	}
-	fmt.Fprintf(&b, "- **Source**: %s → **Target**: %s\n", mr.SourceBranch, mr.TargetBranch)
+	fmt.Fprintf(&b, "- **Source**: %s -> **Target**: %s\n", mr.SourceBranch, mr.TargetBranch)
 	if mr.DetailedMergeStatus != "" {
 		fmt.Fprintf(&b, "- **Merge Status**: %s\n", mr.DetailedMergeStatus)
 	}
@@ -188,14 +188,14 @@ func FormatListMarkdown(out ListOutput) string {
 		b.WriteString("No merge requests found.\n")
 		return b.String()
 	}
-	b.WriteString("| IID | Title | State | Author | Project | Source → Target |\n")
+	b.WriteString("| IID | Title | State | Author | Project | Source -> Target |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- |\n")
 	for _, mr := range out.MergeRequests {
 		draftTag := ""
 		if mr.Draft {
 			draftTag = " " + toolutil.EmojiDraft
 		}
-		fmt.Fprintf(&b, "| [!%d](%s) | %s%s | %s %s | %s | %s | %s → %s |\n",
+		fmt.Fprintf(&b, "| [!%d](%s) | %s%s | %s %s | %s | %s | %s -> %s |\n",
 			mr.IID, mr.WebURL, toolutil.EscapeMdTableCell(mr.Title), draftTag, toolutil.MRStateEmoji(mr.State), mr.State, toolutil.EscapeMdTableCell(userName(mr.Author)), toolutil.EscapeMdTableCell(mrProjectPath(mr)), toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch))
 	}
 	toolutil.WritePagination(&b, out.Pagination)
@@ -460,7 +460,7 @@ func FormatDependencyMarkdown(d DependencyOutput) string {
 		fmt.Fprintf(&b, "- **Blocking MR**: !%d (ID: %d)\n", bmr.IID, bmr.ID)
 		fmt.Fprintf(&b, toolutil.FmtMdTitle, bmr.Title)
 		fmt.Fprintf(&b, toolutil.FmtMdState, bmr.State)
-		fmt.Fprintf(&b, "- **Source**: %s → **Target**: %s\n", bmr.SourceBranch, bmr.TargetBranch)
+		fmt.Fprintf(&b, "- **Source**: %s -> **Target**: %s\n", bmr.SourceBranch, bmr.TargetBranch)
 	}
 	toolutil.WriteHints(
 		&b,

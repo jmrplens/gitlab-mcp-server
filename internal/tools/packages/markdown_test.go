@@ -114,7 +114,7 @@ func TestFormatPublishDirMarkdown_WithPublishedFiles(t *testing.T) {
 	if !strings.Contains(got, "| file1.txt | 512 |") {
 		t.Error("missing file1.txt row")
 	}
-	if !strings.Contains(got, "abcdef123456…") {
+	if !strings.Contains(got, "abcdef123456...") {
 		t.Error("SHA256 should be truncated to 12 chars + ellipsis")
 	}
 	if !strings.Contains(got, "| file2.txt | 512 | short |") {
@@ -294,7 +294,7 @@ func TestFormatFileListMarkdown_LongSHA(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	}
 	got := FormatFileListMarkdown(out)
-	if !strings.Contains(got, "0123456789ab…") {
+	if !strings.Contains(got, "0123456789ab...") {
 		t.Error("SHA256 should be truncated to 12 chars + ellipsis")
 	}
 }

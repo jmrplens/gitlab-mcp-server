@@ -9,11 +9,11 @@ import (
 )
 
 // userDisplay returns a human-readable name for a commit comment/status author,
-// preferring the username and falling back to the display name. Returns an
-// em dash when the author is absent.
+// preferring the username and falling back to the display name. Returns a
+// dash when the author is absent.
 func userDisplay(u *BasicUserOutput) string {
 	if u == nil {
-		return "—"
+		return "-"
 	}
 	if u.Username != "" {
 		return u.Username
@@ -21,7 +21,7 @@ func userDisplay(u *BasicUserOutput) string {
 	if u.Name != "" {
 		return u.Name
 	}
-	return "—"
+	return "-"
 }
 
 // FormatOutputMarkdown renders a single commit as a Markdown summary.
@@ -156,9 +156,9 @@ func FormatCommentsMarkdown(out CommentsOutput) string {
 	for _, c := range out.Comments {
 		path := c.Path
 		if path == "" {
-			path = "—"
+			path = "-"
 		}
-		line := "—"
+		line := "-"
 		if c.Line > 0 {
 			line = strconv.FormatInt(c.Line, 10)
 		}
@@ -241,10 +241,10 @@ func FormatMRsByCommitMarkdown(out MRsByCommitOutput) string {
 		b.WriteString("No merge requests found.\n")
 		return b.String()
 	}
-	b.WriteString("| IID | Title | State | Source → Target | Author |\n")
+	b.WriteString("| IID | Title | State | Source -> Target | Author |\n")
 	b.WriteString(toolutil.TblSep5Col)
 	for _, mr := range out.MergeRequests {
-		fmt.Fprintf(&b, "| !%d | %s | %s | %s → %s | %s |\n",
+		fmt.Fprintf(&b, "| !%d | %s | %s | %s -> %s | %s |\n",
 			mr.IID, toolutil.EscapeMdTableCell(mr.Title), mr.State,
 			toolutil.EscapeMdTableCell(mr.SourceBranch), toolutil.EscapeMdTableCell(mr.TargetBranch),
 			toolutil.EscapeMdTableCell(mr.Author))

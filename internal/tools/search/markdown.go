@@ -48,10 +48,10 @@ func FormatMRsMarkdown(out MergeRequestsOutput) string {
 		b.WriteString("No merge requests found.\n")
 		return b.String()
 	}
-	b.WriteString("| IID | Title | State | Author | Project | Source → Target |\n")
+	b.WriteString("| IID | Title | State | Author | Project | Source -> Target |\n")
 	b.WriteString(toolutil.TblSep6Col)
 	for _, mr := range out.MergeRequests {
-		fmt.Fprintf(&b, "| [!%d](%s) | %s | %s %s | %s | %s | %s → %s |\n",
+		fmt.Fprintf(&b, "| [!%d](%s) | %s | %s %s | %s | %s | %s -> %s |\n",
 			mr.IID, mr.WebURL,
 			toolutil.EscapeMdTableCell(mr.Title),
 			toolutil.MRStateEmoji(mr.State), mr.State,

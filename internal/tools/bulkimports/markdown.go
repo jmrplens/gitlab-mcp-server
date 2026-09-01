@@ -63,7 +63,7 @@ func FormatGetMarkdown(out MigrationSummary) string {
 	fmt.Fprintf(&sb, toolutil.TblRowUpdatedAt, toolutil.FormatTime(out.UpdatedAt))
 	hints := []string{"Use gitlab_list_bulk_import_entities with bulk_import_id to inspect entities"}
 	if out.HasFailures {
-		hints = append(hints, "Failures detected — use gitlab_list_bulk_import_entity_failures for diagnostics")
+		hints = append(hints, "Failures detected. Use gitlab_list_bulk_import_entity_failures for diagnostics")
 	}
 	if out.Status == "started" || out.Status == "created" {
 		hints = append(hints, "Use gitlab_cancel_bulk_import to abort an in-progress migration")
@@ -120,7 +120,7 @@ func FormatGetEntityMarkdown(e EntitySummary) string {
 	fmt.Fprintf(&sb, "| Labels | %d | %d | %d |\n", e.Stats.Labels.Source, e.Stats.Labels.Fetched, e.Stats.Labels.Imported)
 	fmt.Fprintf(&sb, "| Milestones | %d | %d | %d |\n", e.Stats.Milestones.Source, e.Stats.Milestones.Fetched, e.Stats.Milestones.Imported)
 	if e.HasFailures {
-		toolutil.WriteHints(&sb, "Failures detected — use gitlab_list_bulk_import_entity_failures for diagnostics")
+		toolutil.WriteHints(&sb, "Failures detected. Use gitlab_list_bulk_import_entity_failures for diagnostics")
 	}
 	return sb.String()
 }

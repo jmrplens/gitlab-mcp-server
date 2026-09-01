@@ -2127,7 +2127,7 @@ func TestFormatCommentsMarkdown(t *testing.T) {
 	if !strings.Contains(md, "10") {
 		t.Error("expected line number")
 	}
-	if !strings.Contains(md, "—") {
+	if !strings.Contains(md, "| - |") {
 		t.Error("expected dash for empty path")
 	}
 }
@@ -2682,10 +2682,10 @@ func TestUserDisplay(t *testing.T) {
 		in   *BasicUserOutput
 		want string
 	}{
-		{"nil author", nil, "—"},
+		{"nil author", nil, "-"},
 		{"username preferred", &BasicUserOutput{Username: "u", Name: "N"}, "u"},
 		{"name fallback", &BasicUserOutput{Name: "Only Name"}, "Only Name"},
-		{"empty user", &BasicUserOutput{}, "—"},
+		{"empty user", &BasicUserOutput{}, "-"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

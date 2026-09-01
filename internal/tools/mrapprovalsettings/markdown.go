@@ -12,7 +12,7 @@ func formatSetting(s SettingOutput) string {
 	locked := toolutil.BoolEmoji(s.Locked)
 	inherited := s.InheritedFrom
 	if inherited == "" {
-		inherited = "—"
+		inherited = "-"
 	}
 	return fmt.Sprintf("%s | %s | %s", val, locked, inherited)
 }

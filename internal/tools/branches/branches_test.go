@@ -2087,8 +2087,8 @@ func TestShapeConverters_NilAndEmpty(t *testing.T) {
 
 // TestAccessLevelsSummary verifies the compact access-level markdown summary.
 func TestAccessLevelsSummary(t *testing.T) {
-	if got := accessLevelsSummary(nil); got != "—" {
-		t.Errorf("empty summary = %q, want em dash", got)
+	if got := accessLevelsSummary(nil); got != "-" {
+		t.Errorf("empty summary = %q, want dash", got)
 	}
 	got := accessLevelsSummary([]BranchAccessDescriptionOutput{{AccessLevel: 30}, {AccessLevel: 40}})
 	if got != "30, 40" {

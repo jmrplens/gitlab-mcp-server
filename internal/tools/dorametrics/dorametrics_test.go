@@ -478,7 +478,7 @@ func TestFormatMarkdown(t *testing.T) {
 			},
 			metric: "lead_time_for_changes",
 			wantContains: []string{
-				"DORA Metrics — lead_time_for_changes",
+				"DORA Metrics: lead_time_for_changes",
 				"| Date | Value |",
 				"| 2026-01-15 | 1.5000 |",
 				"| 2026-01-16 | 2.0000 |",
@@ -500,7 +500,7 @@ func TestFormatMarkdown(t *testing.T) {
 				"**Total data points:** 1",
 			},
 			wantAbsent: []string{
-				"—",
+				"DORA Metrics:",
 			},
 		},
 		{

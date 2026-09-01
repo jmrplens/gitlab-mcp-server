@@ -34,7 +34,7 @@ func FormatListMarkdown(title, emptyText string, iterations []Output, pagination
 // FormatOutputMarkdown formats a single iteration and appends optional hints.
 func FormatOutputMarkdown(output Output, hints ...string) string {
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "## Iteration #%d — %s\n\n", output.IID, toolutil.EscapeMdTableCell(output.Title))
+	fmt.Fprintf(&builder, "## Iteration #%d: %s\n\n", output.IID, toolutil.EscapeMdTableCell(output.Title))
 	builder.WriteString(toolutil.MarkdownTableHeader("Property", "Value"))
 	fmt.Fprintf(&builder, toolutil.FmtMdID, output.ID)
 	fmt.Fprintf(&builder, "| IID | %d |\n", output.IID)

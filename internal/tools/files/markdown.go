@@ -36,9 +36,9 @@ func FormatOutputMarkdown(f Output) string {
 	switch f.ContentCategory {
 	case "image":
 		fmt.Fprintf(&b, "- **Content type**: image (%s)\n", f.ImageMIMEType)
-		b.WriteString("\n> 🖼️ Image content is attached below as ImageContent for multimodal viewing.\n")
+		b.WriteString("\n> \U0001F5BC\uFE0F Image content is attached below as ImageContent for multimodal viewing.\n")
 	case "binary":
-		b.WriteString("- **Content type**: binary (content omitted — not viewable as text)\n")
+		b.WriteString("- **Content type**: binary (content omitted, not viewable as text)\n")
 	}
 	toolutil.WriteHints(
 		&b,
@@ -90,7 +90,7 @@ func FormatBlameMarkdown(out BlameOutput) string {
 		return b.String()
 	}
 	for i, r := range out.Ranges {
-		fmt.Fprintf(&b, "### Range %d — %s (%s)\n\n", i+1,
+		fmt.Fprintf(&b, "### Range %d: %s (%s)\n\n", i+1,
 			toolutil.EscapeMdTableCell(r.Commit.AuthorName), r.Commit.ID[:minLen(len(r.Commit.ID), 8)])
 		fmt.Fprintf(&b, "**%s**\n\n", toolutil.EscapeMdTableCell(r.Commit.Message))
 		fmt.Fprintf(&b, "```%s\n", langFromPath(out.FilePath))
@@ -156,7 +156,7 @@ func FormatRawImageMarkdown(out RawOutput) string {
 	fmt.Fprintf(&b, "## Image File: %s\n\n", out.FilePath)
 	fmt.Fprintf(&b, fmtSizeBytes, out.Size)
 	fmt.Fprintf(&b, "- **Content type**: %s\n", out.ImageMIMEType)
-	b.WriteString("\n> 🖼️ Image content is attached below as ImageContent for multimodal viewing.\n")
+	b.WriteString("\n> \U0001F5BC\uFE0F Image content is attached below as ImageContent for multimodal viewing.\n")
 	return b.String()
 }
 
@@ -165,7 +165,7 @@ func FormatRawBinaryMarkdown(out RawOutput) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Binary File: %s\n\n", out.FilePath)
 	fmt.Fprintf(&b, fmtSizeBytes, out.Size)
-	b.WriteString("- **Content type**: binary (content omitted — not viewable as text)\n")
+	b.WriteString("- **Content type**: binary (content omitted, not viewable as text)\n")
 	toolutil.WriteHints(
 		&b,
 		"Use `gitlab_file_metadata` to get additional file properties",

@@ -23,7 +23,7 @@ func FormatListPendingMarkdownString(out ListPendingInvitationsOutput) string {
 	fmt.Fprintf(&b, "## Pending Invitations (%d)\n\n", len(out.Invitations))
 	toolutil.WriteListSummary(&b, len(out.Invitations), out.Pagination)
 	for _, inv := range out.Invitations {
-		fmt.Fprintf(&b, "- **%s** (ID: %d) — Access Level: %d", inv.InviteEmail, inv.ID, inv.AccessLevel)
+		fmt.Fprintf(&b, "- **%s** (ID: %d), Access Level: %d", inv.InviteEmail, inv.ID, inv.AccessLevel)
 		if inv.UserName != "" {
 			fmt.Fprintf(&b, ", User: %s", inv.UserName)
 		}

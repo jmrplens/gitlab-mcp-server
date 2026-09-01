@@ -148,7 +148,7 @@ func FormatArtifactsMarkdown(out ArtifactsOutput) string {
 func FormatSingleArtifactMarkdown(out SingleArtifactOutput) string {
 	var b strings.Builder
 	if out.JobID > 0 {
-		fmt.Fprintf(&b, "## Job #%d — %s\n\n", out.JobID, out.ArtifactPath)
+		fmt.Fprintf(&b, "## Job #%d: %s\n\n", out.JobID, out.ArtifactPath)
 	} else {
 		fmt.Fprintf(&b, "## %s\n\n", out.ArtifactPath)
 	}
@@ -170,16 +170,16 @@ func FormatSingleArtifactMarkdown(out SingleArtifactOutput) string {
 func FormatWaitMarkdown(out WaitOutput) string {
 	var b strings.Builder
 	if out.TimedOut {
-		fmt.Fprintf(&b, "## ⏰ Job #%d: Timed Out (current: %s)\n\n", out.Job.ID, out.Job.Status)
+		fmt.Fprintf(&b, "## \u23F0 Job #%d: Timed Out (current: %s)\n\n", out.Job.ID, out.Job.Status)
 	} else {
 		var emoji string
 		switch out.FinalStatus {
 		case "failed":
-			emoji = "❌"
+			emoji = toolutil.EmojiCross
 		case "canceled":
-			emoji = "🚫"
+			emoji = toolutil.EmojiProhibited
 		default:
-			emoji = "✅"
+			emoji = toolutil.EmojiSuccess
 		}
 		fmt.Fprintf(&b, "## %s Job #%d: %s\n\n", emoji, out.Job.ID, out.FinalStatus)
 	}
@@ -193,7 +193,7 @@ func FormatWaitMarkdown(out WaitOutput) string {
 	if out.TimedOut {
 		toolutil.WriteHints(
 			&b,
-			"Job is still running — call gitlab_job_wait again to continue waiting",
+			"Job is still running. Call gitlab_job_wait again to continue waiting",
 			"Use gitlab_job_cancel to abort the job",
 		)
 	} else if out.FinalStatus == "failed" {

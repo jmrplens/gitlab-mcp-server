@@ -1735,7 +1735,7 @@ func TestFormatDetailsMarkdown_Full(t *testing.T) {
 	})
 
 	for _, want := range []string{
-		"## Runner #10 — Details",
+		"## Runner #10: Details",
 		"| Name | detail-runner |",
 		"| Description | detailed |",
 		"| Type | group_type |",
@@ -1766,7 +1766,7 @@ func TestFormatDetailsMarkdown_Minimal(t *testing.T) {
 		Name: "min",
 	})
 
-	if !strings.Contains(md, "## Runner #1 — Details") {
+	if !strings.Contains(md, "## Runner #1: Details") {
 		t.Errorf("missing header:\n%s", md)
 	}
 	for _, absent := range []string{
