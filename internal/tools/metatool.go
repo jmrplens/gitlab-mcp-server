@@ -76,6 +76,12 @@ func SetMetaParamSchema(mode string) {
 	toolutil.SetMetaParamSchemaMode(mode)
 }
 
+// MetaParamSchema reports the strategy [SetMetaParamSchema] selected:
+// "opaque", "compact" or "full".
+func MetaParamSchema() string {
+	return toolutil.MetaParamSchemaMode()
+}
+
 // SetMetaParamSchemaScoped selects the meta-tool input schema strategy and
 // returns a restore function for tests that temporarily override the global
 // mode. Valid modes match SetMetaParamSchema: "opaque", "compact", and

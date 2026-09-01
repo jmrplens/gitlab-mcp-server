@@ -537,6 +537,38 @@ func TestPrintMetaSchemaModes_ListsActiveAndAllModes(t *testing.T) {
 	}
 }
 
+// TestPrintMetaSchemaModes_ReportsDistinctSizesPerMode verifies that the
+// schema-modes section measures each META_PARAM_SCHEMA mode on its own
+// registration rather than reusing one memoized tool list for all three:
+// the opaque, compact and full strategies produce input schemas of
+// different sizes, so three equal totals would mean the memo returned the
+// first listing to every mode.
+func TestPrintMetaSchemaModes_ReportsDistinctSizesPerMode(t *testing.T) {
+	t.Setenv("META_PARAM_SCHEMA", "opaque")
+
+	output := captureStdout(t, func() {
+		printMetaSchemaModes(newAuditMetricsClient(t))
+	})
+
+	totals := map[string]string{}
+	for line := range strings.SplitSeq(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		switch fields[0] {
+		case "opaque", "compact", "full":
+			totals[fields[0]] = fields[1]
+		}
+	}
+	if len(totals) != 3 {
+		t.Fatalf("printMetaSchemaModes() reported %d modes, want 3:\n%s", len(totals), output)
+	}
+	if totals["opaque"] == totals["compact"] || totals["compact"] == totals["full"] || totals["opaque"] == totals["full"] {
+		t.Fatalf("printMetaSchemaModes() reported equal totals across modes, want one measurement per mode: %v\n%s", totals, output)
+	}
+}
+
 // TestPrintMetaSchemaModes_DefaultsToOpaqueWhenUnset verifies the reporter
 // falls back to opaque mode when META_PARAM_SCHEMA is empty or invalid.
 func TestPrintMetaSchemaModes_DefaultsToOpaqueWhenUnset(t *testing.T) {

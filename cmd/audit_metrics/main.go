@@ -443,21 +443,25 @@ func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
 // listServerTools registers tools on an in-memory MCP server and returns
 // the full tool list. When meta is true, meta-tools are registered.
 // Enterprise controls whether Enterprise/Premium meta-tools are included.
-// listedToolsCache memoizes listServerTools per (client, surface, tier):
-// registering a full surface costs seconds, the result depends only on the
-// compiled-in catalog and those inputs, and callers only read it. The audit
-// itself repeats one combination (meta enterprise for the schema-modes
-// section), and the test binary repeats several.
+// listedToolsCache memoizes listServerTools per (client, surface, tier,
+// meta schema mode): registering a full surface costs seconds, the result
+// depends only on the compiled-in catalog and those inputs, and callers only
+// read it. The schema mode is part of the key because printMetaSchemaModes
+// re-registers the meta surface under each mode to size its input schemas;
+// a key without it would hand every mode the first listing and report three
+// identical sizes. The audit repeats the opaque meta enterprise listing, and
+// the test binary repeats several combinations.
 var listedToolsCache sync.Map // listKey -> []*mcp.Tool
 
 type listKey struct {
 	client     *gitlabclient.Client
 	meta       bool
 	enterprise bool
+	schemaMode string
 }
 
 func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
-	key := listKey{client: client, meta: meta, enterprise: enterprise}
+	key := listKey{client: client, meta: meta, enterprise: enterprise, schemaMode: tools.MetaParamSchema()}
 	if cached, ok := listedToolsCache.Load(key); ok {
 		listed, _ := cached.([]*mcp.Tool)
 		return listed
