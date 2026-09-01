@@ -95,10 +95,38 @@ func identityKeyring() *Keyring {
 			return
 		}
 
-		logKeyringChoice(ring, rotation)
 		identityKeyringVal = ring
 	})
 	return identityKeyringVal
+}
+
+// announceIdentityChoice says what this deployment records about callers, and
+// under which key, once those lines can actually leave the process.
+//
+// It is separate from building the redactor and the keyring on purpose, and the
+// purpose is a defect this had: installSlogBridge asks identityRedactor what
+// the exported leg may say, so building it there announced the choice through
+// the handler that was about to be replaced. Both lines reached stderr,
+// neither reached the collector, and the collector is where an operator running
+// three replicas looks to confirm a setting took effect. A setting that works
+// and cannot be confirmed is one somebody configures twice.
+//
+// Called after the bridge is installed, beside the rest of the startup summary.
+func announceIdentityChoice() {
+	policy, err := telemetryIdentityPolicy()
+	if err != nil || policy == telemetry.IdentityNone {
+		// Nothing to announce: an unusable value was already reported where it
+		// was parsed, and a line saying "we are recording nothing" on every
+		// startup is noise.
+		return
+	}
+
+	logIdentityPolicy(policy)
+
+	if ring := identityKeyring(); ring != nil {
+		rotation, _ := telemetryIdentityRotation()
+		logKeyringChoice(ring, rotation)
+	}
 }
 
 // logKeyringChoice says what an operator configured, including the case where
@@ -228,7 +256,6 @@ func identityRedactor() *telemetry.Redactor {
 				"component", "telemetry", "error", err)
 			return
 		}
-		logIdentityPolicy(policy)
 		identityRedactorVal = redactor
 	})
 	return identityRedactorVal

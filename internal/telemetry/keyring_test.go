@@ -72,8 +72,14 @@ func TestKeyring_AGeneratedKeyRotatesOnItsInterval(t *testing.T) {
 	t.Parallel()
 
 	ring := keyringFrom(t, "", time.Hour)
+
+	// The whole timeline is the injected one, baseline included. Setting only
+	// the clock leaves rotatedAt holding the wall time of construction, so
+	// whether the key looks due depends on what time of day the suite runs:
+	// this test passed before midnight and failed after it.
 	clock := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	ring.now = func() time.Time { return clock }
+	ring.rotatedAt = clock
 
 	before := ring.IdentityPseudonym("42")
 
@@ -103,6 +109,7 @@ func TestKeyring_AConfiguredKeyIgnoresRotation(t *testing.T) {
 	ring := keyringFrom(t, "a deployment-wide secret", time.Hour)
 	clock := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	ring.now = func() time.Time { return clock }
+	ring.rotatedAt = clock
 
 	before := ring.IdentityPseudonym("42")
 	clock = clock.Add(72 * time.Hour)

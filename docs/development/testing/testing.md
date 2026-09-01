@@ -18,9 +18,9 @@
 
 | Metric                                                |  Value |
 | ----------------------------------------------------- | -----: |
-| Total test functions                                  | 12,268 |
+| Total test functions                                  | 12,269 |
 | Unit test functions                                   | 11,757 |
-| E2E test functions                                    |    511 |
+| E2E test functions                                    |    512 |
 | cmd test functions                                    |  1,153 |
 | Test files (internal/)                                |    475 |
 | Test files (cmd/)                                     |     87 |
@@ -35,7 +35,7 @@
 
 | Pattern                                |  Count |     % |
 | -------------------------------------- | -----: | ----: |
-| `TestFunc_Scenario` (2-part)           | 10,679 | 87.0% |
+| `TestFunc_Scenario` (2-part)           | 10,680 | 87.0% |
 | `TestFunc` (no underscore)             |    951 |  7.8% |
 | `TestFunc_Scenario_Expected` (3+ part) |    638 |  5.2% |
 
@@ -48,9 +48,9 @@
 | Core packages           |          1,969 |        116 | shared runtime packages such as config, GitLab client, OAuth, resources, prompts, and utilities |
 | Tools orchestration     |            293 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (173) |          8,342 |        345 | domain-specific GitLab tool handlers                                                            |
-| E2E integration         |            511 |        195 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
+| E2E integration         |            512 |        195 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
 | cmd packages            |          1,153 |         87 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,268** |    **757** |                                                                                                 |
+| **Total**               |     **12,269** |    **757** |                                                                                                 |
 
 ### Core Packages
 
@@ -332,7 +332,7 @@
 | cmd/internal/apidocs                           |    87.3% |
 | cmd/internal/docgen                            |    99.6% |
 | cmd/internal/mcpsurface                        |    85.0% |
-| cmd/server                                     |    88.4% |
+| cmd/server                                     |    88.0% |
 
 ### Core Packages
 
@@ -568,8 +568,8 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **edition** (87.0%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 - **cmd/internal/apidocs** (87.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_1to1/internal/actions** (87.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **cmd/server** (88.0%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **cmd/gen_docker_tools** (88.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
-- **cmd/server** (88.4%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
 - **testutil** (88.7%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **oauth** (89.4%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.

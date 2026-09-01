@@ -83,6 +83,11 @@ func startTelemetry(ctx context.Context, serverVersion string) (provider *teleme
 		// the announcement true.
 		restoreLogger = installSlogBridge()
 
+		// After the bridge, so the announcement reaches the collector. Before
+		// it, these lines went to stderr alone, which is the one place an
+		// operator running several replicas is not looking.
+		announceIdentityChoice()
+
 		snapshot := provider.Snapshot()
 		// Per signal rather than one value for the process. The two scalars are
 		// empty when the enabled signals disagree, which is the honest answer
