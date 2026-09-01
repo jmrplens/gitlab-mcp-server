@@ -18,7 +18,7 @@ type CreateInput struct {
 	ProjectID       toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	TagName         string               `json:"tag_name"   jsonschema:"Tag name of the release,required"`
 	Name            string               `json:"name"       jsonschema:"Name of the link,required"`
-	URL             string               `json:"url"        jsonschema:"URL of the link target. For packages use the real url returned by gitlab_package_publish — never construct URLs manually,required"`
+	URL             string               `json:"url"        jsonschema:"URL of the link target. For packages use the real url returned by gitlab_package_publish. Never construct URLs manually,required"`
 	DirectAssetPath string               `json:"direct_asset_path,omitempty" jsonschema:"Optional path for a direct asset link relative to the release: redirects to url. Use instead of the deprecated filepath."`
 	FilePath        string               `json:"filepath,omitempty" jsonschema:"Deprecated alias of direct_asset_path. Prefer direct_asset_path."`
 	LinkType        string               `json:"link_type,omitempty" jsonschema:"Type of the link (runbook, package, image, other)"`

@@ -391,7 +391,7 @@ type mrSummaryParams struct {
 // branches, and omits optional sections for empty description, labels, remove
 // source branch, and squash values.
 func buildMRSummary(p mrSummaryParams) string {
-	summary := fmt.Sprintf("Create merge request in project %s?\n\n**Title**: %s\n**Source**: %s → **Target**: %s",
+	summary := fmt.Sprintf("Create merge request in project %s?\n\n**Title**: %s\n**Source**: %s -> **Target**: %s",
 		toolutil.EscapeConsentValue(string(p.ProjectID)), toolutil.EscapeConsentValue(p.Title),
 		toolutil.EscapeConsentValue(p.SourceBranch), toolutil.EscapeConsentValue(p.TargetBranch))
 	if p.Description != "" {

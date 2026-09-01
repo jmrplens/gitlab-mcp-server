@@ -181,7 +181,7 @@ func main() {
 	if err != nil {
 		cmdutil.Fatalf("find repository root: %v", err)
 	}
-	cmdutil.Progressf("audit_catalog_first: scanning internal/tools source for ActionSpec catalog coverage…")
+	cmdutil.Progressf("audit_catalog_first: scanning internal/tools source for ActionSpec catalog coverage...")
 	report, err := buildCoverageReport(root)
 	if err != nil {
 		cmdutil.Fatalf("build coverage report: %v", err)
@@ -491,7 +491,7 @@ func staleAIContextLine(line string) bool {
 		return false
 	}
 	staleNeedles := []string{
-		"registerall() — delegates to sub-package registertools",
+		"registerall(). Delegates to sub-package registertools",
 		"delegates to sub-package registertools",
 		"create `register.go` with `registertools",
 		"existing package-local `registertools` files may remain",

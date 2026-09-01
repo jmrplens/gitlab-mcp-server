@@ -2211,7 +2211,7 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 		RelatedActions: []string{"vulnerability.severity_count", "vulnerability.get", "vulnerability.dismiss"},
 	},
 	"group.epic_list": {
-		Usage:          "Lists epics for a group full_path via the Work Items GraphQL API. Pagination uses first/after — do not pass per_page. Use group.epic_get when a specific epic_iid is known.",
+		Usage:          "Lists epics for a group full_path via the Work Items GraphQL API. Pagination uses first/after. Do not pass per_page. Use group.epic_get when a specific epic_iid is known.",
 		RelatedActions: []string{"group.epic_get", "group.epic_create", "group.epic_update"},
 	},
 	"tag.get": {

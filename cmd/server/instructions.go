@@ -122,7 +122,7 @@ func buildInstructions(toolSurface, capabilitySurface string, statelessHTTP bool
 		"tags, releases, repositories, commits, files, groups, members, and uploads.\n\n")
 
 	if toolSurface == config.ToolSurfaceDynamic {
-		b.WriteString("FINDING TOOLS — This server exposes two tools that reach the whole GitLab API:\n" +
+		b.WriteString("FINDING TOOLS. This server exposes two tools that reach the whole GitLab API:\n" +
 			"1. Call gitlab_find_action with a natural-language description of the task to get matching " +
 			"action IDs and their input schemas.\n" +
 			"2. Call gitlab_execute_action with that action ID, its parameters under 'params'.\n" +
@@ -130,7 +130,7 @@ func buildInstructions(toolSurface, capabilitySurface string, statelessHTTP bool
 			"directly, no find step needed.\n\n")
 	}
 
-	fmt.Fprintf(&b, "PROJECT DISCOVERY — To find the project_id needed for most operations:\n"+
+	fmt.Fprintf(&b, "PROJECT DISCOVERY. To find the project_id needed for most operations:\n"+
 		"1. Read the .git/config file from the workspace to find [remote \"origin\"] url = ...\n"+
 		"2. Call %s with that URL to get the project_id.\n"+
 		"3. Alternatively, use %s (owned=true) or %s to find projects by name.\n\n",
@@ -138,30 +138,30 @@ func buildInstructions(toolSurface, capabilitySurface string, statelessHTTP bool
 		refProjectList.render(toolSurface),
 		refSearchProjects.render(toolSurface))
 
-	fmt.Fprintf(&b, "DEFAULT BRANCH — When generating URLs to repository files or branches:\n"+
+	fmt.Fprintf(&b, "DEFAULT BRANCH. When generating URLs to repository files or branches:\n"+
 		"1. Call %s to retrieve the project metadata, which includes the default_branch field.\n"+
 		"2. ALWAYS use the returned default_branch value (e.g. develop, master) instead of assuming 'main'.\n"+
 		"3. Projects can use any branch as default, so NEVER hardcode 'main' in URLs.\n\n",
 		refProjectGet.render(toolSurface))
 
-	fmt.Fprintf(&b, "PACKAGE + RELEASE WORKFLOW — When uploading packages and linking them to releases:\n"+
+	fmt.Fprintf(&b, "PACKAGE + RELEASE WORKFLOW. When uploading packages and linking them to releases:\n"+
 		"1. Preferred: Use %s to upload a file and create the release link in one step.\n"+
 		"2. Alternative: Use %s first, then use the 'url' field from its response as the URL for %s.\n"+
-		"3. NEVER construct package download URLs manually — always use the actual URL returned by the publish tool.\n"+
+		"3. NEVER construct package download URLs manually. Always use the actual URL returned by the publish tool.\n"+
 		"4. RELEASE LINK NAMING: The link_name MUST be the exact filename (e.g. 'checksums.txt.asc'), "+
 		"NEVER add descriptive suffixes like '(GPG signature)'. go-selfupdate and other tools match asset names exactly.\n\n",
 		refPackagePublishAndLink.render(toolSurface),
 		refPackagePublish.render(toolSurface),
 		refReleaseLinkCreate.render(toolSurface))
 
-	fmt.Fprintf(&b, "RELEASE CREATION — When creating releases:\n"+
+	fmt.Fprintf(&b, "RELEASE CREATION. When creating releases:\n"+
 		"1. You do NOT need to create the tag first. Provide 'ref' (branch or SHA) in %s and GitLab auto-creates the tag.\n"+
-		"2. The response includes 'assets_sources' with auto-generated tar.gz/zip archive URLs — use those, "+
+		"2. The response includes 'assets_sources' with auto-generated tar.gz/zip archive URLs. Use those, "+
 		"never construct source archive URLs.\n"+
 		"3. Use 'tag_message' to create an annotated tag instead of a lightweight one.\n\n",
 		refReleaseCreate.render(toolSurface))
 
-	fmt.Fprintf(&b, "ID vs IID — GitLab uses two identifiers for issues and merge requests:\n"+
+	fmt.Fprintf(&b, "ID vs IID. GitLab uses two identifiers for issues and merge requests:\n"+
 		"1. IID is the project-scoped number shown in URLs and UI (e.g. issue #3, MR !5). Most operations expect IID.\n"+
 		"2. ID is the global numeric identifier. Only use %s when you have a global ID from another API response.",
 		refIssueGetByID.render(toolSurface))
@@ -182,11 +182,11 @@ func buildInstructions(toolSurface, capabilitySurface string, statelessHTTP bool
 				"(a client speaking an earlier revision cannot watch resources on this transport: the legacy " +
 				"resources/subscribe is refused here, because each request's session ends with its response)"
 		}
-		fmt.Fprintf(&b, "\n\nWATCHING RESOURCES — Instead of re-reading a resource in a loop to detect change:\n"+
+		fmt.Fprintf(&b, "\n\nWATCHING RESOURCES. Instead of re-reading a resource in a loop to detect change:\n"+
 			"1. Single-object resources (a pipeline, an issue, a merge request, a file, a wiki page, ...) can be "+
 			"watched for change notifications via %s; collections (issue lists, branch lists) cannot.\n"+
 			"2. Example: subscribe to gitlab://project/{project_id}/pipelines/latest to be notified when a pipeline's "+
-			"state changes, instead of polling it yourself — the server watches GitLab and sends "+
+			"state changes, instead of polling it yourself. The server watches GitLab and sends "+
 			"notifications/resources/updated only when the content actually changed.", subscribeMethod)
 	}
 

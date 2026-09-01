@@ -481,7 +481,7 @@ func validatePosition(ctx context.Context, client *gitlabclient.Client, projectI
 	}
 	if fileDiff == "" {
 		return fmt.Errorf(
-			"file %q is not in the merge request diff — inline comments can only be placed on changed files. "+
+			"file %q is not in the merge request diff. Inline comments can only be placed on changed files. "+
 				"Omit the position parameter to create a general (non-inline) comment instead", targetPath,
 		)
 	}

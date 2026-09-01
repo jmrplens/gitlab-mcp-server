@@ -200,7 +200,7 @@ func Unprotect(ctx context.Context, client *gitlabclient.Client, input Unprotect
 		if toolutil.IsNotFound(err) {
 			return UnprotectOutput{
 				Status:  "already_unprotected",
-				Message: fmt.Sprintf("Branch %q in project %s is not protected — no action needed.", input.BranchName, input.ProjectID),
+				Message: fmt.Sprintf("Branch %q in project %s is not protected. No action needed.", input.BranchName, input.ProjectID),
 			}, nil
 		}
 		return UnprotectOutput{}, toolutil.WrapErrWithStatusHint("branchUnprotect", err, http.StatusForbidden,

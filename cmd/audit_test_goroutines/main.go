@@ -115,12 +115,12 @@ func main() {
 	// rule 2 of the contract applies to converted Fatal guards, which review
 	// and the testutil helpers cover.
 	if *check && len(report.Fatal) > 0 {
-		fmt.Printf("check: FAIL — %d abort site(s) off the test goroutine (%d advisory errorf sites not gated)\n",
+		fmt.Printf("check: FAIL. %d abort site(s) off the test goroutine (%d advisory errorf sites not gated)\n",
 			len(report.Fatal), len(report.ErrorfNoReturn))
 		os.Exit(1)
 	}
 	if *check {
-		fmt.Printf("check: PASS — no testing.T aborts off the test goroutine (%d advisory errorf site(s))\n",
+		fmt.Printf("check: PASS. No testing.T aborts off the test goroutine (%d advisory errorf site(s))\n",
 			len(report.ErrorfNoReturn))
 	}
 }

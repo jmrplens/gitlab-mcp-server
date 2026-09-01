@@ -302,7 +302,7 @@ func ExtractGitLabMessage(err error) string {
 	}
 	const maxLen = 300
 	if len(msg) > maxLen {
-		msg = msg[:maxLen] + "…"
+		msg = msg[:maxLen] + "..."
 	}
 	return msg
 }

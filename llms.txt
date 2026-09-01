@@ -105,7 +105,7 @@ tool with an "action" parameter. Key meta-tools:
 
 Resources:
 
-45 read-only resources (26 resource kinds are subscribable — subscriptions/listen on protocol 2026-07-28, resources/subscribe on stateful sessions; change detection honored by polling):
+45 read-only resources (26 resource kinds are subscribable, subscriptions/listen on protocol 2026-07-28, resources/subscribe on stateful sessions; change detection honored by polling):
 
 - gitlab://groups: groups
 - gitlab://guides/code-review: code_review
@@ -216,7 +216,7 @@ Prompts:
 
 ## Optional
 
-- [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): Every tool and action with descriptions, without per-action schemas — sized to load into a context window
+- [Medium LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-medium.txt): Every tool and action with descriptions, without per-action schemas. Sized to load into a context window
 - [Full LLM reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full.txt): Complete reference with every per-action JSON schema; large, best used with search or retrieval
 - [Meta-tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-meta-tools.txt): Full schemas for the dynamic and meta-tool surfaces only
 - [Individual tools reference](https://jmrp.io/docs/gitlab-mcp-server/llms-full-individual-tools.txt): Full schemas for the one-tool-per-operation surface only

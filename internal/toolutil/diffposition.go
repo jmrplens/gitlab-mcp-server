@@ -129,7 +129,7 @@ func validateNewLineOnlyPosition(dl DiffLine, newLine int) (bool, error) {
 	}
 	if dl.Type == LineContext && dl.NewLine == newLine {
 		return true, fmt.Errorf(
-			"new_line %d is an unchanged context line, not an added line — "+
+			"new_line %d is an unchanged context line, not an added line. "+
 				"for context lines set BOTH old_line=%d and new_line=%d. "+
 				"Use new_line alone only for added (+) lines",
 			newLine, dl.OldLine, dl.NewLine,
@@ -144,7 +144,7 @@ func validateOldLineOnlyPosition(dl DiffLine, oldLine int) (bool, error) {
 	}
 	if dl.Type == LineContext && dl.OldLine == oldLine {
 		return true, fmt.Errorf(
-			"old_line %d is an unchanged context line, not a removed line — "+
+			"old_line %d is an unchanged context line, not a removed line. "+
 				"for context lines set BOTH old_line=%d and new_line=%d. "+
 				"Use old_line alone only for removed (-) lines",
 			oldLine, dl.OldLine, dl.NewLine,
@@ -188,8 +188,8 @@ func buildPositionError(diffLines []DiffLine, newLine, oldLine int) error {
 	}
 
 	return fmt.Errorf(
-		"position (%s) is outside the diff range — inline comments can only be placed on lines "+
-			"visible in the diff context (valid new_line: %d–%d, valid old_line: %d–%d). "+
+		"position (%s) is outside the diff range. Inline comments can only be placed on lines "+
+			"visible in the diff context (valid new_line: %d-%d, valid old_line: %d-%d). "+
 			"To comment on code outside the diff, omit the position parameter to create a general discussion instead. "+
 			"See https://docs.gitlab.com/api/discussions/#create-a-new-thread-in-the-merge-request-diff",
 		target, minNew, maxNew, minOld, maxOld,

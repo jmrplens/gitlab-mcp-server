@@ -165,9 +165,9 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	if err != nil {
 		switch {
 		case toolutil.ContainsAny(err, "already exists"):
-			return Output{}, toolutil.WrapErrWithHint("tagCreate", err, "a tag with this name already exists — use gitlab_tag_get to view it")
+			return Output{}, toolutil.WrapErrWithHint("tagCreate", err, "a tag with this name already exists. Use gitlab_tag_get to view it")
 		case toolutil.ContainsAny(err, "Target", "is invalid"):
-			return Output{}, toolutil.WrapErrWithHint("tagCreate", err, "the ref does not exist — use gitlab_branch_list or gitlab_tag_list to verify")
+			return Output{}, toolutil.WrapErrWithHint("tagCreate", err, "the ref does not exist. Use gitlab_branch_list or gitlab_tag_list to verify")
 		default:
 			return Output{}, toolutil.WrapErrWithMessage("tagCreate", err)
 		}

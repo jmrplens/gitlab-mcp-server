@@ -76,7 +76,7 @@ func applicationOptionsForAction(actionName, individualTool string) toolutil.Act
 				ExampleBinding: "params.id:12",
 			},
 		}
-		options.IndividualTool.Description = "Renew (rotate) an OAuth application secret by id. Returns: the application record including the freshly generated secret (store it securely — it cannot be retrieved later). See also: gitlab_list_applications, gitlab_create_application."
+		options.IndividualTool.Description = "Renew (rotate) an OAuth application secret by id. Returns: the application record including the freshly generated secret (store it securely, it cannot be retrieved later). See also: gitlab_list_applications, gitlab_create_application."
 	case "application_delete":
 		options.Usage = "Delete an OAuth application by numeric id. Use only after confirming the client is no longer in use."
 		options.Aliases = []string{"delete application", "remove oauth app", "revoke oauth client"}

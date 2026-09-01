@@ -99,7 +99,7 @@ func WriteHints(b *strings.Builder, hints ...string) {
 	if len(hints) == 0 {
 		return
 	}
-	b.WriteString("\n---\n💡 **Next steps:**\n")
+	b.WriteString("\n---\n\U0001F4A1 **Next steps:**\n")
 	for _, h := range hints {
 		fmt.Fprintf(b, "- %s\n", h)
 	}
@@ -109,7 +109,7 @@ func WriteHints(b *strings.Builder, hints ...string) {
 // response and returns the individual hint strings. Returns nil when
 // the section is absent.
 func ExtractHints(md string) []string {
-	const marker = "💡 **Next steps:**\n"
+	const marker = "\U0001F4A1 **Next steps:**\n"
 	_, after, ok := strings.Cut(md, marker)
 	if !ok {
 		return nil

@@ -59,7 +59,7 @@ func ParseRemoteURL(rawURL string) (string, error) {
 
 	// Detect truncated SSH URLs missing the user@ prefix (e.g. "host:group/project.git")
 	if sshMissingUserPattern.MatchString(rawURL) && !strings.Contains(rawURL, "://") {
-		return "", fmt.Errorf("remote URL %q looks like a truncated SSH remote missing the user prefix — "+
+		return "", fmt.Errorf("remote URL %q looks like a truncated SSH remote missing the user prefix. "+
 			"use the full URL including the user, e.g. git@%s", rawURL, rawURL)
 	}
 
@@ -70,7 +70,7 @@ func ParseRemoteURL(rawURL string) (string, error) {
 	}
 
 	if parsed.Host == "" {
-		return "", fmt.Errorf("remote URL %q has no host — provide the full URL from 'git remote -v' output, "+
+		return "", fmt.Errorf("remote URL %q has no host. Provide the full URL from 'git remote -v' output, "+
 			"e.g. https://host/group/project.git or git@host:group/project.git", rawURL)
 	}
 
@@ -100,12 +100,12 @@ func Resolve(ctx context.Context, client *gitlabclient.Client, input ResolveInpu
 
 	projectPath, err := ParseRemoteURL(input.RemoteURL)
 	if err != nil {
-		return ResolveOutput{}, fmt.Errorf("could not parse remote URL: %w — provide the URL from 'git remote -v' output", err)
+		return ResolveOutput{}, fmt.Errorf("could not parse remote URL: %w. Provide the URL from 'git remote -v' output", err)
 	}
 
 	project, _, err := client.GL().Projects.GetProject(projectPath, nil, gl.WithContext(ctx))
 	if err != nil {
-		return ResolveOutput{}, fmt.Errorf("project %q not found on GitLab: %w — verify the remote URL matches a project you have access to", projectPath, err)
+		return ResolveOutput{}, fmt.Errorf("project %q not found on GitLab: %w. Verify the remote URL matches a project you have access to", projectPath, err)
 	}
 
 	return ResolveOutput{

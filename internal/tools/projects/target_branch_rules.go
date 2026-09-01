@@ -66,7 +66,7 @@ func ListTargetBranchRules(ctx context.Context, client *gitlabclient.Client, inp
 	if err != nil {
 		return ListTargetBranchRulesOutput{}, toolutil.WrapErrWithStatusHint(
 			"projectListTargetBranchRules", err, http.StatusNotFound,
-			"pass the full project path (namespace/project), not a numeric ID — target branch rules require Premium/Ultimate",
+			"pass the full project path (namespace/project), not a numeric ID. Target branch rules require Premium/Ultimate",
 		)
 	}
 	out := make([]TargetBranchRuleOutput, 0, len(rules))

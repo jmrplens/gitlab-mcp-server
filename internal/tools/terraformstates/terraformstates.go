@@ -131,7 +131,7 @@ func Lock(ctx context.Context, client *gitlabclient.Client, input LockInput) (Lo
 		// client-go sends no Terraform lock-info body, so GitLab always
 		// rejects this call with 400; point to the working alternatives.
 		return LockOutput{}, toolutil.WrapErrWithStatusHint("gitlab_lock_terraform_state", err, http.StatusBadRequest,
-			"the Go client sends no Terraform lock-info body, so GitLab always rejects this call with 400 — run the terraform CLI against the GitLab HTTP backend for real locking; gitlab_unlock_terraform_state still works to clear stale locks")
+			"the Go client sends no Terraform lock-info body, so GitLab always rejects this call with 400. Run the terraform CLI against the GitLab HTTP backend for real locking; gitlab_unlock_terraform_state still works to clear stale locks")
 	}
 	return LockOutput{Success: true, Message: fmt.Sprintf("State '%s' locked", input.Name)}, nil
 }

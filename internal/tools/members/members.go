@@ -267,9 +267,9 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	if err != nil {
 		switch {
 		case toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("memberAdd", err, "user is already a member of this project — use gitlab_project_member_edit to change their access level")
+			return Output{}, toolutil.WrapErrWithHint("memberAdd", err, "user is already a member of this project. Use gitlab_project_member_edit to change their access level")
 		case toolutil.IsHTTPStatus(err, http.StatusNotFound):
-			return Output{}, toolutil.WrapErrWithHint("memberAdd", err, "user not found — use gitlab_list_users to search for the user")
+			return Output{}, toolutil.WrapErrWithHint("memberAdd", err, "user not found. Use gitlab_list_users to search for the user")
 		default:
 			return Output{}, toolutil.WrapErrWithMessage("memberAdd", err)
 		}

@@ -182,7 +182,7 @@ func printOutputReport(individual, meta []*mcp.Tool, fs []finding) {
 	fmt.Printf("| Title field set | %d/%d (%d%%) | %d/%d (%d%%) |\n",
 		individualStats.Title, len(individual), pct(individualStats.Title, len(individual)),
 		metaStats.Title, len(meta), pct(metaStats.Title, len(meta)))
-	fmt.Printf("| Description has 'See also' | %d/%d (%d%%) | — |\n\n",
+	fmt.Printf("| Description has 'See also' | %d/%d (%d%%) |. |\n\n",
 		individualStats.SeeAlso, len(individual), pct(individualStats.SeeAlso, len(individual)))
 
 	fmt.Printf("| Finding | Count |\n")
@@ -197,7 +197,7 @@ func printOutputReport(individual, meta []*mcp.Tool, fs []finding) {
 	fmt.Printf("| **Total findings** | **%d** |\n\n", len(fs))
 
 	if len(fs) == 0 {
-		fmt.Println("**No findings — all quality checks pass.**")
+		fmt.Println("**No findings. All quality checks pass.**")
 		return
 	}
 

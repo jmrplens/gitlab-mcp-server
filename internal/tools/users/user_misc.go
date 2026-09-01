@@ -69,7 +69,7 @@ func UploadCurrentUserAvatar(ctx context.Context, client *gitlabclient.Client, i
 	// legitimately zero even though the upload succeeded.
 	if out.ID == 0 && out.AvatarURL != "" {
 		out.NextSteps = []string{
-			"The avatar was updated; GitLab 19 returns only avatar_url for this endpoint — use gitlab_user_current to fetch the caller's full profile",
+			"The avatar was updated; GitLab 19 returns only avatar_url for this endpoint. Use gitlab_user_current to fetch the caller's full profile",
 		}
 	}
 	return out, nil
@@ -366,7 +366,7 @@ func FormatUserRunnerMarkdownString(o UserRunnerOutput) string {
 	}
 	toolutil.WriteHints(
 		&b,
-		"Save the runner token — it cannot be retrieved again",
+		"Save the runner token. It cannot be retrieved again",
 	)
 	return b.String()
 }

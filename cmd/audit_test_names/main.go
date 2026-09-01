@@ -391,7 +391,7 @@ func collectRenames(node *ast.File, cleanPath string, stderr io.Writer) map[stri
 		}
 		if suggested == "" || suggested == name || existing[suggested] {
 			if suggested != "" && suggested != name && existing[suggested] {
-				fmt.Fprintf(stderr, "  skip %s → %s in %s: target name already exists\n", name, suggested, cleanPath)
+				fmt.Fprintf(stderr, "  skip %s -> %s in %s: target name already exists\n", name, suggested, cleanPath)
 			}
 			continue
 		}
@@ -432,7 +432,7 @@ func applyFile(path string, stdout, stderr io.Writer, dryRun bool) (applied int,
 		if re.MatchString(result) {
 			result = re.ReplaceAllString(result, newName)
 			applied++
-			fmt.Fprintf(stdout, "%s: %s → %s\n", filepath.ToSlash(cleanPath), old, newName)
+			fmt.Fprintf(stdout, "%s: %s -> %s\n", filepath.ToSlash(cleanPath), old, newName)
 		}
 	}
 	if applied == 0 {

@@ -458,7 +458,7 @@ func ListBillableMembers(ctx context.Context, client *gitlabclient.Client, input
 	)
 	if err != nil {
 		return BillableMembersOutput{}, toolutil.WrapErrWithStatusHint("group_billable_members_list", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get — billable members are a Premium/Ultimate feature and require Owner access on the group")
+			"verify group_id with gitlab_group_get. Billable members are a Premium/Ultimate feature and require Owner access on the group")
 	}
 	out := BillableMembersOutput{
 		Members:    make([]BillableMemberOutput, len(members)),
@@ -492,7 +492,7 @@ func ListBillableMemberMemberships(ctx context.Context, client *gitlabclient.Cli
 	)
 	if err != nil {
 		return BillableMembershipsOutput{}, toolutil.WrapErrWithStatusHint("group_billable_member_memberships_list", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get and user_id with gitlab_list_billable_group_members — the user must be a billable member of the group (Premium/Ultimate)")
+			"verify group_id with gitlab_group_get and user_id with gitlab_list_billable_group_members. The user must be a billable member of the group (Premium/Ultimate)")
 	}
 	out := BillableMembershipsOutput{
 		Memberships: make([]BillableMembershipOutput, len(memberships)),
@@ -523,7 +523,7 @@ func RemoveBillableMember(ctx context.Context, client *gitlabclient.Client, inpu
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return toolutil.WrapErrWithHint("group_billable_member_remove", err,
-				"only directly removable billable members can be removed here; check the 'removable' flag from gitlab_list_billable_group_members — inherited members must be removed from their source group")
+				"only directly removable billable members can be removed here; check the 'removable' flag from gitlab_list_billable_group_members. Inherited members must be removed from their source group")
 		}
 		return toolutil.WrapErrWithStatusHint("group_billable_member_remove", err, http.StatusNotFound,
 			"verify group_id with gitlab_group_get and user_id with gitlab_list_billable_group_members")

@@ -289,7 +289,7 @@ func TestPrintReport_EmptyFindingsWritesNoFindingsMessage(t *testing.T) {
 	for _, want := range []string{
 		"# MCP Output Quality Audit Report",
 		"| Total tools | 1 | 0 |",
-		"**No findings — all quality checks pass.**",
+		"**No findings. All quality checks pass.**",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("printReport() output missing %q:\n%s", want, output)

@@ -938,7 +938,7 @@ func CherryPick(ctx context.Context, client *gitlabclient.Client, input CherryPi
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return Output{}, toolutil.WrapErrWithHint("cherryPickCommit", err, "the commit may produce an empty cherry-pick or the branch may not exist")
 		case toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("cherryPickCommit", err, "cherry-pick has merge conflicts — resolve manually or cherry-pick to a different branch")
+			return Output{}, toolutil.WrapErrWithHint("cherryPickCommit", err, "cherry-pick has merge conflicts. Resolve manually or cherry-pick to a different branch")
 		default:
 			return Output{}, toolutil.WrapErrWithMessage("cherryPickCommit", err)
 		}
@@ -974,7 +974,7 @@ func Revert(ctx context.Context, client *gitlabclient.Client, input RevertInput)
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return Output{}, toolutil.WrapErrWithHint("revertCommit", err, "the commit may already be reverted or the branch may not exist")
 		case toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("revertCommit", err, "revert has merge conflicts — resolve manually or revert on a different branch")
+			return Output{}, toolutil.WrapErrWithHint("revertCommit", err, "revert has merge conflicts. Resolve manually or revert on a different branch")
 		default:
 			return Output{}, toolutil.WrapErrWithMessage("revertCommit", err)
 		}

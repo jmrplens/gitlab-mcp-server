@@ -8,7 +8,7 @@
 
 ## How tokens are counted
 
-Token counts use the **cl100k_base** tokenizer (the GPT-4 / GPT-3.5 encoding) via [`github.com/tiktoken-go/tokenizer`](https://github.com/tiktoken-go/tokenizer) — a pure Go port of OpenAI's tiktoken. The vocabulary is embedded at compile time (~4 MB). This is significantly more accurate than the `bytes ÷ 4` heuristic for JSON-dense content like MCP tool schemas, which contain many braces, identifiers, and nested objects.
+Token counts use the **cl100k_base** tokenizer (the GPT-4 / GPT-3.5 encoding) via [`github.com/tiktoken-go/tokenizer`](https://github.com/tiktoken-go/tokenizer). A pure Go port of OpenAI's tiktoken. The vocabulary is embedded at compile time (~4 MB). This is significantly more accurate than the `bytes ÷ 4` heuristic for JSON-dense content like MCP tool schemas, which contain many braces, identifiers, and nested objects.
 
 ## What each column means
 
@@ -31,36 +31,36 @@ All measurements are against the current source tree. The catalog is built in-me
 | ---------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
 | `dynamic` / `full` (default) | Free/CE  |             2 |               851 | n/a                 |              1,501 |         8,832 |       10,333 |
 | `dynamic` / `minimal`        | Free/CE  |             2 |               851 | n/a                 |              1,501 |           170 |        1,671 |
-| `meta` / `full` (opaque)     | Free/CE  |            33 |               851 | `opaque`            |            124,750 |         8,832 |      133,582 |
-| `meta` / `minimal` (opaque)  | Free/CE  |            33 |               851 | `opaque`            |            124,750 |           170 |      124,920 |
-| `meta` / `full` (compact)    | Free/CE  |            33 |               851 | `compact`           |            190,297 |         8,832 |      199,129 |
-| `meta` / `minimal` (compact) | Free/CE  |            33 |               851 | `compact`           |            190,297 |           170 |      190,467 |
-| `meta` / `full` (full)       | Free/CE  |            33 |               851 | `full`              |            277,947 |         8,832 |      286,779 |
-| `meta` / `minimal` (full)    | Free/CE  |            33 |               851 | `full`              |            277,947 |           170 |      278,117 |
-| `individual` / `full`        | Free/CE  |           847 |               847 | n/a                 |            494,318 |         8,832 |      503,150 |
+| `meta` / `full` (opaque)     | Free/CE  |            33 |               851 | `opaque`            |            124,764 |         8,832 |      133,596 |
+| `meta` / `minimal` (opaque)  | Free/CE  |            33 |               851 | `opaque`            |            124,764 |           170 |      124,934 |
+| `meta` / `full` (compact)    | Free/CE  |            33 |               851 | `compact`           |            190,359 |         8,832 |      199,191 |
+| `meta` / `minimal` (compact) | Free/CE  |            33 |               851 | `compact`           |            190,359 |           170 |      190,529 |
+| `meta` / `full` (full)       | Free/CE  |            33 |               851 | `full`              |            277,972 |         8,832 |      286,804 |
+| `meta` / `minimal` (full)    | Free/CE  |            33 |               851 | `full`              |            277,972 |           170 |      278,142 |
+| `individual` / `full`        | Free/CE  |           847 |               847 | n/a                 |            494,314 |         8,832 |      503,146 |
 | `dynamic` / `full` (default) | Premium  |             2 |             1,003 | n/a                 |              1,501 |         8,832 |       10,333 |
 | `dynamic` / `minimal`        | Premium  |             2 |             1,003 | n/a                 |              1,501 |           170 |        1,671 |
-| `meta` / `full` (opaque)     | Premium  |            39 |             1,003 | `opaque`            |            144,004 |         8,832 |      152,836 |
-| `meta` / `minimal` (opaque)  | Premium  |            39 |             1,003 | `opaque`            |            144,004 |           170 |      144,174 |
-| `meta` / `full` (compact)    | Premium  |            39 |             1,003 | `compact`           |            220,963 |         8,832 |      229,795 |
-| `meta` / `minimal` (compact) | Premium  |            39 |             1,003 | `compact`           |            220,963 |           170 |      221,133 |
-| `meta` / `full` (full)       | Premium  |            39 |             1,003 | `full`              |            322,818 |         8,832 |      331,650 |
-| `meta` / `minimal` (full)    | Premium  |            39 |             1,003 | `full`              |            322,818 |           170 |      322,988 |
-| `individual` / `full`        | Premium  |           999 |               999 | n/a                 |            592,728 |         8,832 |      601,560 |
+| `meta` / `full` (opaque)     | Premium  |            39 |             1,003 | `opaque`            |            144,024 |         8,832 |      152,856 |
+| `meta` / `minimal` (opaque)  | Premium  |            39 |             1,003 | `opaque`            |            144,024 |           170 |      144,194 |
+| `meta` / `full` (compact)    | Premium  |            39 |             1,003 | `compact`           |            221,031 |         8,832 |      229,863 |
+| `meta` / `minimal` (compact) | Premium  |            39 |             1,003 | `compact`           |            221,031 |           170 |      221,201 |
+| `meta` / `full` (full)       | Premium  |            39 |             1,003 | `full`              |            322,848 |         8,832 |      331,680 |
+| `meta` / `minimal` (full)    | Premium  |            39 |             1,003 | `full`              |            322,848 |           170 |      323,018 |
+| `individual` / `full`        | Premium  |           999 |               999 | n/a                 |            592,723 |         8,832 |      601,555 |
 | `dynamic` / `full` (default) | Ultimate |             2 |             1,069 | n/a                 |              1,501 |         8,832 |       10,333 |
 | `dynamic` / `minimal`        | Ultimate |             2 |             1,069 | n/a                 |              1,501 |           170 |        1,671 |
-| `meta` / `full` (opaque)     | Ultimate |            50 |             1,069 | `opaque`            |            155,910 |         8,832 |      164,742 |
-| `meta` / `minimal` (opaque)  | Ultimate |            50 |             1,069 | `opaque`            |            155,910 |           170 |      156,080 |
-| `meta` / `full` (compact)    | Ultimate |            50 |             1,069 | `compact`           |            237,290 |         8,832 |      246,122 |
-| `meta` / `minimal` (compact) | Ultimate |            50 |             1,069 | `compact`           |            237,290 |           170 |      237,460 |
-| `meta` / `full` (full)       | Ultimate |            50 |             1,069 | `full`              |            343,969 |         8,832 |      352,801 |
-| `meta` / `minimal` (full)    | Ultimate |            50 |             1,069 | `full`              |            343,969 |           170 |      344,139 |
-| `individual` / `full`        | Ultimate |         1,065 |             1,065 | n/a                 |            621,741 |         8,832 |      630,573 |
+| `meta` / `full` (opaque)     | Ultimate |            50 |             1,069 | `opaque`            |            155,938 |         8,832 |      164,770 |
+| `meta` / `minimal` (opaque)  | Ultimate |            50 |             1,069 | `opaque`            |            155,938 |           170 |      156,108 |
+| `meta` / `full` (compact)    | Ultimate |            50 |             1,069 | `compact`           |            237,366 |         8,832 |      246,198 |
+| `meta` / `minimal` (compact) | Ultimate |            50 |             1,069 | `compact`           |            237,366 |           170 |      237,536 |
+| `meta` / `full` (full)       | Ultimate |            50 |             1,069 | `full`              |            344,008 |         8,832 |      352,840 |
+| `meta` / `minimal` (full)    | Ultimate |            50 |             1,069 | `full`              |            344,008 |           170 |      344,178 |
+| `individual` / `full`        | Ultimate |         1,065 |             1,065 | n/a                 |            621,737 |         8,832 |      630,569 |
 
 ## Interpretation guide
 
 - **Dynamic mode** (default) exposes only 2 tools (`gitlab_find_action` + `gitlab_execute_action`) but reaches all catalog actions via routing. This is the lowest-token surface.
 - **Meta mode** exposes one dispatcher per domain (e.g. `gitlab_branch`, `gitlab_issue`). The `META_PARAM_SCHEMA` controls whether the action parameter's schema is generic (`opaque`) or detailed (`compact`/`full`). `full` doubles the token cost vs `opaque` but gives the LLM exact per-action input shapes.
-- **Individual mode** exposes every action as its own tool. This is the highest-fidelity but most expensive surface — suitable only for clients with large context windows.
+- **Individual mode** exposes every action as its own tool. This is the highest-fidelity but most expensive surface. Suitable only for clients with large context windows.
 - **Tier scaling**: Free/CE has the fewest actions. Premium adds enterprise features. Ultimate includes everything. The token cost scales with the number of available actions.
 - **Shared tokens** are dominated by MCP resources (`gitlab://tools` template, workflow guides) and prompts. The `minimal` capability surface strips these to just `gitlab://tools`, cutting shared overhead by ~90%%.

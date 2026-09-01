@@ -133,7 +133,7 @@ func RichContentHint(features, webURL string) string {
 	if features == "" || webURL == "" {
 		return ""
 	}
-	return fmt.Sprintf("\n> **Contains**: %s — [view in GitLab](%s) for full rendering.\n", features, webURL)
+	return fmt.Sprintf("\n> **Contains**: %s. [View in GitLab](%s) for full rendering.\n", features, webURL)
 }
 
 // EscapeMdHeading sanitizes a user-controlled string that will be interpolated

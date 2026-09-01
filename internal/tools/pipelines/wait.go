@@ -56,7 +56,7 @@ func Wait(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Cl
 		FailOnError:     input.FailOnError,
 		PollDuration:    pollDuration,
 		ProgressMessage: func(attempt int) string {
-			return fmt.Sprintf("Polling pipeline #%d (attempt %d, status check)…", input.PipelineID, attempt)
+			return fmt.Sprintf("Polling pipeline #%d (attempt %d, status check)...", input.PipelineID, attempt)
 		},
 		Poll: func(pollCtx context.Context) (DetailOutput, error) {
 			p, _, err := client.GL().Pipelines.GetPipeline(string(input.ProjectID), input.PipelineID, gl.WithContext(pollCtx))

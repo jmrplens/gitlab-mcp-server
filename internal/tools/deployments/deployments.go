@@ -313,10 +313,10 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 			switch {
 			case toolutil.ContainsAny(err, "tag is missing"):
 				return Output{}, toolutil.WrapErrWithHint(opCreateDeployment, err,
-					"GitLab 19 requires the tag field explicitly — retry with tag:false for branch refs or tag:true for tag refs")
+					"GitLab 19 requires the tag field explicitly. Retry with tag:false for branch refs or tag:true for tag refs")
 			case toolutil.ContainsAny(err, "status does not have a valid value"):
 				return Output{}, toolutil.WrapErrWithHint(opCreateDeployment, err,
-					"the API accepts status running, success, failed, or canceled when creating a deployment — GitLab 19 rejects 'created'; omit status or use an accepted value")
+					"the API accepts status running, success, failed, or canceled when creating a deployment. GitLab 19 rejects 'created'; omit status or use an accepted value")
 			}
 			return Output{}, toolutil.WrapErrWithHint(opCreateDeployment, err,
 				"verify environment exists with gitlab_environment_list, sha is a valid commit, and ref is an existing branch/tag")

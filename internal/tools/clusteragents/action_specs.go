@@ -23,9 +23,9 @@ const (
 
 	descTokGet = "Get a single Kubernetes agent token's metadata. Returns: the token's id, name, description, agent_id, status, created_at, created_by_user_id, and last_used_at (the confidential value is not returned for stored tokens). See also: gitlab_list_cluster_agent_tokens, gitlab_create_cluster_agent_token, gitlab_revoke_cluster_agent_token."
 
-	descTokCreate = "Create a new token for a Kubernetes agent. An agent may hold at most two active tokens; revoke an existing token first if creation fails. Returns: the created token's id, name, description, agent_id, status, created_at, created_by_user_id, last_used_at, and the confidential token value (shown only once — store it securely). See also: gitlab_list_cluster_agent_tokens, gitlab_revoke_cluster_agent_token, gitlab_get_cluster_agent."
+	descTokCreate = "Create a new token for a Kubernetes agent. An agent may hold at most two active tokens; revoke an existing token first if creation fails. Returns: the created token's id, name, description, agent_id, status, created_at, created_by_user_id, last_used_at, and the confidential token value (shown only once, store it securely). See also: gitlab_list_cluster_agent_tokens, gitlab_revoke_cluster_agent_token, gitlab_get_cluster_agent."
 
-	descTokRevoke = "Revoke a Kubernetes agent token. Returns: a success status and confirmation message. Revocation is irreversible — the token cannot be reactivated. See also: gitlab_list_cluster_agent_tokens, gitlab_create_cluster_agent_token, gitlab_delete_cluster_agent."
+	descTokRevoke = "Revoke a Kubernetes agent token. Returns: a success status and confirmation message. Revocation is irreversible. The token cannot be reactivated. See also: gitlab_list_cluster_agent_tokens, gitlab_create_cluster_agent_token, gitlab_delete_cluster_agent."
 )
 
 // ActionSpecs returns canonical specs for cluster agent tools.

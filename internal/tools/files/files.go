@@ -185,7 +185,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 	info, _, err := client.GL().RepositoryFiles.CreateFile(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
-			return FileInfoOutput{}, toolutil.WrapErrWithHint("fileCreate", err, "the file may already exist — use gitlab_file_update to modify an existing file, or verify the branch name")
+			return FileInfoOutput{}, toolutil.WrapErrWithHint("fileCreate", err, "the file may already exist. Use gitlab_file_update to modify an existing file, or verify the branch name")
 		}
 		return FileInfoOutput{}, toolutil.WrapErrWithMessage("fileCreate", err)
 	}
@@ -254,7 +254,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return FileInfoOutput{}, toolutil.WrapErrWithHint("fileUpdate", err, "verify the file exists and encoding is 'text' or 'base64'; check that the branch name is correct")
 		case toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return FileInfoOutput{}, toolutil.WrapErrWithHint("fileUpdate", err, "the file was modified since last_commit_id — re-read the file to get the current last_commit_id and retry")
+			return FileInfoOutput{}, toolutil.WrapErrWithHint("fileUpdate", err, "the file was modified since last_commit_id. Re-read the file to get the current last_commit_id and retry")
 		default:
 			return FileInfoOutput{}, toolutil.WrapErrWithMessage("fileUpdate", err)
 		}
@@ -326,7 +326,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().RepositoryFiles.DeleteFile(string(input.ProjectID), input.FilePath, opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusNotFound) {
-			return toolutil.WrapErrWithHint("fileDelete", err, "the file does not exist at the specified path or branch — verify with gitlab_file_get first")
+			return toolutil.WrapErrWithHint("fileDelete", err, "the file does not exist at the specified path or branch. Verify with gitlab_file_get first")
 		}
 		return toolutil.WrapErrWithMessage("fileDelete", err)
 	}

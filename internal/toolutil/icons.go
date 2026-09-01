@@ -127,7 +127,7 @@ func icon(name, svg string) []mcp.Icon {
 func webpIcon(name, variant string, theme mcp.IconTheme) mcp.Icon {
 	data, err := webpFS.ReadFile(fmt.Sprintf("icons/webp/%s-%s.webp", name, variant))
 	if err != nil {
-		panic(fmt.Sprintf("toolutil: missing embedded icon asset for %q (%s): %v — run `go run ./cmd/gen_icon_webp/`", name, variant, err))
+		panic(fmt.Sprintf("toolutil: missing embedded icon asset for %q (%s): %v. Run `go run ./cmd/gen_icon_webp/`", name, variant, err))
 	}
 	return mcp.Icon{
 		Source:   "data:" + webpMIME + ";base64," + base64.StdEncoding.EncodeToString(data),

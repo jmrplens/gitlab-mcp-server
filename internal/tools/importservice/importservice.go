@@ -326,7 +326,7 @@ func FormatCancelledImport(out *CancelledImportOutput) string {
 	fmt.Fprintf(&sb, fmtIDRow, out.ID)
 	fmt.Fprintf(&sb, fmtNameRow, toolutil.EscapeMdTableCell(out.Name))
 	fmt.Fprintf(&sb, fmtImportStatusRow, toolutil.EscapeMdTableCell(out.ImportStatus))
-	toolutil.WriteHints(&sb, "Import has been cancelled — start a new import if needed")
+	toolutil.WriteHints(&sb, "Import has been cancelled. Start a new import if needed")
 	return sb.String()
 }
 
