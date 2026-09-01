@@ -74,6 +74,7 @@ var allowed = map[string]string{
 	"gitlab_ci_ymls":        "a GitLab template type and API path segment (templates/gitlab_ci_ymls)",
 	"gitlab_duo":            "a docs.gitlab.com URL path segment (user/gitlab_duo/...)",
 	"gitlab_status":         "a JSON struct field (json:\"gitlab_status\") quoted in error-handling docs",
+	"gitlab_mcp_server":     "the Python import package of the PyPI distribution (python -m gitlab_mcp_server), not a tool",
 }
 
 // allowedPrefixes exempts whole families that exist only on a live GitLab.com

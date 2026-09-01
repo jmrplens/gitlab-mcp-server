@@ -171,3 +171,6 @@ test/e2e/.bitbucket-admin-pass
 # have been committed by accident before, so the pattern is ignored rather
 # than relied on being cleaned up by hand.
 /tmp_*
+
+# PyPI wheelhouse assembled by scripts/build_pypi.py (generated per release)
+/pypi/dist/

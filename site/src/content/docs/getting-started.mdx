@@ -1,6 +1,6 @@
 ---
 title: Getting Started
-description: Install and configure GitLab MCP Server in under five minutes — via Docker, native binary, or npm — for VS Code, Claude, Cursor, and other MCP clients.
+description: Install and configure GitLab MCP Server in under five minutes — via Docker, native binary, npm, or PyPI — for VS Code, Claude, Cursor, and other MCP clients.
 chips:
   - text: Zero-install with Docker
   - text: Any MCP client
@@ -80,7 +80,7 @@ import FAQ from "../../components/FAQ.astro";
 
 :::tip[At a glance]
 
-- **Three ways to install**: a Docker image, a single native binary, or the npm launcher.
+- **Four ways to install**: a Docker image, a single native binary, the npm launcher, or the PyPI wheels (uvx/pipx).
 - **The minimum configuration is one value** — a GitLab personal access token with `api` scope in `GITLAB_TOKEN`. Set `GITLAB_URL` only for self-managed instances.
 - **The default surface is dynamic mode**: your client sees two tools, and they reach every GitLab operation on demand.
 
@@ -175,6 +175,47 @@ Point any MCP client at `npx` with no install at all:
     "gitlab": {
       "command": "npx",
       "args": ["-y", "@jmrp.io/gitlab-mcp-server"],
+      "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
+    }
+  }
+}
+```
+
+### PyPI / uvx (any platform)
+
+Published as [`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/) using the same model as `uv` and `ruff` (the unprefixed PyPI name is an empty registration by an unrelated account, under PEP 541 reclamation): each platform wheel carries the native binary, the installer places it on the scripts path as the command itself, and no Python runs when the server does.
+
+<Tabs syncKey="pypkg">
+<TabItem label="uvx">
+
+```bash
+# Zero install — clients can launch it directly
+uvx jmrplens-gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pipx">
+
+```bash
+pipx install jmrplens-gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pip">
+
+```bash
+pip install jmrplens-gitlab-mcp-server
+```
+
+</TabItem>
+</Tabs>
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "uvx",
+      "args": ["jmrplens-gitlab-mcp-server"],
       "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
     }
   }

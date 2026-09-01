@@ -1,6 +1,6 @@
 ---
 title: Primeros pasos
-description: Instala y configura GitLab MCP Server en menos de cinco minutos — con Docker, binario nativo o npm — para VS Code, Claude, Cursor y otros clientes MCP.
+description: Instala y configura GitLab MCP Server en menos de cinco minutos — con Docker, binario nativo, npm o PyPI — para VS Code, Claude, Cursor y otros clientes MCP.
 chips:
   - text: Sin instalación con Docker
   - text: Cualquier cliente MCP
@@ -80,7 +80,7 @@ import stats from "../../../data/stats.json";
 
 :::tip[De un vistazo]
 
-- **Tres formas de instalarlo**: una imagen Docker, un único binario nativo o el lanzador de npm.
+- **Cuatro formas de instalarlo**: una imagen Docker, un único binario nativo, el lanzador de npm o las wheels de PyPI (uvx/pipx).
 - **La configuración mínima es un solo valor**: un token de acceso personal de GitLab con scope `api` en `GITLAB_TOKEN`. Define `GITLAB_URL` solo para instancias autogestionadas.
 - **La superficie predeterminada es el modo dinámico**: tu cliente ve dos herramientas, y con ellas alcanza cualquier operación de GitLab bajo demanda.
 
@@ -176,6 +176,47 @@ Apunta cualquier cliente MCP a `npx` sin instalar nada:
     "gitlab": {
       "command": "npx",
       "args": ["-y", "@jmrp.io/gitlab-mcp-server"],
+      "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
+    }
+  }
+}
+```
+
+### PyPI / uvx (cualquier plataforma)
+
+Publicado como [`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/) con el mismo modelo que `uv` y `ruff` (el nombre sin prefijo en PyPI es un registro vacío de una cuenta ajena, en proceso de reclamación PEP 541): cada wheel de plataforma lleva el binario nativo, el instalador lo coloca en la ruta de scripts como el propio comando, y no se ejecuta Python cuando corre el servidor.
+
+<Tabs syncKey="pypkg">
+<TabItem label="uvx">
+
+```bash
+# Sin instalación — los clientes pueden lanzarlo directamente
+uvx jmrplens-gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pipx">
+
+```bash
+pipx install jmrplens-gitlab-mcp-server
+```
+
+</TabItem>
+<TabItem label="pip">
+
+```bash
+pip install jmrplens-gitlab-mcp-server
+```
+
+</TabItem>
+</Tabs>
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "uvx",
+      "args": ["jmrplens-gitlab-mcp-server"],
       "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
     }
   }

@@ -67,6 +67,30 @@ Point any MCP client at `npx` with no install at all:
 
 Update with `npm update -g @jmrp.io/gitlab-mcp-server`: npm owns the binary, as every distribution channel does, and the server never replaces itself on disk. The Linux packages declare `libc: ["glibc"]` because the prebuilt binaries need the glibc dynamic loader, so npm skips them on musl systems such as Alpine; there, run the Docker image (`docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false`) or build from source.
 
+### PyPI / uvx (any platform)
+
+The server is also published as [`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/), using the same model as `uv` and `ruff`: each platform wheel carries the native binary, the installer places it on the scripts path as the `gitlab-mcp-server` command itself, and no Python runs when the server does. (The unprefixed PyPI name is an empty registration by an unrelated account, under PEP 541 reclamation.)
+
+```bash
+uvx jmrplens-gitlab-mcp-server             # zero install; clients launch it directly
+pipx install jmrplens-gitlab-mcp-server    # or install globally (pipx)
+pip install jmrplens-gitlab-mcp-server     # or into the active environment (pip)
+```
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "uvx",
+      "args": ["jmrplens-gitlab-mcp-server"],
+      "env": { "GITLAB_URL": "https://gitlab.com", "GITLAB_TOKEN": "glpat-…" }
+    }
+  }
+}
+```
+
+Like npm, the Linux wheels need glibc (manylinux); on musl systems such as Alpine use the Docker image instead.
+
 ### One-line installer (native binary)
 
 ```bash
