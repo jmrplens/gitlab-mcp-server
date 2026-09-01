@@ -250,7 +250,7 @@ func (c Client) elicit(ctx context.Context, message string, schema map[string]an
 		return nil, err
 	}
 
-	slog.Debug("sending elicitation request", "message_length", len(message))
+	slog.DebugContext(ctx, "sending elicitation request", "message_length", len(message))
 
 	result, err := c.session.Elicit(ctx, &mcp.ElicitParams{
 		Message:         message,
@@ -293,7 +293,7 @@ func (c Client) ElicitURL(ctx context.Context, gitlabBaseURL, targetURL, message
 		elicitationID = id
 	}
 
-	slog.Debug("sending URL elicitation", "url", targetURL, "elicitationId", elicitationID)
+	slog.DebugContext(ctx, "sending URL elicitation", "url", targetURL, "elicitationId", elicitationID)
 
 	result, err := c.session.Elicit(ctx, &mcp.ElicitParams{
 		Mode:          "url",

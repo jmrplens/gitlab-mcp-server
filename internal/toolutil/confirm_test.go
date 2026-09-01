@@ -729,3 +729,23 @@ func TestConfirmDestructiveAction_ProtocolFaultsAreJSONRPCErrors(t *testing.T) {
 		})
 	}
 }
+
+// TestIsYOLOMode_TheFlagOverridesTheInheritedAlias pins the precedence a review
+// caught backwards: with AUTOPILOT=true inherited from the environment,
+// --yolo-mode=false writes YOLO_MODE=false and that has to win. ORing the two
+// variables meant the most specific instruction lost to an inherited one, and
+// a destructive-action bypass that cannot be turned off is a safety setting in
+// name only.
+func TestIsYOLOMode_TheFlagOverridesTheInheritedAlias(t *testing.T) {
+	t.Setenv("AUTOPILOT", "true")
+	t.Setenv("YOLO_MODE", "false")
+
+	if IsYOLOMode() {
+		t.Error("YOLO_MODE=false lost to an inherited AUTOPILOT=true; the specific name must decide when set")
+	}
+
+	t.Setenv("YOLO_MODE", "")
+	if !IsYOLOMode() {
+		t.Error("with YOLO_MODE unset, the AUTOPILOT alias must still work")
+	}
+}

@@ -178,6 +178,14 @@ linters:
         # GitLab API JSON uses "noteable_type", "noteable_id", "noteable_iid" (with 'e').
         - typo: "noteable"
           correction: "noteable"
+        # Verbatim quotations from the EDPB pseudonymisation guidelines and from
+        # GDPR Article 4(5), which are written in British English. Correcting the
+        # spelling inside a quotation would misquote the source, so these two
+        # words keep the spelling the source used.
+        - typo: "unauthorised"
+          correction: "unauthorised"
+        - typo: "organisational"
+          correction: "organisational"
 
     nolintlint:
       require-explanation: true

@@ -132,7 +132,7 @@ func handleProjectActivityReport(ctx context.Context, client *gitlabclient.Clien
 		After: &sinceISO,
 	}, gl.WithContext(ctx))
 	if err != nil {
-		slog.Warn("failed to fetch project events", "error", err)
+		slog.WarnContext(ctx, "failed to fetch project events", "error", err)
 	}
 
 	// Merged MRs in the period
@@ -286,7 +286,7 @@ func collectMRDiscussionInfos(ctx context.Context, client *gitlabclient.Client, 
 			PerPage: maxListItems,
 		}, gl.WithContext(ctx))
 		if dErr != nil {
-			slog.Warn("failed to fetch discussions", "merge_request_iid", mr.IID, "error", dErr)
+			slog.WarnContext(ctx, "failed to fetch discussions", "merge_request_iid", mr.IID, "error", dErr)
 			infos = append(infos, info)
 			continue
 		}

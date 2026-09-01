@@ -10,6 +10,9 @@ import (
 	"math/rand/v2"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // Errors a [Reader] may return to steer a watcher. Everything else is
@@ -119,6 +122,15 @@ const (
 // Options configures a [Manager]. The zero value is usable: every field
 // falls back to its documented default.
 type Options struct {
+	// ResourceAttributes says what a poll span may record about the resource
+	// it polls, and is nil by default, which records nothing.
+	//
+	// A function rather than a redactor value: the redaction rules live in a
+	// package that pulls the OpenTelemetry SDK in, and this one deliberately
+	// depends on the API alone. Passing the decision keeps that boundary while
+	// leaving one place where the rule is written.
+	ResourceAttributes func(uri string) []attribute.KeyValue
+
 	// BaseInterval is the polling interval for a resource with no
 	// lifecycle signal. Defaults to [DefaultBaseInterval].
 	BaseInterval time.Duration
@@ -229,6 +241,10 @@ type Manager[S comparable] struct {
 type watcher[S comparable] struct {
 	uri  string
 	kind Kind
+	// origin is the span context of the subscribe request that created this
+	// watcher, kept so each poll can link back to it. It is a link and never a
+	// parent: see detachSpan for why inheriting it is wrong.
+	origin trace.SpanContext
 	// subscribers holds who asked for this watch, by identity rather than
 	// by count. A set is what makes the bookkeeping idempotent: one session
 	// subscribing twice must not need two unsubscribes, and a session that
@@ -337,13 +353,20 @@ func (m *Manager[S]) start(ctx context.Context, w *watcher[S]) error {
 
 	// The deadline is the absolute cap, not the lease: reaching the lease
 	// slows a watcher down, and only [Options.MaxLifetime] ends it. The
-	// watcher detaches from the subscribe request's cancellation — the
+	// watcher detaches from the subscribe request's cancellation, since the
 	// whole point of a subscription is to outlive the request that created
-	// it — while WithoutCancel keeps that request's values, so anything
-	// tracing carried in stays attached to the polls it caused. Close
-	// stops the watcher through its cancel func, which the registry holds
-	// for exactly that purpose.
-	watchCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.opts.MaxLifetime)
+	// it, while WithoutCancel keeps that request's other values. Close stops
+	// the watcher through its cancel func, which the registry holds for
+	// exactly that purpose.
+	//
+	// The span is deliberately NOT among the values kept. An earlier comment
+	// here said the opposite, that tracing carried in should stay attached to
+	// the polls it caused, and that is the one value inheritance gets wrong:
+	// the subscribe span ends in milliseconds while the watcher runs for up to
+	// a day, so every poll would nest under a span that finished long ago. It
+	// is recorded as a link instead. See detachSpan.
+	w.origin = trace.SpanContextFromContext(ctx)
+	watchCtx, cancel := context.WithTimeout(detachSpan(context.WithoutCancel(ctx)), m.opts.MaxLifetime)
 
 	m.mu.Lock()
 	switch {
@@ -786,6 +809,9 @@ func (m *Manager[S]) evictDemotedLocked() bool {
 // poll performs one read and reports how long to wait before the next one,
 // and whether the watcher should stop entirely.
 func (m *Manager[S]) poll(ctx context.Context, w *watcher[S]) (next time.Duration, stopReason error) {
+	ctx, span := m.pollSpan(ctx, w)
+	defer span.End()
+
 	content, err := m.reader.Read(ctx, w.uri)
 	switch {
 	case err == nil:
@@ -811,7 +837,11 @@ func (m *Manager[S]) poll(ctx context.Context, w *watcher[S]) (next time.Duratio
 		// stop reason here is deliberate: the select at the top of the
 		// loop sees the same cancellation and retires the watcher with the
 		// cause, where this branch could only guess at it.
-		//nolint:nilerr // the cancellation is reported by the caller's select, not here
+		//
+		// The ctx here is the poll span's, derived from the watcher's, so it
+		// reports the same cancellation. That derivation is also why the
+		// nilerr suppression this branch used to carry is gone: the linter no
+		// longer traces the returned nil back to the read error.
 		return m.opts.BaseInterval, nil
 
 	default:

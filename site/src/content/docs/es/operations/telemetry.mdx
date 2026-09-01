@@ -1,0 +1,470 @@
+---
+title: OpenTelemetry
+description: Exporta trazas, métricas y logs por OTLP a un colector que tú ejecutas. Desactivado por defecto, con todas las opciones de configuración, las trampas de codificación de credenciales y exactamente qué sale y qué no sale del proceso.
+datePublished: "2026-08-30"
+faq:
+  - q: "¿Este servidor envía telemetría a su mantenedor?"
+    a: "No, y no hay ninguna dirección de la que darse de baja. La telemetría está desactivada por defecto, y cuando la activas los datos van a un colector que **tú** configuras mediante la variable estándar `OTEL_EXPORTER_OTLP_ENDPOINT`. Si no configuras nada, los exportadores usan su propio valor por defecto, `https://localhost:4318`, tu propia máquina, donde la exportación falla silenciosamente salvo que ejecutes ahí un colector. Ningún valor por defecto de ninguna ruta del código apunta a otro sitio."
+  - q: "¿Qué contiene realmente la telemetría?"
+    a: "Operaciones, nunca su contenido. El método MCP invocado, la acción canónica del catálogo como `issue.list`, si tuvo éxito y cuánto tardó. Los argumentos de las herramientas, sus resultados, el contenido de los recursos, las consultas de búsqueda, los cuerpos de respuesta de GitLab y las credenciales quedan excluidos por diseño, no por una opción: no existe ninguna opción que los incluyera."
+  - q: "¿Puedo autenticarme ante mi colector con usuario y contraseña?"
+    a: "Sí, como autenticación básica HTTP a través de `OTEL_EXPORTER_OTLP_HEADERS`. La especificación de OpenTelemetry no define ninguna variable separada de usuario ni de contraseña: todos los esquemas son cabeceras. Escribe `Authorization=Basic%20<base64>`, con el espacio codificado en porcentaje. También se admite TLS mutuo mediante las variables estándar de certificado."
+  - q: "¿Un colector averiado rompe mi servidor?"
+    a: "No. Un colector caído, que rechaza conexiones o que rechaza tu credencial produce líneas de log en stderr y no cambia nada más: el mismo estado, el mismo cuerpo y la misma latencia para cada cliente. La especificación deja esta decisión abierta, y este servidor elige seguir sirviendo GitLab cuando no puede alcanzar un colector."
+---
+
+
+import { Aside, Tabs, TabItem } from "@astrojs/starlight/components";
+
+Este servidor puede exportar trazas, métricas y logs por OTLP a un colector que
+tú ejecutas. Está **desactivado por defecto**.
+
+<Aside type="note" title="Dos cosas antes del detalle">
+La telemetría va a **tu** colector. Nunca se envía nada al mantenedor de este
+proyecto, y no hay ninguna dirección de la que tengas que darte de baja.
+
+Lo que se registra describe **operaciones**, nunca su contenido: la acción
+invocada, el resultado, la duración. No el proyecto que nombraste, ni el cuerpo
+de la incidencia, ni tu consulta de búsqueda, ni tu token.
+</Aside>
+
+## Cómo activarlo
+
+<Tabs>
+<TabItem label="Modo HTTP">
+
+```bash
+gitlab-mcp-server --http --telemetry
+```
+
+</TabItem>
+<TabItem label="stdio (JSON del cliente)">
+
+```json
+{
+  "mcpServers": {
+    "gitlab": {
+      "command": "gitlab-mcp-server",
+      "env": {
+        "GITLAB_URL": "https://gitlab.com",
+        "GITLAB_TOKEN": "glpat-…",
+        "GITLAB_MCP_TELEMETRY": "true",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4318"
+      }
+    }
+  }
+}
+```
+
+</TabItem>
+</Tabs>
+
+Esa es toda la superficie que este proyecto posee. El endpoint, las
+credenciales, el muestreo, el agrupamiento y los atributos de recurso vienen de
+las variables de entorno `OTEL_*` estándar que los exportadores de OpenTelemetry
+leen por su cuenta. Reinventar esa superficie significaría mantener una segunda
+copia peor de una configuración que ya conoces, y rompería el caso corriente de
+una máquina que exporta `OTEL_EXPORTER_OTLP_ENDPOINT` una vez para todos sus
+servicios.
+
+### Tres trampas de las variables estándar
+
+No son cosa de este servidor, pillan a mucha gente, y las tres fallan en
+silencio.
+
+<Aside type="caution" title="`http://` no es el valor por defecto">
+Los exportadores de Go apuntan por defecto a `https://localhost:4318`. Activar
+la telemetría sin endpoint intenta TLS contra un colector local en texto plano,
+y falla cada lote en las tres señales. Escribe el esquema:
+`OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`. Escribir solo
+`localhost:4318` también da https.
+</Aside>
+
+<Aside type="caution" title="Las duraciones son milisegundos enteros">
+"Cualquier valor que represente un tiempo de espera DEBE ser un entero que
+represente un número de milisegundos". Así que `OTEL_EXPORTER_OTLP_TIMEOUT=30s`
+no significa treinta segundos: no parsea y se mantiene el valor por defecto de
+10s. Escribe `30000`. Todas las duraciones `OTEL_BSP_*`, `OTEL_BLRP_*` y
+`OTEL_METRIC_*` se comportan igual, mientras que todas las banderas que define
+*este* servidor aceptan duraciones de Go, lo que hace la inconsistencia más
+fácil de pisar, no más difícil.
+</Aside>
+
+<Aside type="caution" title="`http/json` se rechaza al arrancar">
+Desde la v1.46.0 el exportador de trazas de Go lo implementa y los de métricas y
+logs no. Honrarlo daría a un mismo despliegue dos codificaciones a la vez, spans
+en JSON junto a métricas en protobuf, a partir de un único ajuste que parece
+seleccionar una sola cosa. Falla por su nombre en vez de degradar en silencio.
+</Aside>
+
+## Autenticarse ante tu colector
+
+**No hay opción de usuario y contraseña**, y no falta ninguna: la especificación
+no define esa variable. Todos los esquemas son cabeceras.
+
+Este servidor no rechaza esa configuración, porque un colector en una red privada
+de confianza alcanzado en claro es un despliegue real y el endpoint es cosa tuya.
+Lo que sí hace es decirlo una vez al arrancar, nombrando las señales afectadas:
+
+```text
+level=WARN msg="a collector credential is configured against a plaintext endpoint
+on another host; it crosses the network in the clear on every export" signals=[traces]
+```
+
+El bucle local queda exento: una credencial que nunca sale de la máquina no se
+puede observar en una red, así que un colector adyacente no genera ningún aviso.
+
+| Lo que pide tu colector       | Qué configurar                                                                   |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| Nada (el valor por defecto)   | No configures nada. Es una configuración admitida, no un recurso de última hora. |
+| Un token bearer               | `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20TU_TOKEN`                     |
+| Autenticación básica          | `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic%20BASE64`                        |
+| Una clave de API de proveedor | `OTEL_EXPORTER_OTLP_HEADERS=api-key=TU_CLAVE`                                    |
+| Varias a la vez               | `OTEL_EXPORTER_OTLP_HEADERS=Authorization=Bearer%20tok,x-tenant=acme`            |
+| TLS mutuo                     | `OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE` y `OTEL_EXPORTER_OTLP_CLIENT_KEY`        |
+| Una CA privada                | `OTEL_EXPORTER_OTLP_CERTIFICATE`                                                 |
+
+<Aside type="danger" title="La codificación es donde esto se tuerce">
+El valor usa el formato W3C Baggage y se decodifica en porcentaje.
+
+- Un espacio se escribe `%20`. `Authorization=Bearer abc` es un par mal formado,
+  se descarta en silencio, y tu colector ve una exportación sin autenticar.
+- Un porcentaje literal se escribe `%25`, y una coma literal `%2C`, porque la
+  coma separa pares.
+- El relleno de base64 no da problemas: `=` separa clave y valor solo en su
+  **primera** aparición, así que el `==` final de una credencial básica
+  sobrevive.
+
+</Aside>
+
+Este servidor nunca lee, registra ni transforma esa variable. Lo que configures
+es lo que recibe tu colector, y una prueba de extremo a extremo verifica que la
+credencial no aparece nunca en los logs del propio servidor, ni siquiera cuando
+falla una exportación.
+
+## Qué se registra
+
+### Spans
+
+Un span por petición MCP, más un span hijo por cada llamada a la API de GitLab
+que provoque.
+
+| Atributo                    | Dónde                    | Significado                                                                                                                |
+| --------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `mcp.method.name`           | todos los spans          | `tools/call`, `resources/read`, `prompts/get`, …                                                                           |
+| `gen_ai.tool.name`          | llamadas a herramienta   | la herramienta que nombró el cliente                                                                                       |
+| `gitlab_mcp.action`         | llamadas a herramienta   | la acción canónica del catálogo, como `issue.list`                                                                         |
+| `gitlab_mcp.tool_surface`   | todos los spans          | `dynamic`, `meta` o `individual`                                                                                           |
+| `network.transport`         | todos los spans          | `pipe` en stdio, `tcp` en HTTP                                                                                             |
+| `gen_ai.prompt.name`        | `prompts/get`            | el prompt que nombró el cliente                                                                                            |
+| `mcp.protocol.version`      | cuando se conoce         | la revisión de MCP que habla la petición                                                                                   |
+| `mcp.session.id`            | solo sesiones con estado | ausente en el HTTP sin estado por defecto                                                                                  |
+| `error.type`                | solo en fallos           | un código JSON-RPC, o `tool_error`                                                                                         |
+| `rpc.response.status_code`  | cuando hubo código       | el código JSON-RPC                                                                                                         |
+| `gitlab_mcp.domain`         | llamadas a herramientas  | el dominio del catálogo, como `issue`; acotado, así que sobrevive en métricas donde el id de acción son demasiados valores |
+| `gitlab_mcp.refusal_reason` | rechazos                 | por qué se declinó la llamada sin llegar a GitLab                                                                          |
+
+`gitlab_mcp.action` es el que conviene entender. En la superficie dinámica, que
+es la de por defecto, cada llamada nombra las mismas dos herramientas, así que
+`gen_ai.tool.name` vale `gitlab_execute_action` tanto si el servidor listó
+incidencias como si borró una rama. El atributo de acción es lo único que las
+distingue.
+
+### Métricas
+
+| Instrumento                     | Unidad | Qué responde                                      |
+| ------------------------------- | ------ | ------------------------------------------------- |
+| `mcp.server.operation.duration` | `s`    | cuánto tardan las peticiones, por método y acción |
+| `mcp.client.operation.duration` | `s`    | cuánto espera este servidor al cliente            |
+| `http.client.request.duration`  | `s`    | cuánto tarda GitLab                               |
+| `mcp.server.session.duration`   | `s`    | cuánto sigue conectado un cliente                 |
+
+`mcp.server.session.duration` no se registra a propósito en el HTTP sin estado
+por defecto, donde cada POST es su propia sesión: el histograma sería una copia
+de `mcp.server.operation.duration` con un nombre que promete otra cosa.
+
+Falta un atributo que la convención pide y que no se puede aportar:
+`jsonrpc.request.id`. El SDK de Go no da a un middleware receptor ningún acceso
+al identificador JSON-RPC del mensaje que atiende, así que no hay nada que
+registrar.
+
+Segundos, no milisegundos. Lo fija la convención, y es lo contrario del campo
+`duration` de los registros de log de este servidor.
+
+Dos de esas dimensiones llevan un nombre que eligió el llamante,
+`gen_ai.tool.name` y `gen_ai.prompt.name`. En una métrica van acotadas: una
+llamada que nombró algo que este servidor no tiene se registra como `_OTHER` y
+no bajo el nombre que envió, así que el número de series almacenadas depende de
+lo que hay registrado y no de lo que teclee un cliente. El span conserva el
+nombre literal, que es donde hay que mirar cuando un cliente informa de que sus
+llamadas fallan.
+
+Un rechazo no es una avería, y por eso tiene un atributo propio: `error.type` no
+distingue una llamada que este servidor declinó de una que se rompió. La llamada
+llegó bien formada y este servidor decidió no ejecutarla:
+
+| `gitlab_mcp.refusal_reason` | Por qué                                                         |
+| --------------------------- | --------------------------------------------------------------- |
+| `safe_mode`                 | el modo seguro respondió una escritura con una previsualización |
+| `needs_confirmation`        | una acción destructiva sin confirmar                            |
+| `invalid_params`            | los parámetros no encajan con la acción                         |
+| `unknown_action`            | no existe ninguna acción con ese nombre en esta superficie      |
+| `rate_limited`              | el propio límite de tasa del despliegue rechazó la llamada      |
+
+Esos cinco son el conjunto completo, y eso es lo que hace que el atributo sea
+asumible también como dimensión de métrica: un despliegue que rechaza una de
+cada tres llamadas es indistinguible de uno sano si solo se mira el histograma
+de duración.
+
+Algunos llevan además `error.type`, y no es una contradicción. Un rechazo que
+quien llama puede corregir se responde con un resultado de error, para que el
+modelo sepa sin ambigüedad que su llamada falló; el modo seguro responde con una
+previsualización, que es un resultado correcto y no fija ningún `error.type`.
+Para quedarte con las llamadas declinadas, agrupa por el motivo de rechazo y no
+por `error.type`.
+
+`rate_limited` es el que conviene vigilar, porque es el único rechazo que no
+depende de quien llama. Su línea de log se limita a una cada diez segundos, para
+que un cliente en bucle de reintento no inunde el terminal; la métrica las cuenta
+todas.
+
+### Registros
+
+La tercera señal son los registros estructurados del propio servidor: las mismas
+líneas que escribe en stderr, exportadas desde `INFO` hacia arriba. `LOG_LEVEL`
+sigue gobernando el terminal; el umbral de exportación es aparte, así que
+ejecutar en `debug` no manda a tu colector un registro por cada viaje a GitLab
+además del span que ya lo describe.
+
+Cada registro escrito mientras se atiende una petición lleva el identificador de
+traza y de span de esa petición, así que desde un span lento se puede saltar
+directamente a las líneas que se escribieron dentro. Los registros de arranque,
+apagado y tareas de fondo no llevan ninguno, porque no hay span al que
+pertenecer.
+
+La política de identidad gobierna también estos registros, y las dos patas se
+comportan distinto a propósito. Tu terminal conserva `user` y `user_id` diga lo
+que diga la política: estás leyendo la salida de tu propio servidor, y un ajuste
+sobre lo que sale del proceso no tiene por qué editarla. La copia exportada
+lleva lo que la política permite, con los mismos nombres `user.*` que usan los
+spans, para que una sola consulta los cruce.
+
+Ese último párrafo no era cierto hasta hace poco, y lo enseñó un despliegue en
+marcha: con la política en `pseudonymous`, que no nombra a nadie, sus spans
+llevaban un digest y sus logs el nombre de usuario en claro. La política se
+había aplicado donde se escribió y nunca al puente de logs.
+
+Por defecto el digest se calcula con un secreto generado al arrancar y que no se
+escribe en ningún sitio, así que identifica a quien llama dentro de un proceso y
+en ningún otro lado. Un despliegue con varias réplicas le da a la misma persona
+un digest distinto en cada una, a la vez, y un reinicio renumera a todo el
+mundo. Para una instancia única eso suele ser lo que quieres: nada que guardar,
+nada que filtrar.
+
+Dos ajustes lo cambian, y cuál te toca se deduce de cómo ejecutas el servidor.
+
+| Ajuste                                   | Qué hace                                                                                                                              |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_MCP_TELEMETRY_IDENTITY_KEY`      | un secreto del que cada réplica deriva sus claves, para que quien llama lleve un único digest en todo el despliegue y entre reinicios |
+| `GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION` | cuánto vive una clave generada, por ejemplo `24h`; vacío la mantiene lo que dure el proceso                                           |
+
+Pon la clave si ejecutas más de una réplica, o si el recuento de usuarios
+distintos tiene que sobrevivir a un despliegue. La rotación entonces no aplica:
+una clave que pusiste tú es tuya y la rotas en tu calendario, y este servidor lo
+dice al arrancar en vez de rotarla por debajo.
+
+Pon el intervalo de rotación si ejecutas una sola instancia y quieres que el
+seudónimo deje de correlacionar pasado un tiempo. Viene desactivado porque las
+réplicas arrancan en instantes distintos, así que rotarían desfasadas y el
+recuento de usuarios se movería sin que nadie lo haya pedido.
+
+Ninguna de las dos respuestas está prescrita. La convención define `user.hash`
+como un valor "to correlate information for a user in anonymized form" y no dice
+nada sobre cuánto debe durar, y ni la especificación ni ENISA dan guía sobre la
+vida de un secreto de seudonimización. Lo que sí hay son dos diseños coherentes,
+y Matomo lleva los dos a la vez: una sal de la instalación que no rota donde el
+seudónimo debe persistir, y una semilla que se descarta cada día donde no debe.
+
+### Qué implica poner la clave
+
+Sin adornos, porque cambia de verdad lo que es el export. Un seudónimo estable
+es lo que el EDPB llama *person pseudonym*, que "requires long-term storage of
+the pseudonymisation secrets" y cuyo "risk of unauthorised attribution is
+comparatively high". Según el Artículo 4(5) del RGPD esa clave es la
+"additional information" que permite la atribución, así que hay que guardarla
+por separado de los datos que protege.
+
+En concreto: los ids de usuario de GitLab son enteros pequeños, así que
+cualquiera que tenga la clave y un export recupera la correspondencia por
+enumeración, en unos dos minutos y en un solo núcleo. La clave no puede vivir
+donde aterriza la telemetría. Este servidor la lee de una variable de entorno,
+con la advertencia que arrastra todo secreto en el entorno: es visible para
+cualquier cosa que pueda leer el entorno del proceso.
+
+La clave se expande con HKDF-SHA256 en dos claves independientes, una para
+quien llama y otra para las URIs de recurso, así que el valor que pones nunca se
+usa como clave directamente y un digest de usuario no se puede comparar con uno
+de recurso.
+
+### Qué no se registra nunca
+
+Ni por defecto ni con ningún ajuste, porque no existe tal ajuste:
+
+- **Argumentos y resultados de las herramientas.** Las convenciones definen
+  atributos `Opt-In` para ambos; este servidor los declina, porque llevan rutas
+  de proyecto, cuerpos de incidencia y consultas de búsqueda.
+- **El contenido de los recursos.** El URI que nombró el recurso sigue la
+  política de identidad: un digest con clave por proceso por defecto, y el URI
+  literal solo bajo `full`, que ya exporta el nombre real de quien llama.
+- **Tu token de GitLab**, ni ninguna cabecera que enviara un cliente.
+- **Cuerpos y mensajes de error de GitLab.** Un fallo registra una clasificación
+  como `-32603`, nunca el texto, que puede nombrar rutas privadas.
+- **URL completas de las llamadas a GitLab.** El span hijo registra el método,
+  el host y el estado; el span padre ya nombra la acción, que identifica la
+  familia de endpoints de forma más legible que una URL.
+
+Una prueba de extremo a extremo lanza tráfico real con una ruta de proyecto
+distintiva, una consulta de búsqueda y un token, y luego busca los tres en cada
+payload exportado.
+
+## Registrar quién hizo la llamada
+
+Desactivado por defecto, en tres escalones:
+
+```bash
+--telemetry-identity none          # el valor por defecto: nada sobre quien llama
+--telemetry-identity pseudonymous  # un resumen por proceso: correlacionable, no legible
+--telemetry-identity full          # user.id y user.name
+```
+
+o `GITLAB_MCP_TELEMETRY_IDENTITY`.
+
+La política gobierna una cosa más de lo que sugiere su nombre: **qué recurso
+nombró la petición**. Un URI de recurso aquí lleva ids de proyecto y de grupo,
+así que dice en qué está trabajando quien llama, que es la misma clase de
+revelación que decir quién es. Con `none` y `pseudonymous` el span lleva
+`gitlab_mcp.resource.ref`, un digest con clave por proceso que correlaciona
+lecturas y sondeos de un mismo recurso sin nombrarlo. Con `full` lleva
+`mcp.resource.uri`, el atributo de la propia convención, con el URI dentro.
+
+Una bandera y no dos, porque un despliegue que registrara rutas de proyecto
+mientras dice no registrar a nadie sería el resultado previsible de dejar que
+las dos configuraciones se separen.
+
+**`none`** es el valor por defecto porque registrar la identidad de una persona
+es una decisión tuya sobre tus propios usuarios, y un valor por defecto que la
+tome por ti es equivocado apunte hacia donde apunte. Las convenciones coinciden:
+estos atributos son `Opt-In`, y su regla dice que "las instrumentaciones
+DEBERÍAN rellenar el atributo si y solo si el usuario configura la
+instrumentación para hacerlo".
+
+**`pseudonymous`** emite `user.hash`, un resumen HMAC-SHA256 bajo una clave de
+32 bytes generada al arrancar y que no se escribe en ningún sitio. Le da a un
+endpoint compartido lo único que necesita de verdad, distinguir el tráfico de un
+llamante del de otro, para poder atribuir una ráfaga y seguir una sesión, sin
+nombrar a nadie.
+
+<Aside type="note" title="Dos propiedades del resumen">
+Es **estable dentro de un proceso y distinto tras un reinicio**, a propósito: un
+resumen estable entre procesos permitiría a cualquiera que tuviera las
+exportaciones de dos despliegues enlazar a la misma persona en ambos.
+
+Seudónimo no es anónimo. Quien pueda correlacionar la actividad de una persona
+conocida con un resumen puede enlazar ambos. Eso es inherente a la técnica, no a
+esta implementación.
+</Aside>
+
+**`full`** emite `user.id` y `user.name`. Lo que quiere una organización que
+audita a sus propios usuarios, y a lo que tiene derecho: son su gente y su
+colector.
+
+Ninguno de estos llega nunca a una **métrica**, con ninguna política. Un span
+que lleva un identificador de usuario cuesta un span; una dimensión de métrica
+que lo lleva es una serie temporal por persona, que crece sin límite con el
+número de personas que usan el despliegue.
+
+## Cómo desactivarlo
+
+```bash
+--telemetry=false      # no lo actives; es el valor por defecto
+OTEL_SDK_DISABLED=true # vétalo desde el entorno, diga lo que diga la bandera
+```
+
+`OTEL_SDK_DISABLED` es el interruptor de apagado de la propia especificación, y
+este servidor lo honra donde nada por debajo lo hace: la cadena no aparece en
+ningún módulo de OpenTelemetry para Go. Es un **veto** y no un interruptor,
+porque su valor por defecto significa "activado" mientras que aquí la telemetría
+está apagada hasta que se pide. Ponerlo a `true` fuerza proveedores inertes
+aunque se haya pasado `--telemetry`, que es lo que permite desactivar la
+telemetría en toda una flota sin editar cada fichero de servicio.
+
+Su gramática booleana es la de la especificación y es más estricta que la de Go:
+solo la cadena `true`, sin distinguir mayúsculas, desactiva. `1`, `t` y `yes` no
+lo hacen, y un valor vacío cuenta como no definido.
+
+## Cómo saber si está activo
+
+```bash
+curl -s http://localhost:8080/server-card | jq .telemetry
+```
+
+```json
+{
+  "enabled": true,
+  "signals": ["traces", "metrics", "logs"],
+  "protocol": "http/protobuf",
+  "conventions": "OpenTelemetry, following the MCP semantic convention",
+  "recorded": "the method called, the tool and catalog action, the outcome and the duration",
+  "not_recorded": "tool arguments, tool results, resource contents, queries, tokens, and GitLab response bodies"
+}
+```
+
+El bloque no aparece cuando la telemetría está apagada, en vez de aparecer
+diciendo `false`: no deberías tener que interpretar una negación para saber que
+no se está registrando nada. La dirección del colector **no** se publica ahí, a
+propósito, porque nombra tu infraestructura y la tarjeta se sirve a quien la
+pida.
+
+## Cuando algo va mal
+
+Un fallo de telemetría nunca afecta a una petición. Un colector caído, que
+rechaza conexiones o que rechaza tu credencial produce líneas de log en stderr y
+no cambia nada más: el mismo estado, el mismo cuerpo, la misma latencia. La
+especificación deja esta decisión abierta ("la API o el SDK PUEDEN fallar rápido
+… pero NO DEBEN hacer que la aplicación falle más tarde en ejecución"), y aquí
+la decisión es que un servidor que puede hablar con GitLab siga haciéndolo
+cuando no puede hablar con un colector.
+
+```bash
+LOG_LEVEL=debug gitlab-mcp-server --telemetry 2>telemetry.log
+```
+
+Los fallos de exportación, los pares de cabecera mal formados, las duraciones
+que no parsean y los avisos de protocolo llegan ahí como registros
+estructurados.
+
+<Aside type="danger" title="En stdio, nunca un exportador de consola">
+`OTEL_LOGS_EXPORTER=console` y los exportadores de salida estándar escriben en
+**stdout**, que en el transporte stdio lleva JSON-RPC y nada más. Una sola línea
+de más termina la sesión. Este servidor no incluye ningún exportador de consola
+por esa razón, y una prueba de extremo a extremo verifica que stdout sigue
+siendo JSON-RPC puro mientras todas las exportaciones fallan.
+</Aside>
+
+## Estándares que sigue
+
+| Área                              | Fuente                                                                                                                      |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Variables de configuración        | [OTLP Exporter Configuration](https://opentelemetry.io/docs/specs/otel/protocol/exporter/)                                  |
+| Forma de spans y métricas         | [Convenciones semánticas de MCP](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/mcp.md) |
+| Niveles de requisito de atributos | [Attribute Requirement Level](https://opentelemetry.io/docs/specs/semconv/general/attribute-requirement-level/)             |
+| Registro de errores               | [Recording Errors](https://opentelemetry.io/docs/specs/semconv/general/recording-errors/)                                   |
+| Atributos de identidad            | [User attributes](https://opentelemetry.io/docs/specs/semconv/registry/attributes/user/)                                    |
+
+La convención semántica de MCP está en estado **Development**, que su propia
+tabla de madurez describe como "NO DEBERÍA usarse en producción" y "PUEDE
+retirarse sin aviso previo". Se adopta igualmente, por un motivo: afecta a los
+operadores y no a los clientes MCP, así que un cambio de convención cuesta
+editar un cuadro de mando y no cuesta nada a quien consume este servidor. Vive
+en un repositorio aparte y no en `opentelemetry.io`, cuyo
+`/docs/specs/semconv/mcp/` devuelve 404.

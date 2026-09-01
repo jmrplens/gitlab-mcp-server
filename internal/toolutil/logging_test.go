@@ -8,12 +8,25 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io"
 	"log/slog"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel/log/global"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
 )
 
 // captureSlog redirects slog to a buffer for the duration of the test.
@@ -46,7 +59,7 @@ func assertNotContains(t *testing.T, output, unwanted string) {
 // with the tool name and duration for a successful call (nil error).
 func TestLogToolCall_Success(t *testing.T) {
 	buf := captureSlog(t)
-	logToolCall("test_tool", time.Now(), false, nil)
+	logToolCall(context.Background(), "test_tool", time.Now(), false, nil)
 	out := buf.String()
 	assertContains(t, out, `"level":"INFO"`)
 	assertContains(t, out, `"msg":"tool call completed"`)
@@ -59,7 +72,7 @@ func TestLogToolCall_Success(t *testing.T) {
 // with the tool name, duration, and error details for a failed call.
 func TestLogToolCall_Error(t *testing.T) {
 	buf := captureSlog(t)
-	logToolCall("test_tool", time.Now(), false, errors.New("something failed"))
+	logToolCall(context.Background(), "test_tool", time.Now(), false, errors.New("something failed"))
 	out := buf.String()
 	assertContains(t, out, `"level":"ERROR"`)
 	assertContains(t, out, `"msg":"tool call failed"`)
@@ -122,7 +135,7 @@ func TestLogToolCallAll_WithAuthenticatedUser(t *testing.T) {
 func TestLogToolCallWithUser_Success(t *testing.T) {
 	buf := captureSlog(t)
 	user := UserIdentity{UserID: "42", Username: "admin"}
-	logToolCallWithUser("user_success_tool", time.Now(), false, nil, user)
+	logToolCallWithUser(context.Background(), "user_success_tool", time.Now(), false, nil, user)
 
 	out := buf.String()
 	assertContains(t, out, `"level":"INFO"`)
@@ -138,7 +151,7 @@ func TestLogToolCallWithUser_Success(t *testing.T) {
 func TestLogToolCallWithUser_Error(t *testing.T) {
 	buf := captureSlog(t)
 	user := UserIdentity{UserID: "42", Username: "admin"}
-	logToolCallWithUser("user_error_tool", time.Now(), false, errors.New("api failure"), user)
+	logToolCallWithUser(context.Background(), "user_error_tool", time.Now(), false, errors.New("api failure"), user)
 
 	out := buf.String()
 	assertContains(t, out, `"level":"ERROR"`)
@@ -352,4 +365,151 @@ func TestLogToolCall_InstanceNamesWhichGitLabAnsweredIt(t *testing.T) {
 			}
 		})
 	}
+}
+
+// capturingExporter keeps the log records the SDK exports so the test can read
+// what a collector would have received.
+type capturingExporter struct {
+	mu      sync.Mutex
+	records []sdklog.Record
+}
+
+func (e *capturingExporter) Export(_ context.Context, records []sdklog.Record) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.records = append(e.records, records...)
+	return nil
+}
+
+func (e *capturingExporter) Shutdown(context.Context) error   { return nil }
+func (e *capturingExporter) ForceFlush(context.Context) error { return nil }
+
+func (e *capturingExporter) all() []sdklog.Record {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]sdklog.Record(nil), e.records...)
+}
+
+// TestLogToolCallAll_InsideASpan_ExportsACorrelatedRecord is the regression that
+// a handler-level test could not be.
+//
+// The fan-out handler was always correct: hand it a context carrying a span and
+// it exports a correlated record. What was wrong was every caller, because the
+// server logged through the context-free slog.Info family, and
+// LogToolCallAll in particular accepted a context and then dropped it on the
+// floor by delegating to helpers that took none.
+//
+// Nothing in the package's own tests could see that. The bridge passed, the
+// records were exported, the log stream on stderr was unchanged, and a
+// collector receiving real traffic showed 235 records with not one trace ID
+// among them. So the assertion here deliberately goes through the exported
+// entry point a tool handler actually calls, rather than through the handler
+// the previous test covers.
+func TestLogToolCallAll_InsideASpan_ExportsACorrelatedRecord(t *testing.T) {
+	exp := &capturingExporter{}
+	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
+	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
+
+	previous := global.GetLoggerProvider()
+	global.SetLoggerProvider(lp)
+	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+
+	handler := telemetry.NewSlogHandler(slog.NewJSONHandler(io.Discard, nil), slog.LevelInfo, nil)
+	previousDefault := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() { slog.SetDefault(previousDefault) })
+
+	tp := sdktrace.NewTracerProvider()
+	t.Cleanup(func() { _ = tp.Shutdown(context.Background()) })
+
+	ctx, span := tp.Tracer("test").Start(context.Background(), "tools/call gitlab_execute_action")
+	LogToolCallAll(ctx, nil, "gitlab_execute_action", time.Now(), nil, nil)
+	span.End()
+
+	records := exp.all()
+	if len(records) != 1 {
+		t.Fatalf("exported %d records, want 1", len(records))
+	}
+
+	want := span.SpanContext().TraceID()
+	if got := records[0].TraceID(); got != want {
+		t.Errorf("record trace ID = %v, want %v: a tool call log cannot be joined to the span it happened inside", got, want)
+	}
+}
+
+// TestRefusalReasons_EveryOneIsDocumented ties the closed set to the guide that
+// calls it closed.
+//
+// The guide tells an operator these five values are the whole set and that
+// grouping a dashboard by them is safe. That claim is true today and nothing
+// kept it true: a sixth constant added next year would silently give the metric
+// a value no dashboard filters on and no page mentions.
+//
+// The constants are read out of the source rather than listed here, because a
+// list here would be the same drift one file further along.
+func TestRefusalReasons_EveryOneIsDocumented(t *testing.T) {
+	t.Parallel()
+
+	reasons := refusalConstants(t)
+	if len(reasons) < 5 {
+		t.Fatalf("found %d refusal constants, want at least the five this package declares; the parse is probably wrong",
+			len(reasons))
+	}
+
+	guide := readTelemetryGuide(t)
+	for name, value := range reasons {
+		if !strings.Contains(guide, "`"+value+"`") {
+			t.Errorf("%s = %q is a refusal this server can record and the telemetry guide never names it, so an operator cannot filter on it",
+				name, value)
+		}
+	}
+}
+
+// refusalConstants returns every Refusal* constant declared in this package,
+// by name and value.
+func refusalConstants(t *testing.T) map[string]string {
+	t.Helper()
+
+	fileSet := token.NewFileSet()
+	parsed, err := parser.ParseFile(fileSet, "logging.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parsing logging.go: %v", err)
+	}
+
+	out := map[string]string{}
+	ast.Inspect(parsed, func(node ast.Node) bool {
+		spec, ok := node.(*ast.ValueSpec)
+		if !ok {
+			return true
+		}
+		for i, name := range spec.Names {
+			if !strings.HasPrefix(name.Name, "Refusal") || i >= len(spec.Values) {
+				continue
+			}
+			literal, isLiteral := spec.Values[i].(*ast.BasicLit)
+			if !isLiteral || literal.Kind != token.STRING {
+				continue
+			}
+			value, unquoteErr := strconv.Unquote(literal.Value)
+			if unquoteErr != nil {
+				t.Fatalf("unquoting %s: %v", name.Name, unquoteErr)
+			}
+			out[name.Name] = value
+		}
+		return true
+	})
+	return out
+}
+
+// readTelemetryGuide returns the operator guide, located from this package
+// rather than from a working directory a test runner chooses.
+func readTelemetryGuide(t *testing.T) string {
+	t.Helper()
+
+	path := filepath.Join("..", "..", "docs", "guides", "telemetry.md")
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading the telemetry guide: %v", err)
+	}
+	return string(content)
 }

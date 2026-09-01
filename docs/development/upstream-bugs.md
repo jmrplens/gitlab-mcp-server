@@ -83,6 +83,7 @@ readable without opening the tracker:
 | 15 | go-sdk | [Protocol version classified by string ordering](#the-protocol-version-is-classified-by-string-ordering) | No | No | No | No | None taken |
 | 16 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
 | 17 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
+| 18 | go-sdk | [A receiving middleware cannot read the JSON-RPC id](#a-receiving-middleware-cannot-read-the-json-rpc-request-id) | No | No | No | No | None possible |
 
 States verified against the upstream trackers on 2026-08-29.
 
@@ -428,6 +429,38 @@ and `prompts/get`, all three answered `-32020` where the plain-ASCII control was
 served. It is upstream by this file's own test: it happens to any caller of
 `StreamableHTTPHandler` with no setting of ours.
 
+### A middleware cannot ask whether a request carries params
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no, once known. The check is three lines of `reflect` and this
+  server now makes it in one place.
+- **Workaround**: `internal/mcpotel.paramsOf` returns `nil` for a `Params`
+  interface holding a nil pointer, and the three consumers in that package ask
+  through it rather than calling `GetParams` themselves.
+
+**What**: `Params` (mcp/shared.go) declares `GetMeta`, `SetMeta`, `isParams` and
+`isNil`. The last exists because a receiving middleware is handed a typed nil
+whenever the wire omitted the params member, which `serverMethodInfos` permits
+for every list method and for `notifications/initialized`. It is unexported, so
+only the SDK can ask. Outside the package, `req.GetParams() != nil` is true for
+that value, because an interface holding a nil pointer is not a nil interface,
+and `GetMeta` on it dereferences the pointer.
+
+The shape is ordinary: `{"jsonrpc":"2.0","id":1,"method":"tools/list"}` is a
+complete, valid request that clients really send. Nothing in the SDK's own
+documentation for `AddReceivingMiddleware` mentions it, and the accessor named
+after the question is the one thing a middleware cannot reach.
+
+**How we found it**: a hosted deployment logged "recovered a panic while
+handling a request" a hundred times in a day, on `tools/list`, `prompts/list`,
+`resources/list` and `notifications/initialized`, with the stack ending in
+`(*ListToolsParams).GetMeta` called from this repository's trace-context
+carrier. The bug in the carrier is ours, and a comment in it had asserted the
+wire could not produce such a request. Exporting `isNil`, or documenting the
+guarantee, would keep the next middleware from writing the same line.
+
 ### The protocol version is classified by string ordering
 
 - **Reported**: no.
@@ -507,3 +540,28 @@ markdown. We keep emitting both.
 - **Blocking**: no.
 - **Workaround**: yes, the `GO-2026-5932` entry in the govulncheck allowlist.
   Retire it when the PR merges.
+
+### A receiving middleware cannot read the JSON-RPC request id
+
+`mcp.Request` exposes `GetSession`, `GetParams` and `GetExtra`, and nothing that
+returns the JSON-RPC `id` of the message being handled. A receiving middleware
+therefore cannot see it, and neither can anything built on one.
+
+That is what stops this server from emitting `jsonrpc.request.id`, which the MCP
+semantic convention marks Conditionally Required "When the client executes a
+request". The attribute is what distinguishes a request span from a notification
+span, and the Go semantic-conventions package already ships the key
+(`semconv.JSONRPCRequestID`), so the only missing piece is an accessor.
+
+The id is not secret and is already on the wire in both directions; the SDK
+decodes it to route the response and then discards it before application code
+runs, the same shape as
+[the cancellation reason](#the-cancellation-reason-is-discarded-before-any-handler-sees-it). Adding `GetID()` to the `Request` interface, or a
+field on `RequestExtra`, would close it.
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. One Conditionally Required attribute is omitted; the span is
+  otherwise complete and the metric does not carry the attribute at all.
+- **Workaround**: none possible. Nothing in the public API exposes the value.

@@ -165,17 +165,6 @@ test-e2e-http: ensure-gotestsum
 	  --junitfile $(E2E_REPORT_DIR)/e2e-http-junit.xml \
 	  -- -tags httpe2e -count=1 -timeout 900s ./test/e2e/http/'
 
-test-e2e: ensure-gotestsum
-	@echo "WARNING: This will run E2E tests against the GitLab instance configured in .env (GITLAB_URL)."
-	@echo "         Tests create and delete projects, groups, users, and other resources."
-	@read -p "Are you sure you want to continue? [y/N] " confirm && [ "$$confirm" = "y" ] || { echo "Aborted."; exit 1; }
-	$(call MKDIR_P,$(E2E_REPORT_DIR))
-	bash -o pipefail -c '$(GOTESTSUM) \
-	  --format testdox \
-	  --junitfile $(E2E_REPORT_DIR)/e2e-junit.xml \
-	  --jsonfile $(E2E_REPORT_DIR)/e2e-log.json \
-	  -- -tags e2e -timeout 120s ./test/e2e/suite/ 2>&1 | tee $(E2E_REPORT_DIR)/e2e-output.txt'
-
 ## validate-http-stateless: smoke-validate stateless streamable HTTP with the compiled binary (reads GITLAB_URL, GITLAB_TOKEN from .env)
 validate-http-stateless:
 	scripts/validate-http-stateless.sh binary

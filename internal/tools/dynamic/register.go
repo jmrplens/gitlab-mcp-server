@@ -475,13 +475,13 @@ func (r *Registry) indexAliases(aliasTargets map[string][]string) {
 }
 
 // Search finds GitLab catalog actions by lexical matching over action metadata.
-func (r *Registry) Search(_ context.Context, _ *mcp.CallToolRequest, input SearchInput) (*mcp.CallToolResult, SearchOutput, error) {
+func (r *Registry) Search(ctx context.Context, _ *mcp.CallToolRequest, input SearchInput) (*mcp.CallToolResult, SearchOutput, error) {
 	query := strings.TrimSpace(input.Query)
 	if query == "" {
 		return toolutil.ErrorResult("catalog search: query is required. Try terms like project create, merge request approve, pipeline retry, or ci variable."), SearchOutput{}, nil
 	}
 
-	matches := r.searchMatches(query, input.Limit, input.Explain)
+	matches := r.searchMatches(ctx, query, input.Limit, input.Explain)
 
 	results := make([]SearchResult, 0, len(matches))
 	for _, match := range matches {
@@ -553,7 +553,7 @@ func (r *Registry) Find(ctx context.Context, req *mcp.CallToolRequest, input Fin
 	// is also the "find query" half of ADR-0011 IMP-008.
 	defer toolutil.LogToolCallAll(ctx, req, FindActionToolName, start, nil, nil)
 
-	matches := r.searchMatches(query, input.Limit, input.Explain)
+	matches := r.searchMatches(ctx, query, input.Limit, input.Explain)
 	results := make([]FindResult, 0, len(matches))
 	for _, match := range matches {
 		description := describeEntry(match.entry)
@@ -624,7 +624,7 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 		}
 	}
 	if len(commonParamExplanations)+len(actionParamExplanations) > 0 {
-		slog.Debug("normalized dynamic action params", "action", entry.ID, "normalizations", len(commonParamExplanations)+len(actionParamExplanations))
+		slog.DebugContext(ctx, "normalized dynamic action params", "action", entry.ID, "normalizations", len(commonParamExplanations)+len(actionParamExplanations))
 	}
 	if result := validateDynamicExecuteParams(entry, params); result != nil {
 		toolutil.LogToolRefusal(ctx, req, executeCallName(entry.ID), toolutil.RefusalInvalidParams)
@@ -634,7 +634,7 @@ func (r *Registry) Execute(ctx context.Context, req *mcp.CallToolRequest, input 
 		params["confirm"] = true
 	}
 	if entry.Destructive && !hasExplicitConfirm(params) {
-		slog.Warn("blocked destructive dynamic action without explicit confirmation", "action", entry.ID)
+		slog.WarnContext(ctx, "blocked destructive dynamic action without explicit confirmation", "action", entry.ID)
 		return toolutil.ErrorResult(fmt.Sprintf("gitlab_execute_action: action %q is destructive. Re-send with confirm=true only after the user explicitly approves this operation.", entry.ID)), nil, nil
 	}
 
@@ -1745,7 +1745,7 @@ func addSchemaPropertyTags(add tagCollector, schema map[string]any) {
 	}
 }
 
-func (r *Registry) searchMatches(query string, limit int, explain bool) []scoredActionEntry {
+func (r *Registry) searchMatches(ctx context.Context, query string, limit int, explain bool) []scoredActionEntry {
 	limit = normalizedLimit(limit)
 	terms := normalizeSearchTerms(query)
 	searchScorer := scoreEntryWithoutExplanation
@@ -1775,18 +1775,18 @@ func (r *Registry) searchMatches(query string, limit int, explain bool) []scored
 	ambiguousAlias := len(r.ambiguousAliasTargets(query)) > 0
 	matches = r.annotateAmbiguousMatches(query, matches)
 	recordSearchRuntimeMetrics(len(matches), fuzzyUsed, ambiguousAlias, lowConfidence, destructiveFuzzySuppressions)
-	logDynamicSearch(query, matches, fuzzyUsed, ambiguousAlias, destructiveFuzzySuppressions)
+	logDynamicSearch(ctx, query, matches, fuzzyUsed, ambiguousAlias, destructiveFuzzySuppressions)
 	return matches
 }
 
-func logDynamicSearch(query string, matches []scoredActionEntry, fuzzyUsed, ambiguousAlias bool, destructiveFuzzySuppressions int) {
+func logDynamicSearch(ctx context.Context, query string, matches []scoredActionEntry, fuzzyUsed, ambiguousAlias bool, destructiveFuzzySuppressions int) {
 	topAction := ""
 	lowConfidence := false
 	if len(matches) > 0 {
 		topAction = matches[0].entry.ID
 		lowConfidence = matches[0].lowConfidence
 	}
-	slog.Debug(
+	slog.DebugContext(ctx,
 		"dynamic search completed",
 		"query_len", len(query),
 		"result_count", len(matches),

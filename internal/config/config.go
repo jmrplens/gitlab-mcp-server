@@ -585,7 +585,7 @@ func parseEnvBool(name string, defaultValue bool) (bool, error) {
 func loadLimitEnv() (limitEnv, error) {
 	values := limitEnv{}
 	var err error
-	if values.maxFileSize, err = parseSize(os.Getenv("UPLOAD_MAX_FILE_SIZE"), DefaultMaxFileSize); err != nil {
+	if values.maxFileSize, err = UploadMaxFileSizeFromEnv(); err != nil {
 		return limitEnv{}, fmt.Errorf("invalid UPLOAD_MAX_FILE_SIZE value: %w", err)
 	}
 	if values.maxHTTPClients, err = parseInt(os.Getenv("MAX_HTTP_CLIENTS"), DefaultMaxHTTPClients); err != nil {
@@ -1105,4 +1105,15 @@ func validatePublicURL(raw string) error {
 		return fmt.Errorf("--public-url %q must use https (RFC 9728 §1.2; http is allowed only for loopback development)", raw)
 	}
 	return nil
+}
+
+// UploadMaxFileSizeFromEnv resolves the upload limit from the environment, or
+// returns the default when it is unset.
+//
+// Exported because HTTP mode builds its configuration from flags rather than
+// through Load, and the flag for this setting works by writing the environment
+// variable. Without one function both paths call, the limit applied depended on
+// the transport: raised on stdio, ignored on HTTP.
+func UploadMaxFileSizeFromEnv() (int64, error) {
+	return parseSize(os.Getenv("UPLOAD_MAX_FILE_SIZE"), DefaultMaxFileSize)
 }

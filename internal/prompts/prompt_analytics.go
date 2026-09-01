@@ -393,7 +393,7 @@ func handleWeeklyTeamRecap(ctx context.Context, client *gitlabclient.Client, req
 		PerPage:      maxListItems,
 	}, gl.WithContext(ctx))
 	if err != nil {
-		slog.Warn("failed to fetch merged MRs", "error", err)
+		slog.WarnContext(ctx, "failed to fetch merged MRs", "error", err)
 	}
 
 	// Open MRs

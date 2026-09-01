@@ -11,6 +11,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/time/rate"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 )
 
 // RateLimiter enforces a token-bucket rate limit on `tools/call` requests.
@@ -81,10 +83,17 @@ func NewRateLimiter(rps float64, burst int) *RateLimiter {
 // WARN rather than INFO: unlike the other refusals, this one is not the
 // caller's doing. The call was well formed and would have succeeded a moment
 // earlier or later, and an operator seeing it may need to raise the limit.
-func (r *RateLimiter) reportRefusal(tool string) {
+func (r *RateLimiter) reportRefusal(ctx context.Context, tool string) {
 	if r == nil {
 		return
 	}
+
+	// Above the throttle, and deliberately: the log line is throttled because a
+	// flood of identical lines helps nobody, but a metric is an aggregate and a
+	// refusal that is not counted cannot be seen at all. This is also the one
+	// refusal an operator can act on, since it is the deployment's own limit
+	// rejecting a call that was well formed.
+	mcpotel.RecordRefusal(ctx, RefusalRateLimited)
 
 	r.reportMu.Lock()
 	window := r.throttleWindow
@@ -105,7 +114,7 @@ func (r *RateLimiter) reportRefusal(tool string) {
 	if tool == "" {
 		tool = "tools/call"
 	}
-	slog.Warn("tool call refused: rate limit exceeded",
+	slog.WarnContext(ctx, "tool call refused: rate limit exceeded",
 		"tool", tool,
 		"reason", RefusalRateLimited,
 		"limit_rps", float64(r.limiter.Limit()),
@@ -159,7 +168,7 @@ func AttachRateLimit(server *mcp.Server, limiter *RateLimiter) {
 			case "tools/call":
 				if !limiter.allow() {
 					result := rateLimitedResult(req)
-					limiter.reportRefusal(extractToolName(req))
+					limiter.reportRefusal(ctx, extractToolName(req))
 					return result, nil
 				}
 			case "completion/complete":

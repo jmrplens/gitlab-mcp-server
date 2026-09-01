@@ -82,7 +82,7 @@ func listenUnix(ctx context.Context, path string, socketMode os.FileMode) (net.L
 	if err != nil {
 		return nil, err
 	}
-	slog.Info("listening on unix socket", "path", path, "mode", fmt.Sprintf("%#o", socketMode))
+	slog.InfoContext(ctx, "listening on unix socket", "path", path, "mode", fmt.Sprintf("%#o", socketMode))
 	return listener, nil
 }
 
@@ -124,7 +124,7 @@ func clearStaleSocket(ctx context.Context, path string) error {
 	if removeErr := os.Remove(path); removeErr != nil {
 		return fmt.Errorf("removing stale socket %q: %w", path, removeErr)
 	}
-	slog.Warn("removed a stale unix socket left by an earlier run", "path", path)
+	slog.WarnContext(ctx, "removed a stale unix socket left by an earlier run", "path", path)
 	return nil
 }
 

@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
 )
 
 // wasCancelled reports whether a tool call ended because its caller went away
@@ -52,10 +55,10 @@ const (
 func LogToolCallAll(ctx context.Context, req *mcp.CallToolRequest, tool string, start time.Time, result any, err error) {
 	user := ResolveIdentity(ctx, req)
 	if user.IsAuthenticated() {
-		logToolCallWithUser(tool, start, resultIsError(result), err, user)
+		logToolCallWithUser(ctx, tool, start, resultIsError(result), err, user)
 		return
 	}
-	logToolCall(tool, start, resultIsError(result), err)
+	logToolCall(ctx, tool, start, resultIsError(result), err)
 }
 
 // LogToolRefusal records a call the server declined to run.
@@ -73,13 +76,21 @@ func LogToolCallAll(ctx context.Context, req *mcp.CallToolRequest, tool string, 
 // policy block, and destructive confirmation events". Only the destructive one
 // was delivered.
 func LogToolRefusal(ctx context.Context, req *mcp.CallToolRequest, tool, reason string) {
+	// The span too, and from here rather than from the middleware. A refusal
+	// travels as an error result, which is a successful response carrying a
+	// failure for the model, so from outside the handler it is
+	// indistinguishable from a call that ran and failed. Without this, a
+	// deployment refusing every third request looks exactly like one whose
+	// GitLab is erroring.
+	mcpotel.RecordRefusal(ctx, reason)
+
 	user := ResolveIdentity(ctx, req)
 	if user.IsAuthenticated() {
-		slog.Info("tool call refused",
+		slog.InfoContext(ctx, "tool call refused",
 			append([]any{"tool", tool, "reason", reason}, identityAttrs(user)...)...)
 		return
 	}
-	slog.Info("tool call refused", "tool", tool, "reason", reason)
+	slog.InfoContext(ctx, "tool call refused", "tool", tool, "reason", reason)
 }
 
 // identityAttrs are the log fields naming who made a call.
@@ -89,7 +100,7 @@ func LogToolRefusal(ctx context.Context, req *mcp.CallToolRequest, tool, reason 
 // so the field would be a constant repeated on every line rather than
 // something to group by. See [UserIdentity.Instance].
 func identityAttrs(user UserIdentity) []any {
-	attrs := []any{"user", user.Username, "user_id", user.UserID}
+	attrs := []any{telemetry.LogFieldUser, user.Username, telemetry.LogFieldUserID, user.UserID}
 	if user.Instance != "" {
 		attrs = append(attrs, "instance", user.Instance)
 	}
@@ -113,27 +124,27 @@ func resultIsError(result any) bool {
 // It replaced an exported LogToolCall of the same shape without the isError
 // argument. Nothing outside this package called it, and leaving both would have
 // left one that could not say whether the call actually succeeded.
-func logToolCall(tool string, start time.Time, isError bool, err error) {
+func logToolCall(ctx context.Context, tool string, start time.Time, isError bool, err error) {
 	duration := time.Since(start)
 	switch {
 	case wasCancelled(err):
-		slog.Info("tool call canceled", "tool", tool, "duration", duration, "cause", err)
+		slog.InfoContext(ctx, "tool call canceled", "tool", tool, "duration", duration, "cause", err)
 	case err != nil:
-		slog.Error("tool call failed", "tool", tool, "duration", duration, "error", err)
+		slog.ErrorContext(ctx, "tool call failed", "tool", tool, "duration", duration, "error", err)
 	default:
-		slog.Info("tool call completed", "tool", tool, "duration", duration, "is_error", isError)
+		slog.InfoContext(ctx, "tool call completed", "tool", tool, "duration", duration, "is_error", isError)
 	}
 }
 
 // logToolCallWithUser logs a tool call including the authenticated user identity.
-func logToolCallWithUser(tool string, start time.Time, isError bool, err error, user UserIdentity) {
+func logToolCallWithUser(ctx context.Context, tool string, start time.Time, isError bool, err error, user UserIdentity) {
 	args := append([]any{"tool", tool, "duration", time.Since(start)}, identityAttrs(user)...)
 	switch {
 	case wasCancelled(err):
-		slog.Info("tool call canceled", append(args, "cause", err)...)
+		slog.InfoContext(ctx, "tool call canceled", append(args, "cause", err)...)
 	case err != nil:
-		slog.Error("tool call failed", append(args, "error", err)...)
+		slog.ErrorContext(ctx, "tool call failed", append(args, "error", err)...)
 	default:
-		slog.Info("tool call completed", append(args, "is_error", isError)...)
+		slog.InfoContext(ctx, "tool call completed", append(args, "is_error", isError)...)
 	}
 }

@@ -126,7 +126,7 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 	// Push rules (best-effort — may fail for non-premium)
 	pushRule, _, pushErr := client.GL().Projects.GetProjectPushRules(projectID, gl.WithContext(ctx))
 	if pushErr != nil {
-		slog.Debug("push rules not available", "error", pushErr)
+		slog.DebugContext(ctx, "push rules not available", "error", pushErr)
 		b.WriteString("## Push Rules\n\nPush rules not available (may require GitLab Premium).\n\n")
 	} else if pushRule != nil {
 		b.WriteString("## Push Rules\n\n")
@@ -422,7 +422,7 @@ func handleAuditProjectWorkflow(ctx context.Context, client *gitlabclient.Client
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if labelsErr != nil {
-		slog.Warn("failed to fetch labels", "error", labelsErr)
+		slog.WarnContext(ctx, "failed to fetch labels", "error", labelsErr)
 	}
 	writeLabelsAudit(&b, labels)
 
@@ -440,13 +440,13 @@ func handleAuditProjectWorkflow(ctx context.Context, client *gitlabclient.Client
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if issueTPLErr != nil {
-		slog.Debug("issue templates not available", "error", issueTPLErr)
+		slog.DebugContext(ctx, "issue templates not available", "error", issueTPLErr)
 	}
 	mrTemplates, _, mrTPLErr := client.GL().ProjectTemplates.ListTemplates(projectID, "merge_requests", &gl.ListProjectTemplatesOptions{
 		PerPage: maxListItems,
 	}, gl.WithContext(ctx))
 	if mrTPLErr != nil {
-		slog.Debug("MR templates not available", "error", mrTPLErr)
+		slog.DebugContext(ctx, "MR templates not available", "error", mrTPLErr)
 	}
 	writeTemplatesAudit(&b, issueTemplates, mrTemplates)
 

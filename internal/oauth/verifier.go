@@ -451,7 +451,7 @@ func introspectToken(ctx context.Context, client *http.Client, gitlabURL, token 
 			}
 		}
 	}
-	slog.Debug("token scope introspection unavailable; assuming api scope")
+	slog.DebugContext(ctx, "token scope introspection unavailable; assuming api scope")
 	return introspection{scopes: expandImpliedScopes([]string{"api"})}
 }
 

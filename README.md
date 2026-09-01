@@ -259,11 +259,11 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ----------------------------------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              1,499 |         8,781 |       10,280 |
+| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              1,499 |         8,832 |       10,331 |
 | `dynamic` / `minimal`                                 | Free/CE  |             2 |               851 | n/a                 |              1,499 |           170 |        1,669 |
-| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              1,499 |         8,781 |       10,280 |
+| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              1,499 |         8,832 |       10,331 |
 | `dynamic` / `minimal`                                 | Premium  |             2 |             1,003 | n/a                 |              1,499 |           170 |        1,669 |
-| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              1,499 |         8,781 |       10,280 |
+| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              1,499 |         8,832 |       10,331 |
 | `dynamic` / `minimal`                                 | Ultimate |             2 |             1,069 | n/a                 |              1,499 |           170 |        1,669 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
@@ -339,7 +339,7 @@ Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs
 
 | Document                                              | Description                                                                            |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [Getting Started](docs/getting-started.md)            | Download, install, per-client configuration                                            |
+| [Getting Started](docs/getting-started.md)            | Download, setup wizard, per-client configuration                                       |
 | [IDE Configuration](docs/guides/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                 |
 | [Configuration](docs/reference/configuration.md)      | Environment variables, transport modes, TLS                                            |
 | [Environment Variables](docs/reference/env.md)        | Exhaustive environment variable table with defaults and examples                       |
@@ -371,7 +371,7 @@ Yes. Set `GITLAB_URL` to your instance URL. When `GITLAB_URL` is omitted, stdio 
 <details>
 <summary><strong>Is my data safe?</strong></summary>
 
-When you run it yourself, locally over stdio or on your own infrastructure over HTTP, every request goes to your GitLab instance and nowhere else. There is no update check, no license check and no telemetry: your instance is the only host this server contacts.
+When you run it yourself, locally over stdio or on your own infrastructure over HTTP, every request goes to your GitLab instance and nowhere else. There is no update check and no phoning home; telemetry exists but is off by default, and turning it on exports to a collector you configure, never to anyone else.
 
 The exception is the <a href="#try-it-without-installing-anything-hosted-endpoint">hosted endpoint</a>: using <code>https://mcp.jmrp.io/gitlab</code> means your token and every request pass through that machine. Nothing is stored there, but it is someone else's server, which is why the hosted section says to keep using it locally.
 
@@ -401,7 +401,7 @@ The server includes retry logic with backoff for GitLab API rate limits. Errors 
 <details>
 <summary><strong>Which AI clients are supported?</strong></summary>
 
-Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. Configuration lives in your MCP client's own JSON; the per-client examples are in the documentation.
+Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. The built-in setup wizard can auto-configure most clients.
 </details>
 
 ## Building from Source
@@ -423,10 +423,11 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 ## Privacy Policy
 
-The server runs entirely on your machine and has **no telemetry, analytics, or
-backend of its own** — data flows only between your MCP client and the GitLab
-instance you configure (plus an optional signed-binary update check against
-GitHub Releases). Your token is used solely to authenticate GitLab requests
+The server runs entirely on your machine and has **no analytics and no backend
+of its own**: data flows only between your MCP client and the GitLab instance
+you configure. OpenTelemetry export exists, off by default, and when you enable
+it the data goes to a collector you run; nothing in any code path carries the
+maintainer's address. Your token is used solely to authenticate GitLab requests
 and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 ## Contributing & Security
@@ -446,39 +447,39 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       977 |     202,349 |
-| Unit tests (`_test.go`)  |       538 |     307,335 |
-| End-to-end tests         |       189 |      51,408 |
-| **Total**                | **1,704** | **561,092** |
+| Source (`.go`, non-test) |     1,003 |     207,932 |
+| Unit tests (`_test.go`)  |       562 |     313,964 |
+| End-to-end tests         |       197 |      52,830 |
+| **Total**                | **1,762** | **574,726** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,662 |
-| — exported (public)             |  2,643 |
-| — unexported (private)          |  5,019 |
-| Unit test functions (`TestXxx`) | 11,582 |
-| Subtests (`t.Run(...)`)         |  3,030 |
-| End-to-end test functions       |    489 |
+| Source functions                |  7,821 |
+| — exported (public)             |  2,702 |
+| — unexported (private)          |  5,119 |
+| Unit test functions (`TestXxx`) | 11,773 |
+| Subtests (`t.Run(...)`)         |  3,068 |
+| End-to-end test functions       |    512 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.52× more tests than code |
+| Test lines vs source lines         | 1.51× more tests than code |
 | Average source file length         |                 ~207 lines |
-| Average test file length           |                 ~571 lines |
-| Comment lines in source            |  25,418 (~12.6% of source) |
+| Average test file length           |                 ~558 lines |
+| Comment lines in source            |  28,096 (~13.5% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,521 |
-| `defer` statements                 |   967 |
-| `struct` types defined             | 2,734 |
+| `if err != nil` checks             | 6,597 |
+| `defer` statements                 | 1,001 |
+| `struct` types defined             | 2,757 |
 | `//nolint` suppressions            |   249 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
@@ -486,9 +487,9 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   236 |
-| Direct dependencies (`go.mod`) |    14 |
-| Indirect dependencies          |    17 |
+| Go packages                    |   238 |
+| Direct dependencies (`go.mod`) |    29 |
+| Indirect dependencies          |    31 |
 
 ### Hall of fame
 
@@ -501,8 +502,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,679 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,655 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,780 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,765 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

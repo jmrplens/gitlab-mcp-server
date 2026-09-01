@@ -2,14 +2,14 @@
 
 E2E tests validate the full MCP server against a real GitLab instance using in-memory transport (`mcp.NewInMemoryTransports()`). Build tag: `e2e`.
 
-There are four modules, answering different questions:
+There are five modules, answering different questions:
 
-| Module           | Build tag   | Needs GitLab | What it covers                                                                      |
-| ---------------- | ----------- | ------------ | ----------------------------------------------------------------------------------- |
-| `test/e2e/suite` | `e2e`       | yes          | Tool behaviour against a real instance, over in-memory MCP transport                 |
-| `test/e2e/http`  | `httpe2e`   | no           | The HTTP transport itself: cross-origin, preflight, auth modes, rate limiting, proxy |
-| `test/e2e/stdio` | `stdioe2e`  | no           | The stdio transport: pipes, process lifetime, exit status, environment configuration |
-| `test/e2e/orbit` | `orbitlive` | gitlab.com   | The experimental Knowledge Graph API                                                 |
+| Module               | Build tag      | Needs GitLab | What it covers                                                                       |
+| -------------------- | -------------- | ------------ | ------------------------------------------------------------------------------------ |
+| `test/e2e/suite`     | `e2e`          | yes          | Tool behaviour against a real instance, over in-memory MCP transport                  |
+| `test/e2e/http`      | `httpe2e`      | no           | The HTTP transport itself: cross-origin, preflight, auth modes, rate limiting, proxy  |
+| `test/e2e/stdio`     | `stdioe2e`     | no           | The stdio transport: pipes, process lifetime, exit status, environment configuration  |
+| `test/e2e/orbit`     | `orbitlive`    | gitlab.com   | The experimental Knowledge Graph API                                                  |
 
 Each tag has to be listed in `GO_ANALYSIS_TAGS` in the Makefile and in `e2eTags` in `cmd/gen_testing_docs`, or the module is invisible to `go vet`, to `golangci-lint` and to the generated test metrics. A file behind a tag nothing names is analysed by nothing.
 

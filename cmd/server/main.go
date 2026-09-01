@@ -62,11 +62,13 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/subscriptions"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
 	gitlabtools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
@@ -285,8 +287,33 @@ func main() {
 	flag.StringVar(&hcfg.tlsCert, "tls-cert", "", "PEM certificate file; serves HTTPS on the listener itself (requires --tls-key)")
 	flag.StringVar(&hcfg.tlsKey, "tls-key", "", "PEM private key file matching --tls-cert")
 	flag.StringVar(&hcfg.socketMode, "http-socket-mode", "", "Permission mode for a unix socket named by --http-addr, in octal (default 0660)")
+	// Both transports, not just HTTP: a stdio deployment is exactly the case an
+	// operator monitoring their own machine cares about. Off by default for
+	// privacy, and the endpoint, headers, sampling and resource attributes come
+	// from the standard OTEL_* environment the exporters read themselves.
+	telemetryFlag = flag.Bool("telemetry", false, "Export OpenTelemetry traces, metrics and logs over OTLP. Off by default. Endpoint and credentials come from the standard OTEL_EXPORTER_OTLP_* environment variables; see the documentation for a worked example")
+	telemetryToolNameFlag = flag.String("telemetry-tool-name", string(telemetry.ToolNameAuto),
+		"Whether the tool name is a metric dimension: auto (default; on for the dynamic and meta surfaces, off for individual, where ~1000 tools would exhaust the cardinality limit), on, or off")
+	telemetryIdentityFlag = flag.String("telemetry-identity", string(telemetry.DefaultIdentityPolicy),
+		"How much telemetry records about who made a call: none (default, records nobody), pseudonymous (a per-process digest that correlates one caller's calls without naming them), or full (the GitLab user id and username)")
+	telemetryIdentityRotationFlag = flag.String("telemetry-identity-rotation", "",
+		"how long a generated pseudonymisation key lives, e.g. 24h; empty or 0 keeps it for the life of the process")
 	flag.Int64Var(&hcfg.maxRequestBodyBytes, "max-request-body-bytes", 0, "Maximum streamable HTTP request body size in bytes; 0 uses the SDK default (4 MiB)")
+
+	// Settings that used to be reachable only through the environment. See
+	// envflags.go for why the flag writes the variable rather than being read
+	// directly, and for the one setting deliberately left without a flag.
+	registerEnvBackedFlags()
+
+	// --help as well as -h. Go's flag package treats an unregistered --help as
+	// a parse error and prints its own flat alphabetical dump of every flag,
+	// which is both the longer output and the one nobody curated. Registering
+	// it means the two spellings give the same curated help, and --help is the
+	// one people actually type.
+	flag.BoolVar(&showHelp, "help", false, "Show full help with flags, env vars, and examples")
+
 	flag.Parse()
+	applyEnvBackedFlags()
 	hcfg.setFlags = make(map[string]bool)
 	flag.Visit(func(f *flag.Flag) {
 		hcfg.setFlags[f.Name] = true
@@ -353,9 +380,10 @@ func main() {
 		return
 	}
 
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+	baseLogHandler = slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 		Level: parseLogLevel(os.Getenv("LOG_LEVEL")),
-	})))
+	})
+	slog.SetDefault(slog.New(baseLogHandler))
 
 	health.SetServerInfo(health.ServerInfo{
 		Version:    version,
@@ -392,49 +420,87 @@ DESCRIPTION
   Supports stdio (default) and HTTP transport modes.
 
 FLAGS
-  -h                        Show this help message
+
+  Grouped by what they configure. Every flag also reads its value from the
+  environment when it is not passed; see ENVIRONMENT VARIABLES below.
+
+ General
+  -h, -help                 Show this help message
   -version                  Print version and exit
   -shutdown                 Terminate all running instances and exit
   -tool-search string       Search tools by name/description and exit
+  -log-level string         Logging verbosity: debug|info|warn|error (default info)
+
+ Transport
   -http                     Run in HTTP transport mode (default: stdio)
   -http-addr string         Listen address: host:port, or a path to bind a unix socket (default ":8080")
   -http-socket-mode str     Octal permission mode for a unix socket (default "0660")
   -tls-cert string          PEM certificate; serves HTTPS on the listener (requires -tls-key)
   -tls-key string           PEM private key matching -tls-cert
-  -gitlab-url string        GitLab URL; omit to require per-request GITLAB-URL header. Repeatable to publish several instances
-  -skip-tls-verify          Skip TLS certificate verification when calling GitLab (default false)
-  -meta-tools               Legacy boolean tool selector; prefer -tool-surface
-  -tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
-  -capability-surface str   Capability surface: full|minimal (default full)
-  -meta-param-schema str    Meta-tool input schema mode: opaque|compact|full (default opaque)
-  -tier string              Force licensing tier: free|ce|premium|ultimate; omit to detect per server entry
-  -read-only                Expose only read-only tools (default false)
-  -safe-mode                Intercept mutating tools and return a preview instead of executing
-  -embedded-resources       Embed canonical MCP resource links in get_* tool results (default true)
-  -exclude-tools string     Comma-separated tool names to exclude from registration
-  -ignore-scopes            Skip PAT scope detection, register all tools (default false)
-  -max-http-clients int     Maximum unique (token, GitLab URL) pool entries; not sessions or concurrent requests (default %d)
-  -session-timeout duration Idle MCP session timeout; --stateless=false only (default %s)
-  -pool-idle-timeout dur    Reclaim a pooled per-token-and-URL server entry after this long unused (default %s, 0 to disable)
-  -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure so -session-timeout governs
-  -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28). Use -stateless=false for legacy stateful sessions
+  -stateless                Stateless streamable HTTP (default true; required for protocol 2026-07-28)
   -json-response            Return application/json responses instead of SSE (default false)
   -max-request-body-bytes n Maximum streamable HTTP request body bytes (0 = SDK default 4 MiB)
+  -session-timeout duration Idle MCP session timeout; -stateless=false only (default %s)
+  -http-idle-timeout dur    HTTP server idle connection timeout; 0 (default) disables idle closure
+
+ GitLab connection
+  -gitlab-url string        GitLab URL; omit to require per-request GITLAB-URL header. Repeatable to publish several instances
+  -skip-tls-verify          Skip TLS certificate verification when calling GitLab (default false)
+  -tier string              Force licensing tier: free|ce|premium|ultimate; omit to detect per server entry
+  -ignore-scopes            Skip PAT scope detection, register all tools (default false)
+  -upload-max-file-size n   Maximum size in bytes for upload and file-read tools (default 2GB)
+
+  The GitLab token has no flag, on purpose: a token on a command line is
+  visible to every user on the machine through ps and lands in shell history.
+  Set GITLAB_TOKEN in the environment, or send it per request in HTTP mode.
+
+ Tool surface
+  -tool-surface string      Tool surface: dynamic|meta|individual (default dynamic)
+  -meta-tools               Legacy boolean tool selector; prefer -tool-surface
+  -capability-surface str   Capability surface: full|minimal (default full)
+  -meta-param-schema str    Meta-tool input schema mode: opaque|compact|full (default opaque)
+  -embedded-resources       Embed canonical MCP resource links in get_* tool results (default true)
+  -exclude-tools string     Comma-separated tool names to exclude from registration
+  -client-compat string     Per-client response compatibility: auto|off (default auto)
+
+ Protective modes
+  -read-only                Expose only read-only tools (default false)
+  -safe-mode                Intercept mutating tools and return a preview instead of executing
+  -yolo-mode true|false     Skip the confirmation prompt on destructive actions (default false; overrides AUTOPILOT)
+
+ Authentication (HTTP mode)
   -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
+  -public-url string        Externally reachable https origin; required with -auth-mode=oauth
+  -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
+  -oauth-client-uid string  Comma-separated GitLab OAuth application uids whose tokens are admitted (default: any)
+  -revalidate-interval dur  How often pooled tokens are re-validated against GitLab (default %s, 0 to disable)
   -resource-documentation string
                             https URL published as RFC 9728 resource_documentation (default: this project's OAuth setup guide)
   -resource-policy-uri string
                             https URL published as RFC 9728 resource_policy_uri (default: omitted)
-  -resource-tos-uri string
-                            https URL published as RFC 9728 resource_tos_uri (default: omitted)
-  -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
-  -oauth-client-uid string  Comma-separated GitLab OAuth application uids whose tokens are admitted (default: any)
-  -public-url string        Externally reachable https origin; required with -auth-mode=oauth (RFC 9728 resource identifier)
-  -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
-  -revalidate-interval dur  How often pooled tokens are re-validated against GitLab (default %s, 0 to disable)
-  -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
+  -resource-tos-uri string  https URL published as RFC 9728 resource_tos_uri (default: omitted)
+
+ Limits and pooling (HTTP mode)
+  -max-http-clients int     Maximum unique (token, GitLab URL) pool entries; not sessions or concurrent requests (default %d)
+  -pool-idle-timeout dur    Reclaim a pooled per-token-and-URL server entry after this long unused (default %s, 0 to disable)
   -rate-limit-rps float     Per-server tools/call rate limit (default 10; 0 disables it)
-  -rate-limit-burst int     Token-bucket burst size when --rate-limit-rps > 0 (default %d)
+  -rate-limit-burst int     Token-bucket burst size when -rate-limit-rps > 0 (default %d)
+  -trusted-origins string   Origins allowed to make cross-origin browser requests ('*' accepts any; empty rejects all)
+  -trusted-proxy-header str HTTP header with real client IP (e.g. X-Forwarded-For, X-Real-IP)
+
+ Telemetry
+  -telemetry                Export OpenTelemetry traces, metrics and logs over OTLP (default false)
+  -telemetry-identity str   What telemetry records about the caller: none|pseudonymous|full (default none)
+  -telemetry-identity-rotation str
+                            How long a generated pseudonymisation key lives, e.g. 24h (empty keeps it for the process)
+  -telemetry-tool-name str  Whether the tool name is a metric dimension: auto|on|off (default auto:
+                            on for dynamic and meta, off for individual, where ~1000 tools would
+                            exhaust the cardinality limit and collapse the long tail)
+
+  Off by default, and it goes to a collector you configure through the
+  standard OTEL_EXPORTER_OTLP_* environment; nothing is ever sent anywhere
+  else. OTEL_SDK_DISABLED=true vetoes it regardless of the flag. See
+  docs/guides/telemetry.md.
 
 ENVIRONMENT VARIABLES (stdio mode)
   GITLAB_URL                GitLab instance URL (default: %s; set for self-managed instances)
@@ -454,6 +520,15 @@ ENVIRONMENT VARIABLES (stdio mode)
   RATE_LIMIT_RPS            Per-server tools/call rate limit (default 0, disabled)
   RATE_LIMIT_BURST          Token-bucket burst size when RATE_LIMIT_RPS > 0 (default 40)
   YOLO_MODE                 Skip destructive action confirmation prompts (default false)
+  GITLAB_MCP_TELEMETRY      Export OpenTelemetry traces, metrics and logs over OTLP (default false)
+  GITLAB_MCP_TELEMETRY_IDENTITY
+                            What telemetry records about the caller: none|pseudonymous|full (default none)
+  GITLAB_MCP_TELEMETRY_IDENTITY_KEY
+                            Secret the pseudonymous policy derives its keys from; environment only, no flag
+  GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION
+                            How long a generated pseudonymisation key lives, e.g. 24h (default: process lifetime)
+  GITLAB_MCP_TELEMETRY_TOOL_NAME
+                            Whether gen_ai.tool.name is a metric dimension: auto|on|off (default auto)
   LOG_LEVEL                 Logging: debug/info/warn/error (default info)
 
 ENVIRONMENT VARIABLES (HTTP mode)
@@ -509,9 +584,14 @@ JSON CONFIGURATION EXAMPLES
   gitlab-mcp-server --http --http-addr=:8080
 `, version, commit,
 		projectAuthor, projectDepartment, projectRepository,
-		config.DefaultMaxHTTPClients, config.DefaultSessionTimeout, config.DefaultPoolIdleTimeout,
+		// In the order the grouped FLAGS block prints them: Transport, then
+		// Authentication, then Limits and pooling. Reordering a group above
+		// means reordering these, which the vet check catches when the types
+		// stop lining up and a reader catches when they do not.
+		config.DefaultSessionTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
 		config.DefaultRevalidateInterval,
+		config.DefaultMaxHTTPClients, config.DefaultPoolIdleTimeout,
 		config.DefaultRateLimitBurst,
 		config.DefaultGitLabURL)
 }
@@ -524,16 +604,113 @@ func run(hcfg *httpConfig) error {
 	return runWithContext(ctx, hcfg)
 }
 
+// resolveToolSurfaceForTelemetry answers which surface this process will serve,
+// early enough for telemetry to size its metric label space by it.
+//
+// An unparseable value falls back to the default surface rather than failing:
+// the mode's own startup validates the same input a moment later and reports it
+// properly, and telemetry sized for the wrong surface is a worse failure than a
+// duplicate error message is a cost.
+func resolveToolSurfaceForTelemetry(hcfg *httpConfig) string {
+	surfaceInput := os.Getenv("TOOL_SURFACE")
+	metaInput := os.Getenv("META_TOOLS")
+	if hcfg != nil {
+		// The flag wins and the environment fills in behind it, which is the
+		// same precedence the HTTP env overlay applies later. Reading the
+		// flags alone made TOOL_SURFACE exported into an HTTP deployment's
+		// environment invisible here while the overlay honored it.
+		if hcfg.toolSurface != "" {
+			surfaceInput = hcfg.toolSurface
+		}
+		if legacy := legacyMetaToolsFlagValue(hcfg); legacy != "" {
+			metaInput = legacy
+		}
+	}
+	surface, metaTools, err := config.ParseToolSurface(surfaceInput, metaInput)
+	if err != nil {
+		return config.ToolSurfaceDynamic
+	}
+	return config.EffectiveToolSurface(metaTools, surface)
+}
+
+// hostsOf extracts the hostnames a set of instance URLs names, dropping
+// whatever does not parse: an unparseable URL fails elsewhere with a message,
+// and this list only bounds a metric label.
+func hostsOf(urls []string) []string {
+	hosts := make([]string, 0, len(urls))
+	for _, raw := range urls {
+		if parsed, err := url.Parse(strings.TrimSpace(raw)); err == nil && parsed.Hostname() != "" {
+			hosts = append(hosts, parsed.Hostname())
+		}
+	}
+	return hosts
+}
+
 // runWithContext dispatches to HTTP or stdio mode depending on hcfg.
 // A non-nil hcfg starts the HTTP server using CLI-flag configuration
 // (no GITLAB_TOKEN required). A nil hcfg starts stdio mode using
 // environment-variable configuration (GITLAB_TOKEN required).
 func runWithContext(ctx context.Context, hcfg *httpConfig) error {
+	// One place for both transports, because telemetry is a property of the
+	// process rather than of how it is spoken to, and because a second copy of
+	// this would eventually disagree with the first about shutdown ordering.
+	//
+	// Shutdown runs on context.WithoutCancel: by the time it fires, ctx is
+	// usually already cancelled by the signal that started the shutdown, and
+	// passing a cancelled context to the exporters would discard the very
+	// batch describing why the process is stopping.
+	// The provider itself is not needed here: the server card reads the
+	// snapshot the package publishes, so what this call site keeps is only the
+	// stop function.
+	// The surface the process will serve, resolved from the inputs the mode
+	// really uses: HTTP takes it from its flags, stdio from the environment.
+	// The auto tool-name policy decides per surface, and reading TOOL_SURFACE
+	// here regardless of mode gave an HTTP deployment started with
+	// --tool-surface=individual the dynamic default's decision.
+	_, stopTelemetry := startTelemetry(ctx, version, resolveToolSurfaceForTelemetry(hcfg))
+
+	// Which GitLab hosts the http.client metric may name. Declared per mode,
+	// because the modes disagree about who chooses the instance: stdio and a
+	// pinned HTTP deployment serve a known list, while the free-selection mode
+	// serves whatever a caller names, which is exactly what must not become a
+	// metric label. See mcpotel.SetMetricServerAddresses.
+	switch {
+	case hcfg != nil && len(hcfg.gitlabURLs) > 0:
+		mcpotel.SetMetricServerAddresses(hostsOf(hcfg.gitlabURLs))
+	case hcfg != nil && os.Getenv("GITLAB_URL") != "":
+		// The env overlay lets GITLAB_URL pin an HTTP deployment the same way
+		// the flag does, so it declares the metric's host the same way too.
+		mcpotel.SetMetricServerAddresses(hostsOf([]string{os.Getenv("GITLAB_URL")}))
+	case hcfg != nil:
+		// Free selection: callers choose the instance, so no host is declared
+		// and every one lands on the metric as the other bucket.
+	case os.Getenv("GITLAB_URL") != "":
+		mcpotel.SetMetricServerAddresses(hostsOf([]string{os.Getenv("GITLAB_URL")}))
+	default:
+		mcpotel.SetMetricServerAddresses(hostsOf([]string{config.DefaultGitLabURL}))
+	}
+
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), telemetryShutdownTimeout)
+		defer cancel()
+		stopTelemetry(shutdownCtx)
+	}()
+
 	if hcfg != nil {
 		return runHTTP(ctx, hcfg)
 	}
 	return runStdio(ctx)
 }
+
+// telemetryShutdownTimeout bounds the final flush.
+//
+// It is the caller's context that bounds Shutdown at the provider level (the
+// SDK's own 30s default applies per export, not to the whole drain), so without
+// a deadline here a collector that accepts a connection and then stalls would
+// hold the process open. Five seconds is long enough for a local collector to
+// take a last batch and short enough that a person pressing Ctrl-C sees the
+// process exit.
+const telemetryShutdownTimeout = 5 * time.Second
 
 // runHTTP validates HTTP flags, builds a [config.Config] from them, and
 // starts the HTTP server. No GITLAB_TOKEN is needed; each client provides
@@ -671,7 +848,7 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		Stateless:             hcfg.stateless,
 		JSONResponse:          hcfg.jsonResponse,
 		MaxRequestBodyBytes:   hcfg.maxRequestBodyBytes,
-		UploadMaxFileSize:     config.DefaultMaxFileSize,
+		UploadMaxFileSize:     uploadMaxFileSize(),
 		AuthMode:              hcfg.authMode,
 		PublicURL:             hcfg.publicURL,
 		ResourceDocumentation: hcfg.resourceDocumentation,
@@ -881,23 +1058,23 @@ func runStdio(ctx context.Context) error {
 		return fmt.Errorf("creating gitlab client: %w", err)
 	}
 
-	slog.Info("connecting to gitlab", "url", cfg.GitLabURL, "tls_skip", cfg.SkipTLSVerify)
+	slog.InfoContext(ctx, "connecting to gitlab", "url", cfg.GitLabURL, "tls_skip", cfg.SkipTLSVerify)
 	gitlabVersion, err := client.Initialize(ctx)
 	if err != nil {
-		slog.Warn("gitlab connectivity check failed — server will start in degraded mode",
+		slog.WarnContext(ctx, "gitlab connectivity check failed — server will start in degraded mode",
 			"url", cfg.GitLabURL, "error", err)
 		client.EnableLazyInit()
 	} else {
 		userInfo, userErr := client.CurrentUser(ctx)
 		if userErr != nil {
-			slog.Warn("could not resolve user identity at startup", "error", userErr)
-			slog.Info("gitlab connection verified", "url", cfg.GitLabURL, "version", gitlabVersion)
+			slog.WarnContext(ctx, "could not resolve user identity at startup", "error", userErr)
+			slog.InfoContext(ctx, "gitlab connection verified", "url", cfg.GitLabURL, "version", gitlabVersion)
 		} else {
 			ctx = toolutil.IdentityToContext(ctx, toolutil.UserIdentity{
 				UserID:   strconv.Itoa(userInfo.UserID),
 				Username: userInfo.Username,
 			})
-			slog.Info(
+			slog.InfoContext(ctx,
 				"gitlab connection verified",
 				"url", cfg.GitLabURL,
 				"user", userInfo.Username,
@@ -922,11 +1099,11 @@ func runStdio(ctx context.Context) error {
 	if !cfg.IgnoreScopes {
 		serverCfg.TokenScopes = gitlabclient.DetectScopes(ctx, client.GL())
 		if serverCfg.TokenScopes == nil {
-			slog.Debug("PAT scope detection unavailable — all tools will be registered")
+			slog.DebugContext(ctx, "PAT scope detection unavailable — all tools will be registered")
 		}
 	}
 
-	server, err := createServer(ctx, client, serverCfg)
+	server, err := createServer(ctx, client, serverCfg, withTransport(mcpotel.TransportPipe))
 	if err != nil {
 		return fmt.Errorf("creating MCP server: %w", err)
 	}
@@ -1201,6 +1378,34 @@ func createServer(
 		)
 	}
 
+	// Second to last, so the span covers every middleware above it, and so a
+	// panic reaches this middleware's deferred span.End before recoverPanics
+	// swallows it. That ordering is what lets the SDK record the panic as an
+	// exception event: it recovers inside End, records it, and re-panics. A
+	// recovery running first would leave the span with no explanation.
+	telemetryOptions := mcpotel.Options{
+		Identifier: gitlabtools.NewCallIdentifier(surfaceCatalog, toolSurface),
+		Users:      telemetryUsers(),
+		Resources:  telemetryResources(),
+		Surface:    toolSurface,
+		Transport:  settings.transport,
+		// The full supported list rather than the narrowed one: this bounds
+		// which caller-supplied version strings may become a metric dimension,
+		// and a revision this build admits at all is a safe label whether or
+		// not this particular transport serves it.
+		ProtocolVersions: supportedProtocolVersions,
+	}
+	server.AddReceivingMiddleware(mcpotel.Middleware(telemetryOptions))
+
+	// The other direction. The MCP convention splits client and server spans by
+	// initiator rather than by role, so the same process produces both: SERVER
+	// for a tools/call it receives, CLIENT for the elicitation, sampling,
+	// roots/list and notifications it sends. Without this the interactive flows
+	// and every resource-updated notification are invisible, which is exactly
+	// the work an operator most wants to see, since it happens without anybody
+	// asking for it.
+	server.AddSendingMiddleware(mcpotel.SendingMiddleware(telemetryOptions))
+
 	// Added last so it wraps every middleware above it as well as the handler.
 	server.AddReceivingMiddleware(recoverPanics)
 
@@ -1210,17 +1415,17 @@ func createServer(
 func applyToolVisibilityConfig(ctx context.Context, server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
 	if len(cfg.ExcludeTools) > 0 {
 		removed := removeExcludedTools(ctx, server, cfg.ExcludeTools)
-		slog.Info("excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
+		slog.InfoContext(ctx, "excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
 	}
 	if cfg.TokenScopes != nil {
 		removed := gitlabtools.RemoveScopeFilteredTools(server, cfg.TokenScopes)
 		if removed > 0 {
-			slog.Info("scope-filtered tools", "removed", removed)
+			slog.InfoContext(ctx, "scope-filtered tools", "removed", removed)
 		}
 	}
 	if cfg.ReadOnly {
 		removed := gitlabtools.RemoveNonReadOnlyTools(ctx, server)
-		slog.Info("read-only mode: removed write tools", "removed", removed)
+		slog.InfoContext(ctx, "read-only mode: removed write tools", "removed", removed)
 		return
 	}
 	if cfg.SafeMode {
@@ -1231,7 +1436,7 @@ func applyToolVisibilityConfig(ctx context.Context, server *mcp.Server, cfg *con
 		// gitlab_interactive_* utilities.
 		exempt := catalogBackedToolNames(surfaceCatalog, toolSurface)
 		wrapped := gitlabtools.WrapMutatingToolsForSafeModeExcept(ctx, server, exempt)
-		slog.Info("safe mode: intercepted mutating operations",
+		slog.InfoContext(ctx, "safe mode: intercepted mutating operations",
 			"surface", toolSurface, "wrapped_tools", wrapped, "catalog_backed_tools", len(exempt))
 	}
 }
@@ -1315,8 +1520,13 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		gitlabtools.RegisterMetaStandaloneTools(server, client)
 		return serverSurfaceRegistration{metaSchemaRoutes: filteredCatalog.ActionMaps(), surfaceCatalog: filteredCatalog}, nil
 	default:
-		gitlabtools.RegisterAll(server, client, cfg.Tier)
-		return serverSurfaceRegistration{}, nil
+		// The catalog is carried out rather than discarded. On this surface a
+		// tool name is declared per ActionSpec rather than derived, so nothing
+		// downstream can map one back to its action without it, and telemetry
+		// recorded no action here at all until this returned something.
+		return serverSurfaceRegistration{
+			surfaceCatalog: gitlabtools.RegisterAll(server, client, cfg.Tier),
+		}, nil
 	}
 }
 
@@ -1560,7 +1770,7 @@ func serveHTTP(ctx context.Context, cfg *config.Config, httpAddr string, httpIdl
 // listener is non-nil it is served directly and httpAddr is used only for
 // logging and host validation; when nil, the server binds httpAddr itself.
 func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, listener net.Listener, httpIdleTimeout time.Duration) error {
-	slog.Info(
+	slog.InfoContext(ctx,
 		"starting MCP server in HTTP mode",
 		"addr", httpAddr,
 		"auth_mode", cfg.AuthMode,
@@ -1574,7 +1784,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	)
 
 	if !cfg.Stateless {
-		slog.Warn("stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
+		slog.WarnContext(ctx, "stateful HTTP sessions are a legacy compatibility mode; protocol 2026-07-28 requires stateless (clients will negotiate 2025-11-25)")
 	}
 
 	// Each pooled entry mints session IDs under its own tag, and sessionTags
@@ -1591,7 +1801,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// mark for being idle. Liveness on this transport is the SSE
 		// keep-alive comment (see sseAwareWriter), which puts bytes on the
 		// wire without asking the client for anything.
-		srv, err := createServer(ctx, client, serverCfg, withSessionTag(tag), withKeepAlive(0))
+		srv, err := createServer(ctx, client, serverCfg, withSessionTag(tag), withKeepAlive(0), withTransport(mcpotel.TransportTCP))
 		if err != nil {
 			return nil, err
 		}
@@ -1641,7 +1851,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 				defer close(serverCardDone)
 				cardJSON, err := buildServerCardFn(ctx, cfg)
 				if err != nil {
-					slog.Warn("failed to build server-card.json, endpoint returns 503", "error", err)
+					slog.WarnContext(ctx, "failed to build server-card.json, endpoint returns 503", "error", err)
 					return
 				}
 				serverCardJSON = cardJSON
@@ -1727,6 +1937,14 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	if hosts := allowedHosts(httpAddr); len(hosts) > 0 {
 		rootHandler = hostValidationMiddleware(hosts, rootHandler)
 	}
+	// Second outermost, so the span covers host validation, CORS and the
+	// credential check as well as the handler. That placement is the whole
+	// point: the MCP span starts after authentication, so it never exists for
+	// a refused request, which leaves an operator of a published endpoint
+	// unable to see how much traffic is being rejected or how long a rejection
+	// takes. Here a refusal is a status code on a span.
+	rootHandler = mcpotel.ServerMiddleware(rootHandler)
+
 	// Outermost, so that EVERY response carries the security headers —
 	// including the ones written by a middleware that answers instead of
 	// forwarding. Host validation used to sit outside this and its 403 went
@@ -1751,7 +1969,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 
 	select {
 	case <-ctx.Done():
-		slog.Info("HTTP server shutdown requested")
+		slog.InfoContext(ctx, "HTTP server shutdown requested")
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), httpShutdownTimeout)
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
@@ -1908,7 +2126,7 @@ func mcpOriginMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 
 // writeUntrustedOrigin refuses a cross-origin request to the MCP endpoint.
 func writeUntrustedOrigin(w http.ResponseWriter, r *http.Request) {
-	slog.Warn("request refused: untrusted Origin on the MCP endpoint", "method", r.Method)
+	slog.WarnContext(r.Context(), "request refused: untrusted Origin on the MCP endpoint", "method", r.Method)
 	(&gateFailure{
 		status:  http.StatusForbidden,
 		code:    errCodeForbidden,
@@ -2034,7 +2252,7 @@ func writeUnsupportedProtocolVersion(w http.ResponseWriter, r *http.Request, sup
 	w.Header().Set(hdrContentType, mimeJSON)
 	w.WriteHeader(http.StatusBadRequest)
 	if err := json.NewEncoder(w).Encode(body); err != nil {
-		slog.Error("failed to write unsupported-protocol-version response", "error", err)
+		slog.ErrorContext(r.Context(), "failed to write unsupported-protocol-version response", "error", err)
 	}
 }
 
@@ -2207,7 +2425,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	}
 	verifier := oauth.NewGitLabVerifierFor(resolveInstance, cfg.SkipTLSVerify, cacheTTL, tokenCache, cfg.OAuthClientUIDs...)
 	if len(cfg.OAuthClientUIDs) > 0 {
-		slog.Info("admitting only tokens issued to the pinned OAuth applications; personal access tokens are refused",
+		slog.InfoContext(ctx, "admitting only tokens issued to the pinned OAuth applications; personal access tokens are refused",
 			"applications", len(cfg.OAuthClientUIDs))
 	}
 	guard := &bearerGuard{
@@ -2251,7 +2469,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	startPeriodicCleanup(ctx, tokenCache.Cleanup)
 	startPeriodicCleanup(ctx, rejectedTokens.Cleanup)
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
-	slog.Info("oauth mode enabled", "cache_ttl", cacheTTL, "resource", resourceID, "metadata_url", resourceMetadataURL)
+	slog.InfoContext(ctx, "oauth mode enabled", "cache_ttl", cacheTTL, "resource", resourceID, "metadata_url", resourceMetadataURL)
 }
 
 // oauthCacheTTL returns a TTL the verifier can actually work with.
@@ -2722,7 +2940,7 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 			host = h
 		}
 		if !allowed[host] {
-			slog.Warn("request blocked: invalid Host header", "host", r.Host) //#nosec G706 -- slog structured args are not interpolated
+			slog.WarnContext(r.Context(), "request blocked: invalid Host header", "host", r.Host) //#nosec G706 -- slog structured args are not interpolated
 			// JSON-RPC rather than http.Error's plain text, for the same
 			// reason the cross-origin refusal is: an unparseable 4xx body
 			// reads to a Streamable HTTP client as a pre-negotiation server.
@@ -2760,6 +2978,72 @@ func newHealthResponse(startedAt, now time.Time) healthResponse {
 		Commit:        commit,
 		StartedAt:     startedAt.UTC().Format(time.RFC3339),
 		UptimeSeconds: uptime,
+	}
+}
+
+// serverCardSubscriptions describes the subscription surface, or nil when this
+// deployment does not offer one.
+//
+// Machine-readable on purpose: the same whitelist the gitlab://tools manifest
+// advertises and the SubscribeHandler enforces, plus per-method availability a
+// consumer can branch on without parsing prose.
+//
+// Both methods are always listed, because the block describes the binary's
+// capability surface, but "available" states what THIS deployment answers. The
+// legacy resources/subscribe verb is refused on stateless HTTP, where each
+// POST's session closes with its response so an accepted subscription could
+// never notify, and subscriptions/listen is the working form there.
+func serverCardSubscriptions(cfg *config.Config) map[string]any {
+	if config.EffectiveCapabilitySurface(cfg.CapabilitySurface) != config.CapabilitySurfaceFull {
+		return nil
+	}
+	return map[string]any{
+		"supported": true,
+		"methods": map[string]any{
+			"subscriptions/listen": map[string]any{
+				"available":      true,
+				"since_protocol": protocolVersionStatelessOnly,
+			},
+			"resources/subscribe": map[string]any{
+				"available": !cfg.Stateless,
+				"requires":  "stateful sessions (--stateless=false)",
+			},
+		},
+		"subscribable_uri_templates": subscriptions.Templates(),
+		"notification":               "notifications/resources/updated, sent when the watched content changes (server polls GitLab)",
+	}
+}
+
+// serverCardTelemetry describes the instrumentation this deployment is running,
+// or nil when it is running none.
+//
+// Announced rather than assumed. The switch is off by default for privacy, and
+// a privacy default nobody can observe is worth less than one they can:
+// somebody connecting to a published endpoint should be able to see that their
+// calls are instrumented without having to ask the operator.
+//
+// Absent rather than "enabled": false, because a consumer should not have to
+// parse a negation to learn that nothing is recorded, and a block that is
+// always present invites one written by hand that says the wrong thing.
+//
+// The collector endpoint is deliberately NOT published, and that is the one
+// line here worth defending. It names the operator's own infrastructure, and a
+// server card is fetched by every client that asks. What a caller needs is that
+// their calls are recorded and in what form; where the records land is not
+// theirs to know.
+func serverCardTelemetry() map[string]any {
+	snapshot := telemetry.CurrentSnapshot()
+	if !snapshot.Enabled {
+		return nil
+	}
+	return map[string]any{
+		"enabled":     true,
+		"signals":     snapshot.Signals,
+		"protocol":    snapshot.Protocol,
+		"conventions": "OpenTelemetry, following the MCP semantic convention",
+		"recorded":    "the method called, the tool and catalog action, the outcome and the duration",
+		"not_recorded": "tool arguments, tool results, resource contents, " +
+			"queries, tokens, and GitLab response bodies",
 	}
 }
 
@@ -3021,31 +3305,11 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 		"prompts":           cardPrompts,
 	}
 
-	// The subscription surface, machine-readable: the same whitelist the
-	// gitlab://tools manifest advertises and the SubscribeHandler enforces,
-	// plus per-method availability a consumer can branch on without parsing
-	// prose. Both methods are always listed — the block describes the
-	// binary's capability surface — but "available" states what THIS
-	// deployment answers: the legacy resources/subscribe verb is refused on
-	// stateless HTTP (each POST's session closes with its response, so an
-	// accepted subscription could never notify), where subscriptions/listen
-	// is the working form.
-	if config.EffectiveCapabilitySurface(cfg.CapabilitySurface) == config.CapabilitySurfaceFull {
-		card["subscriptions"] = map[string]any{
-			"supported": true,
-			"methods": map[string]any{
-				"subscriptions/listen": map[string]any{
-					"available":      true,
-					"since_protocol": protocolVersionStatelessOnly,
-				},
-				"resources/subscribe": map[string]any{
-					"available": !cfg.Stateless,
-					"requires":  "stateful sessions (--stateless=false)",
-				},
-			},
-			"subscribable_uri_templates": subscriptions.Templates(),
-			"notification":               "notifications/resources/updated, sent when the watched content changes (server polls GitLab)",
-		}
+	if block := serverCardSubscriptions(cfg); block != nil {
+		card["subscriptions"] = block
+	}
+	if block := serverCardTelemetry(); block != nil {
+		card["telemetry"] = block
 	}
 
 	return json.Marshal(card)
@@ -3054,7 +3318,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 // serveStdio starts the MCP server using stdio transport.
 // It blocks until the context is canceled or an error occurs.
 func serveStdio(ctx context.Context, server *mcp.Server) error {
-	slog.Info("starting MCP server", "transport", "stdio", "version", version, "commit", commit)
+	slog.InfoContext(ctx, "starting MCP server", "transport", "stdio", "version", version, "commit", commit)
 	// An IOTransport over filtered stdin rather than mcp.StdioTransport, which
 	// wraps os.Stdin directly: the SDK's read loop treats a message it cannot
 	// parse like a closed pipe and ends the session, so one malformed line
@@ -3080,10 +3344,10 @@ func serveStdio(ctx context.Context, server *mcp.Server) error {
 	// client exiting mid-call did not.
 	switch {
 	case reader.clientClosed():
-		slog.Info("client closed stdin, shutting down", "transport", "stdio")
+		slog.InfoContext(ctx, "client closed stdin, shutting down", "transport", "stdio")
 		return nil
 	case errors.Is(err, context.Canceled):
-		slog.Info("signal received, shutting down", "transport", "stdio")
+		slog.InfoContext(ctx, "signal received, shutting down", "transport", "stdio")
 		return nil
 	}
 	return fmt.Errorf("mcp server error: %w", err)
@@ -3289,7 +3553,7 @@ func removeExcludedTools(ctx context.Context, server *mcp.Server, exclude []stri
 
 	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {
-		slog.Error("removeExcludedTools: server connect failed", "error", err)
+		slog.ErrorContext(ctx, "removeExcludedTools: server connect failed", "error", err)
 		return 0
 	}
 	defer serverSession.Close()
@@ -3297,14 +3561,14 @@ func removeExcludedTools(ctx context.Context, server *mcp.Server, exclude []stri
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "exclude-filter", Version: "0"}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		slog.Error("removeExcludedTools: client connect failed", "error", err)
+		slog.ErrorContext(ctx, "removeExcludedTools: client connect failed", "error", err)
 		return 0
 	}
 	defer session.Close()
 
 	result, err := session.ListTools(ctx, nil)
 	if err != nil {
-		slog.Error("removeExcludedTools: list tools failed", "error", err)
+		slog.ErrorContext(ctx, "removeExcludedTools: list tools failed", "error", err)
 		return 0
 	}
 
@@ -3433,4 +3697,30 @@ func buildToolSearchCatalog(tier edition.Tier) (*actioncatalog.Catalog, error) {
 		return nil, fmt.Errorf("add standalone dynamic actions: %w", standaloneErr)
 	}
 	return withStandalone, nil
+}
+
+// uploadMaxFileSize resolves the upload limit for HTTP mode.
+//
+// A parse failure falls back to the default and says so, rather than refusing
+// to start: this runs while the HTTP configuration is being assembled, and a
+// malformed size is worth a loud line and a working server rather than a dead
+// one. The same value is validated again by config.Config.Validate, which is
+// where an out-of-range limit is rejected.
+func uploadMaxFileSize() int64 {
+	size, err := config.UploadMaxFileSizeFromEnv()
+	if err != nil {
+		slog.Warn("UPLOAD_MAX_FILE_SIZE could not be parsed; using the default",
+			"error", err, "default", config.DefaultMaxFileSize)
+		return config.DefaultMaxFileSize
+	}
+	// The ceiling is enforced here rather than only in config.Validate, which
+	// the HTTP path never calls: "1025GB" parses cleanly, so without this a
+	// deployment starts with a limit above the documented one and nothing says
+	// so until a request the size of a small disk arrives.
+	if size > config.MaxFileSize {
+		slog.Warn("UPLOAD_MAX_FILE_SIZE exceeds the maximum; using the maximum",
+			"requested", size, "maximum", config.MaxFileSize)
+		return config.MaxFileSize
+	}
+	return size
 }

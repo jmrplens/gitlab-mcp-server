@@ -47,7 +47,7 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 		}, gl.WithContext(ctx),
 	)
 	if errAuthored != nil {
-		slog.Warn("failed to list authored MRs", "error", errAuthored)
+		slog.WarnContext(ctx, "failed to list authored MRs", "error", errAuthored)
 	}
 
 	// MRs assigned to the user
@@ -59,7 +59,7 @@ func handleMyOpenMRs(ctx context.Context, client *gitlabclient.Client, req *mcp.
 		}, gl.WithContext(ctx),
 	)
 	if errAssigned != nil {
-		slog.Warn("failed to list assigned MRs", "error", errAssigned)
+		slog.WarnContext(ctx, "failed to list assigned MRs", "error", errAssigned)
 	}
 
 	allMRs := deduplicateMRs(authoredMRs, assignedMRs)
@@ -274,7 +274,7 @@ func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, r
 		}, gl.WithContext(ctx),
 	)
 	if errMerged != nil {
-		slog.Warn("failed to list merged MRs", "error", errMerged)
+		slog.WarnContext(ctx, "failed to list merged MRs", "error", errMerged)
 	}
 
 	// MRs reviewed in period
@@ -286,7 +286,7 @@ func handleMyActivitySummary(ctx context.Context, client *gitlabclient.Client, r
 		}, gl.WithContext(ctx),
 	)
 	if errReviewed != nil {
-		slog.Warn("failed to list reviewed MRs", "error", errReviewed)
+		slog.WarnContext(ctx, "failed to list reviewed MRs", "error", errReviewed)
 	}
 
 	var b strings.Builder

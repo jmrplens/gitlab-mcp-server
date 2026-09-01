@@ -17,7 +17,14 @@ import (
 // skipped entirely. Checks the YOLO_MODE and AUTOPILOT environment variables.
 // Any truthy value (1, true, yes — case-insensitive) enables the mode.
 func IsYOLOMode() bool {
-	return isTruthy(os.Getenv("YOLO_MODE")) || isTruthy(os.Getenv("AUTOPILOT"))
+	// The specific name decides when it is set at all, and the alias is only
+	// consulted when it is not. ORing the two meant an inherited AUTOPILOT=true
+	// could not be overridden by --yolo-mode=false, and the most specific
+	// instruction losing to an inherited one is precedence backwards.
+	if value := os.Getenv("YOLO_MODE"); strings.TrimSpace(value) != "" {
+		return isTruthy(value)
+	}
+	return isTruthy(os.Getenv("AUTOPILOT"))
 }
 
 // isTruthy returns true for common truthy string values.
@@ -59,12 +66,12 @@ func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, par
 	}
 
 	if IsYOLOMode() {
-		slog.Debug("destructive action auto-confirmed (YOLO mode)", "tool", tool)
+		slog.DebugContext(ctx, "destructive action auto-confirmed (YOLO mode)", "tool", tool)
 		return nil, nil //nolint:nilnil // no result and no error is the "proceed" answer; see the doc comment
 	}
 
 	if hasExplicitConfirm(params) {
-		slog.Debug("destructive action confirmed via explicit param", "tool", tool)
+		slog.DebugContext(ctx, "destructive action confirmed via explicit param", "tool", tool)
 		return nil, nil //nolint:nilnil // no result and no error is the "proceed" answer; see the doc comment
 	}
 
@@ -74,11 +81,11 @@ func ConfirmDestructiveAction(ctx context.Context, req *mcp.CallToolRequest, par
 	// guard requires confirm=true. Mirrors that guard's contract.
 	flow, err := elicitation.FlowFromRequest(req)
 	if err != nil {
-		slog.Warn("destructive confirmation state invalid", "tool", tool, "error", err)
+		slog.WarnContext(ctx, "destructive confirmation state invalid", "tool", tool, "error", err)
 		return nil, InvalidParams(err)
 	}
 	if !flow.IsSupported() {
-		slog.Warn("blocked destructive action without explicit confirmation", "tool", tool)
+		slog.WarnContext(ctx, "blocked destructive action without explicit confirmation", "tool", tool)
 		return ErrorResult(message +
 			" The connected client cannot prompt for confirmation." +
 			" Re-send with confirm=true only after the user explicitly approves this operation."), nil
@@ -122,7 +129,7 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string
 
 	flow, err := elicitation.FlowFromRequest(req)
 	if err != nil {
-		slog.Warn("destructive confirmation state invalid", "tool", tool, "error", err)
+		slog.WarnContext(ctx, "destructive confirmation state invalid", "tool", tool, "error", err)
 		return nil, InvalidParams(err)
 	}
 	if !flow.IsSupported() {
@@ -131,28 +138,28 @@ func ConfirmAction(ctx context.Context, req *mcp.CallToolRequest, message string
 	confirmed, err := flow.Confirm(ctx, elicitation.ConfirmExchangeID, message)
 	switch {
 	case errors.Is(err, elicitation.ErrInputPending):
-		slog.Debug("destructive confirmation pending client input", "tool", tool)
+		slog.DebugContext(ctx, "destructive confirmation pending client input", "tool", tool)
 		return flow.InputRequiredResult(), nil
 	case errors.Is(err, elicitation.ErrDeclined):
-		slog.Info("destructive action declined by user", "tool", tool)
+		slog.InfoContext(ctx, "destructive action declined by user", "tool", tool)
 		// Distinct from a dismissal, because the model should act differently:
 		// a decision to say no means stop and offer something else, where a
 		// dialog that was dismissed can reasonably be asked again later.
 		return CancelledResult("The user declined this operation. Do not retry it; ask what they would like instead."), nil
 	case errors.Is(err, elicitation.ErrCancelled):
-		slog.Info("destructive confirmation dismissed", "tool", tool)
+		slog.InfoContext(ctx, "destructive confirmation dismissed", "tool", tool)
 		return CancelledResult("The confirmation was dismissed without an answer. Nothing was changed; you may ask again if the user still wants this."), nil
 	case err != nil:
 		// Fail closed: a destructive action must never proceed on a
 		// malformed or failed confirmation exchange.
-		slog.Warn("destructive confirmation failed", "tool", tool, "error", err)
+		slog.WarnContext(ctx, "destructive confirmation failed", "tool", tool, "error", err)
 		return elicitation.ConfirmFailedResult(err), nil
 	}
 	if !confirmed {
-		slog.Info("destructive action denied by user", "tool", tool)
+		slog.InfoContext(ctx, "destructive action denied by user", "tool", tool)
 		return CancelledResult("Operation canceled by user."), nil
 	}
-	slog.Debug("destructive action confirmed by user", "tool", tool)
+	slog.DebugContext(ctx, "destructive action confirmed by user", "tool", tool)
 	return nil, nil //nolint:nilnil // proceed
 }
 

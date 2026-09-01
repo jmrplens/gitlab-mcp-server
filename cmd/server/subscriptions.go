@@ -634,6 +634,11 @@ func newSubscriptionRuntime(
 	notifier := &serverNotifier{}
 	streams := newListenStreams()
 	opts.OnStop = streams.stopped
+	// The same redactor rule the MCP spans use, so a poll span and the
+	// subscribe span that caused it describe the resource the same way.
+	if redactor := telemetryResources(); redactor != nil {
+		opts.ResourceAttributes = redactor.ResourceAttributes
+	}
 	return &subscriptionRuntime{
 		manager: subscriptions.New[*mcp.ServerSession](
 			resourceReader{index: resources.NewHandlerIndex(client)},
@@ -801,11 +806,27 @@ type serverSettings struct {
 	// keepAlive overrides the server-initiated ping interval. Nil leaves the
 	// transport default in place; a pointer to zero disables the ping.
 	keepAlive *time.Duration
+	// transport names how this server is spoken to, for the
+	// network.transport attribute on every span and measurement. The
+	// convention's note fixes the vocabulary rather than leaving it to taste:
+	// "pipe" for stdio, "tcp" for HTTP. Empty omits the attribute, which is
+	// what the server-card build wants: it drives an in-memory session that is
+	// neither.
+	transport string
 }
 
 // withKeepAlive overrides the server keepalive interval for this server.
 func withKeepAlive(d time.Duration) serverOption {
 	return func(s *serverSettings) { s.keepAlive = &d }
+}
+
+// withTransport records how this server is reached, for telemetry.
+//
+// Passed explicitly rather than inferred from sessionTag, which happens to be
+// empty in stdio mode today. Deriving one fact from an unrelated one is how an
+// attribute starts lying after a refactor nobody connected to it.
+func withTransport(name string) serverOption {
+	return func(s *serverSettings) { s.transport = name }
 }
 
 // withSessionTag makes this server mint session IDs carrying tag as a prefix.

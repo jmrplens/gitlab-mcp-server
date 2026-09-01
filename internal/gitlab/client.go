@@ -40,6 +40,8 @@ import (
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
 )
 
 // Client wraps the official GitLab API client with project-specific configuration.
@@ -147,11 +149,7 @@ func NewClient(cfg *config.Config) (*Client, error) {
 	}
 	c.SetTier(cfg.Tier)
 
-	sdkHTTPClient := &http.Client{
-		Transport: &dotUnescapeTransport{
-			base: &resilienceTransport{base: base, client: c},
-		},
-	}
+	sdkHTTPClient := &http.Client{Transport: apiTransport(base, c)}
 
 	options := []gl.ClientOptionFunc{
 		gl.WithBaseURL(cfg.GitLabURL),
@@ -189,11 +187,7 @@ func NewClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client, err
 		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
 	}
 
-	sdkHTTPClient := &http.Client{
-		Transport: &dotUnescapeTransport{
-			base: &resilienceTransport{base: base, client: c},
-		},
-	}
+	sdkHTTPClient := &http.Client{Transport: apiTransport(base, c)}
 
 	inner, err := gl.NewClient(
 		token,
@@ -226,11 +220,7 @@ func NewOAuthClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client
 		healthClient: &http.Client{Transport: base, Timeout: healthTimeout},
 	}
 
-	sdkHTTPClient := &http.Client{
-		Transport: &dotUnescapeTransport{
-			base: &resilienceTransport{base: base, client: c},
-		},
-	}
+	sdkHTTPClient := &http.Client{Transport: apiTransport(base, c)}
 
 	inner, err := gl.NewAuthSourceClient(
 		gl.OAuthTokenSource{TokenSource: oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})},
@@ -350,11 +340,11 @@ func (c *Client) EnsureInitialized(ctx context.Context) {
 	c.lastInitAttempt = time.Now()
 
 	if _, err := c.Initialize(ctx); err != nil {
-		slog.Debug("lazy re-initialization failed", "error", err)
+		slog.DebugContext(ctx, "lazy re-initialization failed", "error", err)
 		return
 	}
 	c.needsLazyInit.Store(false)
-	slog.Info("gitlab client recovered — lazy initialization succeeded")
+	slog.InfoContext(ctx, "gitlab client recovered — lazy initialization succeeded")
 }
 
 // EnableLazyInit enables lazy re-initialization on subsequent API calls.
@@ -384,17 +374,17 @@ func (c *Client) pingDirect(ctx context.Context) error {
 func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
 	versionInfo, err := c.versionDirect(ctx)
 	if err != nil {
-		slog.Warn("failed to detect GitLab edition, using configured enterprise mode", "error", err, "fallback", fallback)
+		slog.WarnContext(ctx, "failed to detect GitLab edition, using configured enterprise mode", "error", err, "fallback", fallback)
 		c.SetEnterprise(fallback)
 		return fallback
 	}
 	if versionInfo.Enterprise == nil {
-		slog.Debug("GitLab version endpoint did not report edition, using configured enterprise mode", "version", versionInfo.Version, "fallback", fallback)
+		slog.DebugContext(ctx, "GitLab version endpoint did not report edition, using configured enterprise mode", "version", versionInfo.Version, "fallback", fallback)
 		c.SetEnterprise(fallback)
 		return fallback
 	}
 	c.SetEnterprise(*versionInfo.Enterprise)
-	slog.Info("detected GitLab edition", "version", versionInfo.Version, "enterprise", *versionInfo.Enterprise)
+	slog.InfoContext(ctx, "detected GitLab edition", "version", versionInfo.Version, "enterprise", *versionInfo.Enterprise)
 	return *versionInfo.Enterprise
 }
 
@@ -409,19 +399,19 @@ func (c *Client) DetectEnterprise(ctx context.Context, fallback bool) bool {
 func (c *Client) DetectTier(ctx context.Context) edition.Tier {
 	lic, _, err := c.inner.License.GetLicense(gl.WithContext(ctx))
 	if err != nil {
-		slog.Debug("failed to detect GitLab tier from license, falling back to free",
+		slog.DebugContext(ctx, "failed to detect GitLab tier from license, falling back to free",
 			"error", err)
 		c.SetTier(edition.Free)
 		return edition.Free
 	}
 	if lic == nil || strings.TrimSpace(lic.Plan) == "" {
-		slog.Debug("GitLab license reported no plan, falling back to free")
+		slog.DebugContext(ctx, "GitLab license reported no plan, falling back to free")
 		c.SetTier(edition.Free)
 		return edition.Free
 	}
 	tier := edition.TierFromPlan(lic.Plan)
 	c.SetTier(tier)
-	slog.Info("detected GitLab tier", "plan", lic.Plan, "tier", tier.String())
+	slog.InfoContext(ctx, "detected GitLab tier", "plan", lic.Plan, "tier", tier.String())
 	return tier
 }
 
@@ -515,6 +505,48 @@ func buildBaseTransport(skipTLSVerify bool) http.RoundTripper {
 		}
 	}
 	return http.DefaultTransport
+}
+
+// apiTransport is the full chain the GitLab SDK client speaks through.
+//
+// Two things happen here and only one of them is telemetry.
+//
+// The span is the visible half: without it a tool call is a single opaque
+// duration, and an operator cannot tell one slow GitLab call from eleven fast
+// paginated ones. It is unconditional, because the OpenTelemetry API is a no-op
+// when no SDK is installed, so a flag would only add a branch that can disagree
+// with whether telemetry is running.
+//
+// The boundary is the half that matters more and is easy to forget.
+// propagation.Baggage.Inject writes a caller's baggage into any outgoing
+// request whenever the context carries some, and this server's global
+// propagator includes Baggage. So the moment this transport participates in
+// tracing, an MCP client's baggage would ride outward to the customer's GitLab
+// instance under this server's credential unless something clears it. Not
+// forwarding is an action, not a default, and this is where the action goes:
+// at the seam between a context that came from a caller and a request we make.
+// The trace context itself is untouched, so a distributed trace still joins up.
+//
+// The health client deliberately does NOT go through here. It probes on a timer
+// rather than in response to anything, so its spans would have no parent and
+// would arrive steadily forever, burying the calls somebody actually asked for
+// under an unbounded stream of liveness checks.
+func apiTransport(base http.RoundTripper, c *Client) http.RoundTripper {
+	return mcpotel.NewTransport(&outboundBoundaryTransport{
+		base: &dotUnescapeTransport{
+			base: &resilienceTransport{base: base, client: c},
+		},
+	})
+}
+
+// outboundBoundaryTransport strips a caller's baggage from every request this
+// client makes. See [instrumented] for why this is not the default.
+type outboundBoundaryTransport struct {
+	base http.RoundTripper
+}
+
+func (t *outboundBoundaryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return t.base.RoundTrip(req.WithContext(telemetry.OutboundContext(req.Context())))
 }
 
 // resilienceTransport wraps an [http.RoundTripper] and calls

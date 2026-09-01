@@ -726,18 +726,18 @@ func (p *ServerPool) StartIdleEviction(ctx context.Context) {
 		ctx = context.Background() //nolint:contextcheck // defensive: nil-ctx guard for callers that pass uninitialized context
 	}
 	if p.idleTimeout <= 0 {
-		slog.Info("server pool: idle eviction disabled")
+		slog.InfoContext(ctx, "server pool: idle eviction disabled")
 		return
 	}
 
 	interval := max(p.idleTimeout/idleSweepDivisor, idleSweepMinInterval)
-	slog.Info("server pool: starting idle eviction",
+	slog.InfoContext(ctx, "server pool: starting idle eviction",
 		"idle_timeout", p.idleTimeout, "sweep_interval", interval)
 
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				slog.Error("server pool: idle eviction goroutine panicked", "panic", r)
+				slog.ErrorContext(ctx, "server pool: idle eviction goroutine panicked", "panic", r)
 			}
 		}()
 
@@ -747,7 +747,7 @@ func (p *ServerPool) StartIdleEviction(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				slog.Info("server pool: idle eviction stopped")
+				slog.InfoContext(ctx, "server pool: idle eviction stopped")
 				return
 			case <-ticker.C:
 				p.evictIdle()
@@ -794,16 +794,16 @@ func (p *ServerPool) StartRevalidation(ctx context.Context) {
 	}
 
 	if p.revalidateInterval <= 0 {
-		slog.Info("server pool: token revalidation disabled")
+		slog.InfoContext(ctx, "server pool: token revalidation disabled")
 		return
 	}
 
-	slog.Info("server pool: starting token revalidation", "interval", p.revalidateInterval)
+	slog.InfoContext(ctx, "server pool: starting token revalidation", "interval", p.revalidateInterval)
 
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				slog.Error("server pool: revalidation goroutine panicked", "panic", r)
+				slog.ErrorContext(ctx, "server pool: revalidation goroutine panicked", "panic", r)
 			}
 		}()
 
@@ -813,7 +813,7 @@ func (p *ServerPool) StartRevalidation(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
-				slog.Info("server pool: revalidation stopped")
+				slog.InfoContext(ctx, "server pool: revalidation stopped")
 				return
 			case <-ticker.C:
 				p.revalidateAll(ctx)
@@ -840,7 +840,7 @@ func (p *ServerPool) revalidateAll(ctx context.Context) {
 		cancel()
 
 		if err != nil {
-			slog.Warn(
+			slog.WarnContext(ctx,
 				"server pool: token revalidation failed, evicting entry",
 				"error", err,
 				"age", time.Since(entry.createdAt).Round(time.Second),

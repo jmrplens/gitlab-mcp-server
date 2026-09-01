@@ -311,10 +311,14 @@ func TestGate_SessionIsBoundToTheCredentialThatMintedIt(t *testing.T) {
 
 	const initialize = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}`
 
-	// Sessions exist only on the revisions that predate stateless streamable
-	// HTTP: the SDK refuses both 2026-07-28 and 2025-11-25 unless the handler
-	// is stateless, so this test speaks the newest revision that still has
-	// sessions at all, with a body carrying none of the newer _meta.
+	// 2026-07-28 is the one revision a stateful handler refuses, at initialize
+	// and with "unsupported protocol version": it is stateless by definition.
+	// Every earlier revision is served and gets a session, 2025-11-25
+	// included, which a hosted deployment does daily.
+	//
+	// 2025-06-18 rather than 2025-11-25 for a narrower reason: this test is
+	// about who owns a session, and a body carrying none of the newer _meta
+	// keeps that the only thing it can fail on.
 	const statefulVersion = "2025-06-18"
 	const statefulBody = `{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}`
 
@@ -783,5 +787,70 @@ func TestElicitingToolCall_WithoutAHandshake_DoesNotKillTheServer(t *testing.T) 
 	})
 	if after.status != http.StatusOK {
 		t.Fatalf("the server stopped serving after the eliciting call: status = %d, body = %s", after.status, after.body)
+	}
+}
+
+// TestGate_StatefulServesEveryRevisionExceptTheStatelessOne turns a comment
+// into an assertion.
+//
+// The comment it replaces claimed the SDK refuses 2025-11-25 unless the handler
+// is stateless, and a test two functions up chose its revision on that basis. A
+// hosted deployment running --stateless=false was serving 2025-11-25 with
+// sessions while the comment said it could not, which is the second time a
+// sentence in this repository has described the transport rather than measured
+// it.
+//
+// 2026-07-28 is genuinely refused, and refused early: it is the revision that
+// defines stateless streamable HTTP, so a handler holding sessions cannot speak
+// it. That is worth pinning too, because it is the reason a deployment cannot
+// switch to sessions without cutting off clients on the current revision.
+func TestGate_StatefulServesEveryRevisionExceptTheStatelessOne(t *testing.T) {
+	gitlab := startFakeGitLab(t, http.StatusOK, `{"id":7,"username":"someone"}`)
+	srv := startServer(t, nil, "--gitlab-url="+gitlab.url, "--stateless=false")
+
+	for version, wantSession := range map[string]bool{
+		"2026-07-28": false,
+		"2025-11-25": true,
+		"2025-06-18": true,
+		"2025-03-26": true,
+	} {
+		t.Run(version, func(t *testing.T) {
+			got := srv.do(t, request{
+				method: http.MethodPost, path: "/mcp",
+				body: `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"` + version +
+					`","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}`,
+				headers: map[string]string{
+					"PRIVATE-TOKEN":        "glpat-token",
+					"MCP-Protocol-Version": version,
+				},
+			})
+
+			session := got.header.Get("Mcp-Session-Id")
+			refused := strings.Contains(got.body, "unsupported protocol version")
+
+			// The sentence alone cannot tell a refusal from a 500 that quotes
+			// it; the HTTP outcome is part of the claim.
+			if wantSession && got.status != http.StatusOK {
+				t.Errorf("HTTP %d for a revision a stateful handler serves", got.status)
+			}
+
+			if wantSession {
+				if refused {
+					t.Fatalf("%s was refused by a stateful handler: %s", version, got.body)
+				}
+				if session == "" {
+					t.Errorf("%s was accepted and minted no session: %s", version, got.body)
+				}
+				return
+			}
+
+			if !refused {
+				t.Errorf("%s was not refused by a stateful handler; it is the revision that defines stateless streamable HTTP. Body: %s",
+					version, got.body)
+			}
+			if session != "" {
+				t.Errorf("%s was refused and still minted a session %q", version, session)
+			}
+		})
 	}
 }
