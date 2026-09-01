@@ -23,7 +23,7 @@
 | E2E test functions                                    |    539 |
 | cmd test functions                                    |  1,158 |
 | Test files (internal/)                                |    478 |
-| Test files (cmd/)                                     |     88 |
+| Test files (cmd/)                                     |     87 |
 | Test files (test/e2e/)                                |    210 |
 | Tool sub-packages tested                              |    173 |
 | Core packages tested                                  |     21 |
@@ -49,8 +49,8 @@
 | Tools orchestration     |            293 |         14 | registration, meta-tool dispatch, safe mode, validation, markdown, and routing tests            |
 | Tool sub-packages (173) |          8,342 |        345 | domain-specific GitLab tool handlers                                                            |
 | E2E integration         |            539 |        210 | build-tagged; only test/e2e/suite and test/e2e/orbit need a real instance                       |
-| cmd packages            |          1,158 |         88 | server entry point and developer command utilities                                              |
-| **Total**               |     **12,327** |    **776** |                                                                                                 |
+| cmd packages            |          1,158 |         87 | server entry point and developer command utilities                                              |
+| **Total**               |     **12,327** |    **775** |                                                                                                 |
 
 ### Core Packages
 
@@ -75,7 +75,7 @@
 | serverpool    |        73 |    98.3% | Package serverpool manages a pool of MCP servers keyed by GitLab token and URL.                                                                                                                                                                                    |
 | subscriptions |        90 |    98.5% | Package subscriptions implements MCP resource subscriptions (resources/subscribe) over GitLab resources.                                                                                                                                                           |
 | telemetry     |        83 |    90.3% | Package telemetry is the only place in this server that knows about OpenTelemetry.                                                                                                                                                                                 |
-| testutil      |        34 |    88.2% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
+| testutil      |        34 |    88.7% | Package testutil provides test helpers for gitlab-mcp-server.                                                                                                                                                                                                      |
 | toolutil      |       736 |    97.9% | Package toolutil provides shared utilities for MCP tool handler sub-packages.                                                                                                                                                                                      |
 | **Subtotal**  | **1,995** |          |                                                                                                                                                                                                                                                                    |
 
@@ -358,7 +358,7 @@
 | serverpool    |    98.3% |
 | subscriptions |    98.5% |
 | telemetry     |    90.3% |
-| testutil      |    88.2% |
+| testutil      |    88.7% |
 | toolutil      |    97.9% |
 
 ### Tool Sub-Packages
@@ -571,8 +571,8 @@ Coverage target: **>90%** per package. Packages below the target in the latest g
 - **cmd/internal/apidocs** (87.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/audit_1to1/internal/actions** (87.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **cmd/server** (87.9%) - entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage.
-- **testutil** (88.2%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **cmd/gen_docker_tools** (88.3%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
+- **testutil** (88.7%) - some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests.
 - **cmd/eval_mcp_surfaces/internal/evalrun** (88.9%) - developer command formatting and reporting branches are covered by focused unit tests plus manual/CI tooling runs.
 - **oauth** (89.4%) - review this package for missing unit coverage or add an explicit exception if the remaining paths are integration-only.
 
