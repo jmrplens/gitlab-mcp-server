@@ -78,7 +78,7 @@ func handleAuditProjectSettings(ctx context.Context, client *gitlabclient.Client
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Settings Audit — %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
+	fmt.Fprintf(&b, "# Project Settings Audit: %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
 
 	// General info
 	b.WriteString("## General\n\n")
@@ -182,7 +182,7 @@ func handleAuditBranchProtection(ctx context.Context, client *gitlabclient.Clien
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Branch Protection Audit — %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
+	fmt.Fprintf(&b, "# Branch Protection Audit: %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
 	fmt.Fprintf(&b, "**Default branch**: %s\n\n", project.DefaultBranch)
 
 	defaultProtected := isDefaultBranchProtected(protectedBranches, project.DefaultBranch)
@@ -291,7 +291,7 @@ func writeSharedGroups(b *strings.Builder, groups []gl.ProjectSharedWithGroup) {
 	b.WriteString("## Shared With Groups\n\n")
 	b.WriteString("| Group | Access Level | Expires |\n|-------|-------------|--------|\n")
 	for _, sg := range groups {
-		expires := "—"
+		expires := "-"
 		if sg.ExpiresAt != nil {
 			expires = sg.ExpiresAt.String()
 		}
@@ -323,7 +323,7 @@ func handleAuditProjectAccess(ctx context.Context, client *gitlabclient.Client, 
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Project Access Audit — %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
+	fmt.Fprintf(&b, "# Project Access Audit: %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
 
 	g := classifyMembers(members)
 
@@ -416,7 +416,7 @@ func handleAuditProjectWorkflow(ctx context.Context, client *gitlabclient.Client
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Workflow Audit — %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
+	fmt.Fprintf(&b, "# Workflow Audit: %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
 
 	labels, _, labelsErr := client.GL().Labels.ListLabels(projectID, &gl.ListLabelsOptions{
 		PerPage: maxListItems,
@@ -498,7 +498,7 @@ func writeMilestonesAudit(b *strings.Builder, active, closed []*gl.Milestone) {
 		b.WriteString("| Milestone | Due Date | Expired |\n|-----------|----------|--------|\n")
 		for _, m := range active {
 			due := toolutil.EmojiWarning + " _not set_"
-			expired := "—"
+			expired := "-"
 			if m.DueDate != nil {
 				due = m.DueDate.String()
 				if m.Expired != nil && *m.Expired {
@@ -607,7 +607,7 @@ func handleAuditProjectFull(ctx context.Context, client *gitlabclient.Client, re
 	}, gl.WithContext(ctx))
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Full Project Audit — %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
+	fmt.Fprintf(&b, "# Full Project Audit: %s\n\n", toolutil.EscapeMdHeading(project.PathWithNamespace))
 
 	writeFullScorecard(&b, scorecardData{
 		project:    project,
@@ -796,7 +796,7 @@ func writeFullPushRulesSection(b *strings.Builder, pushRule *gl.ProjectPushRules
 // formatAccessLevels formats a slice of BranchAccessDescription for compact display.
 func formatAccessLevels(levels []*gl.BranchAccessDescription) string {
 	if len(levels) == 0 {
-		return "—"
+		return "-"
 	}
 	var parts []string
 	for _, al := range levels {
@@ -805,10 +805,10 @@ func formatAccessLevels(levels []*gl.BranchAccessDescription) string {
 	return strings.Join(parts, ", ")
 }
 
-// emptyDash returns "—" for empty strings.
+// emptyDash returns "-" for empty strings.
 func emptyDash(s string) string {
 	if s == "" {
-		return "—"
+		return "-"
 	}
 	return s
 }
@@ -822,12 +822,12 @@ func accessLevelIcon(v gl.AccessControlValue) string {
 }
 
 // formatAuditDate formats a time pointer for the project audit prompt table,
-// returning an em dash ("—") for nil values and a short YYYY-MM-DD date for
+// returning a hyphen ("-") for nil values and a short YYYY-MM-DD date for
 // non-nil values. Intentionally distinct from toolutil.FormatTimePtr
 // (which returns RFC 3339 or empty) — this helper is prompt-table-specific.
 func formatAuditDate(t *time.Time) string {
 	if t == nil {
-		return "—"
+		return "-"
 	}
 	return t.Format("2006-01-02")
 }

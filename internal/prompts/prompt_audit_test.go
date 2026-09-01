@@ -628,8 +628,8 @@ func TestAccessLevelName(t *testing.T) {
 
 // TestEmptyDash verifies EmptyDash.
 func TestEmptyDash(t *testing.T) {
-	if got := emptyDash(""); got != "—" {
-		t.Errorf("emptyDash(\"\") = %q, want \"—\"", got)
+	if got := emptyDash(""); got != "-" {
+		t.Errorf("emptyDash(\"\") = %q, want \"-\"", got)
 	}
 	if got := emptyDash("hello"); got != "hello" {
 		t.Errorf("emptyDash(\"hello\") = %q, want \"hello\"", got)

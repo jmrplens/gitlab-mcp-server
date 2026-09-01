@@ -210,7 +210,7 @@ func handleTeamOverview(ctx context.Context, client *gitlabclient.Client, req *m
 	stats := buildTeamOverviewStats(members, openMRs, mergedMRs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Team Overview — Group %s (last %d days)\n\n", toolutil.EscapeMdHeading(groupID), days)
+	fmt.Fprintf(&b, "# Team Overview: Group %s (last %d days)\n\n", toolutil.EscapeMdHeading(groupID), days)
 	writeTeamOverviewSummary(&b, stats, len(openMRs), len(mergedMRs))
 	writeTeamOverviewWorkload(&b, stats)
 	writeTeamOverviewChart(&b, stats)
@@ -328,7 +328,7 @@ func handleGroupMRDashboard(ctx context.Context, client *gitlabclient.Client, re
 	if opts.TargetBranch != nil {
 		branchInfo = " targeting " + *opts.TargetBranch
 	}
-	fmt.Fprintf(&b, "# Group MR Dashboard — %s (%d %s MRs%s)\n\n", toolutil.EscapeMdHeading(groupID), len(mrs), state, branchInfo)
+	fmt.Fprintf(&b, "# Group MR Dashboard: %s (%d %s MRs%s)\n\n", toolutil.EscapeMdHeading(groupID), len(mrs), state, branchInfo)
 
 	if len(mrs) == 0 {
 		b.WriteString("No merge requests found matching the criteria.\n")
@@ -405,7 +405,7 @@ func handleReviewerWorkload(ctx context.Context, client *gitlabclient.Client, re
 	rStats := buildReviewerWorkloadStats(members, openMRs)
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# Reviewer Workload — Group %s\n\n", toolutil.EscapeMdHeading(groupID))
+	fmt.Fprintf(&b, "# Reviewer Workload: Group %s\n\n", toolutil.EscapeMdHeading(groupID))
 	activeReviewers := writeReviewerWorkloadSummary(&b, rStats, len(openMRs))
 	writeReviewerWorkloadTable(&b, rStats)
 	writeReviewerWorkloadChart(&b, rStats, activeReviewers)
