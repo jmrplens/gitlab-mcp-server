@@ -374,3 +374,36 @@ func answeredID(message map[string]any) int {
 func contains(haystack []string, needle string) bool {
 	return slices.Contains(haystack, needle)
 }
+
+// TestStdio_AliveReportsADeadProcess covers the predicate another test trusts,
+// and it exists because that predicate could not fail.
+//
+// alive() read cmd.ProcessState, which only Cmd.Wait populates, while this
+// harness reaps through Process.Wait deliberately: Cmd.Wait closes the output
+// pipes the moment it sees the exit, and a read still in flight would fail
+// rather than return what it had. So ProcessState stayed nil and alive()
+// returned true for a process that had been dead for a minute.
+//
+// Its caller asserts the server survived sixty idle seconds, which is the
+// regression for a keepalive ping that closed idle clients' sessions in a
+// shipped build. It was passing vacuously, and what actually protected it was
+// the request that follows.
+func TestStdio_AliveReportsADeadProcess(t *testing.T) {
+	gitlab := startFakeGitLab(t)
+	s := startSession(t, baseEnv(gitlab.URL))
+
+	if got := s.call(t, request(1, "tools/list", "")); got["error"] != nil {
+		t.Fatalf("tools/list failed: %v", got["error"])
+	}
+	if !s.alive() {
+		t.Fatal("the server is reported dead while it is answering requests")
+	}
+
+	if !s.terminate(t, 20*time.Second) {
+		t.Fatal("the server did not exit when asked")
+	}
+
+	if s.alive() {
+		t.Error("alive() still reports the process as running after it exited, so every assertion resting on it is vacuous")
+	}
+}

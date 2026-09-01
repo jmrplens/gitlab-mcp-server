@@ -114,6 +114,12 @@ type session struct {
 	stdin  io.WriteCloser
 	stdout *bufio.Reader
 
+	// exited is closed by the one goroutine that reaps the process. Everything
+	// asking whether the server is still there reads it rather than waiting
+	// again: a second Wait on a reaped child answers ErrProcessDone, which
+	// cannot be told from a real failure.
+	exited chan struct{}
+
 	mu     sync.Mutex
 	stderr strings.Builder
 }
@@ -160,7 +166,20 @@ func startSession(t *testing.T, env map[string]string) *session {
 		t.Fatalf("starting the server: %v", startErr)
 	}
 
-	s := &session{cmd: cmd, stdin: stdin, stdout: bufio.NewReader(stdout)}
+	s := &session{
+		cmd:    cmd,
+		stdin:  stdin,
+		stdout: bufio.NewReader(stdout),
+		exited: make(chan struct{}),
+	}
+
+	// The one reaper. Started with the process rather than on demand, because
+	// alive() has to answer before anybody has asked the process to stop, and
+	// a check that has to wait first cannot answer that question.
+	go func() {
+		_, _ = cmd.Process.Wait()
+		close(s.exited)
+	}()
 
 	// stderr is drained on its own goroutine: a full pipe would block the
 	// server, and the contents are an assertion of their own — logs belong
@@ -183,7 +202,14 @@ func startSession(t *testing.T, env map[string]string) *session {
 	t.Cleanup(func() {
 		_ = stdin.Close()
 		cancel()
-		_ = cmd.Wait()
+		// Not Cmd.Wait: the reaper above already collected the child, so this
+		// would answer ErrProcessDone and could not be told from a real
+		// failure. Waiting on the reaper is the same barrier without the
+		// ambiguity.
+		select {
+		case <-s.exited:
+		case <-time.After(10 * time.Second):
+		}
 	})
 	return s
 }
@@ -244,7 +270,12 @@ func (s *session) call(t *testing.T, msg string) map[string]any {
 
 // alive reports whether the server process is still running.
 func (s *session) alive() bool {
-	return s.cmd.ProcessState == nil || !s.cmd.ProcessState.Exited()
+	select {
+	case <-s.exited:
+		return false
+	default:
+		return true
+	}
 }
 
 // stderrText returns everything the server has logged so far.
@@ -325,7 +356,7 @@ func (s *session) terminate(t *testing.T, within time.Duration) bool {
 
 	done := make(chan struct{})
 	go func() {
-		_, _ = s.cmd.Process.Wait()
+		<-s.exited
 		close(done)
 	}()
 
