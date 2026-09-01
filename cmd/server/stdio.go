@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"io"
 	"sync"
@@ -123,10 +124,22 @@ func refuseUnreadable(line string) (refusal []byte, refuse bool) {
 	}
 	if probe.JSONRPC != "2.0" {
 		// Structurally JSON and not a JSON-RPC message. The id, if it carried
-		// one, is worth echoing so the sender can match the refusal.
-		return errorLine(probe.ID, -32600, "Invalid Request"), true
+		// one, is worth echoing so the sender can match the refusal — but only
+		// a scalar one: JSON-RPC allows string, number or null there, and
+		// echoing an object or array id would make the refusal itself an
+		// invalid response.
+		return errorLine(scalarID(probe.ID), -32600, "Invalid Request"), true
 	}
 	return nil, false
+}
+
+// scalarID returns the id if JSON-RPC may echo it, or nothing.
+func scalarID(id json.RawMessage) json.RawMessage {
+	trimmed := bytes.TrimSpace(id)
+	if len(trimmed) == 0 || trimmed[0] == '{' || trimmed[0] == '[' {
+		return nil
+	}
+	return id
 }
 
 // errorLine builds one newline-terminated JSON-RPC error response.

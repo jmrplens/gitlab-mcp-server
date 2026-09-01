@@ -237,3 +237,24 @@ func TestLockedWriter_SerializesConcurrentWrites(t *testing.T) {
 		}
 	}
 }
+
+// TestScalarID_ObjectsAndArraysAreNotEchoed pins the response's own validity:
+// JSON-RPC allows a string, number or null id, so a refusal echoing an object
+// id would itself be an invalid response.
+func TestScalarID_ObjectsAndArraysAreNotEchoed(t *testing.T) {
+	t.Parallel()
+
+	for raw, want := range map[string]string{
+		`7`:        `7`,
+		`"seven"`:  `"seven"`,
+		`null`:     `null`,
+		`{"a":1}`:  ``,
+		`[1,2]`:    ``,
+		` {"a":1}`: ``,
+	} {
+		got := string(scalarID(json.RawMessage(raw)))
+		if got != want {
+			t.Errorf("scalarID(%s) = %q, want %q", raw, got, want)
+		}
+	}
+}

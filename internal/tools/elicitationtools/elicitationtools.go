@@ -95,11 +95,17 @@ const summaryExcerptRunes = 100
 // Counting runes rather than bytes keeps a multi-byte character from being
 // split in half, which would put an invalid sequence in front of the user.
 func summaryExcerpt(s string) string {
-	runes := []rune(s)
-	if len(runes) <= summaryExcerptRunes {
-		return s
+	// Walked rather than converted: []rune(s) copies the whole string, and
+	// the input is client-supplied, so the copy scales with whatever a client
+	// sends to produce a hundred runes.
+	count := 0
+	for i := range s {
+		if count == summaryExcerptRunes {
+			return s[:i] + "..."
+		}
+		count++
 	}
-	return string(runes[:summaryExcerptRunes]) + "..."
+	return s
 }
 
 // parseCSVLabels splits a comma-separated string into trimmed, non-empty labels.

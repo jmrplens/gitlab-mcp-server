@@ -346,3 +346,21 @@ func TestRequestDigest_NormalizesEquivalentNumbers(t *testing.T) {
 		})
 	}
 }
+
+// TestRequestDigest_AStringCannotImpersonateANumber closes a forgery the
+// canonicalization allowed.
+//
+// Numbers are rewritten with a NUL-prefixed marker so 1 and "1" hash apart, but
+// JSON strings may contain NUL, so a string crafted to equal a marked number
+// canonicalized identically to the number itself. Two different argument sets
+// then shared a digest, and a stored confirmation for one call would have been
+// accepted for the other. Strings carry their own marker now, so the two
+// spaces cannot meet.
+func TestRequestDigest_AStringCannotImpersonateANumber(t *testing.T) {
+	numeric := requestDigest("tool", json.RawMessage(`{"a":1}`))
+	forged := requestDigest("tool", json.RawMessage("{\"a\":\"\\u0000num:1\"}"))
+
+	if numeric == forged {
+		t.Errorf("digest %q is shared by a number and a string crafted to look like its canonical form", numeric)
+	}
+}

@@ -223,29 +223,44 @@ func TestMalformedInput_IsAnsweredAndTheSessionSurvives(t *testing.T) {
 			s.send(t, tt.body)
 
 			if tt.wantCode != 0 {
-				got := s.readMessage(t, 30*time.Second)
-				code, ok := errorCode(got)
-				if !ok {
-					t.Fatalf("the input was not refused: %v", got)
-				}
-				if code != tt.wantCode {
-					t.Errorf("error code = %d, want %d: %v", code, tt.wantCode, got)
-				}
+				assertRefusedWith(t, s, tt.wantCode)
 			}
 
 			// The session has to still be usable, which is the half the SDK
 			// gets wrong on its own.
-			s.send(t, request(2, "tools/list", ""))
-			for {
-				got := s.readMessage(t, 30*time.Second)
-				if answeredID(got) == 2 {
-					if got["error"] != nil {
-						t.Fatalf("the session survived but stopped working: %v", got["error"])
-					}
-					return
-				}
-			}
+			assertSessionStillWorks(t, s)
 		})
+	}
+}
+
+// assertRefusedWith reads the next message and requires it to be a refusal
+// carrying the given JSON-RPC code.
+func assertRefusedWith(t *testing.T, s *session, wantCode int) {
+	t.Helper()
+
+	got := s.readMessage(t, 30*time.Second)
+	code, ok := errorCode(got)
+	if !ok {
+		t.Fatalf("the input was not refused: %v", got)
+	}
+	if code != wantCode {
+		t.Errorf("error code = %d, want %d: %v", code, wantCode, got)
+	}
+}
+
+// assertSessionStillWorks drives one more call and requires its answer.
+func assertSessionStillWorks(t *testing.T, s *session) {
+	t.Helper()
+
+	s.send(t, request(2, "tools/list", ""))
+	for {
+		got := s.readMessage(t, 30*time.Second)
+		if answeredID(got) == 2 {
+			if got["error"] != nil {
+				t.Fatalf("the session survived but stopped working: %v", got["error"])
+			}
+			return
+		}
 	}
 }
 

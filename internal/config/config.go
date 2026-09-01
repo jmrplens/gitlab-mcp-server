@@ -1104,7 +1104,9 @@ func ValidateMetadataURL(flag, raw string) error {
 		return nil
 	}
 	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" {
+	// Hostname rather than Host: "https://:443/x" has an authority and no host
+	// in it, and publishing that is a link no client can follow.
+	if err != nil || u.Hostname() == "" {
 		return fmt.Errorf("%s %q is not an absolute URL", flag, raw)
 	}
 	if u.Scheme != "https" && (u.Scheme != "http" || !isLoopbackHost(u.Hostname())) {

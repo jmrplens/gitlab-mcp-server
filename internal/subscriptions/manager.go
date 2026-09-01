@@ -700,6 +700,7 @@ func (m *Manager[S]) Renew(uri string) bool {
 // during exactly the wait its subscriber cared about. Renewing every watch
 // on the manager would be wrong in the other direction: one busy session
 // would keep another session's abandoned watches at full speed forever.
+
 // Lease returns how long a subscription is polled at full speed before it slows
 // down.
 //

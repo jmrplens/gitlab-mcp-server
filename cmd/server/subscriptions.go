@@ -221,7 +221,12 @@ func (b *sessionBridge) renewWhileStreaming(ctx context.Context, session *mcp.Se
 // to protect it from, and the session ending is what releases it.
 func (b *sessionBridge) hold(session *mcp.ServerSession, uri string, stream *listenStream) {
 	if stream == nil {
-		return
+		// The legacy resources/subscribe holds too, under a shared sentinel:
+		// one session mixing the legacy method and subscriptions/listen on the
+		// same URI must not lose the legacy half when the listen ends, and a
+		// duplicate legacy subscribe is idempotent because the sentinel is one
+		// key. The matching release maps nil the same way.
+		stream = legacyHold
 	}
 	key := watchHold{session: session, uri: uri}
 
@@ -233,9 +238,16 @@ func (b *sessionBridge) hold(session *mcp.ServerSession, uri string, stream *lis
 	b.holds[key][stream] = struct{}{}
 }
 
+// legacyHold stands for a resources/subscribe in the holder set, which is
+// keyed by listen stream for the 2026-07-28 path.
+var legacyHold = &listenStream{}
+
 // release drops one stream's hold and reports whether the watch is now
 // unheld, which is when it may actually stop.
 func (b *sessionBridge) release(session *mcp.ServerSession, uri string, stream *listenStream) bool {
+	if stream == nil {
+		stream = legacyHold
+	}
 	key := watchHold{session: session, uri: uri}
 
 	b.mu.Lock()

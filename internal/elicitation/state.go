@@ -192,6 +192,12 @@ func splitState(raw string) (prefix, body, mac string, ok bool) {
 // hash alike.
 const numberMarker = "\x00num:"
 
+// stringMarker prefixes every string for the same reason in the other
+// direction: JSON strings may contain NUL, so a crafted string equal to a
+// marked number would otherwise canonicalize identically to the number and two
+// different argument sets would share a digest.
+const stringMarker = "\x00str:"
+
 // canonicalizeNumbers rewrites every json.Number in a decoded document into one
 // exact textual form, leaving everything else untouched.
 //
@@ -210,6 +216,8 @@ const numberMarker = "\x00num:"
 // it from the digest.
 func canonicalizeNumbers(v any) any {
 	switch value := v.(type) {
+	case string:
+		return stringMarker + value
 	case json.Number:
 		if rat, ok := new(big.Rat).SetString(value.String()); ok {
 			return numberMarker + rat.RatString()

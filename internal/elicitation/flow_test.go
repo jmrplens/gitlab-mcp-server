@@ -1006,3 +1006,23 @@ func TestConfirmSchema_DefaultsToDeclining(t *testing.T) {
 		}
 	}
 }
+
+// TestGatherData_AnAcceptWithNoContentStillValidates covers an accept that
+// carries nothing against a schema that requires something.
+//
+// The validator skipped nil content entirely, so a client accepting without a
+// body handed the handler nil despite required fields. An empty answer is an
+// answer, and required fields have to fail it.
+func TestGatherData_AnAcceptWithNoContentStillValidates(t *testing.T) {
+	err := validateAgainstSchema(map[string]any{
+		"type":     "object",
+		"required": []any{"name"},
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+		},
+	}, nil)
+
+	if err == nil {
+		t.Error("an accept with no content passed a schema that requires a field")
+	}
+}

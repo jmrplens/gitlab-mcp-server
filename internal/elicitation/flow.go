@@ -357,8 +357,14 @@ func (f *Flow) PendingError() error {
 // and hands the content straight back. That is where an unchecked answer can
 // actually reach a handler as the wrong type, so that is where this runs.
 func validateAgainstSchema(schema, content map[string]any) error {
-	if schema == nil || content == nil {
+	if schema == nil {
 		return nil
+	}
+	if content == nil {
+		// An accept with no content is an empty answer, not an unvalidated
+		// one: a schema with required fields has to fail it here rather than
+		// hand the handler a nil it never agreed to.
+		content = map[string]any{}
 	}
 	raw, marshalErr := json.Marshal(schema)
 	if marshalErr != nil {

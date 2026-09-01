@@ -284,6 +284,13 @@ func EscapeConsentValue(s string) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = consentURLScheme.ReplaceAllString(s, "$1[:]//")
 
+	if s == "" {
+		// Two bare backticks read as an unclosed span. A code span holding one
+		// space is the closest markdown gets to "empty", and a real
+		// single-space value rendering identically is an accepted collision.
+		return "` `"
+	}
+
 	fence := strings.Repeat("`", longestBacktickRun(s)+1)
 	// A value that starts or ends with a backtick needs padding, or the fence
 	// and the value run together and the span does not close where it should.
