@@ -154,9 +154,10 @@ func newMCPSession(t *testing.T, handler http.Handler, enterprise ...bool) *mcp.
 		// binary; process teardown reclaims them.
 		srv := httptest.NewServer(delegate)
 		client, err := gitlabclient.NewClient(&config.Config{
-			GitLabURL:     srv.URL,
-			GitLabToken:   "test-token",
-			SkipTLSVerify: false,
+			GitLabURL:      srv.URL,
+			GitLabToken:    "test-token",
+			SkipTLSVerify:  false,
+			DisableRetries: true,
 		})
 		if err != nil {
 			slot.err = fmt.Errorf("create test gitlab client: %w", err)
@@ -230,9 +231,10 @@ func newMetaMCPSession(t *testing.T, handler http.Handler, enterprise bool) *mcp
 		})
 		srv := httptest.NewServer(delegate)
 		client, err := gitlabclient.NewClient(&config.Config{
-			GitLabURL:     srv.URL,
-			GitLabToken:   "test-token",
-			SkipTLSVerify: false,
+			GitLabURL:      srv.URL,
+			GitLabToken:    "test-token",
+			SkipTLSVerify:  false,
+			DisableRetries: true,
 		})
 		if err != nil {
 			slot.err = fmt.Errorf("create test gitlab client: %w", err)
@@ -4592,9 +4594,10 @@ func newTestClient(t *testing.T, handler http.Handler) *gitlabclient.Client {
 	t.Cleanup(srv.Close)
 
 	cfg := &config.Config{
-		GitLabURL:     srv.URL,
-		GitLabToken:   "test-token",
-		SkipTLSVerify: false,
+		GitLabURL:      srv.URL,
+		GitLabToken:    "test-token",
+		SkipTLSVerify:  false,
+		DisableRetries: true,
 	}
 
 	client, err := gitlabclient.NewClient(cfg)
@@ -4621,7 +4624,10 @@ func benchClient(b *testing.B) *gitlabclient.Client {
 		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
 	}))
 	b.Cleanup(srv.Close)
-	client, err := gitlabclient.NewClient(&config.Config{GitLabURL: srv.URL, GitLabToken: "bench-token"})
+	client, err := gitlabclient.NewClient(&config.Config{
+		GitLabURL: srv.URL, GitLabToken: "bench-token",
+		DisableRetries: true,
+	})
 	if err != nil {
 		b.Fatal(err)
 	}

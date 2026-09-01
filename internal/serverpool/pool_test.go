@@ -42,12 +42,13 @@ func testFactory() ServerFactory {
 // false).
 func testConfig(baseURL string) *config.Config {
 	return &config.Config{
-		GitLabURL:     baseURL,
-		GitLabToken:   "default-token",
-		SkipTLSVerify: false,
-		Tier:          edition.Free,
-		TierExplicit:  true,
-		IgnoreScopes:  true,
+		GitLabURL:      baseURL,
+		GitLabToken:    "default-token",
+		SkipTLSVerify:  false,
+		Tier:           edition.Free,
+		TierExplicit:   true,
+		IgnoreScopes:   true,
+		DisableRetries: true,
 	}
 }
 

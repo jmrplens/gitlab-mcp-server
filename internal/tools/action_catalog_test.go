@@ -587,8 +587,9 @@ func mustBuildActionCatalog(t *testing.T, client *gitlabclient.Client, opts Acti
 func newGitLabDotComClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 	client, err := gitlabclient.NewClient(&config.Config{
-		GitLabURL:   "https://gitlab.com",
-		GitLabToken: "test-token",
+		GitLabURL:      "https://gitlab.com",
+		GitLabToken:    "test-token",
+		DisableRetries: true,
 	})
 	if err != nil {
 		t.Fatalf("NewClient(gitlab.com) error = %v", err)
