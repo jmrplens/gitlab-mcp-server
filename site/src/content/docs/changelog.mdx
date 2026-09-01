@@ -10,9 +10,9 @@ faq:
   - q: "What does each release publish?"
     a: "Every release publishes binaries for Linux, macOS and Windows on both amd64 and arm64, a macOS universal binary, a container image on GHCR and Docker Hub, a Claude Desktop extension (.mcpb), the npm packages, and checksums.txt. The checksums are signed keylessly with Cosign/Sigstore, every binary ships an SPDX SBOM, and the release artifacts carry SLSA build provenance attestations, so you can verify what you downloaded before running it."
   - q: "How do I get notified about new GitLab MCP Server releases?"
-    a: "Three ways. Watch the repository on GitHub with the Releases filter; subscribe a feed reader to https://github.com/jmrplens/gitlab-mcp-server/releases.atom; or leave the built-in auto-update enabled, which checks GitHub Releases on startup and can apply the update for you. Set AUTO_UPDATE=check to be told about updates without installing them."
+    a: "Two ways. Watch the repository on GitHub with the Releases filter, or subscribe a feed reader to https://github.com/jmrplens/gitlab-mcp-server/releases.atom. Installing a release is then a step you take: the server does not check for updates and never replaces its own binary, so you upgrade through whichever channel installed it (npm, Homebrew, winget, a newer image tag, a newer Claude Desktop extension) or download the new asset from the Releases page."
   - q: "How do I roll back to an earlier version?"
-    a: "Every release remains downloadable from the GitHub Releases page, so rolling back means fetching the previous asset for your platform and replacing the binary — or pinning the previous image tag if you run the container. Pin an exact version rather than latest in environments where an unexpected upgrade would be disruptive, and set AUTO_UPDATE=false so the server does not update itself underneath you."
+    a: "Every release remains downloadable from the GitHub Releases page, so rolling back means fetching the previous asset for your platform and replacing the binary, or pinning the previous image tag if you run the container. In environments where an unexpected upgrade would be disruptive, pin an exact version rather than latest. Nothing else is needed: the server never replaces its own binary, so a pinned version stays put until you upgrade it yourself."
 ---
 
 import FAQ from "../../components/FAQ.astro";
@@ -52,16 +52,17 @@ Verification steps are on the [security page](/gitlab-mcp-server/operations/secu
 
 ## Staying current
 
-Three ways to track releases, in increasing order of automation:
+Two ways to hear about a release:
 
 1. **Watch the repository** on GitHub with the Releases filter, for a notification per version.
 2. **Subscribe to the [Atom feed](https://github.com/jmrplens/gitlab-mcp-server/releases.atom)** from a feed reader or from automation.
-3. **Leave auto-update enabled.** The server checks GitHub Releases on startup and can apply updates itself. Set `AUTO_UPDATE=check` to be told without installing, or `AUTO_UPDATE=false` to disable it entirely — see [auto-update](/gitlab-mcp-server/operations/auto-update/).
+
+Installing one is a separate and deliberate step. The server does not check for updates and never replaces its own binary, so an upgrade goes through whichever channel installed it (`npm update`, `brew upgrade`, `winget upgrade`, a newer image tag, a newer Claude Desktop extension) or through downloading the new asset from the Releases page.
 
 ## Pinning and rolling back
 
 Every published release stays downloadable, so a rollback is just fetching the previous asset for your platform, or pinning the previous image tag if you run the container.
 
-In environments where an unexpected upgrade would be disruptive, pin an exact version instead of `latest` **and** set `AUTO_UPDATE=false`, so the binary cannot replace itself between runs. The Claude Desktop extension ships with auto-update disabled for the same reason.
+In environments where an unexpected upgrade would be disruptive, pin an exact version instead of `latest`. That is the whole of it: the binary cannot replace itself between runs, so the version you pinned is the version that keeps running until you upgrade it.
 
 <FAQ />

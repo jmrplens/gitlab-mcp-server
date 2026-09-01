@@ -88,12 +88,11 @@ export HTTP_PROXY=http://proxy.corp.example.com:8080
 export NO_PROXY=localhost,127.0.0.1,.internal.corp
 ```
 
-| Symptom                                          | Cause                                         | Solution                                                                              |
-| ------------------------------------------------ | --------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Connection timeout behind corporate network      | Proxy not configured                          | Set `HTTPS_PROXY` / `HTTP_PROXY`                                                      |
-| Proxy works for `curl` but not for the server    | Env vars not exported into the server process | Pass them in `.env`, Docker `environment:`, or your platform's secrets                |
-| `CONNECT` rejected by proxy for `api.github.com` | Proxy denies outbound to GitHub (auto-update) | Set `AUTO_UPDATE=false` or whitelist `github.com` and `objects.githubusercontent.com` |
-| Internal GitLab routed through external proxy    | `NO_PROXY` missing                            | Add your GitLab hostname to `NO_PROXY`                                                |
+| Symptom                                       | Cause                                         | Solution                                                               |
+| --------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------- |
+| Connection timeout behind corporate network   | Proxy not configured                          | Set `HTTPS_PROXY` / `HTTP_PROXY`                                       |
+| Proxy works for `curl` but not for the server | Env vars not exported into the server process | Pass them in `.env`, Docker `environment:`, or your platform's secrets |
+| Internal GitLab routed through external proxy | `NO_PROXY` missing                            | Add your GitLab hostname to `NO_PROXY`                                 |
 
 ### Reverse proxy (HTTP mode)
 
@@ -121,16 +120,16 @@ When running the MCP server behind nginx, Caddy, or a cloud load balancer:
 | Symptom                                                             | Cause                                                                                                                                                                                                                                                                                   | Solution                                                                                                                                                                                                                                              |
 | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `the @jmrp.io/gitlab-mcp-server-linux-x64 package is not installed` | On Alpine this is deliberate: the linux packages declare `libc: glibc` and the released binaries need the glibc dynamic loader, so npm skips them on musl. On a glibc distro it means the install skipped optional dependencies (`--no-optional`, or a lockfile resolved on another OS) | On musl, use the container image `ghcr.io/jmrplens/gitlab-mcp-server` (built against musl) or build from source — the publish is not broken. On glibc, reinstall without `--no-optional`, or delete `node_modules` and the lockfile and install again |
-| Updates never arrive under `npx`                                    | The launcher sets `AUTO_UPDATE=false` — npm owns the binary                                                                                                                                                                                                                             | Expected. Upgrade with npm, or set `AUTO_UPDATE` explicitly to override the launcher                                                                                                                                                                  |
+| Updates never arrive under `npx`                                    | The server never updates itself, and npm owns the binary                                                                                                                                                                                                                                | Expected. Upgrade with npm, or add `@latest` to the `npx` spec so it resolves afresh instead of reusing its cache                                                                                                                                     |
 
-## Auto-update
+## Upgrading
 
-| Symptom                                | Cause                           | Solution                                                                            |
-| -------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------- |
-| Update detected but not applied        | Mode is `check` only            | Set `AUTO_UPDATE=true` to enable automatic application                              |
-| Still running old version after update | Process not restarted (Windows) | Restart the server or use `gitlab-mcp-server --shutdown` to terminate all instances |
-| Cannot replace binary (file locked)    | Running instances hold the file | Run `gitlab-mcp-server --shutdown` to terminate all instances first                 |
-| Network error reaching GitHub          | Firewall or proxy blocking      | Verify connectivity to `github.com` from the server                                 |
+The server never updates itself, so an upgrade is whatever your install channel does plus a restart.
+
+| Symptom                                       | Cause                                | Solution                                                                                            |
+| --------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Still running the old version after upgrading | The old process was never restarted  | Restart the server, or run `gitlab-mcp-server --shutdown` to terminate every running instance first |
+| Cannot replace the binary (file locked)       | Running instances hold the file open | Run `gitlab-mcp-server --shutdown` to terminate every instance, then replace it                     |
 
 ## HTTP server mode
 

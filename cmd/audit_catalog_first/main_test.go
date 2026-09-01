@@ -93,11 +93,6 @@ func assertDomainCoverage(t *testing.T, report coverageReport) {
 	if dynamic.SurfaceClassification != "dynamic-controller-surface" || !dynamic.HasSurfaceSpecs || dynamic.SurfaceSpecCount != 2 {
 		t.Fatalf("dynamic coverage missing controller surface specs: %+v", dynamic)
 	}
-
-	serverUpdate := requireDomain(t, report, "serverupdate")
-	if !serverUpdate.HasStandaloneOnlyTools || serverUpdate.SurfaceClassification != "surface-backed" || serverUpdate.SurfaceSpecCount != 2 {
-		t.Fatalf("serverupdate coverage missing server maintenance surface specs: %+v", serverUpdate)
-	}
 }
 
 // TestAuditCatalogFirstSource_CurrentProductionCodePasses verifies AuditCatalogFirstSource when current production code passes.
@@ -413,7 +408,6 @@ func TestBuildCoverageReport_UtilityTemplateDomainsAreSpecBacked(t *testing.T) {
 	})
 	assertSurfaceBackedDomain(t, report, "elicitationtools", "interactive-utility", 4)
 	assertSurfaceBackedDomain(t, report, "projectdiscovery", "runtime-utility", 1)
-	assertSurfaceBackedDomain(t, report, "serverupdate", "server-maintenance", 2)
 }
 
 // TestWriteReport_WritesJSONFile verifies WriteReport writes JSON file.

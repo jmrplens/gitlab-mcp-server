@@ -11,7 +11,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/projects"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/uploads"
@@ -219,32 +218,6 @@ func TestValidActions_StringSorted(t *testing.T) {
 	expected := "create, delete, list"
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
-	}
-}
-
-// TestWrapUpdaterAction_UnmarshalError covers register_mcp_meta.go:58-60
-// (unmarshalParams returns error for invalid params).
-func TestWrapUpdaterAction_UnmarshalError(t *testing.T) {
-	type testInput struct {
-		Value string `json:"value"`
-	}
-	type testOutput struct {
-		Result string `json:"result"`
-	}
-
-	fn := func(_ context.Context, _ *autoupdate.Updater, _ testInput) (testOutput, error) {
-		t.Fatal("wrapped function should not be called on unmarshal error")
-		return testOutput{}, nil
-	}
-
-	action := wrapUpdaterAction(nil, fn)
-	// Pass type-incompatible params: array where string is expected.
-	_, err := action(context.Background(), map[string]any{"value": []int{1, 2, 3}})
-	if err == nil {
-		t.Fatal("expected error for params with type-incompatible value")
-	}
-	if !strings.Contains(err.Error(), "invalid params") {
-		t.Errorf("error = %v, want 'invalid params' context", err)
 	}
 }
 

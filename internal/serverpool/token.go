@@ -55,10 +55,6 @@ var serverManagedRequestOptions = []requestOptionAlias{
 	{name: "TRUSTED_PROXY_HEADER", headers: []string{"TRUSTED_PROXY_HEADER", "TRUSTED-PROXY-HEADER"}},
 	{name: "RATE_LIMIT_RPS", headers: []string{"RATE_LIMIT_RPS", "RATE-LIMIT-RPS"}},
 	{name: "RATE_LIMIT_BURST", headers: []string{"RATE_LIMIT_BURST", "RATE-LIMIT-BURST"}},
-	{name: "AUTO_UPDATE", headers: []string{"AUTO_UPDATE", "AUTO-UPDATE"}},
-	{name: "AUTO_UPDATE_REPO", headers: []string{"AUTO_UPDATE_REPO", "AUTO-UPDATE-REPO"}},
-	{name: "AUTO_UPDATE_INTERVAL", headers: []string{"AUTO_UPDATE_INTERVAL", "AUTO-UPDATE-INTERVAL"}},
-	{name: "AUTO_UPDATE_TIMEOUT", headers: []string{"AUTO_UPDATE_TIMEOUT", "AUTO-UPDATE-TIMEOUT"}},
 	{name: "LOG_LEVEL", headers: []string{"LOG_LEVEL", "LOG-LEVEL"}},
 }
 

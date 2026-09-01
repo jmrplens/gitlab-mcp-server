@@ -4,9 +4,9 @@ description: Real-time MCP progress notifications that report page-by-page and s
 datePublished: "2026-04-21"
 faq:
   - q: "What are MCP progress notifications?"
-    a: "Progress notifications are **real-time status messages** that GitLab MCP Server sends during long-running operations so MCP clients can show progress to the user. When a tool runs multiple steps or processes large datasets — paginated retrieval, bulk operations, CSV imports, or auto-update — the server emits `notifications/progress` messages reporting the current step, the total when known, and a human-readable description. Progress is best-effort, so clients that cannot display it ignore the messages and the tool still completes."
+    a: "Progress notifications are **real-time status messages** that GitLab MCP Server sends during long-running operations so MCP clients can show progress to the user. When a tool runs multiple steps or processes large datasets (paginated retrieval, bulk operations, CSV imports), the server emits `notifications/progress` messages reporting the current step, the total when known, and a human-readable description. Progress is best-effort, so clients that cannot display it ignore the messages and the tool still completes."
   - q: "When does GitLab MCP Server send progress updates?"
-    a: "GitLab MCP Server sends progress updates for operations that may take several seconds: **paginated list retrieval** (page-by-page fetch progress), **bulk operations** (per-item progress, such as a bulk issue update), **CSV imports** (per-row progress), and **auto-update** (download and apply steps). Each notification carries a `progressToken` correlating it to the original tool call."
+    a: "GitLab MCP Server sends progress updates for operations that may take several seconds: **paginated list retrieval** (page-by-page fetch progress), **bulk operations** (per-item progress, such as a bulk issue update), and **CSV imports** (per-row progress). Each notification carries a `progressToken` correlating it to the original tool call."
   - q: "What does a progress notification contain?"
     a: 'A progress notification follows the JSON-RPC `notifications/progress` format and carries four fields in its `params`: `progressToken` (a correlation ID linking the update to the original tool call), `progress` (the current step number), `total` (the total number of steps, when known), and `message` (a human-readable description such as `"Fetching page 2 of 4..."`). Clients use these to render progress bars or status text.'
   - q: "What happens if my client does not support progress notifications?"
@@ -51,7 +51,6 @@ Progress reporting is used for operations that may take several seconds. In each
 | **Paginated list retrieval** | Page-by-page fetch progress                 |
 | **Bulk operations**          | Per-item progress (e.g., bulk issue update) |
 | **CSV import**               | Per-row import progress                     |
-| **Auto-update**              | Download and apply steps                    |
 
 ## How do clients display progress?
 

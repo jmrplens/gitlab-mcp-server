@@ -19,7 +19,7 @@ matches your goal:
 ### 📘 [Guides](guides/README.md) — how-to
 
 Task-oriented instructions for running the server: IDE configuration, HTTP server
-mode, OAuth app setup, CI/CD usage, auto-update, troubleshooting, and worked examples.
+mode, OAuth app setup, CI/CD usage, troubleshooting, and worked examples.
 
 ### 📖 [Reference](reference/README.md) — look-up
 

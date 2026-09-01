@@ -65,7 +65,7 @@ Point any MCP client at `npx` with no install at all:
 }
 ```
 
-The launcher forces `AUTO_UPDATE=false` unless you set `AUTO_UPDATE` yourself: npm owns the binary, and self-replacement on disk would desynchronize what npm recorded — update with `npm update -g @jmrp.io/gitlab-mcp-server`. The Linux packages declare `libc: ["glibc"]` because the prebuilt binaries need the glibc dynamic loader, so npm skips them on musl systems such as Alpine; there, run the Docker image (`docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false`) or build from source.
+Update with `npm update -g @jmrp.io/gitlab-mcp-server`: npm owns the binary, as every distribution channel does, and the server never replaces itself on disk. The Linux packages declare `libc: ["glibc"]` because the prebuilt binaries need the glibc dynamic loader, so npm skips them on musl systems such as Alpine; there, run the Docker image (`docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --http=false`) or build from source.
 
 ### One-line installer (native binary)
 
@@ -89,7 +89,7 @@ Claude Desktop users can skip all of the above: download
 and open it with Claude Desktop — see the
 [Claude Desktop Extension guide](guides/claude-desktop-extension.md).
 
-Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs). Prefer a guided flow with no JSON to edit? Run `gitlab-mcp-server --setup` after installing the binary (see [Step 2](#step-2-run-the-setup-wizard)).
+Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs). The per-client JSON for every supported client is in [Step 2](#step-2-configure-your-mcp-client).
 
 ### Try it without installing anything (hosted endpoint)
 
@@ -139,51 +139,28 @@ Every release also ships `checksums.txt`, a keyless Cosign signature (`checksums
 
 ---
 
-## Step 2: Run the Setup Wizard
+## Step 2: Configure Your MCP Client
 
-The easiest way to configure everything is the built-in Setup Wizard. It configures your GitLab connection and writes the MCP client config files in one step.
+Configuration lives in your MCP client's own file, not in this binary. Each
+client has its own path and JSON shape; [Manual
+Configuration](#alternative-manual-configuration) below has the snippet for
+yours, and [IDE Configuration](guides/ide-configuration.md) has the full set.
 
-> **Stdio only**: The wizard configures the **stdio MCP server** only. For shared or remote HTTP deployments, use [HTTP Server Mode](guides/http-server-mode.md) instead.
+You need two values:
 
-### Windows
+1. **GitLab URL** — your instance base URL, for example `https://gitlab.example.com`. On GitLab.com you can leave it out.
+2. **Personal Access Token** — a `glpat-...` token with the `api` scope, created under **User settings > Access tokens**. A `read_api` token also works and gets a read-only tool surface.
 
-Double-click the `.exe` file — the wizard opens automatically in your browser.
+If you would rather not paste a token into a config file at all, the HTTP mode
+supports OAuth against your GitLab instance instead: see [OAuth App
+Setup](guides/oauth-app-setup.md).
 
-Or from a terminal:
+### Running the binary by hand
 
-```powershell
-.\gitlab-mcp-server-windows-amd64.exe --setup
-```
-
-### Linux / macOS
-
-```bash
-./gitlab-mcp-server-linux-amd64 --setup
-```
-
-The wizard auto-detects the best UI: **Web** (browser) → **TUI** (terminal) → **CLI** (plain text). You can force a specific mode:
-
-```bash
-gitlab-mcp-server --setup --setup-mode web   # Browser UI (best for first-time setup; has inline help tooltips)
-gitlab-mcp-server --setup --setup-mode tui   # Terminal UI (keyboard-driven, Bubble Tea)
-gitlab-mcp-server --setup --setup-mode cli   # Plain text prompts (headless / SSH)
-```
-
-The wizard will ask for:
-
-1. **GitLab URL** — your instance base URL (e.g., `https://gitlab.example.com`)
-2. **Personal Access Token** — a `glpat-...` token with `api` scope
-3. **MCP client** — which AI client(s) to configure (VS Code, Claude Desktop, Cursor, etc.)
-4. **Advanced options** — tool surface, log level, rate limits, auto-update, etc. The Web UI attaches an inline help tooltip to every advanced option explaining what the setting does and its default. The CLI asks once whether to configure them. In the TUI, press `Ctrl+O` on the GitLab step to open the advanced options step.
-
-It then writes:
-
-- `~/.gitlab-mcp-server.env` — your credentials (with `0600` Unix permissions, never in client config)
-- Client-specific config files (e.g., `.vscode/mcp.json`, `claude_desktop_config.json`)
-
-**Re-running the wizard**: If `~/.gitlab-mcp-server.env` already exists, every UI mode (Web, TUI, CLI) pre-loads the saved values. You can change only the fields you need — the token is masked, and leaving it blank keeps the stored one. Use this to add a new client, switch from `dynamic` to `meta`, or rotate the token without re-typing everything.
-
-> **Skip the wizard?** See [Manual Configuration](#alternative-manual-configuration) below.
+There is no interactive setup to run. Started in a terminal, or double-clicked
+on Windows, with neither value set, the server prints what it is and what it
+needs and waits for you to read it before closing. That is a signpost, not a
+configuration step: the settings still go in your client's JSON.
 
 ---
 
@@ -312,8 +289,6 @@ exact string rather than the token.
 | `CLIENT_COMPAT`                  | No       | Per-client response compatibility (default `auto`)                                               |
 | `LOG_LEVEL`                      | No       | `debug`, `info`, `warn`, `error` (default `info`)                                                |
 
-`AUTO_UPDATE` is forced to `false` inside the container: the image channel owns the binary, and Agent Plugins hosts expand no `${VAR:-default}` fallbacks, so the config pins the only value that is correct there.
-
 Prefer `TOOL_SURFACE` for new configurations: `dynamic` is the default two-tool low-token find/execute surface, `meta` exposes consolidated domain dispatchers, and `individual` exposes every tool separately. The server still supports the deprecated `META_TOOLS` selector for compatibility, but the plugin config forwards the explicit `TOOL_SURFACE` variable.
 
 The Agent Plugins spec starts every entry in the referenced MCP config automatically and does not support runtime variants, so the manifest ships with a single Docker stdio entry. To use the native binary instead, locate the installed `gitlab-mcp-server` plugin directory from your host's plugin UI or installation output, then edit its local `mcp.json` (commonly under `.agents/plugins/gitlab-mcp-server/`) and replace `command` / `args` with the path to the binary downloaded from [GitHub Releases](https://github.com/jmrplens/gitlab-mcp-server/releases/latest).
@@ -324,7 +299,7 @@ For detached HTTP deployments, do not use a stdio client entry. Run the Docker i
 
 ## Alternative: Manual Configuration
 
-If you prefer not to use the wizard, create a `.env` file next to the binary:
+To keep credentials out of client config files, create a `.env` file next to the binary:
 
 ```env
 GITLAB_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx

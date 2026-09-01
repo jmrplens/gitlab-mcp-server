@@ -89,7 +89,7 @@ func subscriptionTestServer(t *testing.T, gitlabURL, capabilitySurface string, o
 		CapabilitySurface: capabilitySurface,
 		GitLabURL:         gitlabURL,
 	}
-	server, err := createServer(t.Context(), subscriptionGitLabClient(t, gitlabURL), cfg, nil, opts...)
+	server, err := createServer(t.Context(), subscriptionGitLabClient(t, gitlabURL), cfg, opts...)
 	if err != nil {
 		t.Fatalf("createServer() error: %v", err)
 	}

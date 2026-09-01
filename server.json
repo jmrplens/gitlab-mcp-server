@@ -171,35 +171,6 @@
             "warn",
             "error"
           ]
-        },
-        {
-          "name": "AUTO_UPDATE",
-          "description": "Auto-update mode: true (auto-apply), check (log-only), false (disabled). Default: true",
-          "isRequired": false,
-          "default": "true",
-          "choices": [
-            "true",
-            "check",
-            "false"
-          ]
-        },
-        {
-          "name": "AUTO_UPDATE_REPO",
-          "description": "GitHub repository slug for release assets (default: jmrplens/gitlab-mcp-server)",
-          "isRequired": false,
-          "default": "jmrplens/gitlab-mcp-server"
-        },
-        {
-          "name": "AUTO_UPDATE_INTERVAL",
-          "description": "Periodic update check interval in HTTP mode (default: 1h)",
-          "isRequired": false,
-          "default": "1h"
-        },
-        {
-          "name": "AUTO_UPDATE_TIMEOUT",
-          "description": "Startup/background update timeout, range 5s-10m (default: 60s)",
-          "isRequired": false,
-          "default": "60s"
         }
       ]
     },
@@ -354,35 +325,6 @@
             "warn",
             "error"
           ]
-        },
-        {
-          "name": "AUTO_UPDATE",
-          "description": "Auto-update mode: true (auto-apply), check (log-only), false (disabled). Default: true",
-          "isRequired": false,
-          "default": "true",
-          "choices": [
-            "true",
-            "check",
-            "false"
-          ]
-        },
-        {
-          "name": "AUTO_UPDATE_REPO",
-          "description": "GitHub repository slug for release assets (default: jmrplens/gitlab-mcp-server)",
-          "isRequired": false,
-          "default": "jmrplens/gitlab-mcp-server"
-        },
-        {
-          "name": "AUTO_UPDATE_INTERVAL",
-          "description": "Periodic update check interval in HTTP mode (default: 1h)",
-          "isRequired": false,
-          "default": "1h"
-        },
-        {
-          "name": "AUTO_UPDATE_TIMEOUT",
-          "description": "Startup/background update timeout, range 5s-10m (default: 60s)",
-          "isRequired": false,
-          "default": "60s"
         }
       ]
     },
@@ -529,17 +471,6 @@
             "info",
             "warn",
             "error"
-          ]
-        },
-        {
-          "name": "AUTO_UPDATE",
-          "description": "Auto-update mode: true (auto-apply), check (log-only), false (disabled). The npm launcher sets false unless explicitly overridden: npm owns the binary, so self-replacement on disk would desynchronize the install.",
-          "isRequired": false,
-          "default": "false",
-          "choices": [
-            "true",
-            "check",
-            "false"
           ]
         }
       ]

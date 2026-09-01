@@ -1,11 +1,9 @@
 ---
 title: Getting Started
-description: Install and configure GitLab MCP Server in under five minutes — via Docker, native binary, or setup wizard — for VS Code, Claude, Cursor, and other MCP clients.
+description: Install and configure GitLab MCP Server in under five minutes — via Docker, native binary, or npm — for VS Code, Claude, Cursor, and other MCP clients.
 chips:
   - text: Zero-install with Docker
   - text: Any MCP client
-  - text: Setup wizard included
-    href: /gitlab-mcp-server/setup-wizard/
 datePublished: "2026-04-21"
 head:
   # The one page on the site with a genuinely procedural shape: token, install,
@@ -53,7 +51,7 @@ head:
             "@type": "HowToStep",
             "position": 3,
             "name": "Register the server with your MCP client",
-            "text": "Add the server to your client's MCP configuration with GITLAB_TOKEN in its environment. For Claude Code the whole step is one command: claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server. For a self-managed instance also pass GITLAB_URL, plus GITLAB_SKIP_TLS_VERIFY=true for self-signed certificates. The built-in setup wizard, gitlab-mcp-server --setup, does this for you and writes the token outside client JSON files.",
+            "text": "Add the server to your client's MCP configuration with GITLAB_TOKEN in its environment. For Claude Code the whole step is one command: claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server. For a self-managed instance also pass GITLAB_URL, plus GITLAB_SKIP_TLS_VERIFY=true for self-signed certificates. To keep the token out of client JSON files, put GITLAB_URL and GITLAB_TOKEN in ~/.gitlab-mcp-server.env instead, which the server reads when they are not already in its environment.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#manual-configuration"
           },
           {
@@ -82,7 +80,7 @@ import FAQ from "../../components/FAQ.astro";
 
 :::tip[At a glance]
 
-- **Three ways to install**: a Docker image, a single native binary, or the interactive setup wizard.
+- **Three ways to install**: a Docker image, a single native binary, or the npm launcher.
 - **The minimum configuration is one value** — a GitLab personal access token with `api` scope in `GITLAB_TOKEN`. Set `GITLAB_URL` only for self-managed instances.
 - **The default surface is dynamic mode**: your client sees two tools, and they reach every GitLab operation on demand.
 
@@ -185,7 +183,7 @@ Point any MCP client at `npx` with no install at all:
 
 ### One-line installer (native binary)
 
-Installs the binary onto your PATH, then registers it. Updates are handled by the binary's built-in auto-update (or by Homebrew, which pins its own checksummed formula).
+Installs the binary onto your PATH, then registers it. Updates come from whatever installed it (`brew upgrade`, `winget upgrade`, or re-running the script); the server does not update itself.
 
 ```bash
 # macOS/Linux (Homebrew)
@@ -201,10 +199,6 @@ claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server
 ```
 
 Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and `--env GITLAB_SKIP_TLS_VERIFY=true` for self-signed certs).
-
-:::tip[Prefer a guided flow?]
-The built-in [setup wizard](#setup-wizard) collects your token and configures your client for you — no JSON to edit. Run `gitlab-mcp-server --setup` after installing the binary.
-:::
 
 ### Try it without installing anything (hosted endpoint)
 
@@ -259,23 +253,21 @@ Optionally, move it to a directory in your PATH:
 sudo mv gitlab-mcp-server-linux-amd64 /usr/local/bin/gitlab-mcp-server
 ```
 
-## Setup wizard
+## Running the binary by hand
 
-The easiest way to configure local stdio clients is the built-in setup wizard:
+There is no setup wizard. MCP configuration belongs in your client's own JSON file, which is what [Manual configuration](#manual-configuration) below documents, and a wizard writing a dotfile on one machine could not put it there.
+
+Running the binary in a terminal with neither `GITLAB_TOKEN` nor `GITLAB_URL` set, or double-clicking it, prints what the server is, the two values it needs, and where the per-client JSON is documented, then waits for Enter so a double-clicked window on Windows does not close before you can read it. An MCP client never sees that screen: a client connects pipes rather than a terminal, so the server starts normally.
+
+:::tip[Keeping the token out of client JSON]
+The server still reads `~/.gitlab-mcp-server.env` for values it does not already have in its environment, one `KEY=value` per line. Write it yourself and leave `env` out of the client configuration:
 
 ```bash
-gitlab-mcp-server --setup
+GITLAB_URL=https://gitlab.com
+GITLAB_TOKEN=glpat-xxxx
 ```
 
-The wizard will:
-
-- Prompt for your GitLab URL and token
-- Load any existing configuration so you can keep or change previous values
-- Configure supported MCP clients
-- Write `~/.gitlab-mcp-server.env` without placing secrets in client JSON files
-
-:::note
-The setup wizard configures stdio clients only. It offers Web, TUI, and CLI interfaces. See [Setup Wizard](/gitlab-mcp-server/setup-wizard/) for modes, supported clients, advanced options, and reconfiguration behavior.
+A `.env` in the working directory takes precedence over it, and an explicit environment variable takes precedence over both.
 :::
 
 ## Install as an Agent Plugin (Cursor / Claude Code / VS Code)

@@ -89,25 +89,12 @@ These variables configure the HTTP server pool. Each has a CLI flag counterpart,
 
 ---
 
-## Optional — Auto-Update
-
-| Variable               | Default                      | Description                                                                      |
-| ---------------------- | ---------------------------- | -------------------------------------------------------------------------------- |
-| `AUTO_UPDATE`          | `true`                       | Update mode: `true` (download and apply), `check` (log only), `false` (disabled) |
-| `AUTO_UPDATE_REPO`     | `jmrplens/gitlab-mcp-server` | GitHub repository slug (owner/repo) for release assets                           |
-| `AUTO_UPDATE_INTERVAL` | `1h`                         | Periodic update check interval (HTTP mode background checks)                     |
-| `AUTO_UPDATE_TIMEOUT`  | `60s`                        | Startup/background update timeout (range: 5s–10m)                                |
-
-> **Note**: Auto-update uses the GitHub Releases API via `AUTO_UPDATE_REPO`. See [Auto-Update](../guides/auto-update.md) for details.
-
----
-
 ## Configuration Loading Order
 
 Configuration is loaded by `internal/config/` in this precedence order (higher wins):
 
 1. **`.env` file** in the current working directory (loaded via `godotenv`)
-2. **`~/.gitlab-mcp-server.env`** in the user's home directory (wizard-generated fallback)
+2. **`~/.gitlab-mcp-server.env`** in the user's home directory
 3. **Environment variables** (override both `.env` files)
 
 > **Note**: `godotenv` does not overwrite existing variables, so step 1 values take precedence over step 2, and explicit environment variables (step 3) override both.
@@ -125,12 +112,11 @@ GITLAB_SKIP_TLS_VERIFY=false
 TOOL_SURFACE=dynamic
 LOG_LEVEL=info
 UPLOAD_MAX_FILE_SIZE=500MB
-AUTO_UPDATE=true
 ```
 
 For self-managed GitLab, add `GITLAB_URL=https://gitlab.example.com`.
 
-> **Security**: The `.env` file is gitignored. Never commit tokens or credentials. The Setup Wizard writes secrets to `~/.gitlab-mcp-server.env` with `0600` permissions on Unix.
+> **Security**: The `.env` file is gitignored. Never commit tokens or credentials. Whichever file holds the token, restrict it to its owner (`chmod 600` on Unix).
 
 ---
 
@@ -177,10 +163,6 @@ Nothing in this table is reachable from a request. Clients control only their Gi
 | `RATE_LIMIT_BURST`            | `--rate-limit-burst`       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | *(none)*                      | `--trusted-proxy-header`   | CLI-only; HTTP header with real client IP for rate limiting behind proxies                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `TRUSTED_ORIGINS`             | `--trusted-origins`        |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `AUTO_UPDATE`                 | `--auto-update`            |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `AUTO_UPDATE_REPO`            | `--auto-update-repo`       |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `AUTO_UPDATE_INTERVAL`        | `--auto-update-interval`   |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `AUTO_UPDATE_TIMEOUT`         | `--auto-update-timeout`    |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `GITLAB_TIER`                 | `--tier`                   | In HTTP mode, an explicit flag forces the tier; when omitted, the tier is detected from the instance license per token+URL pool entry (fallback `free`)                                                                                                                                                                                                                                                                                                                                                               |
 | `GITLAB_READ_ONLY`            | `--read-only`              |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `GITLAB_SAFE_MODE`            | `--safe-mode`              |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
@@ -193,9 +175,8 @@ Nothing in this table is reachable from a request. Clients control only their Gi
 ## See Also
 
 - [CLI Reference](cli.md) — Command-line flags for HTTP mode
-- [Configuration](configuration.md) — Setup wizard, client config, secure token management
+- [Configuration](configuration.md) — Client config and secure token management
 - [Dynamic Toolset](../concepts/dynamic-tools.md) — Low-token find/execute workflow and migration guidance
-- [Auto-Update](../guides/auto-update.md) — Update modes and release requirements
 - [Security](../concepts/security.md) — Token management best practices
 - [HTTP Server Mode](../guides/http-server-mode.md) — OAuth mode architecture and deployment
 - [OAuth App Setup](../guides/oauth-app-setup.md) — Creating GitLab OAuth applications

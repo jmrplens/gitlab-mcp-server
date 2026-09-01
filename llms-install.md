@@ -84,9 +84,8 @@ MCP configuration (Cline `cline_mcp_settings.json`, Claude Desktop
 }
 ```
 
-The binary also ships an interactive setup wizard
-(`gitlab-mcp-server --setup`) that auto-detects VS Code, Claude Desktop,
-Claude Code, Cursor, and Windsurf and writes the config for the user.
+Run with no `GITLAB_TOKEN` in a terminal and the binary prints what it needs
+and waits, which confirms the install without configuring anything.
 
 ### Method C: npm / npx (no Docker, no download step)
 
@@ -110,8 +109,8 @@ at install time.
 }
 ```
 
-Node.js 18 or newer is required. Self-update is off on this path (npm owns the
-binary), so updates come from `npm update -g @jmrp.io/gitlab-mcp-server`. The
+Node.js 18 or newer is required. The server never replaces its own binary, so
+updates come from `npm update -g @jmrp.io/gitlab-mcp-server`. The
 Linux packages need glibc: on musl systems such as Alpine, use Method A.
 
 ## Step 3 — Optional environment variables

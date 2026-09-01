@@ -26,10 +26,10 @@ var (
 )
 
 // cacheableCatalogOptions reports whether opts only carries the fields the
-// shared cache keys on: a client, updater, or spec-group override makes the
+// shared cache keys on: a client or spec-group override makes the
 // build unique to its caller.
 func cacheableCatalogOptions(opts ActionCatalogOptions) bool {
-	return opts.Updater == nil && opts.SpecGroups == nil
+	return opts.SpecGroups == nil
 }
 
 // sharedActionCatalog returns a clone of the memoized nil-client catalog for

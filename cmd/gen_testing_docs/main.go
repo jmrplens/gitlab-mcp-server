@@ -1339,10 +1339,6 @@ func coverageRationale(pkg packageMetrics) string {
 	switch {
 	case pkg.Key == "testutil":
 		return "some helpers are exercised by external packages or the build-tagged E2E suite rather than this package's own tests."
-	case pkg.Key == "autoupdate":
-		return "process replacement, platform-specific binary moves, and signal-handling paths cannot be fully exercised in-process."
-	case pkg.Key == "wizard":
-		return "interactive UI code, browser launch, and OS dialogs require heavy test stubbing."
 	case pkg.Key == "cmd/server":
 		return "entry-point glue, signal handling, and transport startup are validated mostly through integration and E2E coverage."
 	case strings.HasPrefix(pkg.Key, "cmd/"):

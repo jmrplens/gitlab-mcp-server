@@ -337,7 +337,7 @@ Se registran cinco herramientas más junto a las meta-herramientas de dominio. R
 | `gitlab_interactive_release_create` | Creación guiada de releases mediante elicitation de MCP                             |
 
 :::note
-La autoactualización del servidor se registra aparte cuando está habilitada y no cuenta en la cifra de {stats.meta.base} anterior. El modo meta añade una meta-herramienta `gitlab_server` cuyas acciones incluyen `status`, `health_check`, `check_update` y `apply_update`; el modo individual registra `gitlab_server_status`, `gitlab_server_check_update` y `gitlab_server_apply_update`; el modo dinámico alcanza esas mismas acciones a través del catálogo canónico de acciones.
+Junto a estas se registra una meta-herramienta `gitlab_server` que no cuenta en la cifra de {stats.meta.base} anterior. Es de solo lectura, con dos acciones: `status` y `health_check`. El modo individual registra `gitlab_server_status`; el modo dinámico alcanza ambas a través del catálogo canónico de acciones. No hay ninguna acción de autoactualización que invocar, porque el binario pertenece al canal con el que se instaló.
 :::
 
 ## Herramientas exclusivas de Enterprise

@@ -5,7 +5,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/surfaces"
@@ -18,13 +17,6 @@ import (
 // the project discovery helper (gitlab_discover_project).
 func StandaloneSurfaceToolSpecs(client *gitlabclient.Client) []actioncatalog.SurfaceToolSpec {
 	return surfaces.StandaloneToolSpecs(client)
-}
-
-// ServerMaintenanceSurfaceToolSpecs returns updater-backed visible server
-// maintenance tools. When the updater is nil, the returned slice is empty
-// so RegisterServerMaintenanceSurfaceTools has nothing to register.
-func ServerMaintenanceSurfaceToolSpecs(updater *autoupdate.Updater) []actioncatalog.SurfaceToolSpec {
-	return surfaces.ServerMaintenanceToolSpecs(updater)
 }
 
 // RegisterSurfaceTools registers visible tools from canonical surface
@@ -42,11 +34,4 @@ func RegisterSurfaceTools(server *mcp.Server, specs []actioncatalog.SurfaceToolS
 			FormatResult: spec.FormatResult,
 		})
 	}
-}
-
-// RegisterServerMaintenanceSurfaceTools registers visible updater tools
-// when auto-update is enabled. When the updater is nil, no tools are
-// registered.
-func RegisterServerMaintenanceSurfaceTools(server *mcp.Server, updater *autoupdate.Updater) {
-	RegisterSurfaceTools(server, ServerMaintenanceSurfaceToolSpecs(updater))
 }

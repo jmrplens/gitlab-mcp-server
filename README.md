@@ -127,15 +127,12 @@ Clients that launch servers with `npx` need no install at all — point them at
 
 Self-managed GitLab? Add `--env GITLAB_URL=https://gitlab.example.com` (and, for a self-signed certificate, mount the CA and set `--env SSL_CERT_FILE=/path/to/ca-bundle.crt`; `GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative, and OAuth mode refuses it for a non-loopback instance).
 
-### Guided setup (any client, no flags to remember)
+### Run it once to check the install
 
-The binary ships a **setup wizard** that collects your GitLab token and configures your MCP client for you — ideal if you'd rather not edit JSON:
-
-```bash
-gitlab-mcp-server --setup
-```
-
-It auto-detects VS Code, Claude Desktop, Claude Code, Cursor, and Windsurf and writes the right config. On Windows, double-click the `.exe` to launch it.
+Started in a terminal, or double-clicked on Windows, with no `GITLAB_TOKEN` set,
+the binary prints what it is and what it needs and waits for Enter, so you can
+confirm the install before configuring anything. Configuration itself lives in
+your MCP client's JSON, below.
 
 ### Manual JSON (Claude Desktop, Cursor, VS Code, …)
 
@@ -342,7 +339,7 @@ Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs
 
 | Document                                              | Description                                                                            |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [Getting Started](docs/getting-started.md)            | Download, setup wizard, per-client configuration                                       |
+| [Getting Started](docs/getting-started.md)            | Download, install, per-client configuration                                            |
 | [IDE Configuration](docs/guides/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                 |
 | [Configuration](docs/reference/configuration.md)      | Environment variables, transport modes, TLS                                            |
 | [Environment Variables](docs/reference/env.md)        | Exhaustive environment variable table with defaults and examples                       |
@@ -357,7 +354,6 @@ Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs
 | [Dynamic Toolset](docs/concepts/dynamic-tools.md)     | 2-tool low-token mode with canonical action catalog, safety model, and examples        |
 | [Resources](docs/reference/resources.md)              | All 45 resources with URI templates                                                    |
 | [Prompts](docs/reference/prompts.md)                  | All 37 prompts with arguments and output format                                        |
-| [Auto-Update](docs/guides/auto-update.md)             | Self-update mechanism, modes, and release format                                       |
 | [Testing](docs/development/testing/README.md)         | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results |
 | [Security](docs/concepts/security.md)                 | Security model, token scopes, input validation                                         |
 | [Architecture](docs/concepts/architecture.md)         | System architecture, component design, data flow                                       |
@@ -375,11 +371,11 @@ Yes. Set `GITLAB_URL` to your instance URL. When `GITLAB_URL` is omitted, stdio 
 <details>
 <summary><strong>Is my data safe?</strong></summary>
 
-When you run it yourself — locally over stdio, or on your own infrastructure over HTTP — all API calls go directly to your GitLab instance. The one request that leaves for anywhere else is the update check against GitHub Releases, which is on by default and disabled with <code>AUTO_UPDATE=false</code>.
+When you run it yourself, locally over stdio or on your own infrastructure over HTTP, every request goes to your GitLab instance and nowhere else. There is no update check, no license check and no telemetry: your instance is the only host this server contacts.
 
 The exception is the <a href="#try-it-without-installing-anything-hosted-endpoint">hosted endpoint</a>: using <code>https://mcp.jmrp.io/gitlab</code> means your token and every request pass through that machine. Nothing is stored there, but it is someone else's server, which is why the hosted section says to keep using it locally.
 
-See <a href="PRIVACY.md">PRIVACY.md</a> for exactly what the update check sends, and <a href="SECURITY.md">SECURITY.md</a> for the security model.
+See <a href="PRIVACY.md">PRIVACY.md</a> for the full data-flow statement, and <a href="SECURITY.md">SECURITY.md</a> for the security model.
 </details>
 
 <details>
@@ -405,7 +401,7 @@ The server includes retry logic with backoff for GitLab API rate limits. Errors 
 <details>
 <summary><strong>Which AI clients are supported?</strong></summary>
 
-Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. The built-in setup wizard can auto-configure most clients.
+Any MCP-compatible client: VS Code + GitHub Copilot, Claude Desktop, Cursor, Claude Code, Windsurf, JetBrains IDEs, Zed, Kiro, and others. Configuration lives in your MCP client's own JSON; the per-client examples are in the documentation.
 </details>
 
 ## Building from Source
@@ -450,49 +446,49 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,003 |     207,203 |
-| Unit tests (`_test.go`)  |       559 |     320,892 |
-| End-to-end tests         |       189 |      51,413 |
-| **Total**                | **1,751** | **579,508** |
+| Source (`.go`, non-test) |       977 |     202,349 |
+| Unit tests (`_test.go`)  |       538 |     307,335 |
+| End-to-end tests         |       189 |      51,408 |
+| **Total**                | **1,704** | **561,092** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,856 |
-| — exported (public)             |  2,715 |
-| — unexported (private)          |  5,141 |
-| Unit test functions (`TestXxx`) | 12,098 |
-| Subtests (`t.Run(...)`)         |  3,109 |
+| Source functions                |  7,662 |
+| — exported (public)             |  2,643 |
+| — unexported (private)          |  5,019 |
+| Unit test functions (`TestXxx`) | 11,582 |
+| Subtests (`t.Run(...)`)         |  3,030 |
 | End-to-end test functions       |    489 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
-| Test lines vs source lines         | 1.55× more tests than code |
-| Average source file length         |                 ~206 lines |
-| Average test file length           |                 ~574 lines |
-| Comment lines in source            |  25,873 (~12.5% of source) |
+| Test lines vs source lines         | 1.52× more tests than code |
+| Average source file length         |                 ~207 lines |
+| Average test file length           |                 ~571 lines |
+| Comment lines in source            |  25,418 (~12.6% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,815 |
-| `defer` statements                 |   989 |
-| `struct` types defined             | 2,759 |
-| `//nolint` suppressions            |   271 |
+| `if err != nil` checks             | 6,521 |
+| `defer` statements                 |   967 |
+| `struct` types defined             | 2,734 |
+| `//nolint` suppressions            |   249 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   239 |
-| Direct dependencies (`go.mod`) |    18 |
-| Indirect dependencies          |    46 |
+| Go packages                    |   236 |
+| Direct dependencies (`go.mod`) |    14 |
+| Indirect dependencies          |    17 |
 
 ### Hall of fame
 
@@ -505,8 +501,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,767 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,846 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,679 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,655 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

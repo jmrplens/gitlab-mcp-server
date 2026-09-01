@@ -2,7 +2,7 @@
 
 > MCP server in Go that exposes GitLab REST + GraphQL as MCP tools, resources,
 > and prompts. Communicates via stdio (default) or HTTP. Catalog-first tool
-> registration: 176 sub-packages under `internal/tools/`, with three runtime
+> registration: 175 sub-packages under `internal/tools/`, with three runtime
 > surfaces (`dynamic` default, `meta`, `individual`).
 
 ## Read first
@@ -210,6 +210,3 @@ dispatch. `internal/tools/markdown.go` is a thin delegator (~19 lines) to
   `go tool cover -func=coverage.out` reports totals.
 - **HTTP mode without `--gitlab-url`** requires every client request to
   send `GITLAB-URL`; missing it is a common first-time error.
-- **Auto-update defaults to `true`** in stdio and HTTP. The server may
-  restart on its own; disable with `AUTO_UPDATE=false` for local
-  debugging.

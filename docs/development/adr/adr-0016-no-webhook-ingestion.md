@@ -74,8 +74,8 @@ path.
    Every other piece of state here is either the caller's own GitLab token
    (never stored past the request) or purely in-memory and reconstructible
    (`internal/serverpool`'s pool entries, `internal/subscriptions`'
-   watchers). A webhook secret is neither: it must survive
-   `AUTO_UPDATE`'s routine restarts and pool eviction, or every hook
+   watchers). A webhook secret is neither: it must survive restarts and
+   pool eviction, or every hook
    silently starts failing signature checks, and losing it does not merely
    degrade a poll — it either accepts unverified deliveries or accepts
    none.

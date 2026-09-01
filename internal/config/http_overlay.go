@@ -55,11 +55,6 @@ type HTTPEnvOverlay struct {
 
 	RateLimitRPS   *float64
 	RateLimitBurst *int
-
-	AutoUpdate         *string
-	AutoUpdateRepo     *string
-	AutoUpdateInterval *time.Duration
-	AutoUpdateTimeout  *time.Duration
 }
 
 // envPresent reports whether name is set to a non-empty value.
@@ -79,7 +74,6 @@ func LoadHTTPEnvOverlay() (*HTTPEnvOverlay, error) {
 		loadOverlayBooleans,
 		loadOverlayLimits,
 		loadOverlayAuthAndRate,
-		loadOverlayAutoUpdate,
 	} {
 		if err := load(overlay); err != nil {
 			return nil, err
@@ -234,30 +228,6 @@ func loadOverlayAuthAndRate(o *HTTPEnvOverlay) error {
 			return fmt.Errorf("invalid RATE_LIMIT_BURST value: %w", err)
 		}
 		o.RateLimitBurst = &value
-	}
-	return nil
-}
-
-func loadOverlayAutoUpdate(o *HTTPEnvOverlay) error {
-	if !envPresent("AUTO_UPDATE") && !envPresent("AUTO_UPDATE_REPO") &&
-		!envPresent("AUTO_UPDATE_INTERVAL") && !envPresent("AUTO_UPDATE_TIMEOUT") {
-		return nil
-	}
-	updates, err := loadAutoUpdateEnv()
-	if err != nil {
-		return err
-	}
-	if envPresent("AUTO_UPDATE") {
-		o.AutoUpdate = &updates.mode
-	}
-	if envPresent("AUTO_UPDATE_REPO") {
-		o.AutoUpdateRepo = &updates.repo
-	}
-	if envPresent("AUTO_UPDATE_INTERVAL") {
-		o.AutoUpdateInterval = &updates.interval
-	}
-	if envPresent("AUTO_UPDATE_TIMEOUT") {
-		o.AutoUpdateTimeout = &updates.timeout
 	}
 	return nil
 }

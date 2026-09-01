@@ -184,10 +184,10 @@ export const en: HomeContent = {
 			},
 			{
 				title: "Point it at GitLab",
-				body: "A personal access token and your instance URL are the whole configuration. The setup wizard writes the client config for you.",
+				body: "A personal access token and your instance URL are the whole configuration. Both go in your MCP client's own JSON.",
 				code: "GITLAB_URL=https://gitlab.example.com\nGITLAB_TOKEN=glpat-xxxx",
-				href: "/gitlab-mcp-server/setup-wizard/",
-				linkText: "Setup wizard",
+				href: "/gitlab-mcp-server/configuration/",
+				linkText: "Client configuration",
 			},
 			{
 				title: "Pick a surface",
@@ -310,10 +310,10 @@ export const es: HomeContent = {
 			},
 			{
 				title: "Apúntalo a GitLab",
-				body: "Un token de acceso personal y la URL de tu instancia son toda la configuración. El asistente de configuración escribe el config del cliente por ti.",
+				body: "Un token de acceso personal y la URL de tu instancia son toda la configuración. Ambos van en el propio JSON de tu cliente MCP.",
 				code: "GITLAB_URL=https://gitlab.example.com\nGITLAB_TOKEN=glpat-xxxx",
-				href: "/gitlab-mcp-server/es/setup-wizard/",
-				linkText: "Asistente de configuración",
+				href: "/gitlab-mcp-server/es/configuration/",
+				linkText: "Configuración del cliente",
 			},
 			{
 				title: "Elige superficie",

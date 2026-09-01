@@ -82,14 +82,7 @@ if (!binary) {
   );
 }
 
-// Self-update must stay off: npm owns this binary, and letting it replace
-// itself on disk would desynchronize what npm believes is installed — the same
-// reason the Homebrew formula and the Claude Desktop manifest pin it off. An
-// explicit AUTO_UPDATE from the caller still wins.
 const env = { ...process.env };
-if (env.AUTO_UPDATE === undefined) {
-  env.AUTO_UPDATE = "false";
-}
 
 const result = spawnSync(binary, process.argv.slice(2), {
   stdio: "inherit",

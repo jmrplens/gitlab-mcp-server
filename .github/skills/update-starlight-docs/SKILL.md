@@ -36,7 +36,6 @@ Two documentation systems coexist:
 | Transport change | `getting-started`, `http-server-mode` |
 | Error handling change | `troubleshooting`, `error-handling` |
 | Security change | `security` |
-| Auto-update change | `auto-update` |
 
 ### 2. Edit EN pages first
 

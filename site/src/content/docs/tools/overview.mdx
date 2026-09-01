@@ -335,7 +335,7 @@ Five more tools are registered alongside the dispatchers. They take their parame
 | `gitlab_interactive_release_create` | Guided release creation through MCP elicitation                   |
 
 :::note
-Server self-update is registered separately when auto-update is enabled, and is not counted in the {stats.meta.base} figure above. Meta-tool mode adds a `gitlab_server` dispatcher whose actions include `status`, `health_check`, `check_update` and `apply_update`; individual mode registers `gitlab_server_status`, `gitlab_server_check_update` and `gitlab_server_apply_update`; dynamic mode reaches the same actions through the canonical action catalog.
+A `gitlab_server` dispatcher is registered alongside these and is not counted in the {stats.meta.base} figure above. It is read-only, with two actions: `status` and `health_check`. Individual mode registers `gitlab_server_status`; dynamic mode reaches both through the canonical action catalog. There is no self-update action to call, because the binary belongs to whichever channel installed it.
 :::
 
 ## Enterprise-only tools

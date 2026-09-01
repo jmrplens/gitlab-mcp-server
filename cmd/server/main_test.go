@@ -1,8 +1,7 @@
 // main_test.go contains unit and integration-style tests for the server entry
 // point. Tests cover CLI flag handling, configuration validation, GitLab client
 // setup, HTTP and stdio transport modes, MCP protocol handshakes, tool catalog
-// filtering, OAuth middleware, server-card generation, and auto-update logging
-// redaction.
+// filtering, OAuth middleware, and server-card generation.
 //
 // The tests use httptest servers for GitLab API responses and HTTP transport
 // requests, plus in-memory MCP transports for direct tools/list inspection.
@@ -30,7 +29,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/clientcompat"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
@@ -175,7 +173,7 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 	t.Helper()
 	cacheable := cfg.ExcludeTools == nil && cfg.TokenScopes == nil && cfg.GitLabURL == ""
 	if !cacheable {
-		server, err := createServer(t.Context(), client, cfg, nil)
+		server, err := createServer(t.Context(), client, cfg)
 		if err != nil {
 			t.Fatalf("createServer() error: %v", err)
 		}
@@ -200,7 +198,7 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 	if server, ok := createdServers[key]; ok {
 		return server
 	}
-	server, err := createServer(t.Context(), sharedCreateServerClient(t), cfg, nil)
+	server, err := createServer(t.Context(), sharedCreateServerClient(t), cfg)
 	if err != nil {
 		t.Fatalf("createServer() error: %v", err)
 	}
@@ -734,7 +732,7 @@ func TestServeHTTP_PortConflict(t *testing.T) {
 
 // TestRun_GitLabPingFailure_StartsDegraded verifies that a failing GitLab
 // connectivity ping does not abort startup: [run] continues in degraded mode
-// (the server must stay usable so the setup wizard and self-diagnostics can
+// (the server must stay usable so self-diagnostics can
 // run). run then serves stdio until the test binary's stdin reports EOF, so
 // the assertion accepts a clean exit or a transport-closed error but rejects
 // a connectivity error and a hang. The old expectation (run returns an error
@@ -803,7 +801,7 @@ func TestRunWithContext_SuccessHTTPIndividualTools(t *testing.T) {
 			addr:           ":0",
 			gitlabURL:      srv.URL,
 			metaTools:      false,
-			maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
+			maxHTTPClients: config.DefaultMaxHTTPClients,
 			sessionTimeout: config.DefaultSessionTimeout,
 		})
 	}()
@@ -835,7 +833,7 @@ func TestRunWithContext_SuccessHTTPMetaTools(t *testing.T) {
 			addr:           ":0",
 			gitlabURL:      srv.URL,
 			metaTools:      true,
-			maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
+			maxHTTPClients: config.DefaultMaxHTTPClients,
 			sessionTimeout: config.DefaultSessionTimeout,
 		})
 	}()
@@ -951,7 +949,7 @@ func TestRunWithContext_HTTPMissingURL(t *testing.T) {
 	err := runWithContext(ctx, &httpConfig{
 		addr:           ":0",
 		gitlabURL:      "",
-		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
+		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
 	if err != nil {
@@ -974,7 +972,7 @@ func TestRunWithContext_HTTPInvalidURL(t *testing.T) {
 			err := runWithContext(context.Background(), &httpConfig{
 				addr:           ":0",
 				gitlabURL:      tt.url,
-				maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
+				maxHTTPClients: config.DefaultMaxHTTPClients,
 				sessionTimeout: config.DefaultSessionTimeout,
 			})
 			if err == nil {
@@ -1157,7 +1155,6 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 		{"stateless default", "-stateless=false"},
 		{"json-response flag", "-json-response"},
 		{"max-request-body-bytes flag", "-max-request-body-bytes"},
-		{"auto-update flag", "-auto-update"},
 		{"env section", "ENVIRONMENT VARIABLES"},
 		{"GITLAB_URL env", "GITLAB_URL"},
 		{"GITLAB_TOKEN env", "GITLAB_TOKEN"},
@@ -1394,39 +1391,6 @@ func TestCreateServer_DynamicToolSurface(t *testing.T) {
 	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/project.get"})
 	if err != nil {
 		t.Fatalf("dynamic surface should expose tool manifest detail resources: %v", err)
-	}
-}
-
-// TestCreateServer_DynamicToolSurfaceWithUpdaterIncludesUpdateSchema verifies
-// the default dynamic startup path can expose updater-backed maintenance actions
-// without falling back to legacy schema-less routes.
-func TestCreateServer_DynamicToolSurfaceWithUpdaterIncludesUpdateSchema(t *testing.T) {
-	client := newMockGitLabClient(t)
-	updater := autoupdate.NewUpdaterWithSource(autoupdate.Config{
-		Mode:           autoupdate.ModeCheck,
-		Repository:     "owner/repo",
-		CurrentVersion: "1.0.0",
-	}, autoupdate.EmptySource{})
-	server, err := createServer(t.Context(), client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic}, updater)
-	if err != nil {
-		t.Fatalf("createServer(dynamic with updater) error = %v", err)
-	}
-	session := newInMemorySession(t, server)
-
-	result, err := session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/server.apply_update"})
-	if err != nil {
-		t.Fatalf("dynamic surface should expose server.apply_update detail resource: %v", err)
-	}
-	var detail resources.ToolSurfaceDetail
-	if unmarshalErr := json.Unmarshal([]byte(result.Contents[0].Text), &detail); unmarshalErr != nil {
-		t.Fatalf("unmarshal server.apply_update detail: %v", unmarshalErr)
-	}
-	schema, ok := detail.InputSchema.(map[string]any)
-	if !ok {
-		t.Fatalf("server.apply_update input schema = %T, want map[string]any", detail.InputSchema)
-	}
-	if got := schema["type"]; got != "object" {
-		t.Fatalf("server.apply_update input schema type = %v, want object", got)
 	}
 }
 
@@ -2026,7 +1990,7 @@ func TestCreateServer_ToolManifestInspectionError(t *testing.T) {
 
 	// Build directly: the stubbed inspection hook must not be captured into
 	// (or satisfied from) the shared mustCreateServer cache.
-	server, err := createServer(t.Context(), client, &config.ServerConfig{MetaTools: true}, nil)
+	server, err := createServer(t.Context(), client, &config.ServerConfig{MetaTools: true})
 	if err != nil {
 		t.Fatalf("createServer() error: %v", err)
 	}
@@ -2083,204 +2047,6 @@ func TestListRegisteredTools_ErrorPaths(t *testing.T) {
 	})
 }
 
-// TestStartStdioAutoUpdate_InvalidMode verifies that startStdioAutoUpdate
-// returns immediately when the AUTO_UPDATE value is invalid.
-func TestStartStdioAutoUpdate_InvalidMode(t *testing.T) {
-	cfg := &config.Config{AutoUpdate: "invalid-value"}
-	// Should log warning and return without panic.
-	startStdioAutoUpdate(t.Context(), cfg)
-}
-
-// TestStartStdioAutoUpdate_DisabledMode verifies that startStdioAutoUpdate
-// returns immediately when AUTO_UPDATE is "false" (disabled).
-func TestStartStdioAutoUpdate_DisabledMode(t *testing.T) {
-	cfg := &config.Config{AutoUpdate: "false"}
-	startStdioAutoUpdate(t.Context(), cfg)
-}
-
-// TestStartStdioAutoUpdate_ValidMode verifies that startStdioAutoUpdate
-// exercises the full path when mode is valid.
-func TestStartStdioAutoUpdate_ValidMode(t *testing.T) {
-	called := make(chan struct{})
-	check := func(context.Context, autoupdate.Config) (string, bool, error) {
-		close(called)
-		return "", false, nil
-	}
-
-	cfg := &config.Config{
-		AutoUpdate:     "true",
-		AutoUpdateRepo: "group/project",
-	}
-	startStdioAutoUpdateWithCheck(t.Context(), cfg, check)
-
-	select {
-	case <-called:
-	case <-time.After(time.Second):
-		t.Fatal("expected startup auto-update check to run")
-	}
-}
-
-// TestStartStdioAutoUpdate_ValidModeReturnsBeforeCheckCompletes verifies that
-// startup auto-update work runs in the background instead of delaying stdio MCP
-// startup while an update check or download is still in progress.
-func TestStartStdioAutoUpdate_ValidModeReturnsBeforeCheckCompletes(t *testing.T) {
-	oldVersion := version
-	version = "1.0.0"
-	t.Cleanup(func() { version = oldVersion })
-
-	started := make(chan autoupdate.Config, 1)
-	releaseCheck := make(chan struct{})
-	checkDone := make(chan struct{})
-	check := func(_ context.Context, cfg autoupdate.Config) (string, bool, error) {
-		started <- cfg
-		<-releaseCheck
-		close(checkDone)
-		return "1.1.0", true, nil
-	}
-
-	cfg := &config.Config{
-		AutoUpdate:        "true",
-		AutoUpdateRepo:    "group/project",
-		AutoUpdateTimeout: time.Minute,
-	}
-	returned := make(chan struct{})
-	go func() {
-		startStdioAutoUpdateWithCheck(t.Context(), cfg, check)
-		close(returned)
-	}()
-
-	select {
-	case <-returned:
-	case <-time.After(time.Second):
-		t.Fatal("startStdioAutoUpdate blocked waiting for the background check")
-	}
-
-	select {
-	case updateCfg := <-started:
-		if updateCfg.Repository != cfg.AutoUpdateRepo {
-			t.Fatalf("Repository = %q, want %q", updateCfg.Repository, cfg.AutoUpdateRepo)
-		}
-		if updateCfg.Timeout != cfg.AutoUpdateTimeout {
-			t.Fatalf("Timeout = %s, want %s", updateCfg.Timeout, cfg.AutoUpdateTimeout)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("background update check did not start")
-	}
-
-	select {
-	case <-checkDone:
-		t.Fatal("background update check completed before the test released it")
-	default:
-	}
-
-	close(releaseCheck)
-	select {
-	case <-checkDone:
-	case <-time.After(time.Second):
-		t.Fatal("background update check did not finish after release")
-	}
-}
-
-// TestNewUpdaterForTools_InvalidMode verifies that newUpdaterForTools
-// returns nil when the AUTO_UPDATE value cannot be parsed.
-func TestNewUpdaterForTools_InvalidMode(t *testing.T) {
-	cfg := &config.Config{AutoUpdate: "garbage"}
-	u := newUpdaterForTools(cfg)
-	if u != nil {
-		t.Error("expected nil updater for invalid mode")
-	}
-}
-
-// TestNewUpdaterForTools_DisabledMode verifies that newUpdaterForTools
-// returns nil when auto-update is disabled.
-func TestNewUpdaterForTools_DisabledMode(t *testing.T) {
-	cfg := &config.Config{AutoUpdate: "false"}
-	u := newUpdaterForTools(cfg)
-	if u != nil {
-		t.Error("expected nil updater for disabled mode")
-	}
-}
-
-// TestNewUpdaterForTools_NewUpdaterError verifies that newUpdaterForTools
-// returns nil when NewUpdater fails (e.g. version="dev").
-func TestNewUpdaterForTools_NewUpdaterError(t *testing.T) {
-	cfg := &config.Config{
-		AutoUpdate:     "true",
-		AutoUpdateRepo: "group/project",
-		// version is "dev" by default in tests → NewUpdater rejects it.
-	}
-	u := newUpdaterForTools(cfg)
-	if u != nil {
-		t.Error("expected nil updater when version is 'dev'")
-	}
-}
-
-// TestNewUpdaterForTools_Success verifies that newUpdaterForTools returns
-// a valid Updater when all configuration is correct.
-func TestNewUpdaterForTools_Success(t *testing.T) {
-	oldVersion := version
-	version = "1.0.0"
-	t.Cleanup(func() { version = oldVersion })
-
-	cfg := &config.Config{
-		AutoUpdate:     "true",
-		AutoUpdateRepo: "group/project",
-	}
-	u := newUpdaterForTools(cfg)
-	if u == nil {
-		t.Fatal("expected non-nil updater")
-	}
-}
-
-// TestStartAutoUpdate_InvalidMode verifies that startAutoUpdate returns
-// immediately when the AUTO_UPDATE value is invalid.
-func TestStartAutoUpdate_InvalidMode(t *testing.T) {
-	cfg := &config.Config{AutoUpdate: "bad-mode"}
-	// Should log warning and return.
-	startAutoUpdate(context.Background(), cfg)
-}
-
-// TestStartAutoUpdate_DisabledMode verifies that startAutoUpdate returns
-// immediately when auto-update is disabled.
-func TestStartAutoUpdate_DisabledMode(t *testing.T) {
-	cfg := &config.Config{AutoUpdate: "false"}
-	// Should return without starting periodic checks.
-	startAutoUpdate(context.Background(), cfg)
-}
-
-// TestStartAutoUpdate_NewUpdaterError verifies that startAutoUpdate returns
-// gracefully when NewUpdater fails (version="dev").
-func TestStartAutoUpdate_NewUpdaterError(t *testing.T) {
-	cfg := &config.Config{
-		AutoUpdate:     "true",
-		AutoUpdateRepo: "group/project",
-		// version is "dev" → NewUpdater fails.
-	}
-	startAutoUpdate(context.Background(), cfg)
-}
-
-// TestStartAutoUpdate_Success verifies that startAutoUpdate successfully
-// creates an Updater and starts the periodic check goroutine.
-func TestStartAutoUpdate_Success(t *testing.T) {
-	oldVersion := version
-	version = "1.0.0"
-	t.Cleanup(func() { version = oldVersion })
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	cfg := &config.Config{
-		AutoUpdate:         "check",
-		AutoUpdateRepo:     "group/project",
-		AutoUpdateInterval: time.Hour,
-	}
-	// Should succeed and start background goroutine.
-	startAutoUpdate(ctx, cfg)
-
-	// Cancel context to stop the periodic checker.
-	cancel()
-}
-
 // TestRunStdio_PingSucceeds verifies the success path for Ping in runStdio,
 // where the GitLab mock returns a valid version response.
 func TestRunStdio_PingSucceeds(t *testing.T) {
@@ -2288,7 +2054,6 @@ func TestRunStdio_PingSucceeds(t *testing.T) {
 	t.Setenv("GITLAB_URL", srv.URL)
 	t.Setenv("GITLAB_TOKEN", testToken)
 	t.Setenv("META_TOOLS", "false")
-	t.Setenv("AUTO_UPDATE", "false")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -2713,38 +2478,6 @@ func TestServeHTTP_InvalidGitLabURLHeader(t *testing.T) {
 	}
 }
 
-// TestRunHTTP_AutoUpdateDisabled verifies that runHTTP works correctly
-// when auto-update is explicitly disabled.
-func TestRunHTTP_AutoUpdateDisabled(t *testing.T) {
-	srv := newMockGitLabServer(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- runWithContext(ctx, &httpConfig{
-			addr:           ":0",
-			gitlabURL:      srv.URL,
-			metaTools:      false,
-			maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
-			sessionTimeout: config.DefaultSessionTimeout,
-			autoUpdate:     "false",
-		})
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		if err != nil {
-			t.Fatalf("runWithContext: %v", err)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("timeout waiting for shutdown")
-	}
-}
-
 // TestServeHTTP_MissingToken verifies that the HTTP handler rejects requests
 // without an authentication token by returning nil from the server factory.
 func TestServeHTTP_MissingToken(t *testing.T) {
@@ -2812,38 +2545,6 @@ func TestServeHTTP_MissingToken(t *testing.T) {
 		}
 	case <-time.After(testHTTPLivenessTimeout):
 		t.Fatal("serveHTTP did not shut down in time")
-	}
-}
-
-// TestRunHTTP_AutoUpdateInvalid verifies that runHTTP continues even when
-// the auto-update mode is invalid (logs warning, does not block startup).
-func TestRunHTTP_AutoUpdateInvalid(t *testing.T) {
-	srv := newMockGitLabServer(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- runWithContext(ctx, &httpConfig{
-			addr:           ":0",
-			gitlabURL:      srv.URL,
-			metaTools:      false,
-			maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
-			sessionTimeout: config.DefaultSessionTimeout,
-			autoUpdate:     "bogus",
-		})
-	}()
-
-	time.Sleep(200 * time.Millisecond)
-	cancel()
-
-	select {
-	case err := <-errCh:
-		if err != nil {
-			t.Fatalf("runWithContext: %v", err)
-		}
-	case <-time.After(10 * time.Second):
-		t.Fatal("timeout waiting for shutdown")
 	}
 }
 
@@ -3170,63 +2871,6 @@ func TestParseLogLevel(t *testing.T) {
 			}
 		})
 	}
-}
-
-// TestExtractHost verifies host extraction from URLs.
-func TestExtractHost(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"https://gitlab.example.com", "gitlab.example.com"},
-		{"https://gitlab.example.com:443/path", "gitlab.example.com:443"},
-		{"http://localhost:8080", "localhost:8080"},
-		{"", ""},
-		{"://invalid", ""},
-	}
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			if got := extractHost(tt.input); got != tt.want {
-				t.Errorf("extractHost(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestAutoUpdateRedactHandler_RedactsOnlyAutoUpdateLogs verifies that the
-// handler redacts the auto-update URL only in log entries prefixed with
-// "autoupdate:" and leaves other entries untouched.
-func TestAutoUpdateRedactHandler_RedactsOnlyAutoUpdateLogs(t *testing.T) {
-	var buf strings.Builder
-	base := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-	h := &autoUpdateRedactHandler{
-		base:          base,
-		redactStrings: []string{"https://gitlab.example.com", "gitlab.example.com"},
-	}
-	logger := slog.New(h)
-
-	// Auto-update log: URL should be redacted.
-	buf.Reset()
-	logger.Info("autoupdate: check failed", "error", "Get https://gitlab.example.com/api/v4/releases: timeout")
-	if strings.Contains(buf.String(), "gitlab.example.com") {
-		t.Errorf("auto-update log should redact URL, got: %s", buf.String())
-	}
-	if !strings.Contains(buf.String(), "[REDACTED]") {
-		t.Errorf("auto-update log should contain [REDACTED], got: %s", buf.String())
-	}
-
-	// Regular log: URL should NOT be redacted.
-	buf.Reset()
-	logger.Info("connecting to gitlab", "url", "https://gitlab.example.com")
-	if !strings.Contains(buf.String(), "gitlab.example.com") {
-		t.Errorf("regular log should preserve URL, got: %s", buf.String())
-	}
-}
-
-// TestSetupAutoUpdateRedaction_NoOp verifies that setupAutoUpdateRedaction
-// does not panic with an empty URL.
-func TestSetupAutoUpdateRedaction_NoOp(t *testing.T) {
-	setupAutoUpdateRedaction("")
 }
 
 // newMockGitLabServerWithUser creates a mock GitLab that handles both
@@ -3715,7 +3359,7 @@ func TestRunHTTP_InvalidAuthMode(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
 		authMode:       "saml",
-		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
+		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
 	if err == nil {
@@ -3730,12 +3374,11 @@ func TestRunHTTP_InvalidAuthMode(t *testing.T) {
 // fixed GitLab URL and cannot silently fall back to HTTP multi-instance mode.
 func TestRunHTTP_OAuthRequiresGitLabURL(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
-		gitlabURL:         "",
-		maxHTTPClients:    config.DefaultMaxHTTPClients,
-		sessionTimeout:    config.DefaultSessionTimeout,
-		autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
-		authMode:          "oauth",
-		oauthCacheTTL:     config.DefaultOAuthCacheTTL,
+		gitlabURL:      "",
+		maxHTTPClients: config.DefaultMaxHTTPClients,
+		sessionTimeout: config.DefaultSessionTimeout,
+		authMode:       "oauth",
+		oauthCacheTTL:  config.DefaultOAuthCacheTTL,
 	})
 	if err == nil {
 		t.Fatal("expected error when OAuth mode has no fixed GitLab URL")
@@ -3753,7 +3396,7 @@ func TestRunHTTP_OAuthCacheTTL_BelowMin(t *testing.T) {
 		authMode:       "oauth",
 		publicURL:      "http://localhost:8080",
 		oauthCacheTTL:  10 * time.Second,
-		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
+		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
 	if err == nil {
@@ -3772,7 +3415,7 @@ func TestRunHTTP_OAuthCacheTTL_AboveMax(t *testing.T) {
 		authMode:       "oauth",
 		publicURL:      "http://localhost:8080",
 		oauthCacheTTL:  5 * time.Hour,
-		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
+		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
 	if err == nil {
@@ -3788,7 +3431,7 @@ func TestRunHTTP_OAuthCacheTTL_AboveMax(t *testing.T) {
 func TestRunHTTP_SessionTimeoutExceedsMax(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
 		gitlabURL:      "https://gitlab.example.com",
-		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
+		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: 48 * time.Hour,
 	})
 	if err == nil {
@@ -3833,7 +3476,7 @@ func TestRunHTTP_MissingGitLabURL(t *testing.T) {
 		// ":http" — real port 80 — and the test's outcome then depends on
 		// whether anything on the machine already owns it.
 		addr:           "127.0.0.1:0",
-		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
+		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
 	if err != nil {
@@ -3841,62 +3484,11 @@ func TestRunHTTP_MissingGitLabURL(t *testing.T) {
 	}
 }
 
-// TestRunHTTP_AutoUpdateTimeoutBelowMin verifies that runHTTP rejects an
-// auto-update-timeout below the minimum threshold.
-func TestRunHTTP_AutoUpdateTimeoutBelowMin(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
-		gitlabURL:         "https://gitlab.example.com",
-		maxHTTPClients:    config.DefaultMaxHTTPClients,
-		sessionTimeout:    config.DefaultSessionTimeout,
-		autoUpdateTimeout: 1 * time.Second,
-	})
-	if err == nil {
-		t.Fatal("expected error for auto-update-timeout below minimum")
-	}
-	if !strings.Contains(err.Error(), "auto-update-timeout") {
-		t.Errorf("error should mention auto-update-timeout, got: %v", err)
-	}
-}
-
-// TestRunHTTP_AutoUpdateTimeoutAboveMax verifies that runHTTP rejects an
-// auto-update-timeout above the maximum threshold.
-func TestRunHTTP_AutoUpdateTimeoutAboveMax(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
-		gitlabURL:         "https://gitlab.example.com",
-		maxHTTPClients:    config.DefaultMaxHTTPClients,
-		sessionTimeout:    config.DefaultSessionTimeout,
-		autoUpdateTimeout: 15 * time.Minute,
-	})
-	if err == nil {
-		t.Fatal("expected error for auto-update-timeout above maximum")
-	}
-	if !strings.Contains(err.Error(), "auto-update-timeout") {
-		t.Errorf("error should mention auto-update-timeout, got: %v", err)
-	}
-}
-
-// TestRunHTTP_AutoUpdateTimeoutZero verifies that runHTTP rejects an
-// explicit zero timeout instead of silently falling back to a default.
-func TestRunHTTP_AutoUpdateTimeoutZero(t *testing.T) {
-	err := runHTTP(context.Background(), &httpConfig{
-		gitlabURL:         "https://gitlab.example.com",
-		maxHTTPClients:    config.DefaultMaxHTTPClients,
-		sessionTimeout:    config.DefaultSessionTimeout,
-		autoUpdateTimeout: 0,
-	})
-	if err == nil {
-		t.Fatal("expected error for zero auto-update-timeout")
-	}
-	if !strings.Contains(err.Error(), "auto-update-timeout") {
-		t.Errorf("error should mention auto-update-timeout, got: %v", err)
-	}
-}
-
 // TestRunHTTP_InvalidGitLabURL verifies that runHTTP rejects a non-HTTP(S) URL.
 func TestRunHTTP_InvalidGitLabURL(t *testing.T) {
 	err := runHTTP(context.Background(), &httpConfig{
 		gitlabURL:      "ftp://gitlab.example.com",
-		maxHTTPClients: config.DefaultMaxHTTPClients, autoUpdateTimeout: config.DefaultAutoUpdateTimeout,
+		maxHTTPClients: config.DefaultMaxHTTPClients,
 		sessionTimeout: config.DefaultSessionTimeout,
 	})
 	if err == nil {
@@ -4119,71 +3711,6 @@ func TestCrossOriginProtectionMiddleware_AllowsSameOriginPost(t *testing.T) {
 	if !called {
 		t.Fatal("inner handler was not called")
 	}
-}
-
-// TestAutoUpdateRedactHandler_WithAttrs verifies that WithAttrs returns
-// a new handler that preserves the redact strings configuration.
-func TestAutoUpdateRedactHandler_WithAttrs(t *testing.T) {
-	var buf strings.Builder
-	base := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-	h := &autoUpdateRedactHandler{
-		base:          base,
-		redactStrings: []string{"https://secret.example.com"},
-	}
-
-	derived := h.WithAttrs([]slog.Attr{slog.String("fixed", "value")})
-	logger := slog.New(derived)
-
-	buf.Reset()
-	logger.Info("autoupdate: checking", "url", "https://secret.example.com/api")
-	if strings.Contains(buf.String(), "secret.example.com") {
-		t.Errorf("WithAttrs handler should still redact, got: %s", buf.String())
-	}
-}
-
-// TestAutoUpdateRedactHandler_WithGroup verifies that WithGroup returns
-// a new handler that preserves the redact strings configuration.
-func TestAutoUpdateRedactHandler_WithGroup(t *testing.T) {
-	var buf strings.Builder
-	base := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
-	h := &autoUpdateRedactHandler{
-		base:          base,
-		redactStrings: []string{"https://secret.example.com"},
-	}
-
-	derived := h.WithGroup("mygroup")
-	logger := slog.New(derived)
-
-	buf.Reset()
-	logger.Info("autoupdate: checking", "url", "https://secret.example.com/api")
-	if strings.Contains(buf.String(), "secret.example.com") {
-		t.Errorf("WithGroup handler should still redact, got: %s", buf.String())
-	}
-}
-
-// TestSetupAutoUpdateRedaction_WithURL verifies that setupAutoUpdateRedaction
-// installs a redacting handler when given a non-empty URL.
-func TestSetupAutoUpdateRedaction_WithURL(t *testing.T) {
-	// Use a concrete handler (not the initial defaultHandler) to mirror
-	// production, where main() sets a JSONHandler before calling
-	// setupAutoUpdateRedaction.  Restoring Go's initial defaultHandler via
-	// slog.SetDefault creates a recursive deadlock because SetDefault
-	// bridges to log.SetOutput, forming a cycle:
-	//   defaultHandler → log.output → handlerWriter → defaultHandler.
-	safe := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	slog.SetDefault(safe)
-	t.Cleanup(func() { slog.SetDefault(safe) })
-
-	setupAutoUpdateRedaction("https://private-gitlab.example.com")
-
-	var buf strings.Builder
-	// The default logger was replaced by setupAutoUpdateRedaction.
-	// We can verify the handler type is wrapped.
-	handler := slog.Default().Handler()
-	if _, ok := handler.(*autoUpdateRedactHandler); !ok {
-		t.Error("expected default handler to be autoUpdateRedactHandler after setup")
-	}
-	_ = buf
 }
 
 // TestRemoveNonReadOnlyTools verifies that tools.RemoveNonReadOnlyTools strips
@@ -6838,7 +6365,7 @@ func TestToolsList_FitsInOnePage(t *testing.T) {
 	server, err := createServer(t.Context(), sharedCreateServerClient(t), &config.ServerConfig{
 		ToolSurface: config.ToolSurfaceIndividual,
 		Tier:        edition.Ultimate,
-	}, nil)
+	})
 	if err != nil {
 		t.Fatalf("createServer: %v", err)
 	}

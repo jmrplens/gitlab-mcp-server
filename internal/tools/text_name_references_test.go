@@ -41,10 +41,8 @@ func TestCatalogTextFields_NameReferencesResolve(t *testing.T) {
 			valid[action.IndividualTool.Name] = true
 		}
 	}
-	// Server-maintenance specs need an updater to materialize; their names
-	// are stable, so they are pinned rather than constructed.
-	valid["gitlab_server_check_update"] = true
-	valid["gitlab_server_apply_update"] = true
+	// The catalog is the second source: it carries every action projected onto
+	// the individual and meta surfaces, which the domain specs above do not.
 	for _, action := range catalog.Actions() {
 		if action.IndividualTool.Name != "" {
 			valid[action.IndividualTool.Name] = true

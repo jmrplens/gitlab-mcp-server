@@ -46,13 +46,10 @@ stdio mode. Every flag and variable — HTTP mode, OAuth, read-only and safe
 modes, tool surfaces, tiers — is documented in the
 [configuration reference](https://jmrp.io/docs/gitlab-mcp-server/configuration/).
 
-## Auto-update is off under npm
+## Updating
 
-The server can update itself in place, but that is disabled here: npm owns the
-binary, and letting it replace itself would desynchronize what npm has
-recorded. Update with your package manager instead (`npm update -g
-@jmrp.io/gitlab-mcp-server`). Setting `AUTO_UPDATE` explicitly still takes
-effect if you have a reason to override it.
+`npm update -g @jmrp.io/gitlab-mcp-server`. The server never replaces its own
+binary, on this or any other channel.
 
 ## Supported platforms
 

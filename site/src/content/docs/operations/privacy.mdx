@@ -37,16 +37,21 @@ same software runs on a machine the maintainer operates.
   [GitLab Privacy Statement](https://about.gitlab.com/privacy/) (for
   GitLab.com) or by your organization's own policies (for self-managed
   instances).
-- **GitHub (auto-update only).** When [auto-update](/gitlab-mcp-server/operations/auto-update/)
-  is enabled (the default for standalone binaries), the server periodically
-  checks GitHub Releases for new versions and downloads signed binaries. No
-  personal data is sent — it is a standard HTTPS request to `api.github.com`,
-  subject to the [GitHub Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
-  The [Claude Desktop extension](/gitlab-mcp-server/claude-desktop/) ships
-  with auto-update **disabled**; updates arrive through new extension
-  versions instead.
 
-There are no other network destinations.
+The GitLab instance you configure is the only host the server contacts. There
+is no update check, no licence key to validate, and no telemetry, so there are
+no other network destinations at all.
+
+The update check is the part that changed, and this page would be misleading
+if it simply stopped mentioning it. Releases up to and including v2.7.5 shipped a built-in
+auto-update that was **on by default**: a standalone binary asked
+`api.github.com` for the latest release on startup and could download and
+install a replacement for itself. It has been removed rather than defaulted
+off. Every channel that installs the server already owns the binary (npm,
+Homebrew, winget, the container image, the Claude Desktop extension), and a
+process holding your GitLab token had no business also fetching and executing
+code at runtime. If you opened `api.github.com` on a proxy for that check, you
+can close it again.
 
 ## Hosted endpoint
 

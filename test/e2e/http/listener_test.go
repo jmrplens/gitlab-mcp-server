@@ -70,7 +70,6 @@ func startServerWithClient(t *testing.T, client *http.Client, baseURL string, fl
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, append([]string{"--http"}, flags...)...)
 	cmd.Env = append(os.Environ(),
-		"AUTO_UPDATE=false",
 		"LOG_LEVEL=info",
 		"TOOL_SURFACE=dynamic",
 	)

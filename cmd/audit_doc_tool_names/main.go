@@ -31,7 +31,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
@@ -155,25 +154,12 @@ func registeredToolNames() (map[string]struct{}, error) {
 
 	names := make(map[string]struct{})
 
-	// Mirror cmd/server's registerToolSurface: each surface pairs its catalog
-	// registration with the MCP maintenance tools, which is where gitlab_server
-	// and the gitlab_server_* individual tools come from. Registering only the
-	// catalog would make this audit report those names as unknown.
-	// A configured updater is what adds check_update and apply_update; with a
-	// nil one only the status tool registers, and the docs that describe
-	// self-update would look like they named tools that do not exist.
-	updater, updaterErr := autoupdate.NewUpdater(autoupdate.Config{
-		Repository:     "jmrplens/gitlab-mcp-server",
-		CurrentVersion: auditVersion,
-	})
-	if updaterErr != nil {
-		return nil, fmt.Errorf("create updater for audit: %w", updaterErr)
-	}
-
+	// Mirror cmd/server's registerToolSurface, so gitlab_server and the
+	// gitlab_server_* individual tools are in the collected set. Registering
+	// only the catalog would make this audit report those names as unknown.
 	individual := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion},
 		&mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
 	tools.RegisterAll(individual, client, edition.Ultimate)
-	tools.RegisterServerMaintenanceSurfaceTools(individual, updater)
 	if collectErr := collect(individual, names); collectErr != nil {
 		return nil, collectErr
 	}
@@ -183,7 +169,7 @@ func registeredToolNames() (map[string]struct{}, error) {
 	if metaErr := tools.RegisterAllMeta(meta, client, edition.Ultimate); metaErr != nil {
 		return nil, fmt.Errorf("register meta tools: %w", metaErr)
 	}
-	tools.RegisterMCPMeta(meta, client, updater)
+	tools.RegisterMCPMeta(meta, client)
 	tools.RegisterMetaStandaloneTools(meta, client)
 	if collectErr := collect(meta, names); collectErr != nil {
 		return nil, collectErr

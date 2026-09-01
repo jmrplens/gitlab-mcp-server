@@ -30,7 +30,7 @@ case "$MODE" in
   binary)
     go build -o /tmp/gitlab-mcp-server-validate ./cmd/server
     /tmp/gitlab-mcp-server-validate --http --http-addr="127.0.0.1:${PORT}" \
-      --gitlab-url="${GITLAB_URL}" --stateless --json-response --auto-update=false &
+      --gitlab-url="${GITLAB_URL}" --stateless --json-response &
     SERVER_PID=$!
     cleanup() { kill "${SERVER_PID}" 2>/dev/null || true; }
     ;;
@@ -39,7 +39,7 @@ case "$MODE" in
     CONTAINER_ID=$(docker run -d --rm -p "${PORT}:8080" \
       gitlab-mcp-server:stateless-validate \
       --http --http-addr=0.0.0.0:8080 --gitlab-url="${GITLAB_URL}" \
-      --stateless --json-response --auto-update=false)
+      --stateless --json-response)
     cleanup() { docker stop "${CONTAINER_ID}" >/dev/null 2>&1 || true; }
     ;;
   *)

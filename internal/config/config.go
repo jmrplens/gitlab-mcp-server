@@ -3,7 +3,7 @@
 //
 // Configuration comes from environment variables, .env files, and CLI flags in
 // cmd/server. The package centralizes defaults and bounds for stdio mode, HTTP
-// mode, OAuth token verification, auto-update behavior, upload limits, safe
+// mode, OAuth token verification, upload limits, safe
 // mode, read-only mode, rate limiting, tool surfaces, capability surfaces, and
 // meta-tool schema detail.
 //
@@ -56,15 +56,6 @@ const (
 	DefaultOAuthCacheTTL = 15 * time.Minute
 	MinOAuthCacheTTL     = 1 * time.Minute
 	MaxOAuthCacheTTL     = 2 * time.Hour
-)
-
-// Auto-update defaults.
-const (
-	DefaultAutoUpdateRepo     = "jmrplens/gitlab-mcp-server"
-	DefaultAutoUpdateInterval = 1 * time.Hour
-	DefaultAutoUpdateTimeout  = 60 * time.Second
-	MinAutoUpdateTimeout      = 5 * time.Second
-	MaxAutoUpdateTimeout      = 10 * time.Minute
 )
 
 // DefaultRateLimitBurst is the bucket size used when rps > 0 and the operator
@@ -210,11 +201,6 @@ type Config struct {
 	// SocketMode is the permission bits applied to a unix socket named by
 	// the listen address. 0 means the default, [DefaultSocketMode].
 	SocketMode os.FileMode
-
-	AutoUpdate         string        // Auto-update mode: "true" (auto), "check" (log-only), "false" (disabled)
-	AutoUpdateRepo     string        // GitLab project path for update checks
-	AutoUpdateInterval time.Duration // How often to check for updates (HTTP mode)
-	AutoUpdateTimeout  time.Duration // Timeout for startup/background update checks
 
 	AuthMode      string        // Auth mode for HTTP: "legacy" (default) or "oauth"
 	OAuthCacheTTL time.Duration // OAuth token cache TTL (HTTP mode, oauth auth mode)
@@ -376,7 +362,7 @@ func (s *ServerConfig) Enterprise() bool {
 	return s.Tier.IsEnterprise()
 }
 
-// EnvFileName is the name of the env file where the setup wizard stores secrets.
+// EnvFileName is the name of the env file this server reads credentials from.
 const EnvFileName = ".gitlab-mcp-server.env"
 
 // DefaultGitLabURL is the GitLab instance used when GITLAB_URL is unset.
@@ -384,17 +370,30 @@ const DefaultGitLabURL = "https://gitlab.com"
 
 // Load reads configuration from environment variables.
 // It attempts to load a .env file from the current directory first, then
-// falls back to ~/.gitlab-mcp-server.env (written by the setup wizard) for
+// falls back to ~/.gitlab-mcp-server.env (written by hand) for
 // secrets not provided via the environment or CWD .env.
-func Load() (*Config, error) {
+// LoadEnvFiles populates the process environment from the dotenv files this
+// server reads, and is safe to call more than once.
+//
+// It is separate from [Load] because something has to consult these values
+// before a full configuration exists. The startup path decides whether to show
+// a first-run screen instead of serving, and that decision must be made against
+// the same environment Load will see: a deployment that put its credentials in
+// ~/.gitlab-mcp-server.env is configured, and a check reading only os.Getenv
+// would conclude the opposite and refuse to start.
+//
+// Both loads are best-effort. A missing file is the normal case, and godotenv
+// does not overwrite a variable that is already set, so the precedence is:
+// explicit environment beats a CWD .env beats the file in $HOME.
+func LoadEnvFiles() {
 	_ = godotenv.Load()
-
-	// Fallback: load secrets from the wizard-generated env file in $HOME.
-	// godotenv does not overwrite variables already set, so explicit env
-	// vars and CWD .env values take precedence.
 	if home, err := os.UserHomeDir(); err == nil {
 		_ = godotenv.Load(filepath.Join(home, EnvFileName))
 	}
+}
+
+func Load() (*Config, error) {
+	LoadEnvFiles()
 
 	bools, err := loadBooleanEnv()
 	if err != nil {
@@ -417,11 +416,6 @@ func Load() (*Config, error) {
 	}
 
 	limits, err := loadLimitEnv()
-	if err != nil {
-		return nil, err
-	}
-
-	updates, err := loadAutoUpdateEnv()
 	if err != nil {
 		return nil, err
 	}
@@ -461,10 +455,6 @@ func Load() (*Config, error) {
 		SessionTimeout:     limits.sessionTimeout,
 		RevalidateInterval: limits.revalidateInterval,
 		PoolIdleTimeout:    limits.poolIdleTimeout,
-		AutoUpdate:         updates.mode,
-		AutoUpdateRepo:     updates.repo,
-		AutoUpdateInterval: updates.interval,
-		AutoUpdateTimeout:  updates.timeout,
 		AuthMode:           auth.mode,
 		PublicURL:          auth.publicURL,
 		OAuthCacheTTL:      auth.oauthCacheTTL,
@@ -497,13 +487,6 @@ type limitEnv struct {
 	sessionTimeout     time.Duration
 	revalidateInterval time.Duration
 	poolIdleTimeout    time.Duration
-}
-
-type autoUpdateEnv struct {
-	mode     string
-	repo     string
-	interval time.Duration
-	timeout  time.Duration
 }
 
 type authEnv struct {
@@ -644,24 +627,6 @@ func parseBoundedDurationEnv(name string, defaultValue, maxValue time.Duration) 
 	return value, nil
 }
 
-func loadAutoUpdateEnv() (autoUpdateEnv, error) {
-	values := autoUpdateEnv{mode: os.Getenv("AUTO_UPDATE"), repo: os.Getenv("AUTO_UPDATE_REPO")}
-	if values.mode == "" {
-		values.mode = "true"
-	}
-	if values.repo == "" {
-		values.repo = DefaultAutoUpdateRepo
-	}
-	var err error
-	if values.interval, err = parseDuration(os.Getenv("AUTO_UPDATE_INTERVAL"), DefaultAutoUpdateInterval); err != nil {
-		return autoUpdateEnv{}, fmt.Errorf("invalid AUTO_UPDATE_INTERVAL value: %w", err)
-	}
-	if values.timeout, err = parseDuration(os.Getenv("AUTO_UPDATE_TIMEOUT"), DefaultAutoUpdateTimeout); err != nil {
-		return autoUpdateEnv{}, fmt.Errorf("invalid AUTO_UPDATE_TIMEOUT value: %w", err)
-	}
-	return values, nil
-}
-
 func loadAuthEnv() (authEnv, error) {
 	mode := os.Getenv("AUTH_MODE")
 	if mode == "" {
@@ -775,9 +740,6 @@ func validateCapabilitySurface(capabilitySurface string) error {
 
 func (c *Config) validateDurationsAndRates() error {
 	if err := validateDurationRange("OAUTH_CACHE_TTL", c.OAuthCacheTTL, MinOAuthCacheTTL, MaxOAuthCacheTTL); err != nil {
-		return err
-	}
-	if err := validateDurationRange("AUTO_UPDATE_TIMEOUT", c.AutoUpdateTimeout, MinAutoUpdateTimeout, MaxAutoUpdateTimeout); err != nil {
 		return err
 	}
 	if c.RateLimitRPS < 0 {

@@ -88,12 +88,11 @@ export HTTP_PROXY=http://proxy.corp.example.com:8080
 export NO_PROXY=localhost,127.0.0.1,.internal.corp
 ```
 
-| Síntoma                                              | Causa                                                 | Solución                                                                                            |
-| ---------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Timeout de conexión detrás de red corporativa        | Proxy no configurado                                  | Establece `HTTPS_PROXY` / `HTTP_PROXY`                                                              |
-| El proxy funciona con `curl` pero no con el servidor | Vars de entorno no exportadas al proceso del servidor | Pásalas en `.env`, Docker `environment:`, o los secretos de tu plataforma                           |
-| `CONNECT` rechazado por proxy para `api.github.com`  | El proxy deniega salida a GitHub (auto-update)        | Establece `AUTO_UPDATE=false` o añade `github.com` y `objects.githubusercontent.com` a la whitelist |
-| GitLab interno enrutado a través de proxy externo    | Falta `NO_PROXY`                                      | Añade tu hostname de GitLab a `NO_PROXY`                                                            |
+| Síntoma                                              | Causa                                                 | Solución                                                                  |
+| ---------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------- |
+| Timeout de conexión detrás de red corporativa        | Proxy no configurado                                  | Establece `HTTPS_PROXY` / `HTTP_PROXY`                                    |
+| El proxy funciona con `curl` pero no con el servidor | Vars de entorno no exportadas al proceso del servidor | Pásalas en `.env`, Docker `environment:`, o los secretos de tu plataforma |
+| GitLab interno enrutado a través de proxy externo    | Falta `NO_PROXY`                                      | Añade tu hostname de GitLab a `NO_PROXY`                                  |
 
 ### Proxy inverso (modo HTTP)
 
@@ -121,16 +120,16 @@ Cuando se ejecuta el servidor MCP detrás de nginx, Caddy, o un balanceador clou
 | Síntoma                                                             | Causa                                                                                                                                                                                                                                                                                                                                | Solución                                                                                                                                                                                                                                                                 |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `the @jmrp.io/gitlab-mcp-server-linux-x64 package is not installed` | En Alpine es intencionado: los paquetes de Linux declaran `libc: glibc` y los binarios publicados necesitan el cargador dinámico de glibc, así que npm los omite sobre musl. En una distribución con glibc significa que la instalación omitió las dependencias opcionales (`--no-optional`, o un lockfile resuelto en otro sistema) | Sobre musl, usa la imagen de contenedor `ghcr.io/jmrplens/gitlab-mcp-server` (compilada contra musl) o compila desde el código fuente: la publicación no está rota. Sobre glibc, reinstala sin `--no-optional`, o borra `node_modules` y el lockfile y vuelve a instalar |
-| Las actualizaciones nunca llegan al ejecutar con `npx`              | El lanzador fija `AUTO_UPDATE=false`: el binario lo gestiona npm                                                                                                                                                                                                                                                                     | Es lo esperado. Actualiza con npm, o define `AUTO_UPDATE` explícitamente para anular al lanzador                                                                                                                                                                         |
+| Las actualizaciones nunca llegan al ejecutar con `npx`              | El servidor no se actualiza a sí mismo, y el binario lo gestiona npm                                                                                                                                                                                                                                                                 | Es lo esperado. Actualiza con npm, o añade `@latest` a la spec de `npx` para que resuelva de nuevo en lugar de reutilizar su caché                                                                                                                                       |
 
-## Actualización automática
+## Actualizar
 
-| Síntoma                                                   | Causa                                            | Solución                                                                                     |
-| --------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| Actualización detectada pero no aplicada                  | Modo es solo `check`                             | Establece `AUTO_UPDATE=true` para habilitar la aplicación automática                         |
-| Sigue ejecutando la versión antigua tras la actualización | Proceso no reiniciado (Windows)                  | Reinicia el servidor o usa `gitlab-mcp-server --shutdown` para terminar todas las instancias |
-| No se puede reemplazar el binario (archivo bloqueado)     | Las instancias en ejecución mantienen el archivo | Ejecuta `gitlab-mcp-server --shutdown` para terminar todas las instancias primero            |
-| Error de red alcanzando GitHub                            | Firewall o proxy bloqueando                      | Verifica la conectividad a `github.com` desde el servidor                                    |
+El servidor no se actualiza a sí mismo, así que actualizar es lo que haga tu canal de instalación más un reinicio.
+
+| Síntoma                                               | Causa                                            | Solución                                                                                                |
+| ----------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| Sigue ejecutando la versión antigua tras actualizar   | El proceso antiguo no se reinició                | Reinicia el servidor, o ejecuta `gitlab-mcp-server --shutdown` para terminar antes todas las instancias |
+| No se puede reemplazar el binario (archivo bloqueado) | Las instancias en ejecución mantienen el archivo | Ejecuta `gitlab-mcp-server --shutdown` para terminar todas las instancias y después reemplázalo         |
 
 ## Modo servidor HTTP
 

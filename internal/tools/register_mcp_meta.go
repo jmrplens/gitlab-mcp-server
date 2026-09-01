@@ -1,40 +1,39 @@
 package tools
 
 import (
-	"context"
 	"log/slog"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/autoupdate"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncompat"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/health"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/serverupdate"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// RegisterMCPMeta registers the gitlab_server meta-tool consolidating MCP
-// server health/status and update operations. If updater is nil, only
-// the status action is available. Catalog construction failures are
-// logged and the function returns without registering.
-func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client, updater *autoupdate.Updater) {
+// RegisterMCPMeta registers the gitlab_server meta-tool carrying MCP server
+// health and status. Catalog construction failures are logged and the
+// function returns without registering.
+func RegisterMCPMeta(server *mcp.Server, client *gitlabclient.Client) {
 	catalog := actioncatalog.NewCatalog()
-	if err := catalog.AddGroup(BuildMCPActionGroup(client, updater)); err != nil {
+	if err := catalog.AddGroup(BuildMCPActionGroup(client)); err != nil {
 		slog.Error("failed to add MCP meta action group", "error", err)
 		return
 	}
 	RegisterMetaCatalog(server, catalog)
 }
 
-// BuildMCPActionGroup builds the registry group backing the
-// gitlab_server meta-tool. The group always exposes status and
-// health_check actions; when updater is non-nil it also exposes
-// check_update (read-only) and apply_update (destructive). The custom
-// description documents the available actions and their semantics for
-// the schema resource.
-func BuildMCPActionGroup(client *gitlabclient.Client, updater *autoupdate.Updater) actioncatalog.Group {
+// BuildMCPActionGroup builds the registry group backing the gitlab_server
+// meta-tool. The custom description documents the available actions and their
+// semantics for the schema resource.
+//
+// The group is read-only. It used to gain check_update and apply_update when a
+// self-updater was configured, and apply_update was the only destructive action
+// this server had that acted on the machine rather than on GitLab. Self-update
+// is gone: every distribution channel already owns the binary, and the update
+// path was the one place this server fetched and executed code at runtime.
+func BuildMCPActionGroup(client *gitlabclient.Client) actioncatalog.Group {
 	routes := actionMap{
 		"status":       routeAction(client, health.Check),
 		"health_check": routeAction(client, health.Check),
@@ -54,39 +53,15 @@ Errors: tool-level errors are rare — inspect the returned status / error field
 
 See also: gitlab_discover_project (resolve git remote URL → project_id), gitlab_admin (instance admin), gitlab_user (current user details and impersonation tokens).`
 
-	if updater != nil {
-		routes["check_update"] = route(wrapUpdaterAction(updater, serverupdate.Check))
-		routes["apply_update"] = destructiveRoute(wrapUpdaterAction(updater, serverupdate.Apply))
-
-		desc = `MCP server self-diagnostics, version, GitLab connectivity probe, and self-update. apply_update REPLACES the running binary on disk; on Linux/macOS the replacement is atomic, on Windows it is staged via a script. Read-only except apply_update (destructive).
-Valid actions: ` + validActionsString(routes) + `
-
-When to use: confirm the GitLab token works, check whether a newer server release is available, apply that update without leaving the editor.
-NOT for: GitLab instance admin (use gitlab_admin), git remote resolution (use gitlab_discover_project), CI runner health (use gitlab_runner).
-
-Returns:
-- status / health_check: {status, mcp_server_version, gitlab_url, gitlab_version, gitlab_revision, authenticated, username, user_id, response_time_ms, error}.
-- check_update: {update_available (bool), current_version, latest_version, release_url, release_notes, mode}.
-- apply_update: {applied (bool), previous_version, new_version, message}.
-Errors: connectivity / auth failures appear inside the diagnostics object (status / error). Update channel errors include the release fetch URL.
-
-- status / health_check: (no params)
-- check_update: (no params) — compares current binary version against the configured release feed.
-- apply_update: (no params) — downloads and applies the latest server release.
-
-See also: gitlab_discover_project (resolve git remote URL → project_id), gitlab_admin (GitLab instance admin), gitlab_user (current user identity).`
-	}
 	group := actioncatalog.NewGroup(actioncatalog.GroupOptions{
 		ToolName:    "gitlab_server",
 		Description: desc,
 		Icons:       toolutil.IconHealth,
-		ReadOnly:    updater == nil,
+		ReadOnly:    true,
 	})
-	actionSpecs := health.ActionSpecs(client)
-	if updater != nil {
-		actionSpecs = append(actionSpecs, serverupdate.ActionSpecs(updater)...)
-	}
-	specActions, specErr := actioncatalog.ActionsFromSpecs(actioncompat.ApplyToActionSpecs("gitlab_server", "server", actionSpecs))
+	specActions, specErr := actioncatalog.ActionsFromSpecs(
+		actioncompat.ApplyToActionSpecs("gitlab_server", "server", health.ActionSpecs(client)),
+	)
 	if specErr != nil {
 		slog.Error("failed to build MCP health action specs", "error", specErr)
 	}
@@ -102,18 +77,4 @@ See also: gitlab_discover_project (resolve git remote URL → project_id), gitla
 		group.SetAction(actioncatalog.Action{Name: name, Route: route})
 	}
 	return group
-}
-
-// wrapUpdaterAction wraps a function that takes an *autoupdate.Updater
-// (instead of *gitlabclient.Client) into an [actionFunc] for meta-tool
-// dispatch. Used by the self-update routes that need access to the
-// updater rather than the GitLab client.
-func wrapUpdaterAction[T, R any](updater *autoupdate.Updater, fn func(ctx context.Context, updater *autoupdate.Updater, input T) (R, error)) actionFunc {
-	return func(ctx context.Context, params map[string]any) (any, error) {
-		input, err := unmarshalParams[T](params)
-		if err != nil {
-			return nil, err
-		}
-		return fn(ctx, updater, input)
-	}
 }

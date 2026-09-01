@@ -27,13 +27,13 @@ type actionRoute = toolutil.ActionRoute
 // toolutil.
 type actionMap = toolutil.ActionMap
 
-// route and destructiveRoute are constructors for [toolutil.ActionRoute].
-// destructiveRoute additionally marks the route as destructive so the
-// meta-tool layer can apply confirmation prompts.
-var (
-	route            = toolutil.Route
-	destructiveRoute = toolutil.DestructiveRoute
-)
+// route constructs a [toolutil.ActionRoute].
+//
+// A destructiveRoute constructor sat beside it until the self-update actions
+// were removed: apply_update was the only route built here that needed marking
+// destructive, and every remaining destructive action carries the flag through
+// its own ActionSpec instead.
+var route = toolutil.Route
 
 // unmarshalParams decodes a params map into a typed Go value of type T
 // using [toolutil.UnmarshalParams]. Generic helper shared by every

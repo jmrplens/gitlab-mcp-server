@@ -155,7 +155,7 @@ func individualCatalogGroupEligible(group actioncatalog.Group, opts IndividualCa
 	switch group.SurfaceKind {
 	case actioncatalog.SurfaceKindMetaGroup, actioncatalog.SurfaceKindGitLabAction:
 		// Ordinary GitLab actions are part of the current individual surface.
-	case actioncatalog.SurfaceKindRuntimeUtility, actioncatalog.SurfaceKindInteractiveUtility, actioncatalog.SurfaceKindServerMaintenance:
+	case actioncatalog.SurfaceKindRuntimeUtility, actioncatalog.SurfaceKindInteractiveUtility:
 		if !opts.IncludeStandaloneUtilities {
 			return false
 		}

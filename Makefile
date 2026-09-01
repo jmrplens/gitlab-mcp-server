@@ -1069,7 +1069,6 @@ inspector:
 			-e GITLAB_URL="$${GITLAB_URL:-https://gitlab.com}" \
 			-e GITLAB_TOKEN="$$GITLAB_TOKEN" \
 			-e GITLAB_SKIP_TLS_VERIFY="$${GITLAB_SKIP_TLS_VERIFY:-false}" \
-			-e AUTO_UPDATE=false \
 			-e META_TOOLS=true \
 			-- $(INSPECTOR_BIN)
 
