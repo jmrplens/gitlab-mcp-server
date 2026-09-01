@@ -352,7 +352,9 @@ func (p *ServerPool) buildEntry(token, gitlabURL string, knownScopes []string) (
 	// the pool must forward it the same way: an OAuth access token is only
 	// valid as Bearer (GitLab rejects gloas- tokens in PRIVATE-TOKEN, which
 	// is what NewClientWithToken sends), while PATs work in both schemes.
-	newClient := gitlabclient.NewClientWithToken
+	newClient := func(baseURL, token string, skipTLSVerify bool) (*gitlabclient.Client, error) {
+		return gitlabclient.NewClientWithTokenRetries(baseURL, token, skipTLSVerify, p.cfg.DisableRetries)
+	}
 	if p.cfg.AuthMode == "oauth" {
 		newClient = gitlabclient.NewOAuthClientWithToken
 	}

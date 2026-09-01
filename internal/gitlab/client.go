@@ -178,6 +178,15 @@ func NewClient(cfg *config.Config) (*Client, error) {
 // The client includes a resilience transport that enables automatic recovery
 // when GitLab becomes available after being unreachable.
 func NewClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client, error) {
+	return NewClientWithTokenRetries(baseURL, token, skipTLSVerify, false)
+}
+
+// NewClientWithTokenRetries is [NewClientWithToken] with the retry policy
+// exposed: disableRetries turns off client-go's retryablehttp wrapper
+// (RetryMax 5, linear backoff), which unit tests need — a pooled client
+// probing a mock that answers 5xx otherwise sleeps through the whole
+// credential-check deadline instead of reading the answer it already has.
+func NewClientWithTokenRetries(baseURL, token string, skipTLSVerify, disableRetries bool) (*Client, error) {
 	base := buildBaseTransport(skipTLSVerify)
 
 	c := &Client{
@@ -189,10 +198,17 @@ func NewClientWithToken(baseURL, token string, skipTLSVerify bool) (*Client, err
 
 	sdkHTTPClient := &http.Client{Transport: apiTransport(base, c)}
 
-	inner, err := gl.NewClient(
-		token,
+	options := []gl.ClientOptionFunc{
 		gl.WithBaseURL(baseURL),
 		gl.WithHTTPClient(sdkHTTPClient),
+	}
+	if disableRetries {
+		options = append(options, gl.WithoutRetries())
+	}
+
+	inner, err := gl.NewClient(
+		token,
+		options...,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating gitlab client: %w", err)
