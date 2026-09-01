@@ -52,10 +52,13 @@ The MCP auth specification says a resource server MUST validate that access
 tokens were issued for it as the intended audience (RFC 8707 resource
 indicators) and MUST NOT transit other tokens. This server cannot satisfy
 that literally: GitLab's authorization server does not support resource
-indicators, so every token it issues is a GitLab-audience token by design —
-the server is a thin resource proxy that forwards the presented credential
+indicators, so every token it issues is a GitLab-audience token by design.
+The server is a thin resource proxy that forwards the presented credential
 to the one upstream it fronts (the same shape GitHub's remote MCP server
-uses). What IS enforced in oauth mode: the token is verified against the
+uses), which the 2026-07-28 specification prohibits without condition. The
+deviation is accepted rather than argued away; the reasoning, and why it does
+not generalize, is
+[ADR-0019](../development/adr/adr-0019-audience-binding-unavailable-at-the-authorization-server.md). What IS enforced in oauth mode: the token is verified against the
 configured GitLab instance before any use, its **real granted scopes are
 introspected** (`/personal_access_tokens/self` for PATs,
 `/oauth/token/info` for OAuth tokens) rather than assumed, only the
@@ -179,7 +182,7 @@ Two properties are deliberate:
 ## TLS
 
 - All GitLab API communication uses HTTPS by default
-- A self-signed certificate **on the GitLab side**: set `GITLAB_SKIP_TLS_VERIFY=true` (development only)
+- A self-signed certificate **on the GitLab side**: install the CA in the system trust store, or set `SSL_CERT_FILE` to a CA bundle. `GITLAB_SKIP_TLS_VERIFY=true` is the blunt alternative, for development only, and `--auth-mode=oauth` refuses it outright for a non-loopback instance
 - **Serving HTTPS**: in HTTP mode, `--tls-cert` and `--tls-key` terminate TLS on the listener itself. It is both or neither — a certificate without its key is a deployment that thinks it is encrypting and is not, so the server refuses to start. The pair is loaded at startup too, which turns a wrong path into a startup error naming the file instead of a handshake failure nobody sees until a client reports it. TLS 1.2 is the floor, and 1.3 is used with any client that offers it
 - **Or remove the hop instead of encrypting it**: for a reverse proxy on the same machine, `--http-addr=/run/gitlab-mcp.sock` binds a unix socket rather than a TCP port, with `--http-socket-mode` (default `0660`, owner and group only) deciding who may connect. There is no network segment left to read and no certificate to issue or rotate
 - Production deployments should use valid TLS certificates, whether this server presents them or a proxy in front of it does

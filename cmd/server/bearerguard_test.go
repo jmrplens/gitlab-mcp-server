@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -468,5 +469,122 @@ func TestBearerGuard_Challenge_IgnoresAnOddTrailingKey(t *testing.T) {
 	}
 	if !strings.Contains(got, `error="invalid_token"`) {
 		t.Errorf("challenge %q dropped the complete pair", got)
+	}
+}
+
+// TestBearerGuard_RecipientRefusals covers the two ways the --oauth-client-uid
+// pin can refuse, which must not be answered the same way.
+//
+// Both were wrong when the pin shipped, because every refusal wrapped
+// auth.ErrInvalidToken and became indistinguishable from GitLab's own verdict:
+//
+//   - A genuine, unexpired, instance-valid credential belonging to another
+//     application was told "the access token is expired, revoked, or not valid
+//     for this GitLab instance". Every clause of that is false, and a client
+//     acting on it reauthorizes and returns with the same token. It also charged
+//     the authentication-failure budget, so a handful of attempts locked the
+//     address out of the endpoint, including for tokens the deployment admits.
+//   - An introspection that never answered was reported as the same verdict and
+//     cached for the whole TTL, so a transient upstream outage rejected a
+//     perfectly admissible token and told its holder it belonged to somebody
+//     else.
+//
+// The first is a verdict on the token: 401 with invalid_token, which RFC 6750
+// section 3.1 gives to a token "invalid for other reasons". The second is a
+// failed check: 503 with Retry-After, uncached, because RejectedTokens is
+// documented for definitive rejections only. Neither charges the budget.
+func TestBearerGuard_RecipientRefusals(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantInBody string
+		// wantChallenge is checked only for the 401; a 503 carries no
+		// WWW-Authenticate because the credential was never judged.
+		wantChallenge string
+		notInResponse string
+	}{
+		{
+			name:          "another application is a verdict on the token",
+			err:           fmt.Errorf("token was issued to another OAuth application: %w", oauth.ErrUnacceptedRecipient),
+			wantStatus:    http.StatusUnauthorized,
+			wantInBody:    "not issued to an OAuth application",
+			wantChallenge: `error="invalid_token"`,
+			notInResponse: "expired, revoked",
+		},
+		{
+			name:          "an unanswered introspection is an upstream failure",
+			err:           fmt.Errorf("introspection did not answer: %w", oauth.ErrRecipientUnverifiable),
+			wantStatus:    http.StatusServiceUnavailable,
+			wantInBody:    "has not been rejected",
+			notInResponse: "issued to another",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+				return nil, tt.err
+			})
+
+			failure := g.check(guardRequest(t, "gloas-probe"))
+			if failure == nil || failure.status != tt.wantStatus {
+				t.Fatalf("want %d, got %+v", tt.wantStatus, failure)
+			}
+			assertRefusalWording(t, failure, tt.wantInBody, tt.notInResponse)
+			assertRefusalChallenge(t, failure, tt.wantChallenge, tt.notInResponse)
+			if tt.wantStatus == http.StatusServiceUnavailable && failure.header.Get(headerRetryAfter) == "" {
+				t.Error("a 503 must advertise Retry-After, or the client has no idea when to come back")
+			}
+			assertSpendsNoBudget(t, g)
+		})
+	}
+}
+
+// assertRefusalWording checks that a refusal says what is true of it and does
+// not say what is true of a different one.
+func assertRefusalWording(t *testing.T, failure *gateFailure, want, unwanted string) {
+	t.Helper()
+	if !strings.Contains(failure.message, want) {
+		t.Errorf("message %q does not tell the holder what is actually true", failure.message)
+	}
+	if unwanted != "" && strings.Contains(failure.message, unwanted) {
+		t.Errorf("message %q says something untrue about this refusal", failure.message)
+	}
+}
+
+// assertRefusalChallenge checks the WWW-Authenticate value, where one belongs.
+// A 503 carries none: the credential was never judged.
+func assertRefusalChallenge(t *testing.T, failure *gateFailure, want, unwanted string) {
+	t.Helper()
+	if want == "" {
+		return
+	}
+	challenge := failure.header.Get("WWW-Authenticate")
+	if !strings.Contains(challenge, want) {
+		t.Errorf("challenge %q is missing %s", challenge, want)
+	}
+	if unwanted != "" && strings.Contains(challenge, unwanted) {
+		t.Errorf("challenge %q claims GitLab rejected the token; it did not", challenge)
+	}
+}
+
+// assertSpendsNoBudget checks that repeating a refusal does not push the
+// address towards a lockout. A client holding a token this deployment does
+// admit would be caught by that lockout, which is the whole objection.
+func assertSpendsNoBudget(t *testing.T, g *bearerGuard) {
+	t.Helper()
+	for range 10 {
+		got := g.check(guardRequest(t, "gloas-probe-repeat"))
+		if got == nil {
+			t.Fatal("the refusal must be repeatable")
+		}
+		if got.status == http.StatusTooManyRequests {
+			t.Fatal("this refusal charged the authentication-failure budget")
+		}
 	}
 }

@@ -157,6 +157,32 @@ func retryAfter(resp *http.Response) time.Duration {
 // its own address out of the endpoint while holding a perfectly good token.
 var ErrInsufficientScope = errors.New("token lacks the required GitLab scope")
 
+// ErrUnacceptedRecipient reports a token the instance accepts but this
+// deployment does not: it was minted for an OAuth application outside
+// --oauth-client-uid, or for none at all.
+//
+// It is separate from auth.ErrInvalidToken because the honest message is the
+// opposite one. GitLab rejected nothing; the credential is genuine, unexpired
+// and valid for the instance, and telling its holder otherwise sends them to
+// reauthorize and come back with the very same token. The distinction also
+// keeps this off the authentication-failure budget, for the reason spelled out
+// on ErrInsufficientScope above: this shape of refusal is not a guess at a
+// secret, and charging it lets one client lock a shared address out of the
+// endpoint while holding a perfectly good credential.
+var ErrUnacceptedRecipient = errors.New("token was not issued to an OAuth application this deployment admits")
+
+// ErrRecipientUnverifiable reports that the recipient check could not be made:
+// introspection answered nothing, so the token's owning application is unknown.
+//
+// The request is still refused, because a pin that admits what it cannot verify
+// is not a pin. What must not happen is calling it a verdict. It is separate
+// from ErrUnacceptedRecipient so the caller does not tell the holder of a
+// perfectly admissible token that it belongs to another application, and does
+// not cache that non-answer: RejectedTokens.Record is documented for definitive
+// rejections only, since caching an upstream failure locks out a valid token
+// for the whole TTL over a transient outage.
+var ErrRecipientUnverifiable = errors.New("token recipient could not be verified")
+
 // insufficientScopeLimit bounds how much of a rejection body is read. The body
 // is attacker-adjacent — it comes from whatever host the request selected — and
 // nothing legitimate needs more than this to name an error code.
@@ -456,13 +482,15 @@ func acceptedRecipient(pinned []string, result introspection) error {
 		return nil
 	}
 	if !result.answered {
-		return fmt.Errorf("token recipient could not be verified: introspection did not answer: %w", auth.ErrInvalidToken)
+		// Refused, but not judged. Introspection said nothing, so this is a
+		// failed check rather than a failed token.
+		return fmt.Errorf("introspection did not answer: %w", ErrRecipientUnverifiable)
 	}
 	if result.applicationUID == "" {
-		return fmt.Errorf("token names no OAuth application, and this deployment admits only tokens issued to its own: %w", auth.ErrInvalidToken)
+		return fmt.Errorf("token names no OAuth application, and this deployment admits only tokens issued to its own: %w", ErrUnacceptedRecipient)
 	}
 	if !slices.Contains(pinned, result.applicationUID) {
-		return fmt.Errorf("token was issued to another OAuth application: %w", auth.ErrInvalidToken)
+		return fmt.Errorf("token was issued to another OAuth application: %w", ErrUnacceptedRecipient)
 	}
 	return nil
 }

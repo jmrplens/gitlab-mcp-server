@@ -1031,10 +1031,15 @@ func TestAcceptedRecipient_PinRefusesEverythingItCannotVouchFor(t *testing.T) {
 	const ours = "5a4f1c0e"
 
 	tests := []struct {
-		name    string
-		pinned  []string
-		result  introspection
-		wantErr bool
+		name string
+		// wantSentinel is the error the refusal must wrap, or nil for an
+		// admission. The guard routes on it: ErrUnacceptedRecipient is a
+		// verdict on the token and answers 401, ErrRecipientUnverifiable is a
+		// failed check and answers 503 without caching.
+		wantSentinel error
+		pinned       []string
+		result       introspection
+		wantErr      bool
 	}{
 		{
 			name:   "no pin admits a personal access token",
@@ -1050,22 +1055,29 @@ func TestAcceptedRecipient_PinRefusesEverythingItCannotVouchFor(t *testing.T) {
 			result: introspection{scopes: []string{"api"}, applicationUID: ours, answered: true},
 		},
 		{
-			name:    "another application is refused",
-			pinned:  []string{ours},
-			result:  introspection{scopes: []string{"api"}, applicationUID: "somebody-else", answered: true},
-			wantErr: true,
+			name:         "another application is refused",
+			pinned:       []string{ours},
+			result:       introspection{scopes: []string{"api"}, applicationUID: "somebody-else", answered: true},
+			wantErr:      true,
+			wantSentinel: ErrUnacceptedRecipient,
 		},
 		{
-			name:    "a personal access token is refused under a pin",
-			pinned:  []string{ours},
-			result:  introspection{scopes: []string{"api"}, answered: true},
-			wantErr: true,
+			name:         "a personal access token is refused under a pin",
+			pinned:       []string{ours},
+			result:       introspection{scopes: []string{"api"}, answered: true},
+			wantErr:      true,
+			wantSentinel: ErrUnacceptedRecipient,
 		},
 		{
-			name:    "an unanswered introspection is refused, not waved through",
-			pinned:  []string{ours},
-			result:  introspection{scopes: []string{"api"}},
-			wantErr: true,
+			// Refused, but not judged: introspection said nothing, so the
+			// token's application is unknown rather than wrong. Reporting it as
+			// a verdict would tell an admissible token it belongs to somebody
+			// else, and would cache that non-answer for the whole TTL.
+			name:         "an unanswered introspection is refused as unverifiable",
+			pinned:       []string{ours},
+			result:       introspection{scopes: []string{"api"}},
+			wantErr:      true,
+			wantSentinel: ErrRecipientUnverifiable,
 		},
 	}
 
@@ -1077,8 +1089,14 @@ func TestAcceptedRecipient_PinRefusesEverythingItCannotVouchFor(t *testing.T) {
 				if err == nil {
 					t.Fatal("acceptedRecipient() = nil, want a refusal")
 				}
-				if !errors.Is(err, auth.ErrInvalidToken) {
-					t.Errorf("acceptedRecipient() error = %v, want it to wrap auth.ErrInvalidToken so the guard answers 401", err)
+				// Never auth.ErrInvalidToken: GitLab accepted this credential,
+				// and reporting it as rejected sends its holder to reauthorize
+				// and return with the same token.
+				if !errors.Is(err, tt.wantSentinel) {
+					t.Errorf("acceptedRecipient() error = %v, want it to wrap %v", err, tt.wantSentinel)
+				}
+				if errors.Is(err, auth.ErrInvalidToken) {
+					t.Errorf("acceptedRecipient() error = %v, must not read as GitLab's own verdict", err)
 				}
 				return
 			}
@@ -1169,8 +1187,8 @@ func TestGitLabVerifier_RecipientPinIsEnforcedBeforeAnythingIsCached(t *testing.
 		if err == nil {
 			t.Fatal("verify() = nil, want a refusal for a token minted for another application")
 		}
-		if !errors.Is(err, auth.ErrInvalidToken) {
-			t.Errorf("verify() error = %v, want it to wrap auth.ErrInvalidToken", err)
+		if !errors.Is(err, ErrUnacceptedRecipient) {
+			t.Errorf("verify() error = %v, want it to wrap ErrUnacceptedRecipient", err)
 		}
 		if got := cache.Len(); got != 0 {
 			t.Errorf("cache holds %d entries after a refusal; a refused token must never become a cached identity", got)

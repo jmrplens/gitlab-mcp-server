@@ -165,3 +165,9 @@ test/e2e/.bitbucket-admin-pass
 /npm/packages/
 /npm/**/node_modules/
 /npm/**/*.tgz
+
+# Scratch files from local investigation: throwaway drive scripts, captured
+# JSON-RPC exchanges, stub servers. They belong to one debugging session and
+# have been committed by accident before, so the pattern is ignored rather
+# than relied on being cleaned up by hand.
+/tmp_*

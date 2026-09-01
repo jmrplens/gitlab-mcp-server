@@ -771,6 +771,30 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 	// start and then put a live credential on the wire in cleartext for every
 	// request that names b (CWE-319). One cleartext instance in the list is
 	// exactly as bad as a cleartext deployment.
+	// Skipping certificate verification defeats the same protection https is
+	// required for. OAuth 2.1 section 7.1.3.2 states that "the client MUST
+	// validate the TLS certificate chain when making requests to protected
+	// resources", and in the upstream leg this server is that client, carrying
+	// the end user's bearer on every call: with verification off, any host that
+	// can answer for the address is handed a live credential. Refusing an http
+	// instance while allowing an unverified https one would be a distinction
+	// without a difference.
+	//
+	// A private or self-signed certificate does not need this flag. Install the
+	// CA in the OS trust store, or point SSL_CERT_FILE at a bundle, which is
+	// the container answer. Note that SSL_CERT_FILE replaces the default root
+	// pool process-wide, so it also governs the auto-update call to GitHub;
+	// a bundle, not a bare leaf certificate.
+	if cfg.SkipTLSVerify {
+		for _, instance := range instances {
+			if !config.IsLoopbackGitLabURL(instance) {
+				return fmt.Errorf(
+					"--auth-mode=oauth refuses --skip-tls-verify for %q: bearer tokens are forwarded to the instance on every call, and an unverified certificate lets any host answering that address collect them. Install the CA in the system trust store, or set SSL_CERT_FILE to a CA bundle. --skip-tls-verify remains available for loopback instances and in legacy mode",
+					instance,
+				)
+			}
+		}
+	}
 	for _, instance := range instances {
 		if err := config.ValidateOAuthGitLabURL(instance); err != nil {
 			return err

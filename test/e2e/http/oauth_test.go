@@ -844,3 +844,88 @@ func TestOAuth_ResourceDocumentationIsOperatorConfigurable(t *testing.T) {
 		}
 	})
 }
+
+// TestOAuth_SkipTLSVerifyScope verifies where oauth mode will and will not
+// forward bearer tokens over a connection whose certificate is unchecked.
+//
+// oauth mode already refuses an http instance, because "bearer tokens are
+// forwarded to the instance on every call, and http would transmit them in
+// cleartext". An https instance with verification disabled has the same
+// property: any host that can answer for the address collects a live
+// credential. OAuth 2.1 section 7.1.3.2 states it directly, and in the upstream
+// leg this server is the client it addresses.
+//
+// Loopback keeps the exemption, for the same reason cleartext does: the
+// credential does not leave the host. That case is here too, because a rule
+// that refused it would break local development and no refusal test would
+// notice.
+func TestOAuth_SkipTLSVerifyScope(t *testing.T) {
+	bin := serverBinary(t)
+
+	tests := []struct {
+		name       string
+		gitlabURL  string
+		wantRefuse bool
+		wantInOut  []string
+	}{
+		{
+			name:       "a remote instance is refused",
+			gitlabURL:  "https://gitlab.example.com",
+			wantRefuse: true,
+			wantInOut:  []string{"skip-tls-verify", "SSL_CERT_FILE"},
+		},
+		{
+			name:       "one unverified instance among several is enough",
+			gitlabURL:  "https://localhost:8443,https://gitlab.example.com",
+			wantRefuse: true,
+			wantInOut:  []string{"gitlab.example.com"},
+		},
+		{
+			name:       "a loopback instance keeps the exemption",
+			gitlabURL:  "https://localhost:8443",
+			wantRefuse: false,
+		},
+		{
+			name:       "127.0.0.1 is loopback too",
+			gitlabURL:  "https://127.0.0.1:8443",
+			wantRefuse: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// The listen address belongs to whichever harness starts the
+			// process: startServer assigns and polls its own, so passing one
+			// here would leave it polling a port nothing is bound to.
+			authArgs := []string{
+				"--auth-mode=oauth",
+				"--public-url=" + publicURL,
+				"--gitlab-url=" + tt.gitlabURL,
+				"--skip-tls-verify",
+			}
+
+			if !tt.wantRefuse {
+				// A loopback instance must get past validation. The server is
+				// then started for real, so serving /health is the assertion:
+				// nothing behind the URL needs to exist for that.
+				srv := startServer(t, nil, authArgs...)
+				got := srv.do(t, request{method: http.MethodGet, path: "/health"})
+				if got.status != http.StatusOK {
+					t.Fatalf("a loopback instance was refused: /health = %d %s", got.status, got.body)
+				}
+				return
+			}
+
+			args := append([]string{"--http", "--http-addr=127.0.0.1:" + itoa(freePort(t))}, authArgs...)
+			out, err := runServerExpectingExit(t, bin, args...)
+			if err == nil {
+				t.Fatal("oauth mode started with certificate verification disabled")
+			}
+			for _, want := range tt.wantInOut {
+				if !strings.Contains(out, want) {
+					t.Errorf("the startup error should mention %q; got:\n%s", want, out)
+				}
+			}
+		})
+	}
+}
