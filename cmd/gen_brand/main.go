@@ -197,7 +197,7 @@ func bgImage(art []byte, w, h float64) string {
 // purpose: a figure would go stale between releases; figures live on
 // surfaces the generators re-stamp.
 func bannerSVG() string {
-	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" role="img" aria-label="GitLab MCP Server. GitLab for your AI assistant">
+	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" role="img" aria-label="GitLab MCP Server — GitLab for your AI assistant">
 %s  <rect x="0.5" y="0.5" width="1279" height="399" fill="none" stroke="#21262d"/>
   <g transform="translate(96,56) scale(4.5)">
 %s  </g>
@@ -219,7 +219,7 @@ func bannerSVG() string {
 // stacked and centered. Rendered to site/public/og-image.png by
 // `make brand-rasters`.
 func ogSVG() string {
-	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="GitLab MCP Server. GitLab for your AI assistant">
+	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="GitLab MCP Server — GitLab for your AI assistant">
 %s  <rect x="0.5" y="0.5" width="1199" height="629" fill="none" stroke="#21262d"/>
   <g transform="translate(444,88) scale(4.875)">
 %s  </g>
@@ -240,7 +240,7 @@ func ogSVG() string {
 // recommends (1280x640, rendered at 2x by make brand-rasters), same centered
 // composition as the OG card with the extra width spent on quiet ground.
 func socialSVG() string {
-	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" role="img" aria-label="GitLab MCP Server. GitLab for your AI assistant">
+	return fmt.Sprintf(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" role="img" aria-label="GitLab MCP Server — GitLab for your AI assistant">
 %s  <rect x="0.5" y="0.5" width="1279" height="639" fill="none" stroke="#21262d"/>
   <g transform="translate(484,96) scale(4.875)">
 %s  </g>
