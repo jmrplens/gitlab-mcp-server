@@ -361,7 +361,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, in CreateInput) (O
 	site, _, err := client.GL().GeoSites.CreateGeoSite(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("create geo site", err, http.StatusBadRequest,
-			"name must be unique; url must be reachable; only one site may have primary=true; selective_sync_type must be 'namespaces' or 'shards' \u2014 requires admin access and GitLab Premium/Ultimate license")
+			"name must be unique; url must be reachable; only one site may have primary=true; selective_sync_type must be 'namespaces' or 'shards'. Requires admin access and GitLab Premium/Ultimate license")
 	}
 	return toOutput(site), nil
 }
@@ -448,7 +448,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, in IDInput) error 
 	_, err := client.GL().GeoSites.DeleteGeoSite(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete geo site", err, http.StatusForbidden,
-			"requires admin access; cannot delete the primary site while secondaries exist; deletion is irreversible \u2014 the site must be re-registered to rejoin")
+			"requires admin access; cannot delete the primary site while secondaries exist; deletion is irreversible. The site must be re-registered to rejoin")
 	}
 	return nil
 }
@@ -465,7 +465,7 @@ func Repair(ctx context.Context, client *gitlabclient.Client, in IDInput) (Outpu
 	site, _, err := client.GL().GeoSites.RepairGeoSite(in.ID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("repair geo site", err, http.StatusNotFound,
-			"verify id with gitlab_list_geo_sites; repair re-creates the OAuth application for the secondary site \u2014 must be run from the primary")
+			"verify id with gitlab_list_geo_sites; repair re-creates the OAuth application for the secondary site. Must be run from the primary")
 	}
 	if site == nil {
 		return Output{
@@ -489,7 +489,7 @@ func ListStatus(ctx context.Context, client *gitlabclient.Client, in ListStatusI
 	statuses, resp, err := client.GL().GeoSites.ListStatusOfAllGeoSites(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListStatusOutput{}, toolutil.WrapErrWithStatusHint("list geo site statuses", err, http.StatusForbidden,
-			"requires admin access; status data is collected by the primary site \u2014 secondary sites may show stale data if replication is lagging")
+			"requires admin access; status data is collected by the primary site. Secondary sites may show stale data if replication is lagging")
 	}
 
 	out := ListStatusOutput{Statuses: make([]StatusOutput, 0, len(statuses))}

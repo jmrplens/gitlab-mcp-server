@@ -985,7 +985,7 @@ func TestDeploymentUpdate_BadRequest(t *testing.T) {
 	if err == nil {
 		t.Fatal(errExpectedAPI)
 	}
-	if !strings.Contains(err.Error(), "transitions out of terminal states") {
+	if !strings.Contains(err.Error(), "Transitions out of terminal states") {
 		t.Fatalf("error = %v, want transition hint", err)
 	}
 }

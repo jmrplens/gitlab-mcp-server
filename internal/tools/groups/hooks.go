@@ -446,7 +446,7 @@ func EditHook(ctx context.Context, client *gitlabclient.Client, input EditHookIn
 	h, _, err := client.GL().Groups.EditGroupHook(string(input.GroupID), input.HookID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return HookOutput{}, toolutil.WrapErrWithStatusHint("EditHook", err, http.StatusNotFound,
-			"verify hook_id with gitlab_group_hook_list; requires Owner role; updates merge with existing config \u2014 unset fields keep current values")
+			"verify hook_id with gitlab_group_hook_list; requires Owner role; updates merge with existing config. Unset fields keep current values")
 	}
 	return hookToOutput(h), nil
 }

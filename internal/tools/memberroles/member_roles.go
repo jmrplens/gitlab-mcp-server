@@ -234,7 +234,7 @@ func ListInstance(ctx context.Context, client *gitlabclient.Client, _ ListInstan
 	roles, _, err := client.GL().MemberRolesService.ListInstanceMemberRoles()
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list instance member roles", err, http.StatusForbidden,
-			"requires administrator access; self-managed Ultimate only \u2014 instance-level custom roles are not available on GitLab.com")
+			"requires administrator access; self-managed Ultimate only. Instance-level custom roles are not available on GitLab.com")
 	}
 	out := ListOutput{Roles: make([]Output, 0, len(roles))}
 	for _, r := range roles {

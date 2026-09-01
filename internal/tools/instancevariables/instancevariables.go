@@ -118,7 +118,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	vars, resp, err := client.GL().InstanceVariables.ListVariables(opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("list instance variables", err, http.StatusForbidden,
-			"instance-level CI/CD variables are admin-only \u2014 verify your token has admin scope")
+			"instance-level CI/CD variables are admin-only. Verify your token has admin scope")
 	}
 
 	out := ListOutput{Variables: make([]Output, 0, len(vars))}
@@ -249,7 +249,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"deleting instance variables requires admin privileges")
 		}
 		return toolutil.WrapErrWithStatusHint(opDeleteInstanceVariable, err, http.StatusNotFound,
-			"the variable may already be deleted \u2014 verify with gitlab_instance_variable_list")
+			"the variable may already be deleted. Verify with gitlab_instance_variable_list")
 	}
 	return nil
 }

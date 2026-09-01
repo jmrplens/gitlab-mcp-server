@@ -960,7 +960,7 @@ func Pipelines(ctx context.Context, client *gitlabclient.Client, input Pipelines
 	pipelineList, _, err := client.GL().MergeRequests.ListMergeRequestPipelines(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return PipelinesOutput{}, toolutil.WrapErrWithStatusHint("mrPipelines", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with gitlab_mr_get \u2014 the MR may have no pipelines yet (use gitlab_mr_create_pipeline to trigger one)")
+			"verify project_id and merge_request_iid with gitlab_mr_get. The MR may have no pipelines yet (use gitlab_mr_create_pipeline to trigger one)")
 	}
 
 	out := make([]pipelines.Output, len(pipelineList))
@@ -1302,7 +1302,7 @@ func ListGroup(ctx context.Context, client *gitlabclient.Client, input ListGroup
 	mrs, resp, err := client.GL().MergeRequests.ListGroupMergeRequests(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("mrListGroup", err, http.StatusNotFound,
-			"verify the group exists with gitlab_group_get \u2014 use full_path or numeric ID")
+			"verify the group exists with gitlab_group_get. Use full_path or numeric ID")
 	}
 	out := make([]Output, len(mrs))
 	for i, m := range mrs {
@@ -1437,7 +1437,7 @@ func Reviewers(ctx context.Context, client *gitlabclient.Client, input Participa
 	reviewers, _, err := client.GL().MergeRequests.GetMergeRequestReviewers(string(input.ProjectID), input.MRIID, gl.WithContext(ctx))
 	if err != nil {
 		return ReviewersOutput{}, toolutil.WrapErrWithStatusHint("mrReviewers", err, http.StatusNotFound,
-			"verify project_id and merge_request_iid with gitlab_mr_get \u2014 use gitlab_mr_update with reviewer_ids to assign reviewers")
+			"verify project_id and merge_request_iid with gitlab_mr_get. Use gitlab_mr_update with reviewer_ids to assign reviewers")
 	}
 	out := make([]ReviewerOutput, len(reviewers))
 	for i, r := range reviewers {
@@ -1864,7 +1864,7 @@ func CreateTodo(ctx context.Context, client *gitlabclient.Client, input CreateTo
 		if resp != nil && resp.Response != nil && resp.StatusCode == http.StatusNotModified {
 			err = &gl.ErrorResponse{Response: resp.Response, Message: "a pending todo for this MR already exists"}
 			return CreateTodoOutput{}, toolutil.WrapErrWithHint("mrCreateTodo", err,
-				"a pending todo for this MR already exists for the authenticated user \u2014 use gitlab_todo_list to inspect it")
+				"a pending todo for this MR already exists for the authenticated user. Use gitlab_todo_list to inspect it")
 		}
 		return CreateTodoOutput{}, toolutil.WrapErrWithStatusHint("mrCreateTodo", err, http.StatusNotFound,
 			hintVerifyMR)
@@ -1944,7 +1944,7 @@ func CreateDependency(ctx context.Context, client *gitlabclient.Client, input De
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusUnprocessableEntity) || toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return DependencyOutput{}, toolutil.WrapErrWithHint("mrCreateDependency", err,
-				"dependency would create a cycle, the blocking MR does not exist, or this dependency already exists \u2014 use gitlab_mr_dependencies_list to inspect current dependencies")
+				"dependency would create a cycle, the blocking MR does not exist, or this dependency already exists. Use gitlab_mr_dependencies_list to inspect current dependencies")
 		}
 		return DependencyOutput{}, toolutil.WrapErrWithStatusHint("mrCreateDependency", err, http.StatusNotFound,
 			"verify project_id and merge_request_iid with gitlab_mr_get; blocking_merge_request_id is a global database ID, not an IID")
@@ -1977,7 +1977,7 @@ func DeleteDependency(ctx context.Context, client *gitlabclient.Client, input De
 				"MR dependencies require GitLab Premium or Ultimate")
 		}
 		return toolutil.WrapErrWithStatusHint("mrDeleteDependency", err, http.StatusNotFound,
-			"dependency not currently active \u2014 use gitlab_mr_dependencies_list to inspect existing dependencies")
+			"dependency not currently active. Use gitlab_mr_dependencies_list to inspect existing dependencies")
 	}
 	return nil
 }

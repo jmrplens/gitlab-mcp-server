@@ -165,7 +165,7 @@ func GetTrigger(ctx context.Context, client *gitlabclient.Client, input GetInput
 	)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_get", err, http.StatusNotFound,
-			"verify trigger_id with gitlab_pipeline_trigger_list \u2014 trigger tokens are scoped to a single project")
+			"verify trigger_id with gitlab_pipeline_trigger_list. Trigger tokens are scoped to a single project")
 	}
 	return convertTrigger(t), nil
 }
@@ -235,7 +235,7 @@ func DeleteTrigger(ctx context.Context, client *gitlabclient.Client, input Delet
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return toolutil.WrapErrWithHint("pipeline_trigger_delete", err,
-				"only the trigger owner or Maintainer+ can delete trigger tokens \u2014 the token is invalidated immediately on deletion")
+				"only the trigger owner or Maintainer+ can delete trigger tokens. The token is invalidated immediately on deletion")
 		}
 		return toolutil.WrapErrWithStatusHint("pipeline_trigger_delete", err, http.StatusNotFound,
 			"verify trigger_id with gitlab_pipeline_trigger_list")
@@ -274,11 +274,11 @@ func RunTrigger(ctx context.Context, client *gitlabclient.Client, input RunInput
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusUnauthorized) || toolutil.IsHTTPStatus(err, http.StatusForbidden) {
 			return RunOutput{}, toolutil.WrapErrWithHint("pipeline_trigger_run", err,
-				"the token is invalid or has been revoked \u2014 use gitlab_pipeline_trigger_list to find a valid token (Maintainer+ required to read tokens)")
+				"the token is invalid or has been revoked. Use gitlab_pipeline_trigger_list to find a valid token (Maintainer+ required to read tokens)")
 		}
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return RunOutput{}, toolutil.WrapErrWithHint("pipeline_trigger_run", err,
-				"the ref does not exist, the project has no .gitlab-ci.yml, or CI/CD is disabled \u2014 verify with gitlab_branch_get/gitlab_tag_get and gitlab_ci_lint")
+				"the ref does not exist, the project has no .gitlab-ci.yml, or CI/CD is disabled. Verify with gitlab_branch_get/gitlab_tag_get and gitlab_ci_lint")
 		}
 		return RunOutput{}, toolutil.WrapErrWithStatusHint("pipeline_trigger_run", err, http.StatusNotFound,
 			"verify project_id and that the ref (branch/tag) exists with gitlab_branch_get or gitlab_tag_get")

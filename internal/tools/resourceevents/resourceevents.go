@@ -684,7 +684,7 @@ func ListIssueIterationEvents(ctx context.Context, client *gitlabclient.Client, 
 	events, resp, err := client.GL().ResourceIterationEvents.ListIssueIterationEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListIterationEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_iteration_event_list", err, http.StatusNotFound,
-			"iteration events require GitLab Premium/Ultimate \u2014 verify the project tier and that issue_iid exists")
+			"iteration events require GitLab Premium/Ultimate. Verify the project tier and that issue_iid exists")
 	}
 	return toIterationEventsOutput(events, resp), nil
 }
@@ -703,7 +703,7 @@ func GetIssueIterationEvent(ctx context.Context, client *gitlabclient.Client, in
 	event, _, err := client.GL().ResourceIterationEvents.GetIssueIterationEvent(string(input.ProjectID), input.IssueIID, input.IterationEventID, gl.WithContext(ctx))
 	if err != nil {
 		return IterationEventOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_iteration_event_get", err, http.StatusNotFound,
-			"iteration events require Premium/Ultimate \u2014 verify iteration_event_id with gitlab_issue_iteration_event_list")
+			"iteration events require Premium/Ultimate. Verify iteration_event_id with gitlab_issue_iteration_event_list")
 	}
 	return toIterationEventOutput(event), nil
 }
@@ -725,7 +725,7 @@ func ListIssueWeightEvents(ctx context.Context, client *gitlabclient.Client, inp
 	events, resp, err := client.GL().ResourceWeightEvents.ListIssueWeightEvents(string(input.ProjectID), input.IssueIID, opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListWeightEventsOutput{}, toolutil.WrapErrWithStatusHint("gitlab_issue_weight_event_list", err, http.StatusNotFound,
-			"weight events require GitLab Premium/Ultimate \u2014 verify the project tier and that issue_iid exists")
+			"weight events require GitLab Premium/Ultimate. Verify the project tier and that issue_iid exists")
 	}
 	return toWeightEventsOutput(events, resp), nil
 }

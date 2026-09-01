@@ -135,7 +135,7 @@ func GetProject(ctx context.Context, client *gitlabclient.Client, input GetProje
 	badge, _, err := client.GL().ProjectBadges.GetProjectBadge(string(input.ProjectID), input.BadgeID, gl.WithContext(ctx))
 	if err != nil {
 		return GetProjectOutput{}, toolutil.WrapErrWithStatusHint("get_project_badge", err, http.StatusNotFound,
-			"verify badge_id with gitlab_list_project_badges \u2014 inherited group badges have negative IDs and cannot be fetched at the project scope")
+			"verify badge_id with gitlab_list_project_badges. Inherited group badges have negative IDs and cannot be fetched at the project scope")
 	}
 	return GetProjectOutput{Badge: projectBadgeToItem(badge)}, nil
 }

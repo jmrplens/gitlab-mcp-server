@@ -12,7 +12,7 @@ import (
 )
 
 // hintSidekiqAdminRequired is the 403 hint shared by all Sidekiq metrics tools.
-const hintSidekiqAdminRequired = "Sidekiq metrics require administrator access \u2014 verify your token has admin scope"
+const hintSidekiqAdminRequired = "Sidekiq metrics require administrator access. Verify your token has admin scope"
 
 // ---------------------------------------------------------------------------
 // Shared output types

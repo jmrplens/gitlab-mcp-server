@@ -321,7 +321,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	}, &resp, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithHint("epicDiscussionList", err,
-			"verify full_path (group path) and iid (project-scoped epic IID) with gitlab_epic_list; epics are migrated to Work Items \u2014 Premium/Ultimate license required")
+			"verify full_path (group path) and iid (project-scoped epic IID) with gitlab_epic_list; epics are migrated to Work Items. Premium/Ultimate license required")
 	}
 
 	if resp.Data.Namespace == nil || resp.Data.Namespace.WorkItem == nil {
@@ -539,6 +539,6 @@ func DeleteNote(ctx context.Context, client *gitlabclient.Client, input DeleteNo
 	}
 
 	return toolutil.ExecGraphQLDestroyNote(ctx, client.GL().GraphQL, "epicDiscussionDeleteNote",
-		"only the note author or a Maintainer/Owner can delete; verify note_id with gitlab_list_epic_discussions; deletion is irreversible \u2014 system-generated notes cannot be removed",
+		"only the note author or a Maintainer/Owner can delete; verify note_id with gitlab_list_epic_discussions; deletion is irreversible. System-generated notes cannot be removed",
 		mutationDestroyNote, toolutil.FormatGID("Note", input.NoteID))
 }

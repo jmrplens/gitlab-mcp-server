@@ -54,7 +54,7 @@ func GetKeyWithUser(ctx context.Context, client *gitlabclient.Client, input GetB
 	key, _, err := client.GL().Keys.GetKeyWithUser(input.KeyID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("key_get", err, http.StatusNotFound,
-			"verify key_id with gitlab_list_ssh_keys_for_user \u2014 this admin endpoint requires administrator access on self-managed instances")
+			"verify key_id with gitlab_list_ssh_keys_for_user. This admin endpoint requires administrator access on self-managed instances")
 	}
 	return toOutput(key), nil
 }

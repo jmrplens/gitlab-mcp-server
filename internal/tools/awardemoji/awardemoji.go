@@ -412,7 +412,7 @@ func DeleteIssueAwardEmoji(ctx context.Context, client *gitlabclient.Client, inp
 			return toolutil.WrapErrWithHint("issue_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
-			return toolutil.WrapErrWithHint("issue_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_issue_emoji_list to verify award_id")
+			return toolutil.WrapErrWithHint("issue_emoji_delete", err, "award already removed or never existed. List awards with gitlab_issue_emoji_list to verify award_id")
 		}
 		return toolutil.WrapErrWithMessage("issue_emoji_delete", err)
 	}
@@ -565,7 +565,7 @@ func DeleteMRAwardEmoji(ctx context.Context, client *gitlabclient.Client, input 
 			return toolutil.WrapErrWithHint("mr_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
-			return toolutil.WrapErrWithHint("mr_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_mr_emoji_list to verify award_id")
+			return toolutil.WrapErrWithHint("mr_emoji_delete", err, "award already removed or never existed. List awards with gitlab_mr_emoji_list to verify award_id")
 		}
 		return toolutil.WrapErrWithMessage("mr_emoji_delete", err)
 	}
@@ -686,7 +686,7 @@ func DeleteSnippetAwardEmoji(ctx context.Context, client *gitlabclient.Client, i
 			return toolutil.WrapErrWithHint("snippet_emoji_delete", err, hintEmojiOwnerOnly)
 		}
 		if toolutil.IsHTTPStatus(err, 404) {
-			return toolutil.WrapErrWithHint("snippet_emoji_delete", err, "award already removed or never existed \u2014 list awards with gitlab_snippet_emoji_list to verify award_id")
+			return toolutil.WrapErrWithHint("snippet_emoji_delete", err, "award already removed or never existed. List awards with gitlab_snippet_emoji_list to verify award_id")
 		}
 		return toolutil.WrapErrWithMessage("snippet_emoji_delete", err)
 	}

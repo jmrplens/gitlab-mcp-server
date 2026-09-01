@@ -1175,7 +1175,7 @@ func renderDetailedFootprint(rows []tokenFootprintRow) string {
 	b.WriteString("---\n\n")
 
 	b.WriteString("## How tokens are counted\n\n")
-	b.WriteString("Token counts use the **cl100k_base** tokenizer (the GPT-4 / GPT-3.5 encoding) via [`github.com/tiktoken-go/tokenizer`](https://github.com/tiktoken-go/tokenizer) \u2014 a pure Go port of OpenAI's tiktoken. The vocabulary is embedded at compile time (~4 MB). This is significantly more accurate than the `bytes \u00f7 4` heuristic for JSON-dense content like MCP tool schemas, which contain many braces, identifiers, and nested objects.\n\n")
+	b.WriteString("Token counts use the **cl100k_base** tokenizer (the GPT-4 / GPT-3.5 encoding) via [`github.com/tiktoken-go/tokenizer`](https://github.com/tiktoken-go/tokenizer). A pure Go port of OpenAI's tiktoken. The vocabulary is embedded at compile time (~4 MB). This is significantly more accurate than the `bytes \u00f7 4` heuristic for JSON-dense content like MCP tool schemas, which contain many braces, identifiers, and nested objects.\n\n")
 
 	b.WriteString("## What each column means\n\n")
 	// Rendered through docgen (not hand-written) so the emitted table is already
@@ -1222,7 +1222,7 @@ func renderDetailedFootprint(rows []tokenFootprintRow) string {
 	b.WriteString("\n## Interpretation guide\n\n")
 	b.WriteString("- **Dynamic mode** (default) exposes only 2 tools (`gitlab_find_action` + `gitlab_execute_action`) but reaches all catalog actions via routing. This is the lowest-token surface.\n")
 	b.WriteString("- **Meta mode** exposes one dispatcher per domain (e.g. `gitlab_branch`, `gitlab_issue`). The `META_PARAM_SCHEMA` controls whether the action parameter's schema is generic (`opaque`) or detailed (`compact`/`full`). `full` doubles the token cost vs `opaque` but gives the LLM exact per-action input shapes.\n")
-	b.WriteString("- **Individual mode** exposes every action as its own tool. This is the highest-fidelity but most expensive surface \u2014 suitable only for clients with large context windows.\n")
+	b.WriteString("- **Individual mode** exposes every action as its own tool. This is the highest-fidelity but most expensive surface. Suitable only for clients with large context windows.\n")
 	b.WriteString("- **Tier scaling**: Free/CE has the fewest actions. Premium adds enterprise features. Ultimate includes everything. The token cost scales with the number of available actions.\n")
 	b.WriteString("- **Shared tokens** are dominated by MCP resources (`gitlab://tools` template, workflow guides) and prompts. The `minimal` capability surface strips these to just `gitlab://tools`, cutting shared overhead by ~90%%.\n")
 	return b.String()

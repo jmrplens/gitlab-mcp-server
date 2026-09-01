@@ -321,7 +321,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"deleting group variables requires Maintainer or Owner role")
 		}
 		return toolutil.WrapErrWithStatusHint(opDeleteGroupVariable, err, http.StatusNotFound,
-			"the variable may already be deleted \u2014 verify with gitlab_group_variable_list")
+			"the variable may already be deleted. Verify with gitlab_group_variable_list")
 	}
 	return nil
 }

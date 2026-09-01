@@ -381,7 +381,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 				"branch not found. Use gitlab_branch_list to verify the branch name")
 		}
 		return toolutil.WrapErrWithStatusHint("branchDelete", err, http.StatusForbidden,
-			"the branch may be protected or the default branch \u2014 use gitlab_branch_unprotect first or change the default branch")
+			"the branch may be protected or the default branch. Use gitlab_branch_unprotect first or change the default branch")
 	}
 	return nil
 }
@@ -428,7 +428,7 @@ func ProtectedGet(ctx context.Context, client *gitlabclient.Client, input Protec
 	b, _, err := client.GL().ProtectedBranches.GetProtectedBranch(string(input.ProjectID), input.BranchName, gl.WithContext(ctx))
 	if err != nil {
 		return ProtectedOutput{}, toolutil.WrapErrWithStatusHint("protectedBranchGet", err, http.StatusNotFound,
-			"the branch may not be protected \u2014 use gitlab_protected_branches_list to verify")
+			"the branch may not be protected. Use gitlab_protected_branches_list to verify")
 	}
 	return ProtectedToOutput(b), nil
 }
@@ -480,7 +480,7 @@ func ProtectedUpdate(ctx context.Context, client *gitlabclient.Client, input Pro
 				"updating protected branch settings requires Maintainer or Owner role")
 		}
 		return ProtectedOutput{}, toolutil.WrapErrWithStatusHint("protectedBranchUpdate", err, http.StatusNotFound,
-			"the branch may not be protected \u2014 use gitlab_branch_protect first")
+			"the branch may not be protected. Use gitlab_branch_protect first")
 	}
 	return ProtectedToOutput(b), nil
 }

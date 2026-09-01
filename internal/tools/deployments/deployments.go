@@ -264,7 +264,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	d, err := rawGetDeployment(ctx, client, path)
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get deployment", err, http.StatusNotFound,
-			"verify deployment_id with gitlab_deployment_list \u2014 deployment IDs are project-scoped")
+			"verify deployment_id with gitlab_deployment_list. Deployment IDs are project-scoped")
 	}
 
 	return toOutputAPI(d), nil
@@ -351,7 +351,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) {
 			return Output{}, toolutil.WrapErrWithHint("update deployment", err,
-				"status must be one of: created, running, success, failed, canceled, blocked \u2014 transitions out of terminal states are not allowed")
+				"status must be one of: created, running, success, failed, canceled, blocked. Transitions out of terminal states are not allowed")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("update deployment", err, http.StatusNotFound,
 			"verify deployment_id with gitlab_deployment_list")
@@ -432,7 +432,7 @@ func ApproveOrReject(ctx context.Context, client *gitlabclient.Client, input App
 				"approving/rejecting deployments requires being a designated approver on the protected environment; status must be 'approved' or 'rejected'")
 		}
 		return ApproveOrRejectOutput{}, toolutil.WrapErrWithStatusHint("approve_or_reject_deployment", err, http.StatusNotFound,
-			"verify deployment_id with gitlab_deployment_list \u2014 only deployments awaiting approval can be acted on")
+			"verify deployment_id with gitlab_deployment_list. Only deployments awaiting approval can be acted on")
 	}
 
 	return ApproveOrRejectOutput{

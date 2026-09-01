@@ -21,7 +21,7 @@ const (
 	errInvalidExpiresAtFmt = "invalid expires_at format (expected YYYY-MM-DD): %w"
 	// hintTokenAlreadyRevoked is returned when revoking a token that the API
 	// reports as not found.
-	hintTokenAlreadyRevoked = "token already revoked or never existed \u2014 nothing to do" //#nosec G101 -- error hint, not a credential
+	hintTokenAlreadyRevoked = "token already revoked or never existed. Nothing to do" //#nosec G101 -- error hint, not a credential
 )
 
 // ---------------------------------------------------------------------------
@@ -523,7 +523,7 @@ func GroupGet(ctx context.Context, client *gitlabclient.Client, input GroupGetIn
 	t, _, err := client.GL().GroupAccessTokens.GetGroupAccessToken(string(input.GroupID), input.TokenID, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get group access token", err, http.StatusNotFound,
-			"token_id not found on this group \u2014 use gitlab_group_access_token_list to discover current token IDs")
+			"token_id not found on this group. Use gitlab_group_access_token_list to discover current token IDs")
 	}
 	return fromGroupToken(t), nil
 }
@@ -599,7 +599,7 @@ func GroupRotate(ctx context.Context, client *gitlabclient.Client, input GroupRo
 				"token may already be revoked/expired; expires_at must be YYYY-MM-DD")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("rotate group access token", err, http.StatusNotFound,
-			"token_id not found \u2014 use gitlab_group_access_token_list to verify")
+			"token_id not found. Use gitlab_group_access_token_list to verify")
 	}
 	return fromGroupToken(token), nil
 }
@@ -878,7 +878,7 @@ func PersonalGet(ctx context.Context, client *gitlabclient.Client, input Persona
 		t, _, err := client.GL().PersonalAccessTokens.GetSinglePersonalAccessToken(gl.WithContext(ctx))
 		if err != nil {
 			return Output{}, toolutil.WrapErrWithStatusHint("get current personal access token", err, http.StatusUnauthorized,
-				"the calling credential is not a personal access token (e.g. OAuth or job token) \u2014 supply token_id to introspect a specific PAT instead")
+				"the calling credential is not a personal access token (e.g. OAuth or job token). Supply token_id to introspect a specific PAT instead")
 		}
 		return fromPersonalToken(t), nil
 	}
@@ -923,7 +923,7 @@ func PersonalRotate(ctx context.Context, client *gitlabclient.Client, input Pers
 				"token may already be revoked/expired; expires_at must be YYYY-MM-DD")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("rotate personal access token", err, http.StatusNotFound,
-			"token_id not found \u2014 use gitlab_personal_access_token_list to verify")
+			"token_id not found. Use gitlab_personal_access_token_list to verify")
 	}
 	return fromPersonalToken(token), nil
 }

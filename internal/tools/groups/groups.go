@@ -1333,7 +1333,7 @@ func Restore(ctx context.Context, client *gitlabclient.Client, input RestoreInpu
 				"restoring groups requires Owner role; the group must be marked for deletion (within retention window) and not yet permanently removed")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint("groupRestore", err, http.StatusNotFound,
-			"the group is not marked for deletion or has already been permanently removed \u2014 only soft-deleted groups can be restored")
+			"the group is not marked for deletion or has already been permanently removed. Only soft-deleted groups can be restored")
 	}
 	return ToOutput(g), nil
 }
@@ -1479,7 +1479,7 @@ func ListProjects(ctx context.Context, client *gitlabclient.Client, input ListPr
 	projects, resp, err := client.GL().Groups.ListGroupProjects(string(input.GroupID), opts, gl.WithContext(ctx))
 	if err != nil {
 		return ListProjectsOutput{}, toolutil.WrapErrWithStatusHint("groupListProjects", err, http.StatusNotFound,
-			"verify group_id with gitlab_group_get \u2014 use include_subgroups=true to also list projects in descendant groups")
+			"verify group_id with gitlab_group_get. Use include_subgroups=true to also list projects in descendant groups")
 	}
 
 	return ListProjectsOutput{Projects: projectItemsFromGroup(projects), Pagination: toolutil.PaginationFromResponse(resp)}, nil

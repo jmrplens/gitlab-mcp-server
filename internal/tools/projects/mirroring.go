@@ -71,7 +71,7 @@ func GetPullMirror(ctx context.Context, client *gitlabclient.Client, input GetPu
 		if toolutil.IsHTTPStatus(err, http.StatusBadRequest) && toolutil.ContainsAny(err, "not mirrored") {
 			return PullMirrorOutput{}, toolutil.WrapErrWithHint("projectGetPullMirror", err, "configure pull mirroring first with gitlab_project_pull_mirror_configure or the gitlab_project action pull_mirror_configure, then retry pull_mirror_get")
 		}
-		return PullMirrorOutput{}, toolutil.WrapErrWithStatusHint("projectGetPullMirror", err, http.StatusNotFound, "verify project_id with gitlab_project_get \u2014 pull mirroring requires Premium license")
+		return PullMirrorOutput{}, toolutil.WrapErrWithStatusHint("projectGetPullMirror", err, http.StatusNotFound, "verify project_id with gitlab_project_get. Pull mirroring requires Premium license")
 	}
 	return pullMirrorToOutput(details), nil
 }
@@ -124,7 +124,7 @@ func ConfigurePullMirror(ctx context.Context, client *gitlabclient.Client, input
 	}
 	details, _, err := client.GL().Projects.ConfigureProjectPullMirror(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
-		return PullMirrorOutput{}, toolutil.WrapErrWithStatusHint("projectConfigurePullMirror", err, http.StatusBadRequest, "verify project_id and mirror_url are correct \u2014 pull mirroring requires Premium license")
+		return PullMirrorOutput{}, toolutil.WrapErrWithStatusHint("projectConfigurePullMirror", err, http.StatusBadRequest, "verify project_id and mirror_url are correct. Pull mirroring requires Premium license")
 	}
 	return pullMirrorToOutput(details), nil
 }
@@ -144,7 +144,7 @@ func StartMirroring(ctx context.Context, client *gitlabclient.Client, input Star
 	}
 	_, err := client.GL().Projects.StartMirroringProject(string(input.ProjectID), gl.WithContext(ctx))
 	if err != nil {
-		return toolutil.WrapErrWithStatusHint("projectStartMirroring", err, http.StatusNotFound, "verify project_id \u2014 pull mirroring must be configured first")
+		return toolutil.WrapErrWithStatusHint("projectStartMirroring", err, http.StatusNotFound, "verify project_id. Pull mirroring must be configured first")
 	}
 	return nil
 }

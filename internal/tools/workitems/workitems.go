@@ -138,7 +138,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (GetO
 	wi, _, err := client.GL().WorkItems.GetWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
 		return GetOutput{}, toolutil.WrapErrWithStatusHint("get_work_item", err, http.StatusNotFound,
-			"verify full_path (group or project path) and iid (work item IID) with gitlab_list_work_items; Work Items API is experimental \u2014 verify GitLab version supports the work item type")
+			"verify full_path (group or project path) and iid (work item IID) with gitlab_list_work_items; Work Items API is experimental. Verify GitLab version supports the work item type")
 	}
 	return GetOutput{WorkItem: workItemToItem(wi)}, nil
 }
@@ -644,7 +644,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().WorkItems.DeleteWorkItem(input.FullPath, input.IID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("delete_work_item", err, http.StatusForbidden,
-			"only the author or a Maintainer/Owner can delete; verify full_path + iid; deletion is irreversible \u2014 some work item types are protected (e.g. system-managed)")
+			"only the author or a Maintainer/Owner can delete; verify full_path + iid; deletion is irreversible. Some work item types are protected (e.g. system-managed)")
 	}
 	return nil
 }

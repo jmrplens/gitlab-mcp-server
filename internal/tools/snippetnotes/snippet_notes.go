@@ -247,7 +247,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().Notes.DeleteSnippetNote(string(input.ProjectID), input.SnippetID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("snippetNoteDelete", err, http.StatusForbidden,
-			"only the note author or a Maintainer/Owner can delete; deletion is irreversible \u2014 system notes cannot be removed")
+			"only the note author or a Maintainer/Owner can delete; deletion is irreversible. System notes cannot be removed")
 	}
 	return nil
 }

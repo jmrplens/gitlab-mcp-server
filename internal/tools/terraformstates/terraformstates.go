@@ -37,7 +37,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 	states, _, err := client.GL().TerraformStates.List(input.ProjectPath, gl.WithContext(ctx))
 	if err != nil {
 		return ListOutput{}, toolutil.WrapErrWithStatusHint("gitlab_list_terraform_states", err, http.StatusNotFound,
-			"verify project_path with gitlab_project_get; uses GraphQL \u2014 Terraform states require Maintainer role to view")
+			"verify project_path with gitlab_project_get; uses GraphQL. Terraform states require Maintainer role to view")
 	}
 	items := make([]StateItem, 0, len(states))
 	for _, s := range states {
@@ -85,7 +85,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().TerraformStates.Delete(string(input.ProjectID), input.Name, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("gitlab_delete_terraform_state", err, http.StatusForbidden,
-			"deleting Terraform states requires Maintainer role; deletion is irreversible \u2014 all versions are removed")
+			"deleting Terraform states requires Maintainer role; deletion is irreversible. All versions are removed")
 	}
 	return nil
 }
@@ -104,7 +104,7 @@ func DeleteVersion(ctx context.Context, client *gitlabclient.Client, input Delet
 	_, err := client.GL().TerraformStates.DeleteVersion(string(input.ProjectID), input.Name, input.Serial, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("gitlab_delete_terraform_state_version", err, http.StatusNotFound,
-			"verify serial with gitlab_list_terraform_states; cannot delete the latest version \u2014 use gitlab_delete_terraform_state to remove the entire state")
+			"verify serial with gitlab_list_terraform_states; cannot delete the latest version. Use gitlab_delete_terraform_state to remove the entire state")
 	}
 	return nil
 }

@@ -237,7 +237,7 @@ func Get(ctx context.Context, client *gitlabclient.Client, input GetInput) (Outp
 	pe, _, err := client.GL().ProtectedEnvironments.GetProtectedEnvironment(string(input.ProjectID), input.Environment, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("get protected environment", err, http.StatusNotFound,
-			"the environment may not be protected \u2014 use gitlab_protected_environment_list first")
+			"the environment may not be protected. Use gitlab_protected_environment_list first")
 	}
 	return toOutput(pe), nil
 }
@@ -276,7 +276,7 @@ func Protect(ctx context.Context, client *gitlabclient.Client, input ProtectInpu
 				"protecting environments requires Maintainer role and GitLab Premium/Ultimate")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint(opProtectEnvironment, err, http.StatusConflict,
-			"the environment is already protected \u2014 use gitlab_protected_environment_update to modify access levels")
+			"the environment is already protected. Use gitlab_protected_environment_update to modify access levels")
 	}
 	return toOutput(pe), nil
 }
@@ -342,7 +342,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 				"updating protected environments requires Maintainer role")
 		}
 		return Output{}, toolutil.WrapErrWithStatusHint(opUpdateProtectedEnv, err, http.StatusNotFound,
-			"the environment may not be protected \u2014 use gitlab_protected_environment_protect first")
+			"the environment may not be protected. Use gitlab_protected_environment_protect first")
 	}
 	return toOutput(pe), nil
 }
@@ -392,7 +392,7 @@ func Unprotect(ctx context.Context, client *gitlabclient.Client, input Unprotect
 				"unprotecting environments requires Maintainer role")
 		}
 		return toolutil.WrapErrWithStatusHint(opUnprotectEnvironment, err, http.StatusNotFound,
-			"the environment may already be unprotected \u2014 use gitlab_protected_environment_list to verify")
+			"the environment may already be unprotected. Use gitlab_protected_environment_list to verify")
 	}
 	return nil
 }
