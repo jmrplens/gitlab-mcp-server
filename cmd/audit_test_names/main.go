@@ -144,7 +144,7 @@ func scanDir(dir string) []testEntry {
 			results = append(results, scanDir(path)...)
 			continue
 		}
-		if strings.HasSuffix(e.Name(), "_test.go") {
+		if strings.HasSuffix(e.Name(), testFileSuffix) {
 			results = append(results, scanFile(path)...)
 		}
 	}
@@ -352,7 +352,7 @@ func applyDir(dir string, stdout, stderr io.Writer, dryRun bool) (renames, files
 			ok = ok && sub
 			continue
 		}
-		if strings.HasSuffix(e.Name(), "_test.go") {
+		if strings.HasSuffix(e.Name(), testFileSuffix) {
 			totalFiles++
 			r, fileOK := applyFile(path, stdout, stderr, dryRun)
 			totalRenames += r

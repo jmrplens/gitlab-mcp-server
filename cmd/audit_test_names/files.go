@@ -33,6 +33,10 @@ import (
 	"strings"
 )
 
+// testFileSuffix is the suffix that makes a Go file a test file, and the
+// part the naming convention leaves aside when matching a module.
+const testFileSuffix = "_test.go"
+
 // fileViolation is one test file whose name matches no module.
 type fileViolation struct {
 	path   string
@@ -76,7 +80,7 @@ func checkFileNamesInDir(dir string) []fileViolation {
 			violations = append(violations, checkFileNamesInDir(path)...)
 			continue
 		}
-		if !strings.HasSuffix(e.Name(), "_test.go") {
+		if !strings.HasSuffix(e.Name(), testFileSuffix) {
 			continue
 		}
 		if reason, ok := classifyTestFileName(dir, e.Name()); !ok {
@@ -96,7 +100,7 @@ func isE2ETree(path string) bool {
 // classifyTestFileName decides whether one test file name is allowed in its
 // directory, returning the violation reason when it is not.
 func classifyTestFileName(dir, name string) (reason string, ok bool) {
-	base := strings.TrimSuffix(name, "_test.go")
+	base := strings.TrimSuffix(name, testFileSuffix)
 	if base == "export" {
 		return "", true
 	}
@@ -128,7 +132,7 @@ func classifyTestFileName(dir, name string) (reason string, ok bool) {
 // declaring the module's own package, which is what makes a qualified
 // external-package name a forced choice rather than a stylistic one.
 func internalTestSiblingExists(dir, module string) bool {
-	path := filepath.Join(dir, module+"_test.go")
+	path := filepath.Join(dir, module+testFileSuffix)
 	if _, err := os.Stat(path); err != nil {
 		return false
 	}
