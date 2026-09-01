@@ -5,9 +5,23 @@ package shared
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/go/packages"
 )
+
+// loadCache memoizes LoadToolPackages per root. Loading the typed package
+// set for ./internal/tools/... costs 10-20s, and every analyzer plus every
+// test that calls buildReport twice used to pay it again. The audits treat
+// the loaded packages as read-only type information, which is what makes a
+// process-lifetime shared result safe; the CLIs are one-shot anyway.
+var loadCache sync.Map // root -> *loadResult
+
+type loadResult struct {
+	once sync.Once
+	pkgs []*packages.Package
+	err  error
+}
 
 const (
 	ClientGoPkgPath = "gitlab.com/gitlab-org/api/client-go"
@@ -19,7 +33,18 @@ const (
 // with full type information, returning only the tool sub-packages that resolved
 // types successfully. It is shared by the structs and actions analyzers, which
 // both need the same typed package set. A package-load error aborts the run.
+// The result is memoized per root and must be treated as read-only.
 func LoadToolPackages(root string) ([]*packages.Package, error) {
+	entry, _ := loadCache.LoadOrStore(root, &loadResult{})
+	result, _ := entry.(*loadResult)
+	result.once.Do(func() {
+		result.pkgs, result.err = loadToolPackages(root)
+	})
+	return result.pkgs, result.err
+}
+
+// loadToolPackages performs the actual load; see LoadToolPackages.
+func loadToolPackages(root string) ([]*packages.Package, error) {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedSyntax |
 			packages.NeedTypes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports,

@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -50,9 +51,52 @@ func WeakIndividualDescription(spec toolutil.ActionSpec, projected map[string]st
 	return !strings.Contains(description, "Returns:") || !strings.Contains(description, "See also:")
 }
 
+// projectionCache memoizes ProjectIndividualDescriptions. Projecting the
+// individual surface registers ~1071 tools with schema compilation (~10s),
+// the output depends only on the compiled-in catalog (the client is an
+// offline stub), and the audits only read the map. One projection per
+// process therefore serves every analyzer and every test in a package; the
+// one-shot CLIs are unaffected.
+var projectionCache struct {
+	once         sync.Once
+	descriptions map[string]string
+	err          error
+}
+
+// specsCache memoizes CachedActionSpecs per enterprise flag, same contract:
+// the returned groups are shared and must be treated as read-only.
+var specsCache sync.Map // enterprise bool -> *specsResult
+
+type specsResult struct {
+	once   sync.Once
+	groups []tools.ActionSpecGroup
+}
+
+// CachedIndividualDescriptions returns the projected individual-tool
+// descriptions, computed once per process. The map is shared: read-only.
+func CachedIndividualDescriptions(client *gitlabclient.Client) (map[string]string, error) {
+	projectionCache.once.Do(func() {
+		projectionCache.descriptions, projectionCache.err = ProjectIndividualDescriptions(client)
+	})
+	return projectionCache.descriptions, projectionCache.err
+}
+
+// CachedActionSpecs returns the collected action specs for the given tier
+// selector, computed once per process and per flag. The slice and everything
+// it references are shared: read-only.
+func CachedActionSpecs(client *gitlabclient.Client, enterprise bool) []tools.ActionSpecGroup {
+	entry, _ := specsCache.LoadOrStore(enterprise, &specsResult{})
+	result, _ := entry.(*specsResult)
+	result.once.Do(func() {
+		result.groups = tools.CollectActionSpecs(client, enterprise)
+	})
+	return result.groups
+}
+
 // ProjectIndividualDescriptions registers the individual-tool surface on an
 // in-memory MCP server and returns the projected description per tool name —
-// the exact text the model consumes.
+// the exact text the model consumes. Prefer CachedIndividualDescriptions
+// unless a fresh projection is the point.
 func ProjectIndividualDescriptions(client *gitlabclient.Client) (map[string]string, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "audit", Version: "0.0.1"}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	tools.RegisterAll(server, client, edition.Ultimate)
