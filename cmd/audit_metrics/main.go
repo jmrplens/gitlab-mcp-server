@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -442,7 +443,31 @@ func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
 // listServerTools registers tools on an in-memory MCP server and returns
 // the full tool list. When meta is true, meta-tools are registered.
 // Enterprise controls whether Enterprise/Premium meta-tools are included.
+// listedToolsCache memoizes listServerTools per (client, surface, tier):
+// registering a full surface costs seconds, the result depends only on the
+// compiled-in catalog and those inputs, and callers only read it. The audit
+// itself repeats one combination (meta enterprise for the schema-modes
+// section), and the test binary repeats several.
+var listedToolsCache sync.Map // listKey -> []*mcp.Tool
+
+type listKey struct {
+	client     *gitlabclient.Client
+	meta       bool
+	enterprise bool
+}
+
 func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
+	key := listKey{client: client, meta: meta, enterprise: enterprise}
+	if cached, ok := listedToolsCache.Load(key); ok {
+		listed, _ := cached.([]*mcp.Tool)
+		return listed
+	}
+	listed := listServerToolsUncached(client, meta, enterprise)
+	listedToolsCache.Store(key, listed)
+	return listed
+}
+
+func listServerToolsUncached(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
 	opts := &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}}
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, opts)
 

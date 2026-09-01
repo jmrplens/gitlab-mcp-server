@@ -17,6 +17,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -28,22 +29,31 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// newAuditMetricsClient creates a [gitlabclient.Client] backed by a mock
-// /api/v4/version endpoint for audit_metrics tests.
+// newAuditMetricsClient returns the binary-lifetime [gitlabclient.Client]
+// backed by a mock /api/v4/version endpoint. Shared across tests (process
+// teardown reclaims the httptest server) so listServerTools' per-client
+// memo can serve every test from one surface registration, the same
+// pattern cmd/server's createServer tests use.
 func newAuditMetricsClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"version":"17.0.0"}`)
-	}))
-	t.Cleanup(srv.Close)
-
-	client, err := gitlabclient.NewClient(&config.Config{GitLabURL: srv.URL, GitLabToken: "audit-token"})
-	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
+	sharedClientOnce.Do(func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"version":"17.0.0"}`)
+		}))
+		sharedClient, errSharedClient = gitlabclient.NewClient(&config.Config{GitLabURL: srv.URL, GitLabToken: "audit-token"})
+	})
+	if errSharedClient != nil {
+		t.Fatalf("NewClient() error: %v", errSharedClient)
 	}
-	return client
+	return sharedClient
 }
+
+var (
+	sharedClientOnce sync.Once
+	sharedClient     *gitlabclient.Client
+	errSharedClient  error
+)
 
 // TestCountResources_IncludesToolManifest verifies resource metrics include the
 // surface-aware tool manifest registration path used by the audit command.
