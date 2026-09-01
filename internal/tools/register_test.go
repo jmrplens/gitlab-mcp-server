@@ -3,6 +3,12 @@
 // presence, and end-to-end MCP call flow using in-memory transports.
 package tools
 
+// testSchemaCache shares resolved tool schemas across every server these
+// tests register: the resolutions depend only on the compiled-in catalog,
+// and re-resolving ~1000 schemas per registration was most of the package's
+// test time. The benchmark in register_meta_test.go keeps its own caches on
+// purpose, because cold-versus-warm is what it measures.
+
 import (
 	"bytes"
 	"context"
@@ -39,6 +45,8 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/uploads"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
+
+var testSchemaCache = mcp.NewSchemaCache()
 
 const (
 	// fmtListToolsErr is the format string used when ListTools returns an error.
@@ -155,7 +163,7 @@ func newMCPSession(t *testing.T, handler http.Handler, enterprise ...bool) *mcp.
 			return
 		}
 
-		server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+		server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
 		RegisterAll(server, client, edition.TierForEnterprise(ent))
 		toolutil.LockdownInputSchemas(server)
 
@@ -231,7 +239,7 @@ func newMetaMCPSession(t *testing.T, handler http.Handler, enterprise bool) *mcp
 			return
 		}
 
-		server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+		server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 		if registerErr := RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)); registerErr != nil {
 			slot.err = fmt.Errorf("RegisterAllMeta() error = %w", registerErr)
 			return
@@ -277,7 +285,7 @@ func newIsolatedMetaMCPSession(t *testing.T, handler http.Handler, enterprise bo
 	t.Helper()
 	client := newTestClient(t, handler)
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	if err := RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)); err != nil {
 		t.Fatalf("RegisterAllMeta() error = %v", err)
 	}
@@ -363,7 +371,7 @@ func TestRegisterAll_OrbitToolsRequireGitLabDotComEnterprise(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewClientWithToken() error: %v", err)
 			}
-			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
 			RegisterAll(server, client, edition.TierForEnterprise(tt.enterprise))
 			names := toolNamesFromServer(t, server)
 			if gotOrbit := slices.Contains(names, "gitlab_orbit_status"); gotOrbit != tt.wantOrbit {
@@ -443,7 +451,7 @@ func TestRegisterAllMeta_OrbitMetaToolRequiresGitLabDotComEnterprise(t *testing.
 			if err != nil {
 				t.Fatalf("NewClientWithToken() error: %v", err)
 			}
-			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 			if registerErr := RegisterAllMeta(server, client, edition.TierForEnterprise(tt.enterprise)); registerErr != nil {
 				t.Fatalf("RegisterAllMeta() error = %v", registerErr)
 			}
@@ -4627,7 +4635,7 @@ func BenchmarkRegisterAll_Ultimate(b *testing.B) {
 	client := benchClient(b)
 	b.ResetTimer()
 	for range b.N {
-		server := mcp.NewServer(&mcp.Implementation{Name: "bench", Version: "0"}, &mcp.ServerOptions{PageSize: 2000})
+		server := mcp.NewServer(&mcp.Implementation{Name: "bench", Version: "0"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
 		RegisterAll(server, client, edition.Ultimate)
 	}
 }
