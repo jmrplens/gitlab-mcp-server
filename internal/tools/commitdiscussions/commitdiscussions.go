@@ -75,7 +75,7 @@ type CreateInput struct {
 	Body      string               `json:"body" jsonschema:"Discussion body (Markdown supported),required"`
 	Position  *PositionInput       `json:"position,omitempty" jsonschema:"Position for inline diff comments"`
 	// CreatedAt backdates the discussion's first note; requires admin or project/group owner rights (ISO 8601).
-	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights"`
 }
 
 // AddNoteInput defines parameters for adding a note to a commit discussion. It
@@ -86,7 +86,7 @@ type AddNoteInput struct {
 	DiscussionID string               `json:"discussion_id" jsonschema:"Discussion ID to reply to,required"`
 	Body         string               `json:"body" jsonschema:"Note body (Markdown supported),required"`
 	// CreatedAt backdates the note; requires admin or project/group owner rights (ISO 8601).
-	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights"`
 }
 
 // UpdateNoteInput defines parameters for updating a commit discussion note. It
@@ -98,7 +98,7 @@ type UpdateNoteInput struct {
 	NoteID       int64                `json:"note_id" jsonschema:"Note ID to update,required"`
 	Body         string               `json:"body" jsonschema:"Updated note body,required"`
 	// CreatedAt overrides the note's creation timestamp; requires admin or project/group owner rights (ISO 8601).
-	CreatedAt string `json:"created_at,omitempty" jsonschema:"Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights"`
 }
 
 // DeleteNoteInput defines parameters for deleting a commit discussion note.

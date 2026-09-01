@@ -9,7 +9,7 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
-	audit-discovery audit-discovery-check audit-e2e-gaps \
+	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
@@ -989,6 +989,17 @@ audit-test-goroutines:
 ## goroutine. Wired into CI once the sweep lands (phase 4 of the plan).
 check-test-goroutines:
 	go run ./cmd/audit_test_goroutines/ -check
+
+## audit-gateway-chars: report served descriptions and titles carrying
+## characters MCP gateway validators are known to reject (semicolons today),
+## across every tool surface plus prompts and resources.
+audit-gateway-chars:
+	go run ./cmd/audit_gateway_chars/
+
+## check-gateway-chars: fail when anything served carries an offending
+## character, so a rejection at a gateway's door cannot ship silently.
+check-gateway-chars:
+	go run ./cmd/audit_gateway_chars/ -check
 
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:

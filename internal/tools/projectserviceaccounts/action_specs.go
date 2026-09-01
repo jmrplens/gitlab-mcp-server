@@ -39,7 +39,7 @@ func projectServiceAccountOptions(actionName, individualTool string) toolutil.Ac
 	options := toolutil.ActionSpecOptions{
 		Aliases:        projectServiceAccountAliases(actionName),
 		Tags:           projectServiceAccountTags(actionName),
-		Usage:          "Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate); requires sufficient project permissions.",
+		Usage:          "Use for GitLab project service accounts and their personal access tokens. Available on all tiers (Free, Premium, Ultimate). Requires sufficient project permissions.",
 		RelatedActions: []string{"project.get", "project.members"},
 		OpenWorld:      true,
 		OwnerPackage:   "projectserviceaccounts",
@@ -50,7 +50,7 @@ func projectServiceAccountOptions(actionName, individualTool string) toolutil.Ac
 			"token_id": {
 				SemanticRole:     "access_token",
 				ValueSource:      "Project service account personal access token ID returned by service_account_pat_list or service_account_pat_create.",
-				CommonConfusions: []string{"Do not use service_account_id as token_id; token_id identifies the personal access token itself."},
+				CommonConfusions: []string{"Do not use service_account_id as token_id. token_id identifies the personal access token itself."},
 			},
 		}
 	}
@@ -58,7 +58,7 @@ func projectServiceAccountOptions(actionName, individualTool string) toolutil.Ac
 		options.Usage += " Omit email unless the task gives an explicit valid email address."
 	}
 	if actionName == "service_account_pat_create" || actionName == "service_account_pat_rotate" {
-		options.Usage += " Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime."
+		options.Usage += " Omit expires_at unless the task gives an explicit expiry date. If provided, use YYYY-MM-DD within the instance maximum token lifetime."
 	}
 	return options
 }

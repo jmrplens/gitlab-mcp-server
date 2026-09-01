@@ -63,7 +63,7 @@ func TestActionSpecs_VariableValueGuidance(t *testing.T) {
 		if guidance.SemanticRole != "pipeline_schedule_variable_value" {
 			t.Fatalf("%s value SemanticRole = %q, want pipeline_schedule_variable_value", toolName, guidance.SemanticRole)
 		}
-		if !strings.Contains(guidance.ValueSource, "supply an explicit value") {
+		if !strings.Contains(guidance.ValueSource, "Supply an explicit value") {
 			t.Fatalf("%s value ValueSource = %q, want explicit value guidance", toolName, guidance.ValueSource)
 		}
 		description := schemaPropertyDescription(t, byTool[toolName].Route.InputSchema, "value")

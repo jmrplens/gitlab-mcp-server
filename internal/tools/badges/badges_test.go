@@ -1124,14 +1124,14 @@ func assertBadgeEditNameGuidance(t *testing.T, byTool map[string]toolutil.Action
 func assertBadgeCreateScopeGuidance(t *testing.T, byTool map[string]toolutil.ActionSpec) {
 	t.Helper()
 	projectAdd := byTool["gitlab_add_project_badge"]
-	if !strings.Contains(projectAdd.Usage, "project badge") || !strings.Contains(projectAdd.Usage, "project_id") || !strings.Contains(projectAdd.Usage, "group_id") || !strings.Contains(projectAdd.Usage, "do not use gitlab_group") {
+	if !strings.Contains(projectAdd.Usage, "project badge") || !strings.Contains(projectAdd.Usage, "project_id") || !strings.Contains(projectAdd.Usage, "group_id") || !strings.Contains(projectAdd.Usage, "Do not use gitlab_group") {
 		t.Fatalf("project badge add Usage = %q, want project_id guidance", projectAdd.Usage)
 	}
 	if guidance := projectAdd.ParameterGuidance["project_id"]; guidance.SemanticRole != "scope_project" || !containsText(guidance.CommonConfusions, "group_id") {
 		t.Fatalf("project badge project_id guidance = %+v, want group_id warning", guidance)
 	}
 	groupAdd := byTool["gitlab_add_group_badge"]
-	if !strings.Contains(groupAdd.Usage, "group badge") || !strings.Contains(groupAdd.Usage, "group_id") || !strings.Contains(groupAdd.Usage, "project_id") || !strings.Contains(groupAdd.Usage, "project badge CRUD belongs to gitlab_project") {
+	if !strings.Contains(groupAdd.Usage, "group badge") || !strings.Contains(groupAdd.Usage, "group_id") || !strings.Contains(groupAdd.Usage, "project_id") || !strings.Contains(groupAdd.Usage, "Project badge CRUD belongs to gitlab_project") {
 		t.Fatalf("group badge add Usage = %q, want group_id guidance", groupAdd.Usage)
 	}
 	if guidance := groupAdd.ParameterGuidance["group_id"]; guidance.SemanticRole != "scope_group" || !containsText(guidance.CommonConfusions, "project_id") {

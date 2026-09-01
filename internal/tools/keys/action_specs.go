@@ -69,7 +69,7 @@ type keyActionMetaEntry struct {
 // since the admin Keys API resolves a globally unique key to its owning user.
 var keyActionMeta = map[string]keyActionMetaEntry{
 	"gitlab_get_key_with_user": {
-		usage:       "Look up a single SSH key by its global numeric key ID and return the owning user. Admin-only on self-managed instances. Use when a prompt or audit log gives a bare key ID and you need to identify who owns it; for a specific user's own keys use the per-user SSH-key tools instead.",
+		usage:       "Look up a single SSH key by its global numeric key ID and return the owning user. Admin-only on self-managed instances. Use when a prompt or audit log gives a bare key ID and you need to identify who owns it. For a specific user's own keys use the per-user SSH-key tools instead.",
 		aliases:     []string{"get ssh key by id", "look up ssh key owner by id", "identify ssh key owner", "whose ssh key is this id"},
 		related:     []string{"user.get_ssh_key", "user.ssh_keys", "user.ssh_keys_for_user"},
 		description: "Look up an SSH key by its global ID and return the owning user. Returns: the key ID, title, public key, creation time, and the owning user (ID, username, name). See also: gitlab_get_ssh_key, gitlab_list_ssh_keys, gitlab_list_ssh_keys_for_user.",

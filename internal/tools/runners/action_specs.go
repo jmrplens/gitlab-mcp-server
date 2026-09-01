@@ -182,7 +182,7 @@ func resetScopedRegTokenEntry(scope, scopeParam, related1, related2 string) runn
 	return runnerActionMetaEntry{
 		usage: fmt.Sprintf(
 			"Reset a %s's runner registration token by %s (deprecated registration flow). "+
-				"Use only for legacy %s-scoped runner registration; modern flows use runner.register with a created token.",
+				"Use only for legacy %s-scoped runner registration. Modern flows use runner.register with a created token.",
 			scope, scopeParam, scope,
 		),
 		aliases: []string{
@@ -206,7 +206,7 @@ func resetScopedRegTokenEntry(scope, scopeParam, related1, related2 string) runn
 var runnerActionMeta = map[string]runnerActionMetaEntry{
 	// Owned-runner inspection actions.
 	"gitlab_runner_list": {
-		usage:       "List runners owned by the authenticated user. Use type, status, tag_list, and scope filters to narrow results when the prompt asks for the caller's own runners; prefer runner.list_all for an instance-wide admin view.",
+		usage:       "List runners owned by the authenticated user. Use type, status, tag_list, and scope filters to narrow results when the prompt asks for the caller's own runners. Prefer runner.list_all for an instance-wide admin view.",
 		aliases:     []string{"list owned runners", "my runners", "show my runners", "browse my runners"},
 		related:     []string{"gitlab_runner_list_all", "gitlab_runner_get", toolRunnerListProject, "gitlab_runner_list_group"},
 		description: "List runners owned by the authenticated user, with type/status/tag/scope filters and pagination. Returns: runners with id, name, type, status, paused/shared/online flags, plus pagination metadata. See also: gitlab_runner_get, gitlab_runner_list_all, gitlab_runner_list_project.",
@@ -225,7 +225,7 @@ var runnerActionMeta = map[string]runnerActionMetaEntry{
 	},
 	// Runner lifecycle actions.
 	"gitlab_runner_update": {
-		usage:       "Update a runner's configuration by runner_id. Set description, paused, tag_list, locked, access_level, or maximum_timeout; pass only the fields the prompt asks to change (e.g. paused to pause or resume a runner).",
+		usage:       "Update a runner's configuration by runner_id. Set description, paused, tag_list, locked, access_level, or maximum_timeout. Pass only the fields the prompt asks to change (e.g. paused to pause or resume a runner).",
 		aliases:     []string{"update runner", "edit runner", "pause runner", "resume runner", "modify runner"},
 		related:     []string{"gitlab_runner_get", "gitlab_runner_remove"},
 		description: "Update a runner's configuration (description, pause state, tags, locked, access level, timeout) by runner_id. Returns: the updated runner details. See also: gitlab_runner_get, gitlab_runner_remove.",
@@ -244,19 +244,19 @@ var runnerActionMeta = map[string]runnerActionMetaEntry{
 	},
 	// Project and group assignment actions.
 	toolRunnerListProject: {
-		usage:       "List the runners assigned to a project, identified by project_id. Use when the prompt scopes runners to one project; use runner.enable_project or runner.disable_project to change those assignments.",
+		usage:       "List the runners assigned to a project, identified by project_id. Use when the prompt scopes runners to one project. Use runner.enable_project or runner.disable_project to change those assignments.",
 		aliases:     []string{"list project runners", "runners for project", "show project runners", "browse project runners"},
 		related:     []string{toolRunnerEnableProject, toolRunnerDisableProject, "gitlab_runner_list"},
 		description: "List runners assigned to a project, with type/status/tag/scope filters and pagination. Returns: runners with id, name, type, status, flags, plus pagination metadata. See also: gitlab_runner_enable_project, gitlab_runner_disable_project, gitlab_runner_list.",
 	},
 	toolRunnerEnableProject: {
-		usage:       "Assign an existing runner to a project. Provide project_id for the target project and runner_id for the runner to enable; use runner.list to find an available runner_id first.",
+		usage:       "Assign an existing runner to a project. Provide project_id for the target project and runner_id for the runner to enable. Use runner.list to find an available runner_id first.",
 		aliases:     []string{"enable project runner", "assign runner to project", "attach runner to project"},
 		related:     []string{toolRunnerDisableProject, toolRunnerListProject},
 		description: "Assign an existing runner to a project by project_id and runner_id. Returns: the enabled runner. See also: gitlab_runner_disable_project, gitlab_runner_list_project.",
 	},
 	toolRunnerDisableProject: {
-		usage:       "Remove a runner assignment from a project. Provide project_id for the project and runner_id for the runner to unassign; this detaches the runner without unregistering it (use runner.remove to delete the runner itself).",
+		usage:       "Remove a runner assignment from a project. Provide project_id for the project and runner_id for the runner to unassign. This detaches the runner without unregistering it (use runner.remove to delete the runner itself).",
 		aliases:     []string{"disable project runner", "unassign runner from project", "detach runner from project"},
 		related:     []string{toolRunnerEnableProject, toolRunnerListProject},
 		description: "Remove a runner assignment from a project by project_id and runner_id. Returns: a success confirmation. See also: gitlab_runner_enable_project, gitlab_runner_list_project.",
@@ -269,19 +269,19 @@ var runnerActionMeta = map[string]runnerActionMetaEntry{
 	},
 	// Runner registration actions.
 	"gitlab_runner_register": {
-		usage:       "Register a new runner using a registration token. Provide the token plus optional description, tag_list, locked, run_untagged, and access_level; the response includes the runner's authentication token needed to configure the runner agent.",
+		usage:       "Register a new runner using a registration token. Provide the token plus optional description, tag_list, locked, run_untagged, and access_level. The response includes the runner's authentication token needed to configure the runner agent.",
 		aliases:     []string{"register runner", "create runner", "new runner", "provision runner"},
 		related:     []string{"gitlab_runner_verify", "gitlab_runner_list"},
 		description: "Register a new runner with a registration token, optional info hashmap, tags, and configuration. Returns: the created runner including its authentication token. See also: gitlab_runner_verify, gitlab_runner_list.",
 	},
 	toolRunnerDeleteRegistered: {
-		usage:       "Delete a registered runner by its numeric runner_id. Use this runner-registration-API variant when you have the runner_id; prefer runner.delete_by_token when only the authentication token is known.",
+		usage:       "Delete a registered runner by its numeric runner_id. Use this runner-registration-API variant when you have the runner_id. Prefer runner.delete_by_token when only the authentication token is known.",
 		aliases:     []string{"delete registered runner", "delete runner by id", "remove registered runner", "unregister runner by id"},
 		related:     []string{toolRunnerDeleteByToken, "gitlab_runner_remove"},
 		description: "Delete a registered runner by its numeric runner_id. Returns: a success confirmation. See also: gitlab_runner_delete_by_token, gitlab_runner_remove.",
 	},
 	toolRunnerDeleteByToken: {
-		usage:       "Delete a registered runner using its authentication token instead of a runner_id. Use when the runner agent's token is available but the numeric runner_id is not; prefer runner.delete_registered when you have the runner_id.",
+		usage:       "Delete a registered runner using its authentication token instead of a runner_id. Use when the runner agent's token is available but the numeric runner_id is not. Prefer runner.delete_registered when you have the runner_id.",
 		aliases:     []string{"delete runner by token", "unregister runner by token", "remove runner by token", "drop runner by token"},
 		related:     []string{toolRunnerDeleteRegistered, "gitlab_runner_remove"},
 		description: "Delete a registered runner by its authentication token. Returns: a success confirmation. See also: gitlab_runner_delete_registered, gitlab_runner_remove.",
@@ -293,14 +293,14 @@ var runnerActionMeta = map[string]runnerActionMetaEntry{
 		description: "Verify that a runner authentication token is valid. Returns: a success confirmation when the token authenticates. See also: gitlab_runner_register, gitlab_runner_reset_token.",
 	},
 	"gitlab_runner_reset_token": {
-		usage:       "Reset a runner's authentication token by runner_id, invalidating the previous token. Use when a runner token is compromised or must be rotated; the response returns the new token.",
+		usage:       "Reset a runner's authentication token by runner_id, invalidating the previous token. Use when a runner token is compromised or must be rotated. The response returns the new token.",
 		aliases:     []string{"reset runner token", "rotate runner authentication token", "renew runner token", "regenerate runner token"},
 		related:     []string{"gitlab_runner_verify", "gitlab_runner_get"},
 		description: "Reset a runner's authentication token by runner_id. Returns: the new token and its expiry. See also: gitlab_runner_verify, gitlab_runner_get.",
 	},
 	// Deprecated registration-token reset actions.
 	toolRunnerResetInstanceReg: {
-		usage:       "Reset the instance-wide runner registration token (admin only, deprecated registration flow). Use only for legacy instance-level runner registration; modern flows use runner.register with a created token.",
+		usage:       "Reset the instance-wide runner registration token (admin only, deprecated registration flow). Use only for legacy instance-level runner registration. Modern flows use runner.register with a created token.",
 		aliases:     []string{"reset instance registration token", "rotate instance runner registration token", "renew instance registration token", "regenerate instance runner token"},
 		related:     []string{toolRunnerResetGroupReg, toolRunnerResetProjectReg},
 		description: "Reset the instance-level runner registration token (deprecated, admin only). Returns: the new registration token and its expiry. See also: gitlab_runner_reset_group_reg_token, gitlab_runner_reset_project_reg_token.",
@@ -321,7 +321,7 @@ func runnerParameterGuidance(actionName string) map[string]toolutil.ParameterGui
 	if runnerActionUsesRunnerID(actionName) {
 		guidance["runner_id"] = toolutil.ParameterGuidance{
 			SemanticRole: "runner_identifier",
-			ValueSource:  "Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get; runner_id is the global runner ID.",
+			ValueSource:  "Use gitlab_runner_list, gitlab_runner_list_project, gitlab_runner_list_group, or gitlab_runner_get. runner_id is the global runner ID.",
 			CommonConfusions: []string{
 				"Do not pass project_id as runner_id.",
 				"For project assignment actions, project_id identifies the project scope while runner_id identifies the runner.",
@@ -331,7 +331,7 @@ func runnerParameterGuidance(actionName string) map[string]toolutil.ParameterGui
 	if runnerActionUsesProjectID(actionName) {
 		guidance["project_id"] = toolutil.ParameterGuidance{
 			SemanticRole: "scope_owner_project",
-			ValueSource:  "Use gitlab_project get/list outputs; accepts numeric ID or namespace/project path.",
+			ValueSource:  "Use gitlab_project get/list outputs. Accepts numeric ID or namespace/project path.",
 			CommonConfusions: []string{
 				"project_id identifies the project scope, not the runner.",
 				"Use runner_id for the runner to enable, disable, reset, or inspect.",
@@ -341,7 +341,7 @@ func runnerParameterGuidance(actionName string) map[string]toolutil.ParameterGui
 	if runnerActionUsesGroupID(actionName) {
 		guidance["group_id"] = toolutil.ParameterGuidance{
 			SemanticRole: "scope_owner_group",
-			ValueSource:  "Use gitlab_group get/list outputs; accepts numeric ID or full group path.",
+			ValueSource:  "Use gitlab_group get/list outputs. Accepts numeric ID or full group path.",
 		}
 	}
 	if len(guidance) == 0 {

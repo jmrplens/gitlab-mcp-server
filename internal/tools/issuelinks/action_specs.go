@@ -114,7 +114,7 @@ func createOptions() toolutil.ActionSpecOptions {
 			"target_project_id": {
 				SemanticRole:     "target_project",
 				ValueSource:      "Project that owns the target issue.",
-				CommonConfusions: []string{"For same-project links this may equal project_id; otherwise keep it distinct."},
+				CommonConfusions: []string{"For same-project links this may equal project_id. Otherwise keep it distinct."},
 			},
 			"target_issue_iid": {
 				SemanticRole:     "target_issue",

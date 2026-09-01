@@ -126,11 +126,11 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 				SemanticRole:     "hex_color",
 				ValueSource:      "Hex color string for label background (for example #d9534f).",
 				ExampleBinding:   `params.color:"#d9534f"`,
-				CommonConfusions: []string{"Provide hex color values; avoid named colors."},
+				CommonConfusions: []string{"Provide hex color values. Avoid named colors."},
 			},
 		}
 	case "label_update":
-		options.Usage = "Update a project label's name, color, description, priority, or archived state. Identify the label by label_id (ID or name); at least one mutable field is required."
+		options.Usage = "Update a project label's name, color, description, priority, or archived state. Identify the label by label_id (ID or name). At least one mutable field is required."
 		options.Aliases = []string{"update label", "edit label", "rename label", "recolor label"}
 		options.RelatedActions = []string{actionLabelGet, actionLabelList, "label.delete"}
 		options.IndividualTool.Description = "Update an existing project label (new_name, color, description, priority, archived). Returns: the updated label (id, name, color, text_color, description, counts, priority, subscribed, is_project_label, archived). See also: gitlab_label_get, gitlab_label_list, gitlab_label_delete."
@@ -142,7 +142,7 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 			},
 		}
 	case "label_delete":
-		options.Usage = "Delete a project label by label_id (ID or name). Destructive and irreversible; group-inherited labels must be deleted at the group level."
+		options.Usage = "Delete a project label by label_id (ID or name). Destructive and irreversible. Group-inherited labels must be deleted at the group level."
 		options.Aliases = []string{"delete label", "remove label", "drop label"}
 		options.RelatedActions = []string{actionLabelList, actionLabelGet, "label.create"}
 		options.IndividualTool.Description = "Delete a project label by ID or name. Destructive: the label is removed from the project and unassigned from issues and merge requests. Returns: a deletion confirmation. See also: gitlab_label_list, gitlab_label_get, gitlab_label_create."
@@ -178,10 +178,10 @@ func labelOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 			},
 		}
 	case "label_promote":
-		options.Usage = "Promote a project label to a group label so it is shared across the group's projects. The project must belong to a group; personal-namespace projects cannot promote labels."
+		options.Usage = "Promote a project label to a group label so it is shared across the group's projects. The project must belong to a group. Personal-namespace projects cannot promote labels."
 		options.Aliases = []string{"promote label", "promote to group label", "make group label"}
 		options.RelatedActions = []string{actionLabelGet, actionLabelList, "group_label.list"}
-		options.IndividualTool.Description = "Promote a project label to a group label, sharing it across the group's projects. Returns: no content on success; requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list."
+		options.IndividualTool.Description = "Promote a project label to a group label, sharing it across the group's projects. Returns: no content on success. Requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramLabelID: {
 				SemanticRole:   roleLabelIdentifier,

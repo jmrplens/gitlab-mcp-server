@@ -287,12 +287,12 @@ func adminAppearanceUpdateSpec(client *gitlabclient.Client) toolutil.ActionSpec 
 		"message_background_color": {
 			SemanticRole:     "hex_color",
 			ValueSource:      "Hex color string such as #e75e40 for the appearance banner background.",
-			CommonConfusions: []string{"Provide a CSS-style hex color such as #ffffff; do not send color names or RGB tuples."},
+			CommonConfusions: []string{"Provide a CSS-style hex color such as #ffffff. Do not send color names or RGB tuples."},
 		},
 		"message_font_color": {
 			SemanticRole:     "hex_color",
 			ValueSource:      "Hex color string such as #ffffff for the appearance banner text.",
-			CommonConfusions: []string{"Provide a CSS-style hex color such as #000000; do not send color names or RGB tuples."},
+			CommonConfusions: []string{"Provide a CSS-style hex color such as #000000. Do not send color names or RGB tuples."},
 		},
 	}
 	options.IndividualTool.Description = "Update GitLab application appearance and branding settings. Returns: the updated appearance object after GitLab applies the change. See also: gitlab_get_appearance, gitlab_get_settings, gitlab_get_metadata."
@@ -314,7 +314,7 @@ func adminTerraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionS
 	options := adminOptions("gitlab_unlock_terraform_state")
 	options.IndividualTool.AnnotationOverrides.Destructive = &individualDestructive
 	options.Tags = append(options.Tags, "terraform", "terraform_state", "state", "lock", "unlock")
-	options.Usage = "Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name; do not send the state name as id."
+	options.Usage = "Unlock a GitLab Terraform state by project_id and state name. Use params.name for the Terraform state name. Do not send the state name as id."
 	options.Aliases = []string{"terraform_state.unlock", "unlock terraform state", "unlock terraform state lock", "terraform state unlock"}
 	options.RelatedActions = []string{actionTerraformStateGet, actionTerraformStateLock, actionTerraformStateList}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -322,12 +322,12 @@ func adminTerraformStateUnlockSpec(client *gitlabclient.Client) toolutil.ActionS
 			SemanticRole: "terraform_state_name",
 			ValueSource:  "Terraform state name from the prompt or admin.terraform_state_list output.",
 			CommonConfusions: []string{
-				"Do not send the state name as id; use params.name.",
+				"Do not send the state name as id. Use params.name.",
 			},
 		},
 	}
 	options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-		toolutil.SchemaPropertyOverride("name", map[string]any{"description": "Terraform state name. Use params.name for values such as production or eval-unlock-123; do not use id."}),
+		toolutil.SchemaPropertyOverride("name", map[string]any{"description": "Terraform state name. Use params.name for values such as production or eval-unlock-123. Do not use id."}),
 	}
 	options.IndividualTool.Description = "Unlock a project Terraform state by project_id and state name. Returns: the state with its lock released. See also: gitlab_lock_terraform_state, gitlab_get_terraform_state, gitlab_list_terraform_states."
 	return toolutil.NewDeleteActionSpec("terraform_state_unlock", toolutil.DestructiveAction(client, terraformstates.Unlock), options)
@@ -412,7 +412,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		description: "Update a project topic. Returns: the updated topic. See also: gitlab_get_topic, gitlab_delete_topic.",
 	},
 	"gitlab_delete_topic": {
-		usage:       "Delete a project topic by id (admin only). Projects keep their other topics; this only removes the topic definition.",
+		usage:       "Delete a project topic by id (admin only). Projects keep their other topics. This only removes the topic definition.",
 		aliases:     []string{"delete topic", "remove topic", "drop project topic"},
 		related:     []string{actionTopicGet, actionTopicList, "admin.topic_create"},
 		description: "Delete a project topic. Returns: a success status. See also: gitlab_get_topic, gitlab_create_topic.",
@@ -617,7 +617,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		description: "Track multiple usage events. Returns: a success status. See also: gitlab_track_event, gitlab_get_service_ping.",
 	},
 	"gitlab_mark_migration": {
-		usage:       "Mark a background database migration as successfully completed (admin only). Provide the database name and migration version. Use with care; intended for recovering stuck migrations.",
+		usage:       "Mark a background database migration as successfully completed (admin only). Provide the database name and migration version. Use with care. Intended for recovering stuck migrations.",
 		aliases:     []string{"mark migration", "mark database migration done", "force migration complete"},
 		related:     []string{actionSettingsGet, actionMetadataGet},
 		description: "Mark a database migration as complete. Returns: a success status. See also: gitlab_get_settings, gitlab_get_metadata.",
@@ -629,7 +629,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		description: "List instance OAuth applications. Returns: an array of applications with id, application_id, name, redirect URIs, and scopes. See also: gitlab_create_application, gitlab_delete_application.",
 	},
 	"gitlab_create_application": {
-		usage:       "Create an instance-level OAuth application (admin only). Provide name, redirect_uri, and scopes; optionally mark it confidential or trusted.",
+		usage:       "Create an instance-level OAuth application (admin only). Provide name, redirect_uri, and scopes. Optionally mark it confidential or trusted.",
 		aliases:     []string{"create application", "register oauth application", "add instance oauth app"},
 		related:     []string{actionApplicationList, actionApplicationDelete},
 		description: "Create an instance OAuth application. Returns: the application with application_id and secret (shown once). See also: gitlab_list_applications, gitlab_delete_application.",
@@ -749,7 +749,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		description: "List alert metric images. Returns: an array of metric images with id, filename, url, and url_text. See also: gitlab_upload_alert_metric_image, gitlab_update_alert_metric_image.",
 	},
 	"gitlab_upload_alert_metric_image": {
-		usage:       "Upload a metric image to an alert in a project. Provide project_id, alert_iid, and the image file; optionally a url and url_text.",
+		usage:       "Upload a metric image to an alert in a project. Provide project_id, alert_iid, and the image file. Optionally a url and url_text.",
 		aliases:     []string{"upload alert metric image", "attach alert screenshot", "add alert metric image"},
 		related:     []string{actionAlertImgList, actionAlertImgUpdate, actionAlertImgDelete},
 		description: "Upload an alert metric image. Returns: the uploaded metric image with id, filename, and url. See also: gitlab_list_alert_metric_images, gitlab_update_alert_metric_image.",
@@ -890,7 +890,7 @@ var adminActionMeta = map[string]adminActionMetaEntry{
 		usage:       "Import the authenticated user's GitHub gists into GitLab snippets. Provide a GitHub personal access token.",
 		aliases:     []string{"import github gists", "migrate gists", "import gists to snippets"},
 		related:     []string{actionImportGitHub, "admin.import_cancel_github"},
-		description: "Import GitHub gists into snippets. Returns: a success status; the import runs asynchronously. See also: gitlab_import_from_github, gitlab_cancel_github_import.",
+		description: "Import GitHub gists into snippets. Returns: a success status. The import runs asynchronously. See also: gitlab_import_from_github, gitlab_cancel_github_import.",
 	},
 	"gitlab_import_from_bitbucket_cloud": {
 		usage:       "Import a repository from Bitbucket Cloud into GitLab. Provide Bitbucket credentials, the source repo, and the target namespace.",

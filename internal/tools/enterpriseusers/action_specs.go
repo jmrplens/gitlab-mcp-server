@@ -60,7 +60,7 @@ func enterpriseUserReadSpec(name string, route toolutil.ActionRoute, individualT
 
 func enterpriseUserDestructiveSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	options := enterpriseUserOptions(individualTool)
-	options.Usage = "Delete an enterprise user from the group's enterprise namespace. Use hard_delete to permanently remove the user instead of soft-deleting; this action is irreversible."
+	options.Usage = "Delete an enterprise user from the group's enterprise namespace. Use hard_delete to permanently remove the user instead of soft-deleting. This action is irreversible."
 	options.Aliases = []string{individualTool, "delete enterprise user", "remove enterprise user", "destroy enterprise user", "drop enterprise user"}
 	options.RelatedActions = []string{actionEnterpriseUserGet, actionEnterpriseUserList, actionEnterpriseUserDisable2FA}
 	options.IndividualTool.Description = "Delete an enterprise user, optionally with hard_delete. Returns: a success confirmation naming the user and group. See also: gitlab_get_enterprise_user, gitlab_list_enterprise_users, gitlab_disable_2fa_enterprise_user."

@@ -69,8 +69,8 @@ type DetailsOutput struct {
 	Add           string        `json:"add,omitempty"`
 	As            string        `json:"as,omitempty"`
 	Change        string        `json:"change,omitempty"`
-	ChangeObject  any           `json:"change_object,omitempty" jsonschema:"Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"`
-	Changes       []ChangeEntry `json:"changes,omitempty" jsonschema:"Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values"`
+	ChangeObject  any           `json:"change_object,omitempty" jsonschema:"Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated). Holds the raw JSON object so the object-valued change is not lost"`
+	Changes       []ChangeEntry `json:"changes,omitempty" jsonschema:"Plural list of changes emitted by some audit events. Each entry records a changed setting with its previous (from) and new (to) values"`
 	From          string        `json:"from,omitempty"`
 	To            string        `json:"to,omitempty"`
 	Remove        string        `json:"remove,omitempty"`

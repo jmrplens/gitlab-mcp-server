@@ -82,15 +82,16 @@ Para despliegues dinámicos donde los recursos y prompts dominan el contexto ini
 
 ## Opciones de administración
 
-| Variable                         | Predeterminado | Descripción                                                                                                                                                              |
-| -------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `CLIENT_COMPAT`                  | `auto`         | Compatibilidad de respuesta por cliente: las sesiones de Codex reciben las prioridades fraccionarias de las anotaciones redondeadas a 0/1; `off` la desactiva            |
-| `UPLOAD_MAX_FILE_SIZE`           | `2GB`          | Límite de tamaño para las herramientas de subida y de ficheros, incluidas las lecturas raw (en streaming y detenidas al llegar al límite); admite sufijos `KB`/`MB`/`GB` |
-| `YOLO_MODE`                      | `false`        | Omitir confirmaciones de acciones destructivas (no recomendado)                                                                                                          |
-| `AUTOPILOT`                      | `false`        | Igual que `YOLO_MODE`: omitir confirmaciones destructivas                                                                                                                |
-| `GITLAB_MCP_ALLOWED_IMPORT_DIRS` | —              | Directorios adicionales, separados por la lista de rutas del sistema operativo, permitidos para archivos locales de importación de proyectos/grupos                      |
-| `RATE_LIMIT_RPS`                 | `0`            | Límite por servidor en req/s (`0` lo desactiva). Solo stdio; el modo HTTP usa `10` por defecto vía `--rate-limit-rps`                                                    |
-| `RATE_LIMIT_BURST`               | `40`           | Tamaño del bucket de tokens cuando `RATE_LIMIT_RPS` > 0                                                                                                                  |
+| Variable                               | Predeterminado | Descripción                                                                                                                                                                                                                          |
+| -------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CLIENT_COMPAT`                        | `auto`         | Compatibilidad de respuesta por cliente: las sesiones de Codex reciben las prioridades fraccionarias de las anotaciones redondeadas a 0/1; `off` la desactiva                                                                        |
+| `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` | vacío          | Reescribe descripciones y títulos listados para validadores estrictos de pasarelas MCP: pares `old=new` separados por comas y aplicados en orden (la barra invertida escapa `\,` `\=` `\\`); un valor mal formado impide el arranque |
+| `UPLOAD_MAX_FILE_SIZE`                 | `2GB`          | Límite de tamaño para las herramientas de subida y de ficheros, incluidas las lecturas raw (en streaming y detenidas al llegar al límite); admite sufijos `KB`/`MB`/`GB`                                                             |
+| `YOLO_MODE`                            | `false`        | Omitir confirmaciones de acciones destructivas (no recomendado)                                                                                                                                                                      |
+| `AUTOPILOT`                            | `false`        | Igual que `YOLO_MODE`: omitir confirmaciones destructivas                                                                                                                                                                            |
+| `GITLAB_MCP_ALLOWED_IMPORT_DIRS`       | —              | Directorios adicionales, separados por la lista de rutas del sistema operativo, permitidos para archivos locales de importación de proyectos/grupos                                                                                  |
+| `RATE_LIMIT_RPS`                       | `0`            | Límite por servidor en req/s (`0` lo desactiva). Solo stdio; el modo HTTP usa `10` por defecto vía `--rate-limit-rps`                                                                                                                |
+| `RATE_LIMIT_BURST`                     | `40`           | Tamaño del bucket de tokens cuando `RATE_LIMIT_RPS` > 0                                                                                                                                                                              |
 
 ## Archivo .env de ejemplo
 

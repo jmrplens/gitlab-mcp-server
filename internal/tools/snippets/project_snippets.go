@@ -100,7 +100,7 @@ type ProjectCreateInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
 	Title       string               `json:"title" jsonschema:"Snippet title,required"`
 	Description string               `json:"description,omitempty" jsonschema:"Snippet description"`
-	Visibility  string               `json:"visibility,omitempty" jsonschema:"Visibility: private, internal, or public; defaults to private when omitted"`
+	Visibility  string               `json:"visibility,omitempty" jsonschema:"Visibility: private, internal, or public. Defaults to private when omitted"`
 	Files       []CreateFileInput    `json:"files,omitempty" jsonschema:"Files to include in the snippet"`
 	FileName    string               `json:"file_name,omitempty" jsonschema:"File name (single-file, deprecated in favor of files)"`
 	ContentBody string               `json:"content,omitempty" jsonschema:"Content (single-file, deprecated in favor of files)"`

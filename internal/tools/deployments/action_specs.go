@@ -126,7 +126,7 @@ func deploymentOptionsForAction(actionName, individualTool string) toolutil.Acti
 			}),
 		}
 	case "deployment_delete":
-		options.Usage = "Permanently delete a deployment record by deployment_id. Use only to remove obsolete or erroneous deployment entries; this does not undo the underlying deployment."
+		options.Usage = "Permanently delete a deployment record by deployment_id. Use only to remove obsolete or erroneous deployment entries. This does not undo the underlying deployment."
 		options.Aliases = []string{"delete deployment", "remove deployment", "purge deployment record"}
 		options.RelatedActions = []string{actionDeploymentGet, actionDeploymentList}
 		options.IndividualTool.Description = "Delete a deployment record by deployment_id within a project. Returns: a confirmation that the deployment was deleted. See also: gitlab_deployment_get, gitlab_deployment_list."

@@ -52,7 +52,7 @@ type AddInput struct {
 	AutoMerge            bool                 `json:"auto_merge,omitempty" jsonschema:"Enable auto-merge when pipeline succeeds"`
 	SHA                  string               `json:"sha,omitempty" jsonschema:"Head SHA of the merge request to verify"`
 	Squash               bool                 `json:"squash,omitempty" jsonschema:"Squash commits when merging"`
-	WhenPipelineSucceeds bool                 `json:"when_pipeline_succeeds,omitempty" jsonschema:"Deprecated in 17.11; use auto_merge instead. Merge only when the pipeline succeeds"`
+	WhenPipelineSucceeds bool                 `json:"when_pipeline_succeeds,omitempty" jsonschema:"Deprecated in 17.11. Use auto_merge instead. Merge only when the pipeline succeeds"`
 }
 
 // MergeRequestOutput mirrors gl.MergeTrainMergeRequest, the merge request

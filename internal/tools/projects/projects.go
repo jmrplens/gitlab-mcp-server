@@ -2307,7 +2307,7 @@ type HookOptionsInput struct {
 // HookCustomHeaderInput represents a single custom HTTP header for a webhook.
 type HookCustomHeaderInput struct {
 	Key   string `json:"key"   jsonschema:"Header name,required"`
-	Value string `json:"value" jsonschema:"Header value (write-only; not returned by the API),required"`
+	Value string `json:"value" jsonschema:"Header value (write-only. Not returned by the API),required"`
 }
 
 // AddHookInput defines parameters for adding a webhook to a project.
@@ -2832,7 +2832,7 @@ func ListProjectStarrers(ctx context.Context, client *gitlabclient.Client, input
 type ShareProjectInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id"   jsonschema:"Project ID or URL-encoded path,required"`
 	GroupID     int64                `json:"group_id"     jsonschema:"Group ID to share with,required"`
-	GroupAccess int                  `json:"group_access" jsonschema:"Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project shares,required"`
+	GroupAccess int                  `json:"group_access" jsonschema:"Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer). 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project shares,required"`
 	ExpiresAt   string               `json:"expires_at,omitempty" jsonschema:"Expiration date for the share (YYYY-MM-DD)"`
 }
 
@@ -3523,7 +3523,7 @@ func DeleteCustomHeader(ctx context.Context, client *gitlabclient.Client, input 
 type SetWebhookURLVariableInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	HookID    int64                `json:"hook_id" jsonschema:"Webhook ID,required"`
-	Key       string               `json:"key" jsonschema:"URL variable key name — letters and underscores only; GitLab rejects keys containing digits,required"`
+	Key       string               `json:"key" jsonschema:"URL variable key name — letters and underscores only. GitLab rejects keys containing digits,required"`
 	Value     string               `json:"value" jsonschema:"URL variable value — must be non-empty,required"`
 }
 

@@ -80,7 +80,7 @@ func GetPullMirror(ctx context.Context, client *gitlabclient.Client, input GetPu
 type ConfigurePullMirrorInput struct {
 	ProjectID                        toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Enabled                          *bool                `json:"enabled,omitempty" jsonschema:"Enable or disable pull mirroring"`
-	URL                              string               `json:"url,omitempty" jsonschema:"Pull mirror source URL. Do not include credentials in the URL; unlike push mirror endpoints, pull mirroring requires auth_user and auth_password for authentication"`
+	URL                              string               `json:"url,omitempty" jsonschema:"Pull mirror source URL. Do not include credentials in the URL. Unlike push mirror endpoints, pull mirroring requires auth_user and auth_password for authentication"`
 	AuthUser                         string               `json:"auth_user,omitempty" jsonschema:"Authentication username for the mirror URL. Treat as secret-adjacent and avoid logging with auth_password"`
 	AuthPassword                     string               `json:"auth_password,omitempty" jsonschema:"Authentication password or token for the mirror URL. Treat as secret: do not log or store it, and redact it in telemetry/errors"`
 	MirrorBranchRegex                string               `json:"mirror_branch_regex,omitempty" jsonschema:"Regex to filter branches to mirror"`

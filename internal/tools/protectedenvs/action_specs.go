@@ -112,7 +112,7 @@ var protectedEnvironmentActionMeta = map[string]protectedEnvironmentActionMetaEn
 		related: []string{"environment.protected_list", "environment.protected_update", actionEnvProtectedUnprotect},
 	},
 	"gitlab_protected_environment_protect": {
-		usage:   "Protect a project environment (or wildcard tier) by setting its deploy access levels and approval rules. Use when the prompt asks to gate deployments, restrict who can deploy, or require approvals on a project environment. deploy_access_levels must be an array of objects such as [{\"access_level\":40}]; require approvals via approval_rules with required_approvals.",
+		usage:   "Protect a project environment (or wildcard tier) by setting its deploy access levels and approval rules. Use when the prompt asks to gate deployments, restrict who can deploy, or require approvals on a project environment. deploy_access_levels must be an array of objects such as [{\"access_level\":40}]. Require approvals via approval_rules with required_approvals.",
 		aliases: []string{"protect a project environment", "gate project deployments", "restrict who can deploy to an environment", "require deployment approvals"},
 		related: []string{actionEnvProtectedGet, "environment.protected_update", actionEnvProtectedUnprotect},
 	},
@@ -122,7 +122,7 @@ var protectedEnvironmentActionMeta = map[string]protectedEnvironmentActionMetaEn
 		related: []string{actionEnvProtectedGet, "environment.protected_protect", actionEnvProtectedUnprotect},
 	},
 	"gitlab_protected_environment_unprotect": {
-		usage:   "Remove protection from a project environment (or wildcard tier), deleting its deployment gates and approval rules. Destructive; confirm project_id and the environment name before calling.",
+		usage:   "Remove protection from a project environment (or wildcard tier), deleting its deployment gates and approval rules. Destructive. Confirm project_id and the environment name before calling.",
 		aliases: []string{"unprotect a project environment", "remove project deployment gate", "stop gating an environment"},
 		related: []string{"environment.protected_list", "environment.protected_protect"},
 	},

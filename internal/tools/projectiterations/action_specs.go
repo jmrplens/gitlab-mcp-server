@@ -27,12 +27,12 @@ func issueIterationReadSpec(name string, route toolutil.ActionRoute, individualT
 				SemanticRole:     "scope_project",
 				ValueSource:      "Project ID or URL-encoded namespace path whose iterations should be listed.",
 				ExampleBinding:   `params.project_id:"group/project"`,
-				CommonConfusions: []string{"Iterations are defined at the group level; pass the project here and set include_ancestors to surface group-defined iterations."},
+				CommonConfusions: []string{"Iterations are defined at the group level. Pass the project here and set include_ancestors to surface group-defined iterations."},
 			},
 			"state": {
 				ValueSource:      "Iteration lifecycle filter requested by the user: opened, upcoming, current, closed, or all.",
 				ExampleBinding:   `params.state:"current"`,
-				CommonConfusions: []string{"Use current (singular) for the active iteration; there is no active or in_progress value."},
+				CommonConfusions: []string{"Use current (singular) for the active iteration. There is no active or in_progress value."},
 			},
 			"include_ancestors": {
 				ValueSource:    "Set true to include iterations defined on ancestor groups, not only those declared directly on the project.",

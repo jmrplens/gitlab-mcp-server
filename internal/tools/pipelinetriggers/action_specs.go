@@ -77,7 +77,7 @@ func pipelineTriggerOptions(individualTool string) toolutil.ActionSpecOptions {
 // discovery metadata, replacing the generic placeholder Usage/Aliases.
 var pipelineTriggerActionMeta = map[string]toolutil.ActionMetaEntry{
 	"gitlab_pipeline_trigger_list": {
-		Usage:   "List the trigger tokens defined on a project. Use when the prompt asks which trigger tokens exist, or to find a trigger_id or token to run or edit. Requires Maintainer+ to read tokens; supports order_by, sort, offset and keyset pagination.",
+		Usage:   "List the trigger tokens defined on a project. Use when the prompt asks which trigger tokens exist, or to find a trigger_id or token to run or edit. Requires Maintainer+ to read tokens. Supports order_by, sort, offset and keyset pagination.",
 		Aliases: []string{"list pipeline triggers", "show trigger tokens", "list trigger tokens for project"},
 		Related: []string{actionTriggerGet, actionTriggerCreate, actionTriggerRun},
 		Guidance: map[string]toolutil.ParameterGuidance{
@@ -85,7 +85,7 @@ var pipelineTriggerActionMeta = map[string]toolutil.ActionMetaEntry{
 				SemanticRole:     "scope_project",
 				ValueSource:      "Project ID or full namespace path whose trigger tokens should be listed.",
 				ExampleBinding:   `params.project_id:"group/project"`,
-				CommonConfusions: []string{"Trigger tokens are project-scoped; do not pass a group path."},
+				CommonConfusions: []string{"Trigger tokens are project-scoped. Do not pass a group path."},
 			},
 		},
 		Description: "List a project's pipeline trigger tokens. Returns: trigger tokens with id, description, owner, last-used time, and pagination metadata. See also: gitlab_pipeline_trigger_get, gitlab_pipeline_trigger_create, gitlab_pipeline_trigger_run.",
@@ -118,19 +118,19 @@ var pipelineTriggerActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Create a pipeline trigger token. Returns: the created trigger with id, description, token secret, and owner. See also: gitlab_pipeline_trigger_run, gitlab_pipeline_trigger_list, gitlab_pipeline_trigger_delete.",
 	},
 	"gitlab_pipeline_trigger_update": {
-		Usage:       "Update a pipeline trigger token's description. Use when renaming or re-labeling an existing token; the token secret is unchanged.",
+		Usage:       "Update a pipeline trigger token's description. Use when renaming or re-labeling an existing token. The token secret is unchanged.",
 		Aliases:     []string{"update pipeline trigger", "rename trigger token", "edit trigger description"},
 		Related:     []string{actionTriggerGet, actionTriggerList, actionTriggerDelete},
 		Description: "Update a pipeline trigger token's description. Returns: the updated trigger with id, description, token, and owner. See also: gitlab_pipeline_trigger_get, gitlab_pipeline_trigger_delete.",
 	},
 	"gitlab_pipeline_trigger_delete": {
-		Usage:       "Permanently delete a pipeline trigger token. Destructive and irreversible; the token is invalidated immediately. Confirm project_id and trigger_id before calling.",
+		Usage:       "Permanently delete a pipeline trigger token. Destructive and irreversible. The token is invalidated immediately. Confirm project_id and trigger_id before calling.",
 		Aliases:     []string{"delete pipeline trigger", "revoke trigger token", "remove trigger token"},
 		Related:     []string{actionTriggerGet, actionTriggerList, actionTriggerCreate},
 		Description: "Delete a pipeline trigger token. Returns: a success confirmation. See also: gitlab_pipeline_trigger_get, gitlab_pipeline_trigger_create.",
 	},
 	"gitlab_pipeline_trigger_run": {
-		Usage:   "Trigger a pipeline on a ref using a trigger token. Provide project_id, ref, and token; optionally pass variables (CI/CD variables) or inputs (pipeline spec inputs).",
+		Usage:   "Trigger a pipeline on a ref using a trigger token. Provide project_id, ref, and token. Optionally pass variables (CI/CD variables) or inputs (pipeline spec inputs).",
 		Aliases: []string{"run pipeline trigger", "trigger a pipeline with a token", "start pipeline via trigger"},
 		Related: []string{actionTriggerList, actionTriggerGet, actionPipelineGet},
 		Guidance: map[string]toolutil.ParameterGuidance{

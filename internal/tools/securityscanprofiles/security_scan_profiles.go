@@ -22,7 +22,7 @@ const gidPrefix = "gid://"
 // AttachInput holds parameters for attaching a security scan profile to
 // projects and/or groups.
 type AttachInput struct {
-	SecurityScanProfileID string  `json:"security_scan_profile_id" jsonschema:"Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning — attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach); a full gid:// global ID is also accepted,required"`
+	SecurityScanProfileID string  `json:"security_scan_profile_id" jsonschema:"Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning — attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach). A full gid:// global ID is also accepted,required"`
 	ProjectIDs            []int64 `json:"project_ids,omitempty" jsonschema:"Numeric IDs of the projects to attach the profile to"`
 	GroupIDs              []int64 `json:"group_ids,omitempty" jsonschema:"Numeric IDs of the groups to attach the profile to"`
 }
@@ -38,7 +38,7 @@ type DetachInput struct {
 // ListProjectStatusesInput holds parameters for listing the scan profile
 // statuses of a project.
 type ListProjectStatusesInput struct {
-	ProjectFullPath string `json:"project_full_path" jsonschema:"Full project path (namespace/project); numeric project IDs are not accepted by the GraphQL project(fullPath:) field,required"`
+	ProjectFullPath string `json:"project_full_path" jsonschema:"Full project path (namespace/project). Numeric project IDs are not accepted by the GraphQL project(fullPath:) field,required"`
 }
 
 // MutationOutput confirms a security scan profile attach or detach operation

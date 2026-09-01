@@ -57,6 +57,8 @@ jobs:
         run: make check-stats
       - name: Check test-goroutine aborts
         run: make check-test-goroutines
+      - name: Check gateway-safe served characters
+        run: make check-gateway-chars
       - name: Check token footprint
         run: make check-footprint
       - name: Check site stats

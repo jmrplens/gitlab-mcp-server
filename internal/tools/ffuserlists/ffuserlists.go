@@ -51,7 +51,7 @@ type ListInput struct {
 // GetInput contains parameters for getting a feature flag user list.
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	IID       int64                `json:"user_list_iid" jsonschema:"Feature flag user list internal ID returned by list or create; do not use the user list name,required"`
+	IID       int64                `json:"user_list_iid" jsonschema:"Feature flag user list internal ID returned by list or create. Do not use the user list name,required"`
 }
 
 // CreateInput contains parameters for creating a feature flag user list.
@@ -64,7 +64,7 @@ type CreateInput struct {
 // UpdateInput contains parameters for updating a feature flag user list.
 type UpdateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	IID       int64                `json:"user_list_iid" jsonschema:"Feature flag user list internal ID returned by list or create; do not use the user list name,required"`
+	IID       int64                `json:"user_list_iid" jsonschema:"Feature flag user list internal ID returned by list or create. Do not use the user list name,required"`
 	Name      string               `json:"name,omitempty" jsonschema:"New user list name"`
 	UserXIDs  string               `json:"user_xids,omitempty" jsonschema:"Comma-separated list of user external IDs"`
 }
@@ -72,7 +72,7 @@ type UpdateInput struct {
 // DeleteInput contains parameters for deleting a feature flag user list.
 type DeleteInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or path,required"`
-	IID       int64                `json:"user_list_iid" jsonschema:"Feature flag user list internal ID returned by list or create; do not use the user list name,required"`
+	IID       int64                `json:"user_list_iid" jsonschema:"Feature flag user list internal ID returned by list or create. Do not use the user list name,required"`
 }
 
 // ──────────────────────────────────────────────

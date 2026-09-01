@@ -168,7 +168,7 @@ var approvalActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Get the approval configuration of a merge request. Returns: approvals required and left, approved-by users with timestamps, suggested approvers, approver groups, and the remaining approval rules. See also: gitlab_mr_approval_state, gitlab_mr_approval_rules, gitlab_mr_approve.",
 	},
 	"gitlab_mr_approval_reset": {
-		Usage:   "Reset (clear) all existing approvals on a merge request. Requires a project or group access token (bot user); personal access tokens are rejected. Use when approvals must be re-collected after changes.",
+		Usage:   "Reset (clear) all existing approvals on a merge request. Requires a project or group access token (bot user). Personal access tokens are rejected. Use when approvals must be re-collected after changes.",
 		Aliases: []string{"reset mr approvals", "clear merge request approvals", "remove all mr approvals"},
 		Related: []string{actionApprovalState, actionApprovalConfig, actionMRUnapprove},
 		Guidance: map[string]toolutil.ParameterGuidance{
@@ -210,7 +210,7 @@ var approvalActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Update an approval rule on a merge request. Returns: the updated rule with its type, required count, eligible approvers, users, and groups. See also: gitlab_mr_approval_rules, gitlab_mr_approval_rule_create, gitlab_mr_approval_rule_delete.",
 	},
 	"gitlab_mr_approval_rule_delete": {
-		Usage:   "Delete an approval rule from a merge request. Destructive and irreversible; confirm the approval_rule_id with gitlab_mr_approval_rules before calling.",
+		Usage:   "Delete an approval rule from a merge request. Destructive and irreversible. Confirm the approval_rule_id with gitlab_mr_approval_rules before calling.",
 		Aliases: []string{"delete mr approval rule", "remove merge request approval rule", "destroy mr approval rule", "drop merge request approval rule"},
 		Related: []string{actionApprovalRules, actionApprovalRuleUpdate, actionApprovalRuleCreate},
 		Guidance: map[string]toolutil.ParameterGuidance{

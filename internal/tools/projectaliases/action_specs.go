@@ -58,10 +58,10 @@ func projectAliasOptions(individualTool string) toolutil.ActionSpecOptions {
 	var description string
 	switch individualTool {
 	case "gitlab_list_project_aliases":
-		usage = "List project aliases visible in the configured scope (admin-only). The response includes the alias `name` and the `project_id` it points to; pass one of the returned `name` values to project_alias.get to fetch full details. This action does not accept per_page or page — it returns the full set."
+		usage = "List project aliases visible in the configured scope (admin-only). The response includes the alias `name` and the `project_id` it points to. Pass one of the returned `name` values to project_alias.get to fetch full details. This action does not accept per_page or page — it returns the full set."
 		related = []string{relatedProjectAliasGet}
 		aliases = []string{"list project aliases", "show all project aliases", "enumerate project aliases"}
-		description = "List every project alias the authenticated administrator can see. Returns: each alias with id, project_id, and name (the full set; no pagination). See also: gitlab_get_project_alias, gitlab_create_project_alias, gitlab_delete_project_alias."
+		description = "List every project alias the authenticated administrator can see. Returns: each alias with id, project_id, and name (the full set. No pagination). See also: gitlab_get_project_alias, gitlab_create_project_alias, gitlab_delete_project_alias."
 	case "gitlab_get_project_alias":
 		usage = "Get details (id, project_id, name) for one project alias by its `name` (the path-style alias string, e.g. `e2e-enterprise-alias`). The name must come from a prior project_alias.list response or be supplied verbatim by the prompt — this action does not search or accept partial names."
 		related = []string{relatedProjectAliasList}
@@ -70,7 +70,7 @@ func projectAliasOptions(individualTool string) toolutil.ActionSpecOptions {
 			"name": {
 				ValueSource:      "Exact alias string from a prior project_alias.list response or supplied verbatim by the prompt.",
 				ExampleBinding:   `params.name:"e2e-enterprise-alias"`,
-				CommonConfusions: []string{"name is the alias label, not a project path or numeric project_id; this action does not search or accept partial names."},
+				CommonConfusions: []string{"name is the alias label, not a project path or numeric project_id. This action does not search or accept partial names."},
 			},
 		}
 		description = "Get one project alias by its exact name. Returns: the alias id, project_id, and name. See also: gitlab_list_project_aliases, gitlab_create_project_alias, gitlab_delete_project_alias."
@@ -80,7 +80,7 @@ func projectAliasOptions(individualTool string) toolutil.ActionSpecOptions {
 		aliases = []string{"create project alias", "add project alias", "register project alias"}
 		guidance = map[string]toolutil.ParameterGuidance{
 			"name": {
-				ValueSource:    "Unique alias label to assign; must not collide with an existing alias.",
+				ValueSource:    "Unique alias label to assign. Must not collide with an existing alias.",
 				ExampleBinding: `params.name:"my-alias"`,
 			},
 			"project_id": {
@@ -92,7 +92,7 @@ func projectAliasOptions(individualTool string) toolutil.ActionSpecOptions {
 		}
 		description = "Create a project alias mapping a unique name to a numeric project_id (admin-only). Returns: the created alias with id, project_id, and name. See also: gitlab_list_project_aliases, gitlab_get_project_alias, gitlab_delete_project_alias."
 	case "gitlab_delete_project_alias":
-		usage = "Delete a project alias by its `name`. The name must be an exact existing alias string; pass the name from a prior project_alias.list response."
+		usage = "Delete a project alias by its `name`. The name must be an exact existing alias string. Pass the name from a prior project_alias.list response."
 		related = []string{relatedProjectAliasList, relatedProjectAliasGet}
 		aliases = []string{"delete project alias", "remove project alias", "unregister project alias"}
 		guidance = map[string]toolutil.ParameterGuidance{

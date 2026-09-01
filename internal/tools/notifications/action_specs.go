@@ -100,7 +100,7 @@ var notificationActionMeta = map[string]notificationActionMetaEntry{
 		description: "Get the authenticated user's global notification settings. Returns: the global notification level, notification email, and the per-event flags (issue, merge request, pipeline, note, and epic events) when the level is custom. See also: gitlab_notification_global_update, gitlab_notification_project_get, gitlab_notification_group_get.",
 	},
 	actionGlobalUpdate: {
-		usage:       "Update the authenticated user's account-wide (global) notification settings. Set level (disabled, participating, watch, global, mention, custom), notification_email, and individual event flags when level is custom; only the fields you pass are changed.",
+		usage:       "Update the authenticated user's account-wide (global) notification settings. Set level (disabled, participating, watch, global, mention, custom), notification_email, and individual event flags when level is custom. Only the fields you pass are changed.",
 		aliases:     []string{"update global notification settings", "set my notification level", "change default notification email"},
 		related:     []string{actionGlobalGet, actionProjectUpdate, actionGroupUpdate},
 		description: "Update the authenticated user's global notification settings. Returns: the updated global notification level, notification email, and per-event flags. See also: gitlab_notification_global_get, gitlab_notification_project_update, gitlab_notification_group_update.",
@@ -112,7 +112,7 @@ var notificationActionMeta = map[string]notificationActionMetaEntry{
 		description: "Get the authenticated user's notification settings for a project. Returns: the project notification level, notification email, and per-event flags when the level is custom. See also: gitlab_notification_project_update, gitlab_notification_global_get, gitlab_notification_group_get.",
 	},
 	actionProjectUpdate: {
-		usage:       "Update the authenticated user's notification settings for one project. Pass project_id plus level (disabled, participating, watch, global, mention, custom), notification_email, and event flags when level is custom; only the fields you pass are changed.",
+		usage:       "Update the authenticated user's notification settings for one project. Pass project_id plus level (disabled, participating, watch, global, mention, custom), notification_email, and event flags when level is custom. Only the fields you pass are changed.",
 		aliases:     []string{"update project notification settings", "set notification level for project", "override notifications for project"},
 		related:     []string{actionProjectGet, actionGlobalUpdate, actionGroupUpdate},
 		description: "Update the authenticated user's notification settings for a project. Returns: the updated project notification level, notification email, and per-event flags. See also: gitlab_notification_project_get, gitlab_notification_global_update, gitlab_notification_group_update.",
@@ -124,7 +124,7 @@ var notificationActionMeta = map[string]notificationActionMetaEntry{
 		description: "Get the authenticated user's notification settings for a group. Returns: the group notification level, notification email, and per-event flags when the level is custom. See also: gitlab_notification_group_update, gitlab_notification_global_get, gitlab_notification_project_get.",
 	},
 	actionGroupUpdate: {
-		usage:       "Update the authenticated user's notification settings for one group. Pass group_id plus level (disabled, participating, watch, global, mention, custom), notification_email, and event flags when level is custom; only the fields you pass are changed.",
+		usage:       "Update the authenticated user's notification settings for one group. Pass group_id plus level (disabled, participating, watch, global, mention, custom), notification_email, and event flags when level is custom. Only the fields you pass are changed.",
 		aliases:     []string{"update group notification settings", "set notification level for group", "override notifications for group"},
 		related:     []string{actionGroupGet, actionGlobalUpdate, actionProjectUpdate},
 		description: "Update the authenticated user's notification settings for a group. Returns: the updated group notification level, notification email, and per-event flags. See also: gitlab_notification_group_get, gitlab_notification_global_update, gitlab_notification_project_update.",

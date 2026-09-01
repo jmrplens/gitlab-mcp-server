@@ -1766,8 +1766,8 @@ func TestMetaToolDescriptionPrefix_IncludesParameterGuidance(t *testing.T) {
 	for _, want := range []string{
 		"Parameter guidance:",
 		"token_scope_remove_project.project_id: scope_owner_project",
-		"source: Owning project whose allowlist is being changed.",
-		"avoid: Do not use the project being removed as project_id.",
+		"Source: Owning project whose allowlist is being changed.",
+		"Avoid: Do not use the project being removed as project_id.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("prefix missing %q: %q", want, got)

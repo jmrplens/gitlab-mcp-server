@@ -97,7 +97,7 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 		options.RelatedActions = []string{actionCommitGet, actionCommitDiff, actionRepositoryTree}
 		options.IndividualTool.Description = "List repository commits for a project, optionally filtered by ref_name, since/until, path, or author. Returns: commit summaries (SHA, title, author, dates, parent IDs, stats, trailers, last pipeline) with pagination metadata. See also: gitlab_commit_get, gitlab_commit_diff, gitlab_commit_statuses, gitlab_branch_list."
 	case "commit_get":
-		options.Usage = "Get detailed commit information by sha. Use this when a specific commit is referenced and full metadata, message, stats, trailers, or last pipeline are needed; set stats=true to force inclusion of line stats."
+		options.Usage = "Get detailed commit information by sha. Use this when a specific commit is referenced and full metadata, message, stats, trailers, or last pipeline are needed. Set stats=true to force inclusion of line stats."
 		options.Aliases = []string{"get commit", "show commit details", "lookup commit", "describe commit"}
 		options.RelatedActions = []string{actionCommitList, actionCommitDiff, "commit.refs", actionCommitStatuses}
 		options.ParameterGuidance["sha"] = shaGuidance()
@@ -186,7 +186,7 @@ func commitOptionsForAction(actionName, individualTool string) toolutil.ActionSp
 		}
 		options.IndividualTool.Description = "Revert a commit on a target branch, creating a new commit that undoes it. Returns: the newly created revert commit (SHA, title, author, dates, web URL) or a conflict error. See also: gitlab_commit_get, gitlab_branch_list, gitlab_commit_cherry_pick."
 	case "commit_signature":
-		options.Usage = "Get the GPG, X.509, or SSH signature of a commit. Use this to verify commit authenticity; a 404 is also returned for unsigned commits."
+		options.Usage = "Get the GPG, X.509, or SSH signature of a commit. Use this to verify commit authenticity. A 404 is also returned for unsigned commits."
 		options.Aliases = []string{"commit signature", "gpg signature", "verify commit signature", "commit signing key"}
 		options.RelatedActions = []string{actionCommitGet, actionCommitList}
 		options.ParameterGuidance["sha"] = shaGuidance()

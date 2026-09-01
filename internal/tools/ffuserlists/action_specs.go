@@ -75,7 +75,7 @@ func userListOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 func userListUsage(actionName string) string {
 	switch actionName {
 	case "ff_user_list_list":
-		return "List a project's feature flag user lists (the named cohorts of user_xids targeted by gradual rollout strategies) with search, ordering, and offset or keyset pagination; use it to discover a list's user_list_iid before getting, updating, or deleting it."
+		return "List a project's feature flag user lists (the named cohorts of user_xids targeted by gradual rollout strategies) with search, ordering, and offset or keyset pagination. Use it to discover a list's user_list_iid before getting, updating, or deleting it."
 	case "ff_user_list_get":
 		return "Get one feature flag user list by its user_list_iid to inspect the cohort name and the exact set of user_xids it targets for percentage or user-id rollout strategies."
 	case "ff_user_list_create":
@@ -83,7 +83,7 @@ func userListUsage(actionName string) string {
 	case "ff_user_list_update":
 		return "Update a feature flag user list's name or its set of user_xids by user_list_iid to change which users a rollout cohort targets without recreating the list."
 	case "ff_user_list_delete":
-		return "Delete a feature flag user list by its user_list_iid; only do this once no feature flag strategy references the cohort, since the user_xids it groups are removed permanently."
+		return "Delete a feature flag user list by its user_list_iid. Only do this once no feature flag strategy references the cohort, since the user_xids it groups are removed permanently."
 	default:
 		return ""
 	}

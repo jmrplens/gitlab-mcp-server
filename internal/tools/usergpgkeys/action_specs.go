@@ -66,13 +66,13 @@ type userGPGMeta struct {
 // userGPGActionMeta maps each individual tool name to its discovery metadata.
 var userGPGActionMeta = map[string]userGPGMeta{
 	"gitlab_list_gpg_keys": {
-		usage:       "List every GPG key on the authenticated user's own account. Use when the prompt asks to view, audit, or pick one of your own GPG signing keys; no parameters are required.",
+		usage:       "List every GPG key on the authenticated user's own account. Use when the prompt asks to view, audit, or pick one of your own GPG signing keys. No parameters are required.",
 		aliases:     []string{"list gpg keys", "show my gpg keys", "view my gpg signing keys"},
 		related:     []string{actionUserGetGPGKey, actionUserAddGPGKey, actionUserDeleteGPGKey, actionUserGPGKeysForUser},
 		description: "List the authenticated user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp. See also: gitlab_get_gpg_key, gitlab_add_gpg_key, gitlab_delete_gpg_key, gitlab_list_gpg_keys_for_user.",
 	},
 	"gitlab_list_gpg_keys_for_user": {
-		usage:       "List every GPG key registered on a specific user's account by user_id. Use after resolving a user with gitlab_get_user; viewing another user's GPG keys may require an admin token.",
+		usage:       "List every GPG key registered on a specific user's account by user_id. Use after resolving a user with gitlab_get_user. Viewing another user's GPG keys may require an admin token.",
 		aliases:     []string{"list gpg keys for user", "show another user's gpg keys", "get user gpg keys"},
 		related:     []string{actionUserGetGPGKeyForUser, actionUserAddGPGKeyForUser, actionUserDeleteGPGKeyForUser, "user.get"},
 		description: "List a specific user's GPG keys. Returns: each key's ID, armored public key, and creation timestamp. See also: gitlab_get_gpg_key_for_user, gitlab_add_gpg_key_for_user, gitlab_delete_gpg_key_for_user, gitlab_get_user.",
@@ -84,7 +84,7 @@ var userGPGActionMeta = map[string]userGPGMeta{
 		description: "Get one GPG key from the authenticated user's account by ID. Returns: the key's ID, armored public key, and creation timestamp. See also: gitlab_list_gpg_keys, gitlab_add_gpg_key, gitlab_delete_gpg_key.",
 	},
 	"gitlab_get_gpg_key_for_user": {
-		usage:       "Fetch a single GPG key for a specific user by user_id and key_id. Use after listing that user's keys; admin token may be required to read another user's keys.",
+		usage:       "Fetch a single GPG key for a specific user by user_id and key_id. Use after listing that user's keys. Admin token may be required to read another user's keys.",
 		aliases:     []string{"get gpg key for user", "show another user's gpg key", "fetch user gpg key"},
 		related:     []string{actionUserGPGKeysForUser, actionUserAddGPGKeyForUser, actionUserDeleteGPGKeyForUser, "user.get"},
 		description: "Get one GPG key from a specific user's account by ID. Returns: the key's ID, armored public key, and creation timestamp. See also: gitlab_list_gpg_keys_for_user, gitlab_add_gpg_key_for_user, gitlab_delete_gpg_key_for_user, gitlab_get_user.",
@@ -102,13 +102,13 @@ var userGPGActionMeta = map[string]userGPGMeta{
 		description: "Add a GPG key to a specific user's account (admin only). Returns: the created key's ID, armored public key, and creation timestamp. See also: gitlab_list_gpg_keys_for_user, gitlab_get_gpg_key_for_user, gitlab_delete_gpg_key_for_user, gitlab_add_gpg_key.",
 	},
 	"gitlab_delete_gpg_key": {
-		usage:       "Delete a GPG key from the authenticated user's own account by key_id. Destructive and irreversible; confirm the key_id before calling.",
+		usage:       "Delete a GPG key from the authenticated user's own account by key_id. Destructive and irreversible. Confirm the key_id before calling.",
 		aliases:     []string{"delete gpg key", "remove gpg key", "revoke my gpg key"},
 		related:     []string{actionUserGPGKeys, actionUserGetGPGKey, actionUserAddGPGKey, actionUserDeleteGPGKeyForUser},
 		description: "Delete a GPG key from the authenticated user's account. Returns: a confirmation naming the deleted key ID. See also: gitlab_list_gpg_keys, gitlab_get_gpg_key, gitlab_add_gpg_key, gitlab_delete_gpg_key_for_user.",
 	},
 	"gitlab_delete_gpg_key_for_user": {
-		usage:       "Delete a GPG key from a specific user's account by user_id and key_id (admin only). Destructive and irreversible; confirm both IDs before calling.",
+		usage:       "Delete a GPG key from a specific user's account by user_id and key_id (admin only). Destructive and irreversible. Confirm both IDs before calling.",
 		aliases:     []string{"delete gpg key for user", "remove user gpg key", "revoke user gpg key"},
 		related:     []string{actionUserGPGKeysForUser, actionUserGetGPGKeyForUser, actionUserAddGPGKeyForUser, actionUserDeleteGPGKey},
 		description: "Delete a GPG key from a specific user's account (admin only). Returns: a confirmation naming the deleted key ID. See also: gitlab_list_gpg_keys_for_user, gitlab_get_gpg_key_for_user, gitlab_add_gpg_key_for_user, gitlab_delete_gpg_key.",

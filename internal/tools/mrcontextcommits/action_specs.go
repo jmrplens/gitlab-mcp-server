@@ -90,7 +90,7 @@ func contextCommitOptions(individualTool string) toolutil.ActionSpecOptions {
 			"delete additional commits from mr context",
 		}
 		options.RelatedActions = []string{actionContextCommitsList, actionContextCommitsCreate, actionMergeRequestGet, actionCommitGet}
-		options.IndividualTool.Description = "Remove context commits from a merge request by SHA, detaching them from the review. Returns: a success confirmation; the underlying repository commits are left intact. See also: gitlab_list_mr_context_commits, gitlab_create_mr_context_commits, gitlab_mr_get."
+		options.IndividualTool.Description = "Remove context commits from a merge request by SHA, detaching them from the review. Returns: a success confirmation. The underlying repository commits are left intact. See also: gitlab_list_mr_context_commits, gitlab_create_mr_context_commits, gitlab_mr_get."
 	}
 
 	return options

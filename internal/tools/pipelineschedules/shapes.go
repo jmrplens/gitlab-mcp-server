@@ -127,7 +127,7 @@ func variableObjectsAPI(vars []*scheduleVariableAPI) []VariableObject {
 // pipeline schedule payload and accepted on create/edit.
 type InputObject struct {
 	Name    string `json:"name"             jsonschema:"Pipeline input name (must match a defined input on the target pipeline)"`
-	Value   any    `json:"value,omitempty"  jsonschema:"Pipeline input value; type depends on the input definition"`
+	Value   any    `json:"value,omitempty"  jsonschema:"Pipeline input value. Type depends on the input definition"`
 	Destroy *bool  `json:"destroy,omitempty" jsonschema:"Set true to delete this input from the schedule (only honored on update)"`
 }
 

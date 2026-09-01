@@ -27,7 +27,7 @@ import (
 // keeping it for download.
 type ScheduleExportUploadInput struct {
 	URL        string `json:"url,omitempty" jsonschema:"URL to upload the exported project archive to after export completes"`
-	HTTPMethod string `json:"http_method,omitempty" jsonschema:"HTTP method to use for the upload (PUT or POST; default PUT)"`
+	HTTPMethod string `json:"http_method,omitempty" jsonschema:"HTTP method to use for the upload (PUT or POST. Default PUT)"`
 }
 
 // ScheduleExportInput is the input for scheduling a project export. Fields

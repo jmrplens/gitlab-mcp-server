@@ -46,7 +46,7 @@ func securityCategoryUpdateSpec(name string, route toolutil.ActionRoute, individ
 		toolutil.SchemaPropertyOverride("name", map[string]any{"type": "string", "minLength": 1}),
 		toolutil.SchemaPropertyOverride("description", map[string]any{"type": "string"}),
 	}
-	options.Usage = "Rename a security category or change its description. Provide the category_id and at least one of name or description; only editable custom categories can be updated."
+	options.Usage = "Rename a security category or change its description. Provide the category_id and at least one of name or description. Only editable custom categories can be updated."
 	options.Aliases = []string{"update security category", "rename security category", "edit security category", "change security category description"}
 	options.RelatedActions = []string{"security_category.create", "security_category.delete", "security_attribute.update", actionGroupGet}
 	return toolutil.NewUpdateActionSpec(name, route, options)
@@ -55,7 +55,7 @@ func securityCategoryUpdateSpec(name string, route toolutil.ActionRoute, individ
 // securityCategoryDeleteSpec builds the canonical destructive delete spec for a security category tool.
 func securityCategoryDeleteSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityCategoryOptions(individualTool, description)
-	options.Usage = "Delete a custom security category and all security attributes associated with it. Provide the category_id; this is destructive and cannot be undone."
+	options.Usage = "Delete a custom security category and all security attributes associated with it. Provide the category_id. This is destructive and cannot be undone."
 	options.Aliases = []string{"delete security category", "remove security category", "destroy security category", "drop security classification category"}
 	options.RelatedActions = []string{"security_category.create", "security_category.update", "security_attribute.delete", actionGroupGet}
 	return toolutil.NewDeleteActionSpec(name, route, options)

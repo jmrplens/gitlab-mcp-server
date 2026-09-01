@@ -30,7 +30,7 @@ type CreateInput struct {
 	// Basic metadata
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Title       string               `json:"title" jsonschema:"Issue title,required"`
-	IID         int64                `json:"iid,omitempty" jsonschema:"Explicit issue IID to assign (requires admin permissions; normally GitLab assigns the next IID automatically)"`
+	IID         int64                `json:"iid,omitempty" jsonschema:"Explicit issue IID to assign (requires admin permissions. Normally GitLab assigns the next IID automatically)"`
 	Description string               `json:"description,omitempty" jsonschema:"Issue description (Markdown supported)"`
 	IssueType   string               `json:"issue_type,omitempty" jsonschema:"Issue type (issue, incident, test_case, task)"`
 
@@ -58,7 +58,7 @@ type Output struct {
 	ID int64 `json:"id"`
 	// IID is the issue's own project-scoped internal ID, mirroring the SDK
 	// json key `iid`. Distinct from the global `id`.
-	IID         int64    `json:"iid" jsonschema:"Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id."`
+	IID         int64    `json:"iid" jsonschema:"Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id."`
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
 	State       string   `json:"state"`
@@ -169,7 +169,7 @@ type UpdateInput struct {
 	AddLabels        []string             `json:"add_labels,omitempty"    jsonschema:"Label names to add without removing existing"`
 	RemoveLabels     []string             `json:"remove_labels,omitempty" jsonschema:"Label names to remove"`
 	EpicID           int64                `json:"epic_id,omitempty"       tier:"premium" jsonschema:"Epic ID to associate"`
-	MilestoneID      *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset; omit to leave unchanged)"`
+	MilestoneID      *int64               `json:"milestone_id,omitempty"  jsonschema:"New milestone ID (0 to unset. Omit to leave unchanged)"`
 	DueDate          string               `json:"due_date,omitempty"      jsonschema:"New due date in YYYY-MM-DD format"`
 	Confidential     *bool                `json:"confidential,omitempty"  jsonschema:"Update confidential flag"`
 	IssueType        string               `json:"issue_type,omitempty"    jsonschema:"Issue type (issue, incident, test_case, task)"`

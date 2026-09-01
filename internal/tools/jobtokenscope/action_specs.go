@@ -72,7 +72,7 @@ func removeGroupAllowlistOutput(ctx context.Context, client *gitlabclient.Client
 // (target_project_id).
 func jobTokenScopeRemoveProjectSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := jobTokenScopeOptions("gitlab_remove_project_job_token_allowlist")
-	options.Usage = "Remove a project from another project's CI/CD job token inbound allowlist, revoking its inbound job token access. Destructive; confirm project_id and target_project_id first."
+	options.Usage = "Remove a project from another project's CI/CD job token inbound allowlist, revoking its inbound job token access. Destructive. Confirm project_id and target_project_id first."
 	options.Aliases = []string{"remove project from job token allowlist", "revoke project job token access", "delete project job token allowlist entry"}
 	options.RelatedActions = []string{actionJobTokenScopeListInbound, actionJobTokenScopeAddProject, actionJobTokenScopeRemoveGroup}
 	options.IndividualTool.Description = "Remove a project from a project's CI/CD job token inbound allowlist. Returns: a success confirmation naming the removed project. See also: gitlab_list_job_token_inbound_allowlist, gitlab_add_project_job_token_allowlist, gitlab_remove_group_job_token_allowlist."
@@ -206,7 +206,7 @@ var jobTokenScopeActionMeta = map[string]jobTokenScopeActionMetaEntry{
 		description: "Add a project to a project's CI/CD job token inbound allowlist. Returns: the new allowlist entry with source and target project IDs. See also: gitlab_list_job_token_inbound_allowlist, gitlab_remove_project_job_token_allowlist, gitlab_add_group_job_token_allowlist.",
 	},
 	"gitlab_list_job_token_group_allowlist": {
-		usage:       "List the groups allowed inbound CI/CD job token access to this project. Use to audit group allowlist membership; requires GitLab 17.0+.",
+		usage:       "List the groups allowed inbound CI/CD job token access to this project. Use to audit group allowlist membership. Requires GitLab 17.0+.",
 		aliases:     []string{"list job token allowlist groups", "show group job token allowlist", "audit job token group allowlist"},
 		related:     []string{actionJobTokenScopeAddGroup, actionJobTokenScopeRemoveGroup, actionJobTokenScopeGet},
 		description: "List groups on a project's CI/CD job token allowlist. Returns: allowlisted groups with id, name, full path, and web URL plus pagination metadata. See also: gitlab_add_group_job_token_allowlist, gitlab_remove_group_job_token_allowlist, gitlab_get_job_token_access_settings.",
@@ -218,7 +218,7 @@ var jobTokenScopeActionMeta = map[string]jobTokenScopeActionMetaEntry{
 		description: "Add a group to a project's CI/CD job token allowlist. Returns: the new allowlist entry with source project ID and target group ID. See also: gitlab_list_job_token_group_allowlist, gitlab_remove_group_job_token_allowlist, gitlab_add_project_job_token_allowlist.",
 	},
 	"gitlab_remove_group_job_token_allowlist": {
-		usage:       "Remove a group from this project's CI/CD job token allowlist, revoking inbound job token access for the group's projects. Destructive; confirm project_id and target_group_id first.",
+		usage:       "Remove a group from this project's CI/CD job token allowlist, revoking inbound job token access for the group's projects. Destructive. Confirm project_id and target_group_id first.",
 		aliases:     []string{"remove group from job token allowlist", "revoke group job token access", "delete group job token allowlist entry"},
 		related:     []string{actionJobTokenScopeListGroups, actionJobTokenScopeAddGroup, actionJobTokenScopeRemoveProject},
 		description: "Remove a group from a project's CI/CD job token allowlist. Returns: a success confirmation naming the removed group. See also: gitlab_list_job_token_group_allowlist, gitlab_add_group_job_token_allowlist, gitlab_remove_project_job_token_allowlist.",

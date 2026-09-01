@@ -142,7 +142,7 @@ var snippetActionMeta = map[string]snippetActionMetaEntry{
 		description: "List all snippets on the instance (admin). Returns: snippets with author, visibility, repository storage, and pagination metadata. See also: gitlab_snippet_list, gitlab_snippet_explore, gitlab_snippet_get.",
 	},
 	"gitlab_snippet_get": {
-		usage:       "Fetch one personal snippet by its global snippet_id. Use after a snippet list or when the prompt already names a concrete snippet ID; returns a structured not-found result on 404.",
+		usage:       "Fetch one personal snippet by its global snippet_id. Use after a snippet list or when the prompt already names a concrete snippet ID. Returns a structured not-found result on 404.",
 		aliases:     []string{"get snippet", "show snippet details", "fetch snippet"},
 		related:     []string{actionSnippetList, actionSnippetContent, "snippet.update", "snippet.delete"},
 		description: "Get a single personal snippet by ID. Returns: snippet metadata, visibility, author, files, and web URL. See also: gitlab_snippet_list, gitlab_snippet_content, gitlab_snippet_update, gitlab_snippet_delete.",
@@ -166,13 +166,13 @@ var snippetActionMeta = map[string]snippetActionMetaEntry{
 		description: "Create a personal snippet. Returns: the created snippet with ID, visibility, author, files, and web URL. See also: gitlab_snippet_get, gitlab_snippet_update, gitlab_snippet_list.",
 	},
 	"gitlab_snippet_update": {
-		usage:       "Update a personal snippet's metadata or files. Pass files[] with action set to create, update, delete, or move to modify content; use file_name/content only for single-file legacy snippets.",
+		usage:       "Update a personal snippet's metadata or files. Pass files[] with action set to create, update, delete, or move to modify content. Use file_name/content only for single-file legacy snippets.",
 		aliases:     []string{"update snippet", "edit snippet", "modify personal snippet"},
 		related:     []string{actionSnippetGet, "snippet.delete", actionSnippetList},
 		description: "Update a personal snippet. Returns: the updated snippet with metadata, files, and web URL. See also: gitlab_snippet_get, gitlab_snippet_delete, gitlab_snippet_list.",
 	},
 	"gitlab_snippet_delete": {
-		usage:       "Permanently delete a personal snippet by snippet_id. Destructive; confirm the snippet ID before calling.",
+		usage:       "Permanently delete a personal snippet by snippet_id. Destructive. Confirm the snippet ID before calling.",
 		aliases:     []string{"delete snippet", "remove snippet", "destroy snippet", "drop snippet"},
 		related:     []string{actionSnippetGet, actionSnippetList},
 		description: "Delete a personal snippet permanently. Returns: a success confirmation. See also: gitlab_snippet_get, gitlab_snippet_list.",
@@ -184,7 +184,7 @@ var snippetActionMeta = map[string]snippetActionMetaEntry{
 		description: "List public snippets across the instance. Returns: public snippets with author, visibility, and pagination metadata. See also: gitlab_snippet_list, gitlab_snippet_get.",
 	},
 	"gitlab_project_snippet_list": {
-		usage:       "List snippets belonging to one project. Provide project_id; use order_by/sort and keyset pagination when the prompt scopes snippets to a known project.",
+		usage:       "List snippets belonging to one project. Provide project_id. Use order_by/sort and keyset pagination when the prompt scopes snippets to a known project.",
 		aliases:     []string{"list project snippets", "show project snippets", "find snippets in project"},
 		related:     []string{actionSnippetProjectGet, "snippet.project_create", actionSnippetList},
 		description: "List a project's snippets. Returns: snippets with title, visibility, author, files, and pagination metadata. See also: gitlab_project_snippet_get, gitlab_project_snippet_create, gitlab_snippet_list.",
@@ -202,19 +202,19 @@ var snippetActionMeta = map[string]snippetActionMetaEntry{
 		description: "Read a project snippet's raw content. Returns: the snippet ID and raw text content. See also: gitlab_project_snippet_get, gitlab_project_snippet_list.",
 	},
 	"gitlab_project_snippet_create": {
-		usage:       "Create a project snippet. Provide project_id and title plus either files[] (multi-file) or file_name and content (single-file); set visibility to private, internal, or public.",
+		usage:       "Create a project snippet. Provide project_id and title plus either files[] (multi-file) or file_name and content (single-file). Set visibility to private, internal, or public.",
 		aliases:     []string{"create project snippet", "new project snippet", "add snippet to project"},
 		related:     []string{actionSnippetProjectGet, "snippet.project_update", actionSnippetProjectList},
 		description: "Create a project snippet. Returns: the created snippet with ID, visibility, author, files, and web URL. See also: gitlab_project_snippet_get, gitlab_project_snippet_update, gitlab_project_snippet_list.",
 	},
 	"gitlab_project_snippet_update": {
-		usage:       "Update a project snippet's metadata or files. Pass files[] with action set to create, update, delete, or move and use the file_path from project_get; use file_name/content only for single-file legacy snippets.",
+		usage:       "Update a project snippet's metadata or files. Pass files[] with action set to create, update, delete, or move and use the file_path from project_get. Use file_name/content only for single-file legacy snippets.",
 		aliases:     []string{"update project snippet", "edit project snippet", "modify project snippet"},
 		related:     []string{actionSnippetProjectGet, "snippet.project_delete", actionSnippetProjectList},
 		description: "Update a project snippet. Returns: the updated snippet with metadata, files, and web URL. See also: gitlab_project_snippet_get, gitlab_project_snippet_delete, gitlab_project_snippet_list.",
 	},
 	"gitlab_project_snippet_delete": {
-		usage:       "Permanently delete a project snippet by project_id and snippet_id. Destructive; confirm both identifiers before calling.",
+		usage:       "Permanently delete a project snippet by project_id and snippet_id. Destructive. Confirm both identifiers before calling.",
 		aliases:     []string{"delete project snippet", "remove project snippet", "destroy project snippet", "drop project snippet"},
 		related:     []string{actionSnippetProjectGet, actionSnippetProjectList},
 		description: "Delete a project snippet permanently. Returns: a success confirmation. See also: gitlab_project_snippet_get, gitlab_project_snippet_list.",

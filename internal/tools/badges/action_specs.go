@@ -98,7 +98,7 @@ func badgeGuidance(actionName string, options toolutil.ActionSpecOptions) toolut
 		otherParam = "project_id"
 	}
 	verb := strings.TrimPrefix(actionName, "badge_")
-	options.Usage = fmt.Sprintf("%s Use %s for %s badge operations; do not use %s. %s", badgeActionDescription(verb, scope), idParam, scope, otherParam, badgeScopeBoundary(scope))
+	options.Usage = fmt.Sprintf("%s Use %s for %s badge operations. Do not use %s. %s", badgeActionDescription(verb, scope), idParam, scope, otherParam, badgeScopeBoundary(scope))
 	if scope == "group" {
 		switch verb {
 		case "list":
@@ -170,9 +170,9 @@ func badgeIndividualDescription(verb, scope string) string {
 
 func badgeScopeBoundary(scope string) string {
 	if scope == "group" {
-		return "Use only when the task says group badge; project badge CRUD belongs to gitlab_project."
+		return "Use only when the task says group badge. Project badge CRUD belongs to gitlab_project."
 	}
-	return "Use when the task says project badge; do not use gitlab_group for project badge CRUD."
+	return "Use when the task says project badge. Do not use gitlab_group for project badge CRUD."
 }
 
 func badgeActionDescription(verb, scope string) string {
@@ -202,7 +202,7 @@ func badgeEditGuidance(actionName string, options toolutil.ActionSpecOptions) to
 	if actionName != "badge_edit" {
 		return options
 	}
-	options.Usage += " Use the parameter name name for a new badge name; new_name is not supported."
+	options.Usage += " Use the parameter name name for a new badge name. new_name is not supported."
 	options.Aliases = append(options.Aliases, fmt.Sprintf("rename %s badge", options.Tags[0]), fmt.Sprintf("update %s badge name", options.Tags[0]))
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		options.Tags[0] + "_id": options.ParameterGuidance[options.Tags[0]+"_id"],
@@ -210,7 +210,7 @@ func badgeEditGuidance(actionName string, options toolutil.ActionSpecOptions) to
 			SemanticRole: "badge_display_name",
 			ValueSource:  "Optional replacement badge name. The parameter is named name.",
 			CommonConfusions: []string{
-				"Do not send new_name; badge_edit accepts name, link_url, and image_url.",
+				"Do not send new_name. badge_edit accepts name, link_url, and image_url.",
 			},
 		},
 	}

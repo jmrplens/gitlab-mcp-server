@@ -89,10 +89,11 @@ func TestEnvBackedFlags_AnUnpassedFlagLeavesTheEnvironmentAlone(t *testing.T) {
 // something else.
 func TestEnvBackedFlags_EverySettingIsReachableFromTheCommandLine(t *testing.T) {
 	want := map[string]string{
-		"log-level":            "LOG_LEVEL",
-		"client-compat":        "CLIENT_COMPAT",
-		"upload-max-file-size": "UPLOAD_MAX_FILE_SIZE",
-		"yolo-mode":            "YOLO_MODE",
+		"log-level":                 "LOG_LEVEL",
+		"client-compat":             "CLIENT_COMPAT",
+		"upload-max-file-size":      "UPLOAD_MAX_FILE_SIZE",
+		"yolo-mode":                 "YOLO_MODE",
+		"description-substitutions": "GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS",
 	}
 
 	got := make(map[string]string, len(envBackedFlags))

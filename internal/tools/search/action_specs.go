@@ -37,7 +37,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func searchCodeSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := searchReadOptions("gitlab_search_code")
-	options.Usage = "Search code blobs and file contents. Use for text, symbols, snippets, or filenames inside repositories; do not use for project or repository name discovery."
+	options.Usage = "Search code blobs and file contents. Use for text, symbols, snippets, or filenames inside repositories. Do not use for project or repository name discovery."
 	options.Aliases = []string{"code search", "file content search", "find code", "search repository files"}
 	options.Tags = append(options.Tags, "code", "blob", "file_content")
 	options.RelatedActions = []string{actionSearchProjects, "repository.file_get", "repository.tree"}
@@ -47,7 +47,7 @@ func searchCodeSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 
 func searchProjectsSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := searchReadOptions("gitlab_search_projects")
-	options.Usage = "Search project records by fuzzy project name, path fragment, namespace, or description. Use for broad discovery across many projects; if the prompt gives one exact namespace path like group/project and asks for metadata, use project.get instead. Do not use for code contents."
+	options.Usage = "Search project records by fuzzy project name, path fragment, namespace, or description. Use for broad discovery across many projects. If the prompt gives one exact namespace path like group/project and asks for metadata, use project.get instead. Do not use for code contents."
 	options.Aliases = []string{"project search", "repository search", "find projects", "find repositories"}
 	options.Tags = append(options.Tags, "project", "repository", "namespace")
 	options.RelatedActions = []string{"project.get", "project.list", actionSearchCode}
@@ -110,14 +110,14 @@ var searchActionMeta = map[string]searchActionMetaEntry{
 		description: "Search merge requests across global, group, or project scope. Returns: matching merge requests with title, state, author, source and target branches, and web URL plus pagination metadata. See also: gitlab_search_issues, gitlab_mr_list, gitlab_mr_get.",
 	},
 	"gitlab_search_issues": {
-		usage:       "Search issues by title and description across global, group (group_id), or project (project_id) scope. Use when the prompt gives keywords; if it already names a project plus an issue number, use issue.get instead.",
+		usage:       "Search issues by title and description across global, group (group_id), or project (project_id) scope. Use when the prompt gives keywords. If it already names a project plus an issue number, use issue.get instead.",
 		aliases:     []string{"search issues", "search tickets", "full-text issue search", "find issues by content"},
 		tags:        []string{"issue"},
 		related:     []string{actionSearchMergeRequests, "issue.list", "issue.get"},
 		description: "Search issues across global, group, or project scope. Returns: matching issues with title, state, labels, assignees, author, and web URL plus pagination metadata. See also: gitlab_search_merge_requests, gitlab_issue_list, gitlab_issue_get.",
 	},
 	"gitlab_search_commits": {
-		usage:       "Search commit messages across global, group (group_id), or project (project_id) scope. Use to find commits by message keywords; use repository.commit_get when the SHA is already known.",
+		usage:       "Search commit messages across global, group (group_id), or project (project_id) scope. Use to find commits by message keywords. Use repository.commit_get when the SHA is already known.",
 		aliases:     []string{"search commits", "search commit messages", "find commit by message", "full-text commit search"},
 		tags:        []string{"commit"},
 		related:     []string{actionSearchCode, "repository.commit_get", "repository.commit_list"},

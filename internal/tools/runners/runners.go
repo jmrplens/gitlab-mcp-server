@@ -331,7 +331,7 @@ type ListInput struct {
 	Status  string   `json:"status,omitempty"   jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
 	Paused  *bool    `json:"paused,omitempty"   jsonschema:"Filter by paused state"`
 	TagList []string `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
-	Scope   string   `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead"`
+	Scope   string   `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead"`
 	OrderBy string   `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
 	Sort    string   `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
@@ -385,7 +385,7 @@ type UpdateInput struct {
 	AccessLevel     string   `json:"access_level,omitempty"       jsonschema:"Access level: not_protected, ref_protected"`
 	MaximumTimeout  *int64   `json:"maximum_timeout,omitempty"    jsonschema:"Maximum job timeout in seconds"`
 	MaintenanceNote string   `json:"maintenance_note,omitempty"   jsonschema:"Maintenance note for the runner"`
-	Active          *bool    `json:"active,omitempty"             jsonschema:"Deprecated: runner active state; prefer paused instead"`
+	Active          *bool    `json:"active,omitempty"             jsonschema:"Deprecated: runner active state. Prefer paused instead"`
 }
 
 // Update modifies a runner's configuration and returns updated details.
@@ -527,7 +527,7 @@ type ListProjectInput struct {
 	Status    string               `json:"status,omitempty"   jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
 	Paused    *bool                `json:"paused,omitempty"   jsonschema:"Filter by paused state"`
 	TagList   []string             `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
-	Scope     string               `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead"`
+	Scope     string               `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead"`
 	OrderBy   string               `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
 	Sort      string               `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput
@@ -674,7 +674,7 @@ type RegisterInput struct {
 	AccessLevel     string             `json:"access_level,omitempty"     jsonschema:"Access level: not_protected, ref_protected"`
 	MaximumTimeout  *int64             `json:"maximum_timeout,omitempty"  jsonschema:"Maximum job timeout in seconds"`
 	MaintenanceNote string             `json:"maintenance_note,omitempty" jsonschema:"Maintenance note"`
-	Active          *bool              `json:"active,omitempty"           jsonschema:"Deprecated: registration active state; prefer paused instead"`
+	Active          *bool              `json:"active,omitempty"           jsonschema:"Deprecated: registration active state. Prefer paused instead"`
 }
 
 // buildRegisterInfo maps the optional info hashmap input onto the client-go
@@ -865,7 +865,7 @@ type ListAllInput struct {
 	Status  string   `json:"status,omitempty"   jsonschema:"Runner status filter: online, offline, stale, never_contacted"`
 	Paused  *bool    `json:"paused,omitempty"   jsonschema:"Filter by paused state"`
 	TagList []string `json:"tag_list,omitempty" jsonschema:"List of tags to filter by"`
-	Scope   string   `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead"`
+	Scope   string   `json:"scope,omitempty"    jsonschema:"Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead"`
 	OrderBy string   `json:"order_by,omitempty" jsonschema:"Field to order keyset-paginated results by, e.g. id"`
 	Sort    string   `json:"sort,omitempty"     jsonschema:"Sort direction: asc or desc"`
 	toolutil.PaginationInput

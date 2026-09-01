@@ -106,7 +106,7 @@ var groupImportExportActionMeta = map[string]groupImportExportActionMetaEntry{
 		description: "Schedule an asynchronous export of a GitLab group. Returns: a confirmation that the export was scheduled (the archive is built in the background). See also: gitlab_download_group_export, gitlab_import_group_from_file, gitlab_group_get.",
 	},
 	"gitlab_download_group_export": {
-		usage:       "Download the finished export archive for a group as a base64-encoded .tar.gz. Use this only after group_export_schedule has completed; the call fails until the archive is ready.",
+		usage:       "Download the finished export archive for a group as a base64-encoded .tar.gz. Use this only after group_export_schedule has completed. The call fails until the archive is ready.",
 		aliases:     []string{"download group export", "fetch group archive", "get group export file", "retrieve group export"},
 		related:     []string{actionGroupExportSchedule, actionGroupImportFile, actionGroupGet},
 		description: "Download a group's finished export archive. Returns: the export archive as base64 content plus its size in bytes. See also: gitlab_schedule_group_export, gitlab_import_group_from_file, gitlab_group_get.",

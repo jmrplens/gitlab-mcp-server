@@ -92,16 +92,16 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	if scope == "" {
 		return options
 	}
-	options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action %s a %s-scoped API token.", scope, accessTokenOperationPhrase(operation), scope)
+	options.Usage = fmt.Sprintf("Use for GitLab %s access tokens: this action %s a %s-scoped API token.", scope, accessTokenOperationPhrase(operation), scope)
 	if strings.HasSuffix(operation, "_self") {
 		// The self variants act on the token that authenticates the request
 		// itself; without this sentence they read identically to their
 		// token_id-taking siblings and a model has no signal to pick one.
-		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action %s the %s-scoped token that authenticates this request itself — no token_id parameter.", scope, accessTokenOperationPhrase(operation), scope)
+		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens: this action %s the %s-scoped token that authenticates this request itself — no token_id parameter.", scope, accessTokenOperationPhrase(operation), scope)
 	}
 	options.Aliases = accessTokenAliases(scope, operation)
 	if operation == "list" {
-		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens; this action lists %s-scoped API tokens.", scope, scope)
+		options.Usage = fmt.Sprintf("Use for GitLab %s access tokens: this action lists %s-scoped API tokens.", scope, scope)
 		options.Tags = append(options.Tags, scope+"_access_tokens")
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("state", map[string]any{"enum": []any{"active", "inactive"}}),
@@ -113,7 +113,7 @@ func accessTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			"token_id": {
 				SemanticRole:     "access_token",
 				ValueSource:      fmt.Sprintf("Access token ID returned by token_%s_list or token_%s_get.", scope, scope),
-				CommonConfusions: []string{"Do not use project_id, group_id, or user_id as token_id; token_id identifies the access token itself."},
+				CommonConfusions: []string{"Do not use project_id, group_id, or user_id as token_id. token_id identifies the access token itself."},
 			},
 		}
 	}

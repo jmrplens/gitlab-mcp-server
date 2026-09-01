@@ -287,7 +287,7 @@ func assertSurfacePolicyMetaProjection(t *testing.T, spec toolutil.ActionSpec, h
 	if !strings.Contains(metaPrefix, "Action params schema: gitlab://tools/gitlab_project.<action>.") {
 		t.Fatalf("meta description prefix missing schema hint: %q", metaPrefix)
 	}
-	if !strings.Contains(metaPrefix, "delete.project_id: gitlab project id; source: prompt project reference") {
+	if !strings.Contains(metaPrefix, "delete.project_id: gitlab project id. Source: prompt project reference") {
 		t.Fatalf("meta description prefix missing parameter guidance: %q", metaPrefix)
 	}
 	if strings.Contains(metaPrefix, "Delete a GitLab project.") {

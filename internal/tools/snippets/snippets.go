@@ -129,7 +129,7 @@ type CreateFileInput struct {
 // UpdateFileInput represents a file operation when updating a snippet.
 type UpdateFileInput struct {
 	Action       string `json:"action" jsonschema:"File action: create, update, delete, move,required"`
-	FilePath     string `json:"file_path" jsonschema:"Snippet file path to create/update/delete; for project_update use the file_path returned by project_get,required"`
+	FilePath     string `json:"file_path" jsonschema:"Snippet file path to create/update/delete. For project_update use the file_path returned by project_get,required"`
 	Content      string `json:"content,omitempty" jsonschema:"File content (for create/update)"`
 	PreviousPath string `json:"previous_path,omitempty" jsonschema:"Previous file path (for move)"`
 }
@@ -422,7 +422,7 @@ type CreateInput struct {
 	FileName    string            `json:"file_name,omitempty" jsonschema:"File name (single-file snippet, deprecated in favor of files)"`
 	Description string            `json:"description,omitempty" jsonschema:"Snippet description"`
 	ContentBody string            `json:"content,omitempty" jsonschema:"Snippet content (single-file, deprecated in favor of files)"`
-	Visibility  string            `json:"visibility,omitempty" jsonschema:"Visibility: private, internal, or public; defaults to private when omitted"`
+	Visibility  string            `json:"visibility,omitempty" jsonschema:"Visibility: private, internal, or public. Defaults to private when omitted"`
 	Files       []CreateFileInput `json:"files,omitempty" jsonschema:"Files to include in the snippet"`
 }
 

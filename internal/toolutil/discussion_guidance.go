@@ -11,7 +11,7 @@ func DiscussionIDParamGuidance(valueSource string) ParameterGuidance {
 		SemanticRole:     "discussion_id",
 		ValueSource:      valueSource,
 		ExampleBinding:   `params.discussion_id:"6a9c1750b37d513a43987b574953fceb50b03ce7"`,
-		CommonConfusions: []string{"The discussion_id is the thread hash, not a note id; pass note_id separately for note actions."},
+		CommonConfusions: []string{"The discussion_id is the thread hash, not a note id. Pass note_id separately for note actions."},
 	}
 }
 
@@ -25,6 +25,6 @@ func DiscussionNoteIDParamGuidance(valueSource string) ParameterGuidance {
 		SemanticRole:     "note_id",
 		ValueSource:      valueSource,
 		ExampleBinding:   "params.note_id:300",
-		CommonConfusions: []string{"note_id is the numeric id of a single note; discussion_id is the thread hash."},
+		CommonConfusions: []string{"note_id is the numeric id of a single note. discussion_id is the thread hash."},
 	}
 }

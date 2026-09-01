@@ -50,12 +50,12 @@ func appearanceOptions(actionName, individualTool string) toolutil.ActionSpecOpt
 			"message_background_color": {
 				SemanticRole:     "hex_color",
 				ValueSource:      "Hex color string such as #e75e40 for the appearance banner background.",
-				CommonConfusions: []string{"Provide a CSS-style hex color such as #ffffff; do not send color names or RGB tuples."},
+				CommonConfusions: []string{"Provide a CSS-style hex color such as #ffffff. Do not send color names or RGB tuples."},
 			},
 			"message_font_color": {
 				SemanticRole:     "hex_color",
 				ValueSource:      "Hex color string such as #ffffff for the appearance banner text.",
-				CommonConfusions: []string{"Provide a CSS-style hex color such as #000000; do not send color names or RGB tuples."},
+				CommonConfusions: []string{"Provide a CSS-style hex color such as #000000. Do not send color names or RGB tuples."},
 			},
 		}
 		options.IndividualTool.Description = "Update GitLab application appearance and branding settings. Returns: the updated appearance object after GitLab applies the change. See also: gitlab_get_appearance, gitlab_get_settings, gitlab_get_metadata."

@@ -108,11 +108,11 @@ func tagSpec(name string, route toolutil.ActionRoute, individualTool string, rea
 				SemanticRole:     "git_ref",
 				ValueSource:      "Branch, tag, or commit to tag.",
 				ExampleBinding:   `params.ref:"main"`,
-				CommonConfusions: []string{"Use ref for source revision; do not pass project paths or URLs."},
+				CommonConfusions: []string{"Use ref for source revision. Do not pass project paths or URLs."},
 			},
 		}
 	case "delete":
-		options.Usage = "Delete a tag from a project by name. Destructive and not recoverable; protected tags must be unprotected first."
+		options.Usage = "Delete a tag from a project by name. Destructive and not recoverable. Protected tags must be unprotected first."
 		options.Aliases = []string{"delete tag", "remove tag", "drop tag"}
 		options.RelatedActions = []string{actionTagList, actionTagGet, actionTagUnprotect}
 		options.IndividualTool.Description = "Delete a tag from a project permanently. Returns: a success confirmation naming the tag and project. See also: gitlab_tag_get, gitlab_tag_list, gitlab_tag_unprotect."
@@ -137,7 +137,7 @@ func tagSpec(name string, route toolutil.ActionRoute, individualTool string, rea
 		options.RelatedActions = []string{actionTagUnprotect, actionTagListProtected, "tag.get_protected"}
 		options.IndividualTool.Description = "Protect a tag or wildcard pattern with create access levels. Returns: the protected tag with its resolved create access levels. See also: gitlab_tag_unprotect, gitlab_tag_list_protected, gitlab_tag_get_protected."
 	case "unprotect":
-		options.Usage = "Remove protection from a tag or wildcard pattern by name. Destructive; allows the matched tags to be created or deleted again."
+		options.Usage = "Remove protection from a tag or wildcard pattern by name. Destructive. Allows the matched tags to be created or deleted again."
 		options.Aliases = []string{"unprotect tag", "remove tag protection", "delete protected tag"}
 		options.RelatedActions = []string{actionTagProtect, actionTagListProtected, "tag.delete"}
 		options.IndividualTool.Description = "Remove protection from a tag or wildcard pattern. Returns: a success confirmation naming the tag and project. See also: gitlab_tag_protect, gitlab_tag_list_protected, gitlab_tag_get_protected."

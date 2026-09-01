@@ -64,7 +64,7 @@ func securityAttributeUpdateSpec(name string, route toolutil.ActionRoute, indivi
 		toolutil.SchemaPropertyOverride("description", map[string]any{schemaType: schemaTypeStr}),
 		toolutil.SchemaPropertyOverride("color", map[string]any{schemaType: schemaTypeStr, "pattern": hexColorSchemaPattern}),
 	}
-	options.Usage = "Rename, re-describe, or recolor an editable custom security attribute by attribute_id. Provide at least one of name, description, or color; template-provided attributes are not editable."
+	options.Usage = "Rename, re-describe, or recolor an editable custom security attribute by attribute_id. Provide at least one of name, description, or color. Template-provided attributes are not editable."
 	options.Aliases = []string{"update security attribute", "rename security attribute", "recolor security attribute", "edit security classification label"}
 	options.RelatedActions = []string{actionSecAttrCreate, "security_attribute.delete", "security_category.update", actionProjectGet}
 	return toolutil.NewUpdateActionSpec(name, route, options)
@@ -73,7 +73,7 @@ func securityAttributeUpdateSpec(name string, route toolutil.ActionRoute, indivi
 // securityAttributeDeleteSpec builds the canonical destructive delete spec for a security attribute tool.
 func securityAttributeDeleteSpec(name string, route toolutil.ActionRoute, individualTool, description string) toolutil.ActionSpec {
 	options := securityAttributeOptions(individualTool, description)
-	options.Usage = "Permanently delete an editable custom security attribute by attribute_id. This destructive action removes the attribute and unassigns it from every project that uses it; template-provided attributes cannot be deleted."
+	options.Usage = "Permanently delete an editable custom security attribute by attribute_id. This destructive action removes the attribute and unassigns it from every project that uses it. Template-provided attributes cannot be deleted."
 	options.Aliases = []string{"delete security attribute", "remove security attribute value", "destroy security classification label"}
 	options.RelatedActions = []string{actionSecAttrCreate, "security_attribute.update", "security_category.delete", actionSecAttrProjUpdate}
 	return toolutil.NewDeleteActionSpec(name, route, options)
@@ -87,7 +87,7 @@ func securityAttributeProjectUpdateSpec(name string, route toolutil.ActionRoute,
 		toolutil.SchemaPropertyOverride("add_attribute_ids", map[string]any{schemaType: schemaTypeArr, schemaMinItems: 1}),
 		toolutil.SchemaPropertyOverride("remove_attribute_ids", map[string]any{schemaType: schemaTypeArr, schemaMinItems: 1}),
 	}
-	options.Usage = "Assign or unassign existing security attributes on a single project by project_id, supplying add_attribute_ids, remove_attribute_ids, or both. Use this to classify one project; for many targets at once use security_attribute.bulk_update instead."
+	options.Usage = "Assign or unassign existing security attributes on a single project by project_id, supplying add_attribute_ids, remove_attribute_ids, or both. Use this to classify one project. For many targets at once use security_attribute.bulk_update instead."
 	options.Aliases = []string{"assign security attributes to project", "tag project with security attribute", "remove security attribute from project", "classify project security attributes"}
 	options.RelatedActions = []string{"security_attribute.bulk_update", actionSecAttrCreate, actionProjectGet, actionSecCatCreate}
 	return toolutil.NewDeleteActionSpec(name, route, options)

@@ -95,6 +95,18 @@ GITLAB_TOKEN = "glpat-xxxxxxxxxxxxxxxxxxxx"
 
 Mantén la superficie de herramientas `dynamic` por defecto para clientes con límites de número de herramientas (Cursor limita cada servidor a 40 herramientas, Windsurf a 100, los clientes basados en OpenAI a 128 por petición) y deja `META_PARAM_SCHEMA` en su valor por defecto `opaque` para Codex, que recorta silenciosamente los esquemas de herramienta mayores de ~5 KB.
 
+### Validadores de pasarelas MCP
+
+Una pasarela (gateway) MCP valida el catálogo de un servidor antes de admitirlo, con reglas que decide su operador: una pasarela en producción (IBM [mcp-context-forge](https://github.com/IBM/mcp-context-forge) antes de 0.7.0) rechazaba cualquier descripción de herramienta que contuviera un punto y coma. El servidor mantiene todo lo que lista libre de puntos y coma en todas las superficies, y un mecanismo de sustituciones permite a un despliegue cumplir la siguiente regla de pasarela sin esperar a una nueva versión:
+
+```bash
+# Reescribe descripciones y títulos listados: pares old=new separados por
+# comas, aplicados en orden (la barra invertida escapa \, \= \\)
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS=';=.'
+```
+
+La reescritura cubre descripciones y títulos de herramientas, prompts, recursos y plantillas de recursos, incluidas las descripciones incrustadas en los esquemas de herramienta. Los nombres, URIs, restricciones de esquema (`pattern`, `const`, valores de enum, defaults) y los resultados de llamadas a herramientas no se tocan nunca, y un valor mal formado impide arrancar el servidor en lugar de servir un catálogo sin reescribir. Si tu pasarela es mcp-context-forge, actualizar a 0.7.0 o posterior también resuelve el rechazo del punto y coma en el lado de la pasarela ([issue 3770](https://github.com/IBM/mcp-context-forge/issues/3770)).
+
 ## Funcionalidades del protocolo MCP
 
 GitLab MCP Server implementa el conjunto completo de capacidades MCP más allá de las herramientas — recursos, prompts, completions, elicitation, notificaciones de progreso y suscripciones a recursos — para que los clientes compatibles obtengan datos contextuales, plantillas de prompts, autocompletado de argumentos y notificaciones de cambio en vivo además de las llamadas a herramientas.

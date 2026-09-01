@@ -28,7 +28,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 
 func repositoryCompareSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 	options := repositoryOptionsForAction("compare", "gitlab_repository_compare")
-	options.Usage = "Diff two refs to see what changed between them; set params.from to the base ref and params.to to the target ref. Use for release diffs or pre-merge review."
+	options.Usage = "Diff two refs to see what changed between them. Set params.from to the base ref and params.to to the target ref. Use for release diffs or pre-merge review."
 	options.Aliases = []string{"diff two branches", "compare refs", "git diff between commits", "what changed between tags"}
 	options.RelatedActions = []string{"repository.merge_base", actionRepositoryTree, actionBranchList, "release.list"}
 	options.IndividualTool.Description = "Compare two refs (branches, tags, or commits) in a project. Use from_project_id for cross-project comparison. Returns: commits, diffs, and comparison metadata. See also: gitlab_repository_tree, gitlab_branch_list."
@@ -67,7 +67,7 @@ func repositoryOptionsForAction(actionName, individualTool string) toolutil.Acti
 			},
 			"ref": {
 				SemanticRole:   "git_ref",
-				ValueSource:    "Branch/tag/commit to inspect; default branch when omitted.",
+				ValueSource:    "Branch/tag/commit to inspect. Default branch when omitted.",
 				ExampleBinding: `params.ref:"main"`,
 			},
 		}

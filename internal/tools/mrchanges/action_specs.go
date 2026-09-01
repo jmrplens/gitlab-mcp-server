@@ -82,7 +82,7 @@ var (
 // mrChangeActionMeta maps each individual MR-changes tool to its discovery metadata.
 var mrChangeActionMeta = map[string]mrChangeActionMetaEntry{
 	"gitlab_mr_changes_get": {
-		usage:   "Get the current file diffs (changes) for a merge request by project_id and merge_request_iid. Use this first when the prompt asks to inspect, view, or analyze MR changes without running an LLM analyzer; returns structured per-file diffs with old/new paths and line metadata for inline review.",
+		usage:   "Get the current file diffs (changes) for a merge request by project_id and merge_request_iid. Use this first when the prompt asks to inspect, view, or analyze MR changes without running an LLM analyzer. Returns structured per-file diffs with old/new paths and line metadata for inline review.",
 		aliases: []string{"get merge request changes", "view mr changes", "inspect mr diff", "list merge request changes", "mr code diff"},
 		related: []string{actionRawDiffs, actionDiffVersionsList, actionMRGet, actionMRDiscussionsList},
 		description: "Get the current file diffs (changes) for a merge request. " +
@@ -106,7 +106,7 @@ var mrChangeActionMeta = map[string]mrChangeActionMetaEntry{
 		},
 	},
 	"gitlab_mr_diff_versions_list": {
-		usage:   "List the diff versions (historical snapshots) of a merge request. Use when the prompt asks for the MR's diff revisions or version history; returns version IDs and SHAs but not the diffs themselves — pass a version_id to diff_version_get to retrieve the actual diff.",
+		usage:   "List the diff versions (historical snapshots) of a merge request. Use when the prompt asks for the MR's diff revisions or version history. Returns version IDs and SHAs but not the diffs themselves — pass a version_id to diff_version_get to retrieve the actual diff.",
 		aliases: []string{"list merge request diff versions", "mr diff revisions", "list mr diff snapshots", "merge request version history"},
 		related: []string{actionDiffVersionGet, actionChangesGet, actionMRGet},
 		description: "List all diff versions (historical snapshots) of a merge request. " +
@@ -118,12 +118,12 @@ var mrChangeActionMeta = map[string]mrChangeActionMetaEntry{
 			"order_by": {
 				ValueSource:      "Column to order keyset-paginated results by.",
 				ExampleBinding:   `params.order_by:"id"`,
-				CommonConfusions: []string{"Combine order_by with sort and pagination='keyset'; not a free-text phrase."},
+				CommonConfusions: []string{"Combine order_by with sort and pagination='keyset'. Not a free-text phrase."},
 			},
 		},
 	},
 	"gitlab_mr_diff_version_get": {
-		usage:   "Get a single merge request diff version with its commits and file diffs. Use the version_id from diff_versions_list; set unidiff to return diffs in unified-diff format.",
+		usage:   "Get a single merge request diff version with its commits and file diffs. Use the version_id from diff_versions_list. Set unidiff to return diffs in unified-diff format.",
 		aliases: []string{"get merge request diff version", "show mr diff snapshot", "get mr diff revision", "merge request version detail"},
 		related: []string{actionDiffVersionsList, actionChangesGet, actionMRGet},
 		description: "Get a single merge request diff version with its commits and file diffs. " +

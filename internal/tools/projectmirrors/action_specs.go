@@ -102,7 +102,7 @@ var mirrorActionMeta = map[string]toolutil.ActionMetaEntry{
 			"order_by": {
 				ValueSource:      "Column to order keyset-paginated results by, such as id.",
 				ExampleBinding:   `params.order_by:"id"`,
-				CommonConfusions: []string{"order_by only applies when pagination='keyset'; combine it with sort."},
+				CommonConfusions: []string{"order_by only applies when pagination='keyset'. Combine it with sort."},
 			},
 		},
 		Description: "List a project's push (remote) mirrors. Returns: each mirror with id, enabled state, redacted URL, last-update status, and pagination metadata. See also: gitlab_get_project_mirror, gitlab_add_project_mirror, gitlab_project_pull_mirror_get.",
@@ -128,7 +128,7 @@ var mirrorActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Get the SSH public key for an SSH-authenticated push mirror. Returns: the public key to register on the remote. See also: gitlab_get_project_mirror, gitlab_edit_project_mirror.",
 	},
 	"gitlab_add_project_mirror": {
-		Usage:   "Create a new push (remote) mirror on a project so commits are mirrored to an external Git URL. Requires GitLab Premium/Ultimate and Maintainer+ role; supply credentials inline in the URL or via SSH auth.",
+		Usage:   "Create a new push (remote) mirror on a project so commits are mirrored to an external Git URL. Requires GitLab Premium/Ultimate and Maintainer+ role. Supply credentials inline in the URL or via SSH auth.",
 		Aliases: []string{"add project mirror", "create push mirror", "set up remote mirror"},
 		Related: []string{actionMirrorList, actionMirrorEdit, actionMirrorGetPublicKey},
 		Guidance: map[string]toolutil.ParameterGuidance{
@@ -137,7 +137,7 @@ var mirrorActionMeta = map[string]toolutil.ActionMetaEntry{
 				SemanticRole:     "mirror_url",
 				ValueSource:      "Remote Git URL to push to, optionally with inline credentials in the userinfo component.",
 				ExampleBinding:   `params.url:"https://example.com/repo.git"`,
-				CommonConfusions: []string{"Inline credentials are secrets; do not mirror a project to itself."},
+				CommonConfusions: []string{"Inline credentials are secrets. Do not mirror a project to itself."},
 			},
 		},
 		Description: "Create a push (remote) mirror on a project. Returns: the created mirror with id, enabled state, redacted URL, and update status. See also: gitlab_list_project_mirrors, gitlab_edit_project_mirror, gitlab_get_project_mirror_public_key.",
@@ -153,7 +153,7 @@ var mirrorActionMeta = map[string]toolutil.ActionMetaEntry{
 		Description: "Update a push mirror's attributes (enabled, branch filtering, divergent refs, auth method). Returns: the updated mirror. See also: gitlab_get_project_mirror, gitlab_force_push_mirror_update.",
 	},
 	"gitlab_delete_project_mirror": {
-		Usage:   "Permanently delete a push mirror from a project. Destructive and irreversible; confirm project_id and mirror_id before calling.",
+		Usage:   "Permanently delete a push mirror from a project. Destructive and irreversible. Confirm project_id and mirror_id before calling.",
 		Aliases: []string{"delete project mirror", "remove push mirror", "delete remote mirror"},
 		Related: []string{actionMirrorGet, actionMirrorList, actionMirrorEdit},
 		Guidance: map[string]toolutil.ParameterGuidance{

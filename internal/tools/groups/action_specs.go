@@ -233,7 +233,7 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 				SemanticRole:     roleScopeGroup,
 				ValueSource:      "Group numeric ID or full path from the prompt or prior discovery step.",
 				ExampleBinding:   `params.group_id:"my-org/platform"`,
-				CommonConfusions: []string{"Use group_id for path or ID; do not send project_id for group lookups."},
+				CommonConfusions: []string{"Use group_id for path or ID. Do not send project_id for group lookups."},
 			},
 		}
 		options.IndividualTool.Description = "Get one GitLab group by ID or path. Returns: group metadata, visibility, parent information, and web URL. See also: gitlab_group_list, gitlab_group_members_list, gitlab_group_projects, gitlab_group_update."
@@ -245,7 +245,7 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 			paramSearch: {
 				ValueSource:      "Group name/path keywords from the user query.",
 				ExampleBinding:   `params.search:"platform"`,
-				CommonConfusions: []string{"search filters visible groups; it does not accept project paths."},
+				CommonConfusions: []string{"search filters visible groups. It does not accept project paths."},
 			},
 		}
 		options.IndividualTool.Description = "List accessible GitLab groups with filtering and pagination. Returns: matching groups including path, name, and visibility metadata. See also: gitlab_group_get, gitlab_group_search, gitlab_group_create."
@@ -312,7 +312,7 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 				SemanticRole:     roleScopeGroup,
 				ValueSource:      "Group numeric ID or full path whose subgroups are listed.",
 				ExampleBinding:   `params.group_id:"my-org/platform"`,
-				CommonConfusions: []string{"Returns descendants at all depths; set top_level_only=true for direct children only."},
+				CommonConfusions: []string{"Returns descendants at all depths. Set top_level_only=true for direct children only."},
 			},
 		}
 		options.IndividualTool.Description = "List the subgroups (descendant groups) of a GitLab group. Returns: descendant groups with path, name, and visibility. See also: gitlab_group_get, gitlab_group_projects, gitlab_group_transfer_locations."
@@ -354,7 +354,7 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		}
 		options.IndividualTool.Description = "Restore a GitLab group marked for deletion. Returns: the restored group metadata. See also: gitlab_group_delete, gitlab_group_get, gitlab_group_list."
 	case "gitlab_group_archive":
-		options.Usage = "Archive a group, making it and its projects read-only. Use when the user wants to freeze a group without deleting it. Idempotent; archiving an archived group is a no-op."
+		options.Usage = "Archive a group, making it and its projects read-only. Use when the user wants to freeze a group without deleting it. Idempotent. Archiving an archived group is a no-op."
 		options.Aliases = []string{"archive group", "freeze group", "make group read-only"}
 		options.RelatedActions = []string{actionGroupGet, "group.unarchive", actionGroupUpdate}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -366,7 +366,7 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 		}
 		options.IndividualTool.Description = "Archive a GitLab group, making it and its projects read-only in GitLab. Returns: a success confirmation. See also: gitlab_group_unarchive, gitlab_group_get, gitlab_group_update."
 	case "gitlab_group_unarchive":
-		options.Usage = "Unarchive a previously archived group, restoring write access. Idempotent; unarchiving a non-archived group is a no-op."
+		options.Usage = "Unarchive a previously archived group, restoring write access. Idempotent. Unarchiving a non-archived group is a no-op."
 		options.Aliases = []string{"unarchive group", "unfreeze group", "restore group write access"}
 		options.RelatedActions = []string{actionGroupGet, "group.archive", actionGroupUpdate}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -391,7 +391,7 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 			"file_path": {
 				ValueSource:      "Absolute path to a local image file on the MCP server filesystem.",
 				ExampleBinding:   `params.file_path:"/tmp/logo.png"`,
-				CommonConfusions: []string{"Provide exactly one of file_path or content_base64, not both; filename is always required."},
+				CommonConfusions: []string{"Provide exactly one of file_path or content_base64, not both. Filename is always required."},
 			},
 			"content_base64": {
 				ValueSource:    "Base64-encoded image bytes when no local file path is available.",
@@ -409,7 +409,7 @@ func groupOptionsForAction(actionName, individualTool string) toolutil.ActionSpe
 				SemanticRole:     roleScopeGroup,
 				ValueSource:      "Group numeric ID or full path whose provisioned users are listed.",
 				ExampleBinding:   `params.group_id:"my-org/platform"`,
-				CommonConfusions: []string{"Lists users provisioned via the group's SAML/SCIM provider, not all members; use gitlab_group_members_list for membership."},
+				CommonConfusions: []string{"Lists users provisioned via the group's SAML/SCIM provider, not all members. Use gitlab_group_members_list for membership."},
 			},
 			paramSearch: {
 				ValueSource:    "Name, username, or email keywords to filter provisioned users.",
@@ -505,7 +505,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 			"shared_group_id": {
 				ValueSource:      "Numeric ID of the group to grant access to.",
 				ExampleBinding:   `params.shared_group_id:123`,
-				CommonConfusions: []string{"group_id is the group being shared; shared_group_id is the group receiving access."},
+				CommonConfusions: []string{"group_id is the group being shared. shared_group_id is the group receiving access."},
 			},
 			"group_access": {
 				ValueSource:    "Access level 10/20/30/40/50 (Guest/Reporter/Developer/Maintainer/Owner).",
@@ -534,7 +534,7 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 				SemanticRole:     roleScopeGroup,
 				ValueSource:      "Group numeric ID or full path whose shared projects are listed.",
 				ExampleBinding:   `params.group_id:"my-org/platform"`,
-				CommonConfusions: []string{"Lists projects shared *into* the group; use gitlab_group_projects for the group's own projects."},
+				CommonConfusions: []string{"Lists projects shared *into* the group. Use gitlab_group_projects for the group's own projects."},
 			},
 		}
 		options.IndividualTool.Description = "List projects shared with a GitLab group. Returns: shared projects with path, visibility, and archived status. See also: gitlab_group_projects, gitlab_group_shared_with_list, gitlab_group_get."
@@ -544,9 +544,9 @@ func applyGroupShareTransferMetadata(individualTool string, options *toolutil.Ac
 		options.RelatedActions = []string{actionGroupTransferLocs, actionGroupGet, actionGroupSubgroups}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"parent_id": {
-				ValueSource:      "Numeric ID of the destination parent group; omit to promote to top level.",
+				ValueSource:      "Numeric ID of the destination parent group. Omit to promote to top level.",
 				ExampleBinding:   `params.parent_id:42`,
-				CommonConfusions: []string{"parent_id is the destination; group_id is the group being moved. Omit parent_id to make the group top-level."},
+				CommonConfusions: []string{"parent_id is the destination. group_id is the group being moved. Omit parent_id to make the group top-level."},
 			},
 		}
 		options.IndividualTool.Description = "Transfer a GitLab group under a new parent (or to top level). Returns: the updated group metadata. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_subgroups_list."
@@ -566,7 +566,7 @@ func applyGroupPushRuleMetadata(individualTool string, options *toolutil.ActionS
 			SemanticRole:     roleScopeGroup,
 			ValueSource:      "Group that owns the singleton push rule.",
 			ExampleBinding:   `params.group_id:"my-org/platform"`,
-			CommonConfusions: []string{"Group push rules are a group-scoped singleton; there is no push_rule_id parameter."},
+			CommonConfusions: []string{"Group push rules are a group-scoped singleton. There is no push_rule_id parameter."},
 		},
 	}
 	switch individualTool {
@@ -575,7 +575,7 @@ func applyGroupPushRuleMetadata(individualTool string, options *toolutil.ActionS
 		options.Aliases = []string{"get group push rules", "show group push rule configuration", "view group push rule", "fetch group push rules"}
 		options.IndividualTool.Description = "Get a GitLab group's push rules. Returns: the singleton push-rule configuration. See also: gitlab_group_add_push_rule, gitlab_group_edit_push_rule."
 	case "gitlab_group_add_push_rule":
-		options.Usage = "Add push rules to a group. Include at least one rule-setting parameter such as commit_message_regex, reject_unsigned_commits, prevent_secrets, branch_name_regex, or deny_delete_tag; do not call add with group_id alone. Premium/Ultimate, Owner role."
+		options.Usage = "Add push rules to a group. Include at least one rule-setting parameter such as commit_message_regex, reject_unsigned_commits, prevent_secrets, branch_name_regex, or deny_delete_tag. Do not call add with group_id alone. Premium/Ultimate, Owner role."
 		options.Aliases = []string{"add group push rule", "create group push rules", "set group push rule", "configure group push rules"}
 		options.IndividualTool.Description = "Add push rules to a GitLab group. Returns: the created push-rule configuration. See also: gitlab_group_get_push_rules, gitlab_group_edit_push_rule."
 	case "gitlab_group_edit_push_rule":
@@ -607,7 +607,7 @@ func applyGroupRelationMetadata(individualTool string, options *toolutil.ActionS
 				SemanticRole:     "scope_project",
 				ValueSource:      "Numeric ID or full path of the project to move.",
 				ExampleBinding:   `params.project_id:"my-org/legacy-service"`,
-				CommonConfusions: []string{"project_id is the project being moved; group_id is the destination group."},
+				CommonConfusions: []string{"project_id is the project being moved. group_id is the destination group."},
 			},
 		}
 		options.IndividualTool.Description = "Transfer a project into a GitLab group namespace. Returns: the updated project metadata. See also: gitlab_group_transfer_locations, gitlab_group_get, gitlab_group_projects."
@@ -620,7 +620,7 @@ func applyGroupRelationMetadata(individualTool string, options *toolutil.ActionS
 				SemanticRole:     roleScopeGroup,
 				ValueSource:      "Group numeric ID or full path whose inbound shares are listed.",
 				ExampleBinding:   `params.group_id:"my-org/platform"`,
-				CommonConfusions: []string{"Lists groups shared *with* this group; it does not list this group's members or the projects it was shared into."},
+				CommonConfusions: []string{"Lists groups shared *with* this group. It does not list this group's members or the projects it was shared into."},
 			},
 		}
 		options.IndividualTool.Description = "List groups shared with a GitLab group (group-to-group shares). Returns: the shared groups with path, visibility, and access metadata. See also: gitlab_group_invited_list, gitlab_group_members_list, gitlab_subgroups_list."
@@ -637,12 +637,12 @@ func applyGroupRelationMetadata(individualTool string, options *toolutil.ActionS
 			"relation": {
 				ValueSource:      "Inheritance filter: direct, inherited, or both.",
 				ExampleBinding:   `params.relation:["direct"]`,
-				CommonConfusions: []string{"relation filters by how the invitation reaches the group; it is not an access level."},
+				CommonConfusions: []string{"relation filters by how the invitation reaches the group. It is not an access level."},
 			},
 		}
 		options.IndividualTool.Description = "List groups invited to a GitLab group. Returns: the invited groups with path and access metadata. See also: gitlab_group_shared_with_list, gitlab_group_members_list, gitlab_group_get."
 	case "gitlab_group_transfer_locations":
-		options.Usage = "List the parent groups this group can be transferred (moved) into. Use this BEFORE attempting a group transfer to discover valid destinations; the caller needs the Owner role on a destination for it to appear."
+		options.Usage = "List the parent groups this group can be transferred (moved) into. Use this BEFORE attempting a group transfer to discover valid destinations. The caller needs the Owner role on a destination for it to appear."
 		options.Aliases = []string{"transfer locations", "where can I move this group", "candidate parent groups", "available group transfer targets", "valid destinations for group transfer"}
 		options.RelatedActions = []string{actionGroupGet, "group.transfer_project", actionGroupSubgroups}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -650,7 +650,7 @@ func applyGroupRelationMetadata(individualTool string, options *toolutil.ActionS
 				SemanticRole:     roleScopeGroup,
 				ValueSource:      "Group numeric ID or full path that would be moved.",
 				ExampleBinding:   `params.group_id:"my-org/legacy-team"`,
-				CommonConfusions: []string{"This lists destinations for moving the *group itself*; to move a project into a group, use gitlab_group_transfer_project."},
+				CommonConfusions: []string{"This lists destinations for moving the *group itself*. To move a project into a group, use gitlab_group_transfer_project."},
 			},
 		}
 		options.IndividualTool.Description = "List candidate parent groups for transferring a GitLab group. Returns: eligible destination groups with id, name, and full path. See also: gitlab_group_transfer_project, gitlab_group_get, gitlab_subgroups_list."
@@ -765,7 +765,7 @@ func applyGroupHookAddEditMetadata(individualTool string, options *toolutil.Acti
 		"url": {
 			ValueSource:      "HTTP(S) endpoint that should receive webhook payloads.",
 			ExampleBinding:   `params.url:"https://ci.example.com/gitlab-hook"`,
-			CommonConfusions: []string{"Enable specific event flags (push_events, merge_requests_events, etc.); a hook with no events fires nothing."},
+			CommonConfusions: []string{"Enable specific event flags (push_events, merge_requests_events, etc.). A hook with no events fires nothing."},
 		},
 	}
 	if individualTool == toolGroupHookAdd {
@@ -774,7 +774,7 @@ func applyGroupHookAddEditMetadata(individualTool string, options *toolutil.Acti
 		options.IndividualTool.Description = "Create a webhook on a GitLab group. Returns: the created hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete."
 		return
 	}
-	options.Usage = "Update an existing group webhook by hook_id. Send only the fields to change; unset fields keep their current values. Requires Owner role."
+	options.Usage = "Update an existing group webhook by hook_id. Send only the fields to change. Unset fields keep their current values. Requires Owner role."
 	options.Aliases = []string{"edit group hook", "update group webhook", "modify group webhook"}
 	options.IndividualTool.Description = "Update a GitLab group webhook. Returns: the updated hook with URL, enabled events, and SSL/header metadata. See also: gitlab_group_hook_list, gitlab_group_hook_get, gitlab_group_hook_delete."
 }

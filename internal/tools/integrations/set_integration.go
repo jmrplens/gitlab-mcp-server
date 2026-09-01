@@ -32,7 +32,7 @@ const commonIntegrationSlugs = "slack, jira, discord, mattermost, microsoft-team
 type SetIntegrationInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Slug      string               `json:"slug" jsonschema:"Integration slug to configure (e.g. slack, harbor, jenkins, google-play). See doc/api/integrations.md for the full list and each integration's config fields,required"`
-	Config    map[string]any       `json:"config,omitempty" jsonschema:"Integration configuration parameters as documented for the chosen slug in doc/api/integrations.md (sent verbatim as the request body). For example slack expects webhook; harbor expects url, project_name, username, password; jenkins expects jenkins_url, project_name, username, password"`
+	Config    map[string]any       `json:"config,omitempty" jsonschema:"Integration configuration parameters as documented for the chosen slug in doc/api/integrations.md (sent verbatim as the request body). For example slack expects webhook. Harbor expects url, project_name, username, password. Jenkins expects jenkins_url, project_name, username, password"`
 }
 
 // SetIntegrationOutput is the output after upserting a project integration.

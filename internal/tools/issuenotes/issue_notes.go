@@ -17,7 +17,7 @@ type CreateInput struct {
 	IssueIID  int64                `json:"issue_iid"  jsonschema:"Issue internal ID,required"`
 	Body      string               `json:"body"       jsonschema:"Note body (Markdown supported),required"`
 	Internal  *bool                `json:"internal,omitempty"   jsonschema:"Mark note as internal (visible only to project members)"`
-	CreatedAt string               `json:"created_at,omitempty" jsonschema:"Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions; ignored otherwise."`
+	CreatedAt string               `json:"created_at,omitempty" jsonschema:"Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise."`
 }
 
 // Output is an alias of [toolutil.NoteOutput], the canonical REST note shape
@@ -180,7 +180,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	}, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("issueNoteUpdate", err, http.StatusForbidden,
-			"only the note author can edit a note; system notes cannot be edited")
+			"only the note author can edit a note. System notes cannot be edited")
 	}
 	return ToOutput(n), nil
 }
@@ -205,7 +205,7 @@ func Delete(ctx context.Context, client *gitlabclient.Client, input DeleteInput)
 	_, err := client.GL().Notes.DeleteIssueNote(string(input.ProjectID), input.IssueIID, input.NoteID, gl.WithContext(ctx))
 	if err != nil {
 		return toolutil.WrapErrWithStatusHint("issueNoteDelete", err, http.StatusForbidden,
-			"only the note author or a Maintainer can delete a note; system notes cannot be deleted")
+			"only the note author or a Maintainer can delete a note. System notes cannot be deleted")
 	}
 	return nil
 }

@@ -84,7 +84,7 @@ func epicScopeGuidance() map[string]toolutil.ParameterGuidance {
 			SemanticRole:     "scope_group",
 			ValueSource:      "Full path of the group that owns the epic, from a prior gitlab_group_list or gitlab_epic_list response.",
 			ExampleBinding:   `params.full_path:"my-group/sub-group"`,
-			CommonConfusions: []string{"Use the group full path here, not a project path or a numeric group ID; epics live on groups, not projects."},
+			CommonConfusions: []string{"Use the group full path here, not a project path or a numeric group ID. Epics live on groups, not projects."},
 		},
 		"epic_iid": {
 			SemanticRole:     "epic_iid",
@@ -168,7 +168,7 @@ func decorateEpicDiscussionMeta(options *toolutil.ActionSpecOptions, individualT
 		)
 		options.IndividualTool.Description = "Update the body of a note in an epic discussion thread. Returns: the updated note (id, author username, body, timestamps). See also: gitlab_add_epic_discussion_note, gitlab_delete_epic_discussion_note, gitlab_get_epic_discussion."
 	case "gitlab_delete_epic_discussion_note":
-		options.Usage = "Permanently delete a note from an epic discussion thread (destructive, requires confirmation) via the destroyNote GraphQL mutation. Only the note author or a Maintainer/Owner can delete a note; system-generated notes cannot be removed. Identify the note with note_id."
+		options.Usage = "Permanently delete a note from an epic discussion thread (destructive, requires confirmation) via the destroyNote GraphQL mutation. Only the note author or a Maintainer/Owner can delete a note. System-generated notes cannot be removed. Identify the note with note_id."
 		options.Aliases = []string{"gitlab_delete_epic_discussion_note", "delete epic discussion note", "remove epic discussion reply", "delete epic thread comment"}
 		options.RelatedActions = []string{actionDiscussionUpdateNote, actionDiscussionGet, actionDiscussionList}
 		options.ParameterGuidance = epicScopeGuidance()

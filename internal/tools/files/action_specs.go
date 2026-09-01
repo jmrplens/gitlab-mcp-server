@@ -93,7 +93,7 @@ var fileActionMeta = map[string]struct {
 }{
 	"gitlab_file_get": {
 		aliases:     []string{"get file", "read file", "show file at path", "fetch file"},
-		usage:       "Read one file's content and metadata by project_id and file_path, optionally at a specific ref. Use when the user wants the contents of a known file; base64 content is decoded automatically.",
+		usage:       "Read one file's content and metadata by project_id and file_path, optionally at a specific ref. Use when the user wants the contents of a known file. base64 content is decoded automatically.",
 		description: "Get a single file's decoded content and metadata from a repository. Returns: file_name, file_path, size, encoding, content, content_sha256, ref, blob_id, commit_id, last_commit_id, and execute_filemode. See also: gitlab_file_raw, gitlab_file_metadata, gitlab_file_blame, gitlab_repository_tree.",
 	},
 	"gitlab_file_create": {

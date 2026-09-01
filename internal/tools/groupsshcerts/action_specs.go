@@ -40,7 +40,7 @@ func groupSSHCertReadSpec(name string, route toolutil.ActionRoute, individualToo
 
 func groupSSHCertCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	opts := groupSSHCertOptions(individualTool)
-	opts.Usage = "Register an SSH CA certificate on a group by supplying the CA public key and a title. Members can then authenticate Git over SSH using user certificates signed by this CA. Use this when onboarding an SSH certificate authority for a group. Requires the group Owner role; the key must be a valid SSH public key."
+	opts.Usage = "Register an SSH CA certificate on a group by supplying the CA public key and a title. Members can then authenticate Git over SSH using user certificates signed by this CA. Use this when onboarding an SSH certificate authority for a group. Requires the group Owner role. The key must be a valid SSH public key."
 	opts.Aliases = []string{individualTool, "add group ssh ca certificate", "register ssh certificate authority", "trust ssh signing key for group"}
 	opts.RelatedActions = []string{"ssh_cert_list", "ssh_cert_delete", actionGroupGet}
 	opts.IndividualTool.Description = "Register a new SSH CA certificate on a group from a CA public key and title. Returns: the created certificate's id, title, public key, and creation timestamp. See also: gitlab_list_group_ssh_certificates, gitlab_delete_group_ssh_certificate, gitlab_group_get."

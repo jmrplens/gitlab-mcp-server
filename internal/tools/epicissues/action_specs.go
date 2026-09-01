@@ -38,7 +38,7 @@ func epicIssueListSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 		paramFullPath: {
 			SemanticRole:     roleParentGroupPath,
 			ValueSource:      hintGroupFullPath,
-			CommonConfusions: []string{"Do not use a child project path as full_path; epics live on groups."},
+			CommonConfusions: []string{"Do not use a child project path as full_path. Epics live on groups."},
 		},
 		"epic_iid": {
 			SemanticRole:   "epic_iid",
@@ -53,7 +53,7 @@ func epicIssueListSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 // epicIssueAssignSpec builds the create spec for linking a project issue to an epic.
 func epicIssueAssignSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := epicIssueBaseOptions("gitlab_epic_issue_assign")
-	options.Usage = "Use to assign a project issue as a child of an epic owned by a group path. Send full_path for the epic group. Copy epic_iid from the epic_create or epic_get result and child_iid from the child issue result; do not omit full_path or epic_iid after creating the epic."
+	options.Usage = "Use to assign a project issue as a child of an epic owned by a group path. Send full_path for the epic group. Copy epic_iid from the epic_create or epic_get result and child_iid from the child issue result. Do not omit full_path or epic_iid after creating the epic."
 	options.Aliases = []string{"assign issue to epic", "add issue to epic", "link issue to epic", "attach issue to epic"}
 	options.RelatedActions = []string{actionEpicIssueList, actionEpicIssueRemove, actionEpicGet, actionIssueGet}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -80,7 +80,7 @@ func epicIssueAssignSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 // epicIssueRemoveSpec builds the destructive spec for unlinking an issue from an epic.
 func epicIssueRemoveSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := epicIssueBaseOptions("gitlab_epic_issue_remove")
-	options.Usage = "Use to unlink a child issue from an epic. Send full_path for the epic group. Copy epic_iid from the epic_create or epic_get result and child_iid from the child issue result; removal is destructive and requires confirmation."
+	options.Usage = "Use to unlink a child issue from an epic. Send full_path for the epic group. Copy epic_iid from the epic_create or epic_get result and child_iid from the child issue result. Removal is destructive and requires confirmation."
 	options.Aliases = []string{"remove issue from epic", "unlink issue from epic", "detach issue from epic"}
 	options.RelatedActions = []string{actionEpicIssueList, actionEpicIssueAssign, actionEpicGet, actionIssueGet}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -100,14 +100,14 @@ func epicIssueRemoveSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 			CommonConfusions: []string{"Do not use epic_iid as child_iid."},
 		},
 	}
-	options.IndividualTool.Description = "Unlink a child issue from a group epic (destructive; requires confirmation). Returns: the resolved epic and issue work item GIDs confirming the removal. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_get."
+	options.IndividualTool.Description = "Unlink a child issue from a group epic (destructive. Requires confirmation). Returns: the resolved epic and issue work item GIDs confirming the removal. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_get."
 	return toolutil.NewDeleteActionSpec("epic_issue_remove", toolutil.DestructiveAction(client, Remove), options)
 }
 
 // epicIssueUpdateSpec builds the update spec for reordering an issue within an epic.
 func epicIssueUpdateSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := epicIssueBaseOptions("gitlab_epic_issue_update")
-	options.Usage = "Use to reorder an issue within an epic by moving it before or after another linked issue. Send full_path for the epic group and epic_iid from the epic_create or epic_get result; child_id and adjacent_id are work item GIDs from the epic_issue_list output id field, and relative_position is BEFORE or AFTER."
+	options.Usage = "Use to reorder an issue within an epic by moving it before or after another linked issue. Send full_path for the epic group and epic_iid from the epic_create or epic_get result. child_id and adjacent_id are work item GIDs from the epic_issue_list output id field, and relative_position is BEFORE or AFTER."
 	options.Aliases = []string{"reorder epic issue", "move issue within epic", "reposition epic issue", "change epic issue order"}
 	options.RelatedActions = []string{actionEpicIssueList, actionEpicIssueAssign, actionEpicIssueRemove, actionEpicGet}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -119,12 +119,12 @@ func epicIssueUpdateSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 		"child_id": {
 			SemanticRole:     "child_work_item_gid",
 			ValueSource:      "Work item GID of the issue to reorder, from the epic_issue_list output id field.",
-			CommonConfusions: []string{"Do not use a numeric issue IID here; this must be a gid:// work item identifier."},
+			CommonConfusions: []string{"Do not use a numeric issue IID here. This must be a gid:// work item identifier."},
 		},
 		"adjacent_id": {
 			SemanticRole:     "reference_work_item_gid",
 			ValueSource:      "Work item GID of the issue to position relative to, from the epic_issue_list output id field.",
-			CommonConfusions: []string{"Do not use a numeric issue IID; this must be a gid:// work item identifier already linked to the epic."},
+			CommonConfusions: []string{"Do not use a numeric issue IID. This must be a gid:// work item identifier already linked to the epic."},
 		},
 		"relative_position": {
 			SemanticRole:   "relative_position",

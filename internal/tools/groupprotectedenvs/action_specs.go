@@ -104,7 +104,7 @@ var groupProtectedEnvActionMeta = map[string]groupProtectedEnvActionMetaEntry{
 		related: []string{"groupprotectedenvs.protected_env_list", "groupprotectedenvs.protected_env_update", actionGroupProtectedEnvUnprotect},
 	},
 	"gitlab_group_protected_environment_protect": {
-		usage:   "Protect a group-level environment tier by setting its deploy access levels and approval rules; the gate cascades to every subgroup project. Use when the prompt asks to gate deployments across a group, restrict who can deploy, or require approvals at the group level. deploy_access_levels must be an array of objects such as [{\"access_level\":40}]; require approvals via approval_rules with required_approvals.",
+		usage:   "Protect a group-level environment tier by setting its deploy access levels and approval rules. The gate cascades to every subgroup project. Use when the prompt asks to gate deployments across a group, restrict who can deploy, or require approvals at the group level. deploy_access_levels must be an array of objects such as [{\"access_level\":40}]. Require approvals via approval_rules with required_approvals.",
 		aliases: []string{"protect a group environment tier", "gate deployments across a group", "restrict group-wide deployment access", "require group deployment approvals"},
 		related: []string{actionGroupProtectedEnvGet, "groupprotectedenvs.protected_env_update", actionGroupProtectedEnvUnprotect},
 	},
@@ -114,7 +114,7 @@ var groupProtectedEnvActionMeta = map[string]groupProtectedEnvActionMetaEntry{
 		related: []string{actionGroupProtectedEnvGet, actionGroupProtectedEnvProtect, actionGroupProtectedEnvUnprotect},
 	},
 	"gitlab_group_protected_environment_unprotect": {
-		usage:   "Remove protection from a group-level environment tier, deleting its deployment gates from the group and its subgroup projects. Destructive; confirm the group id and the environment tier name before calling.",
+		usage:   "Remove protection from a group-level environment tier, deleting its deployment gates from the group and its subgroup projects. Destructive. Confirm the group id and the environment tier name before calling.",
 		aliases: []string{"unprotect a group environment tier", "remove group deployment gate", "stop gating a group environment across subgroups"},
 		related: []string{"groupprotectedenvs.protected_env_list", actionGroupProtectedEnvProtect},
 	},
@@ -129,7 +129,7 @@ func groupProtectedEnvDescription(individualTool string) string {
 	case "gitlab_group_protected_environment_get":
 		return "Get a single group-level protected environment by tier name. Returns: the environment with its deploy access levels (id, access level, user/group, group inheritance) and approval rules. See also: gitlab_group_protected_environment_list, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect."
 	case "gitlab_group_protected_environment_protect":
-		return "Protect a group-level environment tier with deploy access levels and approval rules; protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect."
+		return "Protect a group-level environment tier with deploy access levels and approval rules. Protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect."
 	case "gitlab_group_protected_environment_update":
 		return "Update a group-level protected environment's deploy access levels and approval rules (use _destroy to remove an entry). Returns: the updated environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_protect, gitlab_group_protected_environment_unprotect."
 	case "gitlab_group_protected_environment_unprotect":

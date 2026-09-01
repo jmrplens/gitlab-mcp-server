@@ -135,7 +135,7 @@ var wikiActionMeta = map[string]wikiActionMetaEntry{
 			"See also: gitlab_wiki_list, gitlab_wiki_update, gitlab_wiki_delete.",
 	},
 	"gitlab_wiki_create": {
-		usage:   "Create a new wiki page in a project. Provide a title and content; set format to markdown, rdoc, asciidoc, or org when the default markdown is not wanted.",
+		usage:   "Create a new wiki page in a project. Provide a title and content. Set format to markdown, rdoc, asciidoc, or org when the default markdown is not wanted.",
 		aliases: []string{"create wiki page", "add wiki page", "new wiki page"},
 		related: []string{actionWikiList, actionWikiGet, actionWikiUpdate},
 		description: "Create a new wiki page. Returns: the created page with title, slug, format, content, and encoding. " +
@@ -149,7 +149,7 @@ var wikiActionMeta = map[string]wikiActionMetaEntry{
 			"See also: gitlab_wiki_get, gitlab_wiki_delete, gitlab_wiki_list.",
 	},
 	"gitlab_wiki_delete": {
-		usage:   "Permanently delete a wiki page by slug. Destructive; requires Maintainer or Owner role and confirmation of the project and slug.",
+		usage:   "Permanently delete a wiki page by slug. Destructive. Requires Maintainer or Owner role and confirmation of the project and slug.",
 		aliases: []string{"delete wiki page", "remove wiki page", "destroy wiki page", "drop wiki page"},
 		related: []string{actionWikiGet, actionWikiList, actionWikiUpdate},
 		description: "Delete a wiki page permanently. Returns: a success confirmation for the removed page. " +

@@ -88,7 +88,7 @@ func noteIDGuidance() toolutil.ParameterGuidance {
 		SemanticRole:     "note_id",
 		ValueSource:      "Numeric note ID from a prior merge_request.note_list or merge_request.note_create result.",
 		ExampleBinding:   "params.note_id:200",
-		CommonConfusions: []string{"note_id is the comment ID, not the merge_request_iid; obtain it from merge_request.note_list."},
+		CommonConfusions: []string{"note_id is the comment ID, not the merge_request_iid. Obtain it from merge_request.note_list."},
 	}
 }
 
@@ -121,13 +121,13 @@ func decorateMRNoteMeta(options *toolutil.ActionSpecOptions, individualTool stri
 			"project_id":        projectIDGuidance(),
 			"merge_request_iid": mrIIDGuidance(),
 			"body": {
-				ValueSource:      "The comment text the user wants to post; Markdown is supported.",
+				ValueSource:      "The comment text the user wants to post. Markdown is supported.",
 				ExampleBinding:   `params.body:"LGTM, merging now."`,
-				CommonConfusions: []string{"body is the comment content, not an MR description update; updating the MR body is merge_request.update."},
+				CommonConfusions: []string{"body is the comment content, not an MR description update. Updating the MR body is merge_request.update."},
 			},
 			"internal": {
 				ValueSource:      "Set true only when the user asks for a private/internal note.",
-				CommonConfusions: []string{"internal notes are visible to project members only; do not set for public replies."},
+				CommonConfusions: []string{"internal notes are visible to project members only. Do not set for public replies."},
 			},
 		}
 		options.IndividualTool.Description = "Add a general comment (note) to a merge request. Returns: the created note with id, author, body, timestamps, and resolvable/internal flags. See also: gitlab_mr_notes_list, gitlab_mr_get, gitlab_mr_discussion_create."
@@ -141,7 +141,7 @@ func decorateMRNoteMeta(options *toolutil.ActionSpecOptions, individualTool stri
 			"order_by": {
 				ValueSource:      "Field to order notes by: created_at or updated_at.",
 				ExampleBinding:   `params.order_by:"created_at"`,
-				CommonConfusions: []string{"Combine order_by with sort; pass the field name, not a phrase like 'newest first'."},
+				CommonConfusions: []string{"Combine order_by with sort. Pass the field name, not a phrase like 'newest first'."},
 			},
 		}
 		options.IndividualTool.Description = "List all notes (comments) on a merge request. Returns: notes with author, body, system/internal flags, and pagination metadata. See also: gitlab_mr_note_get, gitlab_mr_note_create, gitlab_mr_discussion_list."
@@ -156,7 +156,7 @@ func decorateMRNoteMeta(options *toolutil.ActionSpecOptions, individualTool stri
 		}
 		options.IndividualTool.Description = "Get a single merge request note by its ID. Returns: the note with author, body, timestamps, position, and resolvable/internal flags. See also: gitlab_mr_notes_list, gitlab_mr_note_update, gitlab_mr_note_delete."
 	case "gitlab_mr_note_update":
-		options.Usage = "Replace the body of an existing merge request note. Only the original author can edit a note; system notes cannot be edited. Use when the task asks to edit, fix, or amend a comment."
+		options.Usage = "Replace the body of an existing merge request note. Only the original author can edit a note. System notes cannot be edited. Use when the task asks to edit, fix, or amend a comment."
 		options.Aliases = []string{"edit mr comment", "update merge request note", "amend mr comment"}
 		options.RelatedActions = []string{actionMRNoteGet, actionMRNoteList, actionMRNoteDelete}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -164,14 +164,14 @@ func decorateMRNoteMeta(options *toolutil.ActionSpecOptions, individualTool stri
 			"merge_request_iid": mrIIDGuidance(),
 			"note_id":           noteIDGuidance(),
 			"body": {
-				ValueSource:      "The new comment text that replaces the existing note body; Markdown is supported.",
+				ValueSource:      "The new comment text that replaces the existing note body. Markdown is supported.",
 				ExampleBinding:   `params.body:"Updated: addressed in latest push."`,
-				CommonConfusions: []string{"This replaces the whole note body; it does not append to it."},
+				CommonConfusions: []string{"This replaces the whole note body. It does not append to it."},
 			},
 		}
 		options.IndividualTool.Description = "Update a merge request note's body. Returns: the updated note with new body and updated_at timestamp. See also: gitlab_mr_note_get, gitlab_mr_notes_list, gitlab_mr_note_delete."
 	case "gitlab_mr_note_delete":
-		options.Usage = "Permanently delete a merge request note. Destructive and irreversible. Only the note author or a project Maintainer can delete a note; system notes cannot be deleted. Requires explicit confirmation."
+		options.Usage = "Permanently delete a merge request note. Destructive and irreversible. Only the note author or a project Maintainer can delete a note. System notes cannot be deleted. Requires explicit confirmation."
 		options.Aliases = []string{"delete mr comment", "remove merge request note", "delete merge request note"}
 		options.RelatedActions = []string{actionMRNoteGet, actionMRNoteList, actionMRDiscussionList}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{

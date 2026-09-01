@@ -95,6 +95,18 @@ GITLAB_TOKEN = "glpat-xxxxxxxxxxxxxxxxxxxx"
 
 Keep the default `dynamic` tool surface for clients with tool-count limits (Cursor caps servers at 40 tools, Windsurf at 100, OpenAI-backed clients at 128 per request) and keep `META_PARAM_SCHEMA` at its `opaque` default for Codex, which silently trims tool schemas larger than ~5 KB.
 
+### MCP gateway validators
+
+An MCP gateway validates a server's catalog before admitting it, under rules its operator chooses — one production gateway (IBM [mcp-context-forge](https://github.com/IBM/mcp-context-forge) before 0.7.0) rejected any tool description containing a semicolon. The server keeps everything it lists free of semicolons on every surface, and a substitution knob lets a deployment meet the next gateway rule without waiting for a release:
+
+```bash
+# Rewrite listed descriptions and titles: comma-separated old=new pairs,
+# applied in order (backslash escapes \, \= \\)
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS=';=.'
+```
+
+The rewrite covers tool, prompt, resource, and resource-template descriptions and titles, including descriptions embedded in tool schemas. Names, URIs, schema constraints (`pattern`, `const`, enum values, defaults) and tool-call results are never touched, and a malformed value refuses to start the server instead of serving an unrewritten catalog. If your gateway is mcp-context-forge, upgrading to 0.7.0 or later also resolves the semicolon rejection on the gateway side ([issue 3770](https://github.com/IBM/mcp-context-forge/issues/3770)).
+
 ## MCP protocol features
 
 GitLab MCP Server implements the full set of MCP capabilities beyond tools — resources, prompts, completions, elicitation, progress notifications, and resource subscriptions — so compatible clients get contextual data, prompt templates, argument autocompletion, and live change notifications in addition to tool calls.

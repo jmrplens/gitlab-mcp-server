@@ -101,22 +101,22 @@ type groupCredentialActionMetaEntry struct {
 // groupsshcerts surfaces.
 var groupCredentialActionMeta = map[string]groupCredentialActionMetaEntry{
 	"gitlab_list_group_personal_access_tokens": {
-		usage:   "Inventory the enterprise personal access tokens issued under a group. Use when auditing which group-owned PATs exist, their scopes, owners, expiry, and revocation state; filter by search, state, revoked, created/last-used dates. Requires Ultimate and Owner or admin access.",
+		usage:   "Inventory the enterprise personal access tokens issued under a group. Use when auditing which group-owned PATs exist, their scopes, owners, expiry, and revocation state. Filter by search, state, revoked, created/last-used dates. Requires Ultimate and Owner or admin access.",
 		aliases: []string{"audit group personal access tokens", "list enterprise group PATs", "group token inventory", "review group-owned access tokens"},
 		related: []string{"group.credential_revoke_pat", "group.credential_list_ssh_keys", actionGroupGet},
 	},
 	"gitlab_list_group_ssh_keys": {
-		usage:   "Inventory the enterprise SSH keys registered under a group. Use when auditing which group members' SSH keys exist, their titles, owners, usage type, and expiry; filter by created/expiry dates. Requires Ultimate and Owner or admin access.",
+		usage:   "Inventory the enterprise SSH keys registered under a group. Use when auditing which group members' SSH keys exist, their titles, owners, usage type, and expiry. Filter by created/expiry dates. Requires Ultimate and Owner or admin access.",
 		aliases: []string{"audit group SSH keys", "list enterprise group SSH keys", "group SSH key inventory", "review group member SSH keys"},
 		related: []string{"group.credential_delete_ssh_key", "group.credential_list_pats", actionGroupGet},
 	},
 	"gitlab_revoke_group_personal_access_token": {
-		usage:   "Revoke one enterprise personal access token belonging to a group, by token_id. Destructive and irreversible; confirm group_id and token_id from credential_list_pats first. Requires Ultimate and Owner or admin access.",
+		usage:   "Revoke one enterprise personal access token belonging to a group, by token_id. Destructive and irreversible. Confirm group_id and token_id from credential_list_pats first. Requires Ultimate and Owner or admin access.",
 		aliases: []string{"revoke group PAT from credentials inventory", "kill enterprise group PAT", "disable group-owned token", "revoke group member personal access token"},
 		related: []string{"group.credential_list_pats", actionGroupGet},
 	},
 	"gitlab_delete_group_ssh_key": {
-		usage:   "Delete one enterprise SSH key belonging to a group, by key_id. Destructive and irreversible; confirm group_id and key_id from credential_list_ssh_keys first. Requires Ultimate and Owner or admin access.",
+		usage:   "Delete one enterprise SSH key belonging to a group, by key_id. Destructive and irreversible. Confirm group_id and key_id from credential_list_ssh_keys first. Requires Ultimate and Owner or admin access.",
 		aliases: []string{"delete group SSH key", "remove enterprise group SSH key", "revoke group member SSH key", "purge group-owned SSH key"},
 		related: []string{"group.credential_list_ssh_keys", actionGroupGet},
 	},

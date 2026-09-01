@@ -20,7 +20,7 @@ type CreateInput struct {
 	Name            string               `json:"name"       jsonschema:"Name of the link,required"`
 	URL             string               `json:"url"        jsonschema:"URL of the link target. For packages use the real url returned by gitlab_package_publish — never construct URLs manually,required"`
 	DirectAssetPath string               `json:"direct_asset_path,omitempty" jsonschema:"Optional path for a direct asset link relative to the release: redirects to url. Use instead of the deprecated filepath."`
-	FilePath        string               `json:"filepath,omitempty" jsonschema:"Deprecated alias of direct_asset_path; prefer direct_asset_path."`
+	FilePath        string               `json:"filepath,omitempty" jsonschema:"Deprecated alias of direct_asset_path. Prefer direct_asset_path."`
 	LinkType        string               `json:"link_type,omitempty" jsonschema:"Type of the link (runbook, package, image, other)"`
 }
 
@@ -84,9 +84,9 @@ type ListOutput struct {
 // the full per-link option set of [gl.CreateReleaseLinkOptions].
 type LinkEntry struct {
 	Name            string `json:"name"                jsonschema:"Name of the link,required"`
-	URL             string `json:"url"                 jsonschema:"Absolute URL of the link target. For package assets use the URL returned by package publish actions; do not construct URLs manually,required"`
+	URL             string `json:"url"                 jsonschema:"Absolute URL of the link target. For package assets use the URL returned by package publish actions. Do not construct URLs manually,required"`
 	DirectAssetPath string `json:"direct_asset_path,omitempty" jsonschema:"Optional path for a direct asset link relative to the release: redirects to url. Use instead of the deprecated filepath."`
-	FilePath        string `json:"filepath,omitempty"  jsonschema:"Deprecated alias of direct_asset_path; prefer direct_asset_path."`
+	FilePath        string `json:"filepath,omitempty"  jsonschema:"Deprecated alias of direct_asset_path. Prefer direct_asset_path."`
 	LinkType        string `json:"link_type,omitempty"  jsonschema:"Type of the link (runbook, package, image, other)"`
 }
 

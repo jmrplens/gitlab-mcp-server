@@ -46,7 +46,7 @@ type GetInput struct {
 	ProjectID        toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Key              string               `json:"key" jsonschema:"Variable key name,required"`
 	EnvironmentScope string               `json:"environment_scope" jsonschema:"Filter by environment scope (shorthand for filter.environment_scope)"`
-	Filter           *Filter              `json:"filter,omitempty" jsonschema:"Filter selecting the variable by environment scope; mirrors the GitLab variable filter object"`
+	Filter           *Filter              `json:"filter,omitempty" jsonschema:"Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object"`
 }
 
 // CreateInput holds parameters for creating a project CI/CD variable.
@@ -74,7 +74,7 @@ type UpdateInput struct {
 	Masked           *bool                `json:"masked" jsonschema:"Mask variable value in job logs"`
 	Raw              *bool                `json:"raw" jsonschema:"Treat variable value as raw string"`
 	EnvironmentScope string               `json:"environment_scope" jsonschema:"Filter by environment scope (shorthand for filter.environment_scope)"`
-	Filter           *Filter              `json:"filter,omitempty" jsonschema:"Filter selecting the variable by environment scope; mirrors the GitLab variable filter object"`
+	Filter           *Filter              `json:"filter,omitempty" jsonschema:"Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object"`
 }
 
 // DeleteInput holds parameters for deleting a project CI/CD variable.
@@ -82,7 +82,7 @@ type DeleteInput struct {
 	ProjectID        toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	Key              string               `json:"key" jsonschema:"Variable key name,required"`
 	EnvironmentScope string               `json:"environment_scope" jsonschema:"Filter by environment scope (shorthand for filter.environment_scope)"`
-	Filter           *Filter              `json:"filter,omitempty" jsonschema:"Filter selecting the variable by environment scope; mirrors the GitLab variable filter object"`
+	Filter           *Filter              `json:"filter,omitempty" jsonschema:"Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object"`
 }
 
 // Output represents a single CI/CD variable.

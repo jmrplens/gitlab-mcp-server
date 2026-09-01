@@ -96,7 +96,7 @@ type geoActionMetaEntry struct {
 // geoActionMeta maps each individual Geo site tool to its discovery metadata.
 var geoActionMeta = map[string]geoActionMetaEntry{
 	"gitlab_create_geo_site": {
-		usage:       "Register a new Geo site (secondary or primary) on the instance. Provide a unique name and a reachable url; only one site may be primary. Requires admin access and GitLab Premium/Ultimate.",
+		usage:       "Register a new Geo site (secondary or primary) on the instance. Provide a unique name and a reachable url. Only one site may be primary. Requires admin access and GitLab Premium/Ultimate.",
 		aliases:     []string{"create geo site", "add geo node", "register geo secondary"},
 		related:     []string{actionGeoList, actionGeoGet, actionGeoEdit},
 		description: "Create a new Geo site. Returns: the site with id, name, url, primary/enabled flags, capacities, selective-sync settings, and navigation links. See also: gitlab_list_geo_sites, gitlab_get_geo_site, gitlab_edit_geo_site.",
@@ -114,13 +114,13 @@ var geoActionMeta = map[string]geoActionMetaEntry{
 		description: "Get a single Geo site by id. Returns: the site with name, url, primary/enabled flags, capacities, selective-sync settings, and navigation links. See also: gitlab_list_geo_sites, gitlab_edit_geo_site, gitlab_get_status_geo_site.",
 	},
 	"gitlab_edit_geo_site": {
-		usage:       "Update settings of an existing Geo site (enabled, name, url, capacities, selective sync). The primary flag cannot be toggled; recreate the site to change it.",
+		usage:       "Update settings of an existing Geo site (enabled, name, url, capacities, selective sync). The primary flag cannot be toggled. Recreate the site to change it.",
 		aliases:     []string{"edit geo site", "update geo node", "configure geo site"},
 		related:     []string{actionGeoGet, actionGeoList, "geo.repair"},
 		description: "Edit a Geo site's settings. Returns: the updated site with its capacities and selective-sync configuration. See also: gitlab_get_geo_site, gitlab_list_geo_sites, gitlab_repair_geo_site.",
 	},
 	"gitlab_delete_geo_site": {
-		usage:       "Permanently remove a Geo site. Destructive and irreversible; the primary cannot be deleted while secondaries exist. Confirm the id before calling.",
+		usage:       "Permanently remove a Geo site. Destructive and irreversible. The primary cannot be deleted while secondaries exist. Confirm the id before calling.",
 		aliases:     []string{"delete geo site", "remove geo node", "deregister geo secondary"},
 		related:     []string{actionGeoGet, actionGeoList},
 		description: "Delete a Geo site permanently. Returns: a success confirmation naming the site. See also: gitlab_get_geo_site, gitlab_list_geo_sites.",
@@ -132,7 +132,7 @@ var geoActionMeta = map[string]geoActionMetaEntry{
 		description: "Repair a Geo site's OAuth application. Returns: the repaired site (or a hint to refresh via get when GitLab returns no body). See also: gitlab_get_geo_site, gitlab_get_status_geo_site.",
 	},
 	"gitlab_list_status_all_geo_sites": {
-		usage:       "List the full replication and verification status of every Geo site. Use order_by/sort and offset or keyset pagination. Status is collected by the primary; secondaries may show stale data when lagging.",
+		usage:       "List the full replication and verification status of every Geo site. Use order_by/sort and offset or keyset pagination. Status is collected by the primary. Secondaries may show stale data when lagging.",
 		aliases:     []string{"list geo statuses", "geo replication overview", "show all geo node status"},
 		related:     []string{actionGeoGetStatus, actionGeoList},
 		description: "List replication status for all Geo sites. Returns: per-site health, replication lag, and detailed sync/verification/checksum counts and percentages, with pagination metadata. See also: gitlab_get_status_geo_site, gitlab_list_geo_sites.",

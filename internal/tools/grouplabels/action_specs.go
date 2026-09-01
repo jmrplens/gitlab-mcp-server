@@ -103,7 +103,7 @@ var groupLabelActionMeta = map[string]groupLabelActionMetaEntry{
 		description: "Get a single group label by ID or name. Returns: the label with color, text color, description, issue and merge request counts, priority, and subscription state. See also: gitlab_group_label_list, gitlab_group_label_update, gitlab_group_label_delete.",
 	},
 	"gitlab_group_label_create": {
-		usage:       "Create a new label in a group. Provide group_id, a unique name, and a hex color; add description, priority, or archived only when requested.",
+		usage:       "Create a new label in a group. Provide group_id, a unique name, and a hex color. Add description, priority, or archived only when requested.",
 		aliases:     []string{"create group label", "add group label", "new group label"},
 		related:     []string{actionGroupLabelList, actionGroupLabelGet, "group_label.update"},
 		description: "Create a new group label. Returns: the created label with id, name, color, text color, description, counts, priority, and subscription state. See also: gitlab_group_label_list, gitlab_group_label_get, gitlab_group_label_update.",
@@ -115,7 +115,7 @@ var groupLabelActionMeta = map[string]groupLabelActionMetaEntry{
 		description: "Update a group label. Returns: the updated label with id, name, color, text color, description, counts, priority, and subscription state. See also: gitlab_group_label_get, gitlab_group_label_list, gitlab_group_label_delete.",
 	},
 	"gitlab_group_label_delete": {
-		usage:       "Permanently delete a group label by ID or name. Destructive; confirm group_id and label_id before calling.",
+		usage:       "Permanently delete a group label by ID or name. Destructive. Confirm group_id and label_id before calling.",
 		aliases:     []string{"delete group label", "remove group label", "drop group label", "destroy group label"},
 		related:     []string{actionGroupLabelGet, actionGroupLabelList},
 		description: "Delete a group label permanently. Returns: a success confirmation. See also: gitlab_group_label_get, gitlab_group_label_list.",

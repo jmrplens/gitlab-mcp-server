@@ -52,7 +52,7 @@ func groupServiceAccountOptions(actionName, individualTool string) toolutil.Acti
 	options := toolutil.ActionSpecOptions{
 		Aliases:        groupServiceAccountAliases(actionName),
 		Tags:           groupServiceAccountTags(actionName),
-		Usage:          leads[actionName] + " Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate); requires Owner permissions.",
+		Usage:          leads[actionName] + " Use for GitLab group service accounts and their personal access tokens. Do not use group members, SCIM identities, enterprise users, or generic group access tokens for service account CRUD. Available on all tiers (Free, Premium, Ultimate). Requires Owner permissions.",
 		RelatedActions: []string{"group.get"},
 		OpenWorld:      true,
 		OwnerPackage:   "groupserviceaccounts",
@@ -65,17 +65,17 @@ func groupServiceAccountOptions(actionName, individualTool string) toolutil.Acti
 		options.Usage += " Omit email unless the task gives an explicit valid email address."
 	}
 	if individualTool == "gitlab_group_service_account_pat_create" {
-		options.Usage += " Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime."
+		options.Usage += " Omit expires_at unless the task gives an explicit expiry date. If provided, use YYYY-MM-DD within the instance maximum token lifetime."
 	}
 	if individualTool == "gitlab_group_service_account_pat_rotate" {
-		options.Usage += " Rotating revokes the supplied token_id and returns a brand-new token value; capture the returned token immediately. Omit expires_at unless the task gives an explicit expiry date; if provided, use YYYY-MM-DD within the instance maximum token lifetime."
+		options.Usage += " Rotating revokes the supplied token_id and returns a brand-new token value. Capture the returned token immediately. Omit expires_at unless the task gives an explicit expiry date. If provided, use YYYY-MM-DD within the instance maximum token lifetime."
 	}
 	if individualTool == "gitlab_group_service_account_pat_revoke" || individualTool == "gitlab_group_service_account_pat_rotate" {
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"token_id": {
 				SemanticRole:     "access_token",
 				ValueSource:      "Group service account personal access token ID returned by service_account_pat_list or service_account_pat_create.",
-				CommonConfusions: []string{"Do not use service_account_id as token_id; token_id identifies the personal access token itself."},
+				CommonConfusions: []string{"Do not use service_account_id as token_id. token_id identifies the personal access token itself."},
 			},
 		}
 	}

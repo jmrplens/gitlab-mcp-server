@@ -159,7 +159,7 @@ func applyRegistryDiscovery(options *toolutil.ActionSpecOptions, individualTool 
 	case toolRegistryDeleteTagsBulk:
 		options.Aliases = []string{"bulk delete image tags", "clean up old container tags", "prune registry tags"}
 		options.RelatedActions = []string{actionRegistryTagList, actionRegistryTagDelete}
-		options.IndividualTool.Description = "Delete container registry tags in bulk by name patterns and age (cannot be undone). Returns: a success confirmation; deletion runs asynchronously. See also: gitlab_registry_list_tags, gitlab_registry_delete_tag."
+		options.IndividualTool.Description = "Delete container registry tags in bulk by name patterns and age (cannot be undone). Returns: a success confirmation. Deletion runs asynchronously. See also: gitlab_registry_list_tags, gitlab_registry_delete_tag."
 	case toolRegistryProtUpdate:
 		options.Aliases = []string{"update registry protection rule", "change repository path access levels", "edit image push rule"}
 		options.RelatedActions = []string{actionRegistryRuleList, "package.registry_rule_delete", actionRegistryRuleCreate}
@@ -199,7 +199,7 @@ func applyRegistryDiscovery(options *toolutil.ActionSpecOptions, individualTool 
 				SemanticRole:     "match_pattern",
 				ValueSource:      "An RE2 regular expression matching the tags to protect.",
 				ExampleBinding:   `params.tag_name_pattern:"v.+"`,
-				CommonConfusions: []string{"tag_name_pattern is an RE2 regex, not a glob; omit both minimum access levels to make matching tags fully immutable."},
+				CommonConfusions: []string{"tag_name_pattern is an RE2 regex, not a glob. Omit both minimum access levels to make matching tags fully immutable."},
 			},
 		}
 		options.IndividualTool.Description = "Create a container registry tag protection rule. Returns: the created rule. Omit both minimum access levels to make matching tags immutable. See also: gitlab_registry_tag_protection_list, gitlab_registry_tag_protection_update, gitlab_registry_protection_create."

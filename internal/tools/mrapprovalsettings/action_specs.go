@@ -47,7 +47,7 @@ var approvalSettingsMeta = map[string]approvalSettingsMetaEntry{
 		description:    "Read the merge request approval settings of a group. Returns: each setting (allow author approval, allow committer approval, allow approver-list overrides, retain approvals on push, selective code owner removals, require password to approve, require reauthentication to approve) with its value, locked flag, and inherited-from source. See also: gitlab_update_group_mr_approval_settings, gitlab_get_project_mr_approval_settings.",
 	},
 	"gitlab_update_group_mr_approval_settings": {
-		usage:          "Update the merge request approval settings for a group. Set only the fields you want to change; omitted fields are left unchanged. Group-level changes can lock the corresponding setting for projects in the group.",
+		usage:          "Update the merge request approval settings for a group. Set only the fields you want to change. Omitted fields are left unchanged. Group-level changes can lock the corresponding setting for projects in the group.",
 		aliases:        []string{"update group mr approval settings", "change group approval settings", "set group merge request approval policy"},
 		relatedActions: []string{"approval_settings_group_get", actionMRApprovalsGetState, "group.get"},
 		description:    "Update the merge request approval settings of a group. Returns: the resulting settings (value, locked flag, and inherited-from source for each setting). See also: gitlab_get_group_mr_approval_settings, gitlab_update_project_mr_approval_settings.",
@@ -59,7 +59,7 @@ var approvalSettingsMeta = map[string]approvalSettingsMetaEntry{
 		description:    "Read the merge request approval settings of a project. Returns: each setting (allow author approval, allow committer approval, allow approver-list overrides, retain approvals on push, selective code owner removals, require password to approve, require reauthentication to approve) with its value, locked flag, and inherited-from source. See also: gitlab_update_project_mr_approval_settings, gitlab_get_group_mr_approval_settings.",
 	},
 	"gitlab_update_project_mr_approval_settings": {
-		usage:          "Update the merge request approval settings for a project. Set only the fields you want to change; omitted fields are left unchanged. Settings locked by the parent group cannot be overridden here.",
+		usage:          "Update the merge request approval settings for a project. Set only the fields you want to change. Omitted fields are left unchanged. Settings locked by the parent group cannot be overridden here.",
 		aliases:        []string{"update project mr approval settings", "change project approval settings", "set project merge request approval policy"},
 		relatedActions: []string{"approval_settings_project_get", actionMRApprovalsGetState, "project.get"},
 		description:    "Update the merge request approval settings of a project. Returns: the resulting settings (value, locked flag, and inherited-from source for each setting). See also: gitlab_get_project_mr_approval_settings, gitlab_update_group_mr_approval_settings.",

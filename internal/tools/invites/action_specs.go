@@ -82,13 +82,13 @@ func inviteGuidance(scopeParam string, scope toolutil.ParameterGuidance) map[str
 			SemanticRole:     "invite_email",
 			ValueSource:      "Email address of the person to invite when they may not have an account yet.",
 			ExampleBinding:   `params.email:"newhire@example.com"`,
-			CommonConfusions: []string{"Provide either email or user_id; supply email for people who are not yet GitLab users."},
+			CommonConfusions: []string{"Provide either email or user_id. Supply email for people who are not yet GitLab users."},
 		},
 		"user_id": {
 			SemanticRole:     "user_id",
 			ValueSource:      "Numeric user ID when inviting an existing GitLab user.",
 			ExampleBinding:   "params.user_id:42",
-			CommonConfusions: []string{"Use user_id for existing accounts and email otherwise; do not pass a username here."},
+			CommonConfusions: []string{"Use user_id for existing accounts and email otherwise. Do not pass a username here."},
 		},
 		"access_level": {
 			SemanticRole:     "access_level",
@@ -100,7 +100,7 @@ func inviteGuidance(scopeParam string, scope toolutil.ParameterGuidance) map[str
 			SemanticRole:     "calendar_date",
 			ValueSource:      "Date the invitation should expire, when the user requests one.",
 			ExampleBinding:   `params.expires_at:"2026-12-31"`,
-			CommonConfusions: []string{"Use YYYY-MM-DD date only; this invitation field is not an RFC3339 timestamp."},
+			CommonConfusions: []string{"Use YYYY-MM-DD date only. This invitation field is not an RFC3339 timestamp."},
 		},
 	}
 }
@@ -108,7 +108,7 @@ func inviteGuidance(scopeParam string, scope toolutil.ParameterGuidance) map[str
 // inviteActionMeta maps each individual invite tool to its discovery metadata.
 var inviteActionMeta = map[string]inviteActionMetaEntry{
 	"gitlab_project_invite": {
-		usage:   "Invite a user to a project by email address or user_id with a chosen access_level. Use when adding someone who is not yet a project member, including external users invited by email; for users who already have an account prefer project.member_add.",
+		usage:   "Invite a user to a project by email address or user_id with a chosen access_level. Use when adding someone who is not yet a project member, including external users invited by email. For users who already have an account prefer project.member_add.",
 		aliases: []string{"invite user to project", "add user to project by email", "send project invitation"},
 		related: []string{actionInviteListProject, "project.member_add", "access.request_project", "project.members"},
 		description: "Invite a user to a project by email or user ID with an access level. Returns: an invitation result with status and per-email messages. " +
@@ -117,11 +117,11 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 			SemanticRole:     "scope_project",
 			ValueSource:      "Project ID or full namespace path the user is being invited to.",
 			ExampleBinding:   `params.project_id:"group/project"`,
-			CommonConfusions: []string{"Use the target project here; use group_id only with group.invite_group."},
+			CommonConfusions: []string{"Use the target project here. Use group_id only with group.invite_group."},
 		}),
 	},
 	"gitlab_group_invite": {
-		usage:   "Invite a user to a group by email address or user_id with a chosen access_level. Use when adding someone who is not yet a group member, including external users invited by email; for users who already have an account prefer group.group_member_add.",
+		usage:   "Invite a user to a group by email address or user_id with a chosen access_level. Use when adding someone who is not yet a group member, including external users invited by email. For users who already have an account prefer group.group_member_add.",
 		aliases: []string{"invite user to group", "add user to group by email", "send group invitation"},
 		related: []string{actionInviteListGroup, "group.group_member_add", "access.request_group", "group.members"},
 		description: "Invite a user to a group by email or user ID with an access level. Returns: an invitation result with status and per-email messages. " +
@@ -130,11 +130,11 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 			SemanticRole:     "scope_group",
 			ValueSource:      "Group ID or full group path the user is being invited to.",
 			ExampleBinding:   `params.group_id:"platform/backend"`,
-			CommonConfusions: []string{"Use group_id for the group scope; use project_id only with project.invite_project."},
+			CommonConfusions: []string{"Use group_id for the group scope. Use project_id only with project.invite_project."},
 		}),
 	},
 	"gitlab_project_invite_list_pending": {
-		usage:   "List the pending (not yet accepted) invitations for a project. Use to audit outstanding email invitations before resending or revoking them; this lists invitations, not current members.",
+		usage:   "List the pending (not yet accepted) invitations for a project. Use to audit outstanding email invitations before resending or revoking them. This lists invitations, not current members.",
 		aliases: []string{"list pending project invitations", "show outstanding project invites", "pending project invitations"},
 		related: []string{actionInviteProject, "project.members", "access.request_list_project"},
 		description: "List a project's pending invitations. Returns: pending invitations with invite email, access level, creator, creation and expiry dates, plus pagination metadata. " +
@@ -144,17 +144,17 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 				SemanticRole:     "scope_project",
 				ValueSource:      "Project ID or full namespace path whose pending invitations should be listed.",
 				ExampleBinding:   `params.project_id:"group/project"`,
-				CommonConfusions: []string{"Lists pending invitations, not accepted members; use project.members for current members."},
+				CommonConfusions: []string{"Lists pending invitations, not accepted members. Use project.members for current members."},
 			},
 			"query": {
 				ValueSource:      "Substring to filter pending invitations by invite email or name.",
 				ExampleBinding:   `params.query:"@example.com"`,
-				CommonConfusions: []string{"query filters within this project's pending invitations; it does not replace project_id."},
+				CommonConfusions: []string{"query filters within this project's pending invitations. It does not replace project_id."},
 			},
 		},
 	},
 	"gitlab_group_invite_list_pending": {
-		usage:   "List the pending (not yet accepted) invitations for a group. Use to audit outstanding email invitations before resending or revoking them; this lists invitations, not current members.",
+		usage:   "List the pending (not yet accepted) invitations for a group. Use to audit outstanding email invitations before resending or revoking them. This lists invitations, not current members.",
 		aliases: []string{"list pending group invitations", "show outstanding group invites", "pending group invitations"},
 		related: []string{actionInviteGroup, "group.members", "access.request_list_group"},
 		description: "List a group's pending invitations. Returns: pending invitations with invite email, access level, creator, creation and expiry dates, plus pagination metadata. " +
@@ -164,12 +164,12 @@ var inviteActionMeta = map[string]inviteActionMetaEntry{
 				SemanticRole:     "scope_group",
 				ValueSource:      "Group ID or full group path whose pending invitations should be listed.",
 				ExampleBinding:   `params.group_id:"platform/backend"`,
-				CommonConfusions: []string{"Lists pending invitations, not accepted members; use group.members for current members."},
+				CommonConfusions: []string{"Lists pending invitations, not accepted members. Use group.members for current members."},
 			},
 			"query": {
 				ValueSource:      "Substring to filter pending invitations by invite email or name.",
 				ExampleBinding:   `params.query:"@example.com"`,
-				CommonConfusions: []string{"query filters within this group's pending invitations; it does not replace group_id."},
+				CommonConfusions: []string{"query filters within this group's pending invitations. It does not replace group_id."},
 			},
 		},
 	},

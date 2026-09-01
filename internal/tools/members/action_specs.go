@@ -80,7 +80,7 @@ var projectIDGuidance = toolutil.ParameterGuidance{
 	SemanticRole:     "scope_project",
 	ValueSource:      "Project ID or full namespace path (e.g. \"group/project\") that owns the membership.",
 	ExampleBinding:   `params.project_id:"group/project"`,
-	CommonConfusions: []string{"Use the project here, not a group ID; for group memberships use the group member actions instead."},
+	CommonConfusions: []string{"Use the project here, not a group ID. For group memberships use the group member actions instead."},
 }
 
 // userIDGuidance is the shared parameter guidance for the user_id parameter
@@ -89,7 +89,7 @@ var userIDGuidance = toolutil.ParameterGuidance{
 	SemanticRole:     paramUserID,
 	ValueSource:      "Numeric user ID of the member, from gitlab_list_users or prior member list output.",
 	ExampleBinding:   "params.user_id:42",
-	CommonConfusions: []string{"Use the global user ID, not a username; pass username only on the add action."},
+	CommonConfusions: []string{"Use the global user ID, not a username. Pass username only on the add action."},
 }
 
 // memberOptions returns the [toolutil.ActionSpecOptions] for a project member
@@ -109,13 +109,13 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 
 	switch individualTool {
 	case "gitlab_project_members_list":
-		opts.Usage = "List the members of a project, including members inherited from parent groups. Filter with query, user_ids, and show_seat_info; order with order_by/sort; page with offset or keyset pagination."
+		opts.Usage = "List the members of a project, including members inherited from parent groups. Filter with query, user_ids, and show_seat_info. Order with order_by/sort. Page with offset or keyset pagination."
 		opts.Aliases = []string{individualTool, "list project members", "who has access to project", "show project team", "project collaborators"}
 		opts.RelatedActions = []string{actionMemberGet, "member.add", actionProjectGet, actionUserGet}
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{paramProjectID: projectIDGuidance}
 		opts.IndividualTool.Description = "List a project's members (direct plus inherited from parent groups). Returns: each member's id, username, name, state, access level, member role, created_by, seat usage, and web URL. Supports query/user_ids/show_seat_info filtering, order_by/sort, and offset or keyset pagination. See also: gitlab_project_member_get, gitlab_project_member_add, gitlab_project_get."
 	case "gitlab_project_member_get":
-		opts.Usage = "Get one direct project member by project_id plus user_id. Use after a member list, or when the prompt already names a concrete user. Returns only direct members; use member.get_inherited to include parent-group inheritance."
+		opts.Usage = "Get one direct project member by project_id plus user_id. Use after a member list, or when the prompt already names a concrete user. Returns only direct members. Use member.get_inherited to include parent-group inheritance."
 		opts.Aliases = []string{individualTool, "get project member", "show member access level", "is user a member"}
 		opts.RelatedActions = []string{actionMembersList, "member.get_inherited", actionMemberEdit, "member.delete"}
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{paramProjectID: projectIDGuidance, paramUserID: userIDGuidance}
@@ -134,15 +134,15 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 			paramProjectID: projectIDGuidance,
 			paramUserID: {
 				SemanticRole:     paramUserID,
-				ValueSource:      "Numeric user ID to add; provide either user_id or username.",
+				ValueSource:      "Numeric user ID to add. Provide either user_id or username.",
 				ExampleBinding:   "params.user_id:42",
-				CommonConfusions: []string{"Provide user_id or username, not both; access_level is also required."},
+				CommonConfusions: []string{"Provide user_id or username, not both. access_level is also required."},
 			},
 			paramAccessLevel: {
 				SemanticRole:     paramAccessLevel,
 				ValueSource:      "Numeric access level: 10 Guest, 20 Reporter, 30 Developer, 40 Maintainer, 50 Owner (plus 5/15/25/60 on supported tiers).",
 				ExampleBinding:   "params.access_level:30",
-				CommonConfusions: []string{"Use the numeric level, not a role name; set member_role_id for a custom role."},
+				CommonConfusions: []string{"Use the numeric level, not a role name. Set member_role_id for a custom role."},
 			},
 		}
 		opts.IndividualTool.Description = "Add a user to a project team by user_id or username with an access level. Optional: expires_at, member_role_id (Premium/Ultimate). Returns: the created membership. See also: gitlab_project_member_edit, gitlab_project_members_list, gitlab_list_users."
@@ -157,16 +157,16 @@ func memberOptions(individualTool string) toolutil.ActionSpecOptions {
 				SemanticRole:     paramAccessLevel,
 				ValueSource:      "New numeric access level: 10 Guest, 20 Reporter, 30 Developer, 40 Maintainer, 50 Owner (plus 5/15/25/60 on supported tiers).",
 				ExampleBinding:   "params.access_level:40",
-				CommonConfusions: []string{"Use the numeric level, not a role name; you must hold at least the same level as the target."},
+				CommonConfusions: []string{"Use the numeric level, not a role name. You must hold at least the same level as the target."},
 			},
 		}
 		opts.IndividualTool.Description = "Edit a project member's access level, expiry, or custom member role. Returns: the updated membership. Requires at least the same access level as the target member. See also: gitlab_project_member_add, gitlab_project_member_delete, gitlab_project_members_list."
 	case "gitlab_project_member_delete":
-		opts.Usage = "Remove a member from a project by user_id. Destructive and requires confirmation. Requires Maintainer; the last Owner cannot be removed."
+		opts.Usage = "Remove a member from a project by user_id. Destructive and requires confirmation. Requires Maintainer. The last Owner cannot be removed."
 		opts.Aliases = []string{individualTool, "remove project member", "revoke project access", "delete membership", "kick user from project"}
 		opts.RelatedActions = []string{actionMembersList, actionMemberGet, actionMemberEdit}
 		opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{paramProjectID: projectIDGuidance, paramUserID: userIDGuidance}
-		opts.IndividualTool.Description = "Remove a member from a project (destructive, requires confirmation). Requires Maintainer; the last Owner of a project cannot be removed. Returns: a success confirmation naming the removed member. See also: gitlab_project_member_edit, gitlab_project_members_list."
+		opts.IndividualTool.Description = "Remove a member from a project (destructive, requires confirmation). Requires Maintainer. The last Owner of a project cannot be removed. Returns: a success confirmation naming the removed member. See also: gitlab_project_member_edit, gitlab_project_members_list."
 	}
 
 	return opts

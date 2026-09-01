@@ -19,7 +19,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 					"branch rule overview",
 				},
 				Tags:           []string{"branch", "rules", "graphql"},
-				Usage:          "Audit a project's aggregated branch protection rules in one call: each rule's matched branch pattern, default/protected flags, matching branch count, allow-force-push and code-owner-approval settings, approval rules, and external status checks. Use this when reviewing branch protection posture across a project; for the protected-branch REST records (allowed-to-push/merge access levels) use branch.list_protected or branch.get_protected instead.",
+				Usage:          "Audit a project's aggregated branch protection rules in one call: each rule's matched branch pattern, default/protected flags, matching branch count, allow-force-push and code-owner-approval settings, approval rules, and external status checks. Use this when reviewing branch protection posture across a project. For the protected-branch REST records (allowed-to-push/merge access levels) use branch.list_protected or branch.get_protected instead.",
 				RelatedActions: []string{"branch.list_protected", "branch.get_protected", "project.get"},
 				ParameterGuidance: map[string]toolutil.ParameterGuidance{
 					"project_path": {

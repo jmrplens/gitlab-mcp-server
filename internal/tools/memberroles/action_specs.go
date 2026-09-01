@@ -136,7 +136,7 @@ const (
 
 // baseAccessLevelConfusion is the shared CommonConfusions note for the
 // base_access_level parameter on the create actions.
-var baseAccessLevelConfusion = []string{"Use a valid numeric level (5/10/15/20/25/30/40/50); 60=Admin is not accepted, and do not pass role names like Developer."}
+var baseAccessLevelConfusion = []string{"Use a valid numeric level (5/10/15/20/25/30/40/50). 60=Admin is not accepted, and do not pass role names like Developer."}
 
 // memberRoleActionMeta maps each canonical member role action name to its
 // non-generic Usage, natural-language Aliases, canonical RelatedActions,
@@ -150,7 +150,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 		description: "List instance-level custom member roles. Returns: each role with id, name, description, base_access_level, and its enabled permission flags. See also: gitlab_create_instance_member_role, gitlab_delete_instance_member_role, gitlab_list_group_member_roles.",
 	},
 	"list_group": {
-		usage:   "Lists custom member roles available for a specific group_id. Deprecated on self-managed GitLab 17+; use list_instance instead on self-managed. Still valid on GitLab.com Ultimate.",
+		usage:   "Lists custom member roles available for a specific group_id. Deprecated on self-managed GitLab 17+. Use list_instance instead on self-managed. Still valid on GitLab.com Ultimate.",
 		aliases: []string{"list group member roles", "show group custom roles", "list a group's member roles"},
 		related: []string{actionMRListInstance, actionMRCreateGroup, actionMRDeleteGroup},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -158,7 +158,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 				SemanticRole:     "scope_group",
 				ValueSource:      "Top-level group ID or full group path whose custom member roles should be listed.",
 				ExampleBinding:   `params.group_id:"my-group"`,
-				CommonConfusions: []string{"Use a top-level group, not a subgroup or project; group-level roles are deprecated on self-managed — use list_instance there."},
+				CommonConfusions: []string{"Use a top-level group, not a subgroup or project. Group-level roles are deprecated on self-managed — use list_instance there."},
 			},
 		},
 		description: "List group-level custom member roles. Returns: each role with id, name, description, base_access_level, and its enabled permission flags. See also: gitlab_list_instance_member_roles, gitlab_create_group_member_role, gitlab_delete_group_member_role.",
@@ -183,7 +183,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 		description: "Create an instance-level custom member role. Returns: the created role with id, name, base_access_level, and its enabled permission flags. See also: gitlab_list_instance_member_roles, gitlab_delete_instance_member_role, gitlab_create_group_member_role.",
 	},
 	"create_group": {
-		usage:   "Create a new group-level custom member role for a group_id. Provide name and base_access_level, then enable individual permission flags only when requested. Requires Owner + Ultimate; deprecated on self-managed 17+.",
+		usage:   "Create a new group-level custom member role for a group_id. Provide name and base_access_level, then enable individual permission flags only when requested. Requires Owner + Ultimate. Deprecated on self-managed 17+.",
 		aliases: []string{"create group member role", "add group custom role", "define group member role"},
 		related: []string{actionMRListGroup, actionMRDeleteGroup, actionMRCreateInstance},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -191,7 +191,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 				SemanticRole:     "scope_group",
 				ValueSource:      "Top-level group ID or full group path that will own the custom role.",
 				ExampleBinding:   `params.group_id:"my-group"`,
-				CommonConfusions: []string{"Use a top-level group, not a subgroup or project; group-level roles are deprecated on self-managed — use create_instance there."},
+				CommonConfusions: []string{"Use a top-level group, not a subgroup or project. Group-level roles are deprecated on self-managed — use create_instance there."},
 			},
 			"name": {
 				SemanticRole:   "member_role_name",
@@ -208,7 +208,7 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 		description: "Create a group-level custom member role. Returns: the created role with id, name, base_access_level, and its enabled permission flags. See also: gitlab_list_group_member_roles, gitlab_delete_group_member_role, gitlab_create_instance_member_role.",
 	},
 	"delete_instance": {
-		usage:   "Permanently delete an instance-level custom member role by member_role_id. Destructive and irreversible; may fail while the role is still assigned. Requires admin + self-managed Ultimate.",
+		usage:   "Permanently delete an instance-level custom member role by member_role_id. Destructive and irreversible. May fail while the role is still assigned. Requires admin + self-managed Ultimate.",
 		aliases: []string{"delete instance member role", "remove custom role", "remove instance member role"},
 		related: []string{actionMRListInstance, actionMRCreateInstance, actionMRDeleteGroup},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -216,13 +216,13 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 				SemanticRole:     "member_role_id",
 				ValueSource:      "Numeric ID of the instance member role to delete, usually from gitlab_list_instance_member_roles output.",
 				ExampleBinding:   "params.member_role_id:42",
-				CommonConfusions: []string{"Use the role's member_role_id, not its name or a user/member ID; verify it with gitlab_list_instance_member_roles first."},
+				CommonConfusions: []string{"Use the role's member_role_id, not its name or a user/member ID. Verify it with gitlab_list_instance_member_roles first."},
 			},
 		},
 		description: "Delete an instance-level custom member role. Returns: a success confirmation naming the deleted role. See also: gitlab_list_instance_member_roles, gitlab_create_instance_member_role.",
 	},
 	"delete_group": {
-		usage:   "Permanently delete a group-level custom member role by group_id and member_role_id. Destructive and irreversible; may fail while the role is still assigned. Requires Owner + Ultimate; deprecated on self-managed 17+.",
+		usage:   "Permanently delete a group-level custom member role by group_id and member_role_id. Destructive and irreversible. May fail while the role is still assigned. Requires Owner + Ultimate. Deprecated on self-managed 17+.",
 		aliases: []string{"delete group member role", "remove group custom role", "remove group member role"},
 		related: []string{actionMRListGroup, actionMRCreateGroup, actionMRDeleteInstance},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -230,13 +230,13 @@ var memberRoleActionMeta = map[string]memberRoleActionMetaEntry{
 				SemanticRole:     "scope_group",
 				ValueSource:      "Top-level group ID or full group path that owns the custom role.",
 				ExampleBinding:   `params.group_id:"my-group"`,
-				CommonConfusions: []string{"Use the group that owns the role, not a subgroup or project; group-level roles are deprecated on self-managed."},
+				CommonConfusions: []string{"Use the group that owns the role, not a subgroup or project. Group-level roles are deprecated on self-managed."},
 			},
 			"member_role_id": {
 				SemanticRole:     "member_role_id",
 				ValueSource:      "Numeric ID of the group member role to delete, usually from gitlab_list_group_member_roles output.",
 				ExampleBinding:   "params.member_role_id:42",
-				CommonConfusions: []string{"Use the role's member_role_id, not its name or a user/member ID; verify it with gitlab_list_group_member_roles first."},
+				CommonConfusions: []string{"Use the role's member_role_id, not its name or a user/member ID. Verify it with gitlab_list_group_member_roles first."},
 			},
 		},
 		description: "Delete a group-level custom member role. Returns: a success confirmation naming the deleted role and group. See also: gitlab_list_group_member_roles, gitlab_create_group_member_role.",
