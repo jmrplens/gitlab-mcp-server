@@ -132,13 +132,15 @@ func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 		attrHTTPRequestMethod.String(req.Method),
 		attrURLScheme.String(req.URL.Scheme),
 		attrNetworkProtocolName.String("http"),
-		attrServerPort.Int(port),
 	}
 
-	// The span carries the real host; the metric carries it only when it is
-	// one this process is configured to serve. See metricServerAddresses.
+	// The span carries the real endpoint; the metric carries it only when the
+	// host is one this process is configured to serve, and the port rides with
+	// the host: in the free-selection mode both are the caller's choice, and a
+	// bounded address next to an unbounded port would move the same cardinality
+	// one column over. See metricServerAddresses.
 	spanAttrs := append(append([]attribute.KeyValue(nil), shared...),
-		attrServerAddress.String(host))
+		attrServerAddress.String(host), attrServerPort.Int(port))
 
 	ctx, span := t.tracer.Start(req.Context(), req.Method,
 		trace.WithSpanKind(trace.SpanKindClient),
@@ -152,8 +154,12 @@ func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	resp, err := t.base.RoundTrip(req.WithContext(ctx))
 	elapsed := time.Since(started).Seconds()
 
-	metricAttrs := append(append([]attribute.KeyValue(nil), shared...),
-		attrServerAddress.String(boundedServerAddress(host)))
+	metricAttrs := append([]attribute.KeyValue(nil), shared...)
+	if bounded := boundedServerAddress(host); bounded == host {
+		metricAttrs = append(metricAttrs, attrServerAddress.String(host), attrServerPort.Int(port))
+	} else {
+		metricAttrs = append(metricAttrs, attrServerAddress.String(bounded))
+	}
 	switch {
 	case err != nil:
 		// A transport error, which is the only failure this layer treats as

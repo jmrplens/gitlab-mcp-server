@@ -612,14 +612,21 @@ func run(hcfg *httpConfig) error {
 // properly, and telemetry sized for the wrong surface is a worse failure than a
 // duplicate error message is a cost.
 func resolveToolSurfaceForTelemetry(hcfg *httpConfig) string {
+	surfaceInput := os.Getenv("TOOL_SURFACE")
+	metaInput := os.Getenv("META_TOOLS")
 	if hcfg != nil {
-		surface, metaTools, err := config.ParseToolSurface(hcfg.toolSurface, legacyMetaToolsFlagValue(hcfg))
-		if err != nil {
-			return config.ToolSurfaceDynamic
+		// The flag wins and the environment fills in behind it, which is the
+		// same precedence the HTTP env overlay applies later. Reading the
+		// flags alone made TOOL_SURFACE exported into an HTTP deployment's
+		// environment invisible here while the overlay honored it.
+		if hcfg.toolSurface != "" {
+			surfaceInput = hcfg.toolSurface
 		}
-		return config.EffectiveToolSurface(metaTools, surface)
+		if legacy := legacyMetaToolsFlagValue(hcfg); legacy != "" {
+			metaInput = legacy
+		}
 	}
-	surface, metaTools, err := config.ParseToolSurface(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
+	surface, metaTools, err := config.ParseToolSurface(surfaceInput, metaInput)
 	if err != nil {
 		return config.ToolSurfaceDynamic
 	}
@@ -667,11 +674,19 @@ func runWithContext(ctx context.Context, hcfg *httpConfig) error {
 	// pinned HTTP deployment serve a known list, while the free-selection mode
 	// serves whatever a caller names, which is exactly what must not become a
 	// metric label. See mcpotel.SetMetricServerAddresses.
-	if hcfg != nil {
+	switch {
+	case hcfg != nil && len(hcfg.gitlabURLs) > 0:
 		mcpotel.SetMetricServerAddresses(hostsOf(hcfg.gitlabURLs))
-	} else if raw := os.Getenv("GITLAB_URL"); raw != "" {
-		mcpotel.SetMetricServerAddresses(hostsOf([]string{raw}))
-	} else {
+	case hcfg != nil && os.Getenv("GITLAB_URL") != "":
+		// The env overlay lets GITLAB_URL pin an HTTP deployment the same way
+		// the flag does, so it declares the metric's host the same way too.
+		mcpotel.SetMetricServerAddresses(hostsOf([]string{os.Getenv("GITLAB_URL")}))
+	case hcfg != nil:
+		// Free selection: callers choose the instance, so no host is declared
+		// and every one lands on the metric as the other bucket.
+	case os.Getenv("GITLAB_URL") != "":
+		mcpotel.SetMetricServerAddresses(hostsOf([]string{os.Getenv("GITLAB_URL")}))
+	default:
 		mcpotel.SetMetricServerAddresses(hostsOf([]string{config.DefaultGitLabURL}))
 	}
 

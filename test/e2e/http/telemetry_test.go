@@ -139,7 +139,7 @@ func TestTelemetry_AnUnreachableCollectorChangesNoResponse(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		t.Run(firstNonEmpty(tc.call.path, tc.call.body), func(t *testing.T) {
+		t.Run(subtestName(tc.call), func(t *testing.T) {
 			want := quiet.do(t, tc.call)
 			got := instrumented.do(t, tc.call)
 
@@ -191,12 +191,19 @@ func TestTelemetry_OffByDefaultOverHTTP(t *testing.T) {
 	}
 }
 
-// firstNonEmpty names a subtest by whichever half of the request exists.
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
+// subtestName names a comparison case without slashes, which -run would read
+// as subtest hierarchy, and without the whole JSON payload.
+func subtestName(r request) string {
+	name := r.path
+	if name == "" {
+		var msg struct {
+			Method string `json:"method"`
 		}
+		_ = json.Unmarshal([]byte(r.body), &msg)
+		name = msg.Method
 	}
-	return "empty"
+	if name == "" {
+		name = "empty"
+	}
+	return strings.ReplaceAll(strings.TrimPrefix(name, "/"), "/", " ")
 }

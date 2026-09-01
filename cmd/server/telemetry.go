@@ -205,17 +205,10 @@ var baseLogHandler slog.Handler
 // telemetryToolNameFlag holds --telemetry-tool-name.
 var telemetryToolNameFlag *string
 
-// dropToolNameFromMetrics resolves whether the tool name is a metric dimension.
-//
-// The surface is read from the environment rather than taken as a parameter
-// because this runs before the server is built, and it is the same value
-// config.Load will resolve: the dotenv files are already loaded by the time
-// anything calls this.
-//
-// An unusable policy is reported and treated as auto. Auto is the value that
-// protects an individual-surface deployment from a thousand-series dimension,
-// so falling back to it is the safe direction, and the loud failure for a typo
-// belongs at startup validation rather than here.
+// dropToolNameFromMetrics resolves whether the tool name is a metric
+// dimension, for the surface the caller resolved from the inputs its mode
+// really uses. Reading TOOL_SURFACE here regardless of mode is the defect this
+// parameter replaced.
 func dropToolNameFromMetrics(toolSurface string) bool {
 	value := os.Getenv(telemetry.EnvToolNameName)
 	if telemetryToolNameFlag != nil && isFlagPassed("telemetry-tool-name") {

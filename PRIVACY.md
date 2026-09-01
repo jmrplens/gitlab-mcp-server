@@ -30,9 +30,9 @@ paragraph above stays exactly true rather than becoming a technicality.
 
 It is **off by default**. When you enable it, the telemetry goes to a collector
 **you** configure and run. There is no path by which it could reach the
-maintainer: the only default the exporters have is their own specification's
-`http://localhost:4318`, your machine, where the export fails quietly unless
-you run a collector there. Nothing in any code path carries anyone else's
+maintainer: the only default the exporters have is their own
+`https://localhost:4318`, your machine, where the export fails, and says so
+in your own server log, unless you run a collector there. Nothing in any code path carries anyone else's
 address. Turning it on is a decision you make about your own deployment and
 your own users.
 

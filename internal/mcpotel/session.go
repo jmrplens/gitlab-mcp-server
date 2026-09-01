@@ -2,12 +2,12 @@ package mcpotel
 
 import (
 	"context"
-	"log/slog"
 	"slices"
 	"sync"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
@@ -63,9 +63,10 @@ func newSessionTracker(meter metric.Meter, constant []attribute.KeyValue, transp
 	if err != nil {
 		// Nil disables session telemetry, and doing that silently would leave
 		// an operator staring at a missing instrument with nothing anywhere
-		// saying why. The duration histograms log their failures the same way.
-		slog.Warn("mcp.server.session.duration could not be created; session telemetry is disabled",
-			"component", "telemetry", "error", err)
+		// saying why. Reported the way every other instrument constructor in
+		// this package reports: through the SDK's error handler, which the
+		// diagnostics wiring turns into a structured log record.
+		otel.Handle(err)
 		return nil
 	}
 	return &sessionTracker{

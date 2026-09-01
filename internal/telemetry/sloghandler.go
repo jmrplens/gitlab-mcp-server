@@ -165,6 +165,11 @@ func exportAttrs(attrs []slog.Attr, identity *Redactor) []slog.Attr {
 	strip = func(attrs []slog.Attr) []slog.Attr {
 		out := make([]slog.Attr, 0, len(attrs))
 		for _, attr := range attrs {
+			// Resolved first: a LogValuer is opaque until asked, so inspecting
+			// the unresolved value would wave through whatever it later
+			// resolves to, URIs and identity included, on the OTLP handler's
+			// side of the policy.
+			attr.Value = attr.Value.Resolve()
 			switch {
 			case attr.Key == LogFieldUserID:
 				userID = attr.Value.String()
