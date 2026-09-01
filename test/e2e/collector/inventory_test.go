@@ -42,6 +42,11 @@ var (
 		"gen_ai.operation.name",
 		"gen_ai.tool.name",
 		"gitlab_mcp.action",
+		// The catalog domain. Bounded by the catalog's domain count, and the
+		// coarse dimension that survives on metrics where the action id is too
+		// many values; also what remains of a call whose action does not
+		// resolve, so a model inventing an action still names a real domain.
+		"gitlab_mcp.domain",
 		"gitlab_mcp.tool_surface",
 		"mcp.method.name",
 		"mcp.protocol.version",
@@ -55,6 +60,11 @@ var (
 		"gen_ai.operation.name",
 		"gen_ai.tool.name",
 		"gitlab_mcp.action",
+		// Bounded by the catalog's domain count (at most a few dozen values),
+		// and the dimension worth the cost: it is what an operator groups by
+		// on the individual surface, where the tool name and action id are
+		// dropped by the cardinality policy.
+		"gitlab_mcp.domain",
 		"gitlab_mcp.tool_surface",
 		"mcp.method.name",
 		"mcp.protocol.version",
