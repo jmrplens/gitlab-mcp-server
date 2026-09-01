@@ -158,12 +158,12 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 				SemanticRole:     "git_ref",
 				ValueSource:      "Branch or tag to run the pipeline against.",
 				ExampleBinding:   `params.ref:"main"`,
-				CommonConfusions: []string{"Use ref for branch/tag names; do not send commit SHA when branch intent is requested."},
+				CommonConfusions: []string{"Use ref for branch/tag names. Do not send commit SHA when branch intent is requested."},
 			},
 		}
 		options.IndividualTool.Description = "Create a new pipeline. Returns: created pipeline metadata including ID, status, and target ref. See also: gitlab_pipeline_get, gitlab_pipeline_wait, gitlab_job_list_project."
 	case "cancel":
-		options.Usage = "Cancel a running pipeline's jobs by project_id and pipeline_id. Use when a build must be stopped early; completed pipelines cannot be cancelled."
+		options.Usage = "Cancel a running pipeline's jobs by project_id and pipeline_id. Use when a build must be stopped early. Completed pipelines cannot be cancelled."
 		options.Aliases = []string{"cancel pipeline", "stop pipeline", "abort pipeline"}
 		options.RelatedActions = []string{actionPipelineGet, actionPipelineRetry, actionJobListProject}
 		options.ParameterGuidance = pipelineIDGuidance()
@@ -175,19 +175,19 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 		options.ParameterGuidance = pipelineIDGuidance()
 		options.IndividualTool.Description = "Retry failed and canceled jobs in a pipeline. Returns: updated pipeline metadata after re-queuing jobs. See also: gitlab_pipeline_get, gitlab_pipeline_cancel, gitlab_job_list_project."
 	case "delete":
-		options.Usage = "Permanently delete a pipeline and all its jobs by project_id and pipeline_id. Use only when the pipeline record must be removed; this cannot be undone and requires Owner role."
+		options.Usage = "Permanently delete a pipeline and all its jobs by project_id and pipeline_id. Use only when the pipeline record must be removed. This cannot be undone and requires Owner role."
 		options.Aliases = []string{"delete pipeline", "remove pipeline", "destroy pipeline"}
 		options.RelatedActions = []string{actionPipelineGet, actionPipelineList, actionPipelineCancel}
 		options.ParameterGuidance = pipelineIDGuidance()
 		options.IndividualTool.Description = "Delete a pipeline and all its jobs. Returns: a success status and confirmation message. See also: gitlab_pipeline_get, gitlab_pipeline_list, gitlab_pipeline_cancel."
 	case "variables":
-		options.Usage = "List the variables used to run a pipeline by project_id and pipeline_id. Use to inspect the runtime variable overrides a pipeline executed with; requires Maintainer+ role."
+		options.Usage = "List the variables used to run a pipeline by project_id and pipeline_id. Use to inspect the runtime variable overrides a pipeline executed with. Requires Maintainer+ role."
 		options.Aliases = []string{"pipeline variables", "show pipeline variables", "get pipeline variables"}
 		options.RelatedActions = []string{actionPipelineGet, "pipeline.create", actionJobListProject}
 		options.ParameterGuidance = pipelineIDGuidance()
 		options.IndividualTool.Description = "List a pipeline's runtime variables. Returns: variable keys, values, and types. See also: gitlab_pipeline_get, gitlab_pipeline_create, gitlab_job_list_project."
 	case "test_report":
-		options.Usage = "Get the full test report for a pipeline by project_id and pipeline_id. Use when the task needs per-suite test counts and timing; requires jobs that upload JUnit artifacts."
+		options.Usage = "Get the full test report for a pipeline by project_id and pipeline_id. Use when the task needs per-suite test counts and timing. Requires jobs that upload JUnit artifacts."
 		options.Aliases = []string{"pipeline test report", "show test report", "get test results"}
 		options.RelatedActions = []string{"pipeline.test_report_summary", actionPipelineGet, actionJobListProject}
 		options.ParameterGuidance = pipelineIDGuidance()
@@ -210,7 +210,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 			},
 			"ref": {
 				SemanticRole:   "git_ref",
-				ValueSource:    "Branch or tag to scope the latest pipeline to; defaults to the project default branch.",
+				ValueSource:    "Branch or tag to scope the latest pipeline to. Defaults to the project default branch.",
 				ExampleBinding: `params.ref:"main"`,
 			},
 		}
@@ -221,7 +221,7 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 			toolutil.SchemaEnumOverride("order_by", "id", "status", "ref", "updated_at", "user_id"),
 		}
 	case "update_metadata":
-		options.Usage = "Update a pipeline's metadata (its display name) by project_id and pipeline_id. Use to rename a pipeline; requires Developer+ role and a non-archived pipeline."
+		options.Usage = "Update a pipeline's metadata (its display name) by project_id and pipeline_id. Use to rename a pipeline. Requires Developer+ role and a non-archived pipeline."
 		options.Aliases = []string{"update pipeline metadata", "rename pipeline", "set pipeline name"}
 		options.RelatedActions = []string{actionPipelineGet, actionPipelineList, "pipeline.create"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -242,12 +242,12 @@ func pipelineOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 			"pipeline_id": {
 				SemanticRole:     "pipeline_identifier",
 				ValueSource:      "Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines.",
-				CommonConfusions: []string{"Do not use merge_request_iid; pipeline.wait requires pipeline_id."},
+				CommonConfusions: []string{"Do not use merge_request_iid. Pipeline.wait requires pipeline_id."},
 				ExampleBinding:   "MR !7 pipeline #123 => pipeline_id=123.",
 			},
 		}
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
-			{PropertyPath: "pipeline_id", Values: map[string]any{"description": "Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines; do not use merge_request_iid."}},
+			{PropertyPath: "pipeline_id", Values: map[string]any{"description": "Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines. Do not use merge_request_iid."}},
 		}
 	}
 	return options

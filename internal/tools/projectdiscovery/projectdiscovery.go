@@ -16,7 +16,7 @@ import (
 
 // ResolveInput defines parameters for resolving a git remote URL to a GitLab project.
 type ResolveInput struct {
-	RemoteURL string `json:"remote_url" jsonschema:"Full git remote URL (HTTPS or SSH) exactly as shown in .git/config or 'git remote -v' output. IMPORTANT: pass the complete URL including the scheme (https://) or user prefix (git@). Examples: 'https://gitlab.example.com/group/project.git' or 'git@gitlab.example.com:group/project.git'. Do not pass plain project paths such as group/project, and do not synthesize URLs by adding .git to a project path; project paths are already valid project_id values.,required"`
+	RemoteURL string `json:"remote_url" jsonschema:"Full git remote URL (HTTPS or SSH) exactly as shown in .git/config or 'git remote -v' output. IMPORTANT: pass the complete URL including the scheme (https://) or user prefix (git@). Examples: 'https://gitlab.example.com/group/project.git' or 'git@gitlab.example.com:group/project.git'. Do not pass plain project paths such as group/project, and do not synthesize URLs by adding .git to a project path. Project paths are already valid project_id values.,required"`
 }
 
 // ResolveOutput holds the resolved GitLab project information.

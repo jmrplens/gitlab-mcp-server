@@ -2563,7 +2563,7 @@ const (
 
 	// metaToolParamsDescription is the canonical description for the params
 	// property generated in every meta-tool input schema.
-	metaToolParamsDescription = "Action-specific parameters as a JSON object. Required and optional fields differ per action. This envelope schema stays broad; runtime validation applies the chosen action's schema after reserved meta keys like `confirm` are stripped." + paramsResourceHint
+	metaToolParamsDescription = "Action-specific parameters as a JSON object. Required and optional fields differ per action. This envelope schema stays broad. Runtime validation applies the chosen action's schema after reserved meta keys like `confirm` are stripped." + paramsResourceHint
 )
 
 // BuildMetaToolSchema returns the input schema for a meta-tool given the
@@ -2627,7 +2627,7 @@ func MetaToolDescriptionPrefix(toolName string, routes ActionMap) string {
 	exampleAction := metaToolExampleAction(actions)
 	guidance := metaToolActionGuidanceSummary(routes, actions) + metaToolParameterGuidanceSummary(routes, actions)
 	return fmt.Sprintf(
-		"Use {\"action\":%q,\"params\":{...}}; only top-level keys are action and params.\nAction params schema: gitlab://tools/%s.<action>.%s\n\n",
+		"Use {\"action\":%q,\"params\":{...}}. The only top-level keys are action and params.\nAction params schema: gitlab://tools/%s.<action>.%s\n\n",
 		exampleAction, toolName,
 		guidance,
 	)
@@ -2679,11 +2679,16 @@ func metaToolParameterGuidanceSummary(routes ActionMap, actionNames []string) st
 			if item.SemanticRole != "" {
 				line += ": " + item.SemanticRole
 			}
+			// Sentence-styled facets rather than semicolon joiners: some MCP
+			// gateway validators reject any description carrying a semicolon,
+			// and these joiners put one on thousands of served lines. The
+			// TrimSuffix keeps a facet that already ends in a period from
+			// producing ".." when the next facet appends its own.
 			if item.ValueSource != "" {
-				line += "; source: " + item.ValueSource
+				line = strings.TrimSuffix(line, ".") + ". Source: " + item.ValueSource
 			}
 			if len(item.CommonConfusions) > 0 {
-				line += "; avoid: " + strings.Join(item.CommonConfusions, ", ")
+				line = strings.TrimSuffix(line, ".") + ". Avoid: " + strings.Join(item.CommonConfusions, ", ")
 			}
 			lines = append(lines, line)
 		}

@@ -33,7 +33,7 @@ type CreateInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id"  jsonschema:"Project ID or URL-encoded path,required"`
 	SnippetID int64                `json:"snippet_id"  jsonschema:"Snippet ID,required"`
 	Body      string               `json:"body"        jsonschema:"Note body (Markdown supported),required"`
-	CreatedAt string               `json:"created_at,omitempty" jsonschema:"Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions; ignored otherwise."`
+	CreatedAt string               `json:"created_at,omitempty" jsonschema:"Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise."`
 }
 
 // UpdateInput defines parameters for updating a snippet note.

@@ -27,6 +27,69 @@ Every other client — including Claude Code, Claude Desktop, and every client i
 | --------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `CLIENT_COMPAT` | `auto`  | Set to `off` to disable per-client response rewriting (all clients then receive identical responses). Read from the process environment in both stdio and HTTP modes — it has no CLI flag equivalent |
 
+## MCP gateway validators
+
+An MCP gateway sits between clients and servers and validates a server's
+catalog before admitting it, under rules the gateway operator chooses. One
+production gateway (IBM [mcp-context-forge](https://github.com/IBM/mcp-context-forge)
+before 0.7.0) rejected any tool whose description contained a semicolon:
+
+```text
+All N tools failed validation ... Description contains unsafe characters
+```
+
+This server responds on two fronts:
+
+- **Its own text is kept clean.** Nothing served by `tools/list` (on any
+  surface), `prompts/list`, `resources/list`, or `resources/templates/list`
+  carries a semicolon — descriptions, titles, and the schema-embedded
+  descriptions included. `make check-gateway-chars` gates this in CI, and
+  `go run ./cmd/audit_gateway_chars/` prints any offender with context.
+- **The next rule is yours to meet without waiting for a release.** The
+  substitution knob rewrites listed catalog text on the way out.
+
+### Description substitutions
+
+| Variable                               | Default | Description                                                                                                                 |
+| -------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS` | empty   | Comma-separated `old=new` pairs applied in order to every listed description and title (flag `--description-substitutions`) |
+
+A backslash escapes a literal comma, equals sign, or backslash inside either
+half. Whitespace is significant. Examples:
+
+```bash
+# Replace every semicolon with a period
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS=';=.'
+
+# Replace semicolons with commas (the comma must be escaped)
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS=';=\,'
+
+# Two ordered substitutions: "; " becomes ". ", then ":" becomes "-"
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS='; =. ,:=-'
+```
+
+The rewrite covers what a gateway validates and nothing else: tool
+descriptions, titles, annotation titles, and the `description`/`title` keys
+embedded in input and output schemas, plus prompt, prompt-argument, resource,
+and resource-template descriptions and titles. Names, URIs, schema
+constraints (`pattern`, `const`, `enum` values, `default`) and tool-call
+payloads are never touched. A malformed value refuses to start the server
+rather than serving an unrewritten catalog to the gateway the operator
+configured it for.
+
+To verify a substitution config clears a character the audit knows about, run
+the audit with the substitutions applied:
+
+```bash
+GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS=';=.' go run ./cmd/audit_gateway_chars/ -apply -check
+```
+
+If the gateway in front of you is mcp-context-forge, upgrading to 0.7.0 or
+later also resolves the semicolon rejection at the gateway
+([issue 3770](https://github.com/IBM/mcp-context-forge/issues/3770)); its
+`TOOL_DESCRIPTION_FORBIDDEN_PATTERNS` setting tunes the rule, and
+`VALIDATION_STRICT=false` downgrades rejection to a warning.
+
 ## Client limits worth knowing
 
 These are client-side constraints, not server behavior. The default `dynamic` surface (2 tools) fits every client; the `meta` surface (~33–50 tools) fits everywhere except Cursor's cap; the `individual` surface only suits clients without tool caps.

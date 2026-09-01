@@ -103,7 +103,7 @@ func deployTokenOptions(actionName, individualTool string) toolutil.ActionSpecOp
 			ValueSource:    "Deploy token ID returned by deploy token list/get actions.",
 			ExampleBinding: "params.deploy_token_id:2",
 			CommonConfusions: []string{
-				"Do not use deploy_key_id; deploy keys are a different access resource.",
+				"Do not use deploy_key_id. Deploy keys are a different access resource.",
 			},
 		}
 	}
@@ -170,15 +170,15 @@ var deployTokenActionMeta = map[string]deployTokenActionMetaEntry{
 		aliases: []string{"get group deploy token", "show group deploy token", "fetch group deploy token by id"},
 	},
 	"deploy_token_create_project": {
-		usage:   "Create a deploy token for a project so CI or external clients can pull/push the registry or repository. Provide name, scopes, and optional expires_at; the secret token value is returned only once.",
+		usage:   "Create a deploy token for a project so CI or external clients can pull/push the registry or repository. Provide name, scopes, and optional expires_at. The secret token value is returned only once.",
 		aliases: []string{"create project deploy token", "issue project deploy token", "generate deploy token for project"},
 	},
 	"deploy_token_create_group": {
-		usage:   "Create a deploy token for a group so its projects share one set of pull/push credentials. Provide name, scopes, and optional expires_at; the secret token value is returned only once.",
+		usage:   "Create a deploy token for a group so its projects share one set of pull/push credentials. Provide name, scopes, and optional expires_at. The secret token value is returned only once.",
 		aliases: []string{"create group deploy token", "issue group deploy token", "generate deploy token for group"},
 	},
 	"deploy_token_delete_project": {
-		usage:   "Delete (revoke) a project deploy token by deploy_token_id. Use this to immediately invalidate leaked or unused project pull/push credentials; pass the deploy token ID, not another token type.",
+		usage:   "Delete (revoke) a project deploy token by deploy_token_id. Use this to immediately invalidate leaked or unused project pull/push credentials. Pass the deploy token ID, not another token type.",
 		aliases: []string{"delete project deploy token", "revoke project deploy token", "remove deploy token from project"},
 	},
 	"deploy_token_delete_group": {
@@ -222,9 +222,9 @@ func deployTokenDescription(actionName string) string {
 	case "deploy_token_create_group":
 		return "Create a deploy token for a group. Returns: the created deploy token including its one-time secret token value, plus id, name, username, scopes, and expiry. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_get_group, gitlab_deploy_token_delete_group."
 	case "deploy_token_delete_project":
-		return "Permanently delete a project deploy token by ID. Returns: a success confirmation; deletion is irreversible. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_get_project, gitlab_deploy_token_create_project."
+		return "Permanently delete a project deploy token by ID. Returns: a success confirmation. Deletion is irreversible. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_get_project, gitlab_deploy_token_create_project."
 	case "deploy_token_delete_group":
-		return "Permanently delete a group deploy token by ID. Returns: a success confirmation; deletion is irreversible. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_get_group, gitlab_deploy_token_create_group."
+		return "Permanently delete a group deploy token by ID. Returns: a success confirmation. Deletion is irreversible. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_get_group, gitlab_deploy_token_create_group."
 	default:
 		return ""
 	}

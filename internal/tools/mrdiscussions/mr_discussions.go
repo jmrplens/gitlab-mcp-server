@@ -56,7 +56,7 @@ type CreateInput struct {
 	// CommitID anchors the discussion to a specific commit within the MR.
 	CommitID string `json:"commit_id,omitempty" jsonschema:"SHA of the commit to anchor the discussion to (optional)."`
 	// CreatedAt backdates the discussion's first note; requires admin or project/group owner rights (ISO 8601).
-	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights"`
 }
 
 // NoteOutput is an alias of [toolutil.DiscussionThreadNoteOutput], the rich
@@ -84,7 +84,7 @@ type ReplyInput struct {
 	DiscussionID string               `json:"discussion_id" jsonschema:"ID of the discussion to reply to,required"`
 	Body         string               `json:"body"          jsonschema:"Reply body,required"`
 	// CreatedAt backdates the reply note; requires admin or project/group owner rights (ISO 8601).
-	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights"`
 }
 
 // ListInput defines parameters for listing discussions.
@@ -279,7 +279,7 @@ type UpdateNoteInput struct {
 	Body         string               `json:"body,omitempty"     jsonschema:"New body text (Markdown). Leave empty to keep current body."`
 	Resolved     *bool                `json:"resolved,omitempty" jsonschema:"Set to true to resolve, false to unresolve. Omit to leave unchanged."`
 	// CreatedAt overrides the note's creation timestamp; requires admin or project/group owner rights (ISO 8601).
-	CreatedAt string `json:"created_at,omitempty" jsonschema:"Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights"`
+	CreatedAt string `json:"created_at,omitempty" jsonschema:"Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights"`
 }
 
 // DeleteNoteInput defines parameters for deleting a discussion note.

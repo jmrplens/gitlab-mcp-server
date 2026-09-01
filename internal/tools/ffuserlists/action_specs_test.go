@@ -75,7 +75,7 @@ func TestActionSpecs_UserListIIDGuidance(t *testing.T) {
 			t.Fatalf("%s user_list_iid CommonConfusions = %v, want name warning", toolName, guidance.CommonConfusions)
 		}
 		description := schemaPropertyDescription(t, byTool[toolName].Route.InputSchema, "user_list_iid")
-		if !strings.Contains(description, "do not use the user list name") {
+		if !strings.Contains(description, "Do not use the user list name") {
 			t.Fatalf("%s user_list_iid schema description = %q, want name warning", toolName, description)
 		}
 	}

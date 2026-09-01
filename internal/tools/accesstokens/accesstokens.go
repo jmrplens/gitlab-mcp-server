@@ -210,7 +210,7 @@ type ProjectCreateInput struct {
 	Name        string               `json:"name"                    jsonschema:"Token name,required"`
 	Description string               `json:"description,omitempty"   jsonschema:"Token description"`
 	Scopes      []string             `json:"scopes"                  jsonschema:"Token scopes: api, read_api, read_repository, write_repository, etc.,required"`
-	AccessLevel int                  `json:"access_level,omitempty"  jsonschema:"Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer); 50=Owner and 60=Admin are not valid for project access tokens"`
+	AccessLevel int                  `json:"access_level,omitempty"  jsonschema:"Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer). 50=Owner and 60=Admin are not valid for project access tokens"`
 	ExpiresAt   string               `json:"expires_at,omitempty"    jsonschema:"Expiry date in YYYY-MM-DD format"`
 }
 
@@ -534,7 +534,7 @@ type GroupCreateInput struct {
 	Name        string               `json:"name"                    jsonschema:"Token name,required"`
 	Description string               `json:"description,omitempty"   jsonschema:"Token description"`
 	Scopes      []string             `json:"scopes"                  jsonschema:"Token scopes: api, read_api, read_repository, write_repository, etc.,required"`
-	AccessLevel int                  `json:"access_level,omitempty"  jsonschema:"Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner); 60=Admin is not valid for group access tokens"`
+	AccessLevel int                  `json:"access_level,omitempty"  jsonschema:"Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner). 60=Admin is not valid for group access tokens"`
 	ExpiresAt   string               `json:"expires_at,omitempty"    jsonschema:"Expiry date in YYYY-MM-DD format"`
 }
 

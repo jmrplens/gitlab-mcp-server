@@ -95,7 +95,7 @@ var submoduleActionMeta = map[string]submoduleActionMetaEntry{
 		description: "Read a file from inside a submodule at the parent-pinned commit. Returns: file_name, file_path, submodule_path, resolved_project, commit_sha, size, decoded content, and encoding. See also: gitlab_list_repository_submodules, gitlab_file_get, gitlab_update_repository_submodule.",
 	},
 	"gitlab_update_repository_submodule": {
-		usage:       "Move a submodule pointer to a new commit SHA, creating a commit on the target branch in the parent repository. Provide project_id, the submodule path, branch, and commit_sha; add commit_message to override the generated message. Use when bumping a submodule to a newer revision.",
+		usage:       "Move a submodule pointer to a new commit SHA, creating a commit on the target branch in the parent repository. Provide project_id, the submodule path, branch, and commit_sha. Add commit_message to override the generated message. Use when bumping a submodule to a newer revision.",
 		aliases:     []string{"update submodule pointer", "bump submodule commit", "set submodule reference", "point submodule at a new sha"},
 		related:     []string{actionListSubmodules, actionReadSubmoduleFile, "commit.get"},
 		description: "Update a submodule pointer to a new commit SHA on a branch. Returns: the created commit with id, short_id, title, author and committer details, dates, parent_ids, message, and web_url. See also: gitlab_list_repository_submodules, gitlab_read_repository_submodule_file, gitlab_commit_get.",

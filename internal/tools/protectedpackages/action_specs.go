@@ -82,7 +82,7 @@ func applyProtectedPackageDiscovery(options *toolutil.ActionSpecOptions, individ
 		options.RelatedActions = []string{actionPackageProtectionRuleList, actionPackageProtectionRuleCreate, "package.protection_rule_delete"}
 		options.IndividualTool.Description = "Update an existing package protection rule by its id. Returns: the updated rule's id, project id, package name pattern, package type, and minimum push/delete access levels. See also: gitlab_list_package_protection_rules, gitlab_create_package_protection_rule, gitlab_delete_package_protection_rule."
 	case "gitlab_delete_package_protection_rule":
-		options.Usage = "Delete a package protection rule from a project by its id. Use when a package name pattern should no longer be protected; this removes the restriction permanently and cannot be undone."
+		options.Usage = "Delete a package protection rule from a project by its id. Use when a package name pattern should no longer be protected. This removes the restriction permanently and cannot be undone."
 		options.Aliases = []string{"delete package protection rule", "remove package protection", "unprotect package pattern"}
 		options.RelatedActions = []string{actionPackageProtectionRuleList, actionPackageProtectionRuleCreate}
 		options.IndividualTool.Description = "Delete a package protection rule from a project by its id (cannot be undone). Returns: a success confirmation. See also: gitlab_list_package_protection_rules, gitlab_create_package_protection_rule."

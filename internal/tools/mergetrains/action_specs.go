@@ -79,7 +79,7 @@ var mergeTrainActionMeta = map[string]mergeTrainActionMetaEntry{
 		description: "Get the merge train status of a single merge request. Returns: the merge train entry with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_list_project_merge_trains, gitlab_list_merge_request_in_merge_train, gitlab_add_merge_request_to_merge_train.",
 	},
 	"gitlab_add_merge_request_to_merge_train": {
-		usage:       "Add a merge request to its target branch's merge train. Requires the MR to be approved with a passing pipeline; optionally enable auto_merge, verify a head sha, or squash on merge.",
+		usage:       "Add a merge request to its target branch's merge train. Requires the MR to be approved with a passing pipeline. Optionally enable auto_merge, verify a head sha, or squash on merge.",
 		aliases:     []string{"add merge request to merge train", "enqueue mr on merge train", "merge train an mr"},
 		related:     []string{actionMergeTrainGet, actionMergeTrainListBranch, actionMergeTrainListProject},
 		description: "Add a merge request to a merge train. Returns: the resulting merge train entries with the merge request, user, pipeline, target branch, status, and duration. See also: gitlab_get_merge_request_on_merge_train, gitlab_list_merge_request_in_merge_train, gitlab_list_project_merge_trains.",

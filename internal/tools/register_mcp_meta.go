@@ -39,7 +39,7 @@ func BuildMCPActionGroup(client *gitlabclient.Client) actioncatalog.Group {
 		"health_check": routeAction(client, health.Check),
 	}
 
-	desc := `MCP server self-diagnostics: GitLab connectivity probe, server/GitLab version, and authenticated user identity. Read-only; no required params.
+	desc := `MCP server self-diagnostics: GitLab connectivity probe, server/GitLab version, and authenticated user identity. Read-only. No required params.
 Valid actions: ` + validActionsString(routes) + `
 
 When to use: at session start to confirm the GitLab token works, when diagnosing 401/403 errors from other tools, or to record server/GitLab versions for support tickets.

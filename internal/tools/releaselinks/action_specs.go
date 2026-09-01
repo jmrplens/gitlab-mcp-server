@@ -58,7 +58,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		options.Aliases = []string{"list release links", "show release asset links", "list release downloads", "enumerate release attachments"}
 	}
 	if actionName == "link_delete" {
-		options.Usage = "Delete a release asset link by link_id. Use to detach a downloadable asset from a release; the underlying file or package is not removed."
+		options.Usage = "Delete a release asset link by link_id. Use to detach a downloadable asset from a release. The underlying file or package is not removed."
 		options.Aliases = []string{"delete release link", "remove release asset link", "detach release download"}
 		options.RelatedActions = []string{"release.link_get", actionReleaseLinkListID, "release.get"}
 	}
@@ -69,7 +69,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"links": {
 				SemanticRole: "release_asset_link_batch",
-				ValueSource:  "An array of {name, url} objects, one per asset. For package assets, use the absolute URLs returned by package publish actions; do not construct package registry URLs manually.",
+				ValueSource:  "An array of {name, url} objects, one per asset. For package assets, use the absolute URLs returned by package publish actions. Do not construct package registry URLs manually.",
 				CommonConfusions: []string{
 					"Do not call link_create once per asset when several are requested; pass them all in the links array of link_create_batch.",
 					"Do not put a single name/url at top level; each link goes inside the links array.",
@@ -79,10 +79,10 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 	}
 	if actionName == "link_create" || actionName == "link_update" {
 		if actionName == "link_create" {
-			options.Usage = "Create a single release asset link. The url must be an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url. To create several links at once (e.g. one per uploaded package file), use link_create_batch instead."
+			options.Usage = "Create a single release asset link. The url must be an absolute http, https, or ftp URL. Do not pass local file paths or relative paths as url. To create several links at once (e.g. one per uploaded package file), use link_create_batch instead."
 			options.Aliases = []string{"create release link", "add release asset link", "link release asset"}
 		} else {
-			options.Usage = "Update an existing release asset link by link_id. When changing url, use an absolute http, https, or ftp URL; do not pass local file paths or relative paths as url."
+			options.Usage = "Update an existing release asset link by link_id. When changing url, use an absolute http, https, or ftp URL. Do not pass local file paths or relative paths as url."
 			options.Aliases = []string{"update release link", "edit release asset link", "modify release asset link"}
 		}
 		options.RelatedActions = []string{actionReleaseCreate, actionReleaseLinkListID, actionPackagePublish, actionPackagePublishDir}
@@ -101,7 +101,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 				SemanticRole: "release_asset_link_identifier",
 				ValueSource:  "Use the release link ID returned by release.link_create, release.link_create_batch, or release.link_list.",
 				CommonConfusions: []string{
-					"Do not use link_update to create a new release asset link; call link_create or link_create_batch first.",
+					"Do not use link_update to create a new release asset link. Call link_create or link_create_batch first.",
 				},
 			}
 		}
@@ -124,7 +124,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"links": {
 				SemanticRole: "release_asset_links",
-				ValueSource:  "Array of link objects. Each item supports name, url, link_type, and an optional direct_asset_path (prefer it over the deprecated filepath); url must be absolute.",
+				ValueSource:  "Array of link objects. Each item supports name, url, link_type, and an optional direct_asset_path (prefer it over the deprecated filepath). Url must be absolute.",
 				CommonConfusions: []string{
 					"Prefer direct_asset_path over the deprecated filepath when setting a direct asset link.",
 					"For package assets, use the package URLs returned by gitlab_package publish actions instead of constructing URLs manually.",
@@ -134,7 +134,7 @@ func releaseLinkOptions(actionName, individualTool string) toolutil.ActionSpecOp
 		options.InputSchemaOverrides = []toolutil.InputSchemaOverride{
 			toolutil.SchemaPropertyOverride("links", map[string]any{"description": "Array of release asset links. Each item supports name, url, link_type, direct_asset_path, and the deprecated filepath."}),
 			toolutil.SchemaPropertyOverride("links.url", map[string]any{
-				"description": "Absolute http, https, or ftp URL of the link target. For package assets, use the URL returned by gitlab_package publish actions; do not construct package URLs manually.",
+				"description": "Absolute http, https, or ftp URL of the link target. For package assets, use the URL returned by gitlab_package publish actions. Do not construct package URLs manually.",
 				"format":      "uri",
 				"pattern":     "^(https?|ftp)://",
 			}),

@@ -131,7 +131,7 @@ Add a reply note to an existing commit discussion thread. Returns: the created n
 
 - `body` (string) (required): Note body (Markdown supported)
 - `commit_sha` (string) (required): Commit SHA
-- `created_at` (string): Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights
+- `created_at` (string): Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `discussion_id` (string) (required): Discussion ID to reply to
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -225,7 +225,7 @@ Add a reply note to an existing issue discussion thread. Returns: the created no
 **Parameters:**
 
 - `body` (string) (required): Note body (Markdown supported)
-- `created_at` (string): Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights
+- `created_at` (string): Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `discussion_id` (string) (required): Discussion ID to reply to
 - `issue_iid` (integer) (required): Issue internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -253,7 +253,7 @@ Add a merge request to a merge train. Returns: the resulting merge train entries
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `sha` (string): Head SHA of the merge request to verify
 - `squash` (boolean): Squash commits when merging
-- `when_pipeline_succeeds` (boolean): Deprecated in 17.11; use auto_merge instead. Merge only when the pipeline succeeds
+- `when_pipeline_succeeds` (boolean): Deprecated in 17.11. Use auto_merge instead. Merge only when the pipeline succeeds
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -294,7 +294,7 @@ Create a push (remote) mirror on a project. Returns: the created mirror with id,
 - `mirror_branch_regex` (string): Regex pattern for branches to mirror
 - `only_protected_branches` (boolean): Mirror only protected branches
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `url` (string) (required): Remote push mirror URL (e.g. https://user:token@example.com/repo.git). URL-embedded credentials are supported only for push mirrors; treat them as secrets, do not log or store them, and redact tokens or passwords in telemetry/errors
+- `url` (string) (required): Remote push mirror URL (e.g. https://user:token@example.com/repo.git). URL-embedded credentials are supported only for push mirrors. Treat them as secrets, do not log or store them, and redact tokens or passwords in telemetry/errors
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -305,7 +305,7 @@ Add a reply note to an existing snippet discussion thread. Returns: the created 
 **Parameters:**
 
 - `body` (string) (required): Note body (Markdown supported)
-- `created_at` (string): Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights
+- `created_at` (string): Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `discussion_id` (string) (required): Discussion ID to reply to
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `snippet_id` (integer) (required): Snippet ID
@@ -382,7 +382,7 @@ Attach a GitLab security scan profile to one or more projects and/or groups via 
 
 - `group_ids` (array of integers): Numeric IDs of the groups to attach the profile to
 - `project_ids` (array of integers): Numeric IDs of the projects to attach the profile to
-- `security_scan_profile_id` (string) (required): Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning — attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach); a full gid:// global ID is also accepted
+- `security_scan_profile_id` (string) (required): Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning — attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach). A full gid:// global ID is also accepted
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -765,7 +765,7 @@ Delete a CI/CD variable by key, selecting an environment-scoped instance via the
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `environment_scope` (string) (required): Filter by environment scope (shorthand for filter.environment_scope)
-- `filter` (object): Filter selecting the variable by environment scope; mirrors the GitLab variable filter object
+- `filter` (object): Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object
 - `key` (string) (required): Variable key name
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -778,7 +778,7 @@ Get a single CI/CD variable by key, optionally selecting an environment-scoped i
 **Parameters:**
 
 - `environment_scope` (string) (required): Filter by environment scope (shorthand for filter.environment_scope)
-- `filter` (object): Filter selecting the variable by environment scope; mirrors the GitLab variable filter object
+- `filter` (object): Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object
 - `key` (string) (required): Variable key name
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -808,7 +808,7 @@ Update a CI/CD variable, selecting an environment-scoped instance via the filter
 
 - `description` (string) (required): Updated variable description
 - `environment_scope` (string) (required): Filter by environment scope (shorthand for filter.environment_scope)
-- `filter` (object): Filter selecting the variable by environment scope; mirrors the GitLab variable filter object
+- `filter` (object): Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object
 - `key` (string) (required): Variable key name
 - `masked` (boolean) (required): Mask variable value in job logs
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -913,7 +913,7 @@ Get a single commit from a project by SHA (full, short, branch, or tag). Returns
 
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `sha` (string) (required): Commit SHA hash to retrieve
-- `stats` (boolean): Include commit stats (additions, deletions, total); defaults to true on GitLab
+- `stats` (boolean): Include commit stats (additions, deletions, total). Defaults to true on GitLab
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -1101,7 +1101,7 @@ Create a new discussion thread on a commit, optionally as an inline diff comment
 
 - `body` (string) (required): Discussion body (Markdown supported)
 - `commit_sha` (string) (required): Commit SHA
-- `created_at` (string): Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights
+- `created_at` (string): Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `position` (object): Position for inline diff comments
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -1216,7 +1216,7 @@ Create a group-level custom member role. Returns: the created role with id, name
 - `admin_vulnerability` (boolean): Allow admin vulnerability
 - `admin_web_hook` (boolean): Allow admin webhooks
 - `archive_project` (boolean): Allow archive project
-- `base_access_level` (integer) (required): Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid)
+- `base_access_level` (integer) (required): Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. 60=Admin is not valid)
 - `description` (string): Description of the custom role
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `manage_deploy_tokens` (boolean): Allow manage deploy tokens
@@ -1274,7 +1274,7 @@ Create an instance-level custom member role. Returns: the created role with id, 
 - `admin_vulnerability` (boolean): Allow admin vulnerability
 - `admin_web_hook` (boolean): Allow admin webhooks
 - `archive_project` (boolean): Allow archive project
-- `base_access_level` (integer) (required): Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid)
+- `base_access_level` (integer) (required): Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. 60=Admin is not valid)
 - `description` (string): Description of the custom role
 - `manage_deploy_tokens` (boolean): Allow manage deploy tokens
 - `manage_group_access_tokens` (boolean): Allow manage group access tokens
@@ -1298,7 +1298,7 @@ Create a new discussion thread on an issue with an initial note. Returns: the cr
 **Parameters:**
 
 - `body` (string) (required): Discussion body (Markdown supported)
-- `created_at` (string): Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights
+- `created_at` (string): Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `issue_iid` (integer) (required): Issue internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -1426,7 +1426,7 @@ Create a new discussion thread on a project snippet with an initial note. Return
 **Parameters:**
 
 - `body` (string) (required): Discussion body (Markdown supported)
-- `created_at` (string): Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights
+- `created_at` (string): Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `snippet_id` (integer) (required): Snippet ID
 
@@ -1772,7 +1772,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_delete_group_datadog_integration
 
-Remove the Datadog integration from a group. The stored api_key is cleared; deletion is irreversible. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com).
+Remove the Datadog integration from a group. The stored api_key is cleared. Deletion is irreversible. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com).
 
 **Parameters:**
 
@@ -1916,7 +1916,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_delete_mr_context_commits
 
-Remove context commits from a merge request by SHA, detaching them from the review. Returns: a success confirmation; the underlying repository commits are left intact. See also: gitlab_list_mr_context_commits, gitlab_create_mr_context_commits, gitlab_mr_get.
+Remove context commits from a merge request by SHA, detaching them from the review. Returns: a success confirmation. The underlying repository commits are left intact. See also: gitlab_list_mr_context_commits, gitlab_create_mr_context_commits, gitlab_mr_get.
 
 **Parameters:**
 
@@ -2174,7 +2174,7 @@ Delete a deploy key from a project (removes it from all projects where it is ena
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `deploy_key_id` (integer) (required): Deploy key ID returned by deploy key operations; do not use deploy_token_id
+- `deploy_key_id` (integer) (required): Deploy key ID returned by deploy key operations. Do not use deploy_token_id
 - `project_id` (string) (required): Project ID or path
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
@@ -2185,7 +2185,7 @@ Enable an existing deploy key for a project. Returns: the enabled deploy key wit
 
 **Parameters:**
 
-- `deploy_key_id` (integer) (required): Deploy key ID to enable; do not use deploy_token_id
+- `deploy_key_id` (integer) (required): Deploy key ID to enable. Do not use deploy_token_id
 - `project_id` (string) (required): Project ID or path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -2196,7 +2196,7 @@ Get a single project deploy key by id. Returns: the deploy key with title, key, 
 
 **Parameters:**
 
-- `deploy_key_id` (integer) (required): Deploy key ID returned by deploy key operations; do not use deploy_token_id
+- `deploy_key_id` (integer) (required): Deploy key ID returned by deploy key operations. Do not use deploy_token_id
 - `project_id` (string) (required): Project ID or path
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
@@ -2256,7 +2256,7 @@ Update a project deploy key's title or push permission. Returns: the updated dep
 **Parameters:**
 
 - `can_push` (boolean): Whether the key can push to the project
-- `deploy_key_id` (integer) (required): Deploy key ID returned by deploy key operations; do not use deploy_token_id
+- `deploy_key_id` (integer) (required): Deploy key ID returned by deploy key operations. Do not use deploy_token_id
 - `project_id` (string) (required): Project ID or path
 - `title` (string): New deploy key title
 
@@ -2292,7 +2292,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_deploy_token_delete_group
 
-Permanently delete a group deploy token by ID. Returns: a success confirmation; deletion is irreversible. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_get_group, gitlab_deploy_token_create_group.
+Permanently delete a group deploy token by ID. Returns: a success confirmation. Deletion is irreversible. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_get_group, gitlab_deploy_token_create_group.
 
 **Parameters:**
 
@@ -2304,7 +2304,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_deploy_token_delete_project
 
-Permanently delete a project deploy token by ID. Returns: a success confirmation; deletion is irreversible. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_get_project, gitlab_deploy_token_create_project.
+Permanently delete a project deploy token by ID. Returns: a success confirmation. Deletion is irreversible. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_get_project, gitlab_deploy_token_create_project.
 
 **Parameters:**
 
@@ -2506,11 +2506,11 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_discover_project
 
-Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only; performs a lookup against the GitLab Projects API; no side effects.
+Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only. Performs a lookup against the GitLab Projects API. No side effects.
 
 **Parameters:**
 
-- `remote_url` (string) (required): Full git remote URL (HTTPS or SSH) exactly as shown in .git/config or 'git remote -v' output. IMPORTANT: pass the complete URL including the scheme (https://) or user prefix (git@). Examples: 'https://gitlab.example.com/group/project.git' or 'git@gitlab.example.com:group/project.git'. Do not pass plain project paths such as group/project, and do not synthesize URLs by adding .git to a project path; project paths are already valid project_id values.
+- `remote_url` (string) (required): Full git remote URL (HTTPS or SSH) exactly as shown in .git/config or 'git remote -v' output. IMPORTANT: pass the complete URL including the scheme (https://) or user prefix (git@). Examples: 'https://gitlab.example.com/group/project.git' or 'git@gitlab.example.com:group/project.git'. Do not pass plain project paths such as group/project, and do not synthesize URLs by adding .git to a project path. Project paths are already valid project_id values.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -2881,7 +2881,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_issue_remove
 
-Unlink a child issue from a group epic (destructive; requires confirmation). Returns: the resolved epic and issue work item GIDs confirming the removal. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_get.
+Unlink a child issue from a group epic (destructive. Requires confirmation). Returns: the resolved epic and issue work item GIDs confirming the removal. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_get.
 
 **Parameters:**
 
@@ -3006,7 +3006,7 @@ Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_epic_update
 
-Update an existing epic; supports close/reopen via state_event. Returns: the updated epic with its current state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_delete.
+Update an existing epic. Supports close/reopen via state_event. Returns: the updated epic with its current state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_delete.
 
 **Parameters:**
 
@@ -3040,7 +3040,7 @@ Create a feature flag with optional activation strategies and scopes. Returns: t
 - `description` (string): Feature flag description
 - `name` (string) (required): Feature flag name
 - `project_id` (string) (required): Project ID or path
-- `strategies` (array of objects): Activation strategies for the flag; each has a name, optional parameters, and optional environment scopes
+- `strategies` (array of objects): Activation strategies for the flag. Each has a name, optional parameters, and optional environment scopes
 - `version` (string): Version of the feature flag (new_version_flag)
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -3096,7 +3096,7 @@ Update a feature flag's name, description, active state, or strategies. Returns:
 - `name` (string) (required): Current feature flag name
 - `new_name` (string): New feature flag name
 - `project_id` (string) (required): Project ID or path
-- `strategies` (array of objects): Activation strategies for the flag; each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes
+- `strategies` (array of objects): Activation strategies for the flag. Each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -3122,7 +3122,7 @@ Delete a feature flag user list by its user_list_iid. Returns: a success confirm
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `project_id` (string) (required): Project ID or path
-- `user_list_iid` (integer) (required): Feature flag user list internal ID returned by list or create; do not use the user list name
+- `user_list_iid` (integer) (required): Feature flag user list internal ID returned by list or create. Do not use the user list name
 
 Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
@@ -3133,7 +3133,7 @@ Get a single feature flag user list by its user_list_iid. Returns: the list's id
 **Parameters:**
 
 - `project_id` (string) (required): Project ID or path
-- `user_list_iid` (integer) (required): Feature flag user list internal ID returned by list or create; do not use the user list name
+- `user_list_iid` (integer) (required): Feature flag user list internal ID returned by list or create. Do not use the user list name
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -3162,7 +3162,7 @@ Update a feature flag user list's name or user_xids by its user_list_iid. Return
 
 - `name` (string): New user list name
 - `project_id` (string) (required): Project ID or path
-- `user_list_iid` (integer) (required): Feature flag user list internal ID returned by list or create; do not use the user list name
+- `user_list_iid` (integer) (required): Feature flag user list internal ID returned by list or create. Do not use the user list name
 - `user_xids` (string): Comma-separated list of user external IDs
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -4290,7 +4290,7 @@ Create a new group access token with specified name, scopes, access level, and o
 
 **Parameters:**
 
-- `access_level` (integer): Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner); 60=Admin is not valid for group access tokens
+- `access_level` (integer): Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner). 60=Admin is not valid for group access tokens
 - `description` (string): Token description
 - `expires_at` (string): Expiry date in YYYY-MM-DD format
 - `group_id` (string) (required): Group ID or URL-encoded path
@@ -4561,7 +4561,7 @@ Create a GitLab group or subgroup. Returns: created group metadata including ID,
 - `membership_lock` (boolean): Prevent members from being added to projects in this group
 - `mentions_disabled` (boolean): Disable @-mention notifications
 - `name` (string) (required): Group name
-- `organization_id` (integer): Organization ID to create the group in (GitLab.com multi-organization; defaults to the default organization)
+- `organization_id` (integer): Organization ID to create the group in (GitLab.com multi-organization. Defaults to the default organization)
 - `parent_id` (integer): Parent group ID (creates a subgroup)
 - `path` (string): Group URL path (defaults to kebab-case of name)
 - `project_creation_level` (string): Who can create projects (noone, maintainer, developer)
@@ -4669,7 +4669,7 @@ Get one GitLab group by ID or path. Returns: group metadata, visibility, parent 
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `sort` (string): Sort direction for embedded projects (asc, desc)
 - `with_custom_attributes` (boolean): Include custom attributes in the response
-- `with_projects` (boolean): Include the group's projects in the response (deprecated; prefer gitlab_group_projects)
+- `with_projects` (boolean): Include the group's projects in the response (deprecated. Prefer gitlab_group_projects)
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -4862,7 +4862,7 @@ Set a URL variable on a GitLab group webhook. Returns: a success confirmation. S
 
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `hook_id` (integer) (required): Webhook ID
-- `key` (string) (required): URL variable key name — letters and underscores only; GitLab rejects keys containing digits
+- `key` (string) (required): URL variable key name — letters and underscores only. GitLab rejects keys containing digits
 - `value` (string) (required): URL variable value (write-only) — must be non-empty
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -4889,7 +4889,7 @@ Invite a user to a group by email or user ID with an access level. Returns: an i
 - `email` (string): Email address to invite (either email or user_id required)
 - `expires_at` (string): Expiration date for the invitation (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
-- `id` (string): Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter; usually equal to group_id)
+- `id` (string): Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to group_id)
 - `user_id` (integer): User ID to invite (either email or user_id required)
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
@@ -4975,7 +4975,7 @@ List labels in a group with filtering and pagination. Returns: matching labels w
 
 **Parameters:**
 
-- `archived` (boolean): Filter by archived state: true returns only archived labels, false only active labels; omit for both
+- `archived` (boolean): Filter by archived state: true returns only archived labels, false only active labels. Omit for both
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `include_ancestor_groups` (boolean): Include labels from ancestor groups
 - `include_descendant_groups` (boolean): Include labels from descendant groups
@@ -5100,7 +5100,7 @@ List accessible GitLab groups with filtering and pagination. Returns: matching g
 - `active` (boolean): Filter by active (true) or inactive/archived (false) groups
 - `all_available` (boolean): Show all groups accessible by the authenticated user
 - `archived` (boolean): Limit to archived groups (true) or non-archived (false)
-- `custom_attributes` (object): Filter groups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response
+- `custom_attributes` (object): Filter groups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response
 - `marked_for_deletion_on` (string): Filter to groups marked for deletion on this date (YYYY-MM-DD)
 - `min_access_level` (integer): Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)
 - `order_by` (string): Order groups by field (name, path, id, similarity)
@@ -5151,7 +5151,7 @@ Add a user as a direct member of a group. Returns: the created membership with a
 - `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `expires_at` (string): Membership expiration date (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
-- `member_role_id` (integer): Custom member role ID to assign (Premium/Ultimate); the role's base access level must match access_level
+- `member_role_id` (integer): Custom member role ID to assign (Premium/Ultimate). The role's base access level must match access_level
 - `user_id` (integer): User ID to add
 - `username` (string): Username to add (alternative to user_id)
 
@@ -5166,7 +5166,7 @@ Edit a direct group member's access level, expiry, or custom member role. Return
 - `access_level` (integer): New access level (5=Minimal access, 10=Guest, 15=Planner (Premium), 20=Reporter, 25=Security Manager (Premium), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `expires_at` (string): New membership expiration date (YYYY-MM-DD)
 - `group_id` (string) (required): Group ID or URL-encoded path
-- `member_role_id` (integer): Custom member role ID to assign (Premium/Ultimate); the role's base access level must match access_level
+- `member_role_id` (integer): Custom member role ID to assign (Premium/Ultimate). The role's base access level must match access_level
 - `user_id` (integer) (required): User ID
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -5495,7 +5495,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_group_protected_environment_protect
 
-Protect a group-level environment tier with deploy access levels and approval rules; protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect.
+Protect a group-level environment tier with deploy access levels and approval rules. Protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect.
 
 **Parameters:**
 
@@ -5773,7 +5773,7 @@ Share a group with another group at a chosen access level. Returns: the shared g
 **Parameters:**
 
 - `expires_at` (string): Share expiration date (YYYY-MM-DD)
-- `group_access` (integer) (required): Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for group shares
+- `group_access` (integer) (required): Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer). 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for group shares
 - `group_id` (string) (required): Group ID or URL-encoded path to share
 - `share_group_id` (integer) (required): Group ID to share with
 
@@ -5846,7 +5846,7 @@ Transfer a GitLab group under a new parent (or to top level). Returns: the updat
 **Parameters:**
 
 - `group_id` (string) (required): Group ID or URL-encoded path of the group to move
-- `parent_id` (integer): ID of the new parent group; omit to turn the subgroup into a top-level group
+- `parent_id` (integer): ID of the new parent group. Omit to turn the subgroup into a top-level group
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -6010,7 +6010,7 @@ Delete a group CI/CD variable by key, selecting an environment-scoped instance v
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
 - `environment_scope` (string): Filter by environment scope (shorthand for filter.environment_scope)
-- `filter` (object): Filter selecting the variable by environment scope; mirrors the GitLab variable filter object
+- `filter` (object): Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `key` (string) (required): Variable key name
 
@@ -6023,7 +6023,7 @@ Get a single group CI/CD variable by key, optionally selecting an environment-sc
 **Parameters:**
 
 - `environment_scope` (string): Filter by environment scope (shorthand for filter.environment_scope)
-- `filter` (object): Filter selecting the variable by environment scope; mirrors the GitLab variable filter object
+- `filter` (object): Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `key` (string) (required): Variable key name
 
@@ -6053,7 +6053,7 @@ Update a group CI/CD variable, selecting an environment-scoped instance via the 
 
 - `description` (string): Updated variable description
 - `environment_scope` (string): Filter by environment scope (shorthand for filter.environment_scope)
-- `filter` (object): Filter selecting the variable by environment scope; mirrors the GitLab variable filter object
+- `filter` (object): Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `key` (string) (required): Variable key name
 - `masked` (boolean): Mask variable value in job logs
@@ -6180,7 +6180,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_import_github_gists
 
-Import GitHub gists into snippets. Returns: a success status; the import runs asynchronously. See also: gitlab_import_from_github, gitlab_cancel_github_import.
+Import GitHub gists into snippets. Returns: a success status. The import runs asynchronously. See also: gitlab_import_from_github, gitlab_cancel_github_import.
 
 **Parameters:**
 
@@ -6341,7 +6341,7 @@ Create a new issue in a project. Returns: the created issue with IID, state, lab
 - `discussion_to_resolve` (string): Discussion ID to mark as resolved by this issue
 - `due_date` (string): Due date in YYYY-MM-DD format
 - `epic_id` (integer): Epic ID to associate the issue with
-- `iid` (integer): Explicit issue IID to assign (requires admin permissions; normally GitLab assigns the next IID automatically)
+- `iid` (integer): Explicit issue IID to assign (requires admin permissions. Normally GitLab assigns the next IID automatically)
 - `issue_type` (string): Issue type (issue, incident, test_case, task)
 - `labels` (array of strings): Label names to apply
 - `merge_request_to_resolve_discussions_of` (integer): MR IID whose unresolved discussions become issues
@@ -6776,7 +6776,7 @@ Add a comment (note) to an issue. Returns: the created note with id, author, bod
 **Parameters:**
 
 - `body` (string) (required): Note body (Markdown supported)
-- `created_at` (string): Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions; ignored otherwise.
+- `created_at` (string): Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.
 - `internal` (boolean): Mark note as internal (visible only to project members)
 - `issue_iid` (integer) (required): Issue internal ID
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -7046,10 +7046,10 @@ Update a GitLab issue. Supports changing title, description, state (close/reopen
 - `issue_iid` (integer) (required): Issue IID (project-scoped internal ID, not 'issue_id')
 - `issue_type` (string): Issue type (issue, incident, test_case, task)
 - `labels` (array of strings): Label names to replace all existing
-- `milestone_id` (integer): New milestone ID (0 to unset; omit to leave unchanged)
+- `milestone_id` (integer): New milestone ID (0 to unset. Omit to leave unchanged)
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `remove_labels` (array of strings): Label names to remove
-- `state_event` (string): State transition; set to close or reopen when changing issue state.
+- `state_event` (string): State transition. Set to close or reopen when changing issue state.
 - `title` (string): New title
 - `updated_at` (string): Update timestamp override (ISO 8601/RFC 3339, requires admin permissions)
 - `weight` (integer): Issue weight, 0 or higher
@@ -7359,7 +7359,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_label_promote
 
-Promote a project label to a group label, sharing it across the group's projects. Returns: no content on success; requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list.
+Promote a project label to a group label, sharing it across the group's projects. Returns: no content on success. Requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list.
 
 **Parameters:**
 
@@ -8243,7 +8243,7 @@ Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_list_project_aliases
 
-List every project alias the authenticated administrator can see. Returns: each alias with id, project_id, and name (the full set; no pagination). See also: gitlab_get_project_alias, gitlab_create_project_alias, gitlab_delete_project_alias.
+List every project alias the authenticated administrator can see. Returns: each alias with id, project_id, and name (the full set. No pagination). See also: gitlab_get_project_alias, gitlab_create_project_alias, gitlab_delete_project_alias.
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -8382,7 +8382,7 @@ List the security scan profile statuses for a GitLab project via GraphQL. Requir
 
 **Parameters:**
 
-- `project_full_path` (string) (required): Full project path (namespace/project); numeric project IDs are not accepted by the GraphQL project(fullPath:) field
+- `project_full_path` (string) (required): Full project path (namespace/project). Numeric project IDs are not accepted by the GraphQL project(fullPath:) field
 
 Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
 
@@ -9063,7 +9063,7 @@ Open a new merge request from a source branch into a target branch. Returns: the
 **Parameters:**
 
 - `allow_collaboration` (boolean): Allow commits from upstream members who can merge to target branch
-- `approvals_before_merge` (integer): Number of approvals required before this MR can be merged (deprecated; use the approval rules API)
+- `approvals_before_merge` (integer): Number of approvals required before this MR can be merged (deprecated. Use the approval rules API)
 - `assignee_id` (integer): Single user ID to assign (use assignee_ids for multiple)
 - `assignee_ids` (array of integers): User IDs to assign
 - `description` (string): Merge request description (Markdown supported)
@@ -9188,7 +9188,7 @@ Create a new discussion thread on a merge request, optionally as an inline diff 
 
 - `body` (string) (required): Discussion body
 - `commit_id` (string): SHA of the commit to anchor the discussion to (optional).
-- `created_at` (string): Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights
+- `created_at` (string): Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `position` (object): Diff position for inline comments. Omit for general MR discussions.
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -9245,7 +9245,7 @@ Update the body or resolved state of a note in a merge request discussion thread
 **Parameters:**
 
 - `body` (string): New body text (Markdown). Leave empty to keep current body.
-- `created_at` (string): Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights
+- `created_at` (string): Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `discussion_id` (string) (required): ID of the discussion containing the note
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `note_id` (integer) (required): ID of the note to update
@@ -9261,7 +9261,7 @@ Add a reply note to an existing merge request discussion thread. Returns: the cr
 **Parameters:**
 
 - `body` (string) (required): Reply body
-- `created_at` (string): Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights
+- `created_at` (string): Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `discussion_id` (string) (required): ID of the discussion to reply to
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -9683,7 +9683,7 @@ Add a general comment (note) to a merge request. Returns: the created note with 
 **Parameters:**
 
 - `body` (string) (required): Comment body (Markdown supported)
-- `created_at` (string): Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions; ignored otherwise.
+- `created_at` (string): Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.
 - `internal` (boolean): Mark note as internal (visible only to project members)
 - `merge_request_diff_head_sha` (string): Required for the deduplication of system notes: SHA referencing the most recent diff version of the merge request.
 - `merge_request_iid` (integer) (required): Merge request IID (project-scoped, not 'merge_request_id')
@@ -10279,7 +10279,7 @@ Download a single file from the Generic Package Registry to a local path. Return
 
 **Parameters:**
 
-- `file_name` (string) (required): File name to download; may include / to describe a directory structure (segments must not be empty or . or ..)
+- `file_name` (string) (required): File name to download. May include / to describe a directory structure (segments must not be empty or . or ..)
 - `output_path` (string) (required): Absolute path where the file will be saved on the local filesystem
 - `package_name` (string) (required): Package name
 - `package_version` (string) (required): Package version
@@ -10345,7 +10345,7 @@ Publish a single file to the Generic Package Registry. Returns: the published fi
 **Parameters:**
 
 - `content_base64` (string): Base64-encoded file content. Only one should be provided.
-- `file_name` (string) (required): Name of the file within the package; may include / to describe a directory structure (segments must not be empty or . or ..)
+- `file_name` (string) (required): Name of the file within the package. May include / to describe a directory structure (segments must not be empty or . or ..)
 - `file_path` (string): Absolute path to a local file. Alternative to content_base64. Only one of file_path or content_base64 should be provided.
 - `package_name` (string) (required): Package name (alphanumeric, dots, dashes, underscores)
 - `package_version` (string) (required): Package version (e.g. 1.0.0)
@@ -10716,7 +10716,7 @@ Create a pipeline schedule. Returns: the created schedule with id, description, 
 - `cron` (string) (required): Cron expression (e.g. 0 1 * * *)
 - `cron_timezone` (string): Cron timezone (e.g. UTC or America/New_York)
 - `description` (string) (required): Schedule description
-- `inputs` (array of objects): Pipeline inputs to seed on the schedule; each entry has name and value
+- `inputs` (array of objects): Pipeline inputs to seed on the schedule. Each entry has name and value
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `ref` (string) (required): Branch or tag to run the pipeline on
 
@@ -10852,7 +10852,7 @@ Update a pipeline schedule. Returns: the updated schedule with cron, ref, owner,
 - `cron` (string): Updated cron expression
 - `cron_timezone` (string): Updated cron timezone
 - `description` (string): Updated description
-- `inputs` (array of objects): Pipeline inputs to set on the schedule; each entry has name, value, and optional destroy
+- `inputs` (array of objects): Pipeline inputs to set on the schedule. Each entry has name, value, and optional destroy
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `ref` (string): Updated branch or tag
 - `schedule_id` (integer) (required): Pipeline schedule ID
@@ -10999,7 +10999,7 @@ Wait for a pipeline to reach a terminal state (success, failed, canceled, skippe
 
 - `fail_on_error` (boolean): Return isError when pipeline ends in failed/canceled status (default true)
 - `interval_seconds` (integer): Polling interval in seconds (5-60, default 10)
-- `pipeline_id` (integer) (required): Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines; do not use merge_request_iid.
+- `pipeline_id` (integer) (required): Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines. Do not use merge_request_iid.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `timeout_seconds` (integer): Maximum wait time in seconds (1-3600, default 300)
 
@@ -11040,7 +11040,7 @@ Create a new project access token with specified name, scopes, access level, and
 
 **Parameters:**
 
-- `access_level` (integer): Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer); 50=Owner and 60=Admin are not valid for project access tokens
+- `access_level` (integer): Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer). 50=Owner and 60=Admin are not valid for project access tokens
 - `description` (string): Token description
 - `expires_at` (string): Expiry date in YYYY-MM-DD format
 - `name` (string) (required): Token name
@@ -11479,7 +11479,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_project_delete
 
-Delete a project. Returns: a deletion status; on instances with delayed deletion the project is marked for deletion. See also: gitlab_project_restore, gitlab_project_archive.
+Delete a project. Returns: a deletion status. On instances with delayed deletion the project is marked for deletion. See also: gitlab_project_restore, gitlab_project_archive.
 
 **Parameters:**
 
@@ -11792,7 +11792,7 @@ Set a URL variable on a project webhook. Returns: a success confirmation naming 
 **Parameters:**
 
 - `hook_id` (integer) (required): Webhook ID
-- `key` (string) (required): URL variable key name — letters and underscores only; GitLab rejects keys containing digits
+- `key` (string) (required): URL variable key name — letters and underscores only. GitLab rejects keys containing digits
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `value` (string) (required): URL variable value — must be non-empty
 
@@ -11819,7 +11819,7 @@ Invite a user to a project by email or user ID with an access level. Returns: an
 - `access_level` (integer) (required): Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported)
 - `email` (string): Email address to invite (either email or user_id required)
 - `expires_at` (string): Expiration date for the invitation (YYYY-MM-DD)
-- `id` (string): Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter; usually equal to project_id)
+- `id` (string): Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to project_id)
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `user_id` (integer): User ID to invite (either email or user_id required)
 
@@ -12168,7 +12168,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_project_member_delete
 
-Remove a member from a project (destructive, requires confirmation). Requires Maintainer; the last Owner of a project cannot be removed. Returns: a success confirmation naming the removed member. See also: gitlab_project_member_edit, gitlab_project_members_list.
+Remove a member from a project (destructive, requires confirmation). Requires Maintainer. The last Owner of a project cannot be removed. Returns: a success confirmation naming the removed member. See also: gitlab_project_member_edit, gitlab_project_members_list.
 
 **Parameters:**
 
@@ -12247,7 +12247,7 @@ Configure a project's pull mirror. Returns: the updated mirror configuration. Se
 - `mirror_trigger_builds` (boolean): Trigger CI builds when mirror updates
 - `only_mirror_protected_branches` (boolean): Only mirror protected branches
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `url` (string): Pull mirror source URL. Do not include credentials in the URL; unlike push mirror endpoints, pull mirroring requires auth_user and auth_password for authentication
+- `url` (string): Pull mirror source URL. Do not include credentials in the URL. Unlike push mirror endpoints, pull mirroring requires auth_user and auth_password for authentication
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
@@ -12412,7 +12412,7 @@ Share a project with a group. Returns: a confirmation with the group ID and gran
 **Parameters:**
 
 - `expires_at` (string): Expiration date for the share (YYYY-MM-DD)
-- `group_access` (integer) (required): Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project shares
+- `group_access` (integer) (required): Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer). 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project shares
 - `group_id` (integer) (required): Group ID to share with
 - `project_id` (string) (required): Project ID or URL-encoded path
 
@@ -12441,7 +12441,7 @@ Create a project snippet. Returns: the created snippet with ID, visibility, auth
 - `files` (array of objects): Files to include in the snippet
 - `project_id` (string) (required): Project ID or path
 - `title` (string) (required): Snippet title
-- `visibility` (string): Visibility: private, internal, or public; defaults to private when omitted
+- `visibility` (string): Visibility: private, internal, or public. Defaults to private when omitted
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -12932,7 +12932,7 @@ Annotations: readOnly=false, destructive=true, idempotent=true, openWorld=true
 
 #### gitlab_registry_delete_tags_bulk
 
-Delete container registry tags in bulk by name patterns and age (cannot be undone). Returns: a success confirmation; deletion runs asynchronously. See also: gitlab_registry_list_tags, gitlab_registry_delete_tag.
+Delete container registry tags in bulk by name patterns and age (cannot be undone). Returns: a success confirmation. Deletion runs asynchronously. See also: gitlab_registry_list_tags, gitlab_registry_delete_tag.
 
 **Parameters:**
 
@@ -13146,7 +13146,7 @@ Create a release for a tag, optionally creating the tag from a ref and attaching
 - `milestones` (array of strings): Milestone titles to associate with the release
 - `name` (string): Release title
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `ref` (string): Branch or commit SHA to create tag from when tag_name does not exist; include this when the prompt says ref/from ref
+- `ref` (string): Branch or commit SHA to create tag from when tag_name does not exist. Include this when the prompt says ref/from ref
 - `released_at` (string): Date of the release in ISO 8601 format
 - `tag_message` (string): Message to use for the annotated tag (creates annotated tag instead of lightweight)
 - `tag_name` (string) (required): Tag name associated with the release
@@ -13193,7 +13193,7 @@ Create a single release asset link. Returns: the created link with id, name, url
 **Parameters:**
 
 - `direct_asset_path` (string): Optional path for a direct asset link relative to the release: redirects to url. Use instead of the deprecated filepath.
-- `filepath` (string): Deprecated alias of direct_asset_path; prefer direct_asset_path.
+- `filepath` (string): Deprecated alias of direct_asset_path. Prefer direct_asset_path.
 - `link_type` (string): Type of the release link: other, runbook, image, or package.
 - `name` (string) (required): Name of the link
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -13958,7 +13958,7 @@ List runners owned by the authenticated user, with type/status/tag/scope filters
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.
 - `paused` (boolean): Filter by paused state
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `scope` (string): Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead
+- `scope` (string): Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead
 - `sort` (string): Sort direction: asc or desc
 - `status` (string): Runner status filter: online, offline, stale, or never_contacted.
 - `tag_list` (array of strings): List of tags to filter by
@@ -13978,7 +13978,7 @@ List every runner on the instance (admin token required), with type/status/tag/s
 - `pagination` (string): Pagination method: 'keyset' for keyset-based pagination on large ordered result sets, or 'offset' (the default). Keyset avoids deep-offset cost.
 - `paused` (boolean): Filter by paused state
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
-- `scope` (string): Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead
+- `scope` (string): Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead
 - `sort` (string): Sort direction: asc or desc
 - `status` (string): Runner status filter: online, offline, stale, or never_contacted.
 - `tag_list` (array of strings): List of tags to filter by
@@ -14028,7 +14028,7 @@ List runners assigned to a project, with type/status/tag/scope filters and pagin
 - `paused` (boolean): Filter by paused state
 - `per_page` (integer): Items per page. Defaults to 20, minimum 1, maximum 100. Use 100 to minimize round trips when the result set is large.
 - `project_id` (string) (required): Project ID or URL-encoded path
-- `scope` (string): Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead
+- `scope` (string): Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead
 - `sort` (string): Sort direction: asc or desc
 - `status` (string): Runner status filter: online, offline, stale, or never_contacted.
 - `tag_list` (array of strings): List of tags to filter by
@@ -14043,7 +14043,7 @@ Register a new runner with a registration token, optional info hashmap, tags, an
 **Parameters:**
 
 - `access_level` (string): Access level: not_protected, ref_protected
-- `active` (boolean): Deprecated: registration active state; prefer paused instead
+- `active` (boolean): Deprecated: registration active state. Prefer paused instead
 - `description` (string): Runner description
 - `info` (object): Runner manager info hashmap (name, version, revision, platform, architecture)
 - `locked` (boolean): Lock runner to current project
@@ -14110,7 +14110,7 @@ Update a runner's configuration (description, pause state, tags, locked, access 
 **Parameters:**
 
 - `access_level` (string): Access level: not_protected, ref_protected
-- `active` (boolean): Deprecated: runner active state; prefer paused instead
+- `active` (boolean): Deprecated: runner active state. Prefer paused instead
 - `description` (string): Runner description
 - `locked` (boolean): Whether runner is locked to current project
 - `maintenance_note` (string): Maintenance note for the runner
@@ -14432,7 +14432,7 @@ Create or update the Datadog integration on a group. Requires Owner role and Git
 
 **Parameters:**
 
-- `api_key` (string): Datadog API key (write-only; never returned by the get endpoint)
+- `api_key` (string): Datadog API key (write-only. Never returned by the get endpoint)
 - `api_url` (string): Datadog API URL (e.g. https://api.datadoghq.com)
 - `archive_trace_events` (boolean): Forward CI job trace events to Datadog
 - `datadog_ci_visibility` (boolean): Enable Datadog CI Visibility: forward pipeline/job data to Datadog CI Visibility
@@ -14463,7 +14463,7 @@ Configure (create or update) any project integration by slug, passing the integr
 
 **Parameters:**
 
-- `config` (object): Integration configuration parameters as documented for the chosen slug in doc/api/integrations.md (sent verbatim as the request body). For example slack expects webhook; harbor expects url, project_name, username, password; jenkins expects jenkins_url, project_name, username, password
+- `config` (object): Integration configuration parameters as documented for the chosen slug in doc/api/integrations.md (sent verbatim as the request body). For example slack expects webhook. Harbor expects url, project_name, username, password. Jenkins expects jenkins_url, project_name, username, password
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `slug` (string) (required): Integration slug to configure (e.g. slack, harbor, jenkins, google-play). See doc/api/integrations.md for the full list and each integration's config fields
 
@@ -14525,7 +14525,7 @@ Create or update one URL variable for an instance system hook. Returns: a succes
 **Parameters:**
 
 - `id` (integer) (required): System hook ID
-- `key` (string) (required): URL variable key name — letters and underscores only; GitLab rejects keys containing digits
+- `key` (string) (required): URL variable key name — letters and underscores only. GitLab rejects keys containing digits
 - `value` (string) (required): URL variable value — must be non-empty
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -14579,7 +14579,7 @@ Create a personal snippet. Returns: the created snippet with ID, visibility, aut
 - `file_name` (string): File name (single-file snippet, deprecated in favor of files)
 - `files` (array of objects): Files to include in the snippet
 - `title` (string) (required): Snippet title
-- `visibility` (string): Visibility: private, internal, or public; defaults to private when omitted
+- `visibility` (string): Visibility: private, internal, or public. Defaults to private when omitted
 
 Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
@@ -14725,7 +14725,7 @@ Add a comment (note) to a project snippet. Returns: the created note with id, au
 **Parameters:**
 
 - `body` (string) (required): Note body (Markdown supported)
-- `created_at` (string): Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions; ignored otherwise.
+- `created_at` (string): Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.
 - `project_id` (string) (required): Project ID or URL-encoded path
 - `snippet_id` (integer) (required): Snippet ID
 
@@ -14884,7 +14884,7 @@ List the subgroups (descendant groups) of a GitLab group. Returns: descendant gr
 - `active` (boolean): Filter by active (true) or inactive/archived (false) subgroups
 - `all_available` (boolean): Show all subgroups accessible by the authenticated user
 - `archived` (boolean): Limit to archived subgroups (true) or non-archived (false)
-- `custom_attributes` (object): Filter subgroups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response
+- `custom_attributes` (object): Filter subgroups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response
 - `group_id` (string) (required): Group ID or URL-encoded path
 - `marked_for_deletion_on` (string): Filter to subgroups marked for deletion on this date (YYYY-MM-DD)
 - `min_access_level` (integer): Minimum access level (5=Minimal access,10=Guest,15=Planner (Premium/Ultimate),20=Reporter,25=Security Manager (Premium/Ultimate),30=Developer,40=Maintainer,50=Owner,60=Admin where supported)
@@ -15133,7 +15133,7 @@ Unlock a project Terraform state by project_id and state name. Returns: the stat
 **Parameters:**
 
 - `confirm` (boolean): Set true to explicitly confirm this destructive action instead of relying on MCP elicitation.
-- `name` (string) (required): Terraform state name. Use params.name for values such as production or eval-unlock-123; do not use id.
+- `name` (string) (required): Terraform state name. Use params.name for values such as production or eval-unlock-123. Do not use id.
 - `project_id` (string) (required): Project ID or URL-encoded path
 
 Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
@@ -15208,7 +15208,7 @@ Update the body of a note in a commit discussion thread. Returns: the updated no
 
 - `body` (string) (required): Updated note body
 - `commit_sha` (string) (required): Commit SHA
-- `created_at` (string): Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights
+- `created_at` (string): Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `discussion_id` (string) (required): Discussion ID
 - `note_id` (integer) (required): Note ID to update
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -15311,7 +15311,7 @@ Update the body of a note in an issue discussion thread. Returns: the updated no
 **Parameters:**
 
 - `body` (string) (required): Updated note body
-- `created_at` (string): Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights
+- `created_at` (string): Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `discussion_id` (string) (required): Discussion ID
 - `issue_iid` (integer) (required): Issue internal ID
 - `note_id` (integer) (required): Note ID to update
@@ -15446,7 +15446,7 @@ Update the body of a note in a snippet discussion thread. Returns: the updated n
 **Parameters:**
 
 - `body` (string) (required): Updated note body
-- `created_at` (string): Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights
+- `created_at` (string): Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights
 - `discussion_id` (string) (required): Discussion ID
 - `note_id` (integer) (required): Note ID to update
 - `project_id` (string) (required): Project ID or URL-encoded path
@@ -15474,10 +15474,10 @@ Update an existing work item by namespace path and IID. Returns: the updated wor
 **Parameters:**
 
 - `add_label_ids` (array of integers): Global IDs of labels to add
-- `assignee_ids` (array of integers): Global IDs of assignees. Replaces the current assignees; pass an empty array [] to remove every assignee. Omit the field to leave assignees untouched
+- `assignee_ids` (array of integers): Global IDs of assignees. Replaces the current assignees. Pass an empty array [] to remove every assignee. Omit the field to leave assignees untouched
 - `color` (string): Color hex code (e.g. #fefefe)
 - `confirm` (boolean): Confirms removing existing assignees or CRM contacts when assignee_ids or crm_contact_ids is an empty array. Only required when entries would actually be deleted
-- `crm_contact_ids` (array of integers): CRM contact IDs. Replaces the current contacts; pass an empty array [] to remove every contact. Omit the field to leave contacts untouched
+- `crm_contact_ids` (array of integers): CRM contact IDs. Replaces the current contacts. Pass an empty array [] to remove every contact. Omit the field to leave contacts untouched
 - `description` (string): New description
 - `due_date` (string): Due date (YYYY-MM-DD)
 - `full_path` (string) (required): Full path of the project or group (e.g. my-group/my-project)
@@ -15515,7 +15515,7 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 #### gitlab_upload_user_avatar
 
-Upload the current user's avatar. Returns: the updated user profile including the new avatar URL; GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty — use gitlab_user_current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.
+Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty — use gitlab_user_current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.
 
 **Parameters:**
 

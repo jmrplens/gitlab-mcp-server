@@ -42,7 +42,7 @@ func guidanceDestination() toolutil.ParameterGuidance {
 		SemanticRole:     "config_value",
 		ValueSource:      "Name of a Gitaly storage shard already configured on the instance to move the repository to.",
 		ExampleBinding:   `params.destination_storage_name:"storage2"`,
-		CommonConfusions: []string{"Must reference an existing storage shard; cannot equal the shard the project currently lives on. Omit to let GitLab pick a shard by weight."},
+		CommonConfusions: []string{"Must reference an existing storage shard. Cannot equal the shard the project currently lives on. Omit to let GitLab pick a shard by weight."},
 	}
 }
 
@@ -50,7 +50,7 @@ func guidanceDestination() toolutil.ParameterGuidance {
 func guidanceSource() toolutil.ParameterGuidance {
 	return toolutil.ParameterGuidance{
 		SemanticRole:     "config_value",
-		ValueSource:      "Name of the Gitaly storage shard to drain; every project on this shard is scheduled to move.",
+		ValueSource:      "Name of the Gitaly storage shard to drain. Every project on this shard is scheduled to move.",
 		ExampleBinding:   `params.source_storage_name:"default"`,
 		CommonConfusions: []string{"This is the shard to move projects away from, not the destination."},
 	}
@@ -121,7 +121,7 @@ func scheduleSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 
 func scheduleAllSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	opts := baseOptions("gitlab_schedule_all_project_storage_moves")
-	opts.Usage = "Schedule every project on one Gitaly storage shard to migrate to another (admin-only, self-managed). Bulk operation used to drain a shard; may enqueue many concurrent moves."
+	opts.Usage = "Schedule every project on one Gitaly storage shard to migrate to another (admin-only, self-managed). Bulk operation used to drain a shard. May enqueue many concurrent moves."
 	opts.Aliases = []string{"gitlab_schedule_all_project_storage_moves", "drain storage shard", "migrate all projects off shard", "bulk schedule storage moves"}
 	opts.RelatedActions = []string{actionRetrieveAll, actionSchedule}
 	opts.ParameterGuidance = map[string]toolutil.ParameterGuidance{"source_storage_name": guidanceSource(), "destination_storage_name": guidanceDestination()}

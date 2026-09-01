@@ -60,7 +60,7 @@ Dynamic toolset (default mode):
 
 When TOOL_SURFACE is unset or set to dynamic, the server exposes only gitlab_find_action and gitlab_execute_action while keeping the same canonical GitLab action catalog. Models should find an action with its exact schema, then execute the canonical domain.action ID returned by find. Set TOOL_SURFACE=meta to use consolidated domain meta-tools instead.
 
-- gitlab_find_action: Search the local GitLab action catalog; read-only and no GitLab API call.
+- gitlab_find_action: Search the local GitLab action catalog.
 - gitlab_execute_action: Execute one GitLab catalog action by canonical ID or alias.
 
 Meta-tool overview:

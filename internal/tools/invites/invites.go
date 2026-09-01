@@ -37,7 +37,7 @@ type ListPendingGroupInvitationsInput struct {
 // ProjectInvitesInput contains parameters for inviting a user to a project.
 type ProjectInvitesInput struct {
 	ProjectID   toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
-	ID          toolutil.StringOrInt `json:"id,omitempty" jsonschema:"Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter; usually equal to project_id)"`
+	ID          toolutil.StringOrInt `json:"id,omitempty" jsonschema:"Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to project_id)"`
 	Email       string               `json:"email,omitempty" jsonschema:"Email address to invite (either email or user_id required)"`
 	UserID      int64                `json:"user_id,omitempty" jsonschema:"User ID to invite (either email or user_id required)"`
 	AccessLevel int                  `json:"access_level" jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported),required"`
@@ -47,7 +47,7 @@ type ProjectInvitesInput struct {
 // GroupInvitesInput contains parameters for inviting a user to a group.
 type GroupInvitesInput struct {
 	GroupID     toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	ID          toolutil.StringOrInt `json:"id,omitempty" jsonschema:"Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter; usually equal to group_id)"`
+	ID          toolutil.StringOrInt `json:"id,omitempty" jsonschema:"Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to group_id)"`
 	Email       string               `json:"email,omitempty" jsonschema:"Email address to invite (either email or user_id required)"`
 	UserID      int64                `json:"user_id,omitempty" jsonschema:"User ID to invite (either email or user_id required)"`
 	AccessLevel int                  `json:"access_level" jsonschema:"Access level (5=Minimal access, 10=Guest, 15=Planner (Premium/Ultimate), 20=Reporter, 25=Security Manager (Premium/Ultimate), 30=Developer, 40=Maintainer, 50=Owner, 60=Admin where supported),required"`

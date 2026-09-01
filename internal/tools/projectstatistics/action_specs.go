@@ -22,7 +22,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 					SemanticRole:     "scope_project",
 					ValueSource:      "Project ID or URL-encoded path whose fetch statistics should be retrieved.",
 					ExampleBinding:   `params.project_id:"group/project"`,
-					CommonConfusions: []string{"This returns git fetch (clone/pull) counts, not storage/size statistics; for repository or storage size use gitlab_project_get with statistics enabled."},
+					CommonConfusions: []string{"This returns git fetch (clone/pull) counts, not storage/size statistics. For repository or storage size use gitlab_project_get with statistics enabled."},
 				},
 			},
 			OpenWorld:    true,

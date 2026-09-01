@@ -148,7 +148,7 @@ func Add(ctx context.Context, client *gitlabclient.Client, input AddInput) (Outp
 	email, _, err := client.GL().Users.AddEmail(opts, gl.WithContext(ctx))
 	if err != nil {
 		return Output{}, toolutil.WrapErrWithStatusHint("add_email", err, http.StatusBadRequest,
-			"email must be a valid RFC 5322 address and not already taken; skip_confirmation requires admin token")
+			"email must be a valid RFC 5322 address and not already taken. skip_confirmation requires admin token")
 	}
 	return toOutput(email), nil
 }

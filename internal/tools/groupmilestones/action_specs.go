@@ -131,7 +131,7 @@ var groupMilestoneActionMeta = map[string]groupMilestoneActionMetaEntry{
 		description: "Create a new group milestone. Returns: the created milestone with ID, IID, state, start and due dates. See also: gitlab_group_milestone_get, gitlab_group_milestone_list, gitlab_group_milestone_update.",
 	},
 	"gitlab_group_milestone_update": {
-		usage:       "Update an existing group milestone. Only non-empty fields are applied; use state_event to close or activate.",
+		usage:       "Update an existing group milestone. Only non-empty fields are applied. Use state_event to close or activate.",
 		aliases:     []string{"update group milestone", "edit group milestone", "close group milestone", "activate group milestone"},
 		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneList, "group_milestone.delete"},
 		description: "Update an existing group milestone. Returns: the updated milestone with state, dates, and expiry. See also: gitlab_group_milestone_get, gitlab_group_milestone_list, gitlab_group_milestone_delete.",
@@ -140,7 +140,7 @@ var groupMilestoneActionMeta = map[string]groupMilestoneActionMetaEntry{
 		},
 	},
 	"gitlab_group_milestone_delete": {
-		usage:       "Permanently delete a group milestone. Destructive and irreversible; confirm group_id and milestone_iid before calling. Requires Owner role.",
+		usage:       "Permanently delete a group milestone. Destructive and irreversible. Confirm group_id and milestone_iid before calling. Requires Owner role.",
 		aliases:     []string{"delete group milestone", "remove group milestone", "destroy group milestone", "drop group milestone"},
 		related:     []string{actionGroupMilestoneGet, actionGroupMilestoneList, actionGroupMilestoneUpdate},
 		description: "Delete a group milestone permanently. Returns: a success confirmation. See also: gitlab_group_milestone_get, gitlab_group_milestone_update.",

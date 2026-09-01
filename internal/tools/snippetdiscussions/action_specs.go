@@ -117,7 +117,7 @@ func decorateSnippetDiscussionMeta(options *toolutil.ActionSpecOptions, individu
 			SemanticRole:     "discussion_list_sort_field",
 			ValueSource:      "Column requested for ordering threads, such as created_at or updated_at.",
 			ExampleBinding:   `params.order_by:"created_at"`,
-			CommonConfusions: []string{"Combine order_by with sort; do not pass natural-language phrases as the field value."},
+			CommonConfusions: []string{"Combine order_by with sort. Do not pass natural-language phrases as the field value."},
 		}
 		options.IndividualTool.Description = "List discussion threads on a project snippet with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state) and pagination metadata. See also: gitlab_get_snippet_discussion, gitlab_create_snippet_discussion, gitlab_project_snippet_get, gitlab_snippet_note_list."
 	case "gitlab_get_snippet_discussion":

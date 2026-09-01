@@ -48,7 +48,7 @@ func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool st
 	opts := workItemOptions(individualTool)
 	switch individualTool {
 	case "gitlab_get_work_item":
-		opts.Usage = "Get one exact work item by namespace full_path plus work_item_iid. Use this after list/search results or when the prompt already names a concrete work item number; prefer work_item.get over work_item.list when the target is already known."
+		opts.Usage = "Get one exact work item by namespace full_path plus work_item_iid. Use this after list/search results or when the prompt already names a concrete work item number. Prefer work_item.get over work_item.list when the target is already known."
 		opts.Aliases = []string{"get work item", "show work item details", "fetch work item by iid", individualTool}
 		opts.RelatedActions = []string{actionWorkItemList, "work_item.update", "work_item.delete"}
 		opts.IndividualTool.Description = "Get a single work item by namespace path and IID. Returns: id, iid, type, state, status, title, description, author, assignees, labels, linked items, child work items, confidentiality, timestamps, and web URL. Experimental. See also: gitlab_list_work_items, gitlab_update_work_item, gitlab_delete_work_item."
@@ -70,7 +70,7 @@ func workItemReadSpec(name string, route toolutil.ActionRoute, individualTool st
 // workItemCreateSpec builds the canonical create spec for a work item tool.
 func workItemCreateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	opts := workItemOptions(individualTool)
-	opts.Usage = "Create a new work item under a project or group namespace. Provide full_path, a work_item_type_id (discover with work_item.type_list), and a title; add description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, status, color, dates, or linked_items only when requested."
+	opts.Usage = "Create a new work item under a project or group namespace. Provide full_path, a work_item_type_id (discover with work_item.type_list), and a title. Add description, confidential, assignee_ids, milestone_id, label_ids, weight, health_status, status, color, dates, or linked_items only when requested."
 	opts.Aliases = []string{"create work item", "open new work item", "add epic or task", individualTool}
 	opts.RelatedActions = []string{actionWorkItemGet, actionWorkItemList, "work_item.type_list"}
 	opts.IndividualTool.Description = "Create a new work item under a namespace. Returns: the created work item with id, iid, type, state, title, description, assignees, labels, linked items, child work items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_list_work_items, gitlab_list_work_item_types."
@@ -81,7 +81,7 @@ func workItemCreateSpec(name string, route toolutil.ActionRoute, individualTool 
 // workItemUpdateSpec builds the canonical update spec for a work item tool.
 func workItemUpdateSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	opts := workItemOptions(individualTool)
-	opts.Usage = "Update an existing work item's fields, status, labels, or hierarchy. Provide full_path plus work_item_iid; set state_event to CLOSE or REOPEN to change state, and supply only the widget-supported fields you want to change. assignee_ids and crm_contact_ids replace the whole list: send an empty array to remove every entry, and omit the field to leave it untouched. Clearing entries that exist requires confirm=true (or an approved elicitation prompt)."
+	opts.Usage = "Update an existing work item's fields, status, labels, or hierarchy. Provide full_path plus work_item_iid. Set state_event to CLOSE or REOPEN to change state, and supply only the widget-supported fields you want to change. assignee_ids and crm_contact_ids replace the whole list: send an empty array to remove every entry, and omit the field to leave it untouched. Clearing entries that exist requires confirm=true (or an approved elicitation prompt)."
 	opts.Aliases = []string{"update work item", "edit work item fields", "close or reopen work item", individualTool}
 	opts.RelatedActions = []string{actionWorkItemGet, "work_item.delete", actionWorkItemList}
 	opts.IndividualTool.Description = "Update an existing work item by namespace path and IID. Returns: the updated work item with id, iid, type, state, status, title, description, assignees, labels, linked items, child work items, and web URL. Experimental. See also: gitlab_get_work_item, gitlab_delete_work_item, gitlab_list_work_items."
@@ -92,7 +92,7 @@ func workItemUpdateSpec(name string, route toolutil.ActionRoute, individualTool 
 // workItemDeleteSpec builds the canonical destructive delete spec for a work item tool.
 func workItemDeleteSpec(name string, route toolutil.ActionRoute, individualTool string) toolutil.ActionSpec {
 	opts := workItemOptions(individualTool)
-	opts.Usage = "Permanently delete a work item by namespace full_path plus work_item_iid. Deletion is irreversible; only the author or a Maintainer/Owner can delete, and some work item types are protected."
+	opts.Usage = "Permanently delete a work item by namespace full_path plus work_item_iid. Deletion is irreversible. Only the author or a Maintainer/Owner can delete, and some work item types are protected."
 	opts.Aliases = []string{"delete work item", "remove work item permanently", "destroy work item", individualTool}
 	opts.RelatedActions = []string{actionWorkItemGet, "work_item.update"}
 	opts.IndividualTool.Description = "Delete a work item permanently by namespace path and IID. Returns: a success confirmation naming the work item and namespace. Experimental. See also: gitlab_get_work_item, gitlab_update_work_item."

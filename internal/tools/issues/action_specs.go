@@ -149,7 +149,7 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 	options := issueOptions(individualTool)
 	switch individualTool {
 	case "gitlab_issue_get":
-		options.Usage = "Get one exact issue by project_id plus issue_iid. Use this after list/search results or when the prompt already names a concrete issue number; prefer issue.get over issue.list when the target issue is already known."
+		options.Usage = "Get one exact issue by project_id plus issue_iid. Use this after list/search results or when the prompt already names a concrete issue number. Prefer issue.get over issue.list when the target issue is already known."
 		options.Aliases = []string{"get issue", "show issue details", "fetch issue"}
 		options.RelatedActions = []string{actionIssueList, actionIssueUpdate, "issue.delete", "issue.notes_list"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -163,7 +163,7 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 				SemanticRole:     "issue_iid",
 				ValueSource:      "Issue number visible in the project, usually from the URL or prior issue list output.",
 				ExampleBinding:   "params.issue_iid:42",
-				CommonConfusions: []string{"Use issue_iid for project-scoped issue numbers; issue_id is only for the global issue ID action."},
+				CommonConfusions: []string{"Use issue_iid for project-scoped issue numbers. issue_id is only for the global issue ID action."},
 			},
 		}
 		options.IndividualTool.Description = "Get a single issue from a project by issue IID. Returns: issue metadata, state, labels, assignees, author, due date, task completion, and web URL. See also: gitlab_issue_list, gitlab_issue_update, gitlab_issue_delete, gitlab_issue_note_list."
@@ -176,18 +176,18 @@ func issueReadSpec(name string, route toolutil.ActionRoute, individualTool strin
 				SemanticRole:     roleScopeProject,
 				ValueSource:      "Project ID or namespace path whose issues should be listed.",
 				ExampleBinding:   `params.project_id:"group/project"`,
-				CommonConfusions: []string{"Use project_id for the project scope; use group_id only with issue.list_group."},
+				CommonConfusions: []string{"Use project_id for the project scope. Use group_id only with issue.list_group."},
 			},
 			"search": {
 				ValueSource:      "Keywords from the user's issue title or description request.",
 				ExampleBinding:   `params.search:"oauth timeout"`,
-				CommonConfusions: []string{"search narrows within the selected project; it does not replace project_id."},
+				CommonConfusions: []string{"search narrows within the selected project. It does not replace project_id."},
 			},
 			"order_by": {
 				SemanticRole:     "issue_list_sort_field",
 				ValueSource:      "Field requested for sorting recent or oldest issues, such as created_at or updated_at.",
 				ExampleBinding:   `params.order_by:"updated_at"`,
-				CommonConfusions: []string{"Combine order_by with sort; do not pass natural-language phrases like newest first as the field value."},
+				CommonConfusions: []string{"Combine order_by with sort. Do not pass natural-language phrases like newest first as the field value."},
 			},
 		}
 		options.IndividualTool.Description = "List issues in one project with filtering and pagination. Returns: matching issues with state, labels, assignees, author, and pagination metadata. See also: gitlab_issue_get, gitlab_issue_create, gitlab_search_issues."
@@ -258,7 +258,7 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 		related: []string{actionIssueList, "group.get", actionSearchIssues},
 	},
 	"gitlab_issue_delete": {
-		usage:       "Permanently delete an issue. Destructive and irreversible; confirm project_id and issue_iid before calling.",
+		usage:       "Permanently delete an issue. Destructive and irreversible. Confirm project_id and issue_iid before calling.",
 		aliases:     []string{"delete issue", "remove issue", "destroy issue", "drop issue"},
 		related:     []string{actionIssueGet, actionIssueList, actionIssueUpdate},
 		description: "Delete an issue permanently. Returns: a success confirmation naming the issue and project. See also: gitlab_issue_get, gitlab_issue_update.",
@@ -306,7 +306,7 @@ var issueActionMeta = map[string]issueActionMetaEntry{
 		description: "Clear an issue's time estimate. Returns: the updated time tracking stats. See also: gitlab_issue_time_estimate_set, gitlab_issue_time_stats_get.",
 	},
 	"gitlab_issue_spent_time_add": {
-		usage:       "Log time spent on an issue using a human duration such as 2h or 30m; logged values accumulate across calls.",
+		usage:       "Log time spent on an issue using a human duration such as 2h or 30m. Logged values accumulate across calls.",
 		aliases:     []string{"log issue time", "add spent time", "record time on issue", "log time on issue"},
 		related:     []string{"issue.spent_time_reset", actionIssueTimeEstSet, actionIssueTimeStatsGet},
 		description: "Add spent time to an issue. Returns: the updated time tracking stats. See also: gitlab_issue_spent_time_reset, gitlab_issue_time_stats_get.",
@@ -360,7 +360,7 @@ func issueCreateSpec(name string, route toolutil.ActionRoute, individualTool str
 			SemanticRole:     roleScopeProject,
 			ValueSource:      "Project where the issue should be created.",
 			ExampleBinding:   `params.project_id:"group/project"`,
-			CommonConfusions: []string{"Use the target project path or numeric ID; do not substitute group_id or repository URL."},
+			CommonConfusions: []string{"Use the target project path or numeric ID. Do not substitute group_id or repository URL."},
 		},
 		"title": {
 			SemanticRole:   "issue_title",
@@ -371,7 +371,7 @@ func issueCreateSpec(name string, route toolutil.ActionRoute, individualTool str
 			SemanticRole:     "calendar_date",
 			ValueSource:      "Requested due date in ISO format when the user specifies one.",
 			ExampleBinding:   `params.due_date:"2026-06-01"`,
-			CommonConfusions: []string{"Use YYYY-MM-DD; natural-language dates must be normalized before calling the tool."},
+			CommonConfusions: []string{"Use YYYY-MM-DD. Natural-language dates must be normalized before calling the tool."},
 		},
 	}
 	options.IndividualTool.Description = "Create a new issue in a project. Returns: the created issue with IID, state, labels, assignees, milestone, due date, and web URL. See also: gitlab_issue_get, gitlab_issue_list, gitlab_issue_update."
@@ -404,14 +404,14 @@ func issueAdditiveSpec(name string, route toolutil.ActionRoute, individualTool s
 // override and explicit guidance for the close/reopen aliases.
 func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 	options := issueOptions("gitlab_issue_update")
-	options.Usage = "Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen; dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically."
+	options.Usage = "Update issue fields. To close or reopen an issue with issue.update, set params.state_event to close or reopen. Dynamic execute also accepts issue.close and issue.reopen aliases that fill state_event automatically."
 	options.Aliases = []string{"close issue", "reopen issue", "change issue state", "transition issue"}
 	options.RelatedActions = []string{actionIssueGet, "issue.delete", actionIssueList}
 	options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 		paramStateEvent: {
 			SemanticRole:     "issue_state_transition",
 			ValueSource:      "task intent when closing or reopening an issue",
-			CommonConfusions: []string{"Do not use state=closed/opened for transitions; use state_event=close or state_event=reopen."},
+			CommonConfusions: []string{"Do not use state=closed/opened for transitions. Use state_event=close or state_event=reopen."},
 			ExampleBinding:   `{paramStateEvent:"close"}`,
 		},
 	}
@@ -420,7 +420,7 @@ func issueUpdateActionSpec(client *gitlabclient.Client) toolutil.ActionSpec {
 			PropertyPath: paramStateEvent,
 			Values: map[string]any{
 				"enum":        []any{"close", "reopen"},
-				"description": "State transition; set to close or reopen when changing issue state.",
+				"description": "State transition. Set to close or reopen when changing issue state.",
 			},
 		},
 		toolutil.SchemaPropertyOverride("issue_type", map[string]any{
@@ -463,7 +463,7 @@ func groupIssueReadSpec(name string, route toolutil.ActionRoute, individualTool 
 				SemanticRole:     "scope_group",
 				ValueSource:      "Group ID or full group path from the user's request.",
 				ExampleBinding:   `params.group_id:"platform/backend"`,
-				CommonConfusions: []string{"Use group_id for group paths or IDs; use project_id only with issue.list for a single project."},
+				CommonConfusions: []string{"Use group_id for group paths or IDs. Use project_id only with issue.list for a single project."},
 			},
 		}
 		options.IndividualTool.Description = "List issues across a group. Returns: matching issues from projects in the group with pagination metadata. See also: gitlab_issue_list, gitlab_group_get, gitlab_search_issues."

@@ -277,7 +277,7 @@ func TestActionSpecs_ProjectGetAndListGuidance(t *testing.T) {
 	specs := ActionSpecs(client, false)
 
 	getSpec := projectActionSpecByTool(t, specs, "gitlab_project_get")
-	for _, want := range []string{"exact project", "group/project", "do not use search.projects"} {
+	for _, want := range []string{"exact project", "group/project", "Do not use search.projects"} {
 		if !strings.Contains(getSpec.Usage, want) {
 			t.Fatalf("get Usage = %q, want %q", getSpec.Usage, want)
 		}
@@ -287,7 +287,7 @@ func TestActionSpecs_ProjectGetAndListGuidance(t *testing.T) {
 	}
 
 	listSpec := projectActionSpecByTool(t, specs, "gitlab_project_list")
-	if !strings.Contains(listSpec.Usage, "last_activity_at") || strings.Contains(listSpec.Usage, "last_activity_after as an order_by") && !strings.Contains(listSpec.Usage, "do not use") {
+	if !strings.Contains(listSpec.Usage, "last_activity_at") || strings.Contains(listSpec.Usage, "last_activity_after as an order_by") && !strings.Contains(listSpec.Usage, "Do not use") {
 		t.Fatalf("list Usage = %q, want last_activity_at ordering guidance", listSpec.Usage)
 	}
 	if got := projectSchemaPropertyEnum(t, listSpec.Route.InputSchema, "order_by"); !sameProjectStringSet(got, []string{"id", "name", "path", "created_at", "updated_at", "last_activity_at", "similarity", "star_count"}) {

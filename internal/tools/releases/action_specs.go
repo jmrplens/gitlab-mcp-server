@@ -91,7 +91,7 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 				SemanticRole:     roleGitTag,
 				ValueSource:      hintReleaseTagName,
 				ExampleBinding:   `params.tag_name:"v1.2.0"`,
-				CommonConfusions: []string{"Use tag_name for release lookup; do not pass release title in this field."},
+				CommonConfusions: []string{"Use tag_name for release lookup. Do not pass release title in this field."},
 			},
 		}
 		options.IndividualTool.Description = "Get a single release by project_id and tag_name. Returns: release notes, author, commit, assets, milestones, evidences, and _links. See also: gitlab_release_list, gitlab_release_update, gitlab_release_delete, gitlab_release_link_list."
@@ -121,7 +121,7 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 				SemanticRole:     "git_ref",
 				ValueSource:      "Branch/tag/commit used to create tag when tag_name does not exist.",
 				ExampleBinding:   `params.ref:"main"`,
-				CommonConfusions: []string{"ref is only needed when creating a new tag; omit it when releasing an existing tag."},
+				CommonConfusions: []string{"ref is only needed when creating a new tag. Omit it when releasing an existing tag."},
 			},
 		}
 		options.IndividualTool.Description = "Create a release for a tag, optionally creating the tag from a ref and attaching asset links. Returns: the created release with author, commit, assets, milestones, and _links. See also: gitlab_release_update, gitlab_release_link_create, gitlab_tag_create."
@@ -134,12 +134,12 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 				SemanticRole:     roleGitTag,
 				ValueSource:      hintReleaseTagName,
 				ExampleBinding:   `params.tag_name:"v1.2.0"`,
-				CommonConfusions: []string{"tag_name identifies the release to edit; it cannot be changed by this action."},
+				CommonConfusions: []string{"tag_name identifies the release to edit. It cannot be changed by this action."},
 			},
 		}
 		options.IndividualTool.Description = "Update an existing release's title, notes, release date, or milestones. Returns: the updated release with author, commit, assets, milestones, and _links. See also: gitlab_release_get, gitlab_release_create, gitlab_release_delete."
 	case "delete":
-		options.Usage = "Delete a release identified by project_id and tag_name. Use this to remove a release record; the underlying Git tag is not deleted."
+		options.Usage = "Delete a release identified by project_id and tag_name. Use this to remove a release record. The underlying Git tag is not deleted."
 		options.Aliases = []string{"delete release", "remove release", "destroy release"}
 		options.RelatedActions = []string{actionReleaseGet, actionReleaseList, "tag.delete"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -147,7 +147,7 @@ func releaseOptionsForAction(actionName, individualTool string) toolutil.ActionS
 				SemanticRole:     roleGitTag,
 				ValueSource:      hintReleaseTagName,
 				ExampleBinding:   `params.tag_name:"v1.2.0"`,
-				CommonConfusions: []string{"Deleting the release does not delete the Git tag; use gitlab_tag_delete to remove the tag."},
+				CommonConfusions: []string{"Deleting the release does not delete the Git tag. Use gitlab_tag_delete to remove the tag."},
 			},
 		}
 		options.IndividualTool.Description = "Delete a release by tag_name (the Git tag itself is preserved). Returns: the deleted release details. See also: gitlab_release_get, gitlab_release_list, gitlab_tag_delete."

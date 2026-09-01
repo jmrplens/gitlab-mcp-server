@@ -94,7 +94,7 @@ func noteIDGuidance() toolutil.ParameterGuidance {
 		SemanticRole:     "note_id",
 		ValueSource:      "Numeric note ID from a prior snippet.note_list or snippet.note_create result.",
 		ExampleBinding:   "params.note_id:100",
-		CommonConfusions: []string{"note_id is the comment ID, not the snippet_id; obtain it from snippet.note_list."},
+		CommonConfusions: []string{"note_id is the comment ID, not the snippet_id. Obtain it from snippet.note_list."},
 	}
 }
 
@@ -127,12 +127,12 @@ func decorateSnippetNoteMeta(options *toolutil.ActionSpecOptions, individualTool
 			"project_id": projectIDGuidance(),
 			"snippet_id": snippetIDGuidance(),
 			"body": {
-				ValueSource:      "The comment text the user wants to post; Markdown is supported.",
+				ValueSource:      "The comment text the user wants to post. Markdown is supported.",
 				ExampleBinding:   `params.body:"Nice snippet, thanks!"`,
-				CommonConfusions: []string{"body is the comment content, not a snippet content update; updating the snippet body is snippet.update."},
+				CommonConfusions: []string{"body is the comment content, not a snippet content update. Updating the snippet body is snippet.update."},
 			},
 			"created_at": {
-				ValueSource:      "Optional RFC 3339 timestamp to backdate the note; requires admin or owner permissions.",
+				ValueSource:      "Optional RFC 3339 timestamp to backdate the note. Requires admin or owner permissions.",
 				CommonConfusions: []string{"created_at is ignored unless you have administrator or project/group owner permissions."},
 			},
 		}
@@ -147,7 +147,7 @@ func decorateSnippetNoteMeta(options *toolutil.ActionSpecOptions, individualTool
 			"order_by": {
 				ValueSource:      "Field to order notes by: created_at or updated_at.",
 				ExampleBinding:   `params.order_by:"created_at"`,
-				CommonConfusions: []string{"Combine order_by with sort; pass the field name, not a phrase like 'newest first'."},
+				CommonConfusions: []string{"Combine order_by with sort. Pass the field name, not a phrase like 'newest first'."},
 			},
 		}
 		options.IndividualTool.Description = "List all notes (comments) on a project snippet. Returns: notes with author, body, system flag, and pagination metadata. See also: gitlab_snippet_note_get, gitlab_snippet_note_create, gitlab_snippet_get."
@@ -162,7 +162,7 @@ func decorateSnippetNoteMeta(options *toolutil.ActionSpecOptions, individualTool
 		}
 		options.IndividualTool.Description = "Get a single snippet note by its ID. Returns: the note with author, body, timestamps, and position. See also: gitlab_snippet_note_list, gitlab_snippet_note_update, gitlab_snippet_note_delete."
 	case "gitlab_snippet_note_update":
-		options.Usage = "Replace the body of an existing snippet note. Only the original author or a Maintainer/Owner can edit a note; system notes cannot be edited. Use when the task asks to edit, fix, or amend a comment."
+		options.Usage = "Replace the body of an existing snippet note. Only the original author or a Maintainer/Owner can edit a note. System notes cannot be edited. Use when the task asks to edit, fix, or amend a comment."
 		options.Aliases = []string{"edit snippet comment", "update snippet note", "amend snippet comment"}
 		options.RelatedActions = []string{actionSnippetNoteGet, actionSnippetNoteList, actionSnippetNoteDelete}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -170,14 +170,14 @@ func decorateSnippetNoteMeta(options *toolutil.ActionSpecOptions, individualTool
 			"snippet_id": snippetIDGuidance(),
 			"note_id":    noteIDGuidance(),
 			"body": {
-				ValueSource:      "The new comment text that replaces the existing note body; Markdown is supported.",
+				ValueSource:      "The new comment text that replaces the existing note body. Markdown is supported.",
 				ExampleBinding:   `params.body:"Updated: fixed the typo."`,
-				CommonConfusions: []string{"This replaces the whole note body; it does not append to it."},
+				CommonConfusions: []string{"This replaces the whole note body. It does not append to it."},
 			},
 		}
 		options.IndividualTool.Description = "Update a snippet note's body. Returns: the updated note with new body and updated_at timestamp. See also: gitlab_snippet_note_get, gitlab_snippet_note_list, gitlab_snippet_note_delete."
 	case "gitlab_snippet_note_delete":
-		options.Usage = "Permanently delete a snippet note. Destructive and irreversible. Only the note author or a project Maintainer/Owner can delete a note; system notes cannot be deleted. Requires explicit confirmation."
+		options.Usage = "Permanently delete a snippet note. Destructive and irreversible. Only the note author or a project Maintainer/Owner can delete a note. System notes cannot be deleted. Requires explicit confirmation."
 		options.Aliases = []string{"delete snippet comment", "remove snippet note", "delete snippet note"}
 		options.RelatedActions = []string{actionSnippetNoteGet, actionSnippetNoteList, actionSnippetList}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{

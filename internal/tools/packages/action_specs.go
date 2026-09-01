@@ -110,13 +110,13 @@ type packageActionMeta struct {
 // Usage, toolname-only Aliases, or empty RelatedActions (1:1 audit R-META).
 var packageActionMetadata = map[string]packageActionMeta{
 	"publish": {
-		usage:       "Upload a single file as a Generic Package Registry asset. Provide project_id, package_name, package_version, and file_name plus the local file to stream; optional status and select fields control visibility and processing. To upload ALL files from a local directory in one call, use publish_directory instead.",
+		usage:       "Upload a single file as a Generic Package Registry asset. Provide project_id, package_name, package_version, and file_name plus the local file to stream. Optional status and select fields control visibility and processing. To upload ALL files from a local directory in one call, use publish_directory instead.",
 		aliases:     []string{"upload generic package file", "publish package asset", "push file to package registry", "create generic package version"},
 		related:     []string{"package.publish_and_link", "package.publish_directory", actionPackageList, actionPackageFileList},
 		description: "Publish a single file to the Generic Package Registry. Returns: the published file's id, package id, name, size, checksums (md5/sha1/sha256), and download URL. See also: gitlab_package_publish_and_link, gitlab_package_publish_directory, gitlab_package_list.",
 	},
 	"download": {
-		usage:       "Download one Generic Package Registry file to a local path. Provide project_id, package_name, package_version, file_name, and the output_path to write; the file is streamed and checksummed locally.",
+		usage:       "Download one Generic Package Registry file to a local path. Provide project_id, package_name, package_version, file_name, and the output_path to write. The file is streamed and checksummed locally.",
 		aliases:     []string{"download generic package file", "fetch package asset", "pull file from package registry", "retrieve package version file"},
 		related:     []string{actionPackageFileList, actionPackageList, actionPackagePublish},
 		description: "Download a single file from the Generic Package Registry to a local path. Returns: the local output path, byte size, and SHA256 checksum. See also: gitlab_package_file_list, gitlab_package_list.",
@@ -140,7 +140,7 @@ var packageActionMetadata = map[string]packageActionMeta{
 		description: "List the files within a single package. Returns: package files with name, size, checksums, creation time, and pagination metadata. See also: gitlab_package_download, gitlab_package_file_delete, gitlab_package_list.",
 	},
 	"delete": {
-		usage:       "Permanently delete an entire package and all of its files. Provide project_id and the package_id from package.list; this is irreversible and removes every version asset.",
+		usage:       "Permanently delete an entire package and all of its files. Provide project_id and the package_id from package.list. This is irreversible and removes every version asset.",
 		aliases:     []string{"delete package", "remove package from registry", "purge package version", "destroy published package"},
 		related:     []string{actionPackageList, "package.file_delete", actionPackageFileList},
 		description: "Delete a package permanently. Returns: a success confirmation naming the deleted package and project. See also: gitlab_package_list, gitlab_package_file_delete.",
@@ -190,7 +190,7 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 		}
 	}
 	if actionName == actionNameList {
-		options.Usage = "List package registry packages. If ordering is requested, use order_by with one of created_at, name, version, or type; do not use updated_at, released_at, or downloaded_at."
+		options.Usage = "List package registry packages. If ordering is requested, use order_by with one of created_at, name, version, or type. Do not use updated_at, released_at, or downloaded_at."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			paramOrderBy: {
 				SemanticRole: "package_list_sort_field",
@@ -256,17 +256,17 @@ func packageOptions(actionName, individualTool string) toolutil.ActionSpecOption
 		}
 	}
 	if actionName == actionNamePublishDir {
-		options.Usage = "Publish all regular files from a local directory to Generic Packages. Omit include_pattern to upload every file; include_pattern is one glob, not a comma-separated file list."
+		options.Usage = "Publish all regular files from a local directory to Generic Packages. Omit include_pattern to upload every file. include_pattern is one glob, not a comma-separated file list."
 		options.Aliases = []string{"publish local directory", "upload package directory", "generic package directory upload", "publish multiple package files", "publish files from directory", "upload package files from directory", "generic package publish directory files", "publish fixture files directory"}
 		options.Tags = append(options.Tags, "generic_package", "directory_upload", "package-files-directory", "fixture-files-directory")
 		options.RelatedActions = []string{"release.create", "release.link_create_batch", actionPackagePublish}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"include_pattern": {
 				SemanticRole: "single_glob_filter",
-				ValueSource:  "Optional single glob matched against file names inside directory_path; omit it to include all regular files.",
+				ValueSource:  "Optional single glob matched against file names inside directory_path. Omit it to include all regular files.",
 				CommonConfusions: []string{
 					"Do not pass comma-separated filenames.",
-					"Do not use include_pattern to enumerate exact files; omit it when all fixture files should be uploaded.",
+					"Do not use include_pattern to enumerate exact files. Omit it when all fixture files should be uploaded.",
 				},
 			},
 		}

@@ -87,13 +87,13 @@ var groupSCIMActionMeta = map[string]groupSCIMActionMetaEntry{
 		description: "Get one SCIM identity of a top-level group by its SCIM external UID. Returns: the identity's external_uid, user_id, and active status. See also: gitlab_list_group_scim_identities, gitlab_update_group_scim_identity, gitlab_delete_group_scim_identity.",
 	},
 	"update": {
-		usage:       "Update the extern_uid field of an existing SCIM identity for a group (Premium/Ultimate). Use this when a SAML SSO SCIM-provisioned user's external identifier changed at the identity provider and must be re-pointed; it only rewrites the SCIM external UID, not the underlying GitLab user.",
+		usage:       "Update the extern_uid field of an existing SCIM identity for a group (Premium/Ultimate). Use this when a SAML SSO SCIM-provisioned user's external identifier changed at the identity provider and must be re-pointed. It only rewrites the SCIM external UID, not the underlying GitLab user.",
 		aliases:     []string{"update group scim identity", "change scim extern uid", "remap scim provisioned user", "rewrite scim external uid", "edit scim identity"},
 		related:     []string{actionGroupSCIMGet, actionGroupSCIMList, actionGroupSCIMDelete},
 		description: "Update the extern_uid of an existing group SCIM identity. Returns: a confirmation that the SCIM identity's external UID was rewritten. See also: gitlab_get_group_scim_identity, gitlab_list_group_scim_identities, gitlab_delete_group_scim_identity.",
 	},
 	"delete": {
-		usage:       "Delete a single SCIM identity from a group by its SCIM external UID (Premium/Ultimate, destructive). Use this to de-provision a SAML SSO SCIM-synced identity link; verify the SCIM external UID with list first because removal of the identity mapping is permanent.",
+		usage:       "Delete a single SCIM identity from a group by its SCIM external UID (Premium/Ultimate, destructive). Use this to de-provision a SAML SSO SCIM-synced identity link. Verify the SCIM external UID with list first because removal of the identity mapping is permanent.",
 		aliases:     []string{"delete group scim identity", "remove scim identity", "deprovision scim user", "unlink scim provisioned identity", "revoke scim identity"},
 		related:     []string{actionGroupSCIMGet, actionGroupSCIMList, actionGroupSCIMUpdate},
 		description: "Delete a SCIM identity from a top-level group by its SCIM external UID. Returns: a success confirmation naming the deleted SCIM identity and group. See also: gitlab_get_group_scim_identity, gitlab_list_group_scim_identities, gitlab_update_group_scim_identity.",

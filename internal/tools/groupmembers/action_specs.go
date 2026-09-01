@@ -144,7 +144,7 @@ func groupIDGuidance() toolutil.ParameterGuidance {
 		SemanticRole:     "scope_group",
 		ValueSource:      "Group ID or full namespace path that owns the membership.",
 		ExampleBinding:   `params.group_id:"my-org/platform"`,
-		CommonConfusions: []string{"Use the group here, not a project path or project member action; project members use the project-member tools."},
+		CommonConfusions: []string{"Use the group here, not a project path or project member action. Project members use the project-member tools."},
 	}
 }
 
@@ -155,7 +155,7 @@ func userIDGuidance(valueSource string) toolutil.ParameterGuidance {
 		SemanticRole:     "user_id",
 		ValueSource:      valueSource,
 		ExampleBinding:   "params.user_id:42",
-		CommonConfusions: []string{"Use the numeric user ID, not the username; resolve usernames with gitlab_list_users first."},
+		CommonConfusions: []string{"Use the numeric user ID, not the username. Resolve usernames with gitlab_list_users first."},
 	}
 }
 
@@ -184,7 +184,7 @@ func shareGroupIDGuidance(valueSource string) toolutil.ParameterGuidance {
 // metadata.
 var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 	"gitlab_group_member_get": {
-		usage:   "Get one direct member of a group by group_id plus user_id. Use this when the prompt names a known user and group and you need that user's exact access level, expiry, or custom member role. Inherited members are not returned; use group_member_get_inherited for those.",
+		usage:   "Get one direct member of a group by group_id plus user_id. Use this when the prompt names a known user and group and you need that user's exact access level, expiry, or custom member role. Inherited members are not returned. Use group_member_get_inherited for those.",
 		aliases: []string{"get group member", "show group member access", "check user role in group"},
 		related: []string{actionGroupMembers, "group_member_get_inherited", "group_member_edit"},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -204,7 +204,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 		description: "Get a single member of a group including inherited memberships from ancestor groups. Returns: effective access level, custom member role, created_by, expiry, public email, SAML identity, and seat usage. See also: gitlab_group_member_get, gitlab_group_members_list, gitlab_group_member_edit.",
 	},
 	"gitlab_group_member_add": {
-		usage:   "Add a user as a direct member of a group with a chosen access level. Use this to grant a known user a role in a group; supply user_id or username plus access_level, and optionally member_role_id for a custom role (Premium/Ultimate) or expires_at.",
+		usage:   "Add a user as a direct member of a group with a chosen access level. Use this to grant a known user a role in a group. Supply user_id or username plus access_level, and optionally member_role_id for a custom role (Premium/Ultimate) or expires_at.",
 		aliases: []string{"add group member", "add existing user to group", "grant group access"},
 		related: []string{actionGroupMembers, "group_member_edit", "group_member_get"},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -213,9 +213,9 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 			"access_level": accessLevelGuidance(),
 			"member_role_id": {
 				SemanticRole:     "member_role_id",
-				ValueSource:      "ID of a custom member role to assign (Premium/Ultimate); its base access level must match access_level.",
+				ValueSource:      "ID of a custom member role to assign (Premium/Ultimate). Its base access level must match access_level.",
 				ExampleBinding:   "params.member_role_id:7",
-				CommonConfusions: []string{"member_role_id references a custom role definition, not access_level; it is only available on Premium/Ultimate."},
+				CommonConfusions: []string{"member_role_id references a custom role definition, not access_level. It is only available on Premium/Ultimate."},
 			},
 		},
 		description: "Add a user as a direct member of a group. Returns: the created membership with access level, custom member role, expiry, and seat usage. See also: gitlab_group_members_list, gitlab_group_member_edit, gitlab_group_member_get.",
@@ -230,15 +230,15 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 			"access_level": accessLevelGuidance(),
 			"member_role_id": {
 				SemanticRole:     "member_role_id",
-				ValueSource:      "ID of a custom member role to assign (Premium/Ultimate); its base access level must match access_level.",
+				ValueSource:      "ID of a custom member role to assign (Premium/Ultimate). Its base access level must match access_level.",
 				ExampleBinding:   "params.member_role_id:7",
-				CommonConfusions: []string{"member_role_id references a custom role definition, not access_level; it is only available on Premium/Ultimate."},
+				CommonConfusions: []string{"member_role_id references a custom role definition, not access_level. It is only available on Premium/Ultimate."},
 			},
 		},
 		description: "Edit a direct group member's access level, expiry, or custom member role. Returns: the updated membership. See also: gitlab_group_members_list, gitlab_group_member_get, gitlab_group_member_remove.",
 	},
 	"gitlab_group_member_remove": {
-		usage:   "Remove a direct member from a group by group_id plus user_id. Destructive: requires confirmation. Inherited members cannot be removed here; remove them from the ancestor group where they were added directly.",
+		usage:   "Remove a direct member from a group by group_id plus user_id. Destructive: requires confirmation. Inherited members cannot be removed here. Remove them from the ancestor group where they were added directly.",
 		aliases: []string{"remove group member", "revoke group access", "delete group member"},
 		related: []string{actionGroupMembers, "group_member_get", "group_member_edit"},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -248,7 +248,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 		description: "Remove a direct member from a group (destructive, requires confirmation). Returns: a delete confirmation. See also: gitlab_group_members_list, gitlab_group_member_get, gitlab_group_member_edit.",
 	},
 	"gitlab_group_share": {
-		usage:   "Share a group with another group so its members gain access at a chosen group_access level. Use this for cross-group collaboration; supply group_id (the group to share) and share_group_id (the recipient group). Group shares accept only Guest/Reporter/Developer/Maintainer levels.",
+		usage:   "Share a group with another group so its members gain access at a chosen group_access level. Use this for cross-group collaboration. Supply group_id (the group to share) and share_group_id (the recipient group). Group shares accept only Guest/Reporter/Developer/Maintainer levels.",
 		aliases: []string{"share group with group", "grant group access to another group", "add group share"},
 		related: []string{"group_member_unshare", actionGroupGet, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{
@@ -258,7 +258,7 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 				SemanticRole:     "access_level",
 				ValueSource:      "Access level granted to the recipient group (10/20/30/40 only).",
 				ExampleBinding:   "params.group_access:30",
-				CommonConfusions: []string{"Group shares accept only 10/20/30/40; 5, 15, 25, and 60 are rejected."},
+				CommonConfusions: []string{"Group shares accept only 10/20/30/40. 5, 15, 25, and 60 are rejected."},
 			},
 		},
 		description: "Share a group with another group at a chosen access level. Returns: the shared group's id, name, path, and web URL. See also: gitlab_group_unshare, gitlab_group_get, gitlab_group_members_list.",
@@ -300,17 +300,17 @@ var groupMemberActionMeta = map[string]groupMemberActionMetaEntry{
 		related: []string{actionBillableMembers, actionBillableMemberRemove, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id": groupIDGuidance(),
-			"user_id":  userIDGuidance("Numeric user ID of the billable member whose memberships to list; from gitlab_list_billable_group_members."),
+			"user_id":  userIDGuidance("Numeric user ID of the billable member whose memberships to list. From gitlab_list_billable_group_members."),
 		},
 		description: "List the memberships of a billable group member (Premium/Ultimate). Returns: each membership's source id, source full name, source members URL, access level (numeric + string), created/expiry dates, plus pagination. See also: gitlab_list_billable_group_members, gitlab_remove_billable_group_member, gitlab_group_members_list.",
 	},
 	"gitlab_remove_billable_group_member": {
-		usage:   "Remove a billable member from a group to free a seat (Premium/Ultimate). Destructive: requires confirmation. Only members whose 'removable' flag is true can be removed here; the last owner cannot be removed. Supply group_id plus the billable member's user_id.",
+		usage:   "Remove a billable member from a group to free a seat (Premium/Ultimate). Destructive: requires confirmation. Only members whose 'removable' flag is true can be removed here. The last owner cannot be removed. Supply group_id plus the billable member's user_id.",
 		aliases: []string{"remove billable group member", "free a group seat", "revoke billable member", "remove licensed user from group"},
 		related: []string{actionBillableMembers, actionBillableMemberMemberships, actionGroupMembers},
 		guidance: map[string]toolutil.ParameterGuidance{
 			"group_id": groupIDGuidance(),
-			"user_id":  userIDGuidance("Numeric user ID of the removable billable member; check the 'removable' flag from gitlab_list_billable_group_members first."),
+			"user_id":  userIDGuidance("Numeric user ID of the removable billable member. Check the 'removable' flag from gitlab_list_billable_group_members first."),
 		},
 		description: "Remove a billable member from a group, freeing a seat (Premium/Ultimate, destructive, requires confirmation). Returns: a removal confirmation. See also: gitlab_list_billable_group_members, gitlab_list_billable_member_memberships, gitlab_group_members_list.",
 	},

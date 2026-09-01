@@ -771,7 +771,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
+          "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
         },
         "discussion_id": {
@@ -1490,7 +1490,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
+          "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
         },
         "discussion_id": {
@@ -1728,7 +1728,7 @@
           "type": "boolean"
         },
         "when_pipeline_succeeds": {
-          "description": "Deprecated in 17.11; use auto_merge instead. Merge only when the pipeline succeeds",
+          "description": "Deprecated in 17.11. Use auto_merge instead. Merge only when the pipeline succeeds",
           "type": "boolean"
         }
       },
@@ -2302,7 +2302,7 @@
           "type": "string"
         },
         "url": {
-          "description": "Remote push mirror URL (e.g. https://user:token@example.com/repo.git). URL-embedded credentials are supported only for push mirrors; treat them as secrets, do not log or store them, and redact tokens or passwords in telemetry/errors",
+          "description": "Remote push mirror URL (e.g. https://user:token@example.com/repo.git). URL-embedded credentials are supported only for push mirrors. Treat them as secrets, do not log or store them, and redact tokens or passwords in telemetry/errors",
           "format": "uri",
           "type": "string"
         }
@@ -2408,7 +2408,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
+          "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
         },
         "discussion_id": {
@@ -2878,7 +2878,7 @@
           "type": "array"
         },
         "security_scan_profile_id": {
-          "description": "Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning — attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach); a full gid:// global ID is also accepted",
+          "description": "Security scan profile identifier: a built-in scan type (dependency_scanning, sast, secret_detection, or container_scanning — attach creates the default profile on the fly) or the persisted profile's numeric database ID (required by detach). A full gid:// global ID is also accepted",
           "type": "string"
         }
       },
@@ -8145,7 +8145,7 @@
         },
         "filter": {
           "additionalProperties": false,
-          "description": "Filter selecting the variable by environment scope; mirrors the GitLab variable filter object",
+          "description": "Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object",
           "properties": {
             "environment_scope": {
               "description": "Filter the variable by its environment scope (e.g. * or production)",
@@ -8218,7 +8218,7 @@
         },
         "filter": {
           "additionalProperties": false,
-          "description": "Filter selecting the variable by environment scope; mirrors the GitLab variable filter object",
+          "description": "Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object",
           "properties": {
             "environment_scope": {
               "description": "Filter the variable by its environment scope (e.g. * or production)",
@@ -8490,7 +8490,7 @@
         },
         "filter": {
           "additionalProperties": false,
-          "description": "Filter selecting the variable by environment scope; mirrors the GitLab variable filter object",
+          "description": "Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object",
           "properties": {
             "environment_scope": {
               "description": "Filter the variable by its environment scope (e.g. * or production)",
@@ -9551,7 +9551,7 @@
           "type": "string"
         },
         "stats": {
-          "description": "Include commit stats (additions, deletions, total); defaults to true on GitLab",
+          "description": "Include commit stats (additions, deletions, total). Defaults to true on GitLab",
           "type": "boolean"
         }
       },
@@ -11551,7 +11551,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
+          "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
         },
         "position": {
@@ -12726,7 +12726,7 @@
           ]
         },
         "base_access_level": {
-          "description": "Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid)",
+          "description": "Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. 60=Admin is not valid)",
           "type": "integer"
         },
         "description": {
@@ -13242,7 +13242,7 @@
           ]
         },
         "base_access_level": {
-          "description": "Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner; 60=Admin is not valid)",
+          "description": "Base access level (5=Minimal access, 10=Guest, 15=Planner, 20=Reporter, 25=Security Manager, 30=Developer, 40=Maintainer, 50=Owner. 60=Admin is not valid)",
           "type": "integer"
         },
         "description": {
@@ -13530,7 +13530,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
+          "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
         },
         "issue_iid": {
@@ -14824,7 +14824,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
+          "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
         },
         "project_id": {
@@ -16972,7 +16972,7 @@
   },
   {
     "name": "gitlab_delete_group_datadog_integration",
-    "description": "Remove the Datadog integration from a group. The stored api_key is cleared; deletion is irreversible. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com).\n\nReturns: confirmation message.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_set_group_datadog_integration.",
+    "description": "Remove the Datadog integration from a group. The stored api_key is cleared. Deletion is irreversible. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com).\n\nReturns: confirmation message.\n\nSee also: gitlab_get_group_datadog_integration, gitlab_set_group_datadog_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -17668,7 +17668,7 @@
   },
   {
     "name": "gitlab_delete_mr_context_commits",
-    "description": "Remove context commits from a merge request by SHA, detaching them from the review. Returns: a success confirmation; the underlying repository commits are left intact. See also: gitlab_list_mr_context_commits, gitlab_create_mr_context_commits, gitlab_mr_get.",
+    "description": "Remove context commits from a merge request by SHA, detaching them from the review. Returns: a success confirmation. The underlying repository commits are left intact. See also: gitlab_list_mr_context_commits, gitlab_create_mr_context_commits, gitlab_mr_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -18979,7 +18979,7 @@
           "type": "boolean"
         },
         "deploy_key_id": {
-          "description": "Deploy key ID returned by deploy key operations; do not use deploy_token_id",
+          "description": "Deploy key ID returned by deploy key operations. Do not use deploy_token_id",
           "type": "integer"
         },
         "project_id": {
@@ -19033,7 +19033,7 @@
       "additionalProperties": false,
       "properties": {
         "deploy_key_id": {
-          "description": "Deploy key ID to enable; do not use deploy_token_id",
+          "description": "Deploy key ID to enable. Do not use deploy_token_id",
           "type": "integer"
         },
         "project_id": {
@@ -19106,7 +19106,7 @@
       "additionalProperties": false,
       "properties": {
         "deploy_key_id": {
-          "description": "Deploy key ID returned by deploy key operations; do not use deploy_token_id",
+          "description": "Deploy key ID returned by deploy key operations. Do not use deploy_token_id",
           "type": "integer"
         },
         "project_id": {
@@ -19738,7 +19738,7 @@
           ]
         },
         "deploy_key_id": {
-          "description": "Deploy key ID returned by deploy key operations; do not use deploy_token_id",
+          "description": "Deploy key ID returned by deploy key operations. Do not use deploy_token_id",
           "type": "integer"
         },
         "project_id": {
@@ -20012,7 +20012,7 @@
   },
   {
     "name": "gitlab_deploy_token_delete_group",
-    "description": "Permanently delete a group deploy token by ID. Returns: a success confirmation; deletion is irreversible. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_get_group, gitlab_deploy_token_create_group.",
+    "description": "Permanently delete a group deploy token by ID. Returns: a success confirmation. Deletion is irreversible. See also: gitlab_deploy_token_list_group, gitlab_deploy_token_get_group, gitlab_deploy_token_create_group.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -20070,7 +20070,7 @@
   },
   {
     "name": "gitlab_deploy_token_delete_project",
-    "description": "Permanently delete a project deploy token by ID. Returns: a success confirmation; deletion is irreversible. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_get_project, gitlab_deploy_token_create_project.",
+    "description": "Permanently delete a project deploy token by ID. Returns: a success confirmation. Deletion is irreversible. See also: gitlab_deploy_token_list_project, gitlab_deploy_token_get_project, gitlab_deploy_token_create_project.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -22623,12 +22623,12 @@
   },
   {
     "name": "gitlab_discover_project",
-    "description": "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only; performs a lookup against the GitLab Projects API; no side effects.\n\nWhen to use: only when the user or workspace provides a complete git remote URL from .git/config ([remote \"origin\"] url = ...) or from 'git remote -v'. If the prompt already provides a project path such as group/project or a numeric project ID, pass that value directly as params.project_id to the requested GitLab tool instead of calling discovery. Do not synthesize, guess, or add .git to a project path to create a remote URL.\nNOT for: searching projects by name (use gitlab_search action=projects), listing a user's projects (use gitlab_project action=list_user_projects), verifying GitLab connectivity or authentication (use gitlab_server action=health_check), or pre-checking workflows where project_id is already known.\n\nIMPORTANT: pass the complete URL exactly as it appears — do NOT strip the git@ prefix from SSH URLs. Supported formats (a URL scheme or git@ user prefix is required):\n- HTTPS: https://gitlab.example.com/group/project.git\n- SSH shorthand: git@gitlab.example.com:group/project.git\n- SSH protocol: ssh://git@gitlab.example.com/group/project.git\n\nReturns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. Errors: 404 not found (hint: project may be private — verify token permissions), 403 forbidden (hint: token lacks read_api scope).\n\nSee also: gitlab_project_get, gitlab_server_status, gitlab_search_projects.",
+    "description": "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. Read-only. Performs a lookup against the GitLab Projects API. No side effects.\n\nWhen to use: only when the user or workspace provides a complete git remote URL from .git/config ([remote \"origin\"] url = ...) or from 'git remote -v'. If the prompt already provides a project path such as group/project or a numeric project ID, pass that value directly as params.project_id to the requested GitLab tool instead of calling discovery. Do not synthesize, guess, or add .git to a project path to create a remote URL.\nNOT for: searching projects by name (use gitlab_search action=projects), listing a user's projects (use gitlab_project action=list_user_projects), verifying GitLab connectivity or authentication (use gitlab_server action=health_check), or pre-checking workflows where project_id is already known.\n\nIMPORTANT: pass the complete URL exactly as it appears — do NOT strip the git@ prefix from SSH URLs. Supported formats (a URL scheme or git@ user prefix is required):\n- HTTPS: https://gitlab.example.com/group/project.git\n- SSH shorthand: git@gitlab.example.com:group/project.git\n- SSH protocol: ssh://git@gitlab.example.com/group/project.git\n\nReturns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. Errors: 404 not found (hint: project may be private — verify token permissions), 403 forbidden (hint: token lacks read_api scope).\n\nSee also: gitlab_project_get, gitlab_server_status, gitlab_search_projects.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "remote_url": {
-          "description": "Full git remote URL (HTTPS or SSH) exactly as shown in .git/config or 'git remote -v' output. IMPORTANT: pass the complete URL including the scheme (https://) or user prefix (git@). Examples: 'https://gitlab.example.com/group/project.git' or 'git@gitlab.example.com:group/project.git'. Do not pass plain project paths such as group/project, and do not synthesize URLs by adding .git to a project path; project paths are already valid project_id values.",
+          "description": "Full git remote URL (HTTPS or SSH) exactly as shown in .git/config or 'git remote -v' output. IMPORTANT: pass the complete URL including the scheme (https://) or user prefix (git@). Examples: 'https://gitlab.example.com/group/project.git' or 'git@gitlab.example.com:group/project.git'. Do not pass plain project paths such as group/project, and do not synthesize URLs by adding .git to a project path. Project paths are already valid project_id values.",
           "format": "uri",
           "type": "string"
         }
@@ -27463,7 +27463,7 @@
   },
   {
     "name": "gitlab_epic_issue_remove",
-    "description": "Unlink a child issue from a group epic (destructive; requires confirmation). Returns: the resolved epic and issue work item GIDs confirming the removal. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_get.",
+    "description": "Unlink a child issue from a group epic (destructive. Requires confirmation). Returns: the resolved epic and issue work item GIDs confirming the removal. See also: gitlab_epic_issue_list, gitlab_epic_issue_assign, gitlab_epic_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -28590,7 +28590,7 @@
   },
   {
     "name": "gitlab_epic_update",
-    "description": "Update an existing epic; supports close/reopen via state_event. Returns: the updated epic with its current state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_delete.",
+    "description": "Update an existing epic. Supports close/reopen via state_event. Returns: the updated epic with its current state, labels, assignees, dates, and web URL. See also: gitlab_epic_get, gitlab_epic_list, gitlab_epic_delete.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -28962,7 +28962,7 @@
           "type": "string"
         },
         "strategies": {
-          "description": "Activation strategies for the flag; each has a name, optional parameters, and optional environment scopes",
+          "description": "Activation strategies for the flag. Each has a name, optional parameters, and optional environment scopes",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -29017,7 +29017,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "environment_scope": {
-                      "description": "Environment scope this strategy applies to (e.g. production, staging); omit for the default * scope",
+                      "description": "Environment scope this strategy applies to (e.g. production, staging). Omit for the default * scope",
                       "type": "string"
                     }
                   },
@@ -29801,7 +29801,7 @@
           "type": "string"
         },
         "strategies": {
-          "description": "Activation strategies for the flag; each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes",
+          "description": "Activation strategies for the flag. Each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -29856,7 +29856,7 @@
                   "additionalProperties": false,
                   "properties": {
                     "environment_scope": {
-                      "description": "Environment scope this strategy applies to (e.g. production, staging); omit for the default * scope",
+                      "description": "Environment scope this strategy applies to (e.g. production, staging). Omit for the default * scope",
                       "type": "string"
                     }
                   },
@@ -30156,7 +30156,7 @@
           "type": "string"
         },
         "user_list_iid": {
-          "description": "Feature flag user list internal ID returned by list or create; do not use the user list name",
+          "description": "Feature flag user list internal ID returned by list or create. Do not use the user list name",
           "type": "integer"
         }
       },
@@ -30210,7 +30210,7 @@
           "type": "string"
         },
         "user_list_iid": {
-          "description": "Feature flag user list internal ID returned by list or create; do not use the user list name",
+          "description": "Feature flag user list internal ID returned by list or create. Do not use the user list name",
           "type": "integer"
         }
       },
@@ -30447,7 +30447,7 @@
           "type": "string"
         },
         "user_list_iid": {
-          "description": "Feature flag user list internal ID returned by list or create; do not use the user list name",
+          "description": "Feature flag user list internal ID returned by list or create. Do not use the user list name",
           "type": "integer"
         },
         "user_xids": {
@@ -33814,10 +33814,10 @@
               "type": "string"
             },
             "change_object": {
-              "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"
+              "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated). Holds the raw JSON object so the object-valued change is not lost"
             },
             "changes": {
-              "description": "Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values",
+              "description": "Plural list of changes emitted by some audit events. Each entry records a changed setting with its previous (from) and new (to) values",
               "items": {
                 "additionalProperties": false,
                 "properties": {
@@ -34004,7 +34004,7 @@
   },
   {
     "name": "gitlab_get_group_datadog_integration",
-    "description": "Read the Datadog integration configured on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The api_key is never returned.\n\nReturns: JSON with the group's Datadog integration details. The canonical configuration is the nested properties object (api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events); the flat top-level copies of those fields are deprecated and will be removed — prefer properties.*.\n\nSee also: gitlab_set_group_datadog_integration, gitlab_delete_group_datadog_integration.",
+    "description": "Read the Datadog integration configured on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). The api_key is never returned.\n\nReturns: JSON with the group's Datadog integration details. The canonical configuration is the nested properties object (api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events). The flat top-level copies of those fields are deprecated and will be removed — prefer properties.*.\n\nSee also: gitlab_set_group_datadog_integration, gitlab_delete_group_datadog_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -34107,7 +34107,7 @@
             },
             "properties": {
               "additionalProperties": false,
-              "description": "Canonical Datadog configuration object; prefer these values over the deprecated flat copies",
+              "description": "Canonical Datadog configuration object. Prefer these values over the deprecated flat copies",
               "properties": {
                 "api_url": {
                   "type": "string"
@@ -35311,10 +35311,10 @@
               "type": "string"
             },
             "change_object": {
-              "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"
+              "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated). Holds the raw JSON object so the object-valued change is not lost"
             },
             "changes": {
-              "description": "Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values",
+              "description": "Plural list of changes emitted by some audit events. Each entry records a changed setting with its previous (from) and new (to) values",
               "items": {
                 "additionalProperties": false,
                 "properties": {
@@ -37020,10 +37020,10 @@
               "type": "string"
             },
             "change_object": {
-              "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"
+              "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated). Holds the raw JSON object so the object-valued change is not lost"
             },
             "changes": {
-              "description": "Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values",
+              "description": "Plural list of changes emitted by some audit events. Each entry records a changed setting with its previous (from) and new (to) values",
               "items": {
                 "additionalProperties": false,
                 "properties": {
@@ -41820,7 +41820,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner); 60=Admin is not valid for group access tokens",
+          "description": "Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer), 50 (owner). 60=Admin is not valid for group access tokens",
           "type": "integer"
         },
         "description": {
@@ -45532,7 +45532,7 @@
               ]
             },
             "allowed_to_merge": {
-              "description": "Access levels allowed to merge (30=Developer, 40=Maintainer); GitLab applies the highest provided",
+              "description": "Access levels allowed to merge (30=Developer, 40=Maintainer). GitLab applies the highest provided",
               "items": {
                 "type": "integer"
               },
@@ -45542,7 +45542,7 @@
               ]
             },
             "allowed_to_push": {
-              "description": "Access levels allowed to push (30=Developer, 40=Maintainer); GitLab applies the highest provided",
+              "description": "Access levels allowed to push (30=Developer, 40=Maintainer). GitLab applies the highest provided",
               "items": {
                 "type": "integer"
               },
@@ -45654,7 +45654,7 @@
           "type": "string"
         },
         "organization_id": {
-          "description": "Organization ID to create the group in (GitLab.com multi-organization; defaults to the default organization)",
+          "description": "Organization ID to create the group in (GitLab.com multi-organization. Defaults to the default organization)",
           "type": [
             "null",
             "integer"
@@ -47190,7 +47190,7 @@
           "type": "boolean"
         },
         "with_projects": {
-          "description": "Include the group's projects in the response (deprecated; prefer gitlab_group_projects)",
+          "description": "Include the group's projects in the response (deprecated. Prefer gitlab_group_projects)",
           "type": [
             "null",
             "boolean"
@@ -47920,7 +47920,7 @@
                 "type": "string"
               },
               "value": {
-                "description": "Header value (write-only; masked on read)",
+                "description": "Header value (write-only. Masked on read)",
                 "type": "string"
               }
             },
@@ -48525,7 +48525,7 @@
                 "type": "string"
               },
               "value": {
-                "description": "Header value (write-only; masked on read)",
+                "description": "Header value (write-only. Masked on read)",
                 "type": "string"
               }
             },
@@ -49565,7 +49565,7 @@
           "type": "integer"
         },
         "key": {
-          "description": "URL variable key name — letters and underscores only; GitLab rejects keys containing digits",
+          "description": "URL variable key name — letters and underscores only. GitLab rejects keys containing digits",
           "type": "string"
         },
         "value": {
@@ -49695,7 +49695,7 @@
           "type": "string"
         },
         "id": {
-          "description": "Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter; usually equal to group_id)",
+          "description": "Group ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to group_id)",
           "type": "string"
         },
         "user_id": {
@@ -50880,7 +50880,7 @@
       "additionalProperties": false,
       "properties": {
         "archived": {
-          "description": "Filter by archived state: true returns only archived labels, false only active labels; omit for both",
+          "description": "Filter by archived state: true returns only archived labels, false only active labels. Omit for both",
           "type": [
             "null",
             "boolean"
@@ -51711,7 +51711,7 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Filter groups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response",
+          "description": "Filter groups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response",
           "properties": {},
           "type": "object"
         },
@@ -52865,7 +52865,7 @@
           "type": "string"
         },
         "member_role_id": {
-          "description": "Custom member role ID to assign (Premium/Ultimate); the role's base access level must match access_level",
+          "description": "Custom member role ID to assign (Premium/Ultimate). The role's base access level must match access_level",
           "type": "integer"
         },
         "user_id": {
@@ -53115,7 +53115,7 @@
           "type": "string"
         },
         "member_role_id": {
-          "description": "Custom member role ID to assign (Premium/Ultimate); the role's base access level must match access_level",
+          "description": "Custom member role ID to assign (Premium/Ultimate). The role's base access level must match access_level",
           "type": "integer"
         },
         "user_id": {
@@ -57073,7 +57073,7 @@
   },
   {
     "name": "gitlab_group_protected_environment_protect",
-    "description": "Protect a group-level environment tier with deploy access levels and approval rules; protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect.",
+    "description": "Protect a group-level environment tier with deploy access levels and approval rules. Protection cascades to all subgroup projects. Returns: the newly protected environment with its deploy access levels, required approval count, and approval rules. See also: gitlab_group_protected_environment_get, gitlab_group_protected_environment_update, gitlab_group_protected_environment_unprotect.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -60890,7 +60890,7 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for group shares",
+          "description": "Access level for the shared group (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer). 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for group shares",
           "type": "integer"
         },
         "group_id": {
@@ -61977,7 +61977,7 @@
           "type": "string"
         },
         "parent_id": {
-          "description": "ID of the new parent group; omit to turn the subgroup into a top-level group",
+          "description": "ID of the new parent group. Omit to turn the subgroup into a top-level group",
           "type": [
             "null",
             "integer"
@@ -63559,7 +63559,7 @@
               ]
             },
             "allowed_to_merge": {
-              "description": "Access levels allowed to merge (30=Developer, 40=Maintainer); GitLab applies the highest provided",
+              "description": "Access levels allowed to merge (30=Developer, 40=Maintainer). GitLab applies the highest provided",
               "items": {
                 "type": "integer"
               },
@@ -63569,7 +63569,7 @@
               ]
             },
             "allowed_to_push": {
-              "description": "Access levels allowed to push (30=Developer, 40=Maintainer); GitLab applies the highest provided",
+              "description": "Access levels allowed to push (30=Developer, 40=Maintainer). GitLab applies the highest provided",
               "items": {
                 "type": "integer"
               },
@@ -65230,7 +65230,7 @@
         },
         "filter": {
           "additionalProperties": false,
-          "description": "Filter selecting the variable by environment scope; mirrors the GitLab variable filter object",
+          "description": "Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object",
           "properties": {
             "environment_scope": {
               "description": "Filter the variable by its environment scope (e.g. * or production)",
@@ -65302,7 +65302,7 @@
         },
         "filter": {
           "additionalProperties": false,
-          "description": "Filter selecting the variable by environment scope; mirrors the GitLab variable filter object",
+          "description": "Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object",
           "properties": {
             "environment_scope": {
               "description": "Filter the variable by its environment scope (e.g. * or production)",
@@ -65573,7 +65573,7 @@
         },
         "filter": {
           "additionalProperties": false,
-          "description": "Filter selecting the variable by environment scope; mirrors the GitLab variable filter object",
+          "description": "Filter selecting the variable by environment scope. Mirrors the GitLab variable filter object",
           "properties": {
             "environment_scope": {
               "description": "Filter the variable by its environment scope (e.g. * or production)",
@@ -66347,7 +66347,7 @@
   },
   {
     "name": "gitlab_import_github_gists",
-    "description": "Import GitHub gists into snippets. Returns: a success status; the import runs asynchronously. See also: gitlab_import_from_github, gitlab_cancel_github_import.",
+    "description": "Import GitHub gists into snippets. Returns: a success status. The import runs asynchronously. See also: gitlab_import_from_github, gitlab_cancel_github_import.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -67127,7 +67127,7 @@
   },
   {
     "name": "gitlab_interactive_issue_create",
-    "description": "Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the issue.\n\nInput: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are title, description, labels, confidential, and confirm. Requires permission to create issues in that project.\n\nAfter invocation, the tool elicits in order:\n- title (string, required) — issue title.\n- description (string, optional, multi-line, Markdown) — leave empty to skip.\n- labels (string, optional) — comma-separated; trimmed and deduped server-side.\n- confidential (boolean, optional) — yes/no confirmation; defaults to public when declined.\n- confirm (boolean, required) — final yes/no review of the assembled summary.\n\nBehavior: cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Each confirmed invocation creates ONE new issue; NON-idempotent — re-running with the same title/fields creates another issue. Side effects on success: GitLab fires issue-created webhooks and may notify issue subscribers.\n\nWhen to use: human-in-the-loop issue creation. NOT for: scripted/programmatic creation — use gitlab_issue (action='create') with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_issue (action='create') as the alternative.\n\nReturns: JSON with the created issue (id, issue_iid, web_url, title, state); issue_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_issue_create, gitlab_issue_get.",
+    "description": "Create a GitLab issue through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the issue.\n\nInput: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are title, description, labels, confidential, and confirm. Requires permission to create issues in that project.\n\nAfter invocation, the tool elicits in order:\n- title (string, required) — issue title.\n- description (string, optional, multi-line, Markdown) — leave empty to skip.\n- labels (string, optional) — comma-separated. Trimmed and deduped server-side.\n- confidential (boolean, optional) — yes/no confirmation. Defaults to public when declined.\n- confirm (boolean, required) — final yes/no review of the assembled summary.\n\nBehavior: cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Each confirmed invocation creates ONE new issue. NON-idempotent — re-running with the same title/fields creates another issue. Side effects on success: GitLab fires issue-created webhooks and may notify issue subscribers.\n\nWhen to use: human-in-the-loop issue creation. NOT for: scripted/programmatic creation — use gitlab_issue (action='create') with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_issue (action='create') as the alternative.\n\nReturns: JSON with the created issue (id, issue_iid, web_url, title, state). issue_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_issue_create, gitlab_issue_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -67488,7 +67488,7 @@
           "type": "integer"
         },
         "iid": {
-          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+          "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -67816,7 +67816,7 @@
   },
   {
     "name": "gitlab_interactive_mr_create",
-    "description": "Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the MR.\n\nInput: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are source_branch, target_branch, title, description, labels, remove_source_branch, squash, and confirm. Requires permission to create merge requests in that project.\n\nAfter invocation, the tool elicits in order:\n- source_branch (string, required) — branch with the changes to merge.\n- target_branch (string, required) — branch to merge into (e.g. main, develop).\n- title (string, required) — MR title.\n- description (string, optional, multi-line, Markdown) — leave empty to skip.\n- labels (string, optional) — comma-separated; trimmed and deduped server-side.\n- remove_source_branch (boolean, optional) — yes/no confirmation; default unset.\n- squash (boolean, optional) — yes/no confirmation; default unset.\n- confirm (boolean, required) — final yes/no review of the assembled summary.\n\nBehavior: cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Each confirmed invocation creates ONE new merge request. NON-idempotent — GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422). Retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use gitlab_merge_request (action='create') with all fields pre-supplied and handle 422 as the expected duplicate case.\n\nWhen to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.\n\nReturns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state); merge_request_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_mr_create, gitlab_branch_create.",
+    "description": "Create a GitLab merge request through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the MR.\n\nInput: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are source_branch, target_branch, title, description, labels, remove_source_branch, squash, and confirm. Requires permission to create merge requests in that project.\n\nAfter invocation, the tool elicits in order:\n- source_branch (string, required) — branch with the changes to merge.\n- target_branch (string, required) — branch to merge into (e.g. main, develop).\n- title (string, required) — MR title.\n- description (string, optional, multi-line, Markdown) — leave empty to skip.\n- labels (string, optional) — comma-separated. Trimmed and deduped server-side.\n- remove_source_branch (boolean, optional) — yes/no confirmation, default unset.\n- squash (boolean, optional) — yes/no confirmation, default unset.\n- confirm (boolean, required) — final yes/no review of the assembled summary.\n\nBehavior: cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Each confirmed invocation creates ONE new merge request. NON-idempotent — GitLab rejects an already-open MR for the same source_branch to target_branch in the same project as a validation failure (HTTP 422). Retries may fail with 422 instead of returning the existing MR. Confirm branch/MR state before re-running. For scripted idempotent workflows, use gitlab_merge_request (action='create') with all fields pre-supplied and handle 422 as the expected duplicate case.\n\nWhen to use: human-in-the-loop MR creation. NOT for: scripted/programmatic creation — use gitlab_merge_request (action='create') with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_merge_request (action='create') as the alternative.\n\nReturns: JSON with the created MR (id, merge_request_iid, web_url, title, source_branch, target_branch, state). merge_request_iid corresponds to GitLab's iid field.\n\nSee also: gitlab_mr_create, gitlab_branch_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -68746,7 +68746,7 @@
   },
   {
     "name": "gitlab_interactive_project_create",
-    "description": "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project except initialize_with_readme, where decline/cancel continues with false.\n\nInput: no fields; every project detail is elicited. Requires permission to create projects for the authenticated user.\n\nAfter invocation, the tool elicits in order:\n- name (string, required) — project display name and (when path is omitted) URL slug.\n- description (string, optional) — leave empty to skip.\n- visibility (enum, required) — one of private, internal, public.\n- initialize_with_readme (boolean, optional) — yes/no confirmation; explicit no, decline, or cancel continues with false.\n- default_branch (string, optional) — leave empty to use the GitLab default ('main').\n- confirm (boolean, required) — final yes/no review of the assembled summary.\n\nWhen to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation — use gitlab_project (action='create') with all fields pre-supplied.\n\nBehavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline at any prompt aborts with no GitLab API call and no side effects, except initialize_with_readme where no/decline/cancel is accepted as initialize_with_readme=false. Side effects on success: GitLab may initialize a repository and notify project members.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.\n\nReturns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: gitlab_project_get, gitlab_group_get.",
+    "description": "Create a GitLab project through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the project except initialize_with_readme, where decline/cancel continues with false.\n\nInput: no fields. Every project detail is elicited. Requires permission to create projects for the authenticated user.\n\nAfter invocation, the tool elicits in order:\n- name (string, required) — project display name and (when path is omitted) URL slug.\n- description (string, optional) — leave empty to skip.\n- visibility (enum, required) — one of private, internal, public.\n- initialize_with_readme (boolean, optional) — yes/no confirmation. Explicit no, decline, or cancel continues with false.\n- default_branch (string, optional) — leave empty to use the GitLab default ('main').\n- confirm (boolean, required) — final yes/no review of the assembled summary.\n\nWhen to use: human-in-the-loop project creation. NOT for: scripted/programmatic creation — use gitlab_project (action='create') with all fields pre-supplied.\n\nBehavior: each successful invocation creates ONE new project after explicit user confirmation. NON-idempotent — re-running with the same project path/name can fail with 400/409. Cancellation/decline at any prompt aborts with no GitLab API call and no side effects, except initialize_with_readme where no/decline/cancel is accepted as initialize_with_readme=false. Side effects on success: GitLab may initialize a repository and notify project members.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_project (action='create') as the alternative.\n\nReturns: JSON with the created project (id, path_with_namespace, web_url, visibility, default_branch).\n\nSee also: gitlab_project_get, gitlab_group_get.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -69682,7 +69682,7 @@
   },
   {
     "name": "gitlab_interactive_release_create",
-    "description": "Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.\n\nInput: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are tag_name, name, description, and confirm. Requires permission to create releases in that project.\n\nAfter invocation, the tool elicits in order:\n- tag_name (string, required) — must reference an existing tag in the project; create it first via gitlab_tag (action='create').\n- name (string, optional) — release title; defaults to tag_name when left empty.\n- description (string, optional, multi-line, Markdown) — release notes; leave empty to skip.\n- confirm (boolean, required) — final yes/no review of the assembled summary.\n\nWhen to use: human-in-the-loop release publishing. NOT for: CI/automated release creation — use gitlab_release (action='create') with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_release (action='create') as the alternative.\n\nBehavior: each successful invocation publishes ONE new release after explicit user confirmation. NON-idempotent — re-running with the same tag returns 409 (release already exists). Cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Side effects on success: GitLab fires release-created webhooks and may notify release subscribers.\n\nReturns: JSON with the created release (tag_name, name, description, web_url).\n\nSee also: gitlab_release_create, gitlab_tag_create.",
+    "description": "Create a GitLab release through step-by-step prompts, with explicit confirmation before calling the GitLab API. Cancellation at any prompt aborts without creating the release.\n\nInput: project_id (numeric ID or URL-encoded path) selects the target project. Prompted fields are tag_name, name, description, and confirm. Requires permission to create releases in that project.\n\nAfter invocation, the tool elicits in order:\n- tag_name (string, required) — must reference an existing tag in the project. Create it first via gitlab_tag (action='create').\n- name (string, optional) — release title. Defaults to tag_name when left empty.\n- description (string, optional, multi-line, Markdown) — release notes. Leave empty to skip.\n- confirm (boolean, required) — final yes/no review of the assembled summary.\n\nWhen to use: human-in-the-loop release publishing. NOT for: CI/automated release creation — use gitlab_release (action='create') with all fields pre-supplied.\n\nRequires the MCP client to support the elicitation capability. If unsupported, returns a structured error naming gitlab_release (action='create') as the alternative.\n\nBehavior: each successful invocation publishes ONE new release after explicit user confirmation. NON-idempotent — re-running with the same tag returns 409 (release already exists). Cancellation/decline at any prompt aborts with no GitLab API call and no side effects. Side effects on success: GitLab fires release-created webhooks and may notify release subscribers.\n\nReturns: JSON with the created release (tag_name, name, description, web_url).\n\nSee also: gitlab_release_create, gitlab_tag_create.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -70093,7 +70093,7 @@
           "type": "integer"
         },
         "iid": {
-          "description": "Explicit issue IID to assign (requires admin permissions; normally GitLab assigns the next IID automatically)",
+          "description": "Explicit issue IID to assign (requires admin permissions. Normally GitLab assigns the next IID automatically)",
           "type": "integer"
         },
         "issue_type": {
@@ -70490,7 +70490,7 @@
           "type": "integer"
         },
         "iid": {
-          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+          "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -71788,7 +71788,7 @@
           "type": "integer"
         },
         "iid": {
-          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+          "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -72477,7 +72477,7 @@
           "type": "integer"
         },
         "iid": {
-          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+          "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -77263,7 +77263,7 @@
                 "type": "integer"
               },
               "iid": {
-                "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+                "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
               "issue_link_id": {
@@ -78252,7 +78252,7 @@
                 "type": "integer"
               },
               "iid": {
-                "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+                "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
               "issue_link_id": {
@@ -79236,7 +79236,7 @@
                 "type": "integer"
               },
               "iid": {
-                "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+                "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
               "issue_link_id": {
@@ -80417,7 +80417,7 @@
           "type": "integer"
         },
         "iid": {
-          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+          "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -82254,7 +82254,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions; ignored otherwise.",
+          "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.",
           "type": "string"
         },
         "internal": {
@@ -84442,7 +84442,7 @@
           "type": "integer"
         },
         "iid": {
-          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+          "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -85570,7 +85570,7 @@
           "type": "integer"
         },
         "iid": {
-          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+          "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -86452,7 +86452,7 @@
           "type": "integer"
         },
         "iid": {
-          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+          "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -86860,7 +86860,7 @@
           ]
         },
         "milestone_id": {
-          "description": "New milestone ID (0 to unset; omit to leave unchanged)",
+          "description": "New milestone ID (0 to unset. Omit to leave unchanged)",
           "type": [
             "null",
             "integer"
@@ -86881,7 +86881,7 @@
           ]
         },
         "state_event": {
-          "description": "State transition; set to close or reopen when changing issue state.",
+          "description": "State transition. Set to close or reopen when changing issue state.",
           "enum": [
             "close",
             "reopen"
@@ -87254,7 +87254,7 @@
           "type": "integer"
         },
         "iid": {
-          "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+          "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
           "type": "integer"
         },
         "issue_link_id": {
@@ -92984,7 +92984,7 @@
   },
   {
     "name": "gitlab_label_promote",
-    "description": "Promote a project label to a group label, sharing it across the group's projects. Returns: no content on success; requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list.",
+    "description": "Promote a project label to a group label, sharing it across the group's projects. Returns: no content on success. Requires group-level Maintainer or higher access. See also: gitlab_label_get, gitlab_label_list, gitlab_group_label_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -99291,10 +99291,10 @@
                     "type": "string"
                   },
                   "change_object": {
-                    "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"
+                    "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated). Holds the raw JSON object so the object-valued change is not lost"
                   },
                   "changes": {
-                    "description": "Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values",
+                    "description": "Plural list of changes emitted by some audit events. Each entry records a changed setting with its previous (from) and new (to) values",
                     "items": {
                       "additionalProperties": false,
                       "properties": {
@@ -101852,10 +101852,10 @@
                     "type": "string"
                   },
                   "change_object": {
-                    "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"
+                    "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated). Holds the raw JSON object so the object-valued change is not lost"
                   },
                   "changes": {
-                    "description": "Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values",
+                    "description": "Plural list of changes emitted by some audit events. Each entry records a changed setting with its previous (from) and new (to) values",
                     "items": {
                       "additionalProperties": false,
                       "properties": {
@@ -103704,7 +103704,7 @@
   },
   {
     "name": "gitlab_list_project_aliases",
-    "description": "List every project alias the authenticated administrator can see. Returns: each alias with id, project_id, and name (the full set; no pagination). See also: gitlab_get_project_alias, gitlab_create_project_alias, gitlab_delete_project_alias.",
+    "description": "List every project alias the authenticated administrator can see. Returns: each alias with id, project_id, and name (the full set. No pagination). See also: gitlab_get_project_alias, gitlab_create_project_alias, gitlab_delete_project_alias.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {},
@@ -103842,10 +103842,10 @@
                     "type": "string"
                   },
                   "change_object": {
-                    "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated); holds the raw JSON object so the object-valued change is not lost"
+                    "description": "Object form of the change field. Populated when the API returns change as a JSON object instead of a plain string (e.g. project_group_link_updated). Holds the raw JSON object so the object-valued change is not lost"
                   },
                   "changes": {
-                    "description": "Plural list of changes emitted by some audit events; each entry records a changed setting with its previous (from) and new (to) values",
+                    "description": "Plural list of changes emitted by some audit events. Each entry records a changed setting with its previous (from) and new (to) values",
                     "items": {
                       "additionalProperties": false,
                       "properties": {
@@ -105474,7 +105474,7 @@
       "additionalProperties": false,
       "properties": {
         "project_full_path": {
-          "description": "Full project path (namespace/project); numeric project IDs are not accepted by the GraphQL project(fullPath:) field",
+          "description": "Full project path (namespace/project). Numeric project IDs are not accepted by the GraphQL project(fullPath:) field",
           "type": "string"
         }
       },
@@ -115722,7 +115722,7 @@
           ]
         },
         "approvals_before_merge": {
-          "description": "Number of approvals required before this MR can be merged (deprecated; use the approval rules API)",
+          "description": "Number of approvals required before this MR can be merged (deprecated. Use the approval rules API)",
           "type": "integer"
         },
         "assignee_id": {
@@ -118782,7 +118782,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
+          "description": "Backdate the discussion creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
         },
         "merge_request_iid": {
@@ -119988,7 +119988,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
+          "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
         },
         "discussion_id": {
@@ -120280,7 +120280,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
+          "description": "Backdate the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
         },
         "discussion_id": {
@@ -123896,7 +123896,7 @@
                 "type": "integer"
               },
               "iid": {
-                "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+                "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
               "issue_link_id": {
@@ -129721,7 +129721,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions; ignored otherwise.",
+          "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.",
           "type": "string"
         },
         "internal": {
@@ -132159,7 +132159,7 @@
                 "type": "integer"
               },
               "iid": {
-                "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+                "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
               "issue_link_id": {
@@ -138019,7 +138019,7 @@
       "additionalProperties": false,
       "properties": {
         "file_name": {
-          "description": "File name to download; may include / to describe a directory structure (segments must not be empty or . or ..)",
+          "description": "File name to download. May include / to describe a directory structure (segments must not be empty or . or ..)",
           "type": "string"
         },
         "output_path": {
@@ -138706,7 +138706,7 @@
           "type": "string"
         },
         "file_name": {
-          "description": "Name of the file within the package; may include / to describe a directory structure (segments must not be empty or . or ..)",
+          "description": "Name of the file within the package. May include / to describe a directory structure (segments must not be empty or . or ..)",
           "type": "string"
         },
         "file_path": {
@@ -142210,7 +142210,7 @@
           "type": "string"
         },
         "inputs": {
-          "description": "Pipeline inputs to seed on the schedule; each entry has name and value",
+          "description": "Pipeline inputs to seed on the schedule. Each entry has name and value",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -142226,7 +142226,7 @@
                 "type": "string"
               },
               "value": {
-                "description": "Pipeline input value; type depends on the input definition"
+                "description": "Pipeline input value. Type depends on the input definition"
               }
             },
             "required": [
@@ -142293,7 +142293,7 @@
                 "type": "string"
               },
               "value": {
-                "description": "Pipeline input value; type depends on the input definition"
+                "description": "Pipeline input value. Type depends on the input definition"
               }
             },
             "required": [
@@ -142762,7 +142762,7 @@
                 "type": "string"
               },
               "value": {
-                "description": "Pipeline input value; type depends on the input definition"
+                "description": "Pipeline input value. Type depends on the input definition"
               }
             },
             "required": [
@@ -143039,7 +143039,7 @@
                       "type": "string"
                     },
                     "value": {
-                      "description": "Pipeline input value; type depends on the input definition"
+                      "description": "Pipeline input value. Type depends on the input definition"
                     }
                   },
                   "required": [
@@ -143415,7 +143415,7 @@
                 "type": "string"
               },
               "value": {
-                "description": "Pipeline input value; type depends on the input definition"
+                "description": "Pipeline input value. Type depends on the input definition"
               }
             },
             "required": [
@@ -143613,7 +143613,7 @@
                 "type": "string"
               },
               "value": {
-                "description": "Pipeline input value; type depends on the input definition"
+                "description": "Pipeline input value. Type depends on the input definition"
               }
             },
             "required": [
@@ -143779,7 +143779,7 @@
           "type": "string"
         },
         "inputs": {
-          "description": "Pipeline inputs to set on the schedule; each entry has name, value, and optional destroy",
+          "description": "Pipeline inputs to set on the schedule. Each entry has name, value, and optional destroy",
           "items": {
             "additionalProperties": false,
             "properties": {
@@ -143795,7 +143795,7 @@
                 "type": "string"
               },
               "value": {
-                "description": "Pipeline input value; type depends on the input definition"
+                "description": "Pipeline input value. Type depends on the input definition"
               }
             },
             "required": [
@@ -143864,7 +143864,7 @@
                 "type": "string"
               },
               "value": {
-                "description": "Pipeline input value; type depends on the input definition"
+                "description": "Pipeline input value. Type depends on the input definition"
               }
             },
             "required": [
@@ -145593,7 +145593,7 @@
           "type": "integer"
         },
         "pipeline_id": {
-          "description": "Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines; do not use merge_request_iid.",
+          "description": "Pipeline ID returned by pipeline.list, pipeline.get, pipeline.latest, or merge_request.pipelines. Do not use merge_request_iid.",
           "type": "integer"
         },
         "project_id": {
@@ -146015,7 +146015,7 @@
       "additionalProperties": false,
       "properties": {
         "access_level": {
-          "description": "Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer); 50=Owner and 60=Admin are not valid for project access tokens",
+          "description": "Access level: 5 (Minimal access), 10 (guest), 15 (Planner, Premium/Ultimate), 20 (reporter), 25 (Security Manager, Premium/Ultimate), 30 (developer), 40 (maintainer). 50=Owner and 60=Admin are not valid for project access tokens",
           "type": "integer"
         },
         "description": {
@@ -152534,7 +152534,7 @@
   },
   {
     "name": "gitlab_project_delete",
-    "description": "Delete a project. Returns: a deletion status; on instances with delayed deletion the project is marked for deletion. See also: gitlab_project_restore, gitlab_project_archive.",
+    "description": "Delete a project. Returns: a deletion status. On instances with delayed deletion the project is marked for deletion. See also: gitlab_project_restore, gitlab_project_archive.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -155707,7 +155707,7 @@
                 "type": "string"
               },
               "value": {
-                "description": "Header value (write-only; not returned by the API)",
+                "description": "Header value (write-only. Not returned by the API)",
                 "type": "string"
               }
             },
@@ -156292,7 +156292,7 @@
                 "type": "string"
               },
               "value": {
-                "description": "Header value (write-only; not returned by the API)",
+                "description": "Header value (write-only. Not returned by the API)",
                 "type": "string"
               }
             },
@@ -157248,7 +157248,7 @@
           "type": "integer"
         },
         "key": {
-          "description": "URL variable key name — letters and underscores only; GitLab rejects keys containing digits",
+          "description": "URL variable key name — letters and underscores only. GitLab rejects keys containing digits",
           "type": "string"
         },
         "project_id": {
@@ -157374,7 +157374,7 @@
           "type": "string"
         },
         "id": {
-          "description": "Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter; usually equal to project_id)",
+          "description": "Project ID or URL-encoded path sent in the request body (mirrors the GitLab id parameter. Usually equal to project_id)",
           "type": "string"
         },
         "project_id": {
@@ -164622,7 +164622,7 @@
   },
   {
     "name": "gitlab_project_member_delete",
-    "description": "Remove a member from a project (destructive, requires confirmation). Requires Maintainer; the last Owner of a project cannot be removed. Returns: a success confirmation naming the removed member. See also: gitlab_project_member_edit, gitlab_project_members_list.",
+    "description": "Remove a member from a project (destructive, requires confirmation). Requires Maintainer. The last Owner of a project cannot be removed. Returns: a success confirmation naming the removed member. See also: gitlab_project_member_edit, gitlab_project_members_list.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -165676,7 +165676,7 @@
           "type": "string"
         },
         "url": {
-          "description": "Pull mirror source URL. Do not include credentials in the URL; unlike push mirror endpoints, pull mirroring requires auth_user and auth_password for authentication",
+          "description": "Pull mirror source URL. Do not include credentials in the URL. Unlike push mirror endpoints, pull mirroring requires auth_user and auth_password for authentication",
           "format": "uri",
           "type": "string"
         }
@@ -167715,7 +167715,7 @@
           "type": "string"
         },
         "group_access": {
-          "description": "Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer); 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project shares",
+          "description": "Access level for the group (10=Guest 20=Reporter 30=Developer 40=Maintainer). 5=Minimal access, 15=Planner, 25=Security Manager, 60=Admin are not valid for project shares",
           "type": "integer"
         },
         "group_id": {
@@ -167890,7 +167890,7 @@
           "type": "string"
         },
         "visibility": {
-          "description": "Visibility: private, internal, or public; defaults to private when omitted",
+          "description": "Visibility: private, internal, or public. Defaults to private when omitted",
           "enum": [
             "private",
             "internal",
@@ -168511,7 +168511,7 @@
                 "type": "string"
               },
               "file_path": {
-                "description": "Snippet file path to create/update/delete; for project_update use the file_path returned by project_get",
+                "description": "Snippet file path to create/update/delete. For project_update use the file_path returned by project_get",
                 "type": "string"
               },
               "previous_path": {
@@ -177508,7 +177508,7 @@
   },
   {
     "name": "gitlab_registry_delete_tags_bulk",
-    "description": "Delete container registry tags in bulk by name patterns and age (cannot be undone). Returns: a success confirmation; deletion runs asynchronously. See also: gitlab_registry_list_tags, gitlab_registry_delete_tag.",
+    "description": "Delete container registry tags in bulk by name patterns and age (cannot be undone). Returns: a success confirmation. Deletion runs asynchronously. See also: gitlab_registry_list_tags, gitlab_registry_delete_tag.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -179125,7 +179125,7 @@
                     "type": "string"
                   },
                   "filepath": {
-                    "description": "Deprecated relative path; prefer direct_asset_path",
+                    "description": "Deprecated relative path. Prefer direct_asset_path",
                     "type": "string"
                   },
                   "link_type": {
@@ -179177,7 +179177,7 @@
           "type": "string"
         },
         "ref": {
-          "description": "Branch or commit SHA to create tag from when tag_name does not exist; include this when the prompt says ref/from ref",
+          "description": "Branch or commit SHA to create tag from when tag_name does not exist. Include this when the prompt says ref/from ref",
           "type": "string"
         },
         "released_at": {
@@ -180665,7 +180665,7 @@
           "type": "string"
         },
         "filepath": {
-          "description": "Deprecated alias of direct_asset_path; prefer direct_asset_path.",
+          "description": "Deprecated alias of direct_asset_path. Prefer direct_asset_path.",
           "type": "string"
         },
         "link_type": {
@@ -180768,7 +180768,7 @@
                 "type": "string"
               },
               "filepath": {
-                "description": "Deprecated alias of direct_asset_path; prefer direct_asset_path.",
+                "description": "Deprecated alias of direct_asset_path. Prefer direct_asset_path.",
                 "type": "string"
               },
               "link_type": {
@@ -180780,7 +180780,7 @@
                 "type": "string"
               },
               "url": {
-                "description": "Absolute http, https, or ftp URL of the link target. For package assets, use the URL returned by gitlab_package publish actions; do not construct package URLs manually.",
+                "description": "Absolute http, https, or ftp URL of the link target. For package assets, use the URL returned by gitlab_package publish actions. Do not construct package URLs manually.",
                 "format": "uri",
                 "pattern": "^(https?|ftp)://",
                 "type": "string"
@@ -187778,7 +187778,7 @@
           "type": "integer"
         },
         "scope": {
-          "description": "Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead",
+          "description": "Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead",
           "type": "string"
         },
         "sort": {
@@ -187988,7 +187988,7 @@
           "type": "integer"
         },
         "scope": {
-          "description": "Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead",
+          "description": "Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead",
           "type": "string"
         },
         "sort": {
@@ -188501,7 +188501,7 @@
           "type": "string"
         },
         "scope": {
-          "description": "Deprecated runner scope filter: specific, shared, active, paused, online; prefer type and status instead",
+          "description": "Deprecated runner scope filter: specific, shared, active, paused, online. Prefer type and status instead",
           "type": "string"
         },
         "sort": {
@@ -188688,7 +188688,7 @@
           "type": "string"
         },
         "active": {
-          "description": "Deprecated: registration active state; prefer paused instead",
+          "description": "Deprecated: registration active state. Prefer paused instead",
           "type": [
             "null",
             "boolean"
@@ -189094,7 +189094,7 @@
           "type": "string"
         },
         "active": {
-          "description": "Deprecated: runner active state; prefer paused instead",
+          "description": "Deprecated: runner active state. Prefer paused instead",
           "type": [
             "null",
             "boolean"
@@ -189733,7 +189733,7 @@
           "description": "Optional upload destination for the generated export archive (mirrors the GitLab upload[] options)",
           "properties": {
             "http_method": {
-              "description": "HTTP method to use for the upload (PUT or POST; default PUT)",
+              "description": "HTTP method to use for the upload (PUT or POST. Default PUT)",
               "type": "string"
             },
             "url": {
@@ -190828,7 +190828,7 @@
                 "type": "integer"
               },
               "iid": {
-                "description": "Project-scoped internal ID (the #N shown in GitLab); pass this value as issue_iid to other issue operations. Distinct from the global id.",
+                "description": "Project-scoped internal ID (the #N shown in GitLab). Pass this value as issue_iid to other issue operations. Distinct from the global id.",
                 "type": "integer"
               },
               "issue_link_id": {
@@ -194328,12 +194328,12 @@
   },
   {
     "name": "gitlab_set_group_datadog_integration",
-    "description": "Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, or use_inherited_settings=true must be supplied.\n\nReturns: JSON with the updated Datadog integration details (canonical values in the nested properties object; flat copies are deprecated — prefer properties.*).\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration.",
+    "description": "Create or update the Datadog integration on a group. Requires Owner role and GitLab Premium/Ultimate (self-managed EE or GitLab.com). At least one of api_key, api_url, datadog_env, datadog_service, datadog_site, datadog_tags, datadog_ci_visibility, archive_trace_events, or use_inherited_settings=true must be supplied.\n\nReturns: JSON with the updated Datadog integration details (canonical values in the nested properties object. Flat copies are deprecated — prefer properties.*).\n\nSee also: gitlab_get_group_datadog_integration, gitlab_delete_group_datadog_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "api_key": {
-          "description": "Datadog API key (write-only; never returned by the get endpoint)",
+          "description": "Datadog API key (write-only. Never returned by the get endpoint)",
           "type": "string"
         },
         "api_url": {
@@ -194476,7 +194476,7 @@
             },
             "properties": {
               "additionalProperties": false,
-              "description": "Canonical Datadog configuration object; prefer these values over the deprecated flat copies",
+              "description": "Canonical Datadog configuration object. Prefer these values over the deprecated flat copies",
               "properties": {
                 "api_url": {
                   "type": "string"
@@ -194587,7 +194587,7 @@
   },
   {
     "name": "gitlab_set_group_integration",
-    "description": "Configure (create or update) any group integration by slug, passing the integration's documented parameters in a free-form `config` object. Requires Owner role on the group (some integrations require GitLab Premium/Ultimate).\n\nThe `config` object is sent verbatim as the request body; see doc/api/group_integrations.md and doc/api/integrations.md for the per-integration fields.\n\nReturns: JSON with the resulting group integration details.\n\nSee also: gitlab_get_group_integration, gitlab_list_group_integrations, gitlab_delete_group_integration.",
+    "description": "Configure (create or update) any group integration by slug, passing the integration's documented parameters in a free-form `config` object. Requires Owner role on the group (some integrations require GitLab Premium/Ultimate).\n\nThe `config` object is sent verbatim as the request body. See doc/api/group_integrations.md and doc/api/integrations.md for the per-integration fields.\n\nReturns: JSON with the resulting group integration details.\n\nSee also: gitlab_get_group_integration, gitlab_list_group_integrations, gitlab_delete_group_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -194745,13 +194745,13 @@
   },
   {
     "name": "gitlab_set_integration",
-    "description": "Configure (create or update) any project integration by slug, passing the integration's documented parameters in a free-form `config` object. Use this generic action for integrations without a dedicated tool (e.g. slack, harbor, jenkins, google-play, apple-app-store, prometheus, microsoft-teams, mattermost, discord).\n\nCommon slugs: slack, jira, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, harbor, drone-ci, github, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands, google-play, apple-app-store, prometheus, bamboo, buildkite, campfire, confluence, packagist, pivotaltracker, pumble, pushover, teamcity, unify-circuit, webex-teams, zentao, gitlab-slack-application.\n\nThe `config` object is sent verbatim as the request body; see doc/api/integrations.md for the exact fields each integration accepts (for example slack expects `webhook`; harbor expects `url`, `project_name`, `username`, `password`).\n\nReturns: JSON with the resulting integration details.\n\nSee also: gitlab_get_integration, gitlab_list_integrations, gitlab_delete_integration, gitlab_set_jira_integration.",
+    "description": "Configure (create or update) any project integration by slug, passing the integration's documented parameters in a free-form `config` object. Use this generic action for integrations without a dedicated tool (e.g. slack, harbor, jenkins, google-play, apple-app-store, prometheus, microsoft-teams, mattermost, discord).\n\nCommon slugs: slack, jira, discord, mattermost, microsoft-teams, telegram, datadog, jenkins, harbor, drone-ci, github, emails-on-push, pipelines-email, external-wiki, custom-issue-tracker, matrix, redmine, youtrack, slack-slash-commands, mattermost-slash-commands, google-play, apple-app-store, prometheus, bamboo, buildkite, campfire, confluence, packagist, pivotaltracker, pumble, pushover, teamcity, unify-circuit, webex-teams, zentao, gitlab-slack-application.\n\nThe `config` object is sent verbatim as the request body. See doc/api/integrations.md for the exact fields each integration accepts (for example slack expects `webhook`. Harbor expects `url`, `project_name`, `username`, `password`).\n\nReturns: JSON with the resulting integration details.\n\nSee also: gitlab_get_integration, gitlab_list_integrations, gitlab_delete_integration, gitlab_set_jira_integration.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "config": {
           "additionalProperties": true,
-          "description": "Integration configuration parameters as documented for the chosen slug in doc/api/integrations.md (sent verbatim as the request body). For example slack expects webhook; harbor expects url, project_name, username, password; jenkins expects jenkins_url, project_name, username, password",
+          "description": "Integration configuration parameters as documented for the chosen slug in doc/api/integrations.md (sent verbatim as the request body). For example slack expects webhook. Harbor expects url, project_name, username, password. Jenkins expects jenkins_url, project_name, username, password",
           "properties": {},
           "type": "object"
         },
@@ -195280,7 +195280,7 @@
           "type": "integer"
         },
         "key": {
-          "description": "URL variable key name — letters and underscores only; GitLab rejects keys containing digits",
+          "description": "URL variable key name — letters and underscores only. GitLab rejects keys containing digits",
           "type": "string"
         },
         "value": {
@@ -195664,7 +195664,7 @@
           "type": "string"
         },
         "visibility": {
-          "description": "Visibility: private, internal, or public; defaults to private when omitted",
+          "description": "Visibility: private, internal, or public. Defaults to private when omitted",
           "enum": [
             "private",
             "internal",
@@ -197257,7 +197257,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions; ignored otherwise.",
+          "description": "Backdate the note to this RFC 3339 timestamp (e.g. 2026-01-15T10:00:00Z). Requires administrator or project/group owner permissions. Ignored otherwise.",
           "type": "string"
         },
         "project_id": {
@@ -199008,7 +199008,7 @@
                 "type": "string"
               },
               "file_path": {
-                "description": "Snippet file path to create/update/delete; for project_update use the file_path returned by project_get",
+                "description": "Snippet file path to create/update/delete. For project_update use the file_path returned by project_get",
                 "type": "string"
               },
               "previous_path": {
@@ -199340,7 +199340,7 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Filter subgroups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response",
+          "description": "Filter subgroups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response",
           "properties": {},
           "type": "object"
         },
@@ -202281,7 +202281,7 @@
           "type": "boolean"
         },
         "name": {
-          "description": "Terraform state name. Use params.name for values such as production or eval-unlock-123; do not use id.",
+          "description": "Terraform state name. Use params.name for values such as production or eval-unlock-123. Do not use id.",
           "type": "string"
         },
         "project_id": {
@@ -202740,7 +202740,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
+          "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
         },
         "discussion_id": {
@@ -203628,7 +203628,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
+          "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
         },
         "discussion_id": {
@@ -204711,7 +204711,7 @@
           "type": "string"
         },
         "created_at": {
-          "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z); requires admin or owner rights",
+          "description": "Override the note creation time (ISO 8601, e.g. 2025-01-01T00:00:00Z). Requires admin or owner rights",
           "type": "string"
         },
         "discussion_id": {
@@ -204888,7 +204888,7 @@
           ]
         },
         "assignee_ids": {
-          "description": "Global IDs of assignees. Replaces the current assignees; pass an empty array [] to remove every assignee. Omit the field to leave assignees untouched",
+          "description": "Global IDs of assignees. Replaces the current assignees. Pass an empty array [] to remove every assignee. Omit the field to leave assignees untouched",
           "items": {
             "type": "integer"
           },
@@ -204906,7 +204906,7 @@
           "type": "boolean"
         },
         "crm_contact_ids": {
-          "description": "CRM contact IDs. Replaces the current contacts; pass an empty array [] to remove every contact. Omit the field to leave contacts untouched",
+          "description": "CRM contact IDs. Replaces the current contacts. Pass an empty array [] to remove every contact. Omit the field to leave contacts untouched",
           "items": {
             "type": "integer"
           },
@@ -205257,7 +205257,7 @@
   },
   {
     "name": "gitlab_upload_user_avatar",
-    "description": "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL; GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty — use gitlab_user_current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
+    "description": "Upload the current user's avatar. Returns: the updated user profile including the new avatar URL. GitLab 19 responds with only avatar_url, so other profile fields (including id) may be empty — use gitlab_user_current for the full profile. Provide filename and exactly one of file_path or content_base64. See also: gitlab_user_current, gitlab_modify_user.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {

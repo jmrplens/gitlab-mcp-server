@@ -54,7 +54,7 @@ type attestationActionMetaEntry struct {
 // individual-tool description.
 var attestationActionMeta = map[string]attestationActionMetaEntry{
 	"gitlab_list_attestations": {
-		usage: "List SLSA build provenance attestations for a project artifact identified by its subject digest. Use this to discover which signed attestations exist for a built image or package before downloading one, and to obtain each attestation's IID, predicate type, and status. Requires an Ultimate license; provide the project plus the OCI-style subject digest of the artifact.",
+		usage: "List SLSA build provenance attestations for a project artifact identified by its subject digest. Use this to discover which signed attestations exist for a built image or package before downloading one, and to obtain each attestation's IID, predicate type, and status. Requires an Ultimate license. Provide the project plus the OCI-style subject digest of the artifact.",
 		aliases: []string{
 			"list build attestations",
 			"list slsa provenance",
@@ -80,7 +80,7 @@ var attestationActionMeta = map[string]attestationActionMetaEntry{
 		description: "List SLSA build provenance attestations for a project artifact by subject digest (Ultimate). Returns: each attestation's id, iid, project_id, build_id, status, predicate_kind, predicate_type, subject_digest, download_url, and created/updated/expire timestamps. See also: gitlab_download_attestation, gitlab_package_list, gitlab_project_get.",
 	},
 	"gitlab_download_attestation": {
-		usage: "Download the raw in-toto attestation bundle for a single attestation by its project-scoped IID. Use this after gitlab_list_attestations identifies the attestation you want to verify; the response carries the base64-encoded bundle content and its byte size. Requires an Ultimate license.",
+		usage: "Download the raw in-toto attestation bundle for a single attestation by its project-scoped IID. Use this after gitlab_list_attestations identifies the attestation you want to verify. The response carries the base64-encoded bundle content and its byte size. Requires an Ultimate license.",
 		aliases: []string{
 			"download build attestation",
 			"download slsa provenance bundle",

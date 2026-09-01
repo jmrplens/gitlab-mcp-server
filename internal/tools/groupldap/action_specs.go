@@ -70,7 +70,7 @@ func groupLDAPOptions(individualTool string) toolutil.ActionSpecOptions {
 		}
 		options.IndividualTool.Description = "Trigger an asynchronous LDAP sync for a GitLab group's LDAP links. Returns: a confirmation that the sync was queued. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_add, gitlab_group_get."
 	case "gitlab_group_ldap_link_delete":
-		options.Usage = "Delete an LDAP group link from a group by CN or filter (Premium/Ultimate). Pass the same CN or filter (and provider, when set) used to create the link; trigger gitlab_group_ldap_sync afterwards to reconcile membership."
+		options.Usage = "Delete an LDAP group link from a group by CN or filter (Premium/Ultimate). Pass the same CN or filter (and provider, when set) used to create the link. Trigger gitlab_group_ldap_sync afterwards to reconcile membership."
 		options.Aliases = []string{"delete ldap link", "remove group ldap mapping", "unlink ldap group"}
 		options.RelatedActions = []string{actionGroupLDAPLinkList, actionGroupLDAPLinkAdd, actionGroupLDAPSync}
 		options.IndividualTool.Description = "Delete a GitLab group's LDAP link by CN or filter (Premium/Ultimate). Returns: a success confirmation. See also: gitlab_group_ldap_link_list, gitlab_group_ldap_link_add, gitlab_group_ldap_sync."

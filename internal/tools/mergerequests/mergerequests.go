@@ -46,7 +46,7 @@ type CreateInput struct {
 	TargetProjectID int64 `json:"target_project_id,omitempty" jsonschema:"Target project ID (for cross-project/fork MRs)"`
 
 	// Deprecated approvals control (use the Merge Request Approvals API instead)
-	ApprovalsBeforeMerge int64 `json:"approvals_before_merge,omitempty" tier:"premium" jsonschema:"Number of approvals required before this MR can be merged (deprecated; use the approval rules API)"`
+	ApprovalsBeforeMerge int64 `json:"approvals_before_merge,omitempty" tier:"premium" jsonschema:"Number of approvals required before this MR can be merged (deprecated. Use the approval rules API)"`
 }
 
 // Output is the canonical merge-request output shape. The authoritative

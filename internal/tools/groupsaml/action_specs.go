@@ -60,7 +60,7 @@ func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {
 				SemanticRole:     "scope_group",
 				ValueSource:      "Top-level group numeric ID or full path with SAML SSO configured.",
 				ExampleBinding:   `params.group_id:"my-org"`,
-				CommonConfusions: []string{"Only top-level groups with SAML SSO have SAML users; subgroups return nothing.", "This lists users, not the SAML group links — use gitlab_group_saml_link_list for the link mappings."},
+				CommonConfusions: []string{"Only top-level groups with SAML SSO have SAML users. Subgroups return nothing.", "This lists users, not the SAML group links — use gitlab_group_saml_link_list for the link mappings."},
 			},
 			"username": {
 				ValueSource:    "Exact username to filter to a single SAML user.",
@@ -78,7 +78,7 @@ func groupSAMLOptions(individualTool string) toolutil.ActionSpecOptions {
 		options.Aliases = []string{"add saml link", "create group saml mapping", "link saml group"}
 		options.RelatedActions = []string{actionGroupSAMLLinkList, actionGroupSAMLUsersList, "group.saml_link_delete"}
 	case "gitlab_group_saml_link_delete":
-		options.Usage = "Delete a SAML group link from a group by its SAML group name (Premium/Ultimate). Removes the mapping between a SAML SSO group and its access level; existing members are not removed."
+		options.Usage = "Delete a SAML group link from a group by its SAML group name (Premium/Ultimate). Removes the mapping between a SAML SSO group and its access level. Existing members are not removed."
 		options.Aliases = []string{"delete saml link", "remove group saml mapping", "unlink saml group", "drop saml sso mapping"}
 		options.RelatedActions = []string{actionGroupSAMLLinkList, "group.saml_link_get", actionGroupSAMLLinkAdd}
 		options.IndividualTool.Description = "Delete a SAML group link from a GitLab group by SAML group name. Returns: a confirmation that the SAML group mapping was removed (members are not deleted). See also: gitlab_group_saml_link_list, gitlab_group_saml_link_get, gitlab_group_saml_link_add."

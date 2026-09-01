@@ -59,7 +59,7 @@ func deployKeyOptions(actionName, individualTool string) toolutil.ActionSpecOpti
 			toolutil.SchemaFormatOverride("expires_at", "date-time"))
 	}
 	if actionName == "deploy_key_list_project" {
-		options.Usage = "Lists SSH deploy keys, not deploy tokens; use access.deploy_token_list_project when credentials/tokens are requested."
+		options.Usage = "Lists SSH deploy keys, not deploy tokens. Use access.deploy_token_list_project when credentials/tokens are requested."
 	}
 	if actionName == "deploy_key_list_all" {
 		options.Usage = "List ALL instance-level SSH deploy keys in one call (admin only). Use this instead of deploy_key_list_project when you need every key on the instance, not just those enabled for a single project."
@@ -76,14 +76,14 @@ func deployKeyOptions(actionName, individualTool string) toolutil.ActionSpecOpti
 		}
 	}
 	if actionName == "deploy_key_get" || actionName == "deploy_key_update" || actionName == "deploy_key_delete" || actionName == "deploy_key_enable" {
-		options.Usage = "Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id; deploy tokens are a different resource."
+		options.Usage = "Use deploy_key_id returned by deploy key list/add/get operations. Do not use deploy_token_id. Deploy tokens are a different resource."
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"deploy_key_id": {
 				SemanticRole:   "deploy_key",
 				ValueSource:    "Deploy key ID returned by deploy_key_add, deploy_key_get, deploy_key_list_project, or deploy_key_list_all.",
 				ExampleBinding: "params.deploy_key_id:1",
 				CommonConfusions: []string{
-					"Do not send deploy_token_id; deploy keys and deploy tokens are separate access resources.",
+					"Do not send deploy_token_id. Deploy keys and deploy tokens are separate access resources.",
 					"Do not use token_id for deploy key get/update/delete operations.",
 				},
 			},

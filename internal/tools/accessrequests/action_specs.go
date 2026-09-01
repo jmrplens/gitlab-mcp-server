@@ -97,7 +97,7 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 			"order_by": {
 				ValueSource:      "Column to order keyset-paginated results by (e.g. id).",
 				ExampleBinding:   `params.order_by:"id"`,
-				CommonConfusions: []string{"Combine order_by with sort (asc/desc); do not pass natural-language phrases as the field value."},
+				CommonConfusions: []string{"Combine order_by with sort (asc/desc). Do not pass natural-language phrases as the field value."},
 			},
 		}
 	case "request_list_group":
@@ -114,11 +114,11 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 			"order_by": {
 				ValueSource:      "Column to order keyset-paginated results by (e.g. id).",
 				ExampleBinding:   `params.order_by:"id"`,
-				CommonConfusions: []string{"Combine order_by with sort (asc/desc); do not pass natural-language phrases as the field value."},
+				CommonConfusions: []string{"Combine order_by with sort (asc/desc). Do not pass natural-language phrases as the field value."},
 			},
 		}
 	case "request_project":
-		options.Usage = "Request membership access to a project for the authenticated user. Use to self-request joining a project; a maintainer must later approve or deny the request."
+		options.Usage = "Request membership access to a project for the authenticated user. Use to self-request joining a project. A maintainer must later approve or deny the request."
 		options.Aliases = []string{"request project access", "join a project", "ask to join project", "self-request project membership"}
 		options.RelatedActions = []string{actionAccessRequestListProject, actionAccessApproveProject, actionAccessDenyProject}
 		options.IndividualTool.Description = "Request access to a project as the authenticated user. Returns: the created access request with id, username, name, requested state, and requested_at timestamp. See also: gitlab_access_request_list_project, gitlab_access_request_approve_project, gitlab_access_request_deny_project."
@@ -130,7 +130,7 @@ func accessRequestOptionsForAction(actionName, individualTool string) toolutil.A
 			},
 		}
 	case "request_group":
-		options.Usage = "Request membership access to a group for the authenticated user. Use to self-request joining a group; an owner must later approve or deny the request."
+		options.Usage = "Request membership access to a group for the authenticated user. Use to self-request joining a group. An owner must later approve or deny the request."
 		options.Aliases = []string{"request group access", "join a group", "ask to join group", "self-request group membership"}
 		options.RelatedActions = []string{actionAccessRequestListGroup, actionAccessApproveGroup, actionAccessDenyGroup}
 		options.IndividualTool.Description = "Request access to a group as the authenticated user. Returns: the created access request with id, username, name, requested state, and requested_at timestamp. See also: gitlab_access_request_list_group, gitlab_access_request_approve_group, gitlab_access_request_deny_group."

@@ -32,7 +32,7 @@ func guidanceProjectID() toolutil.ParameterGuidance {
 		SemanticRole:     "scope_project",
 		ValueSource:      "Project ID or full namespace path that owns the job.",
 		ExampleBinding:   `params.project_id:"group/project"`,
-		CommonConfusions: []string{"Use project_id for project scope; pipeline_id and job_id are not substitutes for project_id."},
+		CommonConfusions: []string{"Use project_id for project scope. pipeline_id and job_id are not substitutes for project_id."},
 	}
 }
 
@@ -43,7 +43,7 @@ func guidanceJobID() toolutil.ParameterGuidance {
 		SemanticRole:     "job_identifier",
 		ValueSource:      "Numeric CI job ID from pipeline/job list output or user-provided context.",
 		ExampleBinding:   "params.job_id:12345",
-		CommonConfusions: []string{"job_id is the global database ID, not the per-pipeline index; do not pass a pipeline ID as job_id."},
+		CommonConfusions: []string{"job_id is the global database ID, not the per-pipeline index. Do not pass a pipeline ID as job_id."},
 	}
 }
 
@@ -54,7 +54,7 @@ func guidancePipelineID() toolutil.ParameterGuidance {
 		SemanticRole:     "pipeline_identifier",
 		ValueSource:      "Numeric pipeline ID from pipeline list output or user-provided context.",
 		ExampleBinding:   "params.pipeline_id:67890",
-		CommonConfusions: []string{"pipeline_id identifies the pipeline, not an individual job; use job_id for a specific job."},
+		CommonConfusions: []string{"pipeline_id identifies the pipeline, not an individual job. Use job_id for a specific job."},
 	}
 }
 
@@ -65,7 +65,7 @@ func guidanceScope() toolutil.ParameterGuidance {
 		SemanticRole:     "job_status_filter",
 		ValueSource:      "Status filter requested by task, for example failed, success, running, pending, or manual.",
 		ExampleBinding:   `params.scope:["failed"]`,
-		CommonConfusions: []string{"scope is an array of status strings; avoid natural-language values."},
+		CommonConfusions: []string{"scope is an array of status strings. Avoid natural-language values."},
 	}
 }
 
@@ -174,7 +174,7 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 
 	switch individualTool {
 	case "gitlab_job_list":
-		options.Usage = "List jobs for one pipeline by project_id and pipeline_id. Use this when the prompt references a specific pipeline and asks which jobs ran, failed, or are pending; filter by scope and paginate as needed."
+		options.Usage = "List jobs for one pipeline by project_id and pipeline_id. Use this when the prompt references a specific pipeline and asks which jobs ran, failed, or are pending. Filter by scope and paginate as needed."
 		options.Aliases = []string{"list pipeline jobs", "show jobs in pipeline", "find pipeline jobs"}
 		options.RelatedActions = []string{actionJobGet, actionJobTrace, actionPipelineGet, actionPipelineList, actionJobListBridges}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -182,7 +182,7 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 		}
 		options.IndividualTool.Description = "List CI jobs for one pipeline with status filters, keyset pagination, and ordering. Returns: job summaries with status, stage, ref, and pipeline association. See also: gitlab_job_get, gitlab_job_trace, gitlab_pipeline_get."
 	case "gitlab_job_list_project":
-		options.Usage = "List jobs in one project. Use this when the prompt asks for recent, failed, manual, or retried jobs in a known project; combine filters and pagination as needed."
+		options.Usage = "List jobs in one project. Use this when the prompt asks for recent, failed, manual, or retried jobs in a known project. Combine filters and pagination as needed."
 		options.Aliases = []string{"list project jobs", "show jobs in project", "find project jobs"}
 		options.RelatedActions = []string{actionJobGet, actionJobTrace, actionPipelineGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -190,7 +190,7 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 		}
 		options.IndividualTool.Description = "List CI jobs in one project with filters, keyset pagination, and ordering. Returns: job summaries, status, stage, ref, and pipeline associations. See also: gitlab_job_get, gitlab_job_trace, gitlab_pipeline_get."
 	case "gitlab_job_list_bridges":
-		options.Usage = "List bridge (trigger) jobs for one pipeline by project_id and pipeline_id. Use this to inspect downstream or multi-project pipeline triggers; bridges exist only on pipelines that trigger child pipelines."
+		options.Usage = "List bridge (trigger) jobs for one pipeline by project_id and pipeline_id. Use this to inspect downstream or multi-project pipeline triggers. Bridges exist only on pipelines that trigger child pipelines."
 		options.Aliases = []string{"list bridge jobs", "show trigger jobs", "list downstream triggers"}
 		options.RelatedActions = []string{actionJobList, actionPipelineGet, actionJobGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -206,7 +206,7 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 		}
 		options.IndividualTool.Description = "Get CI job trace output. Returns: text log with truncation metadata when logs exceed limits. See also: gitlab_job_get, gitlab_job_retry, gitlab_job_cancel."
 	case "gitlab_job_retry":
-		options.Usage = "Retry a failed or canceled CI job by project_id and job_id. Use this to re-run a job that ended in failure; running or successful jobs cannot be retried."
+		options.Usage = "Retry a failed or canceled CI job by project_id and job_id. Use this to re-run a job that ended in failure. Running or successful jobs cannot be retried."
 		options.Aliases = []string{"retry job", "rerun job", "re-run failed job"}
 		options.RelatedActions = []string{actionJobGet, actionJobTrace, actionJobCancel}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -222,7 +222,7 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 		}
 		options.IndividualTool.Description = "Cancel a CI job. Set force:true to cancel jobs already in a non-cancellable state (requires GitLab v17.2+). Returns: updated job state. See also: gitlab_job_get, gitlab_job_retry."
 	case "gitlab_job_play":
-		options.Usage = "Run a manual CI job by project_id and job_id, optionally injecting job_variables_attributes. Use this for jobs defined as when:manual that have not yet run; use retry for finished jobs."
+		options.Usage = "Run a manual CI job by project_id and job_id, optionally injecting job_variables_attributes. Use this for jobs defined as when:manual that have not yet run. Use retry for finished jobs."
 		options.Aliases = []string{"play job", "run manual job", "trigger manual job"}
 		options.RelatedActions = []string{actionJobGet, actionJobRetry, actionJobTrace}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -231,12 +231,12 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 				SemanticRole:     "job_variable_overrides",
 				ValueSource:      "List of key/value (and optional variable_type) variable overrides to inject into the manual run.",
 				ExampleBinding:   `params.job_variables_attributes:[{"key":"ENV","value":"production"}]`,
-				CommonConfusions: []string{"Each entry needs an explicit key and value; variable_type defaults to env_var."},
+				CommonConfusions: []string{"Each entry needs an explicit key and value. variable_type defaults to env_var."},
 			},
 		}
 		options.IndividualTool.Description = "Run a manual CI job with optional variable overrides. Returns: the started job state. See also: gitlab_job_get, gitlab_job_retry, gitlab_job_trace."
 	case "gitlab_job_keep_artifacts":
-		options.Usage = "Prevent a CI job's artifacts from expiring by project_id and job_id. Use this to retain build outputs indefinitely by clearing the artifact expire_at; requires Maintainer+."
+		options.Usage = "Prevent a CI job's artifacts from expiring by project_id and job_id. Use this to retain build outputs indefinitely by clearing the artifact expire_at. Requires Maintainer+."
 		options.Aliases = []string{"keep job artifacts", "retain artifacts", "prevent artifact expiry"}
 		options.RelatedActions = []string{actionJobArtifacts, actionJobGet, actionJobDownloadArtfct}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -244,7 +244,7 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 		}
 		options.IndividualTool.Description = "Keep a CI job's artifacts by clearing their expiration. Returns: updated job state. See also: gitlab_job_artifacts, gitlab_job_get, gitlab_job_download_artifacts."
 	case "gitlab_job_erase":
-		options.Usage = "Erase a finished CI job's trace log and artifacts by project_id and job_id. Use this destructive action to wipe sensitive output; the job must be in a finished state and requires Maintainer+."
+		options.Usage = "Erase a finished CI job's trace log and artifacts by project_id and job_id. Use this destructive action to wipe sensitive output. The job must be in a finished state and requires Maintainer+."
 		options.Aliases = []string{"erase job", "wipe job", "clear job trace and artifacts"}
 		options.RelatedActions = []string{actionJobGet, actionJobTrace, actionJobArtifacts}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -260,7 +260,7 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 		}
 		options.IndividualTool.Description = "Wait for a CI job to finish, polling until terminal state or timeout. Returns: final job snapshot, wait duration, poll count, and timed-out flag. See also: gitlab_job_get, gitlab_job_trace, gitlab_job_retry."
 	case "gitlab_job_artifacts":
-		options.Usage = "Download the full artifact archive for a CI job by project_id and job_id. Use this to retrieve all build outputs as a base64-encoded archive; prefer download_single_artifact for one file."
+		options.Usage = "Download the full artifact archive for a CI job by project_id and job_id. Use this to retrieve all build outputs as a base64-encoded archive. Prefer download_single_artifact for one file."
 		options.Aliases = []string{"download job artifacts", "get artifact archive", "fetch job artifacts"}
 		options.RelatedActions = []string{actionJobDownloadSingle, actionJobKeepArtifacts, actionJobGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -281,7 +281,7 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 		}
 		options.IndividualTool.Description = "Download the latest successful artifacts archive for a ref and job name. Returns: archive size, content, and truncation flag. See also: gitlab_job_artifacts, gitlab_job_download_single_artifact, gitlab_job_get."
 	case "gitlab_job_download_single_artifact":
-		options.Usage = "Download one artifact file path from a job by job_id and artifact_path. Use when the task requests one artifact file by explicit path; prefer job.artifacts for full archives."
+		options.Usage = "Download one artifact file path from a job by job_id and artifact_path. Use when the task requests one artifact file by explicit path. Prefer job.artifacts for full archives."
 		options.Aliases = []string{"download single artifact", "get one artifact file", "fetch artifact by path"}
 		options.RelatedActions = []string{actionJobArtifacts, actionJobDownloadArtfct, actionJobGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -312,7 +312,7 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 		}
 		options.IndividualTool.Description = "Download one artifact file from the latest successful job on a ref by name and path. Returns: file size, raw content, and truncation flag. See also: gitlab_job_download_artifacts, gitlab_job_download_single_artifact, gitlab_job_get."
 	case "gitlab_job_delete_artifacts":
-		options.Usage = "Delete the artifacts for one CI job by project_id and job_id. Use this destructive action to free storage for a finished job; requires Maintainer+ role."
+		options.Usage = "Delete the artifacts for one CI job by project_id and job_id. Use this destructive action to free storage for a finished job. Requires Maintainer+ role."
 		options.Aliases = []string{"delete job artifacts", "remove job artifacts", "purge job artifacts"}
 		options.RelatedActions = []string{actionJobArtifacts, actionJobGet, "job.delete_project_artifacts"}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -320,7 +320,7 @@ func jobOptionsForAction(actionName, individualTool string, extraTags ...string)
 		}
 		options.IndividualTool.Description = "Delete the artifacts for one CI job (destructive). Returns: a success confirmation. See also: gitlab_job_artifacts, gitlab_job_get, gitlab_job_delete_project_artifacts."
 	case "gitlab_job_delete_project_artifacts":
-		options.Usage = "Delete every eligible artifact across a project by project_id. Use this irreversible bulk action to reclaim storage across all jobs; requires Maintainer+ role."
+		options.Usage = "Delete every eligible artifact across a project by project_id. Use this irreversible bulk action to reclaim storage across all jobs. Requires Maintainer+ role."
 		options.Aliases = []string{"delete all project artifacts", "purge project artifacts", "bulk delete artifacts"}
 		options.RelatedActions = []string{"job.delete_artifacts", actionJobListProject, actionJobArtifacts}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{

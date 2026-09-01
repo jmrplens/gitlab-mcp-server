@@ -79,7 +79,7 @@ type ListOutput struct {
 
 // ScopeInput represents a scope for strategy options.
 type ScopeInput struct {
-	EnvironmentScope string `json:"environment_scope" jsonschema:"Environment scope this strategy applies to (e.g. production, staging); omit for the default * scope"`
+	EnvironmentScope string `json:"environment_scope" jsonschema:"Environment scope this strategy applies to (e.g. production, staging). Omit for the default * scope"`
 }
 
 // StrategyParameterInput represents strategy parameters for create/update.
@@ -128,7 +128,7 @@ type CreateInput struct {
 	Description string               `json:"description,omitempty" jsonschema:"Feature flag description"`
 	Version     string               `json:"version,omitempty" jsonschema:"Version of the feature flag (new_version_flag)"`
 	Active      *bool                `json:"active,omitempty" jsonschema:"Whether the flag is active"`
-	Strategies  []StrategyInput      `json:"strategies,omitempty" jsonschema:"Activation strategies for the flag; each has a name, optional parameters, and optional environment scopes"`
+	Strategies  []StrategyInput      `json:"strategies,omitempty" jsonschema:"Activation strategies for the flag. Each has a name, optional parameters, and optional environment scopes"`
 }
 
 // UpdateInput contains parameters for updating a feature flag.
@@ -138,7 +138,7 @@ type UpdateInput struct {
 	NewName     string               `json:"new_name,omitempty" jsonschema:"New feature flag name"`
 	Description string               `json:"description,omitempty" jsonschema:"Feature flag description"`
 	Active      *bool                `json:"active,omitempty" jsonschema:"Whether the flag is active"`
-	Strategies  []StrategyInput      `json:"strategies,omitempty" jsonschema:"Activation strategies for the flag; each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes"`
+	Strategies  []StrategyInput      `json:"strategies,omitempty" jsonschema:"Activation strategies for the flag. Each has an optional id (to update an existing strategy), a name, optional parameters, and optional environment scopes"`
 }
 
 // DeleteInput contains parameters for deleting a feature flag.

@@ -57,8 +57,8 @@ const (
 	// xMCPHeaderKeyword is the JSON Schema keyword defined by SEP-2243.
 	xMCPHeaderKeyword = "x-mcp-header"
 
-	findToolDescription          = "Search the local GitLab action catalog; read-only and no GitLab API call. Use when the action ID or params are unclear; returns schemas, hints, destructive flags, and execute examples."
-	executeActionToolDescription = "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object; destructive actions require top-level confirm=true. Use find first only when action or params are unclear."
+	findToolDescription          = "Search the local GitLab action catalog. Read-only and no GitLab API call. Use when the action ID or params are unclear. Returns schemas, hints, destructive flags, and execute examples."
+	executeActionToolDescription = "Execute one GitLab catalog action by canonical ID or alias. Always pass params as an object. Destructive actions require top-level confirm=true. Use find first only when action or params are unclear."
 	dynamicExecuteEnvelopeHint   = "Execute matches with top-level `action` and one `params` object; every Required Params key below belongs inside `params`, not beside it. Use top-level `confirm` only for destructive actions."
 
 	defaultLimit                 = 20
@@ -198,7 +198,7 @@ type FindOutput struct {
 type ExecuteInput struct {
 	Action  string         `json:"action" jsonschema:"Canonical action ID returned by gitlab_find_action, or a supported compatibility alias, such as project.list, issue.update, or issue.close."`
 	Params  map[string]any `json:"params" jsonschema:"Required action-specific parameters object validated by the selected action schema. Use an empty object for actions with no parameters."`
-	Confirm bool           `json:"confirm,omitempty" jsonschema:"Set top-level confirm=true to explicitly approve destructive actions; do not put confirm inside params for gitlab_execute_action."`
+	Confirm bool           `json:"confirm,omitempty" jsonschema:"Set top-level confirm=true to explicitly approve destructive actions. Do not put confirm inside params for gitlab_execute_action."`
 }
 
 type scoredActionEntry struct {
@@ -2132,7 +2132,7 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 		RelatedActions: []string{"admin.settings_update", actionAdminBroadcastMessageList},
 	},
 	actionAdminBroadcastMessageList: {
-		Usage:          "Lists existing broadcast messages only; it does not read current instance settings.",
+		Usage:          "Lists existing broadcast messages only. It does not read current instance settings.",
 		RelatedActions: []string{actionAdminSettingsGet, "admin.broadcast_message_create"},
 	},
 	"admin.broadcast_message_create": {
@@ -2140,7 +2140,7 @@ var actionUXMetadataByID = map[string]actionUXMetadata{
 		RelatedActions: []string{actionAdminSettingsGet, actionAdminBroadcastMessageList},
 	},
 	"access.deploy_key_list_project": {
-		Usage:          "Lists deploy keys, not deploy tokens; use access.deploy_token_list_project when credentials/tokens are requested.",
+		Usage:          "Lists deploy keys, not deploy tokens. Use access.deploy_token_list_project when credentials/tokens are requested.",
 		RelatedActions: []string{"access.deploy_token_list_project"},
 	},
 	"access.deploy_token_list_project": {

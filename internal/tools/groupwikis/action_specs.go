@@ -109,7 +109,7 @@ var groupWikiActionMeta = map[string]groupWikiActionMetaEntry{
 			"See also: gitlab_group_wiki_list, gitlab_group_wiki_edit, gitlab_group_wiki_delete.",
 	},
 	"gitlab_group_wiki_create": {
-		usage:   "Create a new wiki page in a group (GitLab Premium). Provide a title and content; set format to markdown, rdoc, asciidoc, or org when the default markdown is not wanted.",
+		usage:   "Create a new wiki page in a group (GitLab Premium). Provide a title and content. Set format to markdown, rdoc, asciidoc, or org when the default markdown is not wanted.",
 		aliases: []string{"create group wiki page", "add group wiki page", "new group wiki page"},
 		related: []string{actionGroupWikiList, actionGroupWikiGet, actionGroupWikiEdit},
 		description: "Create a new group wiki page. Returns: the created page with title, slug, format, content, and encoding. " +
@@ -123,7 +123,7 @@ var groupWikiActionMeta = map[string]groupWikiActionMetaEntry{
 			"See also: gitlab_group_wiki_get, gitlab_group_wiki_delete, gitlab_group_wiki_list.",
 	},
 	"gitlab_group_wiki_delete": {
-		usage:   "Permanently delete a group wiki page by slug. Destructive; requires Maintainer or Owner role and confirmation of the group and slug.",
+		usage:   "Permanently delete a group wiki page by slug. Destructive. Requires Maintainer or Owner role and confirmation of the group and slug.",
 		aliases: []string{"delete group wiki page", "remove group wiki page", "destroy group wiki page", "drop group wiki page"},
 		related: []string{actionGroupWikiGet, actionGroupWikiList, actionGroupWikiEdit},
 		description: "Delete a group wiki page permanently. Returns: a success confirmation for the removed page. " +

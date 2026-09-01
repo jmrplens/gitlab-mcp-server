@@ -47,7 +47,7 @@ func (r *recorder) AddResource(resource *mcp.Resource, handler mcp.ResourceHandl
 // never disagree with the table that enforces it — the hand-written
 // variant of this sentence covered 3 of 26 templates and named only the
 // legacy method, which the default stateless HTTP deployment refuses.
-const subscribableMarker = "Subscribable: subscriptions/listen (protocol 2026-07-28); resources/subscribe on stateful sessions."
+const subscribableMarker = "Subscribable: subscriptions/listen (protocol 2026-07-28). Resources/subscribe on stateful sessions."
 
 // subscribableMetaKey is the vendor-namespaced `_meta` key stating the same
 // fact for machines. The description marker serves the model (models read

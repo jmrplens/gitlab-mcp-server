@@ -16,7 +16,7 @@ const (
 
 const (
 	usageScheduleExport = "Schedule an asynchronous export of a group's relations (issues, labels, milestones, boards, and more) by group_id. " +
-		"Use this to start a group relations export before downloading it or before importing the group elsewhere; the export runs in the background, so poll status afterwards with group.group_relations_list_status."
+		"Use this to start a group relations export before downloading it or before importing the group elsewhere. The export runs in the background, so poll status afterwards with group.group_relations_list_status."
 	usageListExportStatus = "List the per-relation status of a group's relations export by group_id, optionally filtered by a single relation name. " +
 		"Use this after scheduling an export to check whether each relation has finished, failed, or is still in progress before downloading the export archive."
 )

@@ -103,7 +103,7 @@ func noteIDGuidance() toolutil.ParameterGuidance {
 		SemanticRole:     "note_id",
 		ValueSource:      "Numeric note ID from a prior group.epic_note_list or group.epic_note_create result.",
 		ExampleBinding:   "params.note_id:100",
-		CommonConfusions: []string{"note_id is the comment ID, not the epic_iid; obtain it from group.epic_note_list."},
+		CommonConfusions: []string{"note_id is the comment ID, not the epic_iid. Obtain it from group.epic_note_list."},
 	}
 }
 
@@ -158,14 +158,14 @@ func decorateEpicNoteMeta(options *toolutil.ActionSpecOptions, individualTool st
 			"full_path": fullPathGuidance(),
 			"epic_iid":  epicIIDGuidance(),
 			"body": {
-				ValueSource:      "The comment text the user wants to post; Markdown is supported.",
+				ValueSource:      "The comment text the user wants to post. Markdown is supported.",
 				ExampleBinding:   `params.body:"Thanks, closing this epic."`,
-				CommonConfusions: []string{"body is the comment content, not a description update; updating the epic body is group.epic_update."},
+				CommonConfusions: []string{"body is the comment content, not a description update. Updating the epic body is group.epic_update."},
 			},
 		}
 		options.IndividualTool.Description = "Add a comment (note) to an epic. Returns: the created note with id, author, body, and timestamps. See also: gitlab_epic_note_list, gitlab_epic_get, gitlab_create_epic_discussion."
 	case "gitlab_epic_note_update":
-		options.Usage = "Replace the body of an existing epic note. Only the original author or a Maintainer/Owner can edit a note; system notes cannot be edited. Use when the task asks to edit, fix, or amend a comment."
+		options.Usage = "Replace the body of an existing epic note. Only the original author or a Maintainer/Owner can edit a note. System notes cannot be edited. Use when the task asks to edit, fix, or amend a comment."
 		options.Aliases = []string{"edit epic comment", "update epic note", "amend epic comment"}
 		options.RelatedActions = []string{actionEpicNoteGet, actionEpicNoteList, actionEpicNoteDelete}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
@@ -173,14 +173,14 @@ func decorateEpicNoteMeta(options *toolutil.ActionSpecOptions, individualTool st
 			"epic_iid":  epicIIDGuidance(),
 			"note_id":   noteIDGuidance(),
 			"body": {
-				ValueSource:      "The new comment text that replaces the existing note body; Markdown is supported.",
+				ValueSource:      "The new comment text that replaces the existing note body. Markdown is supported.",
 				ExampleBinding:   `params.body:"Updated: resolved in &123."`,
-				CommonConfusions: []string{"This replaces the whole note body; it does not append to it."},
+				CommonConfusions: []string{"This replaces the whole note body. It does not append to it."},
 			},
 		}
 		options.IndividualTool.Description = "Update an epic note's body. Returns: the updated note with new body and updated_at timestamp. See also: gitlab_epic_note_get, gitlab_epic_note_list, gitlab_epic_note_delete."
 	case "gitlab_epic_note_delete":
-		options.Usage = "Permanently delete an epic note. Destructive and irreversible. Only the note author or a group Maintainer/Owner can delete a note; system notes cannot be deleted. Requires explicit confirmation."
+		options.Usage = "Permanently delete an epic note. Destructive and irreversible. Only the note author or a group Maintainer/Owner can delete a note. System notes cannot be deleted. Requires explicit confirmation."
 		options.Aliases = []string{"delete epic comment", "remove epic note", "delete epic note"}
 		options.RelatedActions = []string{actionEpicNoteGet, actionEpicNoteList, actionEpicGet}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{

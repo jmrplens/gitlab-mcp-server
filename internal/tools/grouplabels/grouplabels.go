@@ -20,7 +20,7 @@ type ListInput struct {
 	IncludeAncestorGroups   bool                 `json:"include_ancestor_groups,omitempty"  jsonschema:"Include labels from ancestor groups"`
 	IncludeDescendantGroups bool                 `json:"include_descendant_groups,omitempty" jsonschema:"Include labels from descendant groups"`
 	OnlyGroupLabels         bool                 `json:"only_group_labels,omitempty"       jsonschema:"Only return group-level labels (exclude project labels)"`
-	Archived                *bool                `json:"archived,omitempty"                jsonschema:"Filter by archived state: true returns only archived labels, false only active labels; omit for both"`
+	Archived                *bool                `json:"archived,omitempty"                jsonschema:"Filter by archived state: true returns only archived labels, false only active labels. Omit for both"`
 	OrderBy                 string               `json:"order_by,omitempty"                jsonschema:"Column to order results by for keyset pagination (e.g. name, created_at, updated_at)"`
 	Sort                    string               `json:"sort,omitempty"                    jsonschema:"Sort direction (asc, desc)"`
 	toolutil.PaginationInput

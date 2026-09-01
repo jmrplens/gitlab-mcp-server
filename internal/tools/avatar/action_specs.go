@@ -16,7 +16,7 @@ func avatarOptions() toolutil.ActionSpecOptions {
 	return toolutil.ActionSpecOptions{
 		Aliases:        []string{"avatar", "user avatar", "avatar url", "avatar lookup", "lookup avatar by email"},
 		Tags:           []string{"user", "avatar", "profile"},
-		Usage:          "Resolve the avatar URL for a known email address. Use this when the task already provides an email; do not use it to search for users by name or username.",
+		Usage:          "Resolve the avatar URL for a known email address. Use this when the task already provides an email. Do not use it to search for users by name or username.",
 		RelatedActions: []string{"user.me", "user.emails", "user.current_user_status"},
 		ParameterGuidance: map[string]toolutil.ParameterGuidance{
 			"email": {
@@ -27,7 +27,7 @@ func avatarOptions() toolutil.ActionSpecOptions {
 			},
 			"size": {
 				SemanticRole:     "image_size_pixels",
-				ValueSource:      "Optional avatar size in pixels; omit it to let GitLab choose the default size.",
+				ValueSource:      "Optional avatar size in pixels. Omit it to let GitLab choose the default size.",
 				ExampleBinding:   "params.size:128",
 				CommonConfusions: []string{"Send a numeric pixel size such as 64 or 128, not CSS strings like 64px."},
 			},

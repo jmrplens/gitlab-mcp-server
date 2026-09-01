@@ -20,7 +20,7 @@ type CreateInput struct {
 	Name        string               `json:"name,omitempty"        jsonschema:"Release title"`
 	Description string               `json:"description,omitempty" jsonschema:"Release notes (Markdown supported)"`
 	ReleasedAt  string               `json:"released_at,omitempty" jsonschema:"Date of the release in ISO 8601 format"`
-	Ref         string               `json:"ref,omitempty"         jsonschema:"Branch or commit SHA to create tag from when tag_name does not exist; include this when the prompt says ref/from ref"`
+	Ref         string               `json:"ref,omitempty"         jsonschema:"Branch or commit SHA to create tag from when tag_name does not exist. Include this when the prompt says ref/from ref"`
 	Milestones  []string             `json:"milestones,omitempty"  jsonschema:"Milestone titles to associate with the release"`
 	TagMessage  string               `json:"tag_message,omitempty" jsonschema:"Message to use for the annotated tag (creates annotated tag instead of lightweight)"`
 	Assets      *AssetsInput         `json:"assets,omitempty"      jsonschema:"Asset links to attach to the release at creation time"`
@@ -37,7 +37,7 @@ type AssetsInput struct {
 type AssetLinkInput struct {
 	Name            string `json:"name,omitempty"              jsonschema:"Name of the asset link as shown in the release"`
 	URL             string `json:"url,omitempty"               jsonschema:"URL of the asset"`
-	FilePath        string `json:"filepath,omitempty"          jsonschema:"Deprecated relative path; prefer direct_asset_path"`
+	FilePath        string `json:"filepath,omitempty"          jsonschema:"Deprecated relative path. Prefer direct_asset_path"`
 	DirectAssetPath string `json:"direct_asset_path,omitempty" jsonschema:"Relative path to direct asset link (e.g. /binaries/app.zip)"`
 	LinkType        string `json:"link_type,omitempty"         jsonschema:"Asset link type: other (default), runbook, image, or package"`
 }

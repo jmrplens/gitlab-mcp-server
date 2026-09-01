@@ -354,7 +354,7 @@ func List(ctx context.Context, client *gitlabclient.Client, input ListInput) (Li
 type GetInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	SHA       string               `json:"sha"        jsonschema:"Commit SHA hash to retrieve,required"`
-	Stats     bool                 `json:"stats,omitempty" jsonschema:"Include commit stats (additions, deletions, total); defaults to true on GitLab"`
+	Stats     bool                 `json:"stats,omitempty" jsonschema:"Include commit stats (additions, deletions, total). Defaults to true on GitLab"`
 }
 
 // DetailOutput represents a single commit with full details. It mirrors the

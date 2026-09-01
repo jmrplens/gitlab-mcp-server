@@ -117,9 +117,9 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 		}
 		options.ParameterGuidance["position"] = toolutil.ParameterGuidance{
 			SemanticRole:     "diff_position",
-			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_mr_changes_get; omit for a general discussion.",
+			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_mr_changes_get. Omit for a general discussion.",
 			ExampleBinding:   `params.position:{"base_sha":"abc","head_sha":"def","start_sha":"abc","new_path":"main.go","new_line":12}`,
-			CommonConfusions: []string{"Inline comments require the full SHA triple plus a valid path/line from the MR diff; omit position entirely for a thread that is not tied to a line."},
+			CommonConfusions: []string{"Inline comments require the full SHA triple plus a valid path/line from the MR diff. Omit position entirely for a thread that is not tied to a line."},
 		}
 		options.IndividualTool.Description = "Create a new discussion thread on a merge request, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: gitlab_mr_discussion_reply, gitlab_mr_discussion_list, gitlab_mr_changes_get."
 	case "gitlab_mr_discussion_list":
@@ -131,7 +131,7 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 			SemanticRole:     "discussion_list_sort_field",
 			ValueSource:      "Column requested for ordering threads, such as created_at or updated_at.",
 			ExampleBinding:   `params.order_by:"created_at"`,
-			CommonConfusions: []string{"Combine order_by with sort; do not pass natural-language phrases as the field value."},
+			CommonConfusions: []string{"Combine order_by with sort. Do not pass natural-language phrases as the field value."},
 		}
 		options.IndividualTool.Description = "List discussion threads on a merge request with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_mr_discussion_get, gitlab_mr_discussion_create, gitlab_mr_get, gitlab_mr_notes_list."
 	case "gitlab_mr_discussion_get":
@@ -163,11 +163,11 @@ func decorateMRDiscussionMeta(options *toolutil.ActionSpecOptions, individualToo
 			SemanticRole:     "resolve_flag",
 			ValueSource:      "Boolean: true resolves the thread, false reopens it.",
 			ExampleBinding:   "params.resolved:true",
-			CommonConfusions: []string{"resolved is a boolean toggle, not a note body; only resolvable thread discussions can be resolved."},
+			CommonConfusions: []string{"resolved is a boolean toggle, not a note body. Only resolvable thread discussions can be resolved."},
 		}
 		options.IndividualTool.Description = "Resolve or unresolve a merge request discussion thread. Returns: the thread with its updated resolved state and notes. See also: gitlab_mr_discussion_get, gitlab_mr_discussion_list, gitlab_mr_discussion_reply."
 	case "gitlab_mr_discussion_note_update":
-		options.Usage = "Edit the body of a note in a merge request discussion thread, or resolve/unresolve a single resolvable note. Only the note author can edit the body; only Maintainers can change the resolved flag. Identify the note with discussion_id plus note_id."
+		options.Usage = "Edit the body of a note in a merge request discussion thread, or resolve/unresolve a single resolvable note. Only the note author can edit the body. Only Maintainers can change the resolved flag. Identify the note with discussion_id plus note_id."
 		options.Aliases = []string{"gitlab_mr_discussion_note_update", "edit merge request discussion note", "update MR discussion reply", "modify merge request thread comment"}
 		options.RelatedActions = []string{actionDiscussionReply, actionDiscussionNoteDelete, actionDiscussionGet}
 		options.ParameterGuidance = mrScopeGuidance()

@@ -48,7 +48,7 @@ type CreateInput struct {
 	Cron         string               `json:"cron"                    jsonschema:"Cron expression (e.g. 0 1 * * *),required"`
 	CronTimezone string               `json:"cron_timezone,omitempty" jsonschema:"Cron timezone (e.g. UTC or America/New_York)"`
 	Active       *bool                `json:"active,omitempty"        jsonschema:"Whether the schedule is active (default: true)"`
-	Inputs       []InputObject        `json:"inputs,omitempty"        jsonschema:"Pipeline inputs to seed on the schedule; each entry has name and value"`
+	Inputs       []InputObject        `json:"inputs,omitempty"        jsonschema:"Pipeline inputs to seed on the schedule. Each entry has name and value"`
 }
 
 // UpdateInput contains parameters for editing a pipeline schedule.
@@ -60,7 +60,7 @@ type UpdateInput struct {
 	Cron         string               `json:"cron,omitempty"          jsonschema:"Updated cron expression"`
 	CronTimezone string               `json:"cron_timezone,omitempty" jsonschema:"Updated cron timezone"`
 	Active       *bool                `json:"active,omitempty"        jsonschema:"Enable or disable the schedule"`
-	Inputs       []InputObject        `json:"inputs,omitempty"        jsonschema:"Pipeline inputs to set on the schedule; each entry has name, value, and optional destroy"`
+	Inputs       []InputObject        `json:"inputs,omitempty"        jsonschema:"Pipeline inputs to set on the schedule. Each entry has name, value, and optional destroy"`
 }
 
 // DeleteInput contains parameters for deleting a pipeline schedule.

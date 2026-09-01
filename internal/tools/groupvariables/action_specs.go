@@ -65,7 +65,7 @@ func groupVariableOptionsForAction(actionName, individualTool string) toolutil.A
 			},
 			"environment_scope": {
 				SemanticRole:   "environment_scope",
-				ValueSource:    "Optional environment scope string; use * for global variable scope.",
+				ValueSource:    "Optional environment scope string. Use * for global variable scope.",
 				ExampleBinding: `params.environment_scope:"*"`,
 			},
 		}

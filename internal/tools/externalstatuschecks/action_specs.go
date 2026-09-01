@@ -97,7 +97,7 @@ const (
 // to its discovery metadata.
 var externalStatusCheckActionMeta = map[string]externalStatusCheckActionMetaEntry{
 	"gitlab_list_project_status_checks": {
-		usage:       "List a project's external status check services (deprecated path). Prefer gitlab_list_project_external_status_checks; use this only when matching the legacy endpoint. Requires Maintainer role and a Premium/Ultimate license.",
+		usage:       "List a project's external status check services (deprecated path). Prefer gitlab_list_project_external_status_checks. Use this only when matching the legacy endpoint. Requires Maintainer role and a Premium/Ultimate license.",
 		aliases:     []string{"list project status checks", "show project external status checks", "external status check services"},
 		related:     []string{actionListProject, actionCreateProject, actionListProjectMR},
 		description: "List a project's external status check services (deprecated endpoint). Returns: each check with id, name, external_url, hmac, protected branches, and pagination metadata. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_list_project_mr_external_status_checks.",
@@ -127,7 +127,7 @@ var externalStatusCheckActionMeta = map[string]externalStatusCheckActionMetaEntr
 		description: "Update a project external status check service. Returns: the updated check with id, name, external_url, hmac, and protected branches. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_delete_project_external_status_check.",
 	},
 	"gitlab_delete_project_external_status_check": {
-		usage:       "Permanently delete a project external status check service. Destructive and irreversible; confirm project_id and check_id before calling. Requires Maintainer role and a Premium/Ultimate license.",
+		usage:       "Permanently delete a project external status check service. Destructive and irreversible. Confirm project_id and check_id before calling. Requires Maintainer role and a Premium/Ultimate license.",
 		aliases:     []string{"delete external status check", "remove project status check", "remove external status check service"},
 		related:     []string{actionListProject, actionCreateProject, actionUpdateProject},
 		description: "Delete a project external status check service permanently. Returns: a success confirmation. See also: gitlab_list_project_external_status_checks, gitlab_create_project_external_status_check, gitlab_update_project_external_status_check.",

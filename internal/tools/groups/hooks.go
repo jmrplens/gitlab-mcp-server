@@ -51,7 +51,7 @@ type HookInput struct {
 // requests. It mirrors gl.HookCustomHeader on add/edit.
 type HookCustomHeaderInput struct {
 	Key   string `json:"key"   jsonschema:"Header name,required"`
-	Value string `json:"value,omitempty" jsonschema:"Header value (write-only; masked on read)"`
+	Value string `json:"value,omitempty" jsonschema:"Header value (write-only. Masked on read)"`
 }
 
 // ListHooksInput defines parameters for listing group hooks.
@@ -598,7 +598,7 @@ func DeleteHookCustomHeader(ctx context.Context, client *gitlabclient.Client, in
 type SetHookURLVariableInput struct {
 	GroupID toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	HookID  int64                `json:"hook_id"  jsonschema:"Webhook ID,required"`
-	Key     string               `json:"key"      jsonschema:"URL variable key name — letters and underscores only; GitLab rejects keys containing digits,required"`
+	Key     string               `json:"key"      jsonschema:"URL variable key name — letters and underscores only. GitLab rejects keys containing digits,required"`
 	Value   string               `json:"value"    jsonschema:"URL variable value (write-only) — must be non-empty,required"`
 }
 

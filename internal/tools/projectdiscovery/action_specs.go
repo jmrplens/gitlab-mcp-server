@@ -6,7 +6,7 @@ import (
 )
 
 const discoverProjectDescription = "Resolve a full git remote URL to a GitLab project and return its project_id and metadata. " +
-	"Read-only; performs a lookup against the GitLab Projects API; no side effects.\n\n" +
+	"Read-only. Performs a lookup against the GitLab Projects API. No side effects.\n\n" +
 	"When to use: only when the user or workspace provides a complete git remote URL from .git/config ([remote \"origin\"] url = ...) or from 'git remote -v'. " +
 	"If the prompt already provides a project path such as group/project or a numeric project ID, pass that value directly as params.project_id to the requested GitLab tool instead of calling discovery. " +
 	"Do not synthesize, guess, or add .git to a project path to create a remote URL.\n" +

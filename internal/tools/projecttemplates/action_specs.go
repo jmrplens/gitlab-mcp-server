@@ -72,7 +72,7 @@ func projectTemplateOptions(actionName, individualTool string) toolutil.ActionSp
 	opts.IndividualTool.Description = "List project templates of a given template_type with optional id/type filters, order_by/sort, and offset or keyset pagination. Returns: each template's key, name, nickname, popularity, and source/HTML URLs. See also: gitlab_get_project_template, gitlab_project_create."
 	opts.ParameterGuidance["type"] = toolutil.ParameterGuidance{
 		SemanticRole:   "template_type_filter",
-		ValueSource:    "Optional secondary filter passed as the 'type' query parameter; " + templateTypeGuidance,
+		ValueSource:    "Optional secondary filter passed as the 'type' query parameter. " + templateTypeGuidance,
 		ExampleBinding: `params.type:"licenses"`,
 	}
 	opts.ParameterGuidance["id"] = toolutil.ParameterGuidance{

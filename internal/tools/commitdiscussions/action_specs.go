@@ -111,7 +111,7 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 			SemanticRole:     "discussion_list_sort_field",
 			ValueSource:      "Column requested for ordering threads, such as created_at or updated_at.",
 			ExampleBinding:   `params.order_by:"created_at"`,
-			CommonConfusions: []string{"Combine order_by with sort; do not pass natural-language phrases as the field value."},
+			CommonConfusions: []string{"Combine order_by with sort. Do not pass natural-language phrases as the field value."},
 		}
 		options.IndividualTool.Description = "List discussion threads on a commit with ordering and keyset pagination. Returns: discussion threads with their notes (author, body, system flag, resolvable state, diff position) and pagination metadata. See also: gitlab_get_commit_discussion, gitlab_create_commit_discussion, gitlab_commit_get."
 	case "gitlab_get_commit_discussion":
@@ -133,9 +133,9 @@ func decorateCommitDiscussionMeta(options *toolutil.ActionSpecOptions, individua
 		}
 		options.ParameterGuidance["position"] = toolutil.ParameterGuidance{
 			SemanticRole:     "diff_position",
-			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_commit_diff; omit for a general discussion.",
+			ValueSource:      "Diff anchor (base_sha, head_sha, start_sha, new_path/old_path and line) from gitlab_commit_diff. Omit for a general discussion.",
 			ExampleBinding:   `params.position:{"base_sha":"abc","head_sha":"def","start_sha":"abc","position_type":"text","new_path":"main.go","new_line":12}`,
-			CommonConfusions: []string{"Inline comments require the full SHA triple plus a valid path/line from the commit diff; omit position entirely for a thread that is not tied to a line."},
+			CommonConfusions: []string{"Inline comments require the full SHA triple plus a valid path/line from the commit diff. Omit position entirely for a thread that is not tied to a line."},
 		}
 		options.IndividualTool.Description = "Create a new discussion thread on a commit, optionally as an inline diff comment. Returns: the created thread with its first note (author, body, resolvable state, diff position). See also: gitlab_add_commit_discussion_note, gitlab_list_commit_discussions, gitlab_commit_diff."
 	case "gitlab_add_commit_discussion_note":

@@ -1763,7 +1763,7 @@ func TestActionSpecs_SearchDisambiguationUsage(t *testing.T) {
 	byTool := searchSpecsByTool(t, ActionSpecs(client))
 
 	code := byTool["gitlab_search_code"]
-	if !strings.Contains(code.Usage, "file contents") || !strings.Contains(code.Usage, "do not use for project") {
+	if !strings.Contains(code.Usage, "file contents") || !strings.Contains(code.Usage, "Do not use for project") {
 		t.Fatalf("code Usage = %q, want file-content/project distinction", code.Usage)
 	}
 

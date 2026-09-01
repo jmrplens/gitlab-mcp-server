@@ -23,7 +23,7 @@ type ListInput struct {
 	AllAvailable         bool              `json:"all_available,omitempty"         jsonschema:"Show all groups accessible by the authenticated user"`
 	Statistics           bool              `json:"statistics,omitempty"            jsonschema:"Include group statistics (storage, counts)"`
 	WithCustomAttributes bool              `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
-	CustomAttributes     map[string]string `json:"custom_attributes,omitempty" jsonschema:"Filter groups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response"`
+	CustomAttributes     map[string]string `json:"custom_attributes,omitempty" jsonschema:"Filter groups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response"`
 	SkipGroups           []int64           `json:"skip_groups,omitempty"           jsonschema:"Group IDs to exclude from results"`
 	MinAccessLevel       int               `json:"min_access_level,omitempty"      jsonschema:"Minimum access level (10=Guest,20=Reporter,30=Developer,40=Maintainer,50=Owner)"`
 	RepositoryStorage    string            `json:"repository_storage,omitempty"    jsonschema:"Filter by repository storage shard (administrators only)"`
@@ -206,7 +206,7 @@ type ListOutput struct {
 type GetInput struct {
 	GroupID              toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
 	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
-	WithProjects         *bool                `json:"with_projects,omitempty"          jsonschema:"Include the group's projects in the response (deprecated; prefer gitlab_group_projects)"`
+	WithProjects         *bool                `json:"with_projects,omitempty"          jsonschema:"Include the group's projects in the response (deprecated. Prefer gitlab_group_projects)"`
 	OrderBy              string               `json:"order_by,omitempty"               jsonschema:"Order embedded projects by field (only applies with with_projects)"`
 	Sort                 string               `json:"sort,omitempty"                   jsonschema:"Sort direction for embedded projects (asc, desc)"`
 	toolutil.PaginationInput
@@ -284,7 +284,7 @@ type SubgroupsListInput struct {
 	Visibility           string               `json:"visibility,omitempty"    jsonschema:"Filter by visibility (public, internal, private)"`
 	TopLevelOnly         bool                 `json:"top_level_only,omitempty" jsonschema:"Limit to top-level subgroups (exclude nested descendants)"`
 	WithCustomAttributes bool                 `json:"with_custom_attributes,omitempty" jsonschema:"Include custom attributes in the response"`
-	CustomAttributes     map[string]string    `json:"custom_attributes,omitempty" jsonschema:"Filter subgroups by custom attribute key/value pairs (administrators only); distinct from with_custom_attributes, which only includes them in the response"`
+	CustomAttributes     map[string]string    `json:"custom_attributes,omitempty" jsonschema:"Filter subgroups by custom attribute key/value pairs (administrators only). Distinct from with_custom_attributes, which only includes them in the response"`
 	SkipGroups           []int64              `json:"skip_groups,omitempty"   jsonschema:"Group IDs to exclude from results"`
 	RepositoryStorage    string               `json:"repository_storage,omitempty" jsonschema:"Filter by repository storage shard (administrators only)"`
 	Active               *bool                `json:"active,omitempty"        jsonschema:"Filter by active (true) or inactive/archived (false) subgroups"`
@@ -855,9 +855,9 @@ func subgroupsListOptions(input SubgroupsListInput) *gl.ListDescendantGroupsOpti
 // levels in allowed_to_push / allowed_to_merge are given as a list of integer
 // access levels; GitLab applies the highest provided level.
 type BranchProtectionDefaultsInput struct {
-	AllowedToPush             []int `json:"allowed_to_push,omitempty"              jsonschema:"Access levels allowed to push (30=Developer, 40=Maintainer); GitLab applies the highest provided"`
+	AllowedToPush             []int `json:"allowed_to_push,omitempty"              jsonschema:"Access levels allowed to push (30=Developer, 40=Maintainer). GitLab applies the highest provided"`
 	AllowForcePush            *bool `json:"allow_force_push,omitempty"             jsonschema:"Allow force push on the default branch"`
-	AllowedToMerge            []int `json:"allowed_to_merge,omitempty"             jsonschema:"Access levels allowed to merge (30=Developer, 40=Maintainer); GitLab applies the highest provided"`
+	AllowedToMerge            []int `json:"allowed_to_merge,omitempty"             jsonschema:"Access levels allowed to merge (30=Developer, 40=Maintainer). GitLab applies the highest provided"`
 	DeveloperCanInitialPush   *bool `json:"developer_can_initial_push,omitempty"   jsonschema:"Allow developers to make the initial push to the default branch"`
 	CodeOwnerApprovalRequired *bool `json:"code_owner_approval_required,omitempty" jsonschema:"Require code owner approval before merging into the default branch"`
 }
@@ -902,7 +902,7 @@ type CreateInput struct {
 	Description                  string `json:"description,omitempty"         jsonschema:"Group description"`
 	Visibility                   string `json:"visibility,omitempty"          jsonschema:"Visibility level (private, internal, public)"`
 	ParentID                     int64  `json:"parent_id,omitempty"           jsonschema:"Parent group ID (creates a subgroup)"`
-	OrganizationID               *int64 `json:"organization_id,omitempty"     jsonschema:"Organization ID to create the group in (GitLab.com multi-organization; defaults to the default organization)"`
+	OrganizationID               *int64 `json:"organization_id,omitempty"     jsonschema:"Organization ID to create the group in (GitLab.com multi-organization. Defaults to the default organization)"`
 	RequestAccessEnabled         *bool  `json:"request_access_enabled,omitempty" jsonschema:"Allow users to request access"`
 	LFSEnabled                   *bool  `json:"lfs_enabled,omitempty"         jsonschema:"Enable Git LFS"`
 	DefaultBranch                string `json:"default_branch,omitempty"      jsonschema:"Default branch name"`

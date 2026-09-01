@@ -28,7 +28,7 @@ func userEventReadSpec(name string, route toolutil.ActionRoute, individualTool s
 			SemanticRole:     "scope_project",
 			ValueSource:      "Project ID or full namespace path whose activity events should be listed.",
 			ExampleBinding:   `params.project_id:"group/project"`,
-			CommonConfusions: []string{"Use the project that owns the events; do not pass a group path or user ID here."},
+			CommonConfusions: []string{"Use the project that owns the events. Do not pass a group path or user ID here."},
 		}
 	}
 

@@ -220,7 +220,7 @@ func ListSharedProjects(ctx context.Context, client *gitlabclient.Client, input 
 // parent group or to the top level.
 type TransferSubGroupInput struct {
 	GroupID  toolutil.StringOrInt `json:"group_id"  jsonschema:"Group ID or URL-encoded path of the group to move,required"`
-	ParentID *int64               `json:"parent_id,omitempty" jsonschema:"ID of the new parent group; omit to turn the subgroup into a top-level group"`
+	ParentID *int64               `json:"parent_id,omitempty" jsonschema:"ID of the new parent group. Omit to turn the subgroup into a top-level group"`
 }
 
 // TransferSubGroup moves a group under a new parent group, or promotes a

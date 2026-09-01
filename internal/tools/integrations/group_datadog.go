@@ -62,7 +62,7 @@ type GroupDatadogItem struct {
 	DatadogCIVisibility            *bool  `json:"datadog_ci_visibility,omitempty"`
 	ArchiveTraceEvents             *bool  `json:"archive_trace_events,omitempty"`
 
-	Properties *GroupDatadogProperties `json:"properties,omitempty" jsonschema:"Canonical Datadog configuration object; prefer these values over the deprecated flat copies"`
+	Properties *GroupDatadogProperties `json:"properties,omitempty" jsonschema:"Canonical Datadog configuration object. Prefer these values over the deprecated flat copies"`
 }
 
 // GroupDatadogProperties mirrors [gl.GroupDatadogIntegrationProperties]
@@ -182,7 +182,7 @@ func GetGroupDatadog(ctx context.Context, client *gitlabclient.Client, input Get
 // UseInheritedSettings=true to inherit settings from an ancestor group.
 type SetGroupDatadogInput struct {
 	GroupID              toolutil.StringOrInt `json:"group_id" jsonschema:"Group ID or URL-encoded path,required"`
-	APIKey               string               `json:"api_key,omitempty" jsonschema:"Datadog API key (write-only; never returned by the get endpoint)"`
+	APIKey               string               `json:"api_key,omitempty" jsonschema:"Datadog API key (write-only. Never returned by the get endpoint)"`
 	APIURL               string               `json:"api_url,omitempty" jsonschema:"Datadog API URL (e.g. https://api.datadoghq.com)"`
 	DatadogEnv           string               `json:"datadog_env,omitempty" jsonschema:"Datadog env tag forwarded with every log/metric"`
 	DatadogService       string               `json:"datadog_service,omitempty" jsonschema:"Datadog service tag forwarded with every log/metric"`

@@ -32,7 +32,7 @@ func projectIDGuidance() map[string]toolutil.ParameterGuidance {
 			SemanticRole:     "scope_project",
 			ValueSource:      "Project ID or URL-encoded full path of the project being exported or imported.",
 			ExampleBinding:   `params.project_id:"group/project"`,
-			CommonConfusions: []string{"Use the source project for export status/download; for import_status use the newly created target project, not the archive."},
+			CommonConfusions: []string{"Use the source project for export status/download. For import_status use the newly created target project, not the archive."},
 		},
 	}
 }
@@ -86,7 +86,7 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 			"See also: gitlab_get_project_export_status, gitlab_download_project_export.",
 	},
 	"gitlab_get_project_export_status": {
-		usage:    "Get the current export status of a project. Use after gitlab_schedule_project_export to poll until export_status is 'finished'; status values are none, started, finished, regeneration_in_progress.",
+		usage:    "Get the current export status of a project. Use after gitlab_schedule_project_export to poll until export_status is 'finished'. Status values are none, started, finished, regeneration_in_progress.",
 		aliases:  []string{"export status", "check project export progress", "is project export ready"},
 		related:  []string{actionExportSchedule, actionExportDownload, actionProjectGet},
 		guidance: projectIDGuidance(),
@@ -110,11 +110,11 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 				SemanticRole:     "new_project_path",
 				ValueSource:      "URL-safe path (slug) for the imported project.",
 				ExampleBinding:   `params.path:"imported-project"`,
-				CommonConfusions: []string{"This names the NEW project; the source archive is supplied via file_path or content_base."},
+				CommonConfusions: []string{"This names the NEW project. The source archive is supplied via file_path or content_base."},
 			},
 			"namespace": {
 				SemanticRole:     "target_namespace",
-				ValueSource:      "Group/user namespace (id or full path) to import into; defaults to the caller's namespace when omitted.",
+				ValueSource:      "Group/user namespace (id or full path) to import into. Defaults to the caller's namespace when omitted.",
 				ExampleBinding:   `params.namespace:"my-group"`,
 				CommonConfusions: []string{"Omit to import into your own namespace."},
 			},
@@ -129,7 +129,7 @@ var projectImportExportMeta = map[string]projectImportExportMetaEntry{
 			"See also: gitlab_get_project_import_status, gitlab_download_project_export.",
 	},
 	"gitlab_get_project_import_status": {
-		usage:    "Get the import status of a project created by gitlab_import_project_from_file. Poll until import_status is 'finished' or 'failed'; inspect import_error on failure. Status values are none, scheduled, started, finished, failed.",
+		usage:    "Get the import status of a project created by gitlab_import_project_from_file. Poll until import_status is 'finished' or 'failed'. Inspect import_error on failure. Status values are none, scheduled, started, finished, failed.",
 		aliases:  []string{"import status", "check project import progress", "did project import succeed"},
 		related:  []string{actionImportFromFile, actionProjectGet},
 		guidance: projectIDGuidance(),

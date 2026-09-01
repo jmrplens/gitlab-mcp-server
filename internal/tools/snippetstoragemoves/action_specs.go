@@ -55,7 +55,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_schedule_snippet_storage_move — schedule a repository storage move for a single snippet.
 		snippetStorageMoveCreateSpec("schedule_snippet", toolutil.RouteAction(client, Schedule), snippetStorageMoveMeta{
 			tool:        "gitlab_schedule_snippet_storage_move",
-			usage:       "Schedule a repository storage move for one snippet onto a destination Gitaly storage shard. Use to migrate a single snippet's repository when rebalancing or evacuating a shard; the move runs asynchronously.",
+			usage:       "Schedule a repository storage move for one snippet onto a destination Gitaly storage shard. Use to migrate a single snippet's repository when rebalancing or evacuating a shard. The move runs asynchronously.",
 			aliases:     []string{"migrate one snippet's repository to a shard", "schedule a snippet storage move", "move a snippet repository to another Gitaly shard"},
 			description: "Schedule a repository storage move for one snippet to a destination Gitaly storage shard. Returns: the scheduled storage move with its initial state and the associated snippet. See also: gitlab_retrieve_snippet_storage_moves, gitlab_get_snippet_storage_move_for_snippet, gitlab_schedule_all_snippet_storage_moves.",
 			related:     []string{"gitlab_retrieve_snippet_storage_moves", "gitlab_get_snippet_storage_move_for_snippet", "gitlab_schedule_all_snippet_storage_moves"},
@@ -63,7 +63,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 		// gitlab_schedule_all_snippet_storage_moves — schedule moves for all snippets on a source shard.
 		snippetStorageMoveCreateSpec("schedule_all_snippet", toolutil.RouteAction(client, ScheduleAll), snippetStorageMoveMeta{
 			tool:        "gitlab_schedule_all_snippet_storage_moves",
-			usage:       "Schedule repository storage moves for every snippet sitting on a given source Gitaly storage shard. Use to bulk-evacuate or drain a shard of all snippet repositories in one operation; moves run asynchronously.",
+			usage:       "Schedule repository storage moves for every snippet sitting on a given source Gitaly storage shard. Use to bulk-evacuate or drain a shard of all snippet repositories in one operation. Moves run asynchronously.",
 			aliases:     []string{"bulk-migrate all snippets off a shard", "drain a Gitaly shard of snippet repositories", "schedule storage moves for all snippets on a source shard"},
 			description: "Schedule repository storage moves for all snippets on a source Gitaly storage shard. Returns: a confirmation that the bulk move was scheduled. See also: gitlab_retrieve_all_snippet_storage_moves, gitlab_schedule_snippet_storage_move.",
 			related:     []string{"gitlab_retrieve_all_snippet_storage_moves", "gitlab_schedule_snippet_storage_move"},
