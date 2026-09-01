@@ -757,9 +757,11 @@ func TestUserStats_Success(t *testing.T) {
 		{"overall summary", "Overall Summary"},
 	}
 	for _, c := range checks {
-		if !strings.Contains(text, c.substr) {
-			t.Errorf("[%s] expected output to contain %q", c.name, c.substr)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			if !strings.Contains(text, c.substr) {
+				t.Errorf("[%s] expected output to contain %q", c.name, c.substr)
+			}
+		})
 	}
 }
 

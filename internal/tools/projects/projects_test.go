@@ -2614,9 +2614,11 @@ func TestAddPushRule_RequiresRuleSetting(t *testing.T) {
 	}
 	message := err.Error()
 	for _, want := range []string{"at least one push rule setting", "params.commit_message_regex", "reject_unsigned_commits"} {
-		if !strings.Contains(message, want) {
-			t.Fatalf("error = %q, want %q", message, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(message, want) {
+				t.Fatalf("error = %q, want %q", message, want)
+			}
+		})
 	}
 }
 
@@ -2868,9 +2870,11 @@ func TestFormatMarkdown(t *testing.T) {
 	}
 	md := FormatMarkdown(out)
 	for _, want := range []string{"test-project", "group/test-project", testPrivate, "main", testDescProject, "group", "Forked From", "upstream/proj", "Archived", "Forks", "Stars", mdOpenIssues, "go, mcp", "1 Jan 2026", mdHTTPClone, mdSSHClone, "MR Title Regex", "Conventional MR titles", "Protected MR Pipelines"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -2885,9 +2889,11 @@ func TestFormatProjectNotFound(t *testing.T) {
 	}
 	content := result.Content[0].(*mcp.TextContent).Text
 	for _, want := range []string{"Project", "Not Found", "group%2Fmissing", "gitlab_project_list"} {
-		if !strings.Contains(content, want) {
-			t.Errorf("not-found markdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(content, want) {
+				t.Errorf("not-found markdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -2950,9 +2956,11 @@ func TestFormatListMarkdown(t *testing.T) {
 		}
 		md := FormatListMarkdown(out)
 		for _, w := range []string{"Projects (2)", testProjA, testProjB, testPublic, testPrivate} {
-			if !strings.Contains(md, w) {
-				t.Errorf("FormatListMarkdown missing %q", w)
-			}
+			t.Run(w, func(t *testing.T) {
+				if !strings.Contains(md, w) {
+					t.Errorf("FormatListMarkdown missing %q", w)
+				}
+			})
 		}
 	})
 	t.Run("empty", func(t *testing.T) {
@@ -3041,9 +3049,11 @@ func TestFormatHookMarkdown(t *testing.T) {
 	}
 	md := FormatHookMarkdown(out)
 	for _, w := range []string{"test-hook", "example.com/hook", "Push", "Issues", "Merge Requests"} {
-		if !strings.Contains(md, w) {
-			t.Errorf("FormatHookMarkdown missing %q", w)
-		}
+		t.Run(w, func(t *testing.T) {
+			if !strings.Contains(md, w) {
+				t.Errorf("FormatHookMarkdown missing %q", w)
+			}
+		})
 	}
 }
 
@@ -3153,9 +3163,11 @@ func TestFork_WithAllOptions(t *testing.T) {
 		t.Errorf(fmtNameWantQ, out.Name, testMyFork)
 	}
 	for _, want := range []string{"name", "path", "namespace_id", "namespace_path", "description", "visibility", "branches", "mr_default_target_self"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 
@@ -3369,9 +3381,11 @@ func TestFormatMarkdown_FullFields(t *testing.T) {
 		mdHTTPClone,
 		mdSSHClone,
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -3391,9 +3405,11 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 	}
 	// Optional fields should NOT appear
 	for _, absent := range []string{"Namespace", "Archived", "Forks", "Stars", mdOpenIssues, "Topics", mdHTTPClone, mdSSHClone} {
-		if strings.Contains(md, absent) {
-			t.Errorf("FormatMarkdown should not contain %q for minimal output", absent)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("FormatMarkdown should not contain %q for minimal output", absent)
+			}
+		})
 	}
 }
 
@@ -3410,9 +3426,11 @@ func TestFormatDeleteMarkdown_PermanentlyRemoved(t *testing.T) {
 	}
 	md := FormatDeleteMarkdown(out)
 	for _, want := range []string{"Project Deletion", testSuccess, "Project deleted", testPermRemoved} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatDeleteMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatDeleteMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -3447,9 +3465,11 @@ func TestFormatListMarkdown_WithProjects(t *testing.T) {
 	}
 	md := FormatListMarkdown(out)
 	for _, want := range []string{"Projects (2)", testProjA, testProjB, testPublic, testPrivate} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -3497,9 +3517,11 @@ func TestFormatListForksMarkdown_WithForks(t *testing.T) {
 	}
 	md := FormatListForksMarkdown(out)
 	for _, want := range []string{"Project Forks (1)", testForkA, "user/fork-a", testPublic} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListForksMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListForksMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -3529,9 +3551,11 @@ func TestFormatLanguagesMarkdown_WithLanguages(t *testing.T) {
 	}
 	md := FormatLanguagesMarkdown(out)
 	for _, want := range []string{"Project Languages", "Go", "72.5%", "Shell", "27.5%"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatLanguagesMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatLanguagesMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -3559,9 +3583,11 @@ func TestFormatListHooksMarkdown_WithHooks(t *testing.T) {
 	}
 	md := FormatListHooksMarkdown(out)
 	for _, want := range []string{"Project Webhooks (2)", "my-hook", testHookURL, testHookURL2} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListHooksMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListHooksMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -3612,9 +3638,11 @@ func TestFormatHookMarkdown_WithName(t *testing.T) {
 	}
 	md := FormatHookMarkdown(out)
 	for _, want := range []string{"Webhook #1", "deploy-hook", testHookURL, "SSL Verification", "Event Triggers", "Push", "Issues", "Merge Requests", "Resource Deploy Token", "REDACTED"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatHookMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatHookMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -3647,9 +3675,11 @@ func TestFormatListProjectUsersMarkdown_WithUsers(t *testing.T) {
 	}
 	md := FormatListProjectUsersMarkdown(out)
 	for _, want := range []string{"Project Users (2)", testAlice, "@alice", "active", testBob, "@bob", "blocked"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListProjectUsersMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListProjectUsersMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -3676,9 +3706,11 @@ func TestFormatListProjectGroupsMarkdown_WithGroups(t *testing.T) {
 	}
 	md := FormatListProjectGroupsMarkdown(out)
 	for _, want := range []string{"Project Groups (2)", "group-a", "org/group-a", "group-b", "org/group-b"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListProjectGroupsMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListProjectGroupsMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -3705,9 +3737,11 @@ func TestFormatListStarrersMarkdown_WithStarrers(t *testing.T) {
 	}
 	md := FormatListStarrersMarkdown(out)
 	for _, want := range []string{"Project Starrers (2)", testAlice, "@alice", "1 Jan 2026", testBob, "@bob", "1 Feb 2026"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListStarrersMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListStarrersMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -4739,9 +4773,11 @@ func TestListUserProjects_FilterQueryParams(t *testing.T) {
 		"pagination":       "keyset",
 		"page_token":       "tok-1",
 	} {
-		if got := gotQuery.Get(tag); got != want {
-			t.Errorf("query param %s = %q, want %q", tag, got, want)
-		}
+		t.Run(tag, func(t *testing.T) {
+			if got := gotQuery.Get(tag); got != want {
+				t.Errorf("query param %s = %q, want %q", tag, got, want)
+			}
+		})
 	}
 }
 
@@ -6637,9 +6673,11 @@ func TestCreateForUser_AllOptionalFields(t *testing.T) {
 				`"description":"desc"`,
 				`"default_branch":"develop"`,
 			} {
-				if !strings.Contains(s, want) {
-					t.Errorf("request body missing %s, got %s", want, s)
-				}
+				t.Run(want, func(t *testing.T) {
+					if !strings.Contains(s, want) {
+						t.Errorf("request body missing %s, got %s", want, s)
+					}
+				})
 			}
 			testutil.RespondJSON(w, http.StatusCreated, extProjectJSON)
 			return
@@ -7130,9 +7168,11 @@ func TestFormatApprovalRuleMarkdown_AllFields(t *testing.T) {
 		EligibleApprovers:             []*toolutil.BasicUserOutput{{Username: "alice"}, {Username: "bob"}, {Username: "charlie"}},
 	})
 	for _, want := range []string{"regular", "code_coverage", "alice, bob", "security-team", "alice, bob, charlie"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -7190,9 +7230,11 @@ func TestFormatPullMirrorMarkdown_AllFields(t *testing.T) {
 		MirrorBranchRegex:                "^main$",
 	})
 	for _, want := range []string{"mirror.example.com", "finished", "timeout", "15 Jan 2024", "^main$"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -7612,9 +7654,11 @@ func TestBuildCreateOpts_AccessLevels_AllMapped(t *testing.T) {
 		"ModelRegistryAccessLevel":         opts.ModelRegistryAccessLevel,
 	}
 	for name, got := range levels {
-		if got == nil || *got == "" {
-			t.Errorf("%s not set", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if got == nil || *got == "" {
+				t.Errorf("%s not set", name)
+			}
+		})
 	}
 	// Explicit access level wins over the deprecated bool toggle.
 	in2 := CreateInput{Name: "p", IssuesEnabled: new(false), IssuesAccessLevel: "enabled"}
@@ -7927,9 +7971,11 @@ func TestBuildUpdateOpts_AccessLevels_AllMapped(t *testing.T) {
 		"ModelRegistryAccessLevel":         opts.ModelRegistryAccessLevel,
 	}
 	for name, got := range levels {
-		if got == nil || *got == "" {
-			t.Errorf("%s not set", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if got == nil || *got == "" {
+				t.Errorf("%s not set", name)
+			}
+		})
 	}
 	// Bool toggle still bridges when access-level string is absent.
 	bridged := buildUpdateOpts(UpdateInput{ProjectID: "1", IssuesEnabled: new(false)})

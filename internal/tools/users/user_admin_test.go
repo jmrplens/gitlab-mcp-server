@@ -200,7 +200,9 @@ func TestAdminActions_TableDriven(t *testing.T) {
 	}
 
 	for _, action := range actions {
-		runAdminActionCases(t, action)
+		t.Run(action.name, func(t *testing.T) {
+			runAdminActionCases(t, action)
+		})
 	}
 }
 
@@ -316,8 +318,10 @@ func TestFormatAdminActionMarkdownString_Fields(t *testing.T) {
 		UserID: 99, Action: "banned", Success: true,
 	})
 	for _, want := range []string{"99", "banned", "true"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }

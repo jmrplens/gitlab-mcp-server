@@ -206,25 +206,27 @@ func TestActionSpecs_NonGenericMetadata(t *testing.T) {
 		"gitlab_read_repository_submodule_file",
 		"gitlab_update_repository_submodule",
 	} {
-		spec := byTool[tool]
-		if strings.Contains(spec.Usage, "Use to execute") || spec.Usage == "" {
-			t.Errorf("%s: generic or empty Usage: %q", tool, spec.Usage)
-		}
-		if len(spec.Aliases) < 2 {
-			t.Errorf("%s: expected distinctive aliases, got %v", tool, spec.Aliases)
-		}
-		for _, a := range spec.Aliases {
-			if a == tool {
-				t.Errorf("%s: alias must not equal the tool name", tool)
+		t.Run(tool, func(t *testing.T) {
+			spec := byTool[tool]
+			if strings.Contains(spec.Usage, "Use to execute") || spec.Usage == "" {
+				t.Errorf("%s: generic or empty Usage: %q", tool, spec.Usage)
 			}
-		}
-		if len(spec.RelatedActions) == 0 {
-			t.Errorf("%s: expected related actions", tool)
-		}
-		desc := spec.IndividualTool.Description
-		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-			t.Errorf("%s: description must use Returns/See also form, got %q", tool, desc)
-		}
+			if len(spec.Aliases) < 2 {
+				t.Errorf("%s: expected distinctive aliases, got %v", tool, spec.Aliases)
+			}
+			for _, a := range spec.Aliases {
+				if a == tool {
+					t.Errorf("%s: alias must not equal the tool name", tool)
+				}
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s: expected related actions", tool)
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s: description must use Returns/See also form, got %q", tool, desc)
+			}
+		})
 	}
 }
 
@@ -267,9 +269,11 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		}
 	}
 	for _, name := range []string{"gitlab_list_repository_submodules", "gitlab_read_repository_submodule_file"} {
-		if !byTool[name].ReadOnly || !byTool[name].Idempotent {
-			t.Errorf("%s should be read-only and idempotent", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !byTool[name].ReadOnly || !byTool[name].Idempotent {
+				t.Errorf("%s should be read-only and idempotent", name)
+			}
+		})
 	}
 	if byTool["gitlab_update_repository_submodule"].ReadOnly || !byTool["gitlab_update_repository_submodule"].Idempotent {
 		t.Error("update submodule action should be mutating and idempotent")

@@ -71,8 +71,10 @@ func TestDockerRuntimeEnv_EnterpriseImageDefault(t *testing.T) {
 	t.Setenv("EVAL_DOCKER_GITLAB_IMAGE", "")
 	env := strings.Join(dockerRuntimeEnv(options{Preset: presetDockerEnterpriseRead, Edition: editionEnterprise}), "\n")
 	for _, want := range []string{"GITLAB_TIER=ultimate", "GITLAB_IMAGE=gitlab/gitlab-ee:latest", "E2E_DOCKER_COMPOSE_FILE=test/e2e/docker-compose.yml"} {
-		if !strings.Contains(env, want) {
-			t.Fatalf("dockerRuntimeEnv() = %q, want %q", env, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(env, want) {
+				t.Fatalf("dockerRuntimeEnv() = %q, want %q", env, want)
+			}
+		})
 	}
 }

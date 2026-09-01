@@ -132,11 +132,13 @@ func TestList_Filters(t *testing.T) {
 			"includeDescendants": false,
 		}
 		for key, want := range expected {
-			if got := request.Variables[key]; got != want {
-				t.Errorf("variable %s = %#v, want %#v", key, got, want)
-				http.Error(w, "variable, want", http.StatusInternalServerError)
-				return
-			}
+			t.Run(key, func(t *testing.T) {
+				if got := request.Variables[key]; got != want {
+					t.Errorf("variable %s = %#v, want %#v", key, got, want)
+					http.Error(w, "variable, want", http.StatusInternalServerError)
+					return
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, `{"data":{"namespace":{"workItems":{"nodes":[]}}}}`)
 	})
@@ -182,9 +184,11 @@ func TestList_Children(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, field := range []string{"hierarchy", "hasChildren", "children"} {
-		if !strings.Contains(capturedQuery, field) {
-			t.Errorf("list query missing %q field:\n%s", field, capturedQuery)
-		}
+		t.Run(field, func(t *testing.T) {
+			if !strings.Contains(capturedQuery, field) {
+				t.Errorf("list query missing %q field:\n%s", field, capturedQuery)
+			}
+		})
 	}
 	if len(out.WorkItems) != 1 {
 		t.Fatalf("expected 1 work item, got %d", len(out.WorkItems))
@@ -729,9 +733,11 @@ func TestFormatGetMarkdown_FullPopulated(t *testing.T) {
 		"A very detailed description.",
 	}
 	for _, s := range expects {
-		if !strings.Contains(text, s) {
-			t.Errorf("missing %q in output:\n%s", s, text)
-		}
+		t.Run(s, func(t *testing.T) {
+			if !strings.Contains(text, s) {
+				t.Errorf("missing %q in output:\n%s", s, text)
+			}
+		})
 	}
 }
 
@@ -754,9 +760,11 @@ func TestFormatGetMarkdown_Children(t *testing.T) {
 	}
 	text := extractText(t, result)
 	for _, s := range []string{"### Children", "| 20 | my-group/child-a |", "| 21 | my-group/child-b |"} {
-		if !strings.Contains(text, s) {
-			t.Errorf("missing %q in output:\n%s", s, text)
-		}
+		t.Run(s, func(t *testing.T) {
+			if !strings.Contains(text, s) {
+				t.Errorf("missing %q in output:\n%s", s, text)
+			}
+		})
 	}
 }
 
@@ -2057,9 +2065,11 @@ func TestFormatWorkItemTypeListMarkdown_WithTypes(t *testing.T) {
 		"Issue",
 		"Task",
 	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("markdown missing %q:\n%s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("markdown missing %q:\n%s", want, text)
+			}
+		})
 	}
 }
 

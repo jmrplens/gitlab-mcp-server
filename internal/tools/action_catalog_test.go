@@ -58,9 +58,11 @@ func TestBuildActionCatalog_DoesNotUseMetaRegistrationCapture(t *testing.T) {
 		t.Fatalf("ReadFile(action_catalog.go) error = %v", err)
 	}
 	for _, forbidden := range []string{"CaptureMetaToolDefinitions", "registerAllMetaGroups("} {
-		if strings.Contains(string(source), forbidden) {
-			t.Fatalf("action_catalog.go contains %q; catalog construction must use ActionSpec groups directly", forbidden)
-		}
+		t.Run(forbidden, func(t *testing.T) {
+			if strings.Contains(string(source), forbidden) {
+				t.Fatalf("action_catalog.go contains %q; catalog construction must use ActionSpec groups directly", forbidden)
+			}
+		})
 	}
 }
 
@@ -181,9 +183,11 @@ func TestBuildActionCatalog_EnterpriseAndGitLabDotComGates(t *testing.T) {
 func TestBuildMCPActionGroup_IsReadOnlyDiagnostics(t *testing.T) {
 	group := BuildMCPActionGroup(nil)
 	for _, want := range []string{"status", "health_check"} {
-		if _, ok := group.Actions[want]; !ok {
-			t.Errorf("BuildMCPActionGroup is missing the %s action", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if _, ok := group.Actions[want]; !ok {
+				t.Errorf("BuildMCPActionGroup is missing the %s action", want)
+			}
+		})
 	}
 	if len(group.Actions) != 2 {
 		t.Errorf("gitlab_server carries %d actions, want only status and health_check: %v",
@@ -732,12 +736,14 @@ func TestCentralTierFilter_Invariants(t *testing.T) {
 	// input fields (weight, epic_id) must be pruned from the Free schema and
 	// present on Premium/Ultimate.
 	for _, field := range []string{"weight", "epic_id"} {
-		if issueCreateHasInputProp(t, free, field) {
-			t.Errorf("Free issue.create schema must not advertise Premium field %q", field)
-		}
-		if !issueCreateHasInputProp(t, premium, field) {
-			t.Errorf("Premium issue.create schema must include field %q", field)
-		}
+		t.Run(field, func(t *testing.T) {
+			if issueCreateHasInputProp(t, free, field) {
+				t.Errorf("Free issue.create schema must not advertise Premium field %q", field)
+			}
+			if !issueCreateHasInputProp(t, premium, field) {
+				t.Errorf("Premium issue.create schema must include field %q", field)
+			}
+		})
 	}
 
 	// reviewer_assignment_strategy (client-go v2.46.0) is Premium: pruned from

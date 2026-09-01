@@ -1176,9 +1176,11 @@ func TestFormatMarkdownString_WithData(t *testing.T) {
 		"### SCIM Identities",
 		"| scim-alice | 9 | true |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1228,9 +1230,11 @@ func TestFormatListMarkdownString_WithData(t *testing.T) {
 		"| 1 | [@alice](https://gitlab.example.com/alice) | Alice | alice@example.com | active |",
 		"| 2 | [@bob](https://gitlab.example.com/bob) | Bob | bob@example.com | blocked |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1277,9 +1281,11 @@ func TestFormatStatusMarkdownString_WithData(t *testing.T) {
 		"**Availability**: busy",
 		"**Clear At**: 31 Dec 2026 23:59 UTC",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1290,9 +1296,11 @@ func TestFormatStatusMarkdownString_Empty(t *testing.T) {
 		t.Errorf("expected header:\n%s", md)
 	}
 	for _, absent := range []string{"**Emoji**", "**Message**", "**Availability**", "**Clear At**"} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q when empty:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q when empty:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -1337,9 +1345,11 @@ func TestFormatSSHKeyListMarkdownString_WithData(t *testing.T) {
 		"| 2 | Personal |",
 		"auth_and_signing",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1382,9 +1392,11 @@ func TestFormatEmailListMarkdownString_WithData(t *testing.T) {
 		"| 1 | primary@example.com |",
 		"| 2 | alias@example.com |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1428,9 +1440,11 @@ func TestFormatContributionEventsMarkdownString_WithData(t *testing.T) {
 		"| 100 | pushed | Project | main |",
 		"| 101 | commented | Issue | Fix bug |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1476,9 +1490,11 @@ func TestFormatAssociationsCountMarkdownString_WithData(t *testing.T) {
 		"**Issues**: 45",
 		"**Merge Requests**: 30",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1718,9 +1734,11 @@ func TestList_AllFilters(t *testing.T) {
 		"two_factor", "extern_uid", "provider", "public_email", "created_after", "created_before",
 		"pagination", "page_token",
 	} {
-		if query.Get(key) == "" {
-			t.Errorf("query missing %q: %v", key, query.Encode())
-		}
+		t.Run(key, func(t *testing.T) {
+			if query.Get(key) == "" {
+				t.Errorf("query missing %q: %v", key, query.Encode())
+			}
+		})
 	}
 }
 

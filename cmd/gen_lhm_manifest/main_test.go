@@ -108,9 +108,11 @@ func TestGenerate_ReportsCapabilityCounts(t *testing.T) {
 		t.Fatalf("generate() error: %v", err)
 	}
 	for _, want := range []string{"tools", "prompts", "resources"} {
-		if !strings.Contains(counts, want) {
-			t.Fatalf("counts summary = %q, want it to mention %q", counts, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(counts, want) {
+				t.Fatalf("counts summary = %q, want it to mention %q", counts, want)
+			}
+		})
 	}
 }
 
@@ -161,13 +163,15 @@ func TestGenerate_OmitsOutputSchemaAndIcons(t *testing.T) {
 		"tool": raw.Tools, "prompt": raw.Prompts, "resource": raw.Resources,
 	}
 	for kind, entries := range groups {
-		for _, entry := range entries {
-			for _, unwanted := range []string{"outputSchema", "icons", "_meta"} {
-				if _, found := entry[unwanted]; found {
-					t.Fatalf("%s entry carries %q, want it dropped", kind, unwanted)
+		t.Run(kind, func(t *testing.T) {
+			for _, entry := range entries {
+				for _, unwanted := range []string{"outputSchema", "icons", "_meta"} {
+					if _, found := entry[unwanted]; found {
+						t.Fatalf("%s entry carries %q, want it dropped", kind, unwanted)
+					}
 				}
 			}
-		}
+		})
 	}
 }
 

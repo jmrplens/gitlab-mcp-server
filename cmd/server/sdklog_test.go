@@ -190,9 +190,11 @@ func TestSDKLogHandler_PassesEverythingElseThrough(t *testing.T) {
 		t.Fatalf("%d records, want 3; nothing here is session chatter", len(records))
 	}
 	for i, want := range []string{"ERROR", "WARN", "INFO"} {
-		if got := records[i]["level"]; got != want {
-			t.Errorf("record %d logged at %v, want %s", i, got, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if got := records[i]["level"]; got != want {
+				t.Errorf("record %d logged at %v, want %s", i, got, want)
+			}
+		})
 	}
 	if got := records[2]["uri"]; got != "gitlab://project/42" {
 		t.Errorf("attributes were not preserved: uri = %v", got)

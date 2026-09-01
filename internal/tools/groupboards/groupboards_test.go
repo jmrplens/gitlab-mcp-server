@@ -894,9 +894,11 @@ func TestFormatGroupBoardMarkdown_Minimal(t *testing.T) {
 		t.Error("markdown missing board name")
 	}
 	for _, absent := range []string{"**Group**", "**Milestone**", "**Labels**", "### Lists"} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal board", absent)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal board", absent)
+			}
+		})
 	}
 }
 
@@ -930,9 +932,11 @@ func TestFormatBoardListMarkdown_Minimal(t *testing.T) {
 		t.Error("markdown missing position")
 	}
 	for _, absent := range []string{"**Label**", "**Max Issue Count**", "**Max Issue Weight**", "**Assignee**", "**Milestone**"} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal board list", absent)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal board list", absent)
+			}
+		})
 	}
 }
 
@@ -953,9 +957,11 @@ func TestFormatListBoardListsMarkdown_WithData(t *testing.T) {
 	}
 	md := FormatListBoardListsMarkdown(out)
 	for _, want := range []string{"## Board Lists", "To Do", "Doing", "| 10 |", "| 11 |"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -993,9 +999,11 @@ func TestListGroupBoards_OrderBySortKeyset(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=100"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 }
 
@@ -1019,9 +1027,11 @@ func TestListGroupBoardLists_OrderBySortKeyset(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=position", "sort=asc", "pagination=keyset", "page_token=5"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 }
 

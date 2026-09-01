@@ -240,13 +240,15 @@ func TestDeployTokenDescription_AllActions(t *testing.T) {
 		"deploy_token_delete_group",
 	}
 	for _, action := range actions {
-		desc := deployTokenDescription(action)
-		if desc == "" {
-			t.Errorf("action %q has empty description", action)
-		}
-		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-			t.Errorf("action %q description missing Returns/See also: %q", action, desc)
-		}
+		t.Run(action, func(t *testing.T) {
+			desc := deployTokenDescription(action)
+			if desc == "" {
+				t.Errorf("action %q has empty description", action)
+			}
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("action %q description missing Returns/See also: %q", action, desc)
+			}
+		})
 	}
 	if got := deployTokenDescription("unknown_action"); got != "" {
 		t.Errorf("unknown action description = %q, want empty", got)

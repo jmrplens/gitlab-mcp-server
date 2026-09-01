@@ -19,9 +19,11 @@ func TestAppendCapabilityBridgeTools_AddsSupportedBridgeSchemas(t *testing.T) {
 		got[tool.Name] = tool
 	}
 	for _, name := range []string{capabilityListTool, resourceListTool, resourceReadTool, promptListTool, promptGetTool, completionTool, dynamicExecuteActionTool} {
-		if _, ok := got[name]; !ok {
-			t.Fatalf("appendCapabilityBridgeTools() missing %s in %#v", name, got)
-		}
+		t.Run(name, func(t *testing.T) {
+			if _, ok := got[name]; !ok {
+				t.Fatalf("appendCapabilityBridgeTools() missing %s in %#v", name, got)
+			}
+		})
 	}
 	if schema := got[capabilityListTool].InputSchema.(map[string]any); schema["additionalProperties"] != false {
 		t.Fatalf("capability schema = %#v, want strict object", schema)

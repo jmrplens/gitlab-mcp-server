@@ -295,14 +295,18 @@ func TestNoteShapeJSONTags(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	for _, key := range []string{`"id":1`, `"username":"u"`, `"name":"n"`, `"web_url":"w"`} {
-		if !strings.Contains(string(raw), key) {
-			t.Errorf("NoteUserOutput JSON missing %q: %s", key, raw)
-		}
+		t.Run(key, func(t *testing.T) {
+			if !strings.Contains(string(raw), key) {
+				t.Errorf("NoteUserOutput JSON missing %q: %s", key, raw)
+			}
+		})
 	}
 	for _, key := range []string{`"email"`, `"state"`, `"avatar_url"`} {
-		if strings.Contains(string(raw), key) {
-			t.Errorf("NoteUserOutput JSON should omit empty %q: %s", key, raw)
-		}
+		t.Run(key, func(t *testing.T) {
+			if strings.Contains(string(raw), key) {
+				t.Errorf("NoteUserOutput JSON should omit empty %q: %s", key, raw)
+			}
+		})
 	}
 	raw, err = json.Marshal(&LinePositionOutput{LineCode: "x"})
 	if err != nil {

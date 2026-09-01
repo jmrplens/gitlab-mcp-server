@@ -244,10 +244,12 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		t.Fatal("gitlab_get_gitignore_template should define key parameter guidance")
 	}
 	for _, tool := range []string{"gitlab_list_gitignore_templates", "gitlab_get_gitignore_template"} {
-		desc := specByTool[tool].IndividualTool.Description
-		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-			t.Errorf("%s description missing Returns:/See also: form: %q", tool, desc)
-		}
+		t.Run(tool, func(t *testing.T) {
+			desc := specByTool[tool].IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s description missing Returns:/See also: form: %q", tool, desc)
+			}
+		})
 	}
 }
 

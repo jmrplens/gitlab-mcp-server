@@ -125,11 +125,13 @@ func TestRedactResourceURIs_AgreesWithTheHandler(t *testing.T) {
 	}
 
 	for _, input := range inputs {
-		here := redactResourceURIs(input)
-		there := telemetry.RedactResourceURIs(input)
-		if here != there {
-			t.Errorf("the two implementations disagree on %q: mcpotel gives %q and telemetry gives %q",
-				input, here, there)
-		}
+		t.Run(input, func(t *testing.T) {
+			here := redactResourceURIs(input)
+			there := telemetry.RedactResourceURIs(input)
+			if here != there {
+				t.Errorf("the two implementations disagree on %q: mcpotel gives %q and telemetry gives %q",
+					input, here, there)
+			}
+		})
 	}
 }

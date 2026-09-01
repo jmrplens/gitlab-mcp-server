@@ -1472,9 +1472,11 @@ func TestCommitCreate_WithAllOptions(t *testing.T) {
 		t.Errorf(fmtOutShortIDWant, out.ShortID, "opt1")
 	}
 	for _, want := range []string{"start_branch", "start_sha", "start_project", "author_email", "author_name", "stats", "force", "actions", "previous_path", "encoding", "execute_filemode"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 
@@ -1787,9 +1789,11 @@ func TestSetStatus_WithAllOptions(t *testing.T) {
 		t.Error("CreatedAt is empty")
 	}
 	for _, want := range []string{"ref", "name", "context", "target_url", "description", "coverage", "pipeline_id"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 
@@ -2298,9 +2302,11 @@ func TestFormatGPGSignatureMarkdown_SSH(t *testing.T) {
 	}
 	md := FormatGPGSignatureMarkdown(sig)
 	for _, want := range []string{"SSH", "verified", "MyKey", "auth_and_signing", "gitaly"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("expected Markdown to contain %q\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("expected Markdown to contain %q\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -2318,9 +2324,11 @@ func TestFormatGPGSignatureMarkdown_X509(t *testing.T) {
 	}
 	md := FormatGPGSignatureMarkdown(sig)
 	for _, want := range []string{"X509", "unverified", "CN=gitlab@example.org", "gitlab@example.org"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("expected Markdown to contain %q\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("expected Markdown to contain %q\n%s", want, md)
+			}
+		})
 	}
 }
 

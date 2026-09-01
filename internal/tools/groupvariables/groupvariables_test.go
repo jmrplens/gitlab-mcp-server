@@ -797,9 +797,11 @@ func TestFormatOutputMarkdown_FullUnmasked(t *testing.T) {
 		"| Description | Database host |",
 		"| Value | localhost |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 	if strings.Contains(md, "| Hidden | ✅ |") {
 		t.Error("should not contain Hidden line when hidden=false")
@@ -888,9 +890,11 @@ func TestFormatListMarkdown_WithVariables(t *testing.T) {
 		"env_var",
 		"production",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

@@ -43,9 +43,11 @@ func TestWriteComparisonReport_BuildsEvaluationAndTokenSections(t *testing.T) {
 	contentB = strings.ReplaceAll(contentB, "`dynamic`", "`meta`")
 	contentB = strings.ReplaceAll(contentB, "90.0%", "95.0%")
 	for path, content := range map[string]string{evalA: contentA, evalB: contentB} {
-		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-			t.Fatalf("write input %s: %v", path, err)
-		}
+		t.Run(path, func(t *testing.T) {
+			if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+				t.Fatalf("write input %s: %v", path, err)
+			}
+		})
 	}
 	out := filepath.Join(dir, "nested", "comparison.md")
 	if err := writeComparisonReport(out, []string{evalA, evalB}); err != nil {
@@ -57,9 +59,11 @@ func TestWriteComparisonReport_BuildsEvaluationAndTokenSections(t *testing.T) {
 	}
 	content := string(data)
 	for _, want := range []string{"# MCP Surface Evaluation Comparison", "## Evaluation Metrics", "### Delta Versus", "## API Usage", "+5.0 pp"} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("comparison missing %q:\n%s", want, content)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(content, want) {
+				t.Fatalf("comparison missing %q:\n%s", want, content)
+			}
+		})
 	}
 	oneInputErr := writeComparisonReport(filepath.Join(dir, "bad.md"), []string{evalA})
 	if oneInputErr == nil {
@@ -194,9 +198,11 @@ Tools file: ` + "`dist/evaluation/mcp-surfaces/snapshots/current-abc123/tools.js
 
 	comparison := buildComparisonReport([]comparisonInput{tokenInput, evalInput})
 	for _, want := range []string{"Catalog Token Metrics", "Evaluation Metrics", "current-abc123", "18021"} {
-		if !strings.Contains(comparison, want) {
-			t.Fatalf("comparison missing %q:\n%s", want, comparison)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(comparison, want) {
+				t.Fatalf("comparison missing %q:\n%s", want, comparison)
+			}
+		})
 	}
 }
 

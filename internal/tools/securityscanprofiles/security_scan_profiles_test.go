@@ -325,9 +325,11 @@ func TestFormatMutationMarkdown(t *testing.T) {
 		ProjectIDs:            []int64{7, 8}, GroupIDs: []int64{3},
 	})
 	for _, want := range []string{"Security Scan Profile", "dependency_scanning", "7, 8", "3"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -344,9 +346,11 @@ func TestFormatListProjectStatusesMarkdown(t *testing.T) {
 		}},
 	})
 	for _, want := range []string{"Scan Profile Statuses: g/p", "ACTIVE", "Default", "sast"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

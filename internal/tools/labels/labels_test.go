@@ -898,9 +898,11 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 	}
 	md := FormatMarkdown(o)
 	for _, want := range []string{"bug", "#d9534f", "Bug report", "Priority", "3", "Issues", "5 open", "2 closed", "Open MRs", "1"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatMarkdown missing %q in:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatMarkdown missing %q in:\n%s", want, md)
+			}
+		})
 	}
 }
 

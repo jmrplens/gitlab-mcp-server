@@ -184,9 +184,11 @@ func TestSAMLUsersList_AllFilters(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, want := range []string{"search=jane", "username=jdoe", "active=true", "blocked=false", "created_after=", "created_before=", "page=2", "per_page=5", "order_by=created_at", "sort=desc", "pagination=keyset", "page_token=tok-123"} {
-		if !strings.Contains(query, want) {
-			t.Errorf("query %q missing %q", query, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(query, want) {
+				t.Errorf("query %q missing %q", query, want)
+			}
+		})
 	}
 	if out.Users[0].CreatedAt == "" {
 		t.Error("expected created_at to be formatted on the output")

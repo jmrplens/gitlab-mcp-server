@@ -52,19 +52,21 @@ func TestParseGitmodules_Success(t *testing.T) {
 	}
 
 	for i, tt := range tests {
-		e := entries[i]
-		if e.Name != tt.name {
-			t.Errorf("entry[%d] name: got %q, want %q", i, e.Name, tt.name)
-		}
-		if e.Path != tt.path {
-			t.Errorf("entry[%d] path: got %q, want %q", i, e.Path, tt.path)
-		}
-		if e.URL != tt.url {
-			t.Errorf("entry[%d] url: got %q, want %q", i, e.URL, tt.url)
-		}
-		if e.ResolvedProject != tt.resolvedProject {
-			t.Errorf("entry[%d] resolved: got %q, want %q", i, e.ResolvedProject, tt.resolvedProject)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			e := entries[i]
+			if e.Name != tt.name {
+				t.Errorf("entry[%d] name: got %q, want %q", i, e.Name, tt.name)
+			}
+			if e.Path != tt.path {
+				t.Errorf("entry[%d] path: got %q, want %q", i, e.Path, tt.path)
+			}
+			if e.URL != tt.url {
+				t.Errorf("entry[%d] url: got %q, want %q", i, e.URL, tt.url)
+			}
+			if e.ResolvedProject != tt.resolvedProject {
+				t.Errorf("entry[%d] resolved: got %q, want %q", i, e.ResolvedProject, tt.resolvedProject)
+			}
+		})
 	}
 }
 
@@ -322,9 +324,11 @@ func TestActionSpecs_IncludesTools(t *testing.T) {
 		"gitlab_read_repository_submodule_file",
 		"gitlab_update_repository_submodule",
 	} {
-		if _, ok := byTool[name]; !ok {
-			t.Errorf("expected tool %q in ActionSpecs", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if _, ok := byTool[name]; !ok {
+				t.Errorf("expected tool %q in ActionSpecs", name)
+			}
+		})
 	}
 }
 

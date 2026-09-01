@@ -176,9 +176,11 @@ func TestList_RESTFilterOptions(t *testing.T) {
 			"include_ancestor_groups", "include_descendant_groups", "per_page",
 			"pagination", "page_token",
 		} {
-			if query.Get(key) == "" {
-				t.Errorf("query missing %q in %s", key, r.URL.RawQuery)
-			}
+			t.Run(key, func(t *testing.T) {
+				if query.Get(key) == "" {
+					t.Errorf("query missing %q in %s", key, r.URL.RawQuery)
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[]`)
 	}))
@@ -889,9 +891,11 @@ func TestList_WithAllFilters(t *testing.T) {
 			return
 		}
 		for _, key := range []string{"fullPath", "state", "search", "authorUsername", "labelName", "confidential", "sort", "first", "after", "includeAncestors", "includeDescendants"} {
-			if _, ok := vars[key]; !ok {
-				t.Errorf("GraphQL variables missing %q", key)
-			}
+			t.Run(key, func(t *testing.T) {
+				if _, ok := vars[key]; !ok {
+					t.Errorf("GraphQL variables missing %q", key)
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, listResponseJSON)
 	}))
@@ -932,9 +936,11 @@ func TestList_WorkItems_RequestsEEFields(t *testing.T) {
 		}
 		query := string(body)
 		for _, field := range []string{"weight", "healthStatus", "color", "status"} {
-			if !strings.Contains(query, field) {
-				t.Errorf("GraphQL query missing EE field %q; ReturnedFields opt-in not applied\nquery: %s", field, query)
-			}
+			t.Run(field, func(t *testing.T) {
+				if !strings.Contains(query, field) {
+					t.Errorf("GraphQL query missing EE field %q; ReturnedFields opt-in not applied\nquery: %s", field, query)
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, listResponseJSON)
 	}))
@@ -982,9 +988,11 @@ func TestCreate_WithAllOptions(t *testing.T) {
 			return
 		}
 		for _, key := range []string{"title", "confidential", "descriptionWidget", "colorWidget", "startAndDueDateWidget", "assigneesWidget", "labelsWidget", "weightWidget", "healthStatusWidget"} {
-			if _, exists := input[key]; !exists {
-				t.Errorf("GraphQL input missing %q", key)
-			}
+			t.Run(key, func(t *testing.T) {
+				if _, exists := input[key]; !exists {
+					t.Errorf("GraphQL input missing %q", key)
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, createResponseJSON)
 	}))
@@ -1049,9 +1057,11 @@ func TestUpdate_WithAllOptions(t *testing.T) {
 				return
 			}
 			for _, key := range []string{"title", "stateEvent", "descriptionWidget", "colorWidget", "startAndDueDateWidget", "labelsWidget", "assigneesWidget", "weightWidget", "healthStatusWidget", "statusWidget"} {
-				if _, exists := input[key]; !exists {
-					t.Errorf("GraphQL input missing %q", key)
-				}
+				t.Run(key, func(t *testing.T) {
+					if _, exists := input[key]; !exists {
+						t.Errorf("GraphQL input missing %q", key)
+					}
+				})
 			}
 			testutil.RespondJSON(w, http.StatusOK, updateResponseJSON)
 		}
@@ -1186,9 +1196,11 @@ func TestFormatOutputMarkdown_FullFields(t *testing.T) {
 		"Closed", "gitlab.example.com", "Linked Items", "blocks", "g/sub",
 		"Epic description body",
 	} {
-		if !strings.Contains(result, want) {
-			t.Errorf("expected markdown to contain %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(result, want) {
+				t.Errorf("expected markdown to contain %q", want)
+			}
+		})
 	}
 }
 

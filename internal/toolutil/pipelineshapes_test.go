@@ -152,15 +152,19 @@ func TestPipelineOutputJSONTags(t *testing.T) {
 		`"tag":false`, `"duration":0`, `"queued_duration":0`,
 		`"coverage":""`, `"yaml_errors":""`,
 	} {
-		if !strings.Contains(string(raw), key) {
-			t.Errorf("PipelineOutput JSON missing %q: %s", key, raw)
-		}
+		t.Run(key, func(t *testing.T) {
+			if !strings.Contains(string(raw), key) {
+				t.Errorf("PipelineOutput JSON missing %q: %s", key, raw)
+			}
+		})
 	}
 	// Pointer + time fields use omitempty and must NOT appear when empty.
 	for _, key := range []string{`"user"`, `"updated_at"`, `"created_at"`, `"started_at"`, `"finished_at"`, `"committed_at"`, `"detailed_status"`} {
-		if strings.Contains(string(raw), key) {
-			t.Errorf("PipelineOutput JSON should omit empty %q: %s", key, raw)
-		}
+		t.Run(key, func(t *testing.T) {
+			if strings.Contains(string(raw), key) {
+				t.Errorf("PipelineOutput JSON should omit empty %q: %s", key, raw)
+			}
+		})
 	}
 }
 

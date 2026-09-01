@@ -35,25 +35,27 @@ func TestActionSpecs_OrderAndCount(t *testing.T) {
 	}
 	wantNames := []string{"status", "schema", "tools", "dsl", "query", "graph_status"}
 	for i, want := range wantNames {
-		if specs[i].Name != want {
-			t.Fatalf("ActionSpecs()[%d].Name = %q, want %q", i, specs[i].Name, want)
-		}
-		if len(specs[i].Aliases) == 0 {
-			t.Fatalf("ActionSpecs()[%d].Aliases = %v, want first alias gitlab_orbit_%s", i, specs[i].Aliases, want)
-		}
-		if specs[i].Aliases[0] != "gitlab_orbit_"+want {
-			t.Fatalf("ActionSpecs()[%d].Aliases[0] = %q, want gitlab_orbit_%s (full list: %v)",
-				i, specs[i].Aliases[0], want, specs[i].Aliases)
-		}
-		if specs[i].OwnerPackage != "orbit" {
-			t.Fatalf("ActionSpecs()[%d].OwnerPackage = %q, want orbit", i, specs[i].OwnerPackage)
-		}
-		if !specs[i].GitLabDotComOnly || specs[i].Edition != "premium" {
-			t.Fatalf("ActionSpecs()[%d] gating = dotcom:%t edition:%q, want GitLab.com premium", i, specs[i].GitLabDotComOnly, specs[i].Edition)
-		}
-		if !specs[i].OpenWorld {
-			t.Fatalf("ActionSpecs()[%d].OpenWorld = false, want true", i)
-		}
+		t.Run(want, func(t *testing.T) {
+			if specs[i].Name != want {
+				t.Fatalf("ActionSpecs()[%d].Name = %q, want %q", i, specs[i].Name, want)
+			}
+			if len(specs[i].Aliases) == 0 {
+				t.Fatalf("ActionSpecs()[%d].Aliases = %v, want first alias gitlab_orbit_%s", i, specs[i].Aliases, want)
+			}
+			if specs[i].Aliases[0] != "gitlab_orbit_"+want {
+				t.Fatalf("ActionSpecs()[%d].Aliases[0] = %q, want gitlab_orbit_%s (full list: %v)",
+					i, specs[i].Aliases[0], want, specs[i].Aliases)
+			}
+			if specs[i].OwnerPackage != "orbit" {
+				t.Fatalf("ActionSpecs()[%d].OwnerPackage = %q, want orbit", i, specs[i].OwnerPackage)
+			}
+			if !specs[i].GitLabDotComOnly || specs[i].Edition != "premium" {
+				t.Fatalf("ActionSpecs()[%d] gating = dotcom:%t edition:%q, want GitLab.com premium", i, specs[i].GitLabDotComOnly, specs[i].Edition)
+			}
+			if !specs[i].OpenWorld {
+				t.Fatalf("ActionSpecs()[%d].OpenWorld = false, want true", i)
+			}
+		})
 	}
 }
 
@@ -136,9 +138,11 @@ func TestOrbit_ActionSpecs_Metadata(t *testing.T) {
 		names = append(names, spec.IndividualTool.Name)
 	}
 	for _, want := range []string{"gitlab_orbit_status", "gitlab_orbit_schema", "gitlab_orbit_tools", "gitlab_orbit_dsl", "gitlab_orbit_query", "gitlab_orbit_graph_status"} {
-		if !containsTool(names, want) {
-			t.Fatalf("ActionSpecs() missing %s in %v", want, names)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !containsTool(names, want) {
+				t.Fatalf("ActionSpecs() missing %s in %v", want, names)
+			}
+		})
 	}
 }
 

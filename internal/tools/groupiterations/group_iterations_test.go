@@ -543,9 +543,11 @@ func TestList_MultipleIterations(t *testing.T) {
 		t.Fatalf("got %d iterations, want 3", len(out.Iterations))
 	}
 	for i, want := range []string{"Sprint 1", "Sprint 2", "Sprint 3"} {
-		if out.Iterations[i].Title != want {
-			t.Errorf("iteration[%d].Title = %q, want %q", i, out.Iterations[i].Title, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if out.Iterations[i].Title != want {
+				t.Errorf("iteration[%d].Title = %q, want %q", i, out.Iterations[i].Title, want)
+			}
+		})
 	}
 }
 

@@ -33,9 +33,11 @@ func TestValidateEvalCaseRegistry_DetectsInvalidDefinitions(t *testing.T) {
 	}
 	problems := strings.Join(validateEvalCaseRegistry(cases, nil), "\n")
 	for _, want := range []string{"duplicate ID", "empty prompt", "no expected steps", "does not list confirm", "unknown preset", "non-capability bridge step as optional", "must be followed by another capability bridge step"} {
-		if !strings.Contains(problems, want) {
-			t.Fatalf("problems missing %q:\n%s", want, problems)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(problems, want) {
+				t.Fatalf("problems missing %q:\n%s", want, problems)
+			}
+		})
 	}
 }
 
@@ -54,9 +56,11 @@ func TestAllEvalCases_ContainsMigratedReadMutatingAndCapabilityCases(t *testing.
 		t.Fatalf("len(AllEvalCases()) = %d, want at least 173", len(cases))
 	}
 	for _, id := range []string{"MT-001", "MT-002", "MT-003", "MT-004", "MT-010", "MT-017", "MT-026", "MT-070", "MT-117", "MT-125", "MT-188", "MT-192", "MT-196", "MS-008", "MS-010", "MS-028", "MS-038", "MS-039", "MS-040", "MS-041", "MS-042"} {
-		if _, ok := CaseByID(id); !ok {
-			t.Fatalf("CaseByID(%s) = false, want migrated typed case", id)
-		}
+		t.Run(id, func(t *testing.T) {
+			if _, ok := CaseByID(id); !ok {
+				t.Fatalf("CaseByID(%s) = false, want migrated typed case", id)
+			}
+		})
 	}
 	if got := len(CasesByPreset(presetDockerRead)); got < 40 {
 		t.Fatalf("CasesByPreset(docker-read) = %d, want at least 40", got)
@@ -212,9 +216,11 @@ func TestReleaseAssetLinkCRUDCaseUsesAttemptScopedURLs(t *testing.T) {
 		t.Fatalf("MS-018 attempt_names scope = %q, want %q", fixture.Scope, FixtureScopeAttempt)
 	}
 	for _, want := range []string{"{{ .Values.release_link_url }}", "{{ .Values.release_link_updated_url }}"} {
-		if !strings.Contains(evalCase.PromptTemplate.Text, want) {
-			t.Fatalf("MS-018 prompt template = %q, want %q", evalCase.PromptTemplate.Text, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(evalCase.PromptTemplate.Text, want) {
+				t.Fatalf("MS-018 prompt template = %q, want %q", evalCase.PromptTemplate.Text, want)
+			}
+		})
 	}
 	if strings.Contains(evalCase.PromptTemplate.Text, "only after the release exists, add asset link `eval-crud-link`") {
 		t.Fatalf("MS-018 prompt template keeps legacy static release link text: %q", evalCase.PromptTemplate.Text)
@@ -276,9 +282,11 @@ func TestInteractiveMergeRequestCaseUsesGuidedOnlyParams(t *testing.T) {
 		t.Fatalf("MT-081 fixtures = %s, want merge_request_source", fixtureNames(evalCase.Fixtures))
 	}
 	for _, want := range []string{"Do not pass `source_branch`", "guided prompts will use source branch"} {
-		if !strings.Contains(evalCase.PromptTemplate.Text, want) {
-			t.Fatalf("MT-081 prompt template = %q, want %q", evalCase.PromptTemplate.Text, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(evalCase.PromptTemplate.Text, want) {
+				t.Fatalf("MT-081 prompt template = %q, want %q", evalCase.PromptTemplate.Text, want)
+			}
+		})
 	}
 }
 

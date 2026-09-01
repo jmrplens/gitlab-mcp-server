@@ -201,10 +201,12 @@ func TestProtectedEnvironmentDescription_AllActions(t *testing.T) {
 		"gitlab_protected_environment_unprotect",
 	}
 	for _, name := range tools {
-		desc := protectedEnvironmentDescription(name)
-		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-			t.Errorf("%s description missing Returns/See also: %q", name, desc)
-		}
+		t.Run(name, func(t *testing.T) {
+			desc := protectedEnvironmentDescription(name)
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s description missing Returns/See also: %q", name, desc)
+			}
+		})
 	}
 	if got := protectedEnvironmentDescription("gitlab_unknown"); got != "" {
 		t.Errorf("unknown tool description = %q, want empty", got)
@@ -227,24 +229,26 @@ func TestProtectedEnvironmentMeta_PerToolDiscovery(t *testing.T) {
 		"gitlab_protected_environment_unprotect",
 	}
 	for _, name := range tools {
-		opts := protectedEnvironmentOptions(name)
-		if strings.HasPrefix(opts.Usage, sharedUsagePrefix) {
-			t.Errorf("%s still uses generic shared Usage: %q", name, opts.Usage)
-		}
-		if len(opts.Aliases) < 2 {
-			t.Errorf("%s has %d aliases, want >= 2", name, len(opts.Aliases))
-		}
-		for _, alias := range opts.Aliases {
-			if alias == name {
-				t.Errorf("%s alias list still contains the bare tool name", name)
+		t.Run(name, func(t *testing.T) {
+			opts := protectedEnvironmentOptions(name)
+			if strings.HasPrefix(opts.Usage, sharedUsagePrefix) {
+				t.Errorf("%s still uses generic shared Usage: %q", name, opts.Usage)
 			}
-			if strings.Contains(alias, "group") {
-				t.Errorf("%s alias %q overlaps group-level wording", name, alias)
+			if len(opts.Aliases) < 2 {
+				t.Errorf("%s has %d aliases, want >= 2", name, len(opts.Aliases))
 			}
-		}
-		if len(opts.RelatedActions) == 0 {
-			t.Errorf("%s has empty RelatedActions", name)
-		}
+			for _, alias := range opts.Aliases {
+				if alias == name {
+					t.Errorf("%s alias list still contains the bare tool name", name)
+				}
+				if strings.Contains(alias, "group") {
+					t.Errorf("%s alias %q overlaps group-level wording", name, alias)
+				}
+			}
+			if len(opts.RelatedActions) == 0 {
+				t.Errorf("%s has empty RelatedActions", name)
+			}
+		})
 	}
 
 	// Unknown tool: decorator is a no-op, so the shared defaults remain.

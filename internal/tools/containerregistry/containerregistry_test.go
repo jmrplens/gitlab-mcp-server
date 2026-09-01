@@ -580,9 +580,11 @@ func TestFormatRepositoryMarkdown_Full(t *testing.T) {
 	}
 	md := FormatRepositoryMarkdown(out)
 	for _, want := range []string{"Registry Repository: " + testCovRepoPath, "img", testCovRepoPath, "loc", "3", "delete_scheduled", "15 Jan 2026"} {
-		if !strings.Contains(md, want) {
-			t.Errorf(fmtExpectedInMarkdown, want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf(fmtExpectedInMarkdown, want, md)
+			}
+		})
 	}
 	if strings.Contains(md, "| ID |") {
 		t.Error("should not contain numeric ID column")
@@ -631,9 +633,11 @@ func TestFormatRepositoryListMarkdown_WithItems(t *testing.T) {
 		t.Error("should not contain numeric ID column in list")
 	}
 	for _, want := range []string{"| a |", "| x/a |", "| b |", "| x/b |"} {
-		if !strings.Contains(md, want) {
-			t.Errorf(fmtExpectedInMarkdown, want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf(fmtExpectedInMarkdown, want, md)
+			}
+		})
 	}
 }
 
@@ -663,9 +667,11 @@ func TestFormatTagMarkdown_Full(t *testing.T) {
 	}
 	md := FormatTagMarkdown(out)
 	for _, want := range []string{"v1.0", "sha256:abc", "rev1", "1024", "1 Feb 2026"} {
-		if !strings.Contains(md, want) {
-			t.Errorf(fmtExpectedInMarkdown, want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf(fmtExpectedInMarkdown, want, md)
+			}
+		})
 	}
 }
 
@@ -1163,9 +1169,11 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
 	}
 	for _, toolName := range []string{"gitlab_registry_delete_repository", "gitlab_registry_delete_tag", "gitlab_registry_delete_tags_bulk", "gitlab_registry_protection_delete", "gitlab_registry_tag_protection_delete"} {
-		if !byTool[toolName].Route.Destructive {
-			t.Fatalf("%s should be destructive", toolName)
-		}
+		t.Run(toolName, func(t *testing.T) {
+			if !byTool[toolName].Route.Destructive {
+				t.Fatalf("%s should be destructive", toolName)
+			}
+		})
 	}
 	for _, spec := range byTool {
 		if spec.Usage == "" {
@@ -1367,9 +1375,11 @@ func TestFormatProtectionRuleMarkdown_NoNumericIDs(t *testing.T) {
 		t.Error("should not contain numeric Project ID column")
 	}
 	for _, want := range []string{testStagingPattern, "owner", "admin"} {
-		if !strings.Contains(md, want) {
-			t.Errorf(fmtExpectedInMarkdown, want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf(fmtExpectedInMarkdown, want, md)
+			}
+		})
 	}
 }
 
@@ -1388,9 +1398,11 @@ func TestFormatProtectionRuleListMarkdown_NoNumericIDs(t *testing.T) {
 		t.Error("should not contain numeric ID column in list")
 	}
 	for _, want := range []string{testProdPattern, testStagingPattern, "maintainer", "owner"} {
-		if !strings.Contains(md, want) {
-			t.Errorf(fmtExpectedInMarkdown, want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf(fmtExpectedInMarkdown, want, md)
+			}
+		})
 	}
 }
 

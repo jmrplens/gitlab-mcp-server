@@ -180,9 +180,11 @@ func TestEdit_Success(t *testing.T) {
 		t.Errorf("expected ID 1, got %d", out.Hook.ID)
 	}
 	for _, want := range []string{"url", "signing_token", "push_events"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing %q: %s", want, capturedBody)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing %q: %s", want, capturedBody)
+			}
+		})
 	}
 }
 
@@ -227,9 +229,11 @@ func TestEdit_AllOptionalFields(t *testing.T) {
 		t.Errorf("expected ID 2, got %d", out.Hook.ID)
 	}
 	for _, want := range []string{"url", "name", "description", "token", "signing_token", "push_events_branch_filter", "branch_filter_strategy", "tag_push_events", "merge_requests_events", "repository_update_events", "enable_ssl_verification"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing %q: %s", want, capturedBody)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing %q: %s", want, capturedBody)
+			}
+		})
 	}
 }
 
@@ -472,9 +476,11 @@ func TestFormatHookMarkdown_URLVariablesRedacted(t *testing.T) {
 	text := result.Content[0].(*mcp.TextContent).Text
 
 	for _, want := range []string{"URL Variables", "token", "REDACTED"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("FormatHookMarkdown missing %q: %s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("FormatHookMarkdown missing %q: %s", want, text)
+			}
+		})
 	}
 }
 
@@ -618,8 +624,10 @@ func TestFormatDelegatorMarkdown_GetAddEdit(t *testing.T) {
 		"add":  FormatAddMarkdown(AddOutput{Hook: hook}),
 		"edit": FormatEditMarkdown(EditOutput{Hook: hook}),
 	} {
-		if result == nil || len(result.Content) == 0 {
-			t.Errorf("%s delegator returned empty result", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if result == nil || len(result.Content) == 0 {
+				t.Errorf("%s delegator returned empty result", name)
+			}
+		})
 	}
 }

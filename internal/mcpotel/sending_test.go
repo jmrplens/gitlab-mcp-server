@@ -154,8 +154,10 @@ func TestIsNotification(t *testing.T) {
 		"notifications":                      false,
 		"my/notifications/resources/updated": false,
 	} {
-		if got := IsNotification(method); got != want {
-			t.Errorf("IsNotification(%q) = %v, want %v", method, got, want)
-		}
+		t.Run(method, func(t *testing.T) {
+			if got := IsNotification(method); got != want {
+				t.Errorf("IsNotification(%q) = %v, want %v", method, got, want)
+			}
+		})
 	}
 }

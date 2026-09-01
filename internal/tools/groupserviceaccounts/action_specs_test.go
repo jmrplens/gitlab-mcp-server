@@ -40,18 +40,22 @@ func TestActionSpecs_Metadata(t *testing.T) {
 
 	byTool := groupServiceAccountSpecsByTool(t, specs)
 	for _, name := range []string{"gitlab_group_service_account_list", "gitlab_group_service_account_pat_list"} {
-		if !byTool[name].ReadOnly {
-			t.Errorf("%s should be read-only", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !byTool[name].ReadOnly {
+				t.Errorf("%s should be read-only", name)
+			}
+		})
 	}
 	for _, name := range []string{"gitlab_group_service_account_delete", "gitlab_group_service_account_pat_revoke"} {
-		spec := byTool[name]
-		if !spec.Destructive || !spec.Route.Destructive {
-			t.Errorf("%s should be destructive", name)
-		}
-		if !spec.Idempotent {
-			t.Errorf("%s should be idempotent", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			spec := byTool[name]
+			if !spec.Destructive || !spec.Route.Destructive {
+				t.Errorf("%s should be destructive", name)
+			}
+			if !spec.Idempotent {
+				t.Errorf("%s should be idempotent", name)
+			}
+		})
 	}
 }
 

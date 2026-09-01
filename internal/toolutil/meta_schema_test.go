@@ -113,9 +113,11 @@ func TestBuildMetaSchemaIndex_SortsToolsAndActions(t *testing.T) {
 	}
 	wantActions := []string{"delete", "get"}
 	for i, want := range wantActions {
-		if index.Tools[0].Actions[i] != want {
-			t.Fatalf("issue action %d = %q, want %q", i, index.Tools[0].Actions[i], want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if index.Tools[0].Actions[i] != want {
+				t.Fatalf("issue action %d = %q, want %q", i, index.Tools[0].Actions[i], want)
+			}
+		})
 	}
 }
 
@@ -327,9 +329,11 @@ func TestParseMetaSchemaURI_ValidAndMalformedURIs_ReturnsParsedParts(t *testing.
 		"gitlab://schema/meta//delete",
 		"gitlab://schema/meta/gitlab_project/",
 	} {
-		if gotTool, gotAction := ParseMetaSchemaURI(uri); gotTool != "" || gotAction != "" {
-			t.Fatalf("ParseMetaSchemaURI(%q) = %q/%q, want empty", uri, gotTool, gotAction)
-		}
+		t.Run(uri, func(t *testing.T) {
+			if gotTool, gotAction := ParseMetaSchemaURI(uri); gotTool != "" || gotAction != "" {
+				t.Fatalf("ParseMetaSchemaURI(%q) = %q/%q, want empty", uri, gotTool, gotAction)
+			}
+		})
 	}
 }
 

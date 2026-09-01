@@ -152,33 +152,35 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		"gitlab_issue_link_list", "gitlab_issue_link_get",
 		"gitlab_issue_link_create", "gitlab_issue_link_delete",
 	} {
-		spec := byTool[tool]
-		if spec.Usage == "" || strings.Contains(spec.Usage, "domain action") {
-			t.Errorf("%s: generic or empty Usage: %q", tool, spec.Usage)
-		}
-		// Must have at least one natural-language alias beyond the canonical name.
-		if len(spec.Aliases) < 2 {
-			t.Errorf("%s: missing natural-language aliases: %v", tool, spec.Aliases)
-		}
-		if len(spec.RelatedActions) == 0 {
-			t.Errorf("%s: missing RelatedActions", tool)
-		}
-		hasIssueGet := false
-		for _, ra := range spec.RelatedActions {
-			if ra == actionIssueGet {
-				hasIssueGet = true
+		t.Run(tool, func(t *testing.T) {
+			spec := byTool[tool]
+			if spec.Usage == "" || strings.Contains(spec.Usage, "domain action") {
+				t.Errorf("%s: generic or empty Usage: %q", tool, spec.Usage)
 			}
-		}
-		if !hasIssueGet {
-			t.Errorf("%s: RelatedActions should cross-link %q: %v", tool, actionIssueGet, spec.RelatedActions)
-		}
-		if len(spec.ParameterGuidance) == 0 {
-			t.Errorf("%s: missing ParameterGuidance", tool)
-		}
-		desc := spec.IndividualTool.Description
-		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-			t.Errorf("%s: IndividualTool.Description missing Returns/See also: %q", tool, desc)
-		}
+			// Must have at least one natural-language alias beyond the canonical name.
+			if len(spec.Aliases) < 2 {
+				t.Errorf("%s: missing natural-language aliases: %v", tool, spec.Aliases)
+			}
+			if len(spec.RelatedActions) == 0 {
+				t.Errorf("%s: missing RelatedActions", tool)
+			}
+			hasIssueGet := false
+			for _, ra := range spec.RelatedActions {
+				if ra == actionIssueGet {
+					hasIssueGet = true
+				}
+			}
+			if !hasIssueGet {
+				t.Errorf("%s: RelatedActions should cross-link %q: %v", tool, actionIssueGet, spec.RelatedActions)
+			}
+			if len(spec.ParameterGuidance) == 0 {
+				t.Errorf("%s: missing ParameterGuidance", tool)
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s: IndividualTool.Description missing Returns/See also: %q", tool, desc)
+			}
+		})
 	}
 }
 

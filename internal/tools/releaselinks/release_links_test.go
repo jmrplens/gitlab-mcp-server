@@ -791,9 +791,11 @@ func TestFormatOutputMarkdown_WithData(t *testing.T) {
 		"- **Type**: package",
 		"- **External**: true",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -847,9 +849,11 @@ func TestFormatListMarkdown_WithLinks(t *testing.T) {
 		"Binary arm64",
 		"package",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -893,9 +897,11 @@ func TestFormatListMarkdown_ContainsHints(t *testing.T) {
 		"link_create'",
 		"link_create_batch'",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListMarkdown missing hint containing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListMarkdown missing hint containing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -923,9 +929,11 @@ func TestFormatBatchMarkdown_WithCreatedAndFailed(t *testing.T) {
 		"checksum.txt: 409 Conflict",
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c) {
-			t.Errorf("missing %q in:\n%s", c, md)
-		}
+		t.Run(c, func(t *testing.T) {
+			if !strings.Contains(md, c) {
+				t.Errorf("missing %q in:\n%s", c, md)
+			}
+		})
 	}
 }
 
@@ -1179,9 +1187,11 @@ func TestReleaseLinkDescriptions_RMeta(t *testing.T) {
 		"gitlab_release_link_update",
 		"gitlab_release_link_delete",
 	} {
-		desc := byTool[name].IndividualTool.Description
-		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-			t.Errorf("%s description = %q, want Returns:/See also: form", name, desc)
-		}
+		t.Run(name, func(t *testing.T) {
+			desc := byTool[name].IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s description = %q, want Returns:/See also: form", name, desc)
+			}
+		})
 	}
 }

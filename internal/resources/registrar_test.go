@@ -55,9 +55,11 @@ func TestNewHandlerIndex_CapturesEveryRegistration(t *testing.T) {
 		"gitlab://user/current",                                // static resource
 		"gitlab://project/{project_id}/pipeline/{pipeline_id}", // template
 	} {
-		if index[key] == nil {
-			t.Errorf("index has no handler for %q", key)
-		}
+		t.Run(key, func(t *testing.T) {
+			if index[key] == nil {
+				t.Errorf("index has no handler for %q", key)
+			}
+		})
 	}
 }
 

@@ -363,9 +363,11 @@ func TestProtect_InvalidTierIncludesActionableHint(t *testing.T) {
 	}
 	got := err.Error()
 	for _, want := range []string{"valid group protected environment tiers", "production", "staging", "testing", "development", "other"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("Protect() error = %q, want substring %q", got, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("Protect() error = %q, want substring %q", got, want)
+			}
+		})
 	}
 }
 
@@ -486,9 +488,11 @@ func TestUpdate_NotFoundIncludesActionableHint(t *testing.T) {
 		t.Fatal("Update() error = nil, want not found error")
 	}
 	for _, want := range []string{"protected_env_list", "valid tiers", "partial updates merge"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("Update() error missing %q: %v", want, err)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("Update() error missing %q: %v", want, err)
+			}
+		})
 	}
 }
 

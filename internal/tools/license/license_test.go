@@ -195,9 +195,11 @@ func TestFormatLicenseMarkdown_WithDates(t *testing.T) {
 	result := FormatLicenseMarkdown(item)
 	text := result.Content[0].(*mcp.TextContent).Text
 	for _, want := range []string{"ultimate", "1 Jan 2026", "31 Dec 2026", "Jane", "Corp", "true"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("missing %q in markdown", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("missing %q in markdown", want)
+			}
+		})
 	}
 }
 

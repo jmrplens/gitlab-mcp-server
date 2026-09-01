@@ -624,7 +624,9 @@ func TestRegisterAllMeta_ToolNames(t *testing.T) {
 		delete(expectedNames, tool.Name)
 	}
 	for name := range expectedNames {
-		t.Errorf("expected meta-tool not found: %s", name)
+		t.Run(name, func(t *testing.T) {
+			t.Errorf("expected meta-tool not found: %s", name)
+		})
 	}
 }
 
@@ -714,9 +716,11 @@ func TestRegisterAllDoesNotUseDomainRegisterTools(t *testing.T) {
 		t.Fatalf("ReadFile register.go: %v", err)
 	}
 	for _, forbidden := range []string{".RegisterTools(", "registerAllLegacy", "legacyIndividualToolDescriptions", "listToolsForDescriptionCapture"} {
-		if strings.Contains(string(src), forbidden) {
-			t.Fatalf("register.go contains %q; RegisterAll must remain catalog-backed", forbidden)
-		}
+		t.Run(forbidden, func(t *testing.T) {
+			if strings.Contains(string(src), forbidden) {
+				t.Fatalf("register.go contains %q; RegisterAll must remain catalog-backed", forbidden)
+			}
+		})
 	}
 }
 

@@ -340,14 +340,18 @@ func TestFormatOutputMarkdown_WithChanges(t *testing.T) {
 		"| new_name.go | renamed from old_name.go |",
 		"diff_versions_list",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 	for _, absent := range []string{"raw_diffs", "truncation"} {
-		if strings.Contains(md, absent) {
-			t.Errorf("markdown should not contain %q when no files are truncated:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("markdown should not contain %q when no files are truncated:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -372,9 +376,11 @@ func TestFormatOutputMarkdown_TruncatedFiles(t *testing.T) {
 		"huge_test.c",
 		"truncation",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 	if strings.Contains(md, "removed.go") && strings.Contains(md, "truncation") {
 		// Deleted files with empty diff should NOT be in truncation warning
@@ -420,9 +426,11 @@ func TestFormatDiffVersionsListMarkdown_WithVersions(t *testing.T) {
 		"abcdef12", // truncated to 8
 		"12345678", // truncated to 8
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 	// Full SHA should not appear (truncated to 8)
 	if strings.Contains(md, "abcdef1234567890") {
@@ -485,9 +493,11 @@ func TestFormatDiffVersionGetMarkdown_Full(t *testing.T) {
 		"| renamed.go | renamed from original.go |",
 		"diff_versions_list",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 	if strings.Contains(md, "raw_diffs") {
 		t.Errorf("should not reference non-existent raw_diffs action:\n%s", md)
@@ -601,9 +611,11 @@ func TestFormatRawDiffsMarkdown_WithDiff(t *testing.T) {
 		"diff --git",
 		"```",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -779,9 +791,11 @@ func TestMRChangesGet_PaginationAndOptions(t *testing.T) {
 		t.Fatalf("Get() unexpected error: %v", err)
 	}
 	for _, want := range []string{"unidiff=true", "order_by=id", "sort=desc", "page=2", "per_page=50", "pagination=keyset", "page_token=tok123"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 	if len(out.Changes) != 1 {
 		t.Fatalf("len(Changes) = %d, want 1", len(out.Changes))
@@ -816,9 +830,11 @@ func TestListDiffVersions_PaginationAndOptions(t *testing.T) {
 		t.Fatalf("ListDiffVersions() unexpected error: %v", err)
 	}
 	for _, want := range []string{"order_by=id", "sort=asc", "page=3", "per_page=25", "pagination=keyset", "page_token=cur9"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 }
 

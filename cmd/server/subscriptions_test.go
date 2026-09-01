@@ -620,10 +620,12 @@ func TestSubscribe_ActiveSession_WatcherStaysFast(t *testing.T) {
 // TestSessionBridge_ALegacySubscribeStillFollowsTheLease.
 func TestKeepalive_IsNotRenewalActivity(t *testing.T) {
 	for _, method := range []string{"ping", "notifications/initialized", "notifications/cancelled"} {
-		req := &mcp.ServerRequest[*mcp.CallToolParams]{Session: &mcp.ServerSession{}}
-		if _, ok := activeSession(method, req); ok {
-			t.Errorf("%q was treated as evidence that a subscriber is still there", method)
-		}
+		t.Run(method, func(t *testing.T) {
+			req := &mcp.ServerRequest[*mcp.CallToolParams]{Session: &mcp.ServerSession{}}
+			if _, ok := activeSession(method, req); ok {
+				t.Errorf("%q was treated as evidence that a subscriber is still there", method)
+			}
+		})
 	}
 
 	// The control: something a client only sends because it wants an answer.

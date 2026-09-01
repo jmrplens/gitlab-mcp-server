@@ -63,14 +63,18 @@ func TestAssets_SharedGeometryReachesEveryEmitter(t *testing.T) {
 func TestAssets_CanonicalCarriesNoColor(t *testing.T) {
 	canonical := canonicalSVG()
 	for _, forbidden := range []string{"#", "currentColor"} {
-		if strings.Contains(canonical, forbidden) {
-			t.Errorf("canonical mark contains %q; it must be painted by site CSS tokens only", forbidden)
-		}
+		t.Run(forbidden, func(t *testing.T) {
+			if strings.Contains(canonical, forbidden) {
+				t.Errorf("canonical mark contains %q; it must be painted by site CSS tokens only", forbidden)
+			}
+		})
 	}
 	for _, class := range []string{"m-node", "m-branch", "m-tip"} {
-		if !strings.Contains(canonical, class) {
-			t.Errorf("canonical mark is missing the %q class", class)
-		}
+		t.Run(class, func(t *testing.T) {
+			if !strings.Contains(canonical, class) {
+				t.Errorf("canonical mark is missing the %q class", class)
+			}
+		})
 	}
 }
 
@@ -99,17 +103,21 @@ func TestRun_WriteThenCheck_RoundTrips(t *testing.T) {
 // every renderer fails on silently.
 func TestEmbeddedBackgrounds_AreValidJPEGs(t *testing.T) {
 	for name, art := range map[string][]byte{"bg-wide": bgWide, "bg-tall": bgTall} {
-		if len(art) < 4 || art[0] != 0xff || art[1] != 0xd8 {
-			t.Errorf("%s does not start with the JPEG SOI marker", name)
-		}
-		if _, err := jpeg.DecodeConfig(bytes.NewReader(art)); err != nil {
-			t.Errorf("%s does not decode as JPEG: %v", name, err)
-		}
+		t.Run(name, func(t *testing.T) {
+			if len(art) < 4 || art[0] != 0xff || art[1] != 0xd8 {
+				t.Errorf("%s does not start with the JPEG SOI marker", name)
+			}
+			if _, err := jpeg.DecodeConfig(bytes.NewReader(art)); err != nil {
+				t.Errorf("%s does not decode as JPEG: %v", name, err)
+			}
+		})
 	}
 	for _, card := range []string{bannerSVG(), ogSVG(), socialSVG()} {
-		if !strings.Contains(card, "data:image/jpeg;base64,") {
-			t.Error("a card is missing its embedded background layer")
-		}
+		t.Run(card, func(t *testing.T) {
+			if !strings.Contains(card, "data:image/jpeg;base64,") {
+				t.Error("a card is missing its embedded background layer")
+			}
+		})
 	}
 }
 

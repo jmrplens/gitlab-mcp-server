@@ -17,9 +17,11 @@ func TestShortPackage_ExtractsDomain(t *testing.T) {
 		"a/b/c":                                                            "c",
 	}
 	for input, want := range cases {
-		if got := shortPackage(input); got != want {
-			t.Errorf("shortPackage(%q) = %q, want %q", input, got, want)
-		}
+		t.Run(input, func(t *testing.T) {
+			if got := shortPackage(input); got != want {
+				t.Errorf("shortPackage(%q) = %q, want %q", input, got, want)
+			}
+		})
 	}
 }
 

@@ -199,9 +199,11 @@ func TestList_AppliesListAndKeysetOptions(t *testing.T) {
 		"page_token": "cursor-99",
 	}
 	for key, want := range wants {
-		if got := gotQuery.Get(key); got != want {
-			t.Errorf("query %q = %q, want %q", key, got, want)
-		}
+		t.Run(key, func(t *testing.T) {
+			if got := gotQuery.Get(key); got != want {
+				t.Errorf("query %q = %q, want %q", key, got, want)
+			}
+		})
 	}
 }
 
@@ -464,9 +466,11 @@ func TestFormatListMarkdownString_Populated(t *testing.T) {
 		"First note", "Second note", "Solo note",
 		"1 Jan 2026 00:00 UTC", "2 Jan 2026 00:00 UTC", "3 Jan 2026 00:00 UTC",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListMarkdownString missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListMarkdownString missing %q", want)
+			}
+		})
 	}
 }
 
@@ -489,9 +493,11 @@ func TestFormatMarkdownString_Populated(t *testing.T) {
 		"Hello world", "Reply here",
 		"1 Jan 2026 00:00 UTC", "2 Jan 2026 00:00 UTC",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatMarkdownString missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatMarkdownString missing %q", want)
+			}
+		})
 	}
 }
 
@@ -523,9 +529,11 @@ func TestFormatNoteMarkdownString_Populated(t *testing.T) {
 		"Great work!",
 		"1 Mar 2026 10:00 UTC",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatNoteMarkdownString missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatNoteMarkdownString missing %q", want)
+			}
+		})
 	}
 }
 

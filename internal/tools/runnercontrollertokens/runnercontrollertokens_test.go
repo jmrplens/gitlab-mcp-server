@@ -491,9 +491,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 
 	md := FormatOutputMarkdown(out)
 	for _, want := range []string{"my-token", "glrt-abc123", "Last Used At", "Created At"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q: %s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q: %s", want, md)
+			}
+		})
 	}
 
 	// Without token and timestamps
@@ -521,9 +523,11 @@ func TestFormatListMarkdown(t *testing.T) {
 
 	md := FormatListMarkdown(out)
 	for _, want := range []string{"tok-1", "tok-2"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q: %s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q: %s", want, md)
+			}
+		})
 	}
 
 	// Empty

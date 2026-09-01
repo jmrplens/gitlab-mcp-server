@@ -128,9 +128,11 @@ func TestLimit_ReadOnlyRemovesMutations(t *testing.T) {
 			countTools(readOnly), countTools(full))
 	}
 	for _, mutating := range []string{`"name":"gitlab_create_`, `"name":"gitlab_delete_`, `"name":"gitlab_update_`} {
-		if strings.Contains(readOnly, mutating) {
-			t.Errorf("a mutating tool matching %s survived --read-only", mutating)
-		}
+		t.Run(mutating, func(t *testing.T) {
+			if strings.Contains(readOnly, mutating) {
+				t.Errorf("a mutating tool matching %s survived --read-only", mutating)
+			}
+		})
 	}
 }
 

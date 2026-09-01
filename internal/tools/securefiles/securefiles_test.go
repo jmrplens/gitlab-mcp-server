@@ -312,9 +312,11 @@ func TestFormatListMarkdown_WithPagination(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 5, Page: 1, PerPage: 2, TotalPages: 3},
 	})
 	for _, want := range []string{"| ID |", "| 1 |", "| 2 |", "key.pem", "cert.pem"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -396,9 +398,11 @@ func TestList_KeysetPagination(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=42"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 }
 
@@ -426,9 +430,11 @@ func TestFormatShowMarkdown_FullMetadata(t *testing.T) {
 		"2024-01-02T03:04:05Z", "2025-01-02T03:04:05Z", "Certificate Metadata",
 		"00:11:22", "Acme Root CA", "service.example.com", "2026-06-01T00:00:00Z",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

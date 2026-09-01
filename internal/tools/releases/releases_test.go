@@ -671,9 +671,11 @@ func TestFormatMarkdown_AllFields(t *testing.T) {
 		"### Description",
 		"Feature X",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -709,9 +711,11 @@ func TestFormatMarkdown_MinimalFields(t *testing.T) {
 		"### Description",
 		"**Released**",
 	} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -752,9 +756,11 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 		"First",
 		"dev",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -916,9 +922,11 @@ func TestFormatMarkdown_ContainsHints(t *testing.T) {
 		"link_create_batch'",
 		"publish_and_link'",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatMarkdown missing hint containing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatMarkdown missing hint containing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1351,9 +1359,11 @@ func TestReleaseList_IncludeHTMLDescriptionAndKeyset(t *testing.T) {
 				"order_by":                 "created_at",
 				"sort":                     "asc",
 			} {
-				if got := q.Get(k); got != want {
-					t.Errorf("query param %s = %q, want %q", k, got, want)
-				}
+				t.Run(k, func(t *testing.T) {
+					if got := q.Get(k); got != want {
+						t.Errorf("query param %s = %q, want %q", k, got, want)
+					}
+				})
 			}
 			testutil.RespondJSON(w, http.StatusOK, `[]`)
 			return
@@ -1492,14 +1502,18 @@ func TestToOutput_DocumentedSubset_OmitsUndocumentedCommitAndAuthorFields(t *tes
 	}
 	commitJSON := string(commitData)
 	for _, undocumented := range []string{`"stats"`, `"status"`, `"project_id"`, `"web_url"`} {
-		if strings.Contains(commitJSON, undocumented) {
-			t.Errorf("serialized commit must omit undocumented field %s; got %s", undocumented, commitJSON)
-		}
+		t.Run(undocumented, func(t *testing.T) {
+			if strings.Contains(commitJSON, undocumented) {
+				t.Errorf("serialized commit must omit undocumented field %s; got %s", undocumented, commitJSON)
+			}
+		})
 	}
 	for _, documented := range []string{`"id"`, `"short_id"`, `"title"`} {
-		if !strings.Contains(commitJSON, documented) {
-			t.Errorf("serialized commit must keep documented field %s; got %s", documented, commitJSON)
-		}
+		t.Run(documented, func(t *testing.T) {
+			if !strings.Contains(commitJSON, documented) {
+				t.Errorf("serialized commit must keep documented field %s; got %s", documented, commitJSON)
+			}
+		})
 	}
 
 	// The author created_at is not part of the documented author subset.
@@ -1512,8 +1526,10 @@ func TestToOutput_DocumentedSubset_OmitsUndocumentedCommitAndAuthorFields(t *tes
 		t.Errorf("serialized author must omit undocumented created_at; got %s", authorJSON)
 	}
 	for _, documented := range []string{`"avatar_url"`, `"web_url"`, `"state"`} {
-		if !strings.Contains(authorJSON, documented) {
-			t.Errorf("serialized author must keep documented field %s; got %s", documented, authorJSON)
-		}
+		t.Run(documented, func(t *testing.T) {
+			if !strings.Contains(authorJSON, documented) {
+				t.Errorf("serialized author must keep documented field %s; got %s", documented, authorJSON)
+			}
+		})
 	}
 }

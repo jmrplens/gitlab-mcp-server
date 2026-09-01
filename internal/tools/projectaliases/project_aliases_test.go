@@ -317,9 +317,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 		"gitlab_list_project_aliases",
 	}
 	for _, want := range checks {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatOutputMarkdown missing %q in:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatOutputMarkdown missing %q in:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -341,9 +343,11 @@ func TestFormatListMarkdown_WithAliases(t *testing.T) {
 		"| 2 | `beta` | 200 |",
 	}
 	for _, want := range checks {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListMarkdown missing %q in:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListMarkdown missing %q in:\n%s", want, md)
+			}
+		})
 	}
 	if strings.Contains(md, "No project aliases found") {
 		t.Error("non-empty list should not contain empty message")

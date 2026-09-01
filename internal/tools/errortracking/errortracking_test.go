@@ -342,9 +342,11 @@ func TestFormatKeyMarkdown(t *testing.T) {
 		"**Public Key**: pk-123",
 		"**Sentry DSN**: https://dsn.example.com",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

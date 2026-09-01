@@ -876,9 +876,11 @@ func TestFormatScheduleAllMarkdown(t *testing.T) {
 		"gitlab_retrieve_all_project_storage_moves",
 	}
 	for _, want := range wantAll {
-		if !strings.Contains(got, want) {
-			t.Errorf("output missing %q\ngot:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Errorf("output missing %q\ngot:\n%s", want, got)
+			}
+		})
 	}
 }
 

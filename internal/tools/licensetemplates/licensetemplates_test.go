@@ -133,9 +133,11 @@ func TestFormatGetMarkdown_AllFields(t *testing.T) {
 		Content:     "Apache License text here",
 	})
 	for _, want := range []string{"Apache 2.0", "A permissive license", "commercial-use", "include-copyright", "no-liability", "Apache License text here"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("missing %q in markdown output", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("missing %q in markdown output", want)
+			}
+		})
 	}
 	if strings.Contains(md, "- **Permissions**") {
 		t.Error("license details should use unbulleted field labels")

@@ -391,9 +391,11 @@ func TestFormatSetIntegrationMarkdown(t *testing.T) {
 	})
 	text := firstMarkdownText(t, result)
 	for _, want := range []string{"Integration Updated", "Slack", "Slug", "Created", "Updated"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("markdown should contain %q, got: %s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("markdown should contain %q, got: %s", want, text)
+			}
+		})
 	}
 }
 
@@ -477,8 +479,10 @@ func TestActionSpecs_GenericIntegrationsPresent(t *testing.T) {
 		}
 	}
 	for name := range want {
-		if !seen[name] {
-			t.Errorf("ActionSpecs missing %q", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !seen[name] {
+				t.Errorf("ActionSpecs missing %q", name)
+			}
+		})
 	}
 }

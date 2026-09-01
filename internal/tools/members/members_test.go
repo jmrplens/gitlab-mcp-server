@@ -238,9 +238,11 @@ func TestProjectMembersList_AllListOptions(t *testing.T) {
 			"page_token":     "tok42",
 		}
 		for key, want := range checks {
-			if got := q.Get(key); got != want {
-				t.Errorf("query %s = %q, want %q", key, got, want)
-			}
+			t.Run(key, func(t *testing.T) {
+				if got := q.Get(key); got != want {
+					t.Errorf("query %s = %q, want %q", key, got, want)
+				}
+			})
 		}
 		if got := q["user_ids[]"]; len(got) != 2 || got[0] != "10" || got[1] != "20" {
 			t.Errorf("query user_ids[] = %v, want [10 20]", got)

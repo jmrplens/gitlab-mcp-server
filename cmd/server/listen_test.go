@@ -327,9 +327,11 @@ func TestRepeatedFlag_AcceptsRepetitionAndCommas(t *testing.T) {
 		t.Fatalf("collected %v, want %v", got, want)
 	}
 	for i, value := range want {
-		if flagValue[i] != value {
-			t.Errorf("entry %d = %q, want %q", i, flagValue[i], value)
-		}
+		t.Run(value, func(t *testing.T) {
+			if flagValue[i] != value {
+				t.Errorf("entry %d = %q, want %q", i, flagValue[i], value)
+			}
+		})
 	}
 	if got := flagValue.String(); got != strings.Join(want, ",") {
 		t.Errorf("String() = %q, want %q", got, strings.Join(want, ","))

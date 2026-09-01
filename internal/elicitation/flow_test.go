@@ -632,9 +632,11 @@ func TestFlow_MRTR_MultiStepAccumulatesState(t *testing.T) {
 		t.Fatalf("elicitation messages = %v, want %v", messages, want)
 	}
 	for i, msg := range want {
-		if messages[i] != msg {
-			t.Errorf("elicitation %d = %q, want %q", i, messages[i], msg)
-		}
+		t.Run(msg, func(t *testing.T) {
+			if messages[i] != msg {
+				t.Errorf("elicitation %d = %q, want %q", i, messages[i], msg)
+			}
+		})
 	}
 }
 

@@ -1803,9 +1803,11 @@ func TestFormatMarkdown_Populated(t *testing.T) {
 		testLabelBug, "enhancement", "1 Jan 2026", "Comments", "5",
 		"Full description here", testMRWebURL,
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1827,9 +1829,11 @@ func TestFormatListMarkdown_Populated(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 2},
 	})
 	for _, want := range []string{"MR1", "MR2", testAuthorAlice, testAuthorBob, "📝"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatListMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatListMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1845,9 +1849,11 @@ func TestFormatListMarkdown_Empty(t *testing.T) {
 func TestFormatApproveMarkdown_Populated(t *testing.T) {
 	md := FormatApproveMarkdown(ApproveOutput{Approved: true, ApprovalsRequired: 2, ApprovedBy: 1})
 	for _, want := range []string{"Approved", "true", "2", "1"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatApproveMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatApproveMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1868,9 +1874,11 @@ func TestFormatCommitsMarkdown_Populated(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
 	for _, want := range []string{"abc1234", "feat: add login", "Alice", "1 Jan 2026"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatCommitsMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatCommitsMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1890,9 +1898,11 @@ func TestFormatPipelinesMarkdown_Populated(t *testing.T) {
 		},
 	})
 	for _, want := range []string{"10", "success", "push", testBranchMain} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatPipelinesMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatPipelinesMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1929,9 +1939,11 @@ func TestFormatParticipantsMarkdown_Populated(t *testing.T) {
 		},
 	})
 	for _, want := range []string{testAuthorAlice, testAuthorBob, "Alice A", "Bob B", testStateActive, "Participants (2)"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatParticipantsMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatParticipantsMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1951,9 +1963,11 @@ func TestFormatReviewersMarkdown_Populated(t *testing.T) {
 		},
 	})
 	for _, want := range []string{testAuthorCarol, "Carol C", "reviewed", "1 Mar 2026", "Reviewers (1)"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatReviewersMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatReviewersMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1974,9 +1988,11 @@ func TestFormatIssuesClosedMarkdown_Populated(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
 	for _, want := range []string{"Bug fix", testStateOpened, testAuthorAlice, testLabelBug, "#5"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatIssuesClosedMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatIssuesClosedMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -1995,9 +2011,11 @@ func TestFormatCreatePipelineMarkdown(t *testing.T) {
 		SHA: testSHAAbc, WebURL: "https://gitlab.example.com/pipelines/500",
 	})
 	for _, want := range []string{"500", testStatePending, "merge_request_event", testFeatureBranch, testSHAAbc, "https://gitlab.example.com/pipelines/500"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatCreatePipelineMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatCreatePipelineMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -2019,9 +2037,11 @@ func TestFormatTimeStatsMarkdown_Populated(t *testing.T) {
 		TimeEstimate: 10800, TotalTimeSpent: 5400,
 	})
 	for _, want := range []string{"3h", "10800", "1h30m", "5400"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatTimeStatsMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatTimeStatsMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -2045,9 +2065,11 @@ func TestFormatRelatedIssuesMarkdown_Populated(t *testing.T) {
 		Pagination: toolutil.PaginationOutput{TotalItems: 1},
 	})
 	for _, want := range []string{"Related bug", testStateOpened, testAuthorAlice, testLabelBug, "critical", "#10"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatRelatedIssuesMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatRelatedIssuesMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -2067,9 +2089,11 @@ func TestFormatCreateTodoMarkdown_Populated(t *testing.T) {
 		State: testStatePending,
 	})
 	for _, want := range []string{"42", testActionMarked, testTargetTypeMR, testMRTitle, testMRWebURL, testStatePending} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatCreateTodoMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatCreateTodoMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -2145,9 +2169,11 @@ func TestFormatDependencyMarkdown_Populated(t *testing.T) {
 		},
 	})
 	for _, want := range []string{testBlockerTitle, "!10", testStateOpened, testBranchFeatA, testBranchMain} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatDependencyMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatDependencyMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -2168,9 +2194,11 @@ func TestFormatDependenciesMarkdown_Populated(t *testing.T) {
 		},
 	})
 	for _, want := range []string{testDepTitleA, "Dep B", "!10", "!20", testStateOpened, testStateMerged, "Dependencies (2)"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("FormatDependenciesMarkdown missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("FormatDependenciesMarkdown missing %q", want)
+			}
+		})
 	}
 }
 
@@ -4180,9 +4208,11 @@ func TestFormatMarkdown_MergedState(t *testing.T) {
 		ChangesCount:        "3", MergeUser: &toolutil.BasicUserOutput{Username: "alice"}, MergedAt: testCreatedAt,
 	})
 	for _, want := range []string{"group/project", "v1.0", "[#42](https://pipeline)", "3 files", "@alice"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("missing %q in merged MR markdown", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("missing %q in merged MR markdown", want)
+			}
+		})
 	}
 }
 

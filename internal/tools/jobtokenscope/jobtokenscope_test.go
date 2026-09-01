@@ -645,9 +645,11 @@ func TestFormatListInboundAllowlistMarkdown_WithData(t *testing.T) {
 		"proj-b",
 		"grp/proj-a",
 	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("markdown missing %q:\n%s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("markdown missing %q:\n%s", want, text)
+			}
+		})
 	}
 }
 
@@ -695,9 +697,11 @@ func TestFormatListGroupAllowlistMarkdown_WithData(t *testing.T) {
 		"group-b",
 		"org/group-b",
 	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("markdown missing %q:\n%s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("markdown missing %q:\n%s", want, text)
+			}
+		})
 	}
 }
 

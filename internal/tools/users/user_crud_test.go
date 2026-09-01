@@ -380,9 +380,11 @@ func TestCreate_AllOptionalFields(t *testing.T) {
 		"skype", "discord", "github", "provider", "extern_uid", "group_id_for_saml",
 		"theme_id", "color_scheme_id", "shared_runners_minutes_limit", "extra_shared_runners_minutes_limit",
 	} {
-		if _, ok := body[key]; !ok {
-			t.Errorf("create body missing %q: %v", key, body)
-		}
+		t.Run(key, func(t *testing.T) {
+			if _, ok := body[key]; !ok {
+				t.Errorf("create body missing %q: %v", key, body)
+			}
+		})
 	}
 }
 
@@ -413,8 +415,10 @@ func TestModify_AllOptionalFields(t *testing.T) {
 		"auditor", "view_diffs_file_by_file", "commit_email", "public_email", "website_url",
 		"linkedin", "twitter", "skype", "provider", "extern_uid", "theme_id",
 	} {
-		if _, ok := body[key]; !ok {
-			t.Errorf("modify body missing %q: %v", key, body)
-		}
+		t.Run(key, func(t *testing.T) {
+			if _, ok := body[key]; !ok {
+				t.Errorf("modify body missing %q: %v", key, body)
+			}
+		})
 	}
 }

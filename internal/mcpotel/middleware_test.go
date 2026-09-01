@@ -884,9 +884,11 @@ func TestMiddleware_DurationCarriesTheMethodAndTheAction(t *testing.T) {
 		string(AttrActionID):      "issue.list",
 		string(AttrToolSurface):   "dynamic",
 	} {
-		if found[key] != want {
-			t.Errorf("%s = %q on the metric, want %q", key, found[key], want)
-		}
+		t.Run(key, func(t *testing.T) {
+			if found[key] != want {
+				t.Errorf("%s = %q on the metric, want %q", key, found[key], want)
+			}
+		})
 	}
 }
 

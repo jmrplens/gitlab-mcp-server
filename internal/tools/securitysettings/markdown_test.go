@@ -38,9 +38,11 @@ func TestFormatProjectMarkdown_AllFields(t *testing.T) {
 		"**Updated**: 2026-01-02T00:00:00Z",
 	}
 	for _, exp := range expectations {
-		if !strings.Contains(md, exp) {
-			t.Errorf("expected markdown to contain %q, got:\n%s", exp, md)
-		}
+		t.Run(exp, func(t *testing.T) {
+			if !strings.Contains(md, exp) {
+				t.Errorf("expected markdown to contain %q, got:\n%s", exp, md)
+			}
+		})
 	}
 }
 

@@ -217,9 +217,11 @@ func TestList_NotFoundIncludesActionableHint(t *testing.T) {
 		t.Fatal("List() expected error, got nil")
 	}
 	for _, want := range []string{"Premium/Ultimate", "can be empty", "configured for the group"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("List() error missing %q: %v", want, err)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("List() error missing %q: %v", want, err)
+			}
+		})
 	}
 }
 
@@ -422,9 +424,11 @@ func TestGet_NotFoundIncludesActionableHint(t *testing.T) {
 		t.Fatal("Get() expected error, got nil")
 	}
 	for _, want := range []string{"epic_board_list", "gitlab_group", "configure an epic board"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("Get() error missing %q: %v", want, err)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("Get() error missing %q: %v", want, err)
+			}
+		})
 	}
 }
 

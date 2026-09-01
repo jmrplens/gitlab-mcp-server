@@ -205,7 +205,9 @@ func TestIndividual_PackagePublishComposite(t *testing.T) {
 	t.Run("PublishDirectory", func(t *testing.T) {
 		dir := t.TempDir()
 		for _, name := range []string{"first.txt", "second.txt"} {
-			requireNoError(t, os.WriteFile(filepath.Join(dir, name), []byte("directory payload "+name), 0o600), "write temp file "+name)
+			t.Run(name, func(t *testing.T) {
+				requireNoError(t, os.WriteFile(filepath.Join(dir, name), []byte("directory payload "+name), 0o600), "write temp file "+name)
+			})
 		}
 
 		out, pErr := callToolOn[packages.PublishDirOutput](ctx, sess.individual, "gitlab_package_publish_directory", packages.PublishDirInput{

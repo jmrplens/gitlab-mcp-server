@@ -50,9 +50,11 @@ func TestLoadHTTPEnvOverlay_AbsentVariablesReportNothing(t *testing.T) {
 		"RateLimitBurst":     overlay.RateLimitBurst == nil,
 	}
 	for field, isNil := range nilFields {
-		if !isNil {
-			t.Errorf("%s was reported despite its variable being unset", field)
-		}
+		t.Run(field, func(t *testing.T) {
+			if !isNil {
+				t.Errorf("%s was reported despite its variable being unset", field)
+			}
+		})
 	}
 	if overlay.TierExplicit {
 		t.Error("TierExplicit = true with no tier variable set")

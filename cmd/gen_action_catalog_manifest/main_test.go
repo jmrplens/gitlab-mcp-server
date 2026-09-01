@@ -55,9 +55,11 @@ func TestGenerateManifest_IsDeterministic(t *testing.T) {
 		"buildAccessActionSpecs,",
 		"buildWikiActionSpecs,",
 	} {
-		if !bytes.Contains(first, []byte(want)) {
-			t.Fatalf("generated manifest missing %q:\n%s", want, first)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !bytes.Contains(first, []byte(want)) {
+				t.Fatalf("generated manifest missing %q:\n%s", want, first)
+			}
+		})
 	}
 }
 

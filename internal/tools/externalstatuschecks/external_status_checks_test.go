@@ -349,9 +349,11 @@ func TestUpdateProjectExternalStatusCheck_WithAllFields(t *testing.T) {
 		t.Errorf("expected name 'Security Scan', got %q", out.Name)
 	}
 	for _, want := range []string{"name", "external_url", "shared_secret", "protected_branch_ids"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 

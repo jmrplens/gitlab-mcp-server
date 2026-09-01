@@ -266,9 +266,11 @@ func TestPrintReport_EmptyViolationsWritesNoViolationsMessage(t *testing.T) {
 		"| Total violations | 0 |",
 		"**No violations found.**",
 	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("printReport() output missing %q:\n%s", want, output)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Fatalf("printReport() output missing %q:\n%s", want, output)
+			}
+		})
 	}
 }
 
@@ -298,9 +300,11 @@ func TestPrintReport_GroupsViolationsByCategory(t *testing.T) {
 		"`tool_b` | too short",
 		"### Individual Tools (2)",
 	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("printReport() output missing %q:\n%s", want, output)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Fatalf("printReport() output missing %q:\n%s", want, output)
+			}
+		})
 	}
 }
 

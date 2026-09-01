@@ -59,17 +59,19 @@ func TestActionSpecs_VariableValueGuidance(t *testing.T) {
 	byTool := pipelineScheduleSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, pipelineScheduleActionHandler())))
 
 	for _, toolName := range []string{"gitlab_pipeline_schedule_create_variable", "gitlab_pipeline_schedule_edit_variable"} {
-		guidance := byTool[toolName].ParameterGuidance["value"]
-		if guidance.SemanticRole != "pipeline_schedule_variable_value" {
-			t.Fatalf("%s value SemanticRole = %q, want pipeline_schedule_variable_value", toolName, guidance.SemanticRole)
-		}
-		if !strings.Contains(guidance.ValueSource, "Supply an explicit value") {
-			t.Fatalf("%s value ValueSource = %q, want explicit value guidance", toolName, guidance.ValueSource)
-		}
-		description := schemaPropertyDescription(t, byTool[toolName].Route.InputSchema, "value")
-		if !strings.Contains(description, "Required") {
-			t.Fatalf("%s value schema description = %q, want required guidance", toolName, description)
-		}
+		t.Run(toolName, func(t *testing.T) {
+			guidance := byTool[toolName].ParameterGuidance["value"]
+			if guidance.SemanticRole != "pipeline_schedule_variable_value" {
+				t.Fatalf("%s value SemanticRole = %q, want pipeline_schedule_variable_value", toolName, guidance.SemanticRole)
+			}
+			if !strings.Contains(guidance.ValueSource, "Supply an explicit value") {
+				t.Fatalf("%s value ValueSource = %q, want explicit value guidance", toolName, guidance.ValueSource)
+			}
+			description := schemaPropertyDescription(t, byTool[toolName].Route.InputSchema, "value")
+			if !strings.Contains(description, "Required") {
+				t.Fatalf("%s value schema description = %q, want required guidance", toolName, description)
+			}
+		})
 	}
 }
 

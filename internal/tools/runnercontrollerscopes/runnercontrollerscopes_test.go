@@ -377,9 +377,11 @@ func TestFormatScopesMarkdown(t *testing.T) {
 
 	md := FormatScopesMarkdown(out)
 	for _, want := range []string{"Instance-Level", "Runner-Level", "42"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q: %s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q: %s", want, md)
+			}
+		})
 	}
 
 	// Empty instance scopes

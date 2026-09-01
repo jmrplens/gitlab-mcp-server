@@ -13,9 +13,11 @@ func TestTaskPromptForSurface_DynamicBridgeGuidance(t *testing.T) {
 	task := evalTask{ID: "MS-039", Prompt: "Read `gitlab://tools`.", Steps: []evalStep{{ExpectedTool: resourceReadTool, RequiredParams: []string{"uri"}}}}
 	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	for _, want := range []string{"Use MCP capability bridge tools directly", "do not use bridge tools as a substitute for a required catalog action", "gitlab://tools"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("dynamic prompt missing %q:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("dynamic prompt missing %q:\n%s", want, got)
+			}
+		})
 	}
 }
 
@@ -31,9 +33,11 @@ func TestTaskPromptForSurface_DynamicRemoteURLDiscoveryGuidance(t *testing.T) {
 	task := evalTask{ID: "MS-002", Prompt: "Resolve remote URL `https://gitlab.example.com/group/project.git` then inspect pipeline `1`.", Steps: []evalStep{{ExpectedTool: "gitlab_execute_action", ExpectedAction: "discover_project.resolve", RequiredParams: []string{"remote_url"}}, {ExpectedTool: "gitlab_execute_action", ExpectedAction: "pipeline.get", RequiredParams: []string{"project_id", "pipeline_id"}}}}
 	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	for _, want := range []string{"first gitlab_find_action query for that discovery step must explicitly describe resolving the provided remote URL", "must use the project-discovery action with params.remote_url set to that exact URL"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("dynamic prompt missing %q:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("dynamic prompt missing %q:\n%s", want, got)
+			}
+		})
 	}
 	if strings.Contains(got, "discover_project.resolve") {
 		t.Fatalf("dynamic prompt leaked exact discovery action:\n%s", got)
@@ -54,9 +58,11 @@ func TestTaskPromptForSurface_DynamicRemoteURLGuidanceIsScoped(t *testing.T) {
 	got := taskPromptForSurface(task, config.ToolSurfaceDynamic)
 	forbidden := []string{"first gitlab_find_action query for that discovery step must explicitly describe resolving the provided remote URL", "must use the project-discovery action with params.remote_url set to that exact URL"}
 	for _, text := range forbidden {
-		if strings.Contains(got, text) {
-			t.Fatalf("dynamic prompt unexpectedly included remote URL guidance %q:\n%s", text, got)
-		}
+		t.Run(text, func(t *testing.T) {
+			if strings.Contains(got, text) {
+				t.Fatalf("dynamic prompt unexpectedly included remote URL guidance %q:\n%s", text, got)
+			}
+		})
 	}
 	if strings.Contains(got, "discover_project.resolve") {
 		t.Fatalf("dynamic prompt unexpectedly leaked exact discovery action:\n%s", got)
@@ -160,9 +166,11 @@ func TestCompactExactTaskPrompt_UsesExpectedToolName(t *testing.T) {
 func TestSchemaFirstTaskPrompt_RendersFallbackGuidance(t *testing.T) {
 	got := schemaFirstTaskPrompt(evalTask{ID: "MT-999", Prompt: "Find the thing."}, "no", evalStep{ExpectedTool: "", ExpectedAction: "project.get"})
 	for _, want := range []string{"Task MT-999", "Do not use placeholder values", "call gitlab with action project.get"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("schemaFirstTaskPrompt() missing %q:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("schemaFirstTaskPrompt() missing %q:\n%s", want, got)
+			}
+		})
 	}
 }
 
@@ -214,9 +222,11 @@ func TestDynamicTaskPrompt_MultiStepUsesFindFirst(t *testing.T) {
 		"Do not use action IDs from memory",
 	})
 	for _, unwanted := range []string{"Dynamic workflow plan:", "action=issue.create", "do not call gitlab_find_action for these planned actions"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPromptForSurface() = %q, want no exact dynamic plan content %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPromptForSurface() = %q, want no exact dynamic plan content %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -360,9 +370,11 @@ func TestDynamicTaskPrompt_MultiStepOmitsExactActionPlan(t *testing.T) {
 		"Do not use action IDs from memory",
 	})
 	for _, unwanted := range []string{"Dynamic first-step exact call", "pipeline.schedule_create", "do not call gitlab_find_action for these planned actions"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPromptForSurface() = %q, want no exact dynamic plan content %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPromptForSurface() = %q, want no exact dynamic plan content %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -561,9 +573,11 @@ func TestTaskPrompt_MultiStepAvoidsImplicitPagination(t *testing.T) {
 		"do not fetch additional pagination pages",
 		"unless the task explicitly asks for every page",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want pagination guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want pagination guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -593,9 +607,11 @@ func TestTaskPrompt_BroadInventoryUsesExactOrderAndSmallPages(t *testing.T) {
 		"Use params.per_page=1 on list/tree/package steps",
 		"one page is enough for this evaluation",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want broad inventory guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want broad inventory guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -645,9 +661,11 @@ func TestTaskPrompt_PackageReleaseWorkflowUsesExactOrderDynamic(t *testing.T) {
 		"Do not use action IDs from memory",
 	})
 	for _, unwanted := range []string{"Dynamic workflow plan:", "package.publish_directory", "release.link_create_batch"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPromptForSurface(dynamic) = %q, want no exact action guidance %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPromptForSurface(dynamic) = %q, want no exact action guidance %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -674,9 +692,11 @@ func TestTaskPrompt_MergeRequestTimeEmojiUsesExactOrder(t *testing.T) {
 		"using the returned award emoji id as params.award_id with params.confirm=true",
 		"After emoji_mr_delete, call spent_time_reset before time_estimate_reset",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want MR time/emoji guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want MR time/emoji guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -700,9 +720,11 @@ func TestTaskPrompt_MergeRequestNoteCRUDUsesExactOrder(t *testing.T) {
 		"call note_update with params.body set to the updated note text and without params.confirm",
 		"Only note_delete is destructive; call note_delete last with params.confirm=true",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want MR note CRUD guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want MR note CRUD guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -723,9 +745,11 @@ func TestTaskPrompt_MergeRequestNotePrefersNoteCreate(t *testing.T) {
 		`"body":"<body>"`,
 		"Do not use discussion_create unless the task explicitly says threaded discussion or discussion",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want MR note guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want MR note guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -749,9 +773,11 @@ func TestTaskPrompt_RunnerListProjectAvoidsImplicitFilters(t *testing.T) {
 		"Do not send params.paused, params.type, params.tag_list, status all, status active, or empty filter strings for runner.list_project",
 		"For runner jobs, use runner.jobs with params.runner_id only",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want runner filter guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want runner filter guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -776,9 +802,11 @@ func TestTaskPrompt_PipelineTriggerCreateOmitsRef(t *testing.T) {
 		"Use the returned trigger_id for trigger_get, trigger_update, and trigger_delete",
 		"trigger_delete also requires params.confirm=true",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want pipeline trigger guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want pipeline trigger guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -804,9 +832,11 @@ func TestTaskPrompt_RepositoryFileCRUDUsesRefAndDeletesAfterUpdate(t *testing.T)
 		`"action":"file_delete","params":{"project_id":"<project_id>","file_path":"<file_path>","branch":"<branch>","commit_message":"<commit_message>","confirm":true}`,
 		"Do not call file_get again after the update",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want repository file CRUD guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want repository file CRUD guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -829,9 +859,11 @@ func TestTaskPrompt_SingleFileCreateUsesExactToolCall(t *testing.T) {
 		`"branch":"feature/eval"`,
 		`"commit_message":"Create evaluation file"`,
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want exact file_create guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want exact file_create guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -853,9 +885,11 @@ func TestTaskPrompt_ProjectGetUsesExactToolCall(t *testing.T) {
 		`"project_id":"my-org/tools/gitlab-mcp-server"`,
 		"do not call gitlab_discover_project",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want exact project_get guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want exact project_get guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -878,9 +912,11 @@ func TestTaskPrompt_InstanceVariableCreateUsesExactToolCall(t *testing.T) {
 		`"value":"masked-value-123"`,
 		"Return exactly one tool call and no text answer",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want exact instance_create guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want exact instance_create guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -912,9 +948,11 @@ func TestTaskPrompt_PipelineScheduleCRUDAvoidsProjectPrefetchAndConfirmsDeletes(
 		"Use the returned id as params.schedule_id",
 		"Both schedule_delete_variable and schedule_delete are destructive and require confirm:true according to the active tool surface",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want pipeline schedule guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want pipeline schedule guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -938,9 +976,11 @@ func TestTaskPrompt_DiscoverProjectUsesStandaloneInput(t *testing.T) {
 		"call gitlab_project/get to verify metadata before calling gitlab_repository/file_get",
 		"do not skip the project metadata verification step",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want discover_project guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want discover_project guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -969,9 +1009,11 @@ func TestTaskPrompt_FeatureFlagLifecycleOmitsArrayStrategies(t *testing.T) {
 		"omit params.strategies unless the task gives an exact strategies JSON string",
 		`must be a JSON string such as "[{\"name\":\"default\"}]", never an array or object`,
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want feature flag lifecycle guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want feature flag lifecycle guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -994,9 +1036,11 @@ func TestTaskPrompt_DeployTokenLifecycleAvoidsInventedTimestamp(t *testing.T) {
 		"Do not add params.expires_at unless the task gives an explicit expiry date",
 		"must be YYYY-MM-DD only, never a timestamp",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want deploy token lifecycle guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want deploy token lifecycle guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1115,9 +1159,11 @@ func TestTaskPrompt_ProjectSnippetCRUDAvoidsProjectPrefetch(t *testing.T) {
 		"project_update params should contain project_id, snippet_id, and files",
 		"never send params.file_path or params.content at top level when using files[]",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want project snippet CRUD guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want project snippet CRUD guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1139,9 +1185,11 @@ func TestTaskPrompt_ProjectHookCRUDAvoidsGroupHooks(t *testing.T) {
 		"For project hook CRUD, use gitlab_project actions hook_add, hook_get, hook_edit, and hook_delete with params.project_id",
 		"Do not use gitlab_group hook actions for a project hook workflow",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want project hook guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want project hook guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1184,9 +1232,11 @@ func TestTaskPrompt_SplitDiscussionResolveUsesExactToolCall(t *testing.T) {
 		`"resolved":true`,
 		"Return exactly one tool call and no text answer",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want split discussion_resolve guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want split discussion_resolve guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1247,9 +1297,11 @@ func TestTaskPrompt_ArtifactFromNumericJobUsesSingleArtifact(t *testing.T) {
 
 	prompt := taskPrompt(task)
 	for _, want := range []string{"Exact required call", "use the gitlab_job tool once", `"action":"download_single_artifact"`, `"job_id":999`, `"artifact_path":"coverage/report.xml"`} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want artifact guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want artifact guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1267,9 +1319,11 @@ func TestTaskPrompt_FailedPipelineJobsUseJobList(t *testing.T) {
 
 	prompt := taskPrompt(task)
 	for _, want := range []string{"gitlab_job", `"action":"list"`, `"scope":"failed"`, "do not call gitlab_pipeline list with pipeline_id"} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want failed-job guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want failed-job guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1294,9 +1348,11 @@ func TestTaskPrompt_SingleFailedPipelineJobsUsesExactToolCall(t *testing.T) {
 		`"scope":"failed"`,
 		"Return exactly one tool call and no text answer",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want single failed-job guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want single failed-job guidance containing %q", prompt, want)
+			}
+		})
 	}
 
 	system := systemPromptForTask(task, config.ToolSurfaceMeta)
@@ -1377,20 +1433,26 @@ func TestTaskPrompt_PipelineTriggerDeleteUsesTriggerID(t *testing.T) {
 		"Exact required call",
 		"The supplied ID maps to the matching *_id param",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want pipeline trigger delete guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want pipeline trigger delete guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want compact pipeline trigger delete guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want compact pipeline trigger delete guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 	system := systemPromptForTask(task, config.ToolSurfaceMeta)
 	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
-		if strings.Contains(system, unwanted) {
-			t.Fatalf("systemPromptForTask() = %q, want compact pipeline trigger delete system prompt without %q", system, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(system, unwanted) {
+				t.Fatalf("systemPromptForTask() = %q, want compact pipeline trigger delete system prompt without %q", system, unwanted)
+			}
+		})
 	}
 }
 
@@ -1413,20 +1475,26 @@ func TestTaskPrompt_PipelineScheduleDeleteUsesScheduleID(t *testing.T) {
 		"Exact required call",
 		"The supplied ID maps to the matching *_id param",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want pipeline schedule delete guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want pipeline schedule delete guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want compact pipeline schedule delete guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want compact pipeline schedule delete guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 	system := systemPromptForTask(task, config.ToolSurfaceMeta)
 	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
-		if strings.Contains(system, unwanted) {
-			t.Fatalf("systemPromptForTask() = %q, want compact pipeline schedule delete system prompt without %q", system, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(system, unwanted) {
+				t.Fatalf("systemPromptForTask() = %q, want compact pipeline schedule delete system prompt without %q", system, unwanted)
+			}
+		})
 	}
 }
 
@@ -1448,14 +1516,18 @@ func TestTaskPrompt_UserBlockUsesUserID(t *testing.T) {
 		`"user_id":69`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want user block guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want user block guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"runner_id", "target_branch", "params.variables"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want compact user block guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want compact user block guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -1479,14 +1551,18 @@ func TestTaskPrompt_FeatureFlagDeleteUsesName(t *testing.T) {
 		"Exact required call",
 		"The supplied values map to the matching params",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want feature flag delete guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want feature flag delete guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want compact feature flag delete guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want compact feature flag delete guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -1510,14 +1586,18 @@ func TestTaskPrompt_WikiDeleteUsesSlug(t *testing.T) {
 		"Exact required call",
 		"The supplied values map to the matching params",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want wiki delete guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want wiki delete guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"target_branch", "tag_name", "params.variables"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want compact wiki delete guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want compact wiki delete guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -1541,14 +1621,18 @@ func TestTaskPrompt_MRAwardDeleteUsesAwardID(t *testing.T) {
 		`"award_id":21`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want MR award delete guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want MR award delete guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"mr_review.emoji_mr_note_delete", "note_id", "params.variables"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want compact MR award delete guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want compact MR award delete guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -1572,14 +1656,18 @@ func TestTaskPrompt_IssueAwardDeleteUsesAwardID(t *testing.T) {
 		`"award_id":22`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want issue award delete guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want issue award delete guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"note_id", "target_branch", "params.variables"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want compact issue award delete guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want compact issue award delete guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -1602,9 +1690,11 @@ func TestTaskPrompt_DeployKeyDeleteUsesDeployKeyID(t *testing.T) {
 		`"deploy_key_id":32`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want deploy key delete guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want deploy key delete guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1627,9 +1717,11 @@ func TestTaskPrompt_DeployTokenDeleteUsesDeployTokenID(t *testing.T) {
 		`"deploy_token_id":66`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want deploy token delete guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want deploy token delete guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1654,14 +1746,18 @@ func TestTaskPrompt_CommitDiscussionDeleteUsesDiscussionAndNote(t *testing.T) {
 		`"note_id":999`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want commit discussion delete guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want commit discussion delete guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"issue.discussion_delete_note", "merge_request_iid", "params.variables"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want compact commit discussion delete guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want compact commit discussion delete guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -1682,9 +1778,11 @@ func TestTaskPrompt_AttestationDownloadUsesAttestationIID(t *testing.T) {
 		`"attestation_iid":5`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want attestation guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want attestation guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1704,9 +1802,11 @@ func TestTaskPrompt_AuditEventGetUsesEventID(t *testing.T) {
 		`"event_id":77`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want audit event get guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want audit event get guidance containing %q", prompt, want)
+			}
+		})
 	}
 	if strings.Contains(prompt, "user_id") {
 		t.Fatalf("taskPrompt() = %q, want event_id guidance without user_id", prompt)
@@ -1732,9 +1832,11 @@ func TestTaskPrompt_AuditEventListUsesCreatedRange(t *testing.T) {
 		`"created_before":"2026-02-01"`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want audit event list guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want audit event list guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1754,9 +1856,11 @@ func TestTaskPrompt_CompliancePolicyUpdateUsesNamespaceID(t *testing.T) {
 		`"csp_namespace_id":123`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want compliance policy guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want compliance policy guidance containing %q", prompt, want)
+			}
+		})
 	}
 	if strings.Contains(prompt, "issue_iid") {
 		t.Fatalf("taskPrompt() = %q, want csp_namespace_id guidance without issue_iid", prompt)
@@ -1780,9 +1884,11 @@ func TestTaskPrompt_DependencyExportCreateUsesPipelineID(t *testing.T) {
 		`"pipeline_id":12345`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want dependency export create guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want dependency export create guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1802,14 +1908,18 @@ func TestTaskPrompt_DependencyExportDownloadUsesExportID(t *testing.T) {
 		`"export_id":987`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want dependency export download guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want dependency export download guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"project_id", "attestation_iid"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want export_id guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want export_id guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -1833,9 +1943,11 @@ func TestTaskPrompt_DORAMetricsGroupUsesMetric(t *testing.T) {
 		`"end_date":"2026-01-31"`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want DORA guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want DORA guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1856,9 +1968,11 @@ func TestTaskPrompt_EnterpriseUserGetUsesGroupAndUserID(t *testing.T) {
 		`"user_id":55`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want enterprise user guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want enterprise user guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1882,9 +1996,11 @@ func TestTaskPrompt_EnterpriseUserDisable2FAUsesEnterpriseAction(t *testing.T) {
 		`"confirm":true`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want enterprise 2FA guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want enterprise 2FA guidance containing %q", prompt, want)
+			}
+		})
 	}
 	if strings.Contains(prompt, "user.disable_two_factor") {
 		t.Fatalf("taskPrompt() = %q, want enterprise action guidance without base user 2FA action", prompt)
@@ -1910,9 +2026,11 @@ func TestTaskPrompt_ExternalStatusCheckCreateUsesExternalURL(t *testing.T) {
 		`"external_url":"https://example.com/check"`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want external check create guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want external check create guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1936,9 +2054,11 @@ func TestTaskPrompt_ExternalStatusCheckStatusUsesCheckID(t *testing.T) {
 		`"status":"passed"`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want external check status guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want external check status guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -1962,14 +2082,18 @@ func TestTaskPrompt_ExternalStatusCheckDeleteUsesCheckID(t *testing.T) {
 		`"confirm":true`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want external check delete guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want external check delete guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"rule_id", "deploy_key_id"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want check_id guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want check_id guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -1989,9 +2113,11 @@ func TestTaskPrompt_GeoGetUsesID(t *testing.T) {
 		`"id":3`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want Geo get guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want Geo get guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -2015,9 +2141,11 @@ func TestTaskPrompt_GeoCreateUsesEnabledAndPrimary(t *testing.T) {
 		`"primary":false`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want Geo create guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want Geo create guidance containing %q", prompt, want)
+			}
+		})
 	}
 	if strings.Contains(prompt, "paused") {
 		t.Fatalf("taskPrompt() = %q, want Geo create guidance without paused", prompt)
@@ -2043,14 +2171,18 @@ func TestTaskPrompt_GeoDeleteUsesID(t *testing.T) {
 		`"confirm":true`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want Geo delete guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want Geo delete guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"geo_node_id", "site_id", "path"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want Geo delete guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want Geo delete guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -2072,9 +2204,11 @@ func TestTaskPrompt_GroupCredentialListUsesCredentialAction(t *testing.T) {
 		`"state":"active"`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want group credential list guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want group credential list guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -2098,9 +2232,11 @@ func TestTaskPrompt_GroupCredentialRevokeUsesTokenID(t *testing.T) {
 		`"confirm":true`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want group credential revoke guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want group credential revoke guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -2121,9 +2257,11 @@ func TestTaskPrompt_GroupEpicBoardListUsesEpicBoardAction(t *testing.T) {
 		`"group_id":"my-org"`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want group epic board list guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want group epic board list guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -2145,14 +2283,18 @@ func TestTaskPrompt_GroupEpicListUsesFullPath(t *testing.T) {
 		`"include_descendants":true`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want group epic list guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want group epic list guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"group_path", "group_id", "include_descendant_groups"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want group epic list guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want group epic list guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 }
 
@@ -2174,9 +2316,11 @@ func TestTaskPrompt_GroupEpicCreateUsesFullPathAndTitle(t *testing.T) {
 		`"title":"Evaluation Epic"`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want group epic create guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want group epic create guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -2199,9 +2343,11 @@ func TestTaskPrompt_GroupEpicUpdateUsesEpicIID(t *testing.T) {
 		`"state_event":"close"`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want group epic update guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want group epic update guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -2225,9 +2371,11 @@ func TestTaskPrompt_GroupEpicDeleteUsesEpicIID(t *testing.T) {
 		`"confirm":true`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want group epic delete guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want group epic delete guidance containing %q", prompt, want)
+			}
+		})
 	}
 }
 
@@ -2250,13 +2398,17 @@ func TestTaskPrompt_GroupEpicIssueAssignUsesChildParams(t *testing.T) {
 		`"child_iid":99`,
 		"Exact required call",
 	} {
-		if !strings.Contains(prompt, want) {
-			t.Fatalf("taskPrompt() = %q, want group epic issue assign guidance containing %q", prompt, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("taskPrompt() = %q, want group epic issue assign guidance containing %q", prompt, want)
+			}
+		})
 	}
 	for _, unwanted := range []string{"project_id", "issue_iid", "target_full_path"} {
-		if strings.Contains(prompt, unwanted) {
-			t.Fatalf("taskPrompt() = %q, want group epic issue assign guidance without %q", prompt, unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(prompt, unwanted) {
+				t.Fatalf("taskPrompt() = %q, want group epic issue assign guidance without %q", prompt, unwanted)
+			}
+		})
 	}
 }

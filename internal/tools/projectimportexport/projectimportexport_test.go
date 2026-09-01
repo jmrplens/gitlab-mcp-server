@@ -572,9 +572,11 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		"gitlab_download_project_export",
 		"gitlab_get_project_import_status",
 	} {
-		if !byTool[name].ReadOnly || !byTool[name].Idempotent {
-			t.Errorf("%s should be read-only and idempotent", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !byTool[name].ReadOnly || !byTool[name].Idempotent {
+				t.Errorf("%s should be read-only and idempotent", name)
+			}
+		})
 	}
 }
 
@@ -812,9 +814,11 @@ func TestImportFromFile_OverrideParams(t *testing.T) {
 				return
 			}
 			for key, want := range wantParams {
-				if got := r.FormValue(key); got != want {
-					t.Errorf("%s = %q, want %q", key, got, want)
-				}
+				t.Run(key, func(t *testing.T) {
+					if got := r.FormValue(key); got != want {
+						t.Errorf("%s = %q, want %q", key, got, want)
+					}
+				})
 			}
 			testutil.RespondJSON(w, http.StatusCreated,
 				`{"id":99,"name":"p","path":"p","path_with_namespace":"g/p","import_status":"scheduled"}`)

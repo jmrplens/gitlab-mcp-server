@@ -283,9 +283,11 @@ func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 		"Release.Desc":          {out.Release.Description, "Second major release"},
 	}
 	for field, pair := range stringChecks {
-		if pair[0] != pair[1] {
-			t.Errorf("%s = %q, want %q", field, pair[0], pair[1])
-		}
+		t.Run(field, func(t *testing.T) {
+			if pair[0] != pair[1] {
+				t.Errorf("%s = %q, want %q", field, pair[0], pair[1])
+			}
+		})
 	}
 	for field, ts := range map[string]string{
 		"AuthoredDate":  out.Commit.AuthoredDate,
@@ -293,9 +295,11 @@ func TestTagGet_SuccessEnrichedFields(t *testing.T) {
 		"CommitCreated": out.Commit.CreatedAt,
 		"CreatedAt":     out.CreatedAt,
 	} {
-		if ts == "" {
-			t.Errorf("%s is empty, want timestamp", field)
-		}
+		t.Run(field, func(t *testing.T) {
+			if ts == "" {
+				t.Errorf("%s is empty, want timestamp", field)
+			}
+		})
 	}
 	if len(out.Commit.ParentIDs) != 1 || out.Commit.ParentIDs[0] != "zzz000" {
 		t.Errorf("out.Commit.ParentIDs = %v, want [zzz000]", out.Commit.ParentIDs)
@@ -900,9 +904,11 @@ func TestTagProtect_WithAllowedToCreate(t *testing.T) {
 		t.Errorf(fmtNameWant, out.Name, "v*")
 	}
 	for _, want := range []string{"allowed_to_create", "user_id", "group_id", "deploy_key_id"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 

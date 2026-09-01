@@ -1303,9 +1303,11 @@ func TestMarkdownRegistry_BranchNotFound(t *testing.T) {
 		t.Fatalf("content type = %T, want TextContent", result.Content[0])
 	}
 	for _, want := range []string{"Branch Not Found", `"missing" in project 42`, "gitlab_branch_list"} {
-		if !strings.Contains(content.Text, want) {
-			t.Fatalf("markdown missing %q:\n%s", want, content.Text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(content.Text, want) {
+				t.Fatalf("markdown missing %q:\n%s", want, content.Text)
+			}
+		})
 	}
 }
 
@@ -1960,9 +1962,11 @@ func TestBranchProtect_SerializesAllOptions(t *testing.T) {
 		t.Fatalf(fmtProtectErr, err)
 	}
 	for _, want := range []string{`"name":"release/*"`, `"unprotect_access_level":40`, `"allowed_to_push"`, `"user_id":7`, `"allowed_to_merge"`, `"allowed_to_unprotect"`, `"_destroy":true`} {
-		if !strings.Contains(gotBody, want) {
-			t.Errorf("request body missing %q\nbody=%s", want, gotBody)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotBody, want) {
+				t.Errorf("request body missing %q\nbody=%s", want, gotBody)
+			}
+		})
 	}
 }
 
@@ -1998,9 +2002,11 @@ func TestProtectedUpdate_SerializesAllOptions(t *testing.T) {
 		t.Fatalf("ProtectedUpdate() unexpected error: %v", err)
 	}
 	for _, want := range []string{`"name":"main-renamed"`, `"allowed_to_push"`, `"group_id":3`, `"allowed_to_merge"`, `"allowed_to_unprotect"`, `"deploy_key_id":3`} {
-		if !strings.Contains(gotBody, want) {
-			t.Errorf("request body missing %q\nbody=%s", want, gotBody)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotBody, want) {
+				t.Errorf("request body missing %q\nbody=%s", want, gotBody)
+			}
+		})
 	}
 }
 
@@ -2029,9 +2035,11 @@ func TestBranchList_KeysetAndOrdering(t *testing.T) {
 		t.Fatalf(fmtBranchListErr, err)
 	}
 	for _, want := range []string{"search=feat", "regex=", "order_by=updated", "sort=desc", "pagination=keyset", "page_token=tok"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query missing %q: %s", want, gotQuery)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query missing %q: %s", want, gotQuery)
+			}
+		})
 	}
 }
 
@@ -2059,9 +2067,11 @@ func TestProtectedList_SearchKeysetAndOrdering(t *testing.T) {
 		t.Fatalf(fmtProtBranchListErr, err)
 	}
 	for _, want := range []string{"search=main", "order_by=name", "sort=asc", "pagination=keyset", "page_token=tok"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query missing %q: %s", want, gotQuery)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query missing %q: %s", want, gotQuery)
+			}
+		})
 	}
 }
 
@@ -2112,25 +2122,27 @@ func TestProtectedFlaggedTools_Metadata(t *testing.T) {
 		"gitlab_protected_branch_update",
 	}
 	for _, tool := range flagged {
-		spec, ok := byTool[tool]
-		if !ok {
-			t.Fatalf("missing spec for %s", tool)
-		}
-		if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute branches domain action") {
-			t.Errorf("%s: generic/empty usage %q", tool, spec.Usage)
-		}
-		if len(spec.Aliases) == 0 {
-			t.Errorf("%s: no aliases", tool)
-		}
-		for _, a := range spec.Aliases {
-			if a == tool {
-				t.Errorf("%s: alias duplicates tool name", tool)
+		t.Run(tool, func(t *testing.T) {
+			spec, ok := byTool[tool]
+			if !ok {
+				t.Fatalf("missing spec for %s", tool)
 			}
-		}
-		desc := spec.IndividualTool.Description
-		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-			t.Errorf("%s: description missing Returns:/See also: form: %q", tool, desc)
-		}
+			if spec.Usage == "" || strings.Contains(spec.Usage, "Use to execute branches domain action") {
+				t.Errorf("%s: generic/empty usage %q", tool, spec.Usage)
+			}
+			if len(spec.Aliases) == 0 {
+				t.Errorf("%s: no aliases", tool)
+			}
+			for _, a := range spec.Aliases {
+				if a == tool {
+					t.Errorf("%s: alias duplicates tool name", tool)
+				}
+			}
+			desc := spec.IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s: description missing Returns:/See also: form: %q", tool, desc)
+			}
+		})
 	}
 }
 

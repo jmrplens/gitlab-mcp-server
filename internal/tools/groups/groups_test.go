@@ -2068,9 +2068,11 @@ func TestFormatOutputMarkdown_WithData(t *testing.T) {
 		"Marked for deletion",
 		"2026-06-01",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -2096,9 +2098,11 @@ func TestFormatOutputMarkdown_Minimal(t *testing.T) {
 		"**Created**",
 		"Marked for deletion",
 	} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -2130,9 +2134,11 @@ func TestFormatListMarkdown_WithData(t *testing.T) {
 		"public",
 		"private",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -2175,9 +2181,11 @@ func TestFormatMemberListMarkdown_WithData(t *testing.T) {
 		"Maintainer",
 		"Developer",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -2221,9 +2229,11 @@ func TestFormatListProjectsMarkdown_WithData(t *testing.T) {
 		"No",
 		"Yes",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -2287,9 +2297,11 @@ func TestFormatHookMarkdown_WithNameAndAllEvents(t *testing.T) {
 		"**Alert Status**: executable",
 		"**Created**:",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -2361,9 +2373,11 @@ func TestFormatHookListMarkdown_WithData(t *testing.T) {
 		"push",
 		"pipeline",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -2405,9 +2419,11 @@ func TestEnabledEvents_All(t *testing.T) {
 	result := enabledEvents(h)
 
 	for _, want := range []string{"push", "tag_push", "merge_request", "issues", "note", "job", "pipeline", "wiki", "deployment", "releases", "subgroup", "member"} {
-		if !strings.Contains(result, want) {
-			t.Errorf("enabledEvents missing %q: %s", want, result)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(result, want) {
+				t.Errorf("enabledEvents missing %q: %s", want, result)
+			}
+		})
 	}
 }
 
@@ -3063,9 +3079,11 @@ func TestCreate_AuditFields(t *testing.T) {
 		`"two_factor_grace_period":48`, `"wiki_access_level":"enabled"`,
 		`"default_branch_protection_defaults"`, `"allow_force_push":true`,
 	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("create request body missing %q:\n%s", want, body)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(body, want) {
+				t.Errorf("create request body missing %q:\n%s", want, body)
+			}
+		})
 	}
 }
 
@@ -3145,9 +3163,11 @@ func TestUpdate_AuditFields(t *testing.T) {
 		`"unique_project_download_limit_allowlist":["safe"]`, `"unique_project_download_limit_alertlist":[1]`,
 		`"wiki_access_level":"private"`, `"code_owner_approval_required":true`,
 	} {
-		if !strings.Contains(body, want) {
-			t.Errorf("update request body missing %q:\n%s", want, body)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(body, want) {
+				t.Errorf("update request body missing %q:\n%s", want, body)
+			}
+		})
 	}
 }
 
@@ -3170,9 +3190,11 @@ func TestList_AuditFiltersAndKeyset(t *testing.T) {
 			"page_token":             "abc",
 		}
 		for k, want := range checks {
-			if got := q.Get(k); got != want {
-				t.Errorf("query %s = %q, want %q", k, got, want)
-			}
+			t.Run(k, func(t *testing.T) {
+				if got := q.Get(k); got != want {
+					t.Errorf("query %s = %q, want %q", k, got, want)
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, groupListJSON)
 	}))
@@ -3229,9 +3251,11 @@ func TestSubgroupsList_AuditFilters(t *testing.T) {
 			"pagination":             "keyset",
 		}
 		for k, want := range checks {
-			if got := q.Get(k); got != want {
-				t.Errorf("query %s = %q, want %q", k, got, want)
-			}
+			t.Run(k, func(t *testing.T) {
+				if got := q.Get(k); got != want {
+					t.Errorf("query %s = %q, want %q", k, got, want)
+				}
+			})
 		}
 		if !strings.Contains(r.URL.RawQuery, "skip_groups") {
 			t.Error("skip_groups missing")
@@ -3294,9 +3318,11 @@ func TestListProjects_AuditFilters(t *testing.T) {
 			"pagination":                  "keyset",
 		}
 		for k, want := range checks {
-			if got := q.Get(k); got != want {
-				t.Errorf("query %s = %q, want %q", k, got, want)
-			}
+			t.Run(k, func(t *testing.T) {
+				if got := q.Get(k); got != want {
+					t.Errorf("query %s = %q, want %q", k, got, want)
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"p","path_with_namespace":"org/p","visibility":"private","web_url":"https://gitlab.example.com/org/p"}]`)
 	}))
@@ -3473,9 +3499,11 @@ func TestSharedWithList_AllFilters(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, want := range []string{"search=team", "min_access_level=30", "visibility=private", "order_by=name", "sort=desc", "skip_groups=", "with_custom_attributes=true", "page=2", "per_page=10"} {
-		if !strings.Contains(query, want) {
-			t.Errorf("query %q missing %q", query, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(query, want) {
+				t.Errorf("query %q missing %q", query, want)
+			}
+		})
 	}
 }
 
@@ -3569,9 +3597,11 @@ func TestInvitedList_AllFilters(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, want := range []string{"search=guests", "min_access_level=20", "relation=", "with_custom_attributes=true", "page=3", "per_page=5"} {
-		if !strings.Contains(query, want) {
-			t.Errorf("query %q missing %q", query, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(query, want) {
+				t.Errorf("query %q missing %q", query, want)
+			}
+		})
 	}
 }
 
@@ -3662,9 +3692,11 @@ func TestTransferLocationsList_AllFilters(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, want := range []string{"search=org", "page=2", "per_page=15"} {
-		if !strings.Contains(query, want) {
-			t.Errorf("query %q missing %q", query, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(query, want) {
+				t.Errorf("query %q missing %q", query, want)
+			}
+		})
 	}
 }
 
@@ -3748,9 +3780,11 @@ func TestCreate_NewOptions(t *testing.T) {
 		"unique_project_download_limit_allowlist", "unique_project_download_limit_alertlist",
 		"auto_ban_user_on_excessive_projects_download",
 	} {
-		if !strings.Contains(body, field) {
-			t.Errorf("expected %s in request body, got: %s", field, body)
-		}
+		t.Run(field, func(t *testing.T) {
+			if !strings.Contains(body, field) {
+				t.Errorf("expected %s in request body, got: %s", field, body)
+			}
+		})
 	}
 }
 
@@ -3779,8 +3813,10 @@ func TestUpdate_NewOptions(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	for _, field := range []string{"math_rendering_limits_enabled", "web_based_commit_signing_enabled", "allow_personal_snippets"} {
-		if !strings.Contains(body, field) {
-			t.Errorf("expected %s in request body, got: %s", field, body)
-		}
+		t.Run(field, func(t *testing.T) {
+			if !strings.Contains(body, field) {
+				t.Errorf("expected %s in request body, got: %s", field, body)
+			}
+		})
 	}
 }

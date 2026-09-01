@@ -46,9 +46,11 @@ func TestCaptureSlog(t *testing.T) {
 	slog.Info("test message", "key", "val")
 	out := buf.String()
 	for _, want := range []string{`"msg":"test message"`, `"key":"val"`, `"level":"INFO"`} {
-		if !strings.Contains(out, want) {
-			t.Errorf("slog output missing %q, got: %s", want, out)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(out, want) {
+				t.Errorf("slog output missing %q, got: %s", want, out)
+			}
+		})
 	}
 }
 
@@ -222,10 +224,12 @@ func TestRespondJSONWithPagination(t *testing.T) {
 		"X-Prev-Page":   "1",
 	}
 	for header, want := range checks {
-		got := w.Header().Get(header)
-		if got != want {
-			t.Errorf("header %s = %q, want %q", header, got, want)
-		}
+		t.Run(header, func(t *testing.T) {
+			got := w.Header().Get(header)
+			if got != want {
+				t.Errorf("header %s = %q, want %q", header, got, want)
+			}
+		})
 	}
 }
 
@@ -249,9 +253,11 @@ func TestRespondJSONWithPagination_PartialHeaders(t *testing.T) {
 	}
 	// Omitted headers should not be set.
 	for _, header := range []string{"X-Total", "X-Total-Pages", "X-Next-Page", "X-Prev-Page"} {
-		if got := w.Header().Get(header); got != "" {
-			t.Errorf("header %s = %q, want empty (not set)", header, got)
-		}
+		t.Run(header, func(t *testing.T) {
+			if got := w.Header().Get(header); got != "" {
+				t.Errorf("header %s = %q, want empty (not set)", header, got)
+			}
+		})
 	}
 }
 

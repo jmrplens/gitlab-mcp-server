@@ -100,9 +100,11 @@ func TestApplyToActionSpecs_ProjectsPackageReleaseWorkflowAliases(t *testing.T) 
 	})
 	packageAliases := packageSpecs[0].Compatibility.ActionAliases
 	for _, alias := range []string{"generic_packages.publish_directory", "gitlab_package/publish_directory"} {
-		if !hasAlias(packageAliases, alias, "publish_directory") {
-			t.Fatalf("package aliases = %+v, want %s -> publish_directory", packageAliases, alias)
-		}
+		t.Run(alias, func(t *testing.T) {
+			if !hasAlias(packageAliases, alias, "publish_directory") {
+				t.Fatalf("package aliases = %+v, want %s -> publish_directory", packageAliases, alias)
+			}
+		})
 	}
 
 	releaseSpecs := ApplyToActionSpecs("gitlab_release_link", "release", []toolutil.ActionSpec{
@@ -110,9 +112,11 @@ func TestApplyToActionSpecs_ProjectsPackageReleaseWorkflowAliases(t *testing.T) 
 	})
 	releaseAliases := releaseSpecs[0].Compatibility.ActionAliases
 	for _, alias := range []string{"release_link.create_batch", "release_link.link_create_batch", "gitlab_release/link_create_batch", "gitlab_release_link/link_create_batch"} {
-		if !hasAlias(releaseAliases, alias, "link_create_batch") {
-			t.Fatalf("release aliases = %+v, want %s -> link_create_batch", releaseAliases, alias)
-		}
+		t.Run(alias, func(t *testing.T) {
+			if !hasAlias(releaseAliases, alias, "link_create_batch") {
+				t.Fatalf("release aliases = %+v, want %s -> link_create_batch", releaseAliases, alias)
+			}
+		})
 	}
 }
 
@@ -190,10 +194,12 @@ func TestNormalizeActionAlias_UsesCompatibilityPolicy(t *testing.T) {
 		"release_link.link_create_batch":        "release.link_create_batch",
 		"terraform_state.unlock":                "admin.terraform_state_unlock",
 	} {
-		canonical, ok = NormalizeActionAlias(alias)
-		if !ok || canonical != want {
-			t.Fatalf("NormalizeActionAlias(%s) = %q, %t; want %s, true", alias, canonical, ok, want)
-		}
+		t.Run(alias, func(t *testing.T) {
+			canonical, ok = NormalizeActionAlias(alias)
+			if !ok || canonical != want {
+				t.Fatalf("NormalizeActionAlias(%s) = %q, %t; want %s, true", alias, canonical, ok, want)
+			}
+		})
 	}
 	unchanged, aliasOK := NormalizeActionAlias("project.get")
 	if aliasOK || unchanged != "project.get" {

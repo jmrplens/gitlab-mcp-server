@@ -601,9 +601,11 @@ func TestDefaultPaginationValue_PageVsOthers(t *testing.T) {
 		t.Fatalf("defaultPaginationValue(page) = %d, want 1", got)
 	}
 	for _, name := range []string{"first", "last", "per_page"} {
-		if got := defaultPaginationValue(name); got != 100 {
-			t.Fatalf("defaultPaginationValue(%q) = %d, want 100", name, got)
-		}
+		t.Run(name, func(t *testing.T) {
+			if got := defaultPaginationValue(name); got != 100 {
+				t.Fatalf("defaultPaginationValue(%q) = %d, want 100", name, got)
+			}
+		})
 	}
 }
 

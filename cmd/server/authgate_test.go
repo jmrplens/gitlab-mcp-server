@@ -153,9 +153,11 @@ func TestMCPServerGate_MissingCredential_Returns401WithBearerChallenge(t *testin
 	}
 	// The message is the only place the caller learns the accepted headers.
 	for _, want := range []string{"PRIVATE-TOKEN", "Bearer"} {
-		if !strings.Contains(decoded.Error.Message, want) {
-			t.Errorf("message %q does not mention %q", decoded.Error.Message, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(decoded.Error.Message, want) {
+				t.Errorf("message %q does not mention %q", decoded.Error.Message, want)
+			}
+		})
 	}
 }
 
@@ -439,12 +441,14 @@ func TestGateErrorCodes_AllocatedOutsideReservedRange(t *testing.T) {
 		"errCodeTooManyRequests":     errCodeTooManyRequests,
 		"errCodeUpstreamUnavailable": errCodeUpstreamUnavailable,
 	} {
-		if standard[code] {
-			continue
-		}
-		if code >= -32768 && code <= -32000 {
-			t.Errorf("%s = %d is inside the JSON-RPC reserved range; application codes must be outside it", name, code)
-		}
+		t.Run(name, func(t *testing.T) {
+			if standard[code] {
+				return
+			}
+			if code >= -32768 && code <= -32000 {
+				t.Errorf("%s = %d is inside the JSON-RPC reserved range; application codes must be outside it", name, code)
+			}
+		})
 	}
 }
 

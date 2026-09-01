@@ -592,12 +592,14 @@ func TestAddStandaloneCatalog_MatchesRouteCompatibilityWrapper(t *testing.T) {
 	fromCatalog := NewRegistryFromCatalog(standaloneCatalog)
 
 	for _, actionID := range []string{"project.list", "discover_project.resolve", "interactive.issue_create"} {
-		if _, ok := fromRoutes.resolveAction(actionID); !ok {
-			t.Fatalf("route wrapper registry missing %s", actionID)
-		}
-		if _, ok := fromCatalog.resolveAction(actionID); !ok {
-			t.Fatalf("catalog registry missing %s", actionID)
-		}
+		t.Run(actionID, func(t *testing.T) {
+			if _, ok := fromRoutes.resolveAction(actionID); !ok {
+				t.Fatalf("route wrapper registry missing %s", actionID)
+			}
+			if _, ok := fromCatalog.resolveAction(actionID); !ok {
+				t.Fatalf("catalog registry missing %s", actionID)
+			}
+		})
 	}
 }
 
@@ -913,9 +915,11 @@ func TestDescribe_MetaCatalogSchemas(t *testing.T) {
 	}
 	markdown := textContent(result)
 	for _, notWant := range []string{"input_schema", "output_schema"} {
-		if strings.Contains(markdown, notWant) {
-			t.Fatalf("Describe() markdown contains %q: %s", notWant, markdown)
-		}
+		t.Run(notWant, func(t *testing.T) {
+			if strings.Contains(markdown, notWant) {
+				t.Fatalf("Describe() markdown contains %q: %s", notWant, markdown)
+			}
+		})
 	}
 	if !strings.Contains(markdown, "**Input schema**") || !strings.Contains(markdown, "```json") || !strings.Contains(markdown, "properties") {
 		t.Fatalf("Describe() markdown missing compact input schema: %s", markdown)
@@ -993,19 +997,21 @@ func TestDynamicCatalog_DelegatedSpecBackedDomainsPreserveIDsAndSchemas(t *testi
 	}
 
 	for _, actionID := range actionIDs {
-		description := actionDescriptionByID(t, output, actionID)
-		catalogAction, ok := catalog.Action(actioncatalog.ActionID(actionID))
-		if !ok {
-			t.Fatalf("catalog missing %s", actionID)
-		}
-		if !catalogAction.SpecBacked {
-			t.Fatalf("%s SpecBacked = false, want true", actionID)
-		}
-		assertSchemaPropertyNamesEqual(t, actionID, description.InputSchema, catalogAction.Route.InputSchema)
-		if !slices.Equal(description.RequiredParams, requiredParams(catalogAction.Route.InputSchema)) {
-			t.Fatalf("%s RequiredParams = %v, want %v", actionID, description.RequiredParams, requiredParams(catalogAction.Route.InputSchema))
-		}
-		assertSchemaPropertyNamesEqual(t, actionID+" output", description.OutputSchema, catalogAction.Route.OutputSchema)
+		t.Run(actionID, func(t *testing.T) {
+			description := actionDescriptionByID(t, output, actionID)
+			catalogAction, ok := catalog.Action(actioncatalog.ActionID(actionID))
+			if !ok {
+				t.Fatalf("catalog missing %s", actionID)
+			}
+			if !catalogAction.SpecBacked {
+				t.Fatalf("%s SpecBacked = false, want true", actionID)
+			}
+			assertSchemaPropertyNamesEqual(t, actionID, description.InputSchema, catalogAction.Route.InputSchema)
+			if !slices.Equal(description.RequiredParams, requiredParams(catalogAction.Route.InputSchema)) {
+				t.Fatalf("%s RequiredParams = %v, want %v", actionID, description.RequiredParams, requiredParams(catalogAction.Route.InputSchema))
+			}
+			assertSchemaPropertyNamesEqual(t, actionID+" output", description.OutputSchema, catalogAction.Route.OutputSchema)
+		})
 	}
 
 	searchCode := actionDescriptionByID(t, output, "search.code")
@@ -1125,9 +1131,11 @@ func TestFind_MarkdownGuidesImmediateExecuteAndConfirm(t *testing.T) {
 		"before starting another catalog operation",
 		"top-level `confirm:true`",
 	} {
-		if !strings.Contains(markdown, want) {
-			t.Fatalf("Find() markdown = %q, want %q", markdown, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(markdown, want) {
+				t.Fatalf("Find() markdown = %q, want %q", markdown, want)
+			}
+		})
 	}
 }
 
@@ -1616,9 +1624,11 @@ func TestDescribe_JobSingleArtifactRequiresArtifactPath(t *testing.T) {
 	}
 	description := actionDescriptionByID(t, output, "job.download_single_artifact")
 	for _, required := range []string{"artifact_path", "job_id", "project_id"} {
-		if !slices.Contains(description.RequiredParams, required) {
-			t.Fatalf("required params = %v, want %s", description.RequiredParams, required)
-		}
+		t.Run(required, func(t *testing.T) {
+			if !slices.Contains(description.RequiredParams, required) {
+				t.Fatalf("required params = %v, want %s", description.RequiredParams, required)
+			}
+		})
 	}
 	if params, ok := description.Example.Arguments["params"].(map[string]any); !ok || params["artifact_path"] == nil {
 		t.Fatalf("example arguments = %#v, want artifact_path in params", description.Example.Arguments)
@@ -2148,9 +2158,11 @@ func TestActionScopedParamAliases_CoversDocumentedActions(t *testing.T) {
 		"snippet.project_create",
 	}
 	for _, actionID := range wantActions {
-		if !slices.ContainsFunc(aliases, func(alias actioncompat.ParameterAlias) bool { return alias.ActionID == actionID }) {
-			t.Fatalf("ParameterAliases() = %+v, want action %s", aliases, actionID)
-		}
+		t.Run(actionID, func(t *testing.T) {
+			if !slices.ContainsFunc(aliases, func(alias actioncompat.ParameterAlias) bool { return alias.ActionID == actionID }) {
+				t.Fatalf("ParameterAliases() = %+v, want action %s", aliases, actionID)
+			}
+		})
 	}
 }
 
@@ -2168,9 +2180,11 @@ func TestDynamicRegister_DoesNotOwnCompatibilityPolicyTables(t *testing.T) {
 		"func gitlabAccessLevelValue(",
 		"func boolStringValue(",
 	} {
-		if strings.Contains(string(source), forbidden) {
-			t.Fatalf("register.go still owns compatibility policy table/helper %q; move policy to actioncompat", forbidden)
-		}
+		t.Run(forbidden, func(t *testing.T) {
+			if strings.Contains(string(source), forbidden) {
+				t.Fatalf("register.go still owns compatibility policy table/helper %q; move policy to actioncompat", forbidden)
+			}
+		})
 	}
 }
 
@@ -2192,9 +2206,11 @@ func TestExecute_ReportsUnknownAndMissingParamsBeforeDispatch(t *testing.T) {
 	}
 	text := textContent(result)
 	for _, want := range []string{"Unknown params: reff", "Did you mean reff -> ref", "Missing required params: ref", "Valid params: file_path, project_id, ref"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("Execute() error text = %q, want %q", text, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Fatalf("Execute() error text = %q, want %q", text, want)
+			}
+		})
 	}
 }
 
@@ -2222,9 +2238,11 @@ func TestExecute_RejectsUnsupportedPipelineScheduleVariableSecurityFields(t *tes
 	}
 	text := textContent(result)
 	for _, want := range []string{"Unknown params: masked, protected", "Valid params: key, project_id, schedule_id, value, variable_type"} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("Execute() error text = %q, want %q", text, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Fatalf("Execute() error text = %q, want %q", text, want)
+			}
+		})
 	}
 }
 
@@ -2779,9 +2797,11 @@ func TestSearch_MultiIntentLongQuery_ReturnsSegmentMatches(t *testing.T) {
 		t.Fatalf("Search() result = %+v, want non-error", result)
 	}
 	for _, want := range []string{"discover_project.resolve", "merge_request.list"} {
-		if !slices.ContainsFunc(output.Results, func(r SearchResult) bool { return r.ID == want }) {
-			t.Fatalf("Search() results = %+v, want %s", output.Results, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !slices.ContainsFunc(output.Results, func(r SearchResult) bool { return r.ID == want }) {
+				t.Fatalf("Search() results = %+v, want %s", output.Results, want)
+			}
+		})
 	}
 }
 
@@ -4191,9 +4211,11 @@ func TestRegistry_HelperCoverage(t *testing.T) {
 		}}
 		got := actionTags("repository.file_create", "repository", "file_create", schema)
 		for _, want := range []string{"repository file", "branch", "url", "close"} {
-			if !stringInSlice(got, want) {
-				t.Fatalf("actionTags() = %v, want %q", got, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !stringInSlice(got, want) {
+					t.Fatalf("actionTags() = %v, want %q", got, want)
+				}
+			})
 		}
 	})
 
@@ -4621,9 +4643,11 @@ func TestCompatibilityAliasAndDescriptionBranches(t *testing.T) {
 		t.Fatalf("NormalizeCompatibilityActionAlias() = %q, %t; want feature_flags.ff_user_list_create, true", got, ok)
 	}
 	for _, actionID := range []string{"", "project.get", "project.unknown"} {
-		if got, ok := NormalizeCompatibilityActionAlias(actionID); ok || got != strings.ToLower(strings.TrimSpace(actionID)) {
-			t.Fatalf("NormalizeCompatibilityActionAlias(%q) = %q, %t; want unchanged false", actionID, got, ok)
-		}
+		t.Run(actionID, func(t *testing.T) {
+			if got, ok := NormalizeCompatibilityActionAlias(actionID); ok || got != strings.ToLower(strings.TrimSpace(actionID)) {
+				t.Fatalf("NormalizeCompatibilityActionAlias(%q) = %q, %t; want unchanged false", actionID, got, ok)
+			}
+		})
 	}
 
 	aliases := dedupeActionAliases([]actionAlias{{Alias: "", Canonical: "project.get"}, {Alias: "project.lookup", Canonical: "project.get"}, {Alias: "project.lookup", Canonical: "project.get"}})
@@ -4691,9 +4715,11 @@ func TestSchemaSearchTermHelpers_Branches(t *testing.T) {
 	}
 	enums := strings.Join(schemaPropertyEnumValues(schema), ",")
 	for _, want := range []string{"opened", "closed", "30", "true", "bug", "feature"} {
-		if !strings.Contains(enums, want) {
-			t.Fatalf("schemaPropertyEnumValues() = %q, missing %q", enums, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(enums, want) {
+				t.Fatalf("schemaPropertyEnumValues() = %q, missing %q", enums, want)
+			}
+		})
 	}
 }
 
@@ -4893,9 +4919,11 @@ func TestNormalization_FormattingBranches(t *testing.T) {
 			}},
 		})
 		for _, want := range []string{"top-level `action`", "one `params` object", "Required Params key below belongs inside `params`"} {
-			if !strings.Contains(findText, want) {
-				t.Fatalf("formatFindOutput() = %q, want %q", findText, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(findText, want) {
+					t.Fatalf("formatFindOutput() = %q, want %q", findText, want)
+				}
+			})
 		}
 	})
 }
@@ -5791,9 +5819,11 @@ func TestScoreProjectGetIntent_PositiveCase(t *testing.T) {
 
 	// "find", "path", "id" alternatives all return the boost.
 	for _, q := range []string{"project find", "project path", "project id"} {
-		if v := scoreProjectGetIntentValue(entry, normalizeSearchTerms(q)); v != scoreProjectGetIntentBoost {
-			t.Fatalf("scoreProjectGetIntentValue(%q) = %d, want %d", q, v, scoreProjectGetIntentBoost)
-		}
+		t.Run(q, func(t *testing.T) {
+			if v := scoreProjectGetIntentValue(entry, normalizeSearchTerms(q)); v != scoreProjectGetIntentBoost {
+				t.Fatalf("scoreProjectGetIntentValue(%q) = %d, want %d", q, v, scoreProjectGetIntentBoost)
+			}
+		})
 	}
 }
 
@@ -6055,14 +6085,18 @@ func TestExecute_WithheldActionNamesTheCauseInsteadOfCallingItUnknown(t *testing
 			WithWithheldActions([]string{"project.hook_add"}, nil))
 		text := executeText(t, registry, "project.hook_add")
 		for _, want := range []string{"exists but is not available", "credential in use", "api scope"} {
-			if !strings.Contains(text, want) {
-				t.Errorf("Execute() error text = %q, want it to contain %q", text, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(text, want) {
+					t.Errorf("Execute() error text = %q, want it to contain %q", text, want)
+				}
+			})
 		}
 		for _, unwanted := range []string{"unknown action", "Did you mean"} {
-			if strings.Contains(text, unwanted) {
-				t.Errorf("Execute() error text = %q, must not contain %q: the action is not unknown", text, unwanted)
-			}
+			t.Run(unwanted, func(t *testing.T) {
+				if strings.Contains(text, unwanted) {
+					t.Errorf("Execute() error text = %q, must not contain %q: the action is not unknown", text, unwanted)
+				}
+			})
 		}
 	})
 

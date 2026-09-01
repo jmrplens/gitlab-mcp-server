@@ -61,9 +61,11 @@ func TestListProvisionedUsers_FiltersAndOutput(t *testing.T) {
 		"order_by":       "created_at",
 		"sort":           "desc",
 	} {
-		if got := query.Get(k); got != want {
-			t.Errorf("query %s = %q, want %q", k, got, want)
-		}
+		t.Run(k, func(t *testing.T) {
+			if got := query.Get(k); got != want {
+				t.Errorf("query %s = %q, want %q", k, got, want)
+			}
+		})
 	}
 
 	if len(out.Users) != 1 {

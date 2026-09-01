@@ -124,9 +124,11 @@ func TestBearerGuard_InvalidToken_ChallengesWithInvalidTokenCode(t *testing.T) {
 	}
 	challenge := failure.header.Get("WWW-Authenticate")
 	for _, want := range []string{`error="invalid_token"`, `error_description="`, `resource_metadata="`} {
-		if !strings.Contains(challenge, want) {
-			t.Errorf("challenge %q is missing %s", challenge, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(challenge, want) {
+				t.Errorf("challenge %q is missing %s", challenge, want)
+			}
+		})
 	}
 }
 
@@ -285,9 +287,11 @@ func TestBearerGuard_NoAPIScope_IsForbiddenNotUnauthorized(t *testing.T) {
 	// error_description.
 	challenge := failure.header.Get("WWW-Authenticate")
 	for _, want := range []string{`error="insufficient_scope"`, `scope="` + oauth.MinimumScope + `"`} {
-		if !strings.Contains(challenge, want) {
-			t.Errorf("challenge %q is missing %s", challenge, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(challenge, want) {
+				t.Errorf("challenge %q is missing %s", challenge, want)
+			}
+		})
 	}
 	if strings.Contains(challenge, `scope="`+oauth.ScopeAPI+`"`) {
 		t.Errorf("challenge %q demands the write scope for a request that only needs %s", challenge, oauth.MinimumScope)

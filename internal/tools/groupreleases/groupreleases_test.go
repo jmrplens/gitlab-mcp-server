@@ -296,9 +296,11 @@ func TestList_MultipleReleases(t *testing.T) {
 	}
 	wantTags := []string{"v2.0.0", "v1.1.0", "v1.0.0"}
 	for i, wt := range wantTags {
-		if out.Releases[i].TagName != wt {
-			t.Errorf("Releases[%d].TagName = %q, want %q", i, out.Releases[i].TagName, wt)
-		}
+		t.Run(wt, func(t *testing.T) {
+			if out.Releases[i].TagName != wt {
+				t.Errorf("Releases[%d].TagName = %q, want %q", i, out.Releases[i].TagName, wt)
+			}
+		})
 	}
 }
 

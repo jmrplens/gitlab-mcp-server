@@ -742,9 +742,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			"gitlab_group_protected_branch_unprotect",
 		}
 		for _, want := range checks {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatOutputMarkdown missing %q", want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(md, want) {
+					t.Errorf("FormatOutputMarkdown missing %q", want)
+				}
+			})
 		}
 		if strings.Contains(md, "### Unprotect Access Levels") {
 			t.Error("FormatOutputMarkdown should not render empty Unprotect Access Levels section")
@@ -770,9 +772,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 			t.Error("missing force push")
 		}
 		for _, heading := range []string{"### Push Access Levels", "### Merge Access Levels", "### Unprotect Access Levels"} {
-			if strings.Contains(md, heading) {
-				t.Errorf("should not render empty section %q", heading)
-			}
+			t.Run(heading, func(t *testing.T) {
+				if strings.Contains(md, heading) {
+					t.Errorf("should not render empty section %q", heading)
+				}
+			})
 		}
 	})
 }
@@ -799,9 +803,11 @@ func TestFormatListMarkdown(t *testing.T) {
 			"gitlab_group_protected_branch_protect",
 		}
 		for _, want := range checks {
-			if !strings.Contains(md, want) {
-				t.Errorf("FormatListMarkdown missing %q", want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(md, want) {
+					t.Errorf("FormatListMarkdown missing %q", want)
+				}
+			})
 		}
 	})
 

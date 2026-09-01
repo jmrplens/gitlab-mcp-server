@@ -283,9 +283,11 @@ func TestListExportStatus_KeysetAndOrdering(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=abc", "relation=project"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 	if len(out.Statuses) != 1 || len(out.Statuses[0].Batches) != 1 {
 		t.Fatalf("expected 1 status with 1 batch, got %+v", out.Statuses)
@@ -374,9 +376,11 @@ func TestFormatListExportStatus_MultipleItems(t *testing.T) {
 		"true",
 		"false",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

@@ -67,17 +67,19 @@ func TestActionSpecs_UserListIIDGuidance(t *testing.T) {
 	byTool := userListSpecsByTool(t, ActionSpecs(testutil.NewTestClient(t, http.NewServeMux())))
 
 	for _, toolName := range []string{"gitlab_ff_user_list_get", "gitlab_ff_user_list_update", "gitlab_ff_user_list_delete"} {
-		guidance := byTool[toolName].ParameterGuidance["user_list_iid"]
-		if guidance.SemanticRole != "feature_flag_user_list_iid" {
-			t.Fatalf("%s user_list_iid SemanticRole = %q, want feature_flag_user_list_iid", toolName, guidance.SemanticRole)
-		}
-		if !containsText(guidance.CommonConfusions, "user list name") {
-			t.Fatalf("%s user_list_iid CommonConfusions = %v, want name warning", toolName, guidance.CommonConfusions)
-		}
-		description := schemaPropertyDescription(t, byTool[toolName].Route.InputSchema, "user_list_iid")
-		if !strings.Contains(description, "Do not use the user list name") {
-			t.Fatalf("%s user_list_iid schema description = %q, want name warning", toolName, description)
-		}
+		t.Run(toolName, func(t *testing.T) {
+			guidance := byTool[toolName].ParameterGuidance["user_list_iid"]
+			if guidance.SemanticRole != "feature_flag_user_list_iid" {
+				t.Fatalf("%s user_list_iid SemanticRole = %q, want feature_flag_user_list_iid", toolName, guidance.SemanticRole)
+			}
+			if !containsText(guidance.CommonConfusions, "user list name") {
+				t.Fatalf("%s user_list_iid CommonConfusions = %v, want name warning", toolName, guidance.CommonConfusions)
+			}
+			description := schemaPropertyDescription(t, byTool[toolName].Route.InputSchema, "user_list_iid")
+			if !strings.Contains(description, "Do not use the user list name") {
+				t.Fatalf("%s user_list_iid schema description = %q, want name warning", toolName, description)
+			}
+		})
 	}
 }
 
@@ -198,10 +200,12 @@ func TestActionSpecs_Descriptions(t *testing.T) {
 		"gitlab_ff_user_list_update",
 		"gitlab_ff_user_list_delete",
 	} {
-		desc := byTool[toolName].IndividualTool.Description
-		if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
-			t.Errorf("%s description = %q, want Returns/See also form", toolName, desc)
-		}
+		t.Run(toolName, func(t *testing.T) {
+			desc := byTool[toolName].IndividualTool.Description
+			if !strings.Contains(desc, "Returns:") || !strings.Contains(desc, "See also:") {
+				t.Errorf("%s description = %q, want Returns/See also form", toolName, desc)
+			}
+		})
 	}
 	if got := userListDescription("unknown_action"); got != "" {
 		t.Errorf("userListDescription(unknown) = %q, want empty", got)
@@ -221,7 +225,9 @@ func TestActionSpecs_MetadataHelpers(t *testing.T) {
 		"ff_user_list_update",
 		"ff_user_list_delete",
 	} {
-		assertUserListMetadata(t, action)
+		t.Run(action, func(t *testing.T) {
+			assertUserListMetadata(t, action)
+		})
 	}
 
 	if got := userListUsage("unknown_action"); got != "" {

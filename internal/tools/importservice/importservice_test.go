@@ -215,9 +215,11 @@ func TestImportFromBitbucketCloud_APIToken(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, field := range []string{"bitbucket_api_token", "bitbucket_email"} {
-		if !strings.Contains(body, field) {
-			t.Errorf("expected %s in request body, got: %s", field, body)
-		}
+		t.Run(field, func(t *testing.T) {
+			if !strings.Contains(body, field) {
+				t.Errorf("expected %s in request body, got: %s", field, body)
+			}
+		})
 	}
 	if strings.Contains(body, "bitbucket_app_password") {
 		t.Errorf("did not expect bitbucket_app_password when using API token, got: %s", body)
@@ -380,9 +382,11 @@ func TestImportFromGitHub_WithAllOptionalFields(t *testing.T) {
 		t.Errorf("expected name 'imported', got %q", out.Name)
 	}
 	for _, want := range []string{"personal_access_token", "repo_id", "target_namespace", "new_name", "github_hostname", "timeout_strategy"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 
@@ -538,9 +542,11 @@ func TestImportFromGitHub_WithOptionalStages(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"optional_stages", "single_endpoint_notes_import", "attachments_import", "collaborators_import"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q; body=%s", want, capturedBody)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q; body=%s", want, capturedBody)
+			}
+		})
 	}
 	if out.RefsURL != "https://gitlab.example.com/ns/my-repo/refs" {
 		t.Errorf("expected refs_url to be mapped, got %q", out.RefsURL)

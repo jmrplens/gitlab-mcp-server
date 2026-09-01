@@ -327,10 +327,12 @@ func TestNewCallIdentifier_AliasNeverShadowsACanonicalID(t *testing.T) {
 // path.
 func TestNewCallIdentifier_NilCatalogIsUsable(t *testing.T) {
 	for _, surface := range []string{config.ToolSurfaceIndividual, config.ToolSurfaceMeta, config.ToolSurfaceDynamic} {
-		identifier := NewCallIdentifier(nil, surface)
-		if identity, ok := identifier.Identify("gitlab_issue_list", nil); ok {
-			t.Errorf("a nil catalog resolved something on %s: %+v", surface, identity)
-		}
+		t.Run(surface, func(t *testing.T) {
+			identifier := NewCallIdentifier(nil, surface)
+			if identity, ok := identifier.Identify("gitlab_issue_list", nil); ok {
+				t.Errorf("a nil catalog resolved something on %s: %+v", surface, identity)
+			}
+		})
 	}
 }
 

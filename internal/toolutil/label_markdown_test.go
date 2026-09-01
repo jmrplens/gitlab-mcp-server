@@ -38,9 +38,11 @@ func TestFormatLabelMarkdown_AllBranches(t *testing.T) {
 		"- **Open MRs**: 1",
 		"Use action 'label_update'",
 	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("FormatLabelMarkdown() missing %q in:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("FormatLabelMarkdown() missing %q in:\n%s", want, got)
+			}
+		})
 	}
 }
 
@@ -64,9 +66,11 @@ func TestFormatLabelMarkdown_MinimalUnescaped(t *testing.T) {
 	}, LabelMarkdownOptions{DetailTitle: "Group Label"})
 
 	for _, unwanted := range []string{"- **Priority**", "- **Issues**", "- **Open MRs**", "&#124;"} {
-		if strings.Contains(got, unwanted) {
-			t.Fatalf("FormatLabelMarkdown() unexpectedly contains %q in:\n%s", unwanted, got)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(got, unwanted) {
+				t.Fatalf("FormatLabelMarkdown() unexpectedly contains %q in:\n%s", unwanted, got)
+			}
+		})
 	}
 	if !strings.Contains(got, "- **Description**: plain|pipe") {
 		t.Fatalf("FormatLabelMarkdown() did not preserve unescaped description:\n%s", got)
@@ -103,9 +107,11 @@ func TestFormatLabelListMarkdownFunc_WithLabels(t *testing.T) {
 		"Page 1 of 1",
 		"Use action 'label_get'",
 	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("FormatLabelListMarkdown() missing %q in:\n%s", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("FormatLabelListMarkdown() missing %q in:\n%s", want, got)
+			}
+		})
 	}
 }
 

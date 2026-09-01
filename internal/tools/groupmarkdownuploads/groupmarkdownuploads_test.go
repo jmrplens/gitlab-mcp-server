@@ -469,9 +469,11 @@ func TestFormatList_MultipleRows(t *testing.T) {
 	}
 	md := FormatList(out)
 	for _, want := range []string{"a.txt", "b.txt", "c.txt", "| 1 |", "| 2 |", "| 3 |"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -549,9 +551,11 @@ func TestList_KeysetAndOrdering(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=tok123"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 }
 
@@ -569,9 +573,11 @@ func TestFormatListMarkdownString_UploadedBy(t *testing.T) {
 	}
 	md := FormatListMarkdownString(out)
 	for _, want := range []string{"Group Markdown Uploads (1)", "Uploaded By", "Bob (@bob)", "image.png"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -597,8 +603,10 @@ func TestUploadedByLabel(t *testing.T) {
 		{"empty", &UploadedByOutput{}, ""},
 	}
 	for _, tc := range cases {
-		if got := uploadedByLabel(tc.in); got != tc.want {
-			t.Errorf("%s: uploadedByLabel = %q, want %q", tc.name, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			if got := uploadedByLabel(tc.in); got != tc.want {
+				t.Errorf("%s: uploadedByLabel = %q, want %q", tc.name, got, tc.want)
+			}
+		})
 	}
 }

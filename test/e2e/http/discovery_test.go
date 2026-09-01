@@ -67,9 +67,11 @@ func TestProtectedResourceMetadata_BehavesLikeAnHTTPDocument(t *testing.T) {
 			t.Fatal("the 405 carries no Allow header, so a client cannot learn what to send instead")
 		}
 		for _, method := range []string{"GET", "HEAD"} {
-			if !strings.Contains(allow, method) {
-				t.Errorf("Allow = %q, want it to list %s", allow, method)
-			}
+			t.Run(method, func(t *testing.T) {
+				if !strings.Contains(allow, method) {
+					t.Errorf("Allow = %q, want it to list %s", allow, method)
+				}
+			})
 		}
 	})
 

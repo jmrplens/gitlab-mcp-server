@@ -629,9 +629,11 @@ func TestFormatOutputMarkdown_Full(t *testing.T) {
 		"@author",
 		"Looks good!",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -692,9 +694,11 @@ func TestFormatListMarkdown_WithNotes(t *testing.T) {
 	}
 	md := FormatListMarkdown(out)
 	for _, want := range []string{"## MR Notes (2)", "| 1 |", "| 2 |", "| ID |"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

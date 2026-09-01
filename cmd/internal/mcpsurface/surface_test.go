@@ -57,9 +57,11 @@ func TestDynamicTools_ExposesFindAndExecute(t *testing.T) {
 		t.Fatalf("execute InputSchema properties has type %T, want map[string]any", executeSchema["properties"])
 	}
 	for _, property := range []string{"action", "params", "confirm"} {
-		if _, exists := executeProperties[property]; !exists {
-			t.Fatalf("execute InputSchema missing %q property: %v", property, executeProperties)
-		}
+		t.Run(property, func(t *testing.T) {
+			if _, exists := executeProperties[property]; !exists {
+				t.Fatalf("execute InputSchema missing %q property: %v", property, executeProperties)
+			}
+		})
 	}
 	required, ok := executeSchema["required"].([]any)
 	if !ok {
@@ -87,9 +89,11 @@ func TestSortDynamicTools_PutsFindBeforeExecute(t *testing.T) {
 
 	want := []string{DynamicFindToolName, DynamicExecuteActionToolName, "aaa_unexpected", "zzz_unexpected"}
 	for i, name := range want {
-		if dynamicTools[i].Name != name {
-			t.Fatalf("position %d = %q, want %q", i, dynamicTools[i].Name, name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if dynamicTools[i].Name != name {
+				t.Fatalf("position %d = %q, want %q", i, dynamicTools[i].Name, name)
+			}
+		})
 	}
 }
 

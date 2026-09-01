@@ -237,9 +237,11 @@ func TestParseRetryAfter(t *testing.T) {
 		t.Errorf("padded: got %v, want 10s", got)
 	}
 	for _, v := range []string{"", "0", "-3", "garbage"} {
-		if got := parseRetryAfter(v); got != 0 {
-			t.Errorf("parseRetryAfter(%q) = %v, want 0", v, got)
-		}
+		t.Run(v, func(t *testing.T) {
+			if got := parseRetryAfter(v); got != 0 {
+				t.Errorf("parseRetryAfter(%q) = %v, want 0", v, got)
+			}
+		})
 	}
 	future := time.Now().Add(30 * time.Second).UTC().Format(http.TimeFormat)
 	if got := parseRetryAfter(future); got <= 0 || got > 31*time.Second {

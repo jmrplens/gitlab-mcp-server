@@ -32,18 +32,22 @@ func TestIsGenericUsage_FlagsPlaceholders(t *testing.T) {
 		"use to execute markdown_render action",
 	}
 	for _, usage := range generic {
-		if !auditshared.IsGenericUsage(usage) {
-			t.Errorf("isGenericUsage(%q) = false, want true", usage)
-		}
+		t.Run(usage, func(t *testing.T) {
+			if !auditshared.IsGenericUsage(usage) {
+				t.Errorf("isGenericUsage(%q) = false, want true", usage)
+			}
+		})
 	}
 	specific := []string{
 		"List branches for a project with optional search and pagination.",
 		"Create MULTIPLE release asset links in one call. Use this instead of repeated link_create.",
 	}
 	for _, usage := range specific {
-		if auditshared.IsGenericUsage(usage) {
-			t.Errorf("isGenericUsage(%q) = true, want false", usage)
-		}
+		t.Run(usage, func(t *testing.T) {
+			if auditshared.IsGenericUsage(usage) {
+				t.Errorf("isGenericUsage(%q) = true, want false", usage)
+			}
+		})
 	}
 }
 
@@ -96,9 +100,11 @@ func TestBaseActionStem_StripsVariantAndCRUDSuffixes(t *testing.T) {
 		"link_create":               "link",
 	}
 	for in, want := range cases {
-		if got := baseActionStem(in); got != want {
-			t.Errorf("baseActionStem(%q) = %q, want %q", in, got, want)
-		}
+		t.Run(in, func(t *testing.T) {
+			if got := baseActionStem(in); got != want {
+				t.Errorf("baseActionStem(%q) = %q, want %q", in, got, want)
+			}
+		})
 	}
 }
 
@@ -275,9 +281,11 @@ func TestHasNonCRUDVariantSuffix(t *testing.T) {
 		"notes.delete_all",
 	}
 	for _, name := range variant {
-		if !hasNonCRUDVariantSuffix(name) {
-			t.Errorf("hasNonCRUDVariantSuffix(%q) = false, want true", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !hasNonCRUDVariantSuffix(name) {
+				t.Errorf("hasNonCRUDVariantSuffix(%q) = false, want true", name)
+			}
+		})
 	}
 	crud := []string{
 		"branch.list",
@@ -289,9 +297,11 @@ func TestHasNonCRUDVariantSuffix(t *testing.T) {
 		"deploy_key_get",
 	}
 	for _, name := range crud {
-		if hasNonCRUDVariantSuffix(name) {
-			t.Errorf("hasNonCRUDVariantSuffix(%q) = true, want false", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if hasNonCRUDVariantSuffix(name) {
+				t.Errorf("hasNonCRUDVariantSuffix(%q) = true, want false", name)
+			}
+		})
 	}
 }
 
@@ -311,9 +321,11 @@ func TestBaseActionStem_StripsScopeSuffixes(t *testing.T) {
 		"pages_domain_list_project": "pages_domain",
 	}
 	for in, want := range cases {
-		if got := baseActionStem(in); got != want {
-			t.Errorf("baseActionStem(%q) = %q, want %q", in, got, want)
-		}
+		t.Run(in, func(t *testing.T) {
+			if got := baseActionStem(in); got != want {
+				t.Errorf("baseActionStem(%q) = %q, want %q", in, got, want)
+			}
+		})
 	}
 }
 
@@ -335,9 +347,11 @@ func TestSiblingMatches_AcceptsPrefixedAndUnderscoreForms(t *testing.T) {
 		"totally_unrelated":    false, // no match
 	}
 	for in, want := range cases {
-		if got := siblingMatches(strings.ToLower(in), siblings); got != want {
-			t.Errorf("siblingMatches(%q) = %v, want %v", in, got, want)
-		}
+		t.Run(in, func(t *testing.T) {
+			if got := siblingMatches(strings.ToLower(in), siblings); got != want {
+				t.Errorf("siblingMatches(%q) = %v, want %v", in, got, want)
+			}
+		})
 	}
 }
 
@@ -398,9 +412,11 @@ func TestUsageHasSignal_DetectsDistinguishingPhrases(t *testing.T) {
 		"Publish all assets in a directory.":               true,
 	}
 	for in, want := range cases {
-		if got := usageHasSignal(in); got != want {
-			t.Errorf("usageHasSignal(%q) = %v, want %v", in, got, want)
-		}
+		t.Run(in, func(t *testing.T) {
+			if got := usageHasSignal(in); got != want {
+				t.Errorf("usageHasSignal(%q) = %v, want %v", in, got, want)
+			}
+		})
 	}
 }
 
@@ -430,9 +446,11 @@ func TestEmptyParamDescription_FlagsBoilerplate(t *testing.T) {
 	// "nested.deep" (nested empty). "good" should pass.
 	wantContains := []string{"name", "id", "nested.deep"}
 	for _, w := range wantContains {
-		if !containsStr(got, w) {
-			t.Errorf("emptyParamDescriptions missing %q in %v", w, got)
-		}
+		t.Run(w, func(t *testing.T) {
+			if !containsStr(got, w) {
+				t.Errorf("emptyParamDescriptions missing %q in %v", w, got)
+			}
+		})
 	}
 	for _, g := range got {
 		if g == "good" {
@@ -823,14 +841,18 @@ func TestIsScopeSuggestiveName(t *testing.T) {
 	}
 	no := []string{"name", "color", "description", "content", "labels"}
 	for _, n := range yes {
-		if !isScopeSuggestiveName(n) {
-			t.Errorf("%q should be scope-suggestive", n)
-		}
+		t.Run(n, func(t *testing.T) {
+			if !isScopeSuggestiveName(n) {
+				t.Errorf("%q should be scope-suggestive", n)
+			}
+		})
 	}
 	for _, n := range no {
-		if isScopeSuggestiveName(n) {
-			t.Errorf("%q should NOT be scope-suggestive", n)
-		}
+		t.Run(n, func(t *testing.T) {
+			if isScopeSuggestiveName(n) {
+				t.Errorf("%q should NOT be scope-suggestive", n)
+			}
+		})
 	}
 }
 
@@ -854,14 +876,18 @@ func TestDescriptionImpliesEnum(t *testing.T) {
 		"Numeric merge request IID",
 	}
 	for _, d := range yes {
-		if !descriptionImpliesEnum(d) {
-			t.Errorf("descriptionImpliesEnum(%q) = false, want true", d)
-		}
+		t.Run(d, func(t *testing.T) {
+			if !descriptionImpliesEnum(d) {
+				t.Errorf("descriptionImpliesEnum(%q) = false, want true", d)
+			}
+		})
 	}
 	for _, d := range no {
-		if descriptionImpliesEnum(d) {
-			t.Errorf("descriptionImpliesEnum(%q) = true, want false", d)
-		}
+		t.Run(d, func(t *testing.T) {
+			if descriptionImpliesEnum(d) {
+				t.Errorf("descriptionImpliesEnum(%q) = true, want false", d)
+			}
+		})
 	}
 }
 

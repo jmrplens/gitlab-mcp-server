@@ -84,9 +84,11 @@ func TestList_OrderBySortKeyset(t *testing.T) {
 		t.Fatalf("List() unexpected error: %v", err)
 	}
 	for _, want := range []string{"order_by=name", "sort=desc", "pagination=keyset", "page_token=tok123"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 }
 
@@ -248,9 +250,11 @@ func TestProtect_WithAllOptionalFields(t *testing.T) {
 		t.Fatalf("Protect() unexpected error: %v", err)
 	}
 	for _, want := range []string{"deploy_access_levels", "user_id", "group_id", "group_inheritance_type", "approval_rules", "required_approvals"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 
@@ -527,9 +531,11 @@ func TestUpdate_WithAllFields(t *testing.T) {
 		t.Errorf("Name = %q, want %q", out.Name, "production")
 	}
 	for _, want := range []string{"deploy_access_levels", "user_id", "group_id", "group_inheritance_type", "approval_rules", "required_approvals", "_destroy"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 

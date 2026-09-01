@@ -687,14 +687,18 @@ func TestCreateInstance_WithAllPermissions(t *testing.T) {
 		t.Error("expected RemoveProject to be true")
 	}
 	for _, want := range []string{"name", "base_access_level", "description", "admin_cicd_variables", "admin_merge_request", "read_code", "remove_project", "manage_deploy_tokens", "admin_vulnerability"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 	for _, want := range []string{`"name":"full-perms"`, `"base_access_level":30`, `"description":"All permissions"`} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing %s; got %s", want, capturedBody)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing %s; got %s", want, capturedBody)
+			}
+		})
 	}
 }
 

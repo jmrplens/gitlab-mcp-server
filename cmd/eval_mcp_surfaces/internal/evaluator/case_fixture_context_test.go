@@ -52,9 +52,11 @@ func TestMergeRequestSourceFixture_EnsuresAttemptBranchAndFile(t *testing.T) {
 		t.Fatalf("output = %+v, want suffixed MR source values", output)
 	}
 	for _, want := range []string{"POST /api/v4/projects/101/repository/branches", "POST " + mrSourceFixtureTestFilePath} {
-		if !strings.Contains(strings.Join(calls, ","), want) {
-			t.Fatalf("calls = %s, want %s", strings.Join(calls, ","), want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(strings.Join(calls, ","), want) {
+				t.Fatalf("calls = %s, want %s", strings.Join(calls, ","), want)
+			}
+		})
 	}
 }
 

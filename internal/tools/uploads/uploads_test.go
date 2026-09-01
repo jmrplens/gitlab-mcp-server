@@ -916,9 +916,11 @@ func TestList_KeysetPaginationParams(t *testing.T) {
 			"page":       "2",
 		}
 		for k, want := range checks {
-			if got := q.Get(k); got != want {
-				t.Errorf("query %q = %q, want %q", k, got, want)
-			}
+			t.Run(k, func(t *testing.T) {
+				if got := q.Get(k); got != want {
+					t.Errorf("query %q = %q, want %q", k, got, want)
+				}
+			})
 		}
 		w.Header().Set("X-Next-Page", "3")
 		w.Header().Set("X-Page", "2")

@@ -120,9 +120,11 @@ func TestActionSpecs_Metadata(t *testing.T) {
 
 	byTool := groupSAMLSpecsByTool(t, specs)
 	for _, name := range []string{"gitlab_group_saml_link_list", "gitlab_group_saml_link_get", "gitlab_group_saml_users_list"} {
-		if !byTool[name].ReadOnly {
-			t.Errorf("%s should be read-only", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !byTool[name].ReadOnly {
+				t.Errorf("%s should be read-only", name)
+			}
+		})
 	}
 	spec := byTool["gitlab_group_saml_link_delete"]
 	if !spec.Destructive || !spec.Route.Destructive {

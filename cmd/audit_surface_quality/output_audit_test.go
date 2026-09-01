@@ -291,9 +291,11 @@ func TestPrintReport_EmptyFindingsWritesNoFindingsMessage(t *testing.T) {
 		"| Total tools | 1 | 0 |",
 		"**No findings. All quality checks pass.**",
 	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("printReport() output missing %q:\n%s", want, output)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Fatalf("printReport() output missing %q:\n%s", want, output)
+			}
+		})
 	}
 }
 
@@ -322,9 +324,11 @@ func TestPrintReport_GroupsFindingsByCategory(t *testing.T) {
 		"`tool_a` | missing Title",
 		"`tool_c` | no Returns",
 	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("printReport() output missing %q:\n%s", want, output)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Fatalf("printReport() output missing %q:\n%s", want, output)
+			}
+		})
 	}
 }
 

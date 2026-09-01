@@ -455,9 +455,11 @@ func TestReadPublishReport_SplitsFullRunByPresetFromTraceArtifacts(t *testing.T)
 		rows[row.Preset] = row
 	}
 	for _, preset := range []string{presetDockerRead, presetDockerMutatingSafe, presetDockerDestructiveSafe} {
-		if rows[preset].Attempts != 1 {
-			t.Fatalf("row[%s] = %+v, want one attempt", preset, rows[preset])
-		}
+		t.Run(preset, func(t *testing.T) {
+			if rows[preset].Attempts != 1 {
+				t.Fatalf("row[%s] = %+v, want one attempt", preset, rows[preset])
+			}
+		})
 	}
 	if rows[presetDockerMutatingSafe].ModelRequests != 2 || rows[presetDockerMutatingSafe].ToolCalls != 2 {
 		t.Fatalf("mutating row counts = %+v, want requests/tools 2", rows[presetDockerMutatingSafe])
@@ -616,10 +618,12 @@ func TestPublishFormattingHelpers_CoverBranchLabels(t *testing.T) {
 		presetSchemaEnterprise,
 	}
 	for index, preset := range orderedPresets {
-		wantRank := index + 1
-		if got := presetRank(preset); got != wantRank {
-			t.Fatalf("presetRank(%q) = %d, want %d", preset, got, wantRank)
-		}
+		t.Run(preset, func(t *testing.T) {
+			wantRank := index + 1
+			if got := presetRank(preset); got != wantRank {
+				t.Fatalf("presetRank(%q) = %d, want %d", preset, got, wantRank)
+			}
+		})
 	}
 
 	providerCases := map[string][2]string{
@@ -632,10 +636,12 @@ func TestPublishFormattingHelpers_CoverBranchLabels(t *testing.T) {
 		"plain-model":      {"Unknown", "plain-model"},
 	}
 	for input, want := range providerCases {
-		provider, model := providerModel(input)
-		if provider != want[0] || model != want[1] {
-			t.Fatalf("providerModel(%q) = %q/%q, want %q/%q", input, provider, model, want[0], want[1])
-		}
+		t.Run(input, func(t *testing.T) {
+			provider, model := providerModel(input)
+			if provider != want[0] || model != want[1] {
+				t.Fatalf("providerModel(%q) = %q/%q, want %q/%q", input, provider, model, want[0], want[1])
+			}
+		})
 	}
 
 	if got := dockerLiveStatus(publishModelSummary{DockerBacked: false}); got != "Not Docker-backed" {

@@ -407,14 +407,18 @@ func TestJSONFieldReflectionHelpers(t *testing.T) {
 
 	fields := jsonFieldNames(reflect.TypeFor[namedInput]())
 	for _, want := range []string{"embedded_name", "Plain", "tagged", "Anonymous", "string_list"} {
-		if _, ok := fields[want]; !ok {
-			t.Fatalf("jsonFieldNames() missing %q in %#v", want, fields)
-		}
+		t.Run(want, func(t *testing.T) {
+			if _, ok := fields[want]; !ok {
+				t.Fatalf("jsonFieldNames() missing %q in %#v", want, fields)
+			}
+		})
 	}
 	for _, unwanted := range []string{"-", "_"} {
-		if _, ok := fields[unwanted]; ok {
-			t.Fatalf("jsonFieldNames() contains %q in %#v", unwanted, fields)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if _, ok := fields[unwanted]; ok {
+				t.Fatalf("jsonFieldNames() contains %q in %#v", unwanted, fields)
+			}
+		})
 	}
 	if got := jsonFieldNames(reflect.TypeFor[string]()); got != nil {
 		t.Fatalf("jsonFieldNames(non-struct) = %#v, want nil", got)
@@ -575,9 +579,11 @@ func TestNormalizeParamAliasesForSchema_NormalizesAndCoerces(t *testing.T) {
 		t.Fatalf("note/storage shard values = %#v", got)
 	}
 	for _, alias := range []string{"search", "mr_iid", "project_path", "link", "from", "to", "environment", "merge_when_pipeline_succeeds", "active", "file_path", "body", "shard"} {
-		if _, exists := got[alias]; exists {
-			t.Fatalf("alias %q still present in %#v", alias, got)
-		}
+		t.Run(alias, func(t *testing.T) {
+			if _, exists := got[alias]; exists {
+				t.Fatalf("alias %q still present in %#v", alias, got)
+			}
+		})
 	}
 }
 
@@ -1769,9 +1775,11 @@ func TestMetaToolDescriptionPrefix_IncludesParameterGuidance(t *testing.T) {
 		"Source: Owning project whose allowlist is being changed.",
 		"Avoid: Do not use the project being removed as project_id.",
 	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("prefix missing %q: %q", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("prefix missing %q: %q", want, got)
+			}
+		})
 	}
 
 	description := got + "Manage GitLab CI job token scope."
@@ -1794,9 +1802,11 @@ func TestMetaToolDescriptionPrefix_IncludesActionGuidance(t *testing.T) {
 		"metadata_get: Read GitLab instance metadata such as version and revision.",
 		"settings_get: Read current GitLab application settings.",
 	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("prefix missing %q: %q", want, got)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("prefix missing %q: %q", want, got)
+			}
+		})
 	}
 
 	description := got + "Manage GitLab instance administration."
@@ -3254,10 +3264,12 @@ func TestInputSchemaForType_SecretFieldsWriteOnly(t *testing.T) {
 	schema := inputSchemaForType(reflect.TypeFor[secretInput]())
 	properties := schema["properties"].(map[string]any)
 	for _, key := range []string{"token", "signing_token"} {
-		property := properties[key].(map[string]any)
-		if property["writeOnly"] != true {
-			t.Fatalf("%s writeOnly = %v, want true", key, property["writeOnly"])
-		}
+		t.Run(key, func(t *testing.T) {
+			property := properties[key].(map[string]any)
+			if property["writeOnly"] != true {
+				t.Fatalf("%s writeOnly = %v, want true", key, property["writeOnly"])
+			}
+		})
 	}
 	name := properties["name"].(map[string]any)
 	if _, ok := name["writeOnly"]; ok {
@@ -3326,9 +3338,11 @@ func TestFieldTiers_ReadsTierTag(t *testing.T) {
 		t.Fatalf("FieldTiers = %v, want %v", got, want)
 	}
 	for name, tier := range want {
-		if got[name] != tier {
-			t.Errorf("FieldTiers[%q] = %q, want %q", name, got[name], tier)
-		}
+		t.Run(name, func(t *testing.T) {
+			if got[name] != tier {
+				t.Errorf("FieldTiers[%q] = %q, want %q", name, got[name], tier)
+			}
+		})
 	}
 	if _, ok := got["title"]; ok {
 		t.Error("untagged field title must not appear")
@@ -4604,10 +4618,12 @@ func TestCoercePaginationBooleanDirect(t *testing.T) {
 
 	// name in {first,last,per_page} → 100
 	for _, name := range []string{"first", "last", "per_page"} {
-		got, ok = coercePaginationBoolean(name, true, intType)
-		if !ok || got != 100 {
-			t.Errorf("coercePaginationBoolean(%s, true) = %v/%v, want 100/true", name, got, ok)
-		}
+		t.Run(name, func(t *testing.T) {
+			got, ok = coercePaginationBoolean(name, true, intType)
+			if !ok || got != 100 {
+				t.Errorf("coercePaginationBoolean(%s, true) = %v/%v, want 100/true", name, got, ok)
+			}
+		})
 	}
 
 	// bool false → unchanged
@@ -4690,12 +4706,14 @@ func TestIsStringSliceTypeAndIsStringTypeDirect(t *testing.T) {
 		{"bool", reflect.TypeFor[bool](), false, false},
 	}
 	for _, tc := range cases {
-		if got := isStringType(tc.typ); got != tc.isString {
-			t.Errorf("%s: isStringType = %v, want %v", tc.name, got, tc.isString)
-		}
-		if got := isStringSliceType(tc.typ); got != tc.isSlice {
-			t.Errorf("%s: isStringSliceType = %v, want %v", tc.name, got, tc.isSlice)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isStringType(tc.typ); got != tc.isString {
+				t.Errorf("%s: isStringType = %v, want %v", tc.name, got, tc.isString)
+			}
+			if got := isStringSliceType(tc.typ); got != tc.isSlice {
+				t.Errorf("%s: isStringSliceType = %v, want %v", tc.name, got, tc.isSlice)
+			}
+		})
 	}
 }
 

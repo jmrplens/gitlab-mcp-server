@@ -114,9 +114,11 @@ func TestAuditProject_Settings(t *testing.T) {
 			"Storage Statistics",
 		}
 		for _, want := range checks {
-			if !strings.Contains(text, want) {
-				t.Errorf(assertContains, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(text, want) {
+					t.Errorf(assertContains, want)
+				}
+			})
 		}
 	})
 
@@ -227,9 +229,11 @@ func TestAuditBranch_Protection(t *testing.T) {
 			"Code owner approval required",
 		}
 		for _, want := range checks {
-			if !strings.Contains(text, want) {
-				t.Errorf(assertContains, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(text, want) {
+					t.Errorf(assertContains, want)
+				}
+			})
 		}
 	})
 
@@ -323,9 +327,11 @@ func TestAuditProject_Access(t *testing.T) {
 			"devops-team",
 		}
 		for _, want := range checks {
-			if !strings.Contains(text, want) {
-				t.Errorf(assertContains, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(text, want) {
+					t.Errorf(assertContains, want)
+				}
+			})
 		}
 	})
 
@@ -570,9 +576,11 @@ func TestAuditProject_Full(t *testing.T) {
 			"Prevent secrets | ✅",
 		}
 		for _, want := range checks {
-			if !strings.Contains(text, want) {
-				t.Errorf(assertContains, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(text, want) {
+					t.Errorf(assertContains, want)
+				}
+			})
 		}
 	})
 

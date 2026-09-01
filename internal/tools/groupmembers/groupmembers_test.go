@@ -1058,9 +1058,11 @@ func TestFormatMemberMarkdown_WithAllFields(t *testing.T) {
 		"| Expires | 31 Dec 2026 |",
 		"| URL | [dev](https://gl/dev) |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1127,9 +1129,11 @@ func TestFormatShareMarkdown_WithAllFields(t *testing.T) {
 		"| Path | shared-group |",
 		"| URL | [Shared Group](https://gl/groups/shared-group) |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

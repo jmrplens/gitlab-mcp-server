@@ -39,9 +39,11 @@ func TestActionSpecs_Metadata(t *testing.T) {
 
 	byTool := externalStatusCheckSpecsByTool(t, specs)
 	for _, name := range []string{"gitlab_list_project_status_checks", "gitlab_list_project_mr_external_status_checks", "gitlab_list_project_external_status_checks"} {
-		if !byTool[name].ReadOnly {
-			t.Errorf("%s should be read-only", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !byTool[name].ReadOnly {
+				t.Errorf("%s should be read-only", name)
+			}
+		})
 	}
 	spec := byTool["gitlab_delete_project_external_status_check"]
 	if !spec.Destructive || !spec.Route.Destructive {

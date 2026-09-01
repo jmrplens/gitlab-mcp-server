@@ -1737,9 +1737,11 @@ func TestPlay_WithJobInputs_ForwardsInRequestBody(t *testing.T) {
 	}
 	body, _ := gotBody.Load().(string)
 	for _, want := range []string{`"job_inputs"`, `"environment":"staging"`, `"replicas":3`, `"debug":true`, `"regions":["eu","us"]`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("request body = %s, want it to contain %s", body, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(body, want) {
+				t.Errorf("request body = %s, want it to contain %s", body, want)
+			}
+		})
 	}
 }
 
@@ -1847,9 +1849,11 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"**Created**:",
 		"https://gitlab.example.com/-/jobs/100",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1890,9 +1894,11 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 		"**Coverage**",
 		"**User**",
 	} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -1924,9 +1930,11 @@ func TestFormatListMarkdown_WithJobs(t *testing.T) {
 		"45.5s",
 		"12.3s",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1976,9 +1984,11 @@ func TestFormatTraceMarkdown_WithData(t *testing.T) {
 		"Running with gitlab-runner 15.0.0",
 		"Job succeeded",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 	if strings.Contains(md, "Truncated") {
 		t.Error("should not contain truncation warning")
@@ -2036,9 +2046,11 @@ func TestFormatBridgeListMarkdown_WithData(t *testing.T) {
 		"failed",
 		"#50",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -2069,9 +2081,11 @@ func TestFormatArtifactsMarkdown_WithJobID(t *testing.T) {
 		"**Size**: 2048 bytes",
 		"base64-encoded",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 	if strings.Contains(md, "Truncated") {
 		t.Error("should not contain truncation warning")
@@ -2121,9 +2135,11 @@ func TestFormatSingleArtifactMarkdown_WithJobID(t *testing.T) {
 		"test report content",
 		"```",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

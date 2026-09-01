@@ -540,9 +540,11 @@ func TestFormatSSHKeyMarkdownString_WithData(t *testing.T) {
 		"**Usage Type**: auth",
 		"**Expires At**",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 

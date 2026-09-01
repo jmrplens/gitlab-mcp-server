@@ -281,9 +281,11 @@ func TestFormatMarkdownString_Healthy(t *testing.T) {
 		{"response time", "15 ms"},
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c.want) {
-			t.Errorf("FormatMarkdownString healthy missing %s: want substring %q", c.name, c.want)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			if !strings.Contains(md, c.want) {
+				t.Errorf("FormatMarkdownString healthy missing %s: want substring %q", c.name, c.want)
+			}
+		})
 	}
 	if strings.Contains(md, "Error") {
 		t.Error("healthy status should not contain Error section")
@@ -310,9 +312,11 @@ func TestFormatMarkdownString_WithMetadata(t *testing.T) {
 		"**Department**: Test Department",
 		"**Repository**: https://github.com/jmrplens/gitlab-mcp-server",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("missing %q in markdown", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("missing %q in markdown", want)
+			}
+		})
 	}
 }
 
@@ -332,9 +336,11 @@ func TestFormatMarkdownString_WithoutMetadata(t *testing.T) {
 		"**Department**",
 		"**Repository**",
 	} {
-		if strings.Contains(md, unwanted) {
-			t.Errorf("should not contain %q when field is empty", unwanted)
-		}
+		t.Run(unwanted, func(t *testing.T) {
+			if strings.Contains(md, unwanted) {
+				t.Errorf("should not contain %q when field is empty", unwanted)
+			}
+		})
 	}
 }
 

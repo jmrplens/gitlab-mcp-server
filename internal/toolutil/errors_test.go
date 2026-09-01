@@ -236,9 +236,11 @@ func TestDetailedError_Markdown(t *testing.T) {
 		"**Request ID**: `req-abc-123`",
 	}
 	for _, want := range checks {
-		if !strings.Contains(md, want) {
-			t.Errorf("Markdown() missing %q in:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("Markdown() missing %q in:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1223,9 +1225,11 @@ func TestCloneAccessLevelAliasesDirect(t *testing.T) {
 // detector accepts both the canonical field and the alias family.
 func TestHasStructuredApprovalCountDirect(t *testing.T) {
 	for _, key := range []string{"required_approvals", "required_approval_count", "approval_count", "approvals_required"} {
-		if !hasStructuredApprovalCount(map[string]any{key: 2}) {
-			t.Errorf("hasStructuredApprovalCount(%s) = false, want true", key)
-		}
+		t.Run(key, func(t *testing.T) {
+			if !hasStructuredApprovalCount(map[string]any{key: 2}) {
+				t.Errorf("hasStructuredApprovalCount(%s) = false, want true", key)
+			}
+		})
 	}
 	if hasStructuredApprovalCount(map[string]any{"other": 1}) {
 		t.Error("hasStructuredApprovalCount(other) = true, want false")

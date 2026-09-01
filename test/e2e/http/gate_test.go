@@ -198,14 +198,16 @@ func TestGate_NonPostMethodsReachTheSDK(t *testing.T) {
 	srv := startServer(t, nil, "--gitlab-url=https://gitlab.example.com")
 
 	for _, method := range []string{http.MethodGet, http.MethodDelete} {
-		got := srv.do(t, request{
-			method:  method,
-			path:    "/mcp",
-			headers: map[string]string{"PRIVATE-TOKEN": "glpat-whatever", "MCP-Protocol-Version": protocolVersion},
+		t.Run(method, func(t *testing.T) {
+			got := srv.do(t, request{
+				method:  method,
+				path:    "/mcp",
+				headers: map[string]string{"PRIVATE-TOKEN": "glpat-whatever", "MCP-Protocol-Version": protocolVersion},
+			})
+			if got.status != http.StatusMethodNotAllowed {
+				t.Errorf("%s /mcp = %d, want %d", method, got.status, http.StatusMethodNotAllowed)
+			}
 		})
-		if got.status != http.StatusMethodNotAllowed {
-			t.Errorf("%s /mcp = %d, want %d", method, got.status, http.StatusMethodNotAllowed)
-		}
 	}
 }
 
@@ -215,10 +217,12 @@ func TestGate_HealthAndCardNeedNoCredential(t *testing.T) {
 	srv := startServer(t, nil, "--gitlab-url=https://gitlab.example.com")
 
 	for _, path := range []string{"/health", "/.well-known/mcp/server-card.json"} {
-		got := srv.do(t, request{method: http.MethodGet, path: path})
-		if got.status != http.StatusOK {
-			t.Errorf("GET %s = %d, want %d", path, got.status, http.StatusOK)
-		}
+		t.Run(path, func(t *testing.T) {
+			got := srv.do(t, request{method: http.MethodGet, path: path})
+			if got.status != http.StatusOK {
+				t.Errorf("GET %s = %d, want %d", path, got.status, http.StatusOK)
+			}
+		})
 	}
 }
 

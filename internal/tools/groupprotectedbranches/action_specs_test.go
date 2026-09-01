@@ -41,9 +41,11 @@ func TestActionSpecs_Metadata(t *testing.T) {
 
 	byTool := groupProtectedBranchSpecsByTool(t, specs)
 	for _, name := range []string{"gitlab_group_protected_branch_list", "gitlab_group_protected_branch_get"} {
-		if !byTool[name].ReadOnly {
-			t.Errorf("%s should be read-only", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			if !byTool[name].ReadOnly {
+				t.Errorf("%s should be read-only", name)
+			}
+		})
 	}
 	spec := byTool["gitlab_group_protected_branch_unprotect"]
 	if !spec.Destructive || !spec.Route.Destructive {

@@ -212,9 +212,11 @@ func TestAddHook_Success(t *testing.T) {
 		"emoji_events", "resource_access_token_events", "project_events",
 		"push_events_branch_filter", "branch_filter_strategy",
 	} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing %q: %s", want, capturedBody)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing %q: %s", want, capturedBody)
+			}
+		})
 	}
 }
 
@@ -276,9 +278,11 @@ func TestEditHook_Success(t *testing.T) {
 		t.Errorf("out.ID = %d, want 10", out.ID)
 	}
 	for _, want := range []string{"signing_token", "milestone_events", "feature_flag_events", "vulnerability_events"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing %q: %s", want, capturedBody)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing %q: %s", want, capturedBody)
+			}
+		})
 	}
 }
 
@@ -445,9 +449,11 @@ func TestFormatHookMarkdown_URLVariablesRedacted(t *testing.T) {
 	})
 
 	for _, want := range []string{"Deploy hook", "Deploy events", "Alert Status", "Disabled Until", "Created", "URL Variables", "token", "REDACTED"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("FormatHookMarkdown missing %q: %s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("FormatHookMarkdown missing %q: %s", want, text)
+			}
+		})
 	}
 }
 
@@ -477,9 +483,11 @@ func TestEnabledEvents_AllEvents(t *testing.T) {
 	})
 
 	for _, want := range []string{"push", "tag_push", "merge_request", "issues", "note", "job", "pipeline", "wiki", "deployment", "releases", "milestone", "feature_flag", "subgroup", "member", "vulnerability"} {
-		if !strings.Contains(text, want) {
-			t.Errorf("enabledEvents missing %q: %s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("enabledEvents missing %q: %s", want, text)
+			}
+		})
 	}
 }
 

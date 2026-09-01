@@ -52,9 +52,11 @@ func TestDynamicToolSurface_ExposesFindExecuteOnly(t *testing.T) {
 		t.Fatalf("dynamic tool names = %v, want %v", names, want)
 	}
 	for _, catalogTool := range []string{"gitlab_project", "gitlab_repository"} {
-		if slices.Contains(names, catalogTool) {
-			t.Fatalf("dynamic surface exposed catalog tool %q in %v", catalogTool, names)
-		}
+		t.Run(catalogTool, func(t *testing.T) {
+			if slices.Contains(names, catalogTool) {
+				t.Fatalf("dynamic surface exposed catalog tool %q in %v", catalogTool, names)
+			}
+		})
 	}
 }
 

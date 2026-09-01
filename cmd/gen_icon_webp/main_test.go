@@ -218,13 +218,15 @@ func TestGenerateAll_WritesEveryVariant(t *testing.T) {
 	}
 
 	for _, name := range []string{"branch-light.webp", "branch-dark.webp", "mr-light.webp", "mr-dark.webp"} {
-		data, readErr := os.ReadFile(filepath.Join(dir, name))
-		if readErr != nil {
-			t.Fatalf("expected %s to exist: %v", name, readErr)
-		}
-		if len(data) == 0 {
-			t.Errorf("%s is empty", name)
-		}
+		t.Run(name, func(t *testing.T) {
+			data, readErr := os.ReadFile(filepath.Join(dir, name))
+			if readErr != nil {
+				t.Fatalf("expected %s to exist: %v", name, readErr)
+			}
+			if len(data) == 0 {
+				t.Errorf("%s is empty", name)
+			}
+		})
 	}
 	branchLight, _ := os.ReadFile(filepath.Join(dir, "branch-light.webp"))
 	if string(branchLight) != "<svg>branch</svg>|"+colorLight {

@@ -156,9 +156,11 @@ func TestActionSpecGroupsByTool_RejectsInvalidSpecs(t *testing.T) {
 		t.Fatal("expected grouped validation errors")
 	}
 	for _, want := range []string{"tool name", "action spec name is required", "duplicate action"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Fatalf("error = %q, want %q", err.Error(), want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("error = %q, want %q", err.Error(), want)
+			}
+		})
 	}
 	specs := byTool["gitlab_test"]
 	if len(specs) != 4 {

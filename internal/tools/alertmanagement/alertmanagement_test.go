@@ -413,9 +413,11 @@ func TestListMetricImages_KeysetAndCreatedAt(t *testing.T) {
 		t.Errorf("expected created_at 2024-01-02T03:04:05Z, got %q", out.Images[0].CreatedAt)
 	}
 	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=42"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("expected query to contain %q, got %q", want, gotQuery)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("expected query to contain %q, got %q", want, gotQuery)
+			}
+		})
 	}
 }
 

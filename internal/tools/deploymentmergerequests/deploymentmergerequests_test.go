@@ -350,9 +350,11 @@ func TestList_MergeRequestFilters(t *testing.T) {
 			"draft":           "true",
 		}
 		for key, want := range checks {
-			if got := q.Get(key); got != want {
-				t.Errorf("query %s = %q, want %q", key, got, want)
-			}
+			t.Run(key, func(t *testing.T) {
+				if got := q.Get(key); got != want {
+					t.Errorf("query %s = %q, want %q", key, got, want)
+				}
+			})
 		}
 		if got := q.Get("approver_ids[]"); got != "11" {
 			t.Errorf("approver_ids[] = %q, want 11", got)
@@ -430,9 +432,11 @@ func TestList_AdditionalMergeRequestFilters(t *testing.T) {
 			"non_archived":              "true",
 		}
 		for key, want := range checks {
-			if got := q.Get(key); got != want {
-				t.Errorf("query %s = %q, want %q", key, got, want)
-			}
+			t.Run(key, func(t *testing.T) {
+				if got := q.Get(key); got != want {
+					t.Errorf("query %s = %q, want %q", key, got, want)
+				}
+			})
 		}
 		if got := q.Get("updated_after"); !strings.HasPrefix(got, "2025-02-01") {
 			t.Errorf("updated_after = %q, want 2025-02-01 prefix", got)
@@ -651,9 +655,11 @@ func TestFormatListMarkdown_MultipleItems(t *testing.T) {
 		"fix-b -> develop",
 		"hotfix-c -> main",
 	} {
-		if !strings.Contains(text, want) {
-			t.Errorf("markdown missing %q:\n%s", want, text)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(text, want) {
+				t.Errorf("markdown missing %q:\n%s", want, text)
+			}
+		})
 	}
 }
 

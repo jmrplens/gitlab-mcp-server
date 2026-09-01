@@ -520,9 +520,11 @@ func TestFormatOutputMarkdown_Populated(t *testing.T) {
 		{"target", "**Target Issue**: IID 8 (project 20)"},
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c.want) {
-			t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
-		}
+		t.Run(c.label, func(t *testing.T) {
+			if !strings.Contains(md, c.want) {
+				t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
+			}
+		})
 	}
 }
 
@@ -571,9 +573,11 @@ func TestFormatListMarkdown_Populated(t *testing.T) {
 		{"row2 link type", "blocks"},
 	}
 	for _, c := range checks {
-		if !strings.Contains(md, c.want) {
-			t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
-		}
+		t.Run(c.label, func(t *testing.T) {
+			if !strings.Contains(md, c.want) {
+				t.Errorf("%s: missing %q in:\n%s", c.label, c.want, md)
+			}
+		})
 	}
 }
 

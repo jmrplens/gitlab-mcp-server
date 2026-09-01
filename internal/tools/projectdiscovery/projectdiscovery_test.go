@@ -310,9 +310,11 @@ func TestFormatMarkdown_OutputContainsProjectInfo(t *testing.T) {
 		"private",
 	}
 	for _, want := range checks {
-		if !contains(md, want) {
-			t.Errorf("FormatMarkdown() output missing %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !contains(md, want) {
+				t.Errorf("FormatMarkdown() output missing %q", want)
+			}
+		})
 	}
 }
 

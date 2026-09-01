@@ -594,8 +594,10 @@ func TestDownload_APIError(t *testing.T) {
 	}
 	errText := err.Error()
 	for _, want := range []string{"attestation_iid", "gitlab_attestation", "gitlab_list_attestations"} {
-		if !strings.Contains(errText, want) {
-			t.Fatalf("error missing %q: %v", want, err)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(errText, want) {
+				t.Fatalf("error missing %q: %v", want, err)
+			}
+		})
 	}
 }

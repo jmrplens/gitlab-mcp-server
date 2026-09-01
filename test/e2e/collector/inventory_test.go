@@ -311,9 +311,11 @@ func TestRealCollector_IdentityReachesSpansAndNeverMetrics(t *testing.T) {
 			t.Error("user.hash is present but empty, which correlates nothing while still claiming to")
 		}
 		for _, readable := range []string{"user.id", "user.name"} {
-			if value, leaked := attr(span.Attributes, readable); leaked {
-				t.Errorf("%s = %q under the pseudonymous policy; the whole point of the policy is that this key is not exported", readable, value)
-			}
+			t.Run(readable, func(t *testing.T) {
+				if value, leaked := attr(span.Attributes, readable); leaked {
+					t.Errorf("%s = %q under the pseudonymous policy; the whole point of the policy is that this key is not exported", readable, value)
+				}
+			})
 		}
 	})
 
@@ -325,9 +327,11 @@ func TestRealCollector_IdentityReachesSpansAndNeverMetrics(t *testing.T) {
 			t.Fatalf("the collector parsed no %s metric, so this assertion would pass vacuously", durationMetric)
 		}
 		for _, key := range []string{"user.hash", "user.id", "user.name"} {
-			if instrument := metricDimensionExists(t, c, key); instrument != "" {
-				t.Errorf("%q is a dimension of %s; identity must never reach a metric under any policy", key, instrument)
-			}
+			t.Run(key, func(t *testing.T) {
+				if instrument := metricDimensionExists(t, c, key); instrument != "" {
+					t.Errorf("%q is a dimension of %s; identity must never reach a metric under any policy", key, instrument)
+				}
+			})
 		}
 	})
 }

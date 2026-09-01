@@ -418,9 +418,11 @@ func TestFormatOutputMarkdown(t *testing.T) {
 
 	md := FormatOutputMarkdown(out)
 	for _, want := range []string{"ctrl-1", "enabled", "Created At", "Updated At"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q: %s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q: %s", want, md)
+			}
+		})
 	}
 
 	// Without timestamps
@@ -441,9 +443,11 @@ func TestFormatDetailsMarkdown(t *testing.T) {
 
 	md := FormatDetailsMarkdown(out)
 	for _, want := range []string{"ctrl-1", "Details", "true", "Created At"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q: %s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q: %s", want, md)
+			}
+		})
 	}
 
 	// Without timestamps
@@ -467,9 +471,11 @@ func TestFormatListMarkdown(t *testing.T) {
 
 	md := FormatListMarkdown(out)
 	for _, want := range []string{"ctrl-1", "ctrl-2", "enabled", "disabled"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q: %s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q: %s", want, md)
+			}
+		})
 	}
 
 	// Empty

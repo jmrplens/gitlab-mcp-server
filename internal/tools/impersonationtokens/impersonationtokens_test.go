@@ -647,9 +647,11 @@ func TestFormatListMarkdownString_WithTokens(t *testing.T) {
 		"| 2 | token-b | false | read_api | - |",
 	}
 	for _, want := range checks {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q\ngot:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -672,9 +674,11 @@ func TestFormatMarkdownString_AllOptionalFields(t *testing.T) {
 		"**Token**: `glpat-secret`",
 	}
 	for _, want := range checks {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q\ngot:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -714,9 +718,11 @@ func TestFormatPATMarkdownString_AllOptionalFields(t *testing.T) {
 		"**Token**: `glpat-fullpat`",
 	}
 	for _, want := range checks {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q\ngot:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -751,9 +757,11 @@ func TestFormatRevokeMarkdownString(t *testing.T) {
 		"**Token ID**: 7",
 	}
 	for _, want := range checks {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q\ngot:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q\ngot:\n%s", want, md)
+			}
+		})
 	}
 	if md == "" {
 		t.Fatal("expected non-empty markdown")

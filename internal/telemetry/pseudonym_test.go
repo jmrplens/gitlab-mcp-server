@@ -35,9 +35,11 @@ func TestResourcePseudonym_DoesNotContainTheURI(t *testing.T) {
 	// The distinctive part is the project id, and eight hex characters landing
 	// in the right order by chance is around one in four billion per position.
 	for _, fragment := range []string{"gitlab", "project", "82077663"} {
-		if strings.Contains(digest, fragment) {
-			t.Errorf("digest %q contains %q from the URI", digest, fragment)
-		}
+		t.Run(fragment, func(t *testing.T) {
+			if strings.Contains(digest, fragment) {
+				t.Errorf("digest %q contains %q from the URI", digest, fragment)
+			}
+		})
 	}
 	if strings.Contains(uri, digest) {
 		t.Errorf("digest %q is a substring of the URI it stands for", digest)

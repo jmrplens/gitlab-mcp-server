@@ -106,9 +106,11 @@ func TestList_PaginationAndOrdering(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=created_at", "sort=desc", "page=2", "per_page=50", "pagination=keyset", "page_token=100"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("expected query to contain %q, got %q", want, gotQuery)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("expected query to contain %q, got %q", want, gotQuery)
+			}
+		})
 	}
 }
 
@@ -462,9 +464,11 @@ func TestCreate_WithAllOptionalFields(t *testing.T) {
 		t.Errorf("expected notification, got %s", out.Message.BroadcastType)
 	}
 	for _, want := range []string{"starts_at", "ends_at", "font", "target_access_levels", "target_path", "broadcast_type", "dismissable", "theme"} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 

@@ -317,9 +317,11 @@ func TestListSharedProjects_AllFilters(t *testing.T) {
 		t.Fatalf("ListSharedProjects() error: %v", err)
 	}
 	for _, want := range []string{"order_by=name", "simple=true", "sort=asc", "starred=true", "visibility=private", "with_custom_attributes=true", "with_issues_enabled=true", "with_merge_requests_enabled=true"} {
-		if !strings.Contains(q, want) {
-			t.Errorf("query missing %q: %s", want, q)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(q, want) {
+				t.Errorf("query missing %q: %s", want, q)
+			}
+		})
 	}
 }
 

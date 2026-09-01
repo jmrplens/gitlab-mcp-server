@@ -77,9 +77,11 @@ func TestRedactor_FullUsesTheRegistryNames(t *testing.T) {
 		t.Errorf("%s = %q, want the username", AttrUserName, attrs[AttrUserName])
 	}
 	for _, forbidden := range []string{"enduser.id", "enduser.name", "enduser.pseudo_id"} {
-		if _, present := attrs[forbidden]; present {
-			t.Errorf("%s is emitted; it is either misspelled or invented inside a namespace we do not own", forbidden)
-		}
+		t.Run(forbidden, func(t *testing.T) {
+			if _, present := attrs[forbidden]; present {
+				t.Errorf("%s is emitted; it is either misspelled or invented inside a namespace we do not own", forbidden)
+			}
+		})
 	}
 }
 
@@ -193,9 +195,11 @@ func TestParseIdentityPolicy_RefusesAnUnknownValueByName(t *testing.T) {
 		t.Fatal("a misspelled policy was accepted")
 	}
 	for _, want := range []string{"pseudonimous", string(IdentityNone), string(IdentityPseudonymous), string(IdentityFull)} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("the error does not mention %q: %v", want, err)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("the error does not mention %q: %v", want, err)
+			}
+		})
 	}
 }
 
@@ -211,14 +215,16 @@ func TestParseIdentityPolicy_AcceptsTheSpellingsOperatorsWrite(t *testing.T) {
 		"Pseudonymous":   IdentityPseudonymous,
 		"PSEUDONYMOUS  ": IdentityPseudonymous,
 	} {
-		got, err := ParseIdentityPolicy(input)
-		if err != nil {
-			t.Errorf("ParseIdentityPolicy(%q): %v", input, err)
-			continue
-		}
-		if got != want {
-			t.Errorf("ParseIdentityPolicy(%q) = %q, want %q", input, got, want)
-		}
+		t.Run(input, func(t *testing.T) {
+			got, err := ParseIdentityPolicy(input)
+			if err != nil {
+				t.Errorf("ParseIdentityPolicy(%q): %v", input, err)
+				return
+			}
+			if got != want {
+				t.Errorf("ParseIdentityPolicy(%q) = %q, want %q", input, got, want)
+			}
+		})
 	}
 }
 
@@ -255,9 +261,11 @@ func TestPolicyDescription_SaysWhatEachPolicyExports(t *testing.T) {
 		// The words that would make it wrong: a default whose description
 		// mentioned a digest would be describing pseudonymous.
 		for _, wrong := range []string{"digest", "username", "user id"} {
-			if strings.Contains(descriptions[IdentityNone], wrong) {
-				t.Errorf("the default's description mentions %q: %q", wrong, descriptions[IdentityNone])
-			}
+			t.Run(wrong, func(t *testing.T) {
+				if strings.Contains(descriptions[IdentityNone], wrong) {
+					t.Errorf("the default's description mentions %q: %q", wrong, descriptions[IdentityNone])
+				}
+			})
 		}
 	})
 

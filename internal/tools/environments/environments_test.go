@@ -801,9 +801,11 @@ func TestToOutput_AllTimestampFields(t *testing.T) {
 		"| Updated | 15 Jun 2026 12:00 UTC |",
 		"| Auto-Stop At | 31 Dec 2026 23:59 UTC |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -859,9 +861,11 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 		"| Updated |",
 		"| Auto-Stop At |",
 	} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -896,9 +900,11 @@ func TestFormatListMarkdown_WithEnvironments(t *testing.T) {
 		"available",
 		"stopped",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1362,9 +1368,11 @@ func TestEnvironmentList_OrderBySortKeyset(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=name", "sort=desc", "pagination=keyset", "page_token=tok42"} {
-		if !strings.Contains(gotQuery, want) {
-			t.Errorf("query %q missing %q", gotQuery, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(gotQuery, want) {
+				t.Errorf("query %q missing %q", gotQuery, want)
+			}
+		})
 	}
 }
 
@@ -1397,9 +1405,11 @@ func TestEnvironmentCreate_NewOptionFields(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{`"cluster_agent_id":11`, `"kubernetes_namespace":"prod-ns"`, `"flux_resource_path":"flux/prod"`, `"auto_stop_setting":"with_action"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("request body %q missing %q", body, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(body, want) {
+				t.Errorf("request body %q missing %q", body, want)
+			}
+		})
 	}
 	if out.ClusterAgent == nil || out.ClusterAgent.ID != 11 {
 		t.Errorf("ClusterAgent = %#v", out.ClusterAgent)
@@ -1435,9 +1445,11 @@ func TestEnvironmentUpdate_NewOptionFields(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{`"cluster_agent_id":11`, `"kubernetes_namespace":"prod-ns"`, `"flux_resource_path":"flux/prod"`, `"auto_stop_setting":"with_action"`} {
-		if !strings.Contains(body, want) {
-			t.Errorf("request body %q missing %q", body, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(body, want) {
+				t.Errorf("request body %q missing %q", body, want)
+			}
+		})
 	}
 }
 

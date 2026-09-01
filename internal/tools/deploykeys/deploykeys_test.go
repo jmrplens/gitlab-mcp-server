@@ -889,9 +889,11 @@ func TestFormatOutputMarkdown_AllFields(t *testing.T) {
 		"| Created | 1 Jan 2026 00:00 UTC |",
 		"| Expires | 1 Jan 2027 00:00 UTC |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -908,9 +910,11 @@ func TestFormatOutputMarkdown_MinimalFields(t *testing.T) {
 		t.Errorf("missing header:\n%s", md)
 	}
 	for _, absent := range []string{"Fingerprint", "SHA256", "Created", "Expires"} {
-		if strings.Contains(md, "| "+absent+" |") {
-			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, "| "+absent+" |") {
+				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -939,9 +943,11 @@ func TestFormatListMarkdown_WithKeys(t *testing.T) {
 		"key-a",
 		"key-b",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -995,9 +1001,11 @@ func TestFormatInstanceOutputMarkdown_AllFields(t *testing.T) {
 		"### Projects with Readonly Access",
 		"| 200 | proj-r | group/proj-r |",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1014,9 +1022,11 @@ func TestFormatInstanceOutputMarkdown_MinimalFields(t *testing.T) {
 		t.Errorf("missing header:\n%s", md)
 	}
 	for _, absent := range []string{"Fingerprint", "SHA256", "Created", "Expires", "Write Access", "Readonly Access"} {
-		if strings.Contains(md, absent) {
-			t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
-		}
+		t.Run(absent, func(t *testing.T) {
+			if strings.Contains(md, absent) {
+				t.Errorf("should not contain %q for minimal output:\n%s", absent, md)
+			}
+		})
 	}
 }
 
@@ -1045,9 +1055,11 @@ func TestFormatInstanceListMarkdown_WithKeys(t *testing.T) {
 		"inst-a",
 		"inst-b",
 	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown missing %q:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("markdown missing %q:\n%s", want, md)
+			}
+		})
 	}
 }
 
@@ -1414,9 +1426,11 @@ func TestListProject_OrderingAndKeyset(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=created_at", "sort=desc", "pagination=keyset", "page_token=tok"} {
-		if !strings.Contains(query, want) {
-			t.Errorf("query %q missing %q", query, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(query, want) {
+				t.Errorf("query %q missing %q", query, want)
+			}
+		})
 	}
 }
 
@@ -1442,9 +1456,11 @@ func TestListAll_OrderingAndKeyset(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=title", "sort=asc", "pagination=keyset", "page_token=tok"} {
-		if !strings.Contains(query, want) {
-			t.Errorf("query %q missing %q", query, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(query, want) {
+				t.Errorf("query %q missing %q", query, want)
+			}
+		})
 	}
 }
 
@@ -1471,8 +1487,10 @@ func TestListUserProject_OrderingAndKeyset(t *testing.T) {
 		t.Fatalf(fmtUnexpErr, err)
 	}
 	for _, want := range []string{"order_by=id", "sort=desc", "pagination=keyset", "page_token=tok"} {
-		if !strings.Contains(query, want) {
-			t.Errorf("query %q missing %q", query, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(query, want) {
+				t.Errorf("query %q missing %q", query, want)
+			}
+		})
 	}
 }

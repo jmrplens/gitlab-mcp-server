@@ -86,9 +86,11 @@ func TestListDynamicTools_ExposesTwoTools(t *testing.T) {
 	}
 	sort.Strings(names)
 	for _, want := range []string{"gitlab_execute_action", "gitlab_find_action"} {
-		if !slices.Contains(names, want) {
-			t.Fatalf("listDynamicTools() names = %v, missing %q", names, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !slices.Contains(names, want) {
+				t.Fatalf("listDynamicTools() names = %v, missing %q", names, want)
+			}
+		})
 	}
 }
 
@@ -199,9 +201,11 @@ func TestPrintDynamicSearchMetrics_IncludesAllSurfaces(t *testing.T) {
 		"Dynamic aliases ambiguous (GitLab.com enterprise)",
 		"18",
 	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("printDynamicSearchMetrics() output missing %q:\n%s", want, output)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Fatalf("printDynamicSearchMetrics() output missing %q:\n%s", want, output)
+			}
+		})
 	}
 }
 
@@ -269,9 +273,11 @@ func TestPrintEnterpriseActionSpecAudit_IncludesMissingSpecZeroSection(t *testin
 		"Enterprise actions missing ActionSpec (0)",
 		"none",
 	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("printEnterpriseActionSpecAudit() output missing %q:\n%s", want, output)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Fatalf("printEnterpriseActionSpecAudit() output missing %q:\n%s", want, output)
+			}
+		})
 	}
 }
 
@@ -420,9 +426,11 @@ func TestPrintActionIDList_ListsAllIDs(t *testing.T) {
 	})
 
 	for _, want := range []string{"alpha.list", "beta.get", "gamma.create"} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("printActionIDList() missing %q:\n%s", want, output)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Fatalf("printActionIDList() missing %q:\n%s", want, output)
+			}
+		})
 	}
 }
 
@@ -483,9 +491,11 @@ func TestPrintDomainTable_FewerThan20DomainsPrintsAll(t *testing.T) {
 	})
 
 	for _, want := range []string{"alpha", "beta", "gamma"} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("printDomainTable() missing %q:\n%s", want, output)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Fatalf("printDomainTable() missing %q:\n%s", want, output)
+			}
+		})
 	}
 	if strings.Contains(output, "and") {
 		t.Fatalf("printDomainTable() should not show overflow:\n%s", output)
@@ -531,9 +541,11 @@ func TestPrintMetaSchemaModes_ListsActiveAndAllModes(t *testing.T) {
 		"mode",
 		"total bytes",
 	} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("printMetaSchemaModes() missing %q:\n%s", want, output)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(output, want) {
+				t.Fatalf("printMetaSchemaModes() missing %q:\n%s", want, output)
+			}
+		})
 	}
 }
 

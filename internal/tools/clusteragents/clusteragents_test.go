@@ -518,9 +518,11 @@ func TestListAgents_KeysetAndOrdering(t *testing.T) {
 		for key, want := range map[string]string{
 			"pagination": "keyset", "page_token": "42", "order_by": "id", "sort": "desc",
 		} {
-			if got := q.Get(key); got != want {
-				t.Errorf("query %s = %q, want %q", key, got, want)
-			}
+			t.Run(key, func(t *testing.T) {
+				if got := q.Get(key); got != want {
+					t.Errorf("query %s = %q, want %q", key, got, want)
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"agent1","created_at":"2024-01-02T03:04:05Z","created_by_user_id":10,"config_project":{"id":99,"name":"cfg","path_with_namespace":"grp/cfg","created_at":"2023-01-01T00:00:00Z"}}]`)
 	}))
@@ -562,9 +564,11 @@ func TestListAgentTokens_KeysetAndOrdering(t *testing.T) {
 		for key, want := range map[string]string{
 			"pagination": "keyset", "page_token": "7", "order_by": "id", "sort": "asc",
 		} {
-			if got := q.Get(key); got != want {
-				t.Errorf("query %s = %q, want %q", key, got, want)
-			}
+			t.Run(key, func(t *testing.T) {
+				if got := q.Get(key); got != want {
+					t.Errorf("query %s = %q, want %q", key, got, want)
+				}
+			})
 		}
 		testutil.RespondJSON(w, http.StatusOK, `[{"id":1,"name":"tok","agent_id":5,"status":"active","created_at":"2024-02-03T04:05:06Z","created_by_user_id":11,"last_used_at":"2024-03-04T05:06:07Z"}]`)
 	}))
@@ -623,9 +627,11 @@ func TestFormatAgentMarkdown_Content(t *testing.T) {
 		ConfigProject:   ConfigProjectOutput{ID: 99, Name: "cfg", PathWithNamespace: "grp/cfg"},
 	})
 	for _, want := range []string{"test-agent", "2024-01-02T03:04:05Z", "grp/cfg", "Created By User ID"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("expected %q in markdown, got: %s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("expected %q in markdown, got: %s", want, md)
+			}
+		})
 	}
 }
 
@@ -646,9 +652,11 @@ func TestFormatTokenMarkdown_AllFields(t *testing.T) {
 		Description: "desc", CreatedAt: "2024-02-03T04:05:06Z", LastUsedAt: "2024-03-04T05:06:07Z",
 	})
 	for _, want := range []string{"desc", "2024-02-03T04:05:06Z", "2024-03-04T05:06:07Z"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("expected %q in markdown, got: %s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("expected %q in markdown, got: %s", want, md)
+			}
+		})
 	}
 }
 
@@ -693,9 +701,11 @@ func TestActionSpecs_Metadata(t *testing.T) {
 		t.Fatalf("unique individual tools = %d, want %d", len(byTool), len(specs))
 	}
 	for _, toolName := range []string{"gitlab_delete_cluster_agent", "gitlab_revoke_cluster_agent_token"} {
-		if !byTool[toolName].Route.Destructive {
-			t.Fatalf("%s should be destructive", toolName)
-		}
+		t.Run(toolName, func(t *testing.T) {
+			if !byTool[toolName].Route.Destructive {
+				t.Fatalf("%s should be destructive", toolName)
+			}
+		})
 	}
 	if byTool["gitlab_list_cluster_agents"].Usage == "" {
 		t.Fatal("gitlab_list_cluster_agents should define usage")

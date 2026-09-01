@@ -261,9 +261,11 @@ func TestOAuth_RejectedTokenSaysInvalidToken(t *testing.T) {
 	}
 	challenge := got.header.Get("WWW-Authenticate")
 	for _, want := range []string{`error="invalid_token"`, "error_description=", "resource_metadata="} {
-		if !strings.Contains(challenge, want) {
-			t.Errorf("challenge %q is missing %s", challenge, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(challenge, want) {
+				t.Errorf("challenge %q is missing %s", challenge, want)
+			}
+		})
 	}
 }
 

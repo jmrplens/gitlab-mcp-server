@@ -63,9 +63,11 @@ func TestTelemetry_ServerCardAnnouncesItWithoutNamingTheCollector(t *testing.T) 
 		t.Error("the telemetry block does not report itself enabled")
 	}
 	for _, key := range []string{"signals", "recorded", "not_recorded"} {
-		if _, present := block[key]; !present {
-			t.Errorf("the telemetry block has no %q; announcing without saying what is captured is not announcing", key)
-		}
+		t.Run(key, func(t *testing.T) {
+			if _, present := block[key]; !present {
+				t.Errorf("the telemetry block has no %q; announcing without saying what is captured is not announcing", key)
+			}
+		})
 	}
 }
 

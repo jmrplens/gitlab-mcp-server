@@ -714,9 +714,11 @@ func TestSetJira_WithAllOptionalFields(t *testing.T) {
 		"jira_check_enabled", "jira_exists_check_enabled", "jira_assignee_check_enabled", "jira_status_check_enabled",
 		"jira_allowed_statuses_as_string",
 	} {
-		if !strings.Contains(capturedBody, want) {
-			t.Errorf("request body missing field %q", want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(capturedBody, want) {
+				t.Errorf("request body missing field %q", want)
+			}
+		})
 	}
 }
 
@@ -912,9 +914,11 @@ func TestIntegrationFromService_Branches(t *testing.T) {
 func TestFormatSetJiraMarkdown_RendersUpdateAndHints(t *testing.T) {
 	md := formatSetJiraMarkdownString(SetJiraOutput{Integration: IntegrationItem{Slug: "jira", Active: true}})
 	for _, want := range []string{"Jira Integration Updated", "write-only"} {
-		if !strings.Contains(md, want) {
-			t.Errorf("formatSetJiraMarkdownString missing %q in:\n%s", want, md)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(md, want) {
+				t.Errorf("formatSetJiraMarkdownString missing %q in:\n%s", want, md)
+			}
+		})
 	}
 }
 

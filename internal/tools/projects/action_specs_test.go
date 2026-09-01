@@ -259,9 +259,11 @@ func TestLegacyOutputWrappers_ReturnMessages(t *testing.T) {
 func TestProjectOptions_PushRuleAddGuidance(t *testing.T) {
 	options := projectOptions("gitlab_project_add_push_rule", "push_rule")
 	for _, want := range []string{"at least one rule-setting parameter", "commit_message_regex", "project_id alone"} {
-		if !strings.Contains(options.Usage, want) {
-			t.Fatalf("Usage = %q, want %q", options.Usage, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(options.Usage, want) {
+				t.Fatalf("Usage = %q, want %q", options.Usage, want)
+			}
+		})
 	}
 	if _, ok := options.ParameterGuidance["commit_message_regex"]; !ok {
 		t.Fatalf("ParameterGuidance = %#v, want commit_message_regex guidance", options.ParameterGuidance)
@@ -278,9 +280,11 @@ func TestActionSpecs_ProjectGetAndListGuidance(t *testing.T) {
 
 	getSpec := projectActionSpecByTool(t, specs, "gitlab_project_get")
 	for _, want := range []string{"exact project", "group/project", "Do not use search.projects"} {
-		if !strings.Contains(getSpec.Usage, want) {
-			t.Fatalf("get Usage = %q, want %q", getSpec.Usage, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(getSpec.Usage, want) {
+				t.Fatalf("get Usage = %q, want %q", getSpec.Usage, want)
+			}
+		})
 	}
 	if guidance := getSpec.ParameterGuidance["project_id"]; guidance.SemanticRole != "scope_project" || !strings.Contains(guidance.ValueSource, "full namespace path") {
 		t.Fatalf("project_id guidance = %+v, want namespace path guidance", guidance)

@@ -39,9 +39,11 @@ func TestFormatPublishMarkdown_WithChecksumAndURL(t *testing.T) {
 		"**URL**: [https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/app.tar.gz](https://gitlab.example.com/api/v4/projects/1/packages/generic/pkg/1.0.0/app.tar.gz)",
 		"publish_and_link",
 	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("FormatPublishMarkdown() = %q, want %q", got, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("FormatPublishMarkdown() = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -58,9 +60,11 @@ func TestFormatDownloadMarkdown_WithChecksum(t *testing.T) {
 		"**SHA256**: abcdef",
 		"file_list",
 	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("FormatDownloadMarkdown() = %q, want %q", got, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("FormatDownloadMarkdown() = %q, want %q", got, want)
+			}
+		})
 	}
 }
 
@@ -89,9 +93,11 @@ func TestFormatPublishAndLinkMarkdown_RendersBothSections(t *testing.T) {
 		"**Name**: app.tar.gz",
 		"**URL**: [https://gitlab.example.com/release/app.tar.gz](https://gitlab.example.com/release/app.tar.gz)",
 	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("FormatPublishAndLinkMarkdown() = %q, want %q", got, want)
-		}
+		t.Run(want, func(t *testing.T) {
+			if !strings.Contains(got, want) {
+				t.Fatalf("FormatPublishAndLinkMarkdown() = %q, want %q", got, want)
+			}
+		})
 	}
 }
 

@@ -72,12 +72,14 @@ func TestNewTransport_TheGitLabCallIsAChildSpanThatNamesNoURL(t *testing.T) {
 		// carries the project path and often the query, which is why the whole
 		// URL is left out and the host kept.
 		for _, forbidden := range []string{"url.full", "url.path", "url.query"} {
-			for _, kv := range span.Attributes() {
-				if string(kv.Key) == forbidden {
-					t.Errorf("the span carries %s = %q; a GitLab URL names the project and can carry a search term",
-						forbidden, kv.Value.AsString())
+			t.Run(forbidden, func(t *testing.T) {
+				for _, kv := range span.Attributes() {
+					if string(kv.Key) == forbidden {
+						t.Errorf("the span carries %s = %q; a GitLab URL names the project and can carry a search term",
+							forbidden, kv.Value.AsString())
+					}
 				}
-			}
+			})
 		}
 	})
 
@@ -234,12 +236,14 @@ func TestServerPort_SchemeDefaultsCollapse(t *testing.T) {
 		"http://gitlab.example.com":       80,
 		"https://gitlab.example.com:8443": 8443,
 	} {
-		parsed, err := url.Parse(raw)
-		if err != nil {
-			t.Fatalf("parsing %q: %v", raw, err)
-		}
-		if got := serverPort(parsed); got != want {
-			t.Errorf("serverPort(%q) = %d, want %d", raw, got, want)
-		}
+		t.Run(raw, func(t *testing.T) {
+			parsed, err := url.Parse(raw)
+			if err != nil {
+				t.Fatalf("parsing %q: %v", raw, err)
+			}
+			if got := serverPort(parsed); got != want {
+				t.Errorf("serverPort(%q) = %d, want %d", raw, got, want)
+			}
+		})
 	}
 }

@@ -463,16 +463,20 @@ func TestActionSpecs(t *testing.T) {
 		t.Fatal("gitlab_project_service_account_list should be read-only")
 	}
 	for _, toolName := range []string{"gitlab_project_service_account_delete", "gitlab_project_service_account_pat_revoke"} {
-		if !byTool[toolName].Destructive || !byTool[toolName].Route.Destructive {
-			t.Fatalf("%s should be destructive", toolName)
-		}
+		t.Run(toolName, func(t *testing.T) {
+			if !byTool[toolName].Destructive || !byTool[toolName].Route.Destructive {
+				t.Fatalf("%s should be destructive", toolName)
+			}
+		})
 	}
 	for _, spec := range specs {
 		description := spec.IndividualTool.Description
 		for _, want := range []string{"Returns:", "See also:"} {
-			if !strings.Contains(description, want) {
-				t.Fatalf("%s description = %q, want %q", spec.IndividualTool.Name, description, want)
-			}
+			t.Run(want, func(t *testing.T) {
+				if !strings.Contains(description, want) {
+					t.Fatalf("%s description = %q, want %q", spec.IndividualTool.Name, description, want)
+				}
+			})
 		}
 	}
 

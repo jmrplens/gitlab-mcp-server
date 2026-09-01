@@ -175,9 +175,11 @@ func TestSubscribe_AtCapacity_IsRejected(t *testing.T) {
 		"gitlab://project/42/pipeline/1",
 		"gitlab://project/42/pipeline/2",
 	} {
-		if err := m.Subscribe(ctx, subA, uri); err != nil {
-			t.Fatalf("Subscribe(#%d) error: %v", i, err)
-		}
+		t.Run(uri, func(t *testing.T) {
+			if err := m.Subscribe(ctx, subA, uri); err != nil {
+				t.Fatalf("Subscribe(#%d) error: %v", i, err)
+			}
+		})
 	}
 
 	err := m.Subscribe(ctx, subA, "gitlab://project/42/pipeline/3")
@@ -269,14 +271,18 @@ func TestUnsubscribeAll_SubscriberLeaves_StopsOnlyItsWatchers(t *testing.T) {
 	shared := "gitlab://project/42/pipeline/2"
 	theirs := "gitlab://project/42/pipeline/3"
 	for _, uri := range []string{mine, shared} {
-		if err := m.Subscribe(ctx, subA, uri); err != nil {
-			t.Fatalf("Subscribe(%s): %v", uri, err)
-		}
+		t.Run(uri, func(t *testing.T) {
+			if err := m.Subscribe(ctx, subA, uri); err != nil {
+				t.Fatalf("Subscribe(%s): %v", uri, err)
+			}
+		})
 	}
 	for _, uri := range []string{shared, theirs} {
-		if err := m.Subscribe(ctx, subB, uri); err != nil {
-			t.Fatalf("Subscribe(%s): %v", uri, err)
-		}
+		t.Run(uri, func(t *testing.T) {
+			if err := m.Subscribe(ctx, subB, uri); err != nil {
+				t.Fatalf("Subscribe(%s): %v", uri, err)
+			}
+		})
 	}
 
 	if stopped := m.UnsubscribeAll(subA); stopped != 1 {
@@ -295,9 +301,11 @@ func TestUnsubscribe_LastSubscriberLeaves_StopsWatcher(t *testing.T) {
 	ctx := context.Background()
 
 	for _, subscriber := range []string{subA, subB} {
-		if err := m.Subscribe(ctx, subscriber, testURI); err != nil {
-			t.Fatalf("Subscribe: %v", err)
-		}
+		t.Run(subscriber, func(t *testing.T) {
+			if err := m.Subscribe(ctx, subscriber, testURI); err != nil {
+				t.Fatalf("Subscribe: %v", err)
+			}
+		})
 	}
 
 	if err := m.Unsubscribe(subA, testURI); err != nil {
@@ -1276,9 +1284,11 @@ func TestSubscribe_AtCapacity_AllActive_IsStillRejected(t *testing.T) {
 	ctx := context.Background()
 
 	for _, uri := range []string{"gitlab://project/42/pipeline/1", "gitlab://project/42/pipeline/2"} {
-		if err := m.Subscribe(ctx, subA, uri); err != nil {
-			t.Fatalf("Subscribe(%s): %v", uri, err)
-		}
+		t.Run(uri, func(t *testing.T) {
+			if err := m.Subscribe(ctx, subA, uri); err != nil {
+				t.Fatalf("Subscribe(%s): %v", uri, err)
+			}
+		})
 	}
 
 	err := m.Subscribe(ctx, subA, testURI)
