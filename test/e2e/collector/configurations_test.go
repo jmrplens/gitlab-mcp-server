@@ -321,3 +321,38 @@ func digestsFromTwoServers(t *testing.T, extra map[string]string) []string {
 	sort.Strings(out)
 	return out
 }
+
+// TestRealCollector_TheKeyChoiceIsVisibleToAnOperator covers the line an
+// operator reads to confirm a setting took effect, in the place they read it.
+//
+// The hosted deployment showed the setting working, two processes agreeing on a
+// digest, while the line announcing it appeared in no exported log record. A
+// setting that works and cannot be confirmed is a setting somebody will
+// configure twice, or will believe is on when a typo turned it off.
+//
+// Both legs are checked, because they can disagree and did: stderr is where the
+// line is written and the collector is where an operator running three replicas
+// actually looks.
+func TestRealCollector_TheKeyChoiceIsVisibleToAnOperator(t *testing.T) {
+	c, srv := driveDynamic(t, map[string]string{
+		"GITLAB_MCP_TELEMETRY_IDENTITY":     "pseudonymous",
+		"GITLAB_MCP_TELEMETRY_IDENTITY_KEY": "a deployment-wide secret",
+	})
+
+	const line = "telemetry pseudonyms use the configured key"
+
+	t.Run("the server writes it", func(t *testing.T) {
+		if logs := srv.logs(); !strings.Contains(logs, line) {
+			t.Errorf("the server never announced the configured key.\nServer:\n%s", logs)
+		}
+	})
+
+	t.Run("the collector receives it", func(t *testing.T) {
+		if _, ok := c.awaitLog(t, exportDeadline, func(r otlpLogRecord) bool {
+			return strings.Contains(r.Body.StringValue, line)
+		}); !ok {
+			t.Errorf("the line reached stderr and not the collector, which is where an operator running replicas looks.\nCollector:\n%s",
+				c.containerLogs(t))
+		}
+	})
+}
