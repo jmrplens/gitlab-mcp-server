@@ -58,12 +58,12 @@ func projectAliasOptions(individualTool string) toolutil.ActionSpecOptions {
 	var description string
 	switch individualTool {
 	case "gitlab_list_project_aliases":
-		usage = "List project aliases visible in the configured scope (admin-only). The response includes the alias `name` and the `project_id` it points to. Pass one of the returned `name` values to project_alias.get to fetch full details. This action does not accept per_page or page — it returns the full set."
+		usage = "List project aliases visible in the configured scope (admin-only). The response includes the alias `name` and the `project_id` it points to. Pass one of the returned `name` values to project_alias.get to fetch full details. This action does not accept per_page or page. It returns the full set."
 		related = []string{relatedProjectAliasGet}
 		aliases = []string{"list project aliases", "show all project aliases", "enumerate project aliases"}
 		description = "List every project alias the authenticated administrator can see. Returns: each alias with id, project_id, and name (the full set. No pagination). See also: gitlab_get_project_alias, gitlab_create_project_alias, gitlab_delete_project_alias."
 	case "gitlab_get_project_alias":
-		usage = "Get details (id, project_id, name) for one project alias by its `name` (the path-style alias string, e.g. `e2e-enterprise-alias`). The name must come from a prior project_alias.list response or be supplied verbatim by the prompt — this action does not search or accept partial names."
+		usage = "Get details (id, project_id, name) for one project alias by its `name` (the path-style alias string, e.g. `e2e-enterprise-alias`). The name must come from a prior project_alias.list response or be supplied verbatim by the prompt. This action does not search or accept partial names."
 		related = []string{relatedProjectAliasList}
 		aliases = []string{"get project alias details", "resolve project alias", "look up project alias"}
 		guidance = map[string]toolutil.ParameterGuidance{

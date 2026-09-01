@@ -340,7 +340,7 @@ type MergeInput struct {
 	ShouldRemoveSourceBranch  *bool                `json:"should_remove_source_branch,omitempty"   jsonschema:"Delete source branch after merge. Only set if explicitly requested by the user. Omit to preserve repository defaults"`
 	AutoMerge                 *bool                `json:"auto_merge,omitempty"                     jsonschema:"Automatically merge when pipeline succeeds (auto-merge)"`
 	MergeWhenPipelineSucceeds *bool                `json:"merge_when_pipeline_succeeds,omitempty"   jsonschema:"Deprecated alias for auto_merge: merge when the pipeline succeeds. Prefer auto_merge"`
-	SHA                       string               `json:"sha,omitempty"                            jsonschema:"Head SHA of the merge request — merge only if HEAD matches (safety check)"`
+	SHA                       string               `json:"sha,omitempty"                            jsonschema:"Head SHA of the merge request. Merge only if HEAD matches (safety check)"`
 	SquashCommitMessage       string               `json:"squash_commit_message,omitempty"          jsonschema:"Custom squash commit message (used when squash is enabled)"`
 }
 
@@ -348,7 +348,7 @@ type MergeInput struct {
 type ApproveInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	MRIID     int64                `json:"merge_request_iid"     jsonschema:"Merge request IID (project-scoped, not 'merge_request_id'),required"`
-	SHA       string               `json:"sha,omitempty"         jsonschema:"Head SHA of the merge request — approve only if HEAD matches (safety check, applies to approve only)"`
+	SHA       string               `json:"sha,omitempty"         jsonschema:"Head SHA of the merge request. Approve only if HEAD matches (safety check, applies to approve only)"`
 }
 
 // ApproveOutput holds the approval state after approve/unapprove.
@@ -2074,7 +2074,7 @@ func diagnoseMergeBlocker(mrIID int64, mr *gl.MergeRequest, originalErr error) e
 		return toolutil.WrapErrWithMessage(op, originalErr)
 	}
 
-	return fmt.Errorf("%s: merge request !%d cannot be merged — %s: %w",
+	return fmt.Errorf("%s: merge request !%d cannot be merged (%s): %w",
 		op, mrIID, strings.Join(reasons, "; "), originalErr)
 }
 

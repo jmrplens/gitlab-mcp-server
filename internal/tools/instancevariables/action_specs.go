@@ -61,7 +61,7 @@ func instanceVariableOptions(actionName, individualTool string) toolutil.ActionS
 		options.Usage = "List instance-level CI/CD variables with order_by, sort, and offset or keyset pagination. Admin-only. Use to inspect the instance variable inventory before get/update/delete actions."
 		options.Aliases = []string{individualTool, "list instance variables", "show instance variables", "find instance ci variables"}
 		options.RelatedActions = []string{actionInstanceVariableGet, "instancevariables.instance_create", actionInstanceVariableUpdate, actionInstanceVariableDelete}
-		options.IndividualTool.Description = "List instance-level CI/CD variables with order_by, sort, and offset or keyset pagination (admin-only). Returns: each variable's key, value (raw even when masked — masking redacts CI job logs, not this API), type, protected/masked/raw flags, description, and pagination metadata. See also: gitlab_instance_variable_get, gitlab_instance_variable_create, gitlab_instance_variable_update, gitlab_instance_variable_delete."
+		options.IndividualTool.Description = "List instance-level CI/CD variables with order_by, sort, and offset or keyset pagination (admin-only). Returns: each variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, description, and pagination metadata. See also: gitlab_instance_variable_get, gitlab_instance_variable_create, gitlab_instance_variable_update, gitlab_instance_variable_delete."
 	case "instance_get":
 		options.Usage = "Get one instance-level CI/CD variable by key. Admin-only. Use when exact variable settings are needed."
 		options.Aliases = []string{individualTool, "get instance variable", "show instance variable details", "lookup instance variable"}
@@ -73,7 +73,7 @@ func instanceVariableOptions(actionName, individualTool string) toolutil.ActionS
 				ExampleBinding: `params.key:"DEPLOY_TOKEN"`,
 			},
 		}
-		options.IndividualTool.Description = "Get a single instance-level CI/CD variable by key (admin-only). Returns: the variable's key, value (raw even when masked — masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_list, gitlab_instance_variable_update, gitlab_instance_variable_delete."
+		options.IndividualTool.Description = "Get a single instance-level CI/CD variable by key (admin-only). Returns: the variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_list, gitlab_instance_variable_update, gitlab_instance_variable_delete."
 	case "instance_create":
 		options.Usage = "Create an instance-level CI/CD variable. Admin-only. Use for instance-wide pipeline/runtime configuration that should not be stored in repository files."
 		options.Aliases = []string{individualTool, "create instance variable", "add instance variable", "new instance ci variable"}
@@ -90,12 +90,12 @@ func instanceVariableOptions(actionName, individualTool string) toolutil.ActionS
 				ExampleBinding: `params.value:"example-value"`,
 			},
 		}
-		options.IndividualTool.Description = "Create an instance-level CI/CD variable with type and protected/masked/raw flags (admin-only). Returns: the created variable's key, value (raw even when masked — masking redacts CI job logs, not this API), type, flags, and description. See also: gitlab_instance_variable_list, gitlab_instance_variable_get, gitlab_instance_variable_update."
+		options.IndividualTool.Description = "Create an instance-level CI/CD variable with type and protected/masked/raw flags (admin-only). Returns: the created variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, flags, and description. See also: gitlab_instance_variable_list, gitlab_instance_variable_get, gitlab_instance_variable_update."
 	case "instance_update":
 		options.Usage = "Update an instance-level CI/CD variable by key. Admin-only."
 		options.Aliases = []string{individualTool, "update instance variable", "edit instance variable", "change instance ci variable"}
 		options.RelatedActions = []string{actionInstanceVariableGet, actionInstanceVariableList, actionInstanceVariableDelete}
-		options.IndividualTool.Description = "Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only). Returns: the updated variable's key, value (raw even when masked — masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_get, gitlab_instance_variable_list, gitlab_instance_variable_delete."
+		options.IndividualTool.Description = "Update an instance-level CI/CD variable by key, with type and protected/masked/raw flags (admin-only). Returns: the updated variable's key, value (raw even when masked, because masking redacts CI job logs, not this API), type, protected/masked/raw flags, and description. See also: gitlab_instance_variable_get, gitlab_instance_variable_list, gitlab_instance_variable_delete."
 	case "instance_delete":
 		options.Usage = "Delete an instance-level CI/CD variable by key. Admin-only."
 		options.Aliases = []string{individualTool, "delete instance variable", "remove instance variable", "drop instance ci variable"}

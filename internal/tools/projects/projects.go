@@ -1079,7 +1079,7 @@ func Create(ctx context.Context, client *gitlabclient.Client, input CreateInput)
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
 			return Output{}, toolutil.WrapErrWithHint("projectCreate", err, "check that the project name/path is unique in the target namespace and all required fields are valid")
 		case toolutil.IsHTTPStatus(err, http.StatusConflict):
-			return Output{}, toolutil.WrapErrWithHint("projectCreate", err, "a project with this name already exists in the namespace — use gitlab_project_list to verify")
+			return Output{}, toolutil.WrapErrWithHint("projectCreate", err, "a project with this name already exists in the namespace. Use gitlab_project_list to verify")
 		default:
 			return Output{}, toolutil.WrapErrWithMessage("projectCreate", err)
 		}
@@ -1675,7 +1675,7 @@ func Update(ctx context.Context, client *gitlabclient.Client, input UpdateInput)
 	if err != nil {
 		switch {
 		case toolutil.IsHTTPStatus(err, http.StatusBadRequest):
-			return Output{}, toolutil.WrapErrWithHint("projectUpdate", err, "check that the project settings are valid — name/path must be unique in the namespace")
+			return Output{}, toolutil.WrapErrWithHint("projectUpdate", err, "check that the project settings are valid. Name and path must be unique in the namespace")
 		case toolutil.IsHTTPStatus(err, http.StatusForbidden):
 			return Output{}, toolutil.WrapErrWithHint("projectUpdate", err, "you need at least Maintainer role to update project settings")
 		default:
@@ -1743,7 +1743,7 @@ func Fork(ctx context.Context, client *gitlabclient.Client, input ForkInput) (Ou
 	p, _, err := client.GL().Projects.ForkProject(string(input.ProjectID), opts, gl.WithContext(ctx))
 	if err != nil {
 		if toolutil.IsHTTPStatus(err, http.StatusConflict) {
-			return Output{}, toolutil.WrapErrWithHint("projectFork", err, "a fork of this project already exists in your namespace — use gitlab_project_list to find it")
+			return Output{}, toolutil.WrapErrWithHint("projectFork", err, "a fork of this project already exists in your namespace. Use gitlab_project_list to find it")
 		}
 		return Output{}, toolutil.WrapErrWithMessage("projectFork", err)
 	}
@@ -2870,7 +2870,7 @@ func ShareProjectWithGroup(ctx context.Context, client *gitlabclient.Client, inp
 		return ShareProjectOutput{}, errors.New("projectShareWithGroup: group_id is required. Use gitlab_group_list to find the group ID")
 	}
 	if input.GroupAccess == 0 {
-		return ShareProjectOutput{}, errors.New("projectShareWithGroup: group_access is required. Valid levels: 10 (Guest), 20 (Reporter), 30 (Developer), 40 (Maintainer) — 25 (Security Manager) is not valid for project shares")
+		return ShareProjectOutput{}, errors.New("projectShareWithGroup: group_access is required. Valid levels: 10 (Guest), 20 (Reporter), 30 (Developer), 40 (Maintainer). Level 25 (Security Manager) is not valid for project shares")
 	}
 	opts := &gl.ShareWithGroupOptions{
 		GroupID:     new(input.GroupID),
@@ -3523,8 +3523,8 @@ func DeleteCustomHeader(ctx context.Context, client *gitlabclient.Client, input 
 type SetWebhookURLVariableInput struct {
 	ProjectID toolutil.StringOrInt `json:"project_id" jsonschema:"Project ID or URL-encoded path,required"`
 	HookID    int64                `json:"hook_id" jsonschema:"Webhook ID,required"`
-	Key       string               `json:"key" jsonschema:"URL variable key name — letters and underscores only. GitLab rejects keys containing digits,required"`
-	Value     string               `json:"value" jsonschema:"URL variable value — must be non-empty,required"`
+	Key       string               `json:"key" jsonschema:"URL variable key name. Letters and underscores only. GitLab rejects keys containing digits,required"`
+	Value     string               `json:"value" jsonschema:"URL variable value. Must be non-empty,required"`
 }
 
 // SetWebhookURLVariable sets a URL variable on a project webhook.

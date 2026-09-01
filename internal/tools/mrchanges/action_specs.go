@@ -106,7 +106,7 @@ var mrChangeActionMeta = map[string]mrChangeActionMetaEntry{
 		},
 	},
 	"gitlab_mr_diff_versions_list": {
-		usage:   "List the diff versions (historical snapshots) of a merge request. Use when the prompt asks for the MR's diff revisions or version history. Returns version IDs and SHAs but not the diffs themselves — pass a version_id to diff_version_get to retrieve the actual diff.",
+		usage:   "List the diff versions (historical snapshots) of a merge request. Use when the prompt asks for the MR's diff revisions or version history. Returns version IDs and SHAs but not the diffs themselves. Pass a version_id to diff_version_get to retrieve the actual diff.",
 		aliases: []string{"list merge request diff versions", "mr diff revisions", "list mr diff snapshots", "merge request version history"},
 		related: []string{actionDiffVersionGet, actionChangesGet, actionMRGet},
 		description: "List all diff versions (historical snapshots) of a merge request. " +

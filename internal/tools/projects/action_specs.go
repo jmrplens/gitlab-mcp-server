@@ -237,7 +237,7 @@ func projectGetSpec(route toolutil.ActionRoute) toolutil.ActionSpec {
 			ExampleBinding: `params.project_id:"my-org/tools/gitlab-mcp-server"`,
 			CommonConfusions: []string{
 				"Use project_id for a namespace path. Do not substitute full_path, path, remote_url, search, or query.",
-				"A namespace path like group/project goes here directly — do not call discover_project.resolve for it (that action is only for a full git remote URL).",
+				"A namespace path like group/project goes here directly. Do not call discover_project.resolve for it (that action is only for a full git remote URL).",
 			},
 		},
 	}

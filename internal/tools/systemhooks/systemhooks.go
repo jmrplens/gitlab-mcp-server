@@ -129,8 +129,8 @@ type DeleteInput struct {
 // SetURLVariableInput is the input for creating or updating a system hook URL variable.
 type SetURLVariableInput struct {
 	ID    int64  `json:"id"    jsonschema:"System hook ID,required"`
-	Key   string `json:"key"   jsonschema:"URL variable key name — letters and underscores only. GitLab rejects keys containing digits,required"`
-	Value string `json:"value" jsonschema:"URL variable value — must be non-empty,required"`
+	Key   string `json:"key"   jsonschema:"URL variable key name. Letters and underscores only. GitLab rejects keys containing digits,required"`
+	Value string `json:"value" jsonschema:"URL variable value. Must be non-empty,required"`
 }
 
 // DeleteURLVariableInput is the input for deleting a system hook URL variable.

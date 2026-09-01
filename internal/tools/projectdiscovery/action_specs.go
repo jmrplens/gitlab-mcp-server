@@ -12,13 +12,13 @@ const discoverProjectDescription = "Resolve a full git remote URL to a GitLab pr
 	"Do not synthesize, guess, or add .git to a project path to create a remote URL.\n" +
 	"NOT for: searching projects by name (use gitlab_search action=projects), listing a user's projects (use gitlab_project action=list_user_projects), " +
 	"verifying GitLab connectivity or authentication (use gitlab_server action=health_check), or pre-checking workflows where project_id is already known.\n\n" +
-	"IMPORTANT: pass the complete URL exactly as it appears — do NOT strip the git@ prefix from SSH URLs. " +
+	"IMPORTANT: pass the complete URL exactly as it appears. Do NOT strip the git@ prefix from SSH URLs. " +
 	"Supported formats (a URL scheme or git@ user prefix is required):\n" +
 	"- HTTPS: https://gitlab.example.com/group/project.git\n" +
 	"- SSH shorthand: git@gitlab.example.com:group/project.git\n" +
 	"- SSH protocol: ssh://git@gitlab.example.com/group/project.git\n\n" +
 	"Returns: {id, name, path, path_with_namespace, web_url, description, default_branch, visibility, http_url_to_repo, ssh_url_to_repo, extracted_path}. " +
-	"Errors: 404 not found (hint: project may be private — verify token permissions), 403 forbidden (hint: token lacks read_api scope).\n\n" +
+	"Errors: 404 not found (hint: project may be private, so verify token permissions), 403 forbidden (hint: token lacks read_api scope).\n\n" +
 	"See also: gitlab_project_get, gitlab_server_status, gitlab_search_projects."
 
 // ActionSpecs returns canonical specs for standalone project discovery actions.
@@ -34,7 +34,7 @@ func ActionSpecs(client *gitlabclient.Client) []toolutil.ActionSpec {
 					ValueSource:    "A complete git remote URL from .git/config or `git remote -v`.",
 					ExampleBinding: `params.remote_url:"git@gitlab.com:my-org/tools/gitlab-mcp-server.git"`,
 					CommonConfusions: []string{
-						"remote_url must be a full git URL, not a namespace path: a value like my-org/tools/gitlab-mcp-server is a path — look it up with project.get (project_id), not discover_project.resolve.",
+						"remote_url must be a full git URL, not a namespace path: a value like my-org/tools/gitlab-mcp-server is a path. Look it up with project.get (project_id), not discover_project.resolve.",
 					},
 				},
 			},

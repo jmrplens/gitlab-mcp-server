@@ -55,7 +55,7 @@ func userListOptions(actionName, individualTool string) toolutil.ActionSpecOptio
 		}
 		if actionName == "ff_user_list_delete" {
 			confusions = append(confusions,
-				"This deletes a feature flag user-list cohort, NOT the feature flag itself — to delete the flag use feature_flags.feature_flag_delete (by name).")
+				"This deletes a feature flag user-list cohort, NOT the feature flag itself. To delete the flag use feature_flags.feature_flag_delete (by name).")
 		}
 		options.ParameterGuidance = map[string]toolutil.ParameterGuidance{
 			"user_list_iid": {
