@@ -65,6 +65,11 @@ var envBackedFlags = []struct {
 		envName:  "YOLO_MODE",
 		usage:    "Skip the confirmation prompt on destructive actions: true or false",
 	},
+	{
+		flagName: "description-substitutions",
+		envName:  "GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS",
+		usage:    "Rewrite listed descriptions and titles for strict gateway validators: comma-separated old=new pairs (escape with backslash)",
+	},
 }
 
 // registerEnvBackedFlags declares the flags. Call before flag.Parse.

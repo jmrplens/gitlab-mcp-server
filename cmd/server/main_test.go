@@ -32,6 +32,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/clientcompat"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/gatewaycompat"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
@@ -127,6 +128,10 @@ type createdServerKey struct {
 	rateLimitRPS           float64
 	rateLimitBurst         int
 	clientCompat           bool
+	// descriptionSubs keeps the cache honest for tests that set the
+	// substitution env var: createServer reads it at build time, so two
+	// builds under different values are different servers.
+	descriptionSubs string
 }
 
 var (
@@ -193,6 +198,7 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 		rateLimitRPS:           cfg.RateLimitRPS,
 		rateLimitBurst:         cfg.RateLimitBurst,
 		clientCompat:           clientcompat.Enabled(),
+		descriptionSubs:        os.Getenv(gatewaycompat.EnvVar),
 	}
 	createdServersMu.Lock()
 	defer createdServersMu.Unlock()

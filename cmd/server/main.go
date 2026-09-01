@@ -61,6 +61,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/completions"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/gatewaycompat"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/mcpotel"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/oauth"
@@ -520,6 +521,9 @@ ENVIRONMENT VARIABLES (stdio mode)
   RATE_LIMIT_RPS            Per-server tools/call rate limit (default 0, disabled)
   RATE_LIMIT_BURST          Token-bucket burst size when RATE_LIMIT_RPS > 0 (default 40)
   YOLO_MODE                 Skip destructive action confirmation prompts (default false)
+  GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS
+                            Rewrite listed descriptions and titles for strict gateway validators:
+                            comma-separated old=new pairs, backslash escapes \, \= \\ (default empty)
   GITLAB_MCP_TELEMETRY      Export OpenTelemetry traces, metrics and logs over OTLP (default false)
   GITLAB_MCP_TELEMETRY_IDENTITY
                             What telemetry records about the caller: none|pseudonymous|full (default none)
@@ -750,6 +754,12 @@ func runHTTP(ctx context.Context, hcfg *httpConfig) error {
 	cfg := configFromHTTPFlags(hcfg, toolSurface, metaTools, tier, tierExplicit)
 	if validationErr := validateHTTPRuntimeConfig(cfg); validationErr != nil {
 		return validationErr
+	}
+	// The description-substitution knob is parsed here so a typo in it fails
+	// startup with a clear message; createServer parses it again per pool
+	// entry, but that build happens hours later, on somebody's request.
+	if _, substErr := gatewaycompat.FromEnv(); substErr != nil {
+		return substErr
 	}
 
 	toolutil.SetUploadConfig(cfg.UploadMaxFileSize)
@@ -1292,6 +1302,19 @@ func createServer(
 	// structuredContent shadowing); CLIENT_COMPAT=off disables it.
 	if clientcompat.Enabled() {
 		server.AddReceivingMiddleware(clientcompat.Middleware())
+	}
+
+	// Operator-defined catalog text substitutions, for MCP gateways whose
+	// validators reject characters this server's descriptions carry
+	// (GITLAB_MCP_DESCRIPTION_SUBSTITUTIONS). In stdio mode createServer runs
+	// at startup, so a parse error here is a startup failure; in HTTP mode
+	// runHTTP already validated the value before the listener came up.
+	gatewaySubs, substErr := gatewaycompat.FromEnv()
+	if substErr != nil {
+		return nil, substErr
+	}
+	if len(gatewaySubs) > 0 {
+		server.AddReceivingMiddleware(gatewaycompat.Middleware(gatewaySubs))
 	}
 
 	// Capability/method consistency: the SDK dispatches logging/setLevel
