@@ -35,6 +35,20 @@ project path in the link text and the full URL in the target:
 That stays readable as a mention, resolves from either forge, and creates no
 cross-reference anywhere.
 
+## What does not belong here
+
+Our own misconfiguration. An entry was opened here for the SDK keepalive that
+pinged sessions serving protocol 2026-07-28, where `ping` is a removed method,
+and it was wrong: `ServerOptions.KeepAlive` defaults to zero and the SDK only
+starts a keepalive when it is set to something. This project set it to 30
+seconds. The defect was real and is fixed, but it was ours, and filing it
+upstream would have sent someone looking for a bug in code that was doing what
+it was told.
+
+The test to apply before adding an entry: would the behavior happen to a caller
+who never configured it? If it takes a setting of ours to reach, it is a bug in
+this repository whatever it looks like from inside the debugger.
+
 ## What each entry records
 
 Every entry carries the same five facts, so the state of a contribution is
@@ -60,8 +74,13 @@ readable without opening the tracker:
 | 6 | client-go | [`SetFeatureFlagOptions` lacks `omitempty`](#setfeatureflagoptions-fields-lack-omitempty) | No | No | No | No | Yes |
 | 7 | client-go | [`ApplicationStatistics` assumes numeric JSON](#applicationstatistics-assumes-numeric-json) | No | No | No | No | Yes |
 | 8 | go-sdk | [No SSE keep-alive option](#no-keep-alive-interval-for-sse-streams-on-streamablehttpoptions) | No | No | No | No | Yes |
-| 9 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
-| 10 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
+| 9 | go-sdk | [A malformed message ends the session](#a-malformed-message-ends-the-session-instead-of-answering--32700) | No | No | No | Was yes | Yes |
+| 10 | go-sdk | [Cannot send `notifications/cancelled` for a listen stream](#application-code-cannot-send-notificationscancelled-for-a-listen-stream) | No | No | No | No | None possible |
+| 11 | go-sdk | [Declared, not negotiated, version selects MRTR](#the-declared-protocol-version-not-the-negotiated-one-selects-mrtr) | No | No | No | No | None taken |
+| 12 | go-sdk | [A cancelled call is still answered](#a-cancelled-incoming-call-is-still-answered) | No | No | No | No | Partial |
+| 13 | go-sdk | [The cancellation reason is discarded](#the-cancellation-reason-is-discarded-before-any-handler-sees-it) | No | No | No | No | None possible |
+| 14 | go-selfupdate | [Deprecated `x/crypto/openpgp`](#go-selfupdate-depends-on-the-deprecated-xcryptoopenpgp) | Yes | Yes, open | No | No | Yes |
+| 15 | codex | [Non-integer `priority` breaks a tool call](#a-non-integer-annotation-priority-breaks-a-tool-call) | Yes | Yes, open | No | Was yes | Yes |
 
 States verified against the upstream trackers on 2026-08-29.
 
@@ -228,6 +247,151 @@ the first read rather than after.
 
 **How we found it**: writing `TestSSEKeepAlive_IdleStreamKeepsBytesOnTheWire`.
 The test hung instead of failing, which is how the header-flush half surfaced.
+
+### A malformed message ends the session instead of answering -32700
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: it was, on stdio. One client lost its session and its
+  accumulated context to a single unparseable line; there was no cross-tenant
+  effect, since stdio is one process per client.
+- **Workaround**: yes. `resilientStdio` in `cmd/server/stdio.go` filters stdin
+  ahead of the SDK, answering a line the read loop would choke on and dropping
+  it. This entry first said no workaround was available, on the reasoning that
+  the decision sits inside the SDK's read loop; that was wrong. The SDK exposes
+  `mcp.IOTransport`, which takes any `Reader` and `Writer`, so the loop can be
+  fed a stream that never contains the input it cannot handle. Anything parsing
+  as a JSON object with `"jsonrpc":"2.0"` is passed through untouched, since
+  deciding what a valid message means is the SDK's job.
+
+**What**: `internal/jsonrpc2/conn.go`'s `readIncoming` breaks its loop on *any*
+error from `reader.Read`, so a message that fails to parse is treated exactly
+like a closed pipe. The session ends, and on stdio the process exits. Nothing is
+written to the client, which sees EOF on a stream it can still write to.
+
+JSON-RPC 2.0 defines `-32700 Parse error` for this case, and the framing here is
+one message per line, so the next line is an independent message and
+resynchronizing is trivial. Both a line that is not JSON (`{not json`) and one
+that parses but carries no `"jsonrpc":"2.0"` (`{"hello":"world"}`) produce it; a
+request the server understands but cannot serve — an unknown method, a
+nonexistent tool — is correctly answered with an error and the session
+continues.
+
+**How we found it**: writing `test/e2e/stdio`. The case was written expecting
+the session to survive, and it did not.
+
+**Also fixed by the workaround, unintentionally**: with `mcp.StdioTransport`,
+EOF on stdin — a client closing its pipe, which is how every session ends —
+produced an error from `server.Run`, and the process exited 1. A clean shutdown
+reported failure to whatever supervises it. Under `IOTransport` it exits 0. A
+unit test had been passing because of that error rather than the condition it
+named, which is how this surfaced.
+
+**Pinned by**: `TestMalformedInput_IsAnsweredAndTheSessionSurvives` in
+`test/e2e/stdio`, and `TestResilientStdio_*` in `cmd/server`. The e2e case
+asserts the client-visible contract rather than the workaround, so it keeps
+passing if the SDK ever fixes this and the filter is removed.
+
+### A cancelled incoming call is still answered
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: partial and honest rather than a fix. The response cannot be
+  suppressed, so what we do is stop it lying: a cancellation is classified as
+  "the request was cancelled by the client" instead of falling through to
+  "unexpected error", and logged at INFO rather than ERROR. The client behaviour
+  is documented in the HTTP guide so a client can expect the late response.
+
+**What**: "Servers receiving cancellation notifications SHOULD ... not send a
+response for the cancelled request." `internal/jsonrpc2/conn.go` writes the
+response with `c.write(notDone{req.ctx}, response)`, where `notDone` deliberately
+strips the cancellation from the context so the write proceeds. Nothing at
+application level runs between the handler returning and that write, so no
+server built on this SDK can satisfy the clause.
+
+**How we found it**: the interaction-pattern audit. Captured on stdio, two
+seconds into a hanging GitLab call: the client's `notifications/cancelled` at
+6.306s, and the server's response to that same request id at 6.307s.
+
+### The cancellation reason is discarded before any handler sees it
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: none possible. The field is dropped inside the SDK; there is
+  no seam to read it from. We log what remains — that the call was cancelled and
+  how long it ran.
+
+**What**: "Implementations SHOULD log cancellation reasons for debugging."
+`mcp/transport.go` unmarshals `CancelledParams`, uses `params.RequestID` to
+cancel the call, and discards `params.Reason`. A hook, or even a logger line at
+the preempter, would be enough.
+
+**How we found it**: the interaction-pattern audit. Sending a cancellation with
+reason "User requested cancellation" left no trace of that string anywhere in
+the server's output.
+
+### The declared protocol version, not the negotiated one, selects MRTR
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no.
+- **Workaround**: none taken, deliberately. Disagreeing with the SDK here would
+  be worse than matching it: our gate and `clientSupportsMultiRoundTrip` would
+  choose differently for the same session, and the SDK labels the result.
+
+**What**: `initialize` is deprecated in 2026-07-28, so `negotiatedVersion`
+(`mcp/shared.go`) caps that handshake at `2025-11-25` — while
+`InitializeParams.ProtocolVersion` keeps whatever the client asked for.
+`clientSupportsMultiRoundTrip` (`mcp/mrtr.go`) reads the latter, so a client
+that sends `initialize` requesting `2026-07-28` is negotiated down to
+`2025-11-25` and served multi round-trip requests regardless. The negotiated
+version is the one that describes what the session can actually do, and it
+should drive both.
+
+**Blast radius is small.** The SDK's own client middleware fulfills
+`inputRequests` whatever version it negotiated, so an SDK-based client never
+notices. It takes a hand-written client that implements `2025-11-25` strictly,
+claims `2026-07-28` in its handshake, and ignores `inputRequests` to be harmed.
+
+**How we found it**: the interaction-pattern specification audit. Observed on
+stdio: `initialize -> protocolVersion='2025-11-25'`, and the next `tools/call`
+answered `resultType: 'input_required'`.
+
+**Documented in**: `docs/reference/capabilities/elicitation.md`, so the
+behaviour is stated where someone writing a client would look.
+
+### Application code cannot send notifications/cancelled for a listen stream
+
+- **Reported**: no.
+- **In review**: no.
+- **Merged**: no.
+- **Blocking**: no. The client still receives the completion result the SDK
+  writes when the stream's handler returns, which tells a conforming client the
+  subscription has ended.
+- **Workaround**: none, and unlike the malformed-message entry this one really
+  has none: the type cannot be constructed at all, so there is nothing to
+  interpose.
+
+**What**: 2026-07-28 says a server "MUST send `notifications/cancelled`
+referencing a `subscriptions/listen` request ID when it tears down that
+subscription stream". `SubscriptionsListenResult` embeds an unexported type, so
+application code cannot build the message, and the SDK offers no method that
+sends one. A server that ends a subscription can therefore satisfy the graceful
+half of the contract and not this one.
+
+**How we found it**: the interaction-pattern specification audit. Reproduced on
+stdio at 2026-07-28: a watcher retired after its resource began returning 404,
+and the only output was the listen request's own result — no
+`notifications/cancelled`, before or after, with the connection still usable.
+
+**Recorded in**: ADR-0015, so the gap is stated where the design is rather than
+only here.
 
 ## OpenAI Codex (`openai/codex`)
 

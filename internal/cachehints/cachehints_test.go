@@ -78,15 +78,22 @@ func TestMiddleware_TierDependentLists_TTLFollowsTierSource(t *testing.T) {
 // tier-gated, so a detected tier cannot change them.
 func TestMiddleware_StaticCatalogs_AlwaysHourTTL(t *testing.T) {
 	tests := []struct {
-		name   string
-		method string
-		result func() mcp.Result
+		name      string
+		method    string
+		result    func() mcp.Result
+		wantScope string
 	}{
-		{"prompts_list", "prompts/list", func() mcp.Result { return &mcp.ListPromptsResult{} }},
-		{"resources_list", "resources/list", func() mcp.Result { return &mcp.ListResourcesResult{} }},
+		// The prompt catalog is the one list nothing varies by caller: 37
+		// prompts compiled in, unaffected by tier, token or surface. Private
+		// would cost every client a round trip for a body that could have been
+		// shared, and would claim a per-user variation that does not exist.
+		{"prompts_list", "prompts/list", func() mcp.Result { return &mcp.ListPromptsResult{} }, "public"},
+		// The resource lists follow CAPABILITY_SURFACE, and gitlab://tools
+		// describes whichever tool surface is active, so they stay private.
+		{"resources_list", "resources/list", func() mcp.Result { return &mcp.ListResourcesResult{} }, "private"},
 		{"resource_templates_list", "resources/templates/list", func() mcp.Result {
 			return &mcp.ListResourceTemplatesResult{}
-		}},
+		}, "private"},
 	}
 	for _, tt := range tests {
 		for _, pinned := range []bool{false, true} {
@@ -101,8 +108,8 @@ func TestMiddleware_StaticCatalogs_AlwaysHourTTL(t *testing.T) {
 				if !ok {
 					t.Fatalf("result %T does not implement CacheableResult", res)
 				}
-				if got := cacheable.GetCacheScope(); got != "private" {
-					t.Errorf("CacheScope = %q, want private", got)
+				if got := cacheable.GetCacheScope(); got != tt.wantScope {
+					t.Errorf("CacheScope = %q, want %q", got, tt.wantScope)
 				}
 				if got := cacheable.GetTTLMs(); got != 3600000 {
 					t.Errorf("TTLMs = %d, want 3600000", got)

@@ -22,7 +22,13 @@ const (
 	// labelCollectingDesc identifies the description-collection step in wrapped errors.
 	labelCollectingDesc = "collecting description"
 	// fmtDescSummary identifies the fmt desc summary constant used by this package.
-	fmtDescSummary = "\n**Description**: %.100s..."
+	//
+	// The value is truncated by [summaryExcerpt] before it is escaped, not by a
+	// width verb here. Escaping wraps the text in a fence, so cutting the
+	// escaped form at a byte count would drop the closing delimiter and let the
+	// fence swallow every field printed after it — turning a length limit into
+	// a rendering bug in the dialog a person reads to decide.
+	fmtDescSummary = "\n**Description**: %s"
 )
 
 // Input types.
@@ -74,6 +80,32 @@ func UnsupportedResult(toolName string) *mcp.CallToolResult {
 		},
 		IsError: true,
 	}
+}
+
+// summaryExcerptRunes is how much of a description a consent dialog shows.
+const summaryExcerptRunes = 100
+
+// summaryExcerpt shortens a description for the confirmation dialog.
+//
+// It runs before escaping, not after. Escaping fences the value, so trimming
+// the escaped form would cut the closing delimiter off and let the fence
+// swallow every field printed after it — a length limit turning into a
+// rendering bug in the dialog someone reads to decide.
+//
+// Counting runes rather than bytes keeps a multi-byte character from being
+// split in half, which would put an invalid sequence in front of the user.
+func summaryExcerpt(s string) string {
+	// Walked rather than converted: []rune(s) copies the whole string, and
+	// the input is client-supplied, so the copy scales with whatever a client
+	// sends to produce a hundred runes.
+	count := 0
+	for i := range s {
+		if count == summaryExcerptRunes {
+			return s[:i] + "..."
+		}
+		count++
+	}
+	return s
 }
 
 // parseCSVLabels splits a comma-separated string into trimmed, non-empty labels.
@@ -161,12 +193,13 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 
 	tracker.Step(ctx, 3, 4, "Confirming issue creation...")
 
-	summary := fmt.Sprintf("Create issue in project %s?\n\n**Title**: %s", input.ProjectID, title)
+	summary := fmt.Sprintf("Create issue in project %s?\n\n**Title**: %s",
+		toolutil.EscapeConsentValue(string(input.ProjectID)), toolutil.EscapeConsentValue(title))
 	if description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, description)
+		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(summaryExcerpt(description)))
 	}
 	if len(labels) > 0 {
-		summary += "\n**Labels**: " + strings.Join(labels, ", ")
+		summary += "\n**Labels**: " + toolutil.EscapeConsentValue(strings.Join(labels, ", "))
 	}
 	if confidential != nil && *confidential {
 		summary += "\n**Confidential**: Yes"
@@ -178,13 +211,21 @@ func IssueCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabcl
 
 	tracker.Step(ctx, 4, 4, "Creating issue...")
 
-	return issues.Create(ctx, client, issues.CreateInput{
+	created, err := issues.Create(ctx, client, issues.CreateInput{
 		ProjectID:    input.ProjectID,
 		Title:        title,
 		Description:  description,
 		Labels:       labels,
 		Confidential: confidential,
 	})
+	if err != nil {
+		return created, err
+	}
+	// Step is 1-based and Update is 0-based, so the last Step above reports 3
+	// of 4. Without this the bar stops one short and stays there, which reads
+	// as a wizard that hung on its final call.
+	tracker.Done(ctx, 4, "Issue created")
+	return created, nil
 }
 
 // Interactive MR creation.
@@ -255,7 +296,7 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 
 	tracker.Step(ctx, 5, 5, "Creating merge request...")
 
-	return mergerequests.Create(ctx, client, mergerequests.CreateInput{
+	created, err := mergerequests.Create(ctx, client, mergerequests.CreateInput{
 		ProjectID:          input.ProjectID,
 		SourceBranch:       sourceBranch,
 		TargetBranch:       targetBranch,
@@ -265,6 +306,11 @@ func MRCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclien
 		RemoveSourceBranch: removeSource,
 		Squash:             squash,
 	})
+	if err != nil {
+		return created, err
+	}
+	tracker.Done(ctx, 5, "Merge request created")
+	return created, nil
 }
 
 // collectMROptions asks for optional merge request labels and merge behavior.
@@ -346,12 +392,13 @@ type mrSummaryParams struct {
 // source branch, and squash values.
 func buildMRSummary(p mrSummaryParams) string {
 	summary := fmt.Sprintf("Create merge request in project %s?\n\n**Title**: %s\n**Source**: %s → **Target**: %s",
-		p.ProjectID, p.Title, p.SourceBranch, p.TargetBranch)
+		toolutil.EscapeConsentValue(string(p.ProjectID)), toolutil.EscapeConsentValue(p.Title),
+		toolutil.EscapeConsentValue(p.SourceBranch), toolutil.EscapeConsentValue(p.TargetBranch))
 	if p.Description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, p.Description)
+		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(summaryExcerpt(p.Description)))
 	}
 	if len(p.Labels) > 0 {
-		summary += "\n**Labels**: " + strings.Join(p.Labels, ", ")
+		summary += "\n**Labels**: " + toolutil.EscapeConsentValue(strings.Join(p.Labels, ", "))
 	}
 	if p.RemoveSource != nil && *p.RemoveSource {
 		summary += "\n**Remove source branch**: Yes"
@@ -402,9 +449,9 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 	tracker.Step(ctx, 3, 4, "Confirming release creation...")
 
 	summary := fmt.Sprintf("Create release in project %s?\n\n**Tag**: %s\n**Name**: %s",
-		input.ProjectID, tagName, name)
+		toolutil.EscapeConsentValue(string(input.ProjectID)), toolutil.EscapeConsentValue(tagName), toolutil.EscapeConsentValue(name))
 	if description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, description)
+		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(summaryExcerpt(description)))
 	}
 
 	if confirmErr := confirmCreation(ctx, fl, summary, "release creation"); confirmErr != nil {
@@ -413,12 +460,17 @@ func ReleaseCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 
 	tracker.Step(ctx, 4, 4, "Creating release...")
 
-	return releases.Create(ctx, client, releases.CreateInput{
+	created, err := releases.Create(ctx, client, releases.CreateInput{
 		ProjectID:   input.ProjectID,
 		TagName:     tagName,
 		Name:        name,
 		Description: description,
 	})
+	if err != nil {
+		return created, err
+	}
+	tracker.Done(ctx, 4, "Release created")
+	return created, nil
 }
 
 // Interactive project creation.
@@ -467,15 +519,16 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 
 	tracker.Step(ctx, 3, 4, "Confirming project creation...")
 
-	summary := fmt.Sprintf("Create new GitLab project?\n\n**Name**: %s\n**Visibility**: %s", name, visibility)
+	summary := fmt.Sprintf("Create new GitLab project?\n\n**Name**: %s\n**Visibility**: %s",
+		toolutil.EscapeConsentValue(name), toolutil.EscapeConsentValue(visibility))
 	if description != "" {
-		summary += fmt.Sprintf(fmtDescSummary, description)
+		summary += fmt.Sprintf(fmtDescSummary, toolutil.EscapeConsentValue(summaryExcerpt(description)))
 	}
 	if initReadme {
 		summary += "\n**README**: Yes"
 	}
 	if defaultBranch != "" {
-		summary += "\n**Default Branch**: " + defaultBranch
+		summary += "\n**Default Branch**: " + toolutil.EscapeConsentValue(defaultBranch)
 	}
 
 	if confirmErr := confirmCreation(ctx, fl, summary, "project creation"); confirmErr != nil {
@@ -484,11 +537,16 @@ func ProjectCreate(ctx context.Context, req *mcp.CallToolRequest, client *gitlab
 
 	tracker.Step(ctx, 4, 4, "Creating project...")
 
-	return projects.Create(ctx, client, projects.CreateInput{
+	created, err := projects.Create(ctx, client, projects.CreateInput{
 		Name:                 name,
 		Description:          description,
 		Visibility:           visibility,
 		InitializeWithReadme: initReadme,
 		DefaultBranch:        defaultBranch,
 	})
+	if err != nil {
+		return created, err
+	}
+	tracker.Done(ctx, 4, "Project created")
+	return created, nil
 }

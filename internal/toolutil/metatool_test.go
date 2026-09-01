@@ -4364,8 +4364,12 @@ func TestMakeMetaHandler_DestructiveDeclined_ReturnsCancelled(t *testing.T) {
 		t.Fatal("handler(destructive declined) result = nil, want cancellation result")
 	}
 	tc, ok := result.Content[0].(*mcp.TextContent)
-	if !ok || !strings.Contains(tc.Text, "canceled") {
-		t.Errorf("handler(destructive declined) content = %+v, want canceled message", result.Content)
+	// "declined" rather than "canceled": a user saying no and a dialog being
+	// dismissed are different events and now read differently, because the
+	// model's next move differs — stop and offer an alternative, versus ask
+	// again later.
+	if !ok || !strings.Contains(tc.Text, "declined") {
+		t.Errorf("handler(destructive declined) content = %+v, want a declined message", result.Content)
 	}
 }
 

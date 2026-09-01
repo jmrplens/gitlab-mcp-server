@@ -32,8 +32,15 @@ func TestContentForAction_MapsActions(t *testing.T) {
 	}
 }
 
-// TestConfirmSchema_ShapeAndParse verifies the confirmation schema shape and
-// that parseConfirmContent treats missing or non-boolean fields as false.
+// TestConfirmSchema_ShapeAndParse verifies the confirmation schema shape, and
+// that parseConfirmContent separates a refusal from an unreadable answer.
+//
+// Those two used to be one value. An answer with no boolean `confirmed` field
+// read as false, and the caller reported that as "Operation canceled by user."
+// — a decision nobody made, attributed to a person, because their client sent
+// the wrong shape. Both still stop the action, which is the part that must not
+// change; what differs is what the model is told, and a model told the user
+// cancelled will not retry and will say so to the user.
 func TestConfirmSchema_ShapeAndParse(t *testing.T) {
 	schema := confirmSchema("Sure?")
 	props, ok := schema["properties"].(map[string]any)
@@ -44,14 +51,49 @@ func TestConfirmSchema_ShapeAndParse(t *testing.T) {
 		t.Fatal("confirmSchema missing 'confirmed' property")
 	}
 
-	if !parseConfirmContent(map[string]any{"confirmed": true}) {
-		t.Error("parseConfirmContent(true) = false")
+	tests := []struct {
+		name           string
+		content        map[string]any
+		wantConfirmed  bool
+		wantWellFormed bool
+	}{
+		{
+			name:          "an explicit yes",
+			content:       map[string]any{"confirmed": true},
+			wantConfirmed: true, wantWellFormed: true,
+		},
+		{
+			name:          "an explicit no is a decision, and well formed",
+			content:       map[string]any{"confirmed": false},
+			wantConfirmed: false, wantWellFormed: true,
+		},
+		{
+			name:          "a non-boolean answered the wrong question",
+			content:       map[string]any{"confirmed": "yes"},
+			wantConfirmed: false, wantWellFormed: false,
+		},
+		{
+			name:          "an unrelated field did not answer at all",
+			content:       map[string]any{"title": "something"},
+			wantConfirmed: false, wantWellFormed: false,
+		},
+		{
+			name:          "no content",
+			content:       nil,
+			wantConfirmed: false, wantWellFormed: false,
+		},
 	}
-	if parseConfirmContent(map[string]any{"confirmed": "yes"}) {
-		t.Error("parseConfirmContent(non-bool) = true, want false")
-	}
-	if parseConfirmContent(nil) {
-		t.Error("parseConfirmContent(nil) = true, want false")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			confirmed, wellFormed := parseConfirmContent(tt.content)
+			if confirmed != tt.wantConfirmed {
+				t.Errorf("confirmed = %v, want %v", confirmed, tt.wantConfirmed)
+			}
+			if wellFormed != tt.wantWellFormed {
+				t.Errorf("wellFormed = %v, want %v", wellFormed, tt.wantWellFormed)
+			}
+		})
 	}
 }
 

@@ -209,8 +209,8 @@ func TestCatalogSurface_DeleteConfirmDeclined(t *testing.T) {
 			text.WriteString(tc.Text)
 		}
 	}
-	if !strings.Contains(text.String(), "canceled") {
-		t.Fatalf("declined confirmation result = %q, want cancellation message", text.String())
+	if !strings.Contains(text.String(), "declined") {
+		t.Fatalf("declined confirmation result = %q, want a declined message", text.String())
 	}
 	if hits := apiHits.Load(); hits != 0 {
 		t.Fatalf("API was reached %d time(s) after a declined confirmation", hits)

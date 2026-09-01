@@ -24,7 +24,7 @@ func newMRTRFlow(answers map[string]answerRecord) *Flow {
 	if answers == nil {
 		answers = map[string]answerRecord{}
 	}
-	return &Flow{legacy: Client{session: &mcp.ServerSession{}}, mrtr: true, answers: answers}
+	return &Flow{legacy: Client{session: &mcp.ServerSession{}, caps: formCapabilities()}, mrtr: true, answers: answers}
 }
 
 // TestFlow_Pending_QueuesInputRequest verifies that an unanswered prompt on
@@ -50,8 +50,11 @@ func TestFlow_Pending_QueuesInputRequest(t *testing.T) {
 	if req.Message != "Enter title" {
 		t.Errorf("queued message = %q, want 'Enter title'", req.Message)
 	}
-	if !strings.Contains(result.RequestState, `"v":1`) {
-		t.Errorf("RequestState = %q, want versioned state", result.RequestState)
+	// The state is signed now, so its version is readable from the prefix
+	// rather than from the JSON: nothing inside can be trusted before the MAC
+	// has been checked, and the version has to be legible before that.
+	if !strings.HasPrefix(result.RequestState, "v1.") {
+		t.Errorf("RequestState = %q, want state tagged with its version", result.RequestState)
 	}
 }
 
@@ -308,7 +311,7 @@ func urlFlow(t *testing.T, answers map[string]answerRecord) *Flow {
 	if answers == nil {
 		answers = map[string]answerRecord{}
 	}
-	return &Flow{legacy: Client{session: ss}, mrtr: true, answers: answers}
+	return &Flow{legacy: Client{session: ss, caps: urlCapabilities()}, mrtr: true, answers: answers}
 }
 
 // elicitURLBase and elicitURLTarget are the instance and in-instance page the
@@ -670,7 +673,11 @@ func TestFlow_MRTR_InvalidRequestState(t *testing.T) {
 // which costs one round trip and cannot corrupt anything.
 func TestFlow_MRTR_UnsupportedStateVersion(t *testing.T) {
 	handler := func(_ context.Context, req *mcp.CallToolRequest, _ *Flow) (*mcp.CallToolResult, error) {
-		req.Params.RequestState = `{"v":99,"answers":{}}`
+		// Shaped as this build emits state, with a version it does not know.
+		// The point of the prefix is exactly this: the version is legible
+		// before the signature, so a payload from another build is refused for
+		// what it is rather than for failing a check it was never given.
+		req.Params.RequestState = "v99.eyJ2Ijo5OX0.bm90LWEtdmFsaWQtbWFj"
 		if _, err := FlowFromRequest(req); err != nil {
 			//nolint:nilerr // the rejection is asserted in-band via the result text
 			return textResult("state rejected: " + err.Error()), nil
@@ -689,7 +696,7 @@ func TestFlow_MRTR_UnsupportedStateVersion(t *testing.T) {
 	if !strings.Contains(got, "state rejected") {
 		t.Fatalf("result text = %q, want the state to be rejected", got)
 	}
-	if !strings.Contains(got, "unsupported requestState version 99") {
+	if !strings.Contains(got, `unsupported requestState version "v99"`) {
 		t.Errorf("result text = %q, want the offending version named", got)
 	}
 }
@@ -776,5 +783,246 @@ func TestFlowFromRequest_LegacySession_UsesSynchronousPath(t *testing.T) {
 	}
 	if !confirmed {
 		t.Error("Confirm(legacy) = false, want true")
+	}
+}
+
+// formCapabilities and urlCapabilities are the two client shapes the flow tests
+// need. They are stated explicitly because a Client now captures the
+// capabilities of the request that built it rather than reading them from the
+// session: from 2026-07-28 a client declares them per request, so a test that
+// leaves them unset is describing a client that declared nothing.
+func formCapabilities() *mcp.ClientCapabilities {
+	return &mcp.ClientCapabilities{
+		Elicitation: &mcp.ElicitationCapabilities{Form: &mcp.FormElicitationCapabilities{}},
+	}
+}
+
+func urlCapabilities() *mcp.ClientCapabilities {
+	return &mcp.ClientCapabilities{
+		Elicitation: &mcp.ElicitationCapabilities{
+			Form: &mcp.FormElicitationCapabilities{},
+			URL:  &mcp.URLElicitationCapabilities{},
+		},
+	}
+}
+
+// TestFlow_MRTR_TwoRounds_CarriesTheAnswerForward is the end-to-end check that
+// binding the state to its call did not break the flow that state exists for.
+//
+// This is the failure the binding could introduce, and it is worse than the one
+// it fixes: if the digest computed in round two disagreed with round one — for
+// any reason, a client re-serializing its own arguments included — the answers
+// would be dropped, the same question re-queued, and the flow would never
+// finish. Tests that only check that foreign state is refused cannot see it,
+// because refusing everything passes them.
+//
+// The SDK client drives both rounds itself: it answers the queued input request
+// through its ElicitationHandler and retries the call with the state echoed
+// back. That is what makes this worth running here rather than hand-rolling the
+// second call — the retry is built the way a real client builds it, not the way
+// this test imagines it.
+func TestFlow_MRTR_TwoRounds_CarriesTheAnswerForward(t *testing.T) {
+	var rounds int
+	handler := func(ctx context.Context, _ *mcp.CallToolRequest, f *Flow) (*mcp.CallToolResult, error) {
+		rounds++
+		title, err := f.PromptText(ctx, "title", "Enter title", "title")
+		if err != nil {
+			if errors.Is(err, ErrInputPending) {
+				return f.InputRequiredResult(), nil
+			}
+			return nil, err
+		}
+		return textResult("got title: " + title), nil
+	}
+	cs := flowTestTool(t, handler, func(_ context.Context, _ *mcp.ElicitRequest) (*mcp.ElicitResult, error) {
+		return &mcp.ElicitResult{Action: "accept", Content: map[string]any{"title": "the answer"}}, nil
+	})
+
+	result, err := cs.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "flow_tool",
+		Arguments: map[string]any{"project_id": "7", "title_hint": "something"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+	if got := resultText(result); !strings.Contains(got, "got title: the answer") {
+		t.Fatalf("the flow did not carry the answer forward: %q", got)
+	}
+	if len(result.InputRequests) != 0 {
+		t.Error("the final result still queues a question that was answered")
+	}
+	// Exactly two: one that queued the request and one that read the answer. A
+	// larger number would mean the state was not being honored and the flow was
+	// going round again.
+	if rounds != 2 {
+		t.Errorf("the handler ran %d times, want 2 (queue, then resolve)", rounds)
+	}
+}
+
+// TestGatherData_ValidatesTheAnswerAgainstItsSchema pins the one prompt where
+// nothing else checks what came back.
+//
+// "Servers SHOULD validate received data matches the requested schema." The
+// legacy path gets this from the SDK, inside Elicit. The multi round-trip path
+// never calls Elicit, so on that path an answer reaches the handler exactly as
+// the client sent it.
+//
+// The typed prompts each validate their own answers with better messages, so
+// this is deliberately scoped to GatherData, which takes an arbitrary schema
+// and returns the content untouched.
+func TestGatherData_ValidatesTheAnswerAgainstItsSchema(t *testing.T) {
+	schema := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"count": map[string]any{"type": "number"},
+			"name":  map[string]any{"type": "string"},
+		},
+		"required": []string{"count", "name"},
+	}
+
+	tests := []struct {
+		name    string
+		content map[string]any
+		wantErr bool
+	}{
+		{
+			name:    "an answer matching the schema",
+			content: map[string]any{"count": 3.0, "name": "ok"},
+		},
+		{
+			name:    "a field of the wrong type",
+			content: map[string]any{"count": "three", "name": "ok"},
+			wantErr: true,
+		},
+		{
+			name:    "a required field missing",
+			content: map[string]any{"count": 3.0},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newMRTRFlow(map[string]answerRecord{
+				"data": {Action: "accept", Content: tt.content},
+			})
+
+			got, err := f.GatherData(context.Background(), "data", "Fill this in", schema)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("an answer that does not satisfy the schema was accepted: %v", got)
+				}
+				if !errors.Is(err, ErrMalformedAnswer) {
+					t.Errorf("err = %v, want it classified as a malformed answer rather than a user decision", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("a conforming answer was refused: %v", err)
+			}
+		})
+	}
+}
+
+// TestTypedPrompts_KeepTheirOwnValidation records the line that schema
+// validation deliberately does not cross.
+//
+// Two typed prompts accept more than their schema advertises, on purpose. The
+// 2026-07-28 elicitation subset has no integer enum — PrimitiveSchemaDefinition
+// is String | Number | Boolean | Enum, and every enum variant is string-typed —
+// so an integer choice is offered as decimal strings and parsed back, and a
+// client that answers with the number instead is honored rather than refused.
+//
+// Validating those against their own schema would reject a client that got the
+// answer right, in order to enforce a shape the protocol forced on us. This
+// test exists so that a later pass which "finishes" schema validation has to
+// decide that deliberately rather than by accident.
+func TestTypedPrompts_KeepTheirOwnValidation(t *testing.T) {
+	t.Run("an integer choice answered as a number is accepted", func(t *testing.T) {
+		f := newMRTRFlow(map[string]answerRecord{
+			"days": {Action: "accept", Content: map[string]any{"selection": 30.0}},
+		})
+		got, err := f.SelectOneInt(context.Background(), "days", "How many days?", []int{7, 30, 90})
+		if err != nil {
+			t.Fatalf("a number answer to a string-typed enum was refused: %v", err)
+		}
+		if got != 30 {
+			t.Errorf("got %d, want 30", got)
+		}
+	})
+
+	t.Run("an option outside the list is still refused, in its own words", func(t *testing.T) {
+		f := newMRTRFlow(map[string]answerRecord{
+			"vis": {Action: "accept", Content: map[string]any{"selection": "hacked"}},
+		})
+		_, err := f.SelectOne(context.Background(), "vis", "Visibility?", []string{"private", "public"})
+		if err == nil {
+			t.Fatal("an option outside the list was accepted")
+		}
+		if !strings.Contains(err.Error(), "allowed options") {
+			t.Errorf("err = %v, want the prompt's own message rather than a schema path", err)
+		}
+	})
+}
+
+// TestConfirmSchema_DefaultsToDeclining pins the one default this package
+// emits.
+//
+// "Clients that support defaults SHOULD pre-populate form fields with these
+// values." For a destructive confirmation the safe starting point is obvious,
+// and a client that pre-populates then opens the dialog on "no", so an
+// accidental Enter declines rather than approves. The other builders carry no
+// default on purpose: suggesting an answer to an open question is not a
+// convenience.
+func TestConfirmSchema_DefaultsToDeclining(t *testing.T) {
+	props, ok := confirmSchema("Delete it?")["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("confirmSchema has no properties")
+	}
+	field, ok := props["confirmed"].(map[string]any)
+	if !ok {
+		t.Fatal("confirmSchema has no 'confirmed' property")
+	}
+	value, present := field["default"]
+	if !present {
+		t.Fatal("the confirmation field carries no default, so a pre-populating client chooses for itself")
+	}
+	if value != false {
+		t.Errorf("default = %v, want false: a destructive dialog must not open pre-approved", value)
+	}
+
+	for _, other := range []map[string]any{
+		textSchema("m", "f"),
+		selectOneSchema("m", []string{"a"}),
+		numberSchema("m", "f", 0, 10),
+	} {
+		otherProps, _ := other["properties"].(map[string]any)
+		for name, raw := range otherProps {
+			if otherField, isMap := raw.(map[string]any); isMap {
+				if _, hasDefault := otherField["default"]; hasDefault {
+					t.Errorf("%q carries a default; only the confirmation is meant to suggest an answer", name)
+				}
+			}
+		}
+	}
+}
+
+// TestGatherData_AnAcceptWithNoContentStillValidates covers an accept that
+// carries nothing against a schema that requires something.
+//
+// The validator skipped nil content entirely, so a client accepting without a
+// body handed the handler nil despite required fields. An empty answer is an
+// answer, and required fields have to fail it.
+func TestGatherData_AnAcceptWithNoContentStillValidates(t *testing.T) {
+	err := validateAgainstSchema(map[string]any{
+		"type":     "object",
+		"required": []any{"name"},
+		"properties": map[string]any{
+			"name": map[string]any{"type": "string"},
+		},
+	}, nil)
+
+	if err == nil {
+		t.Error("an accept with no content passed a schema that requires a field")
 	}
 }

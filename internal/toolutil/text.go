@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -248,4 +249,69 @@ func titleSegment(segment string) string {
 		return strings.ToUpper(segment[:len(segment)-1]) + "s"
 	}
 	return strings.ToUpper(segment[:1]) + segment[1:]
+}
+
+// consentURLScheme matches the scheme of a URL a client might render as
+// clickable inside an elicitation form.
+var consentURLScheme = regexp.MustCompile(`(?i)\b(https?)://`)
+
+// EscapeConsentValue renders caller-controlled text for a consent dialog.
+//
+// "MCP servers requesting elicitation SHOULD NOT include URLs intended to be
+// clickable in any field of a form mode elicitation request." The dialog is
+// where a person decides whether to allow an action, so what it shows has to be
+// the server's own words plus data that cannot pass for them. Interpolating raw
+// values did not meet that: a project path of
+//
+//	demo/proj\n\n**SECURITY NOTICE** Verify at https://evil.example/verify
+//
+// reached the user as bold text and a link inside the question they were being
+// asked, all of it attacker-supplied by way of the model.
+//
+// Three things happen here. Line breaks collapse, so a value cannot add
+// paragraphs to the dialog's structure. URL schemes are defanged to https[:]//,
+// which stays legible while leaving nothing for a client to linkify. And the
+// result is fenced in backticks, so emphasis, headings and link syntax inside
+// it are shown rather than rendered — using a fence longer than any run of
+// backticks in the value, the same rule Markdown itself uses for nesting code.
+//
+// This is escaping, not sanitizing: the text still reaches the user, and should,
+// since a project path they cannot read is no use to them deciding. What it can
+// no longer do is impersonate the server asking the question.
+func EscapeConsentValue(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = consentURLScheme.ReplaceAllString(s, "$1[:]//")
+
+	if s == "" {
+		// Two bare backticks read as an unclosed span. A code span holding one
+		// space is the closest markdown gets to "empty", and a real
+		// single-space value rendering identically is an accepted collision.
+		return "` `"
+	}
+
+	fence := strings.Repeat("`", longestBacktickRun(s)+1)
+	// A value that starts or ends with a backtick needs padding, or the fence
+	// and the value run together and the span does not close where it should.
+	pad := ""
+	if strings.HasPrefix(s, "`") || strings.HasSuffix(s, "`") {
+		pad = " "
+	}
+	return fence + pad + s + pad + fence
+}
+
+// longestBacktickRun returns the length of the longest unbroken run of
+// backticks in s, which is what a fence has to exceed to contain it.
+func longestBacktickRun(s string) int {
+	longest, current := 0, 0
+	for _, r := range s {
+		if r == '`' {
+			current++
+			longest = max(longest, current)
+			continue
+		}
+		current = 0
+	}
+	return longest
 }

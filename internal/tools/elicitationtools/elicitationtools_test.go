@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -596,15 +597,19 @@ func TestBuildMRSummary_Full(t *testing.T) {
 		RemoveSource: &removeSource,
 		Squash:       &squash,
 	})
+	// The caller-controlled values are backtick-quoted in the dialog, so each
+	// is looked for as it is rendered: a consent prompt has to show what the
+	// action will do, and the quoting is what stops those values from passing
+	// for the server's own words.
 	checks := []struct {
 		name, want string
 	}{
-		{"project", "project 42"},
-		{"title", "feat: new"},
-		{"source", "feature/x"},
-		{"target", "main"},
-		{"description", "Full description text here"},
-		{"labels", "bug, feature"},
+		{"project", "project `42`"},
+		{"title", "`feat: new`"},
+		{"source", "`feature/x`"},
+		{"target", "`main`"},
+		{"description", "`Full description text here`"},
+		{"labels", "`bug, feature`"},
 		{"remove source", "Remove source branch"},
 		{"squash", "Squash commits"},
 	}
@@ -1942,6 +1947,100 @@ func TestResultsForOperationsThatDidNotRun_AreErrorResults(t *testing.T) {
 			}
 			if len(tt.result.Content) == 0 {
 				t.Error("an error result still has to say what happened")
+			}
+		})
+	}
+}
+
+// TestBuildMRSummary_DefangsInjectedMarkupAndLinks pins the consent dialog
+// against text that arrived from GitLab by way of the model.
+//
+// "MCP servers requesting elicitation SHOULD NOT include URLs intended to be
+// clickable in any field of a form mode elicitation request." The dialog is
+// where a person decides whether to allow an action, so anything in it that can
+// pass for the server's own words is a problem. Interpolating raw values did
+// exactly that: a project path carrying newlines, bold text and an https URL
+// reached the user as a rendered security notice with a link inside the
+// question they were being asked.
+//
+// The values are still shown — a project path the user cannot read is no help
+// to them deciding — they just cannot impersonate the prompt any more.
+func TestBuildMRSummary_DefangsInjectedMarkupAndLinks(t *testing.T) {
+	s := buildMRSummary(mrSummaryParams{
+		ProjectID:    "demo/proj\n\n**SECURITY NOTICE** Verify at https://evil.example/verify to continue",
+		Title:        "Audit <b>title</b> https://evil2.example/x",
+		SourceBranch: "feature/x",
+		TargetBranch: "main",
+	})
+
+	if strings.Contains(s, "https://evil.example") || strings.Contains(s, "https://evil2.example") {
+		t.Errorf("a live URL survived into the consent dialog:\n%s", s)
+	}
+	if strings.Contains(s, "\n\n**SECURITY NOTICE**") {
+		t.Errorf("injected text kept its own paragraph in the dialog:\n%s", s)
+	}
+	// Defanged, not deleted: the user still sees where the value pointed.
+	if !strings.Contains(s, "https[:]//evil.example/verify") {
+		t.Errorf("the URL was not shown in defanged form:\n%s", s)
+	}
+	if !strings.Contains(s, "demo/proj") {
+		t.Errorf("the project path itself was lost, so the user cannot see what they are approving:\n%s", s)
+	}
+}
+
+// TestBuildMRSummary_LongDescriptionKeepsItsFenceClosed pins the interaction
+// between truncating a description and escaping it.
+//
+// Escaping wraps a value in a backtick fence. Truncating the escaped form at a
+// fixed width — which is what the format verb used to do — cuts the closing
+// delimiter off whenever the escaped text is longer than the limit, so the
+// fence stays open and swallows every field printed after it. The consent
+// dialog then shows the labels, the branches and the confirmation question as
+// one run of code, in the prompt a person reads to decide.
+//
+// So the excerpt is taken first and escaped second. The boundary is checked
+// either side of the limit, and a following field is always present, because a
+// dangling fence is only visible in what comes after it.
+func TestBuildMRSummary_LongDescriptionKeepsItsFenceClosed(t *testing.T) {
+	tests := []struct {
+		name        string
+		description string
+	}{
+		{name: "just under the limit", description: strings.Repeat("a", summaryExcerptRunes-1)},
+		{name: "exactly at the limit", description: strings.Repeat("a", summaryExcerptRunes)},
+		{name: "just over the limit", description: strings.Repeat("a", summaryExcerptRunes+1)},
+		{name: "far over the limit", description: strings.Repeat("a", 500)},
+		// Multi-byte text: a rune split in half would put an invalid sequence
+		// in front of the user.
+		{name: "multi-byte characters over the limit", description: strings.Repeat("ñ", 300)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := buildMRSummary(mrSummaryParams{
+				ProjectID:    "42",
+				Title:        "a title",
+				SourceBranch: "feature/x",
+				TargetBranch: "main",
+				Description:  tt.description,
+				// Printed after the description, so an unclosed fence shows up
+				// here rather than staying invisible.
+				Labels: []string{"bug", "urgent"},
+			})
+
+			if strings.Count(s, "`")%2 != 0 {
+				t.Errorf("odd number of backticks, so a fence is left open:\n%s", s)
+			}
+			if !strings.Contains(s, "**Labels**") {
+				t.Fatalf("the labels field is missing from the summary:\n%s", s)
+			}
+			// The label values must still read as their own escaped field
+			// rather than as part of the description's fence.
+			if !strings.Contains(s, "`bug, urgent`") {
+				t.Errorf("the labels were absorbed by the description's fence:\n%s", s)
+			}
+			if !utf8.ValidString(s) {
+				t.Error("the summary is not valid UTF-8; a character was split")
 			}
 		})
 	}

@@ -35,10 +35,18 @@ const (
 	staticReadTTLMs = 3_600_000
 )
 
-// scopePrivate is the only scope this server emits; catalogs and reads are
-// token/tier-dependent, so public intermediary caching would leak data
-// across users (the SDK default is "public").
-const scopePrivate = "private"
+// Cache scopes this server emits.
+//
+// Almost everything is private: catalogs and reads are token- and
+// tier-dependent, so a shared intermediary cache would serve one user's view to
+// another. The exception is the prompt catalog, which is compiled in and
+// identical for every caller — marking that private costs every client a
+// round trip for a body that could have been shared, and claims a
+// per-user variation that does not exist.
+const (
+	scopePrivate = "private"
+	scopePublic  = "public"
+)
 
 // staticResourcePrefixes lists the URI prefixes served entirely from process
 // memory and independent of the catalog. Only the workflow guides
@@ -100,8 +108,19 @@ func Middleware(opts Options) mcp.Middleware {
 // covered by the policy; other results pass through untouched.
 func applyHints(method string, req mcp.Request, res mcp.Result, toolListTTL int) {
 	switch method {
-	case "prompts/list", "resources/list", "resources/templates/list":
-		// Compiled into the binary; no runtime input can change them.
+	case "prompts/list":
+		// Public because nothing about it varies per caller: the 37 prompts are
+		// compiled in, and no tier, token or surface setting adds, removes or
+		// alters one. A shared cache in front of this deployment can serve the
+		// same body to everyone, which is what public means and what private
+		// forbids.
+		setCacheable(res, scopePublic, staticListTTLMs)
+	case "resources/list", "resources/templates/list":
+		// Private, unlike prompts: the registered set follows
+		// CAPABILITY_SURFACE, and gitlab://tools describes whichever tool
+		// surface is active. Deployment-wide rather than per-token today, but
+		// the coupling to the catalog is real enough that a shared cache is not
+		// worth the risk of one caller's view reaching another.
 		setCacheable(res, scopePrivate, staticListTTLMs)
 	case "tools/list", "server/discover":
 		// Tier-dependent: the tool catalog, and the instructions and

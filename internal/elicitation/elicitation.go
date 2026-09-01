@@ -41,26 +41,56 @@ var ErrCancelled = errors.New("elicitation: user canceled")
 // form elicitation but not URL mode elicitation.
 var ErrURLElicitationNotSupported = errors.New("elicitation: client does not support URL elicitation")
 
+// ErrMalformedAnswer is returned when a client accepts an elicitation request
+// with content that does not satisfy the schema the request carried.
+//
+// It is deliberately not ErrDeclined or ErrCancelled. Those two mean a person
+// decided something; this means a client sent something the server cannot read.
+// Reporting the second as the first invents a user decision that never
+// happened, which is worse than reporting a failure, because a model acting on
+// "the user cancelled" will not retry and will tell the user they refused.
+var ErrMalformedAnswer = errors.New("elicitation: the answer did not satisfy the requested schema")
+
+// ErrFormElicitationNotSupported is returned when the client declares url mode
+// and not form mode, so a form request would be one "the client has not
+// declared support for".
+var ErrFormElicitationNotSupported = errors.New("elicitation: client does not support form elicitation")
+
 const errOptionsEmpty = "elicitation: options list must not be empty"
 
 // Client sends elicitation requests to the MCP client for user input. Its
 // zero value is an inactive client where IsSupported returns false.
+//
+// The capabilities are captured when the Client is built rather than read from
+// the session on each question. From protocol 2026-07-28 a client declares them
+// per request, so the session is not the authority: a stateless HTTP POST is its
+// own session, and on stdio the session carries whatever the first request
+// happened to say.
 type Client struct {
 	session *mcp.ServerSession
+	caps    *mcp.ClientCapabilities
 }
 
 // FromRequest extracts the server session from a CallToolRequest and returns
 // a Client. If the connected MCP client does not support elicitation, the
 // returned Client is inactive (IsSupported returns false).
+//
+// The capabilities come from [mcp.ServerRequest.ClientCapabilities], which
+// reads the request's own `_meta` and falls back to the session's
+// InitializeParams for older protocol revisions. Reading InitializeParams
+// directly is what made this panic: the SDK synthesizes InitializeParams for a
+// request that arrives without a handshake and leaves Capabilities, a pointer,
+// nil. Every stateless HTTP POST from a pre-2026-07-28 client took that path,
+// so an ordinary client killed the process on any call that could elicit.
 func FromRequest(req *mcp.CallToolRequest) Client {
 	if req == nil || req.Session == nil {
 		return Client{}
 	}
-	params := req.Session.InitializeParams()
-	if params == nil || params.Capabilities.Elicitation == nil {
+	caps := req.ClientCapabilities()
+	if caps == nil || caps.Elicitation == nil {
 		return Client{}
 	}
-	return Client{session: req.Session}
+	return Client{session: req.Session, caps: caps}
 }
 
 // IsSupported returns true if the MCP client supports elicitation.
@@ -70,14 +100,28 @@ func (c Client) IsSupported() bool {
 
 // IsURLSupported returns true if the MCP client supports URL mode elicitation.
 func (c Client) IsURLSupported() bool {
-	if c.session == nil {
+	if c.caps == nil || c.caps.Elicitation == nil {
 		return false
 	}
-	params := c.session.InitializeParams()
-	if params == nil || params.Capabilities.Elicitation == nil {
+	return c.caps.Elicitation.URL != nil
+}
+
+// IsFormSupported returns true if the MCP client can render a form mode
+// elicitation request.
+//
+// The predicate mirrors the one the SDK enforces when the request is sent: a
+// client that declares url mode and not form mode does not support form, while
+// one that declares neither is treated as form-capable for backwards
+// compatibility, since an empty capabilities object predates the modes. The
+// specification's "servers MUST NOT send elicitation requests with modes that
+// are not supported by the client" is the reason to ask before queueing rather
+// than to discover it from the SDK's refusal afterwards.
+func (c Client) IsFormSupported() bool {
+	if c.caps == nil || c.caps.Elicitation == nil {
 		return false
 	}
-	return params.Capabilities.Elicitation.URL != nil
+	e := c.caps.Elicitation
+	return e.Form != nil || e.URL == nil
 }
 
 // Confirm asks the user a yes/no question and returns true if
@@ -92,7 +136,11 @@ func (c Client) Confirm(ctx context.Context, message string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return parseConfirmContent(result), nil
+	confirmed, wellFormed := parseConfirmContent(result)
+	if !wellFormed {
+		return false, ErrMalformedAnswer
+	}
+	return confirmed, nil
 }
 
 // PromptText asks the user for free-form text input and returns the value.

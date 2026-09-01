@@ -188,6 +188,8 @@ type httpConfig struct {
 	authMode              string
 	publicURL             string
 	resourceDocumentation string
+	resourcePolicyURI     string
+	resourceTermsURI      string
 	oauthCacheTTL         time.Duration
 	oauthClientUID        string
 	trustedProxyHeader    string
@@ -283,6 +285,8 @@ func main() {
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.StringVar(&hcfg.publicURL, "public-url", "", "Externally reachable origin of this deployment (https). Required with --auth-mode=oauth: it is the RFC 9728 protected-resource identifier")
 	flag.StringVar(&hcfg.resourceDocumentation, "resource-documentation", "", "https URL published as RFC 9728 resource_documentation; point it at a page describing your own OAuth application (its client ID and registered redirect URIs). Empty publishes this project's OAuth setup guide")
+	flag.StringVar(&hcfg.resourcePolicyURI, "resource-policy-uri", "", "https URL published as RFC 9728 resource_policy_uri; point it at your own page describing what this deployment does with the data reached through it. Empty publishes no policy link")
+	flag.StringVar(&hcfg.resourceTermsURI, "resource-tos-uri", "", "https URL published as RFC 9728 resource_tos_uri; point it at your own terms of service. Empty publishes no terms link")
 	flag.DurationVar(&hcfg.oauthCacheTTL, "oauth-cache-ttl", config.DefaultOAuthCacheTTL, "OAuth token cache TTL")
 	flag.StringVar(&hcfg.oauthClientUID, "oauth-client-uid", "", "Comma-separated GitLab OAuth application uids whose tokens this deployment admits. Empty (default) admits any credential the instance accepts; setting it also refuses personal access tokens, which belong to no application")
 	flag.StringVar(&hcfg.trustedProxyHeader, "trusted-proxy-header", "", "HTTP header containing the real client IP (e.g. X-Forwarded-For, X-Real-IP)")
@@ -435,6 +439,10 @@ FLAGS
   -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
   -resource-documentation string
                             https URL published as RFC 9728 resource_documentation (default: this project's OAuth setup guide)
+  -resource-policy-uri string
+                            https URL published as RFC 9728 resource_policy_uri (default: omitted)
+  -resource-tos-uri string
+                            https URL published as RFC 9728 resource_tos_uri (default: omitted)
   -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
   -oauth-client-uid string  Comma-separated GitLab OAuth application uids whose tokens are admitted (default: any)
   -public-url string        Externally reachable https origin; required with -auth-mode=oauth (RFC 9728 resource identifier)
@@ -696,6 +704,8 @@ func configFromHTTPFlags(hcfg *httpConfig, toolSurface string, metaTools bool, t
 		AuthMode:              hcfg.authMode,
 		PublicURL:             hcfg.publicURL,
 		ResourceDocumentation: hcfg.resourceDocumentation,
+		ResourcePolicyURI:     hcfg.resourcePolicyURI,
+		ResourceTermsURI:      hcfg.resourceTermsURI,
 		OAuthCacheTTL:         hcfg.oauthCacheTTL,
 		OAuthClientUIDs:       config.ParseCSV(hcfg.oauthClientUID),
 		TrustedProxyHeader:    hcfg.trustedProxyHeader,
@@ -750,6 +760,18 @@ func validateHTTPAuthConfig(cfg *config.Config) error {
 	}
 	if cfg.AuthMode != "legacy" && cfg.AuthMode != "oauth" {
 		return fmt.Errorf("--auth-mode must be 'legacy' or 'oauth', got %q", cfg.AuthMode)
+	}
+	// Checked in both modes: these are published the moment oauth is enabled,
+	// and an operator who sets them while running legacy should hear about a
+	// bad value now rather than the first time they switch.
+	for _, link := range []struct{ flag, value string }{
+		{"--resource-documentation", cfg.ResourceDocumentation},
+		{"--resource-policy-uri", cfg.ResourcePolicyURI},
+		{"--resource-tos-uri", cfg.ResourceTermsURI},
+	} {
+		if err := config.ValidateMetadataURL(link.flag, link.value); err != nil {
+			return err
+		}
 	}
 	if cfg.AuthMode != "oauth" {
 		// In legacy mode --public-url is optional, but when set it now has
@@ -943,7 +965,7 @@ func runStdio(ctx context.Context) error {
 	}
 
 	updater := newUpdaterForTools(cfg)
-	server, err := createServer(client, serverCfg, updater) //nolint:contextcheck // startup: removeExcludedTools uses ephemeral in-memory MCP transport isolated from request ctx
+	server, err := createServer(ctx, client, serverCfg, updater)
 	if err != nil {
 		return fmt.Errorf("creating MCP server: %w", err)
 	}
@@ -959,21 +981,36 @@ var sharedSchemaCache = mcp.NewSchemaCache()
 // resources, and prompts registered for the given GitLab client.
 // Used both by stdio mode (single call) and by the HTTP server pool factory.
 // If updater is non-nil, server update MCP tools are registered.
-// keepAliveFor returns the server keepalive interval for the configured
-// transport: zero (disabled) on stateless HTTP, where a server-initiated ping
-// is forbidden and the SDK closes the session when the ping cannot be written;
-// 30s everywhere else.
+// keepAliveFor returns the server keepalive interval, which is zero on every
+// transport: this server never sends the SDK's periodic ping.
 //
-// HTTP mode overrides this to zero for every pool entry, stateful included —
-// see [withKeepAlive] at the pool factory — so in practice only stdio keeps the
-// ping. The condition stays as it is because it is the transport-level truth,
-// and because a caller building a server without the pool still gets the
-// stateless rule right.
-func keepAliveFor(cfg *config.ServerConfig) time.Duration {
-	if cfg.Stateless {
-		return 0
-	}
-	return 30 * time.Second
+// It used to return 30s outside stateless HTTP, justified as keeping the ping
+// "where it is protocol-legal". That reasoning was per-transport and the
+// legality is per-protocol-version, so it was wrong wherever a client speaks
+// 2026-07-28: that revision removes ping, and restricts a server-sent
+// notifications/cancelled to subscriptions/listen requests. Observed on stdio
+// at that revision: an unprompted ping at +30s, notifications/cancelled with
+// requestId 1 at +45s, and then, because KeepAliveFailureThreshold is 1 and a
+// conformant client cannot answer a method its revision does not define, the
+// process exited. The server advertised a revision under which it killed itself
+// after 45 idle seconds.
+//
+// None of that was the SDK acting on its own. ServerOptions.KeepAlive defaults
+// to zero and the SDK starts a keepalive only when it is set; this function set
+// it. Worth stating plainly, because the failure looks like library behavior
+// from inside a debugger and was briefly filed as such.
+//
+// Gating it on the version is not available: the SDK starts the keepalive when
+// the session is created, before any request has revealed which revision the
+// client speaks. So the choice is per-transport or nothing, and the transport
+// that would keep it is the one where it is least needed — a stdio client that
+// goes away closes the pipe, which the server notices without asking anything.
+//
+// HTTP pool entries already passed zero explicitly ([withKeepAlive] at the pool
+// factory); that override is now redundant rather than load-bearing, and is
+// left in place because it states the intent at the layer that has the reason.
+func keepAliveFor(*config.ServerConfig) time.Duration {
+	return 0
 }
 
 // keepAliveInterval resolves the keepalive an individual server runs with: the
@@ -1005,7 +1042,11 @@ func sessionTagOf(sessionID string) (string, bool) {
 	return tag, true
 }
 
+// The context bounds the server's lifetime rather than any one request: it is
+// what tells the subscription runtime to end its open listen streams, which
+// otherwise keep the process alive through shutdown.
 func createServer(
+	ctx context.Context,
 	client *gitlabclient.Client,
 	cfg *config.ServerConfig,
 	updater *autoupdate.Updater,
@@ -1098,7 +1139,7 @@ func createServer(
 		SchemaCache: sharedSchemaCache,
 	})
 
-	subs.attach(server)
+	subs.attach(ctx, server)
 
 	// SEP-2549 cache hints: catalogs and resource reads are token- and
 	// tier-dependent, so every cacheable result is stamped "private". A
@@ -1139,7 +1180,7 @@ func createServer(
 	metaSchemaRoutes = surfaceRegistration.metaSchemaRoutes
 	surfaceCatalog = surfaceRegistration.surfaceCatalog
 
-	applyToolVisibilityConfig(server, cfg, toolSurface, surfaceCatalog)
+	applyToolVisibilityConfig(ctx, server, cfg, toolSurface, surfaceCatalog)
 
 	toolCount, err := countRegisteredTools(server)
 	if err != nil {
@@ -1198,12 +1239,15 @@ func createServer(
 		)
 	}
 
+	// Added last so it wraps every middleware above it as well as the handler.
+	server.AddReceivingMiddleware(recoverPanics)
+
 	return server, nil
 }
 
-func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
+func applyToolVisibilityConfig(ctx context.Context, server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
 	if len(cfg.ExcludeTools) > 0 {
-		removed := removeExcludedTools(server, cfg.ExcludeTools)
+		removed := removeExcludedTools(ctx, server, cfg.ExcludeTools)
 		slog.Info("excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
 	}
 	if cfg.TokenScopes != nil {
@@ -1213,7 +1257,7 @@ func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig, too
 		}
 	}
 	if cfg.ReadOnly {
-		removed := gitlabtools.RemoveNonReadOnlyTools(server)
+		removed := gitlabtools.RemoveNonReadOnlyTools(ctx, server)
 		slog.Info("read-only mode: removed write tools", "removed", removed)
 		return
 	}
@@ -1224,7 +1268,7 @@ func applyToolVisibilityConfig(server *mcp.Server, cfg *config.ServerConfig, too
 		// including tools registered outside the catalog such as the
 		// gitlab_interactive_* utilities.
 		exempt := catalogBackedToolNames(surfaceCatalog, toolSurface)
-		wrapped := gitlabtools.WrapMutatingToolsForSafeModeExcept(server, exempt)
+		wrapped := gitlabtools.WrapMutatingToolsForSafeModeExcept(ctx, server, exempt)
 		slog.Info("safe mode: intercepted mutating operations",
 			"surface", toolSurface, "wrapped_tools", wrapped, "catalog_backed_tools", len(exempt))
 	}
@@ -1576,7 +1620,6 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 	// records which tag belongs to which server so the gate can refuse a
 	// session presented with a different credential.
 	var sessionTags sync.Map
-	//nolint:contextcheck // the pool bounds entry construction with its own lifetime context via WithBaseContext below
 	pool := serverpool.New(cfg, func(client *gitlabclient.Client, serverCfg *config.ServerConfig) (*mcp.Server, error) {
 		tag := rand.Text()
 		// No server-initiated keepalive on any HTTP entry, stateful included.
@@ -1587,7 +1630,7 @@ func serveHTTPOn(ctx context.Context, cfg *config.Config, httpAddr string, liste
 		// mark for being idle. Liveness on this transport is the SSE
 		// keep-alive comment (see sseAwareWriter), which puts bytes on the
 		// wire without asking the client for anything.
-		srv, err := createServer(client, serverCfg, nil, withSessionTag(tag), withKeepAlive(0))
+		srv, err := createServer(ctx, client, serverCfg, nil, withSessionTag(tag), withKeepAlive(0))
 		if err != nil {
 			return nil, err
 		}
@@ -2213,7 +2256,11 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		advertisedScope: requiredScope,
 	}
 	authMiddleware := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{ResourceMetadataURL: resourceMetadataURL, Scopes: []string{oauth.MinimumScope}})
-	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.InstanceURLs(), oauth.SupportedScopes(cfg.ReadOnly, cfg.SafeMode), cfg.ResourceDocumentation)
+	prm := oauth.NewProtectedResourceHandler(resourceID, cfg.InstanceURLs(), oauth.SupportedScopes(cfg.ReadOnly, cfg.SafeMode), oauth.ResourceLinks{
+		Documentation:  cfg.ResourceDocumentation,
+		Policy:         cfg.ResourcePolicyURI,
+		TermsOfService: cfg.ResourceTermsURI,
+	})
 	// Both derivations of RFC 9728 §3 resolve: the path-less form and the
 	// path-inserted form a client computes from a resource identifier that
 	// carries a path. Mounted without a method restriction so the SDK
@@ -2221,8 +2268,9 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	// Access-Control-Allow-Origin: *); a "GET "-restricted pattern would
 	// send the preflight to the catch-all gate and 401 it, locking out
 	// browser-based clients that fetch PRM cross-origin (claude.ai).
-	mux.Handle("/.well-known/oauth-protected-resource", prm)
-	mux.Handle("/.well-known/oauth-protected-resource/{rest...}", prm)
+	discovery := metadataDocument(prm)
+	mux.Handle("/.well-known/oauth-protected-resource", discovery)
+	mux.Handle("/.well-known/oauth-protected-resource/{rest...}", discovery)
 	// Bearer only: oauth mode advertises the RFC 6750 scheme, so the legacy
 	// PRIVATE-TOKEN header alias is not silently rewritten into it here —
 	// what the challenge advertises is exactly what is accepted.
@@ -2825,7 +2873,7 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 	// createServer's internal tool-exclusion pass runs an ephemeral
 	// in-memory session of its own; the caller's context governs the card
 	// session below, not that registration detail.
-	srv, err := createServer(dummyClient, cfg.ServerConfig(), nil) //nolint:contextcheck // see above
+	srv, err := createServer(ctx, dummyClient, cfg.ServerConfig(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating server-card MCP server: %w", err)
 	}
@@ -3039,7 +3087,13 @@ func buildServerCard(ctx context.Context, cfg *config.Config) ([]byte, error) {
 // It blocks until the context is canceled or an error occurs.
 func serveStdio(ctx context.Context, server *mcp.Server) error {
 	slog.Info("starting MCP server", "transport", "stdio", "version", version, "commit", commit)
-	if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
+	// An IOTransport over filtered stdin rather than mcp.StdioTransport, which
+	// wraps os.Stdin directly: the SDK's read loop treats a message it cannot
+	// parse like a closed pipe and ends the session, so one malformed line
+	// would take the process and the client's whole context with it. See
+	// [resilientStdio].
+	reader, writer := resilientStdio(os.Stdin, os.Stdout)
+	if err := server.Run(ctx, &mcp.IOTransport{Reader: reader, Writer: writer}); err != nil {
 		return fmt.Errorf("mcp server error: %w", err)
 	}
 	return nil
@@ -3364,7 +3418,7 @@ func countCatalogActions(routes map[string]toolutil.ActionMap) int {
 // removeExcludedTools lists all registered tools and removes those whose name
 // matches any entry in the exclusion list. Matching is exact by tool name.
 // Returns the number of tools removed.
-func removeExcludedTools(server *mcp.Server, exclude []string) int {
+func removeExcludedTools(ctx context.Context, server *mcp.Server, exclude []string) int {
 	if len(exclude) == 0 {
 		return 0
 	}
@@ -3375,7 +3429,6 @@ func removeExcludedTools(server *mcp.Server, exclude []string) int {
 	}
 
 	st, ct := mcp.NewInMemoryTransports()
-	ctx := context.Background()
 
 	serverSession, err := server.Connect(ctx, st, nil)
 	if err != nil {

@@ -225,6 +225,20 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 	}
 
 	tracker := progress.FromRequest(req)
+	// One scale for the whole call, measured in bytes.
+	//
+	// Counting files here while each upload counts its own bytes gave one
+	// progress token two series and two meanings of "total", so what a client
+	// received ran 200000 -> 1 -> 0 and its total oscillated. Bytes are the
+	// measure both levels can share, and they are the more useful of the two:
+	// a directory of one large file and twenty small ones is not five percent
+	// done after the first.
+	sizes := fileSizes(input.DirectoryPath, files)
+	var totalBytes, doneBytes int64
+	for _, size := range sizes {
+		totalBytes += size
+	}
+
 	var out PublishDirOutput
 	out.Published = make([]PublishDirItem, 0, len(files))
 
@@ -234,7 +248,7 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 		}
 
 		if tracker.IsActive() {
-			tracker.Update(ctx, float64(i), float64(len(files)),
+			tracker.Update(ctx, float64(doneBytes), float64(totalBytes),
 				fmt.Sprintf("Publishing file %d of %d: %s", i+1, len(files), name))
 		}
 
@@ -248,7 +262,9 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 		}
 
 		var pubOut PublishOutput
-		pubOut, err = Publish(ctx, req, client, pubInput)
+		pubOut, err = publishWithTracker(ctx, client, pubInput,
+			tracker.OnScale(float64(doneBytes), float64(totalBytes)))
+		doneBytes += sizes[i]
 		if err != nil {
 			out.Errors = append(out.Errors, fmt.Sprintf("%s: %v", name, err))
 			continue
@@ -267,9 +283,25 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 	out.TotalFiles = len(out.Published)
 
 	if tracker.IsActive() {
-		tracker.Update(ctx, float64(len(files)), float64(len(files)),
+		tracker.Update(ctx, float64(totalBytes), float64(totalBytes),
 			fmt.Sprintf("Published %d of %d files", out.TotalFiles, len(files)))
 	}
 
 	return out, nil
+}
+
+// fileSizes returns the size of each named file in dir, in the same order.
+//
+// A file that cannot be stat'd counts as zero rather than failing the call:
+// the sizes only scale a progress bar, and losing the whole publish because one
+// file's metadata was unreadable would trade a cosmetic problem for a real one.
+// The publish of that file reports its own failure in the usual way.
+func fileSizes(dir string, names []string) []int64 {
+	sizes := make([]int64, len(names))
+	for i, name := range names {
+		if info, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			sizes[i] = info.Size()
+		}
+	}
+	return sizes
 }

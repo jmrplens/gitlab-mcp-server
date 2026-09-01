@@ -19,7 +19,9 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"time"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -64,13 +66,6 @@ type answerRecord struct {
 	Content map[string]any `json:"content,omitempty"`
 }
 
-// flowState is the JSON payload round-tripped through the opaque
-// RequestState field between rounds of a multi round-trip flow.
-type flowState struct {
-	Version int                     `json:"v"`
-	Answers map[string]answerRecord `json:"answers,omitempty"`
-}
-
 // Flow performs elicitation exchanges for a single tool call, selecting
 // the synchronous path for legacy sessions and the multi round-trip path
 // for protocol >= 2026-07-28 sessions. Prompt methods take a stable id
@@ -81,6 +76,9 @@ type Flow struct {
 	mrtr    bool
 	answers map[string]answerRecord
 	pending mcp.InputRequestMap
+	// digest identifies the call this flow belongs to, so answers given to
+	// one call cannot be presented on another.
+	digest string
 }
 
 // FlowFromRequest builds a Flow for the current tool call. For multi
@@ -92,23 +90,25 @@ func FlowFromRequest(req *mcp.CallToolRequest) (*Flow, error) {
 	if req == nil || req.Session == nil {
 		return f, nil
 	}
-	iparams := req.Session.InitializeParams()
-	if iparams == nil || iparams.ProtocolVersion < minMRTRProtocolVersion {
+	// Read the revision from the request rather than the session. From
+	// 2026-07-28 a client states it per request and may arrive without ever
+	// having handshaken, so the session-level value is whatever the first
+	// request on that session happened to say. The accessor still falls back to
+	// InitializeParams, which is where an older client's value lives.
+	if req.ProtocolVersion() < minMRTRProtocolVersion {
 		return f, nil
 	}
 	f.mrtr = true
 	if req.Params == nil {
 		return f, nil
 	}
+	f.digest = requestDigest(req.Params.Name, req.Params.Arguments)
 	if state := req.Params.RequestState; state != "" {
-		var st flowState
-		if err := json.Unmarshal([]byte(state), &st); err != nil {
-			return nil, fmt.Errorf("elicitation: invalid requestState: %w", err)
+		answers, err := decodeState(state, f.digest, time.Now())
+		if err != nil {
+			return nil, err
 		}
-		if st.Version != flowStateVersion {
-			return nil, fmt.Errorf("elicitation: unsupported requestState version %d", st.Version)
-		}
-		maps.Copy(f.answers, st.Answers)
+		maps.Copy(f.answers, answers)
 	}
 	for id, resp := range req.Params.InputResponses {
 		er, ok := resp.(*mcp.ElicitResult)
@@ -146,6 +146,13 @@ func (f *Flow) exchange(ctx context.Context, id, message string, schema map[stri
 	if rec, ok := f.answers[id]; ok {
 		return contentForAction(rec.Action, rec.Content)
 	}
+	// "Servers MUST NOT send elicitation requests with modes that are not
+	// supported by the client." An answer already given is honored above
+	// regardless, since refusing to read it would discard the user's own input.
+	// The legacy path needs no such check: there the SDK refuses the send.
+	if !f.legacy.IsFormSupported() {
+		return nil, ErrFormElicitationNotSupported
+	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -165,7 +172,11 @@ func (f *Flow) Confirm(ctx context.Context, id, message string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return parseConfirmContent(content), nil
+	confirmed, wellFormed := parseConfirmContent(content)
+	if !wellFormed {
+		return false, ErrMalformedAnswer
+	}
+	return confirmed, nil
 }
 
 // PromptText asks the user for free-form text input. See [Client.PromptText].
@@ -252,7 +263,16 @@ func (f *Flow) GatherData(ctx context.Context, id, message string, schema map[st
 	if !f.IsSupported() {
 		return nil, ErrElicitationNotSupported
 	}
-	return f.exchange(ctx, id, message, schema)
+	content, err := f.exchange(ctx, id, message, schema)
+	if err != nil {
+		return nil, err
+	}
+	// The caller supplied the schema and gets the content back unexamined, so
+	// this is the one prompt where nothing else would check it.
+	if invalid := validateAgainstSchema(schema, content); invalid != nil {
+		return nil, invalid
+	}
+	return content, nil
 }
 
 // ElicitURL sends a URL-mode elicitation request, directing the user to a
@@ -296,16 +316,16 @@ func (f *Flow) ElicitURL(ctx context.Context, id, gitlabBaseURL, targetURL, mess
 // The result must be returned as-is, with no content added: the protocol
 // forbids mixing content and inputRequests in one result.
 func (f *Flow) InputRequiredResult() *mcp.CallToolResult {
-	state, err := json.Marshal(flowState{Version: flowStateVersion, Answers: f.answers})
+	state, err := encodeState(f.answers, f.digest, time.Now())
 	if err != nil {
 		return &mcp.CallToolResult{
-			Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf("elicitation: failed to encode request state: %v", err)}},
+			Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}},
 			IsError: true,
 		}
 	}
 	return &mcp.CallToolResult{
 		InputRequests: f.pending,
-		RequestState:  string(state),
+		RequestState:  state,
 	}
 }
 
@@ -313,4 +333,57 @@ func (f *Flow) InputRequiredResult() *mcp.CallToolResult {
 // for handlers that report outcomes through an error return.
 func (f *Flow) PendingError() error {
 	return &InputRequiredError{result: f.InputRequiredResult()}
+}
+
+// validateAgainstSchema checks an answer against the schema it was asked
+// against.
+//
+// "Servers SHOULD validate received data matches the requested schema." On the
+// legacy path the SDK does this inside Elicit. The multi round-trip path never
+// calls Elicit — the answer arrives as an ordinary field of the next tool call
+// — so nothing validated it there.
+//
+// This is applied to [Flow.GatherData] and not to the typed prompts, which is a
+// deliberate line rather than an oversight. Each typed prompt already validates
+// its own answer, with a message written for the case (an option that is not in
+// the list, a number outside its bounds) rather than a schema path. Two of them
+// also accept more than their schema advertises, on purpose: the 2026-07-28
+// elicitation subset has no integer enum, so an integer choice is offered as
+// decimal strings and parsed back, and a client that answers with the number
+// instead is honored. Validating those strictly would refuse a client that got
+// the answer right, to enforce a schema shape the protocol forced on us.
+//
+// GatherData has no such parser: it takes an arbitrary schema from its caller
+// and hands the content straight back. That is where an unchecked answer can
+// actually reach a handler as the wrong type, so that is where this runs.
+func validateAgainstSchema(schema, content map[string]any) error {
+	if schema == nil {
+		return nil
+	}
+	if content == nil {
+		// An accept with no content is an empty answer, not an unvalidated
+		// one: a schema with required fields has to fail it here rather than
+		// hand the handler a nil it never agreed to.
+		content = map[string]any{}
+	}
+	raw, marshalErr := json.Marshal(schema)
+	if marshalErr != nil {
+		return fmt.Errorf("elicitation: cannot encode the requested schema: %w", marshalErr)
+	}
+	var parsed jsonschema.Schema
+	if unmarshalErr := json.Unmarshal(raw, &parsed); unmarshalErr != nil {
+		return fmt.Errorf("elicitation: cannot read the requested schema: %w", unmarshalErr)
+	}
+	resolved, resolveErr := parsed.Resolve(nil)
+	if resolveErr != nil {
+		return fmt.Errorf("elicitation: cannot resolve the requested schema: %w", resolveErr)
+	}
+	if invalid := resolved.Validate(content); invalid != nil {
+		// The same classification a malformed confirmation gets: the client
+		// answered something other than what was asked, which is not a
+		// decision anyone made. The detail is joined rather than wrapped so
+		// callers can still branch on the sentinel.
+		return fmt.Errorf("%w: %w", ErrMalformedAnswer, invalid)
+	}
+	return nil
 }

@@ -3,9 +3,11 @@ package toolutil
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/testutil"
@@ -108,7 +110,10 @@ func TestHasExplicitConfirm(t *testing.T) {
 func TestConfirmDestructiveAction_YOLOMode(t *testing.T) {
 	t.Setenv("YOLO_MODE", "true")
 
-	result := ConfirmDestructiveAction(context.Background(), nil, nil, testConfirmPrompt)
+	result, guardErr := ConfirmDestructiveAction(context.Background(), nil, nil, testConfirmPrompt)
+	if guardErr != nil {
+		t.Fatalf("unexpected protocol error: %v", guardErr)
+	}
 	if result != nil {
 		t.Errorf("expected nil (proceed) in YOLO_MODE, got result")
 	}
@@ -119,7 +124,10 @@ func TestConfirmDestructiveAction_YOLOMode(t *testing.T) {
 // parameters contain confirm:true.
 func TestConfirmDestructiveAction_ExplicitConfirm(t *testing.T) {
 	params := map[string]any{"confirm": true}
-	result := ConfirmDestructiveAction(context.Background(), nil, params, testConfirmPrompt)
+	result, guardErr := ConfirmDestructiveAction(context.Background(), nil, params, testConfirmPrompt)
+	if guardErr != nil {
+		t.Fatalf("unexpected protocol error: %v", guardErr)
+	}
 	if result != nil {
 		t.Errorf("expected nil (proceed) with confirm:true, got result")
 	}
@@ -130,7 +138,10 @@ func TestConfirmDestructiveAction_ExplicitConfirm(t *testing.T) {
 // (elicitation unsupported): the action must not proceed, and the error
 // result must tell the caller how to confirm explicitly.
 func TestConfirmDestructiveAction_NoElicitation(t *testing.T) {
-	result := ConfirmDestructiveAction(context.Background(), nil, nil, testConfirmPrompt)
+	result, guardErr := ConfirmDestructiveAction(context.Background(), nil, nil, testConfirmPrompt)
+	if guardErr != nil {
+		t.Fatalf("unexpected protocol error: %v", guardErr)
+	}
 	if result == nil {
 		t.Fatal("expected error result when elicitation unsupported, got nil (proceed)")
 	}
@@ -144,7 +155,10 @@ func TestConfirmDestructiveAction_NoElicitation(t *testing.T) {
 // requests fail closed when the client does not support elicitation.
 func TestConfirmDestructiveAction_RequestWithoutElicitation(t *testing.T) {
 	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "delete_project"}}
-	result := ConfirmDestructiveAction(context.Background(), req, nil, testConfirmPrompt)
+	result, guardErr := ConfirmDestructiveAction(context.Background(), req, nil, testConfirmPrompt)
+	if guardErr != nil {
+		t.Fatalf("unexpected protocol error: %v", guardErr)
+	}
 	if result == nil {
 		t.Fatal("ConfirmDestructiveAction() = nil, want fail-closed error result without elicitation support")
 	}
@@ -167,7 +181,11 @@ func confirmGuardServer(t *testing.T) *mcp.ClientSession {
 	}
 	server.AddTool(&mcp.Tool{Name: "guarded", Description: "guarded", InputSchema: schema},
 		func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			if result := ConfirmDestructiveAction(ctx, req, nil, testConfirmPrompt); result != nil {
+			result, err := ConfirmDestructiveAction(ctx, req, nil, testConfirmPrompt)
+			if err != nil {
+				return nil, err
+			}
+			if result != nil {
 				return result, nil
 			}
 			return executed(), nil
@@ -175,7 +193,11 @@ func confirmGuardServer(t *testing.T) *mcp.ClientSession {
 	server.AddTool(&mcp.Tool{Name: "corrupt", Description: "corrupt", InputSchema: schema},
 		func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			req.Params.RequestState = "{not json"
-			if result := ConfirmDestructiveAction(ctx, req, nil, testConfirmPrompt); result != nil {
+			result, err := ConfirmDestructiveAction(ctx, req, nil, testConfirmPrompt)
+			if err != nil {
+				return nil, err
+			}
+			if result != nil {
 				return result, nil
 			}
 			return executed(), nil
@@ -183,7 +205,11 @@ func confirmGuardServer(t *testing.T) *mcp.ClientSession {
 	server.AddTool(&mcp.Tool{Name: "corrupt_confirm", Description: "corrupt confirm", InputSchema: schema},
 		func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			req.Params.RequestState = "{not json"
-			if result := ConfirmAction(ctx, req, testConfirmPrompt); result != nil {
+			result, err := ConfirmAction(ctx, req, testConfirmPrompt)
+			if err != nil {
+				return nil, err
+			}
+			if result != nil {
 				return result, nil
 			}
 			return executed(), nil
@@ -222,35 +248,53 @@ func TestConfirmDestructiveAction_MRTRRoundTrip(t *testing.T) {
 	}
 }
 
-// TestConfirmDestructiveAction_InvalidRequestStateFailsClosed verifies a
-// corrupted client-echoed request state is rejected with an error result
-// instead of proceeding with the destructive action.
-func TestConfirmDestructiveAction_InvalidRequestStateFailsClosed(t *testing.T) {
-	session := confirmGuardServer(t)
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "corrupt", Arguments: map[string]any{}})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
+// TestInvalidRequestState_FailsClosedAsAProtocolError covers both entry points
+// into the confirmation guard with a corrupted client-echoed request state.
+//
+// The failing-closed half must never change: a state this server did not issue
+// stops the destructive action. The shape did change. It used to be an isError
+// tool result, which told a model that a field its own client mangled was
+// something it could correct; it is invalid params, and the assertion follows
+// the wire — a client sees an error response, not a successful call carrying a
+// complaint.
+//
+// Both paths are here because ConfirmAction has its own defensive check,
+// reached when a caller invokes it without the ConfirmDestructiveAction
+// pre-check, and the two must classify the same input the same way.
+func TestInvalidRequestState_FailsClosedAsAProtocolError(t *testing.T) {
+	tests := []struct {
+		name string
+		tool string
+		// namesTheField is true where the message should still identify what
+		// the client got wrong.
+		namesTheField bool
+	}{
+		{name: "through the destructive guard", tool: "corrupt", namesTheField: true},
+		{name: "through ConfirmAction directly", tool: "corrupt_confirm"},
 	}
-	if !result.IsError {
-		t.Fatalf("result = %+v, want error result for invalid request state", result)
-	}
-	tc, ok := result.Content[0].(*mcp.TextContent)
-	if !ok || !strings.Contains(tc.Text, "requestState") {
-		t.Errorf("result content = %+v, want invalid requestState detail", result.Content[0])
-	}
-}
 
-// TestConfirmAction_InvalidRequestStateFailsClosed verifies ConfirmAction's
-// own defensive flow-state check (reached when a caller invokes it without
-// the ConfirmDestructiveAction pre-check) rejects a corrupted request state.
-func TestConfirmAction_InvalidRequestStateFailsClosed(t *testing.T) {
-	session := confirmGuardServer(t)
-	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: "corrupt_confirm", Arguments: map[string]any{}})
-	if err != nil {
-		t.Fatalf("CallTool: %v", err)
-	}
-	if !result.IsError {
-		t.Fatalf("result = %+v, want error result for invalid request state", result)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := confirmGuardServer(t)
+			result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+				Name:      tt.tool,
+				Arguments: map[string]any{},
+			})
+			if err == nil {
+				t.Fatalf("result = %+v, want a protocol error for an invalid request state", result)
+			}
+			if tt.namesTheField && !strings.Contains(err.Error(), "requestState") {
+				t.Errorf("err = %v, want it to name the offending field", err)
+			}
+
+			var rpcErr *jsonrpc.Error
+			if !errors.As(err, &rpcErr) {
+				t.Fatalf("the error carries no JSON-RPC code: %v", err)
+			}
+			if rpcErr.Code != jsonrpc.CodeInvalidParams {
+				t.Errorf("code = %d, want %d (invalid params)", rpcErr.Code, jsonrpc.CodeInvalidParams)
+			}
+		})
 	}
 }
 
@@ -312,7 +356,7 @@ func newConfirmSession(t *testing.T, handler func(context.Context, *mcp.ElicitRe
 // nil (proceed) when the client does not support elicitation.
 func TestConfirmAction_UnsupportedProceeds(t *testing.T) {
 	req := &mcp.CallToolRequest{Params: &mcp.CallToolParamsRaw{Name: "noop"}}
-	if got := ConfirmAction(context.Background(), req, "Proceed?"); got != nil {
+	if got, guardErr := ConfirmAction(context.Background(), req, "Proceed?"); guardErr != nil || got != nil {
 		t.Errorf("ConfirmAction(unsupported) = %+v, want nil", got)
 	}
 }
@@ -325,7 +369,7 @@ func TestConfirmAction_ConfirmedProceeds(t *testing.T) {
 	})
 
 	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
-	if got := ConfirmAction(context.Background(), req, "Delete?"); got != nil {
+	if got, guardErr := ConfirmAction(context.Background(), req, "Delete?"); guardErr != nil || got != nil {
 		t.Errorf("ConfirmAction(confirmed) = %+v, want nil", got)
 	}
 }
@@ -338,7 +382,10 @@ func TestConfirmAction_ConfirmedFalseCancels(t *testing.T) {
 	})
 
 	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
-	got := ConfirmAction(context.Background(), req, "Delete?")
+	got, guardErr := ConfirmAction(context.Background(), req, "Delete?")
+	if guardErr != nil {
+		t.Fatalf("unexpected protocol error: %v", guardErr)
+	}
 	if got == nil {
 		t.Fatal("ConfirmAction(denied) = nil, want CancelledResult")
 	}
@@ -355,7 +402,10 @@ func TestConfirmAction_DeclinedCancels(t *testing.T) {
 	})
 
 	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
-	got := ConfirmAction(context.Background(), req, "Delete?")
+	got, guardErr := ConfirmAction(context.Background(), req, "Delete?")
+	if guardErr != nil {
+		t.Fatalf("unexpected protocol error: %v", guardErr)
+	}
 	if got == nil {
 		t.Fatal("ConfirmAction(declined) = nil, want CancelledResult")
 	}
@@ -364,7 +414,7 @@ func TestConfirmAction_DeclinedCancels(t *testing.T) {
 // TestConfirmAction_NilReqProceeds verifies that a nil request causes
 // [ConfirmAction] to skip elicitation and return nil.
 func TestConfirmAction_NilReqProceeds(t *testing.T) {
-	if got := ConfirmAction(context.Background(), nil, "Proceed?"); got != nil {
+	if got, guardErr := ConfirmAction(context.Background(), nil, "Proceed?"); guardErr != nil || got != nil {
 		t.Errorf("ConfirmAction(nil req) = %+v, want nil", got)
 	}
 }
@@ -378,7 +428,10 @@ func TestConfirmAction_UnknownActionFailsClosed(t *testing.T) {
 	})
 
 	req := &mcp.CallToolRequest{Session: ss, Params: &mcp.CallToolParamsRaw{Name: "delete"}}
-	got := ConfirmAction(context.Background(), req, "Delete?")
+	got, guardErr := ConfirmAction(context.Background(), req, "Delete?")
+	if guardErr != nil {
+		t.Fatalf("unexpected protocol error: %v", guardErr)
+	}
 	if got == nil {
 		t.Fatal("ConfirmAction(unknown action) = nil, want fail-closed error result")
 	}
@@ -464,4 +517,215 @@ func surfaceToolText(result *mcp.CallToolResult) string {
 		}
 	}
 	return b.String()
+}
+
+// TestConfirmAction_MalformedAnswerIsNotAUserDecision pins what a destructive
+// confirmation reports when the client's answer cannot be read.
+//
+// "The server SHOULD treat [an invalid response] as if the input request had
+// not been fulfilled." A client that accepts the confirmation but sends content
+// failing the schema it was handed used to be reported as "Operation canceled
+// by user." The action was correctly stopped; the explanation was invented.
+// That reaches a model as a decision a person made, so the model does not
+// retry, and it tells the user they declined something they were never shown.
+//
+// The guard is called directly rather than through a client session, because
+// the SDK client cannot produce this input: it validates elicitation content
+// against the requested schema and refuses to send a mismatch, and it fulfills
+// input requests itself rather than handing the state back to the caller. With
+// a go-sdk client the case is unreachable. It is reachable from any client that
+// does not validate, which is where it was observed, so the test speaks that
+// client's part directly.
+//
+// Both properties are asserted: the action still does not proceed, and the
+// reason is attributed to the user only when a user actually decided.
+func TestConfirmAction_MalformedAnswerIsNotAUserDecision(t *testing.T) {
+	tests := []struct {
+		name              string
+		content           map[string]any
+		wantsUserDecision bool
+	}{
+		{
+			name:              "an explicit refusal is a user decision",
+			content:           map[string]any{"confirmed": false},
+			wantsUserDecision: true,
+		},
+		{
+			name:              "an answer to a different question is not",
+			content:           map[string]any{"title": "some unrelated field"},
+			wantsUserDecision: false,
+		},
+		{
+			name:              "a non-boolean confirmation is not",
+			content:           map[string]any{"confirmed": "yes"},
+			wantsUserDecision: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &mcp.CallToolRequest{
+				Session: &mcp.ServerSession{},
+				Params: &mcp.CallToolParamsRaw{
+					Name: "guarded",
+					Meta: mcp.Meta{
+						"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+						"io.modelcontextprotocol/clientCapabilities": map[string]any{
+							"elicitation": map[string]any{"form": map[string]any{}},
+						},
+					},
+					InputResponses: mcp.InputResponseMap{
+						"confirm": &mcp.ElicitResult{Action: "accept", Content: tt.content},
+					},
+				},
+			}
+
+			result, guardErr := ConfirmDestructiveAction(context.Background(), req, nil, testConfirmPrompt)
+			if guardErr != nil {
+				t.Fatalf("unexpected protocol error: %v", guardErr)
+			}
+			if result == nil {
+				t.Fatal("the guard let the destructive action proceed")
+			}
+
+			var text string
+			if len(result.Content) > 0 {
+				if tc, isText := result.Content[0].(*mcp.TextContent); isText {
+					text = tc.Text
+				}
+			}
+			// A decision attributed to a person, however it is worded. The
+			// failure this guards against is a client-side schema bug being
+			// reported as something the user did.
+			mentionsUser := strings.Contains(text, "user declined") ||
+				strings.Contains(text, "canceled by user") ||
+				strings.Contains(text, "cancelled by user")
+			if mentionsUser != tt.wantsUserDecision {
+				t.Errorf("result = %q; attributing this to the user = %v, want %v",
+					text, mentionsUser, tt.wantsUserDecision)
+			}
+			if !result.IsError {
+				t.Error("the result is not marked as an error, so a declared output schema goes unsatisfied")
+			}
+		})
+	}
+}
+
+// TestConfirmDestructiveAction_ProtocolFaultsAreJSONRPCErrors pins which
+// failures belong in a tool result and which do not.
+//
+// "Protocol errors (malformed JSON, invalid schema, internal server errors)
+// SHOULD return a JSON-RPC error response with an appropriate error code and
+// message."
+//
+// Three faults used to come back as successful JSON-RPC responses carrying an
+// isError tool result: a requestState this server did not issue, one carrying a
+// version it does not know, and an inputResponses value of the wrong type. None
+// of the three is something the model wrote, so putting them in tool output
+// invites it to fix a field its own client mangled — and a client that cannot
+// see them as protocol errors has no reason to stop resending them.
+//
+// The distinction is the point, and it cuts the other way just as firmly: a
+// user declining, a client that cannot prompt, a GitLab refusal are all tool
+// outcomes and stay in the result, which is where MCP asks for them. Both sides
+// are asserted here so a later change cannot quietly move the line.
+func TestConfirmDestructiveAction_ProtocolFaultsAreJSONRPCErrors(t *testing.T) {
+	mrtrMeta := mcp.Meta{
+		"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+		"io.modelcontextprotocol/clientCapabilities": map[string]any{
+			"elicitation": map[string]any{"form": map[string]any{}},
+		},
+	}
+
+	tests := []struct {
+		name         string
+		params       *mcp.CallToolParamsRaw
+		wantRPCError bool
+	}{
+		{
+			name: "a requestState this server did not issue",
+			params: &mcp.CallToolParamsRaw{
+				Name: "guarded", Meta: mrtrMeta,
+				RequestState: "not-json-at-all",
+			},
+			wantRPCError: true,
+		},
+		{
+			name: "a requestState from a version this build does not know",
+			params: &mcp.CallToolParamsRaw{
+				Name: "guarded", Meta: mrtrMeta,
+				RequestState: "v99.eyJ2Ijo5OX0.bWFj",
+			},
+			wantRPCError: true,
+		},
+		{
+			name: "an inputResponse of the wrong type",
+			params: &mcp.CallToolParamsRaw{
+				Name: "guarded", Meta: mrtrMeta,
+				InputResponses: mcp.InputResponseMap{
+					// Every InputResponse that is not an ElicitResult is
+					// deprecated (sampling and roots, SEP-2577), so a wrong
+					// type can only be spelled with one. That is the case
+					// under test: whatever arrives, it is not what was asked
+					// for.
+					"confirm": &mcp.ListRootsResult{}, //nolint:staticcheck // see above
+				},
+			},
+			wantRPCError: true,
+		},
+		{
+			name: "a user declining is a tool outcome, not a protocol fault",
+			params: &mcp.CallToolParamsRaw{
+				Name: "guarded", Meta: mrtrMeta,
+				InputResponses: mcp.InputResponseMap{
+					"confirm": &mcp.ElicitResult{Action: "decline"},
+				},
+			},
+			wantRPCError: false,
+		},
+		{
+			name: "a client that cannot elicit is a tool outcome",
+			params: &mcp.CallToolParamsRaw{
+				Name: "guarded",
+				Meta: mcp.Meta{
+					"io.modelcontextprotocol/protocolVersion":    "2026-07-28",
+					"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+				},
+			},
+			wantRPCError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &mcp.CallToolRequest{Session: &mcp.ServerSession{}, Params: tt.params}
+
+			result, err := ConfirmDestructiveAction(context.Background(), req, nil, testConfirmPrompt)
+
+			if !tt.wantRPCError {
+				if err != nil {
+					t.Fatalf("a tool outcome was reported as a protocol error: %v", err)
+				}
+				if result == nil {
+					t.Fatal("the destructive action was allowed to proceed")
+				}
+				return
+			}
+
+			if err == nil {
+				t.Fatalf("a protocol fault was reported as a tool result: %+v", result)
+			}
+			if result != nil {
+				t.Errorf("a protocol error also produced a tool result: %+v", result)
+			}
+
+			var rpcErr *jsonrpc.Error
+			if !errors.As(err, &rpcErr) {
+				t.Fatalf("the error carries no JSON-RPC code: %v", err)
+			}
+			if rpcErr.Code != jsonrpc.CodeInvalidParams {
+				t.Errorf("code = %d, want %d (invalid params)", rpcErr.Code, jsonrpc.CodeInvalidParams)
+			}
+		})
+	}
 }

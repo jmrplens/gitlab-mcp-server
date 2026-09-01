@@ -14,7 +14,7 @@ import (
 // returns a valid RFC 9728 Protected Resource Metadata JSON document with
 // the expected resource, authorization server, bearer methods and scopes.
 func TestNewProtectedResourceHandler_ValidResponse(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI}, "")
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI}, ResourceLinks{})
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -74,7 +74,7 @@ func TestNewProtectedResourceHandler_AdvertisesTheScopesItAccepts(t *testing.T) 
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, tt.want, "")
+			handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, tt.want, ResourceLinks{})
 
 			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", http.NoBody)
 			rec := httptest.NewRecorder()
@@ -101,7 +101,7 @@ func TestNewProtectedResourceHandler_AdvertisesTheScopesItAccepts(t *testing.T) 
 // sets Access-Control-Allow-Origin: * so browser-based clients can fetch
 // the metadata document cross-origin.
 func TestNewProtectedResourceHandler_CORSHeaders(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI}, "")
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI}, ResourceLinks{})
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -115,7 +115,7 @@ func TestNewProtectedResourceHandler_CORSHeaders(t *testing.T) {
 // TestNewProtectedResourceHandler_OptionsPreflightReturns204 verifies that
 // OPTIONS preflight requests receive 204 No Content for CORS compliance.
 func TestNewProtectedResourceHandler_OptionsPreflightReturns204(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI}, "")
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI}, ResourceLinks{})
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -129,7 +129,7 @@ func TestNewProtectedResourceHandler_OptionsPreflightReturns204(t *testing.T) {
 // TestNewProtectedResourceHandler_PostMethodNotAllowed verifies that POST
 // and other non-GET/OPTIONS methods return 405 Method Not Allowed.
 func TestNewProtectedResourceHandler_PostMethodNotAllowed(t *testing.T) {
-	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI}, "")
+	handler := NewProtectedResourceHandler("https://mcp.example.com/mcp", []string{"https://gitlab.example.com"}, []string{ScopeAPI}, ResourceLinks{})
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/.well-known/oauth-protected-resource", nil)
 	rec := httptest.NewRecorder()
@@ -162,7 +162,8 @@ func TestNewProtectedResourceHandler_ResourceDocumentationIsConfigurable(t *test
 			t.Parallel()
 
 			handler := NewProtectedResourceHandler("https://mcp.example.com/mcp",
-				[]string{"https://gitlab.example.com"}, []string{ScopeAPI}, tt.configure)
+				[]string{"https://gitlab.example.com"}, []string{ScopeAPI},
+				ResourceLinks{Documentation: tt.configure})
 
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/.well-known/oauth-protected-resource", nil))
@@ -178,4 +179,71 @@ func TestNewProtectedResourceHandler_ResourceDocumentationIsConfigurable(t *test
 			}
 		})
 	}
+}
+
+// TestProtectedResourceHandler_OptionalLinksAreOmittedUnlessNamed pins how the
+// two optional RFC 9728 URL fields behave.
+//
+// "resource_policy_uri ... OPTIONAL. URL of a page containing human-readable
+// information about the protected resource's data usage policies", and the same
+// shape for resource_tos_uri. Both describe undertakings a specific deployment
+// makes about the data reached with the tokens it accepts, so neither has a
+// default: this project cannot make those undertakings on an operator's behalf,
+// and a field pointing at a page that does not exist would put a dead link on a
+// consent screen, which is worse than an absent optional field.
+//
+// resource_documentation is the deliberate exception and keeps its default,
+// since a client that finds no guidance at all is worse off than one sent to
+// generic instructions.
+func TestProtectedResourceHandler_OptionalLinksAreOmittedUnlessNamed(t *testing.T) {
+	read := func(t *testing.T, links ResourceLinks) map[string]any {
+		t.Helper()
+		handler := NewProtectedResourceHandler("https://mcp.example.com/mcp",
+			[]string{"https://gitlab.example.com"}, []string{ScopeAPI}, links)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet,
+			"/.well-known/oauth-protected-resource", nil))
+
+		var document map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &document); err != nil {
+			t.Fatalf("metadata is not JSON: %v (%s)", err, rec.Body.String())
+		}
+		return document
+	}
+
+	t.Run("neither is published by default", func(t *testing.T) {
+		document := read(t, ResourceLinks{})
+		for _, field := range []string{"resource_policy_uri", "resource_tos_uri"} {
+			if value, present := document[field]; present {
+				t.Errorf("%s = %v, want it omitted when no page was named", field, value)
+			}
+		}
+		// The one that does have a default is still there.
+		if document["resource_documentation"] != DefaultResourceDocumentation {
+			t.Errorf("resource_documentation = %v, want the project default", document["resource_documentation"])
+		}
+	})
+
+	t.Run("each appears when an operator names it", func(t *testing.T) {
+		document := read(t, ResourceLinks{
+			Policy:         "https://example.invalid/privacy",
+			TermsOfService: "https://example.invalid/terms",
+		})
+		if got := document["resource_policy_uri"]; got != "https://example.invalid/privacy" {
+			t.Errorf("resource_policy_uri = %v, want the configured page", got)
+		}
+		if got := document["resource_tos_uri"]; got != "https://example.invalid/terms" {
+			t.Errorf("resource_tos_uri = %v, want the configured page", got)
+		}
+	})
+
+	t.Run("one can be named without the other", func(t *testing.T) {
+		document := read(t, ResourceLinks{Policy: "https://example.invalid/privacy"})
+		if _, present := document["resource_policy_uri"]; !present {
+			t.Error("resource_policy_uri is missing though it was configured")
+		}
+		if value, present := document["resource_tos_uri"]; present {
+			t.Errorf("resource_tos_uri = %v, want it omitted; a deployment may have one page and not the other", value)
+		}
+	})
 }

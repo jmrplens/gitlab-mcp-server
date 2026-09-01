@@ -30,7 +30,7 @@ func TestWrapMutatingToolsForSafeMode_ReadOnlyToolPassesThrough(t *testing.T) {
 		}, nil
 	})
 
-	wrapped := WrapMutatingToolsForSafeMode(server)
+	wrapped := WrapMutatingToolsForSafeMode(t.Context(), server)
 	if wrapped != 0 {
 		t.Fatalf("expected 0 tools wrapped, got %d", wrapped)
 	}
@@ -60,7 +60,7 @@ func TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview(t *testing.T) {
 		return nil, errors.New("mutating handler must not run in safe mode")
 	})
 
-	wrapped := WrapMutatingToolsForSafeMode(server)
+	wrapped := WrapMutatingToolsForSafeMode(t.Context(), server)
 	if wrapped != 1 {
 		t.Fatalf("expected 1 tool wrapped, got %d", wrapped)
 	}
@@ -121,7 +121,7 @@ func TestWrapMutatingToolsForSafeMode_NilAnnotations(t *testing.T) {
 		return nil, errors.New("wrapped handler must not run in safe mode")
 	})
 
-	wrapped := WrapMutatingToolsForSafeMode(server)
+	wrapped := WrapMutatingToolsForSafeMode(t.Context(), server)
 	if wrapped != 1 {
 		t.Fatalf("expected 1 tool wrapped, got %d", wrapped)
 	}
@@ -168,7 +168,7 @@ func TestWrapMutatingToolsForSafeMode_MixedTools(t *testing.T) {
 		return nil, errors.New("mutating handler must not run in safe mode")
 	})
 
-	wrapped := WrapMutatingToolsForSafeMode(server)
+	wrapped := WrapMutatingToolsForSafeMode(t.Context(), server)
 	if wrapped != 1 {
 		t.Fatalf("expected 1 tool wrapped, got %d", wrapped)
 	}

@@ -52,7 +52,11 @@ const (
 var (
 	buildOnce   sync.Once
 	builtBinary string
-	errBuild    error
+	// builtDir is recorded separately from builtBinary because a failed build
+	// leaves the directory created and the binary path empty — the one case
+	// where cleanup matters most, since the run is about to end.
+	builtDir string
+	errBuild error
 )
 
 // serverBinary builds cmd/server once for the whole package and returns its
@@ -71,6 +75,7 @@ func serverBinary(t *testing.T) string {
 			errBuild = err
 			return
 		}
+		builtDir = dir
 		out := filepath.Join(dir, "gitlab-mcp-server")
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
@@ -566,4 +571,42 @@ func (s *server) raw(t *testing.T, wire string) string {
 		}
 	}
 	return reply.String()
+}
+
+// TestMain removes the binary this package builds once its tests are done.
+//
+// serverBinary deliberately cannot use t.TempDir: the binary is built under
+// sync.Once for the whole package, and the first test to arrive would own a
+// directory removed when that test ends, leaving every later test pointing at a
+// path that no longer exists. TestMain is the scope that actually matches — it
+// outlives every test and runs after all of them — so the reason for opting out
+// of t.TempDir is not a reason to leak.
+//
+// It is worth doing rather than leaving to the operating system. Each build is
+// around 68 MB, /tmp is not always cleared between runs, and a machine that
+// runs this suite through a working day accumulates a copy per run. Enough of
+// them had piled up here to be worth several gigabytes.
+//
+// The exit code is preserved, so a failing suite still fails.
+func TestMain(m *testing.M) {
+	code := m.Run()
+	removeBuiltBinary()
+	os.Exit(code)
+}
+
+// removeBuiltBinary deletes the temporary directory serverBinary created, if it
+// created one.
+//
+// Keyed on the directory rather than the binary so a build that failed is
+// cleaned up too: MkdirTemp succeeds before the compile does, so the failing
+// case leaves a directory and no binary.
+//
+// Failure is ignored: this runs after the tests have reported, so there is
+// nobody left to tell, and a leaked temporary file is not worth turning a
+// passing suite red.
+func removeBuiltBinary() {
+	if builtDir == "" {
+		return
+	}
+	_ = os.RemoveAll(builtDir)
 }

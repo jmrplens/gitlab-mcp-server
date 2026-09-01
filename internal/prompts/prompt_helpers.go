@@ -41,6 +41,16 @@ func addPrompt(server *mcp.Server, prompt *mcp.Prompt, handler mcp.PromptHandler
 	server.AddPrompt(prompt, func(ctx context.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		result, err := handler(ctx, req)
 		if err == nil {
+			// "description: An optional description for the prompt." The
+			// catalog carries one for all 37 and prompts/get returned none, so
+			// a client that fetched a prompt directly — without listing first,
+			// or after its cached list expired — had nothing to label it with.
+			// Filled here rather than in each handler: it is the same string
+			// the registration already declares, and one place cannot drift
+			// from thirty-seven.
+			if result != nil && result.Description == "" {
+				result.Description = prompt.Description
+			}
 			return result, nil
 		}
 		if _, coded := errors.AsType[*jsonrpc.Error](err); coded {

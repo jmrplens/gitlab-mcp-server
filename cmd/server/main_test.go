@@ -175,7 +175,7 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 	t.Helper()
 	cacheable := cfg.ExcludeTools == nil && cfg.TokenScopes == nil && cfg.GitLabURL == ""
 	if !cacheable {
-		server, err := createServer(client, cfg, nil)
+		server, err := createServer(t.Context(), client, cfg, nil)
 		if err != nil {
 			t.Fatalf("createServer() error: %v", err)
 		}
@@ -200,7 +200,7 @@ func mustCreateServer(t *testing.T, client *gitlabclient.Client, cfg *config.Ser
 	if server, ok := createdServers[key]; ok {
 		return server
 	}
-	server, err := createServer(sharedCreateServerClient(t), cfg, nil)
+	server, err := createServer(t.Context(), sharedCreateServerClient(t), cfg, nil)
 	if err != nil {
 		t.Fatalf("createServer() error: %v", err)
 	}
@@ -884,20 +884,38 @@ func TestRunWithContext_InvalidConfig(t *testing.T) {
 	}
 }
 
-// TestRunWithContext_PingFailure verifies that [runWithContext] returns an error
-// when the GitLab connectivity ping returns a failure status.
-func TestRunWithContext_PingFailure(t *testing.T) {
+// TestRunWithContext_PingFailure_StartsInDegradedMode verifies that an
+// unreachable or refusing GitLab does not stop the server from starting.
+//
+// That is deliberate: a server that refused to start because its instance was
+// briefly down would be harder to work with than one that starts and reports
+// the failure per call, so runWithContext logs the failed check and enables
+// lazy initialization instead.
+//
+// This test used to assert the opposite, and passed for a reason that had
+// nothing to do with the ping. Nothing here fails, so the run reached
+// serveStdio, whose transport returned an error when the test's own stdin hit
+// EOF — that error was what the assertion caught. The transport now treats EOF
+// as the ordinary end of a session (a client closing its pipe is not a
+// failure), which is what exposed it. Ending cleanly is asserted alongside the
+// startup, so the same false positive cannot come back.
+func TestRunWithContext_PingFailure_StartsInDegradedMode(t *testing.T) {
 	srv := newFailingGitLabServer(t, http.StatusForbidden)
 	t.Setenv("GITLAB_URL", srv.URL)
 	t.Setenv("GITLAB_TOKEN", testToken)
 	t.Setenv("GITLAB_SKIP_TLS_VERIFY", "true")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	err := runWithContext(ctx, nil)
-	if err == nil {
-		t.Fatal("expected error when gitlab ping fails")
+	// stdin is already at EOF here, so the session ends as soon as it starts.
+	// Reaching that point at all is the assertion: the refused ping did not
+	// stop the server from coming up.
+	if err := runWithContext(ctx, nil); err != nil {
+		t.Fatalf("a refused connectivity check stopped the server from starting: %v", err)
+	}
+	if ctx.Err() != nil {
+		t.Error("the run did not return on its own; it was cut short by the timeout")
 	}
 }
 
@@ -1389,7 +1407,7 @@ func TestCreateServer_DynamicToolSurfaceWithUpdaterIncludesUpdateSchema(t *testi
 		Repository:     "owner/repo",
 		CurrentVersion: "1.0.0",
 	}, autoupdate.EmptySource{})
-	server, err := createServer(client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic}, updater)
+	server, err := createServer(t.Context(), client, &config.ServerConfig{MetaTools: true, ToolSurface: config.ToolSurfaceDynamic}, updater)
 	if err != nil {
 		t.Fatalf("createServer(dynamic with updater) error = %v", err)
 	}
@@ -2008,7 +2026,7 @@ func TestCreateServer_ToolManifestInspectionError(t *testing.T) {
 
 	// Build directly: the stubbed inspection hook must not be captured into
 	// (or satisfied from) the shared mustCreateServer cache.
-	server, err := createServer(client, &config.ServerConfig{MetaTools: true}, nil)
+	server, err := createServer(t.Context(), client, &config.ServerConfig{MetaTools: true}, nil)
 	if err != nil {
 		t.Fatalf("createServer() error: %v", err)
 	}
@@ -4195,7 +4213,7 @@ func TestRemoveNonReadOnlyTools(t *testing.T) {
 		return &mcp.CallToolResult{}, nil, nil
 	})
 
-	removed := tools.RemoveNonReadOnlyTools(server)
+	removed := tools.RemoveNonReadOnlyTools(t.Context(), server)
 	if removed != 1 {
 		t.Errorf("RemoveNonReadOnlyTools removed %d tools, want 1", removed)
 	}
@@ -6566,8 +6584,17 @@ func TestKeepAliveInterval_HTTPPoolEntriesRunWithoutTheServerPing(t *testing.T) 
 
 	stateful := &config.ServerConfig{Stateless: false}
 
-	if got := keepAliveInterval(newServerSettings(nil), stateful); got == 0 {
-		t.Errorf("keepAliveInterval(stateful, no override) = 0; stdio must keep the ping, where it is protocol-legal")
+	// stdio used to keep the ping, justified as doing so "where it is
+	// protocol-legal". The legality is per protocol version, not per transport:
+	// 2026-07-28 removes ping and limits a server-sent notifications/cancelled
+	// to subscriptions/listen, and the SDK pings regardless and then emits that
+	// notification for its own timed-out ping. At KeepAliveFailureThreshold 1,
+	// a conformant client of that revision cannot answer, and the session dies
+	// — observed as the stdio process exiting 45 seconds into an idle session.
+	// The SDK starts the keepalive at session creation, before any request
+	// reveals the revision, so there is no version to gate on.
+	if got := keepAliveInterval(newServerSettings(nil), stateful); got != 0 {
+		t.Errorf("keepAliveInterval(stateful, no override) = %v, want 0 — a server-initiated ping is not ours to send at 2026-07-28, and the SDK starts it before the revision is known", got)
 	}
 
 	poolOptions := []serverOption{withSessionTag("tag"), withKeepAlive(0)}
@@ -6793,4 +6820,38 @@ func TestValidateHTTPAuthConfig_OAuthRefusesSkipTLSVerify(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestToolsList_FitsInOnePage is the guard on a number that has to stay ahead
+// of the catalog.
+//
+// PageSize is 2000 because one shipping client — OpenAI Codex — ignores
+// nextCursor and silently uses only the first page, so a catalog that outgrew
+// the page size would not fail loudly: it would hand that client a partial tool
+// list and let it conclude the missing tools do not exist.
+//
+// The largest surface is the individual one at the highest tier, and it grows
+// every time a domain is added. Nothing watched the gap between the two numbers
+// until now, which is the kind of limit that is only ever noticed after it is
+// crossed.
+func TestToolsList_FitsInOnePage(t *testing.T) {
+	server, err := createServer(t.Context(), sharedCreateServerClient(t), &config.ServerConfig{
+		ToolSurface: config.ToolSurfaceIndividual,
+		Tier:        edition.Ultimate,
+	}, nil)
+	if err != nil {
+		t.Fatalf("createServer: %v", err)
+	}
+
+	session := connectInMemory(t, server)
+	listed, err := session.ListTools(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("tools/list: %v", err)
+	}
+
+	if listed.NextCursor != "" {
+		t.Fatalf("tools/list paginated at %d tools; a client that ignores nextCursor now sees a partial catalog",
+			len(listed.Tools))
+	}
+	t.Logf("the largest surface lists %d tools in one page", len(listed.Tools))
 }

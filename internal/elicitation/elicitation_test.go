@@ -156,7 +156,7 @@ func TestConfirm_Accept(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	confirmed, err := c.Confirm(ctx, testConfirmMsg)
 	if err != nil {
 		t.Fatalf("Confirm() error = %v", err)
@@ -178,7 +178,7 @@ func TestConfirm_AcceptFalse(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	confirmed, err := c.Confirm(ctx, testConfirmMsg)
 	if err != nil {
 		t.Fatalf("Confirm() error = %v", err)
@@ -197,7 +197,7 @@ func TestConfirm_Decline(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.Confirm(ctx, testConfirmMsg)
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("Confirm(decline) error = %v, want %v", err, ErrDeclined)
@@ -213,7 +213,7 @@ func TestConfirm_Cancel(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.Confirm(ctx, testConfirmMsg)
 	if !errors.Is(err, ErrCancelled) {
 		t.Errorf("Confirm(cancel) error = %v, want %v", err, ErrCancelled)
@@ -232,7 +232,7 @@ func TestPromptText_Accept(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	text, err := c.PromptText(ctx, "Enter issue title", "title")
 	if err != nil {
 		t.Fatalf("PromptText() error = %v", err)
@@ -254,7 +254,7 @@ func TestPromptText_DefaultFieldName(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	text, err := c.PromptText(ctx, testEnterTextMsg, "")
 	if err != nil {
 		t.Fatalf("PromptText() error = %v", err)
@@ -273,7 +273,7 @@ func TestPromptText_Decline(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.PromptText(ctx, testEnterTextMsg, "value")
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("PromptText(decline) error = %v, want %v", err, ErrDeclined)
@@ -292,7 +292,7 @@ func TestSelectOne_Accept(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	sel, err := c.SelectOne(ctx, "Select label", []string{"bug", "feature", "docs"})
 	if err != nil {
 		t.Fatalf("SelectOne() error = %v", err)
@@ -314,7 +314,7 @@ func TestSelectOne_InvalidOption(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectOne(ctx, "Select label", []string{"bug", "feature"})
 	// SDK validates enum schema before our defense-in-depth check runs
 	if err == nil {
@@ -331,7 +331,7 @@ func TestSelectOne_Cancel(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectOne(ctx, "Select", []string{"a", "b"})
 	if !errors.Is(err, ErrCancelled) {
 		t.Errorf("SelectOne(cancel) error = %v, want %v", err, ErrCancelled)
@@ -364,7 +364,7 @@ func TestGatherData_Accept(t *testing.T) {
 		"required": []string{"name"},
 	}
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	data, err := c.GatherData(ctx, "Fill project details", schema)
 	if err != nil {
 		t.Fatalf("GatherData() error = %v", err)
@@ -386,7 +386,7 @@ func TestGatherData_Decline(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.GatherData(ctx, "Fill form", map[string]any{"type": "object"})
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("GatherData(decline) error = %v, want %v", err, ErrDeclined)
@@ -402,7 +402,7 @@ func TestElicit_UnknownAction(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.Confirm(ctx, "test?")
 	if err == nil || !strings.Contains(err.Error(), "unknown action") {
 		t.Errorf("elicit(unknown action) error = %v, want 'unknown action'", err)
@@ -421,7 +421,7 @@ func TestPromptText_NonStringResponse(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.PromptText(ctx, testEnterTextMsg, "value")
 	// SDK validates type schema before our type assertion runs
 	if err == nil {
@@ -441,7 +441,7 @@ func TestSelectOne_NonStringResponse(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectOne(ctx, "Select", []string{"a"})
 	// SDK validates type schema before our type assertion runs
 	if err == nil {
@@ -463,7 +463,7 @@ func TestConfirm_MessagePassedThrough(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, _ = c.Confirm(ctx, testDeleteProjectMsg)
 	if receivedMessage != testDeleteProjectMsg {
 		t.Errorf("message = %q, want %q", receivedMessage, testDeleteProjectMsg)
@@ -556,7 +556,7 @@ func TestSelectMulti_Accept(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	sel, err := c.SelectMulti(ctx, "Select labels", []string{"bug", "feature", "docs"}, 1, 3)
 	if err != nil {
 		t.Fatalf("SelectMulti() error = %v", err)
@@ -578,7 +578,7 @@ func TestSelectMulti_InvalidOption(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectMulti(ctx, "Select", []string{"a", "b"}, 0, 0)
 	if err == nil {
 		t.Error("SelectMulti(invalid) should return an error")
@@ -594,7 +594,7 @@ func TestSelectMulti_Decline(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectMulti(ctx, "choose", []string{"a"}, 0, 0)
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("SelectMulti(decline) error = %v, want %v", err, ErrDeclined)
@@ -635,7 +635,7 @@ func TestSelectOneInt_Accept(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	val, err := c.SelectOneInt(ctx, "Select access level", []int{10, 20, 30, 40})
 	if err != nil {
 		t.Fatalf("SelectOneInt() error = %v", err)
@@ -657,7 +657,7 @@ func TestSelectOneInt_InvalidValue(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectOneInt(ctx, "Select", []int{10, 20})
 	if err == nil {
 		t.Error("SelectOneInt(invalid) should return an error")
@@ -688,7 +688,7 @@ func TestPromptNumber_Accept(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	val, err := c.PromptNumber(ctx, "Enter amount", "amount", 0, 100)
 	if err != nil {
 		t.Fatalf("PromptNumber() error = %v", err)
@@ -710,7 +710,7 @@ func TestPromptNumber_DefaultFieldName(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	val, err := c.PromptNumber(ctx, "Enter value", "", 0, 100)
 	if err != nil {
 		t.Fatalf("PromptNumber() error = %v", err)
@@ -729,7 +729,7 @@ func TestPromptNumber_Decline(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.PromptNumber(ctx, "Enter", "val", 0, 100)
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("PromptNumber(decline) error = %v, want %v", err, ErrDeclined)
@@ -759,7 +759,7 @@ func TestIsURLSupported_WithCapability(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	if !c.IsURLSupported() {
 		t.Error("IsURLSupported() = false, want true")
 	}
@@ -775,7 +775,7 @@ func TestIsURLSupported_WithoutCapability(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	if c.IsURLSupported() {
 		t.Error("IsURLSupported() = true, want false (form-only client)")
 	}
@@ -805,7 +805,7 @@ func TestElicitURL_Accept(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/group/project/-/issues/1", "View issue")
 	if err != nil {
 		t.Errorf("ElicitURL(accept) error = %v", err)
@@ -821,7 +821,7 @@ func TestElicitURL_Decline(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open page")
 	if !errors.Is(err, ErrDeclined) {
 		t.Errorf("ElicitURL(decline) error = %v, want %v", err, ErrDeclined)
@@ -848,7 +848,7 @@ func TestElicitURL_URLModeNotSupported(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open page")
 	if !errors.Is(err, ErrURLElicitationNotSupported) {
 		t.Errorf("ElicitURL(form-only) error = %v, want %v", err, ErrURLElicitationNotSupported)
@@ -864,7 +864,7 @@ func TestElicitURL_ExternalURLRejected(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://evil.com/exploit", "Click here")
 	if err == nil {
 		t.Error("ElicitURL(external URL) should return error")
@@ -982,7 +982,7 @@ func TestSelectOneInt_FloatTruncation(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectOneInt(ctx, "Select", []int{2, 3})
 	if err == nil {
 		t.Error("SelectOneInt(2.5) should return error for non-integer value")
@@ -1001,7 +1001,7 @@ func TestSelectOneInt_NotInOptions(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectOneInt(ctx, "Select", []int{1, 2, 3})
 	if err == nil {
 		t.Error("SelectOneInt(99) should return error for value not in options")
@@ -1020,7 +1020,7 @@ func TestPromptNumber_BelowMin(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	// With min=0, max=100, value -5 should be rejected by schema validation.
 	_, err := c.PromptNumber(ctx, "Enter amount", "amount", 0, 100)
 	if err == nil {
@@ -1040,7 +1040,7 @@ func TestPromptNumber_AboveMax(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.PromptNumber(ctx, "Enter amount", "amount", 0, 100)
 	if err == nil {
 		t.Error("PromptNumber(999) should return error for value above maximum")
@@ -1060,7 +1060,7 @@ func TestElicitURL_Cancel(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open page")
 	if !errors.Is(err, ErrCancelled) {
 		t.Errorf("ElicitURL(cancel) error = %v, want %v", err, ErrCancelled)
@@ -1076,7 +1076,7 @@ func TestElicitURL_UnknownAction(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open page")
 	if err == nil {
 		t.Error("ElicitURL(unknown action) should return error")
@@ -1096,7 +1096,7 @@ func TestElicitURL_ContextCancelled(t *testing.T) {
 	defer cleanup()
 	cancel()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open page")
 	if err == nil {
 		t.Error("ElicitURL(cancelled) should return error")
@@ -1121,7 +1121,7 @@ func TestSelectOneInt_NonNumericResponse(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectOneInt(ctx, "Select", []int{1, 2})
 	if err == nil {
 		t.Error("SelectOneInt(string) should return error")
@@ -1145,7 +1145,7 @@ func TestPromptNumber_NonNumericResponse(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.PromptNumber(ctx, "Enter number", "", 0, 100)
 	if err == nil {
 		t.Error("PromptNumber(string) should return error")
@@ -1168,7 +1168,7 @@ func TestSelectMulti_NonArrayResponse(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectMulti(ctx, "Select", []string{"a", "b"}, 0, 0)
 	if err == nil {
 		t.Error("SelectMulti(string) should return error")
@@ -1187,7 +1187,7 @@ func TestSelectMulti_NonStringElement(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectMulti(ctx, "Select", []string{"a", "b"}, 0, 0)
 	if err == nil {
 		t.Error("SelectMulti(int element) should return error")
@@ -1390,7 +1390,7 @@ func TestSelectOneInt_NaN(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectOneInt(ctx, "Pick", []int{1, 2, 3})
 	if err == nil {
 		t.Error("expected error for non-numeric selection")
@@ -1408,7 +1408,7 @@ func TestSelectOneInt_Inf(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectOneInt(ctx, "Pick", []int{1, 2, 3})
 	if err == nil {
 		t.Error("expected error for Inf selection")
@@ -1427,7 +1427,7 @@ func TestSelectOne_FloatInsteadOfString(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectOne(ctx, "Pick", []string{"a", "b"})
 	if err == nil {
 		t.Error("expected error for non-string selection")
@@ -1446,7 +1446,7 @@ func TestSelectMulti_StringInsteadOfArray(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.SelectMulti(ctx, "Pick", []string{"a", "b"}, 0, 0)
 	if err == nil {
 		t.Error("expected error for non-array selections")
@@ -1472,7 +1472,7 @@ func TestPromptText_NonStringField(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.PromptText(ctx, "Enter text", "")
 	if err == nil {
 		t.Error("expected error for non-string response")
@@ -1491,7 +1491,7 @@ func TestPromptNumber_NaN(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	_, err := c.PromptNumber(ctx, "Enter number", "", 0, 100)
 	if err == nil {
 		t.Error("expected error for non-numeric value")
@@ -1517,12 +1517,191 @@ func TestElicitURL_HandlerError(t *testing.T) {
 	})
 	defer cleanup()
 
-	c := Client{session: ss}
+	c := clientFromSession(ss)
 	err := c.ElicitURL(ctx, "https://gitlab.example.com", "https://gitlab.example.com/test", "Open")
 	if err == nil {
 		t.Fatal("expected error when handler returns error")
 	}
 	if !strings.Contains(err.Error(), "URL request failed") {
 		t.Errorf("err = %v, want substring %q", err, "URL request failed")
+	}
+}
+
+// clientFromSession builds a Client the way the tests used to get one, by
+// taking the capabilities from the session's initialize handshake.
+//
+// Production code no longer reads them there: FromRequest takes the
+// capabilities of the request, because from 2026-07-28 a client declares them
+// per request and a request can arrive on a session that never handshook at
+// all. The tests still negotiate a real session through setupElicitSession or
+// setupElicitURLSession, so deriving from it keeps each case describing the
+// client it set up (form-only or url-capable) rather than one written out again
+// at the call site.
+func clientFromSession(ss *mcp.ServerSession) Client {
+	var caps *mcp.ClientCapabilities
+	if p := ss.InitializeParams(); p != nil {
+		caps = p.Capabilities
+	}
+	return Client{session: ss, caps: caps}
+}
+
+// TestFromRequest_NilCapabilities_DoesNotPanic pins the crash that took the
+// process down.
+//
+// InitializeParams.Capabilities is a pointer, and the SDK synthesizes
+// InitializeParams containing only a protocol version for a request that
+// arrives without a handshake, leaving that pointer nil. FromRequest read
+// params.Capabilities.Elicitation with only a params == nil guard, so the
+// dereference panicked in the SDK's jsonrpc2 goroutine, where nothing recovers:
+// the whole server died.
+//
+// It needed no client misbehavior on HTTP. Under the default stateless
+// transport each POST is its own session, so an ordinary pre-2026-07-28 client
+// took the synthesized path on every single tools/call that could elicit.
+//
+// The nil session and nil request cases are asserted alongside it so the guard
+// cannot be narrowed later to the one shape that was reported.
+func TestFromRequest_NilCapabilities_DoesNotPanic(t *testing.T) {
+	tests := []struct {
+		name string
+		req  *mcp.CallToolRequest
+	}{
+		{
+			name: "a request whose params were synthesized without capabilities",
+			req:  &mcp.CallToolRequest{Session: &mcp.ServerSession{}},
+		},
+		{
+			name: "a request with no session",
+			req:  &mcp.CallToolRequest{},
+		},
+		{
+			name: "no request at all",
+			req:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := FromRequest(tt.req)
+			if c.IsSupported() {
+				t.Error("IsSupported() = true for a client that declared no elicitation capability")
+			}
+			// Both mode predicates are reached on the same nil state.
+			if c.IsURLSupported() {
+				t.Error("IsURLSupported() = true for a client that declared nothing")
+			}
+			if c.IsFormSupported() {
+				t.Error("IsFormSupported() = true for a client that declared nothing")
+			}
+		})
+	}
+}
+
+// TestIsFormSupported_FollowsTheDeclaredModes pins the predicate the
+// specification requires before a form request is queued.
+//
+// "Servers MUST NOT send elicitation requests with modes that are not supported
+// by the client." A client declaring url and not form does not support form.
+// One declaring neither is form-capable, because an empty capabilities object
+// predates the modes and the page keeps it meaning form for compatibility;
+// that is also the predicate the SDK enforces on send, and disagreeing with it
+// would mean queueing requests the SDK then refuses.
+func TestIsFormSupported_FollowsTheDeclaredModes(t *testing.T) {
+	tests := []struct {
+		name string
+		caps *mcp.ClientCapabilities
+		want bool
+	}{
+		{
+			name: "form declared",
+			caps: &mcp.ClientCapabilities{Elicitation: &mcp.ElicitationCapabilities{Form: &mcp.FormElicitationCapabilities{}}},
+			want: true,
+		},
+		{
+			name: "neither mode declared is form, for backwards compatibility",
+			caps: &mcp.ClientCapabilities{Elicitation: &mcp.ElicitationCapabilities{}},
+			want: true,
+		},
+		{
+			name: "both modes declared",
+			caps: urlCapabilities(),
+			want: true,
+		},
+		{
+			name: "url only is not form",
+			caps: &mcp.ClientCapabilities{Elicitation: &mcp.ElicitationCapabilities{URL: &mcp.URLElicitationCapabilities{}}},
+			want: false,
+		},
+		{
+			name: "no elicitation capability at all",
+			caps: &mcp.ClientCapabilities{},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := Client{session: &mcp.ServerSession{}, caps: tt.caps}
+			if got := c.IsFormSupported(); got != tt.want {
+				t.Errorf("IsFormSupported() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestFromRequest_ReadsTheRequestsOwnCapabilities pins where the capabilities
+// are read from.
+//
+// "Clients that support elicitation MUST declare the `elicitation` capability
+// in `_meta.io.modelcontextprotocol/clientCapabilities` on each request."
+//
+// FromRequest used to read the session's InitializeParams instead, which is
+// wrong in both directions on a stdio session: the first request's declaration
+// became permanent, so a client that omitted capabilities on its first call
+// lost elicitation for the rest of the session, and one that declared them
+// there kept them even on a later call that declared none. It is also what
+// crashed the server, since the SDK synthesizes InitializeParams with a nil
+// Capabilities pointer for a request that never handshook.
+//
+// Both directions are asserted here against a session that has no handshake at
+// all, which is the shape a stateless HTTP POST always has.
+func TestFromRequest_ReadsTheRequestsOwnCapabilities(t *testing.T) {
+	tests := []struct {
+		name          string
+		meta          mcp.Meta
+		wantSupported bool
+	}{
+		{
+			name:          "declared on this request",
+			meta:          mcp.Meta{mcp.MetaKeyClientCapabilities: map[string]any{"elicitation": map[string]any{"form": map[string]any{}}}},
+			wantSupported: true,
+		},
+		{
+			name:          "declared empty on this request is still elicitation-capable",
+			meta:          mcp.Meta{mcp.MetaKeyClientCapabilities: map[string]any{"elicitation": map[string]any{}}},
+			wantSupported: true,
+		},
+		{
+			name:          "this request declares capabilities without elicitation",
+			meta:          mcp.Meta{mcp.MetaKeyClientCapabilities: map[string]any{}},
+			wantSupported: false,
+		},
+		{
+			name:          "this request declares nothing",
+			meta:          nil,
+			wantSupported: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := &mcp.CallToolRequest{
+				Session: &mcp.ServerSession{},
+				Params:  &mcp.CallToolParamsRaw{Name: "whatever", Meta: tt.meta},
+			}
+			if got := FromRequest(req).IsSupported(); got != tt.wantSupported {
+				t.Errorf("IsSupported() = %v, want %v", got, tt.wantSupported)
+			}
+		})
 	}
 }

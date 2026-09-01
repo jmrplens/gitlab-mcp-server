@@ -2326,3 +2326,66 @@ func TestEveryPromptWithRequiredArguments_RefusesWithInvalidParams(t *testing.T)
 	}
 	t.Logf("checked %d of %d prompts", checked, len(listed.Prompts))
 }
+
+// TestGetPrompt_CarriesTheDescriptionTheCatalogDeclares pins that a prompt
+// fetched directly identifies itself.
+//
+// "description: An optional description for the prompt." Optional, so omitting
+// it was legal — and unhelpful in the one case the field exists for: a client
+// that calls prompts/get without having listed first, or after its cached list
+// expired, had a result it could render but not label. The catalog already
+// carries a description for all 37, so the string existed and simply was not
+// being sent.
+//
+// It is filled at the registration wrapper rather than in each handler, which
+// is why one test covers every prompt: thirty-seven copies of the same line
+// would be thirty-seven chances to drift.
+func TestGetPrompt_CarriesTheDescriptionTheCatalogDeclares(t *testing.T) {
+	// The argument-free prompts all resolve the caller first, so the backend
+	// has to answer that much for the description to be reachable at all.
+	session := newMCPSession(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.HasSuffix(r.URL.Path, "/user") {
+			_, _ = w.Write([]byte(`{"id":7,"username":"someone","name":"Some One"}`))
+			return
+		}
+		// Everything else these prompts read is a list.
+		_, _ = w.Write([]byte(`[]`))
+	}))
+
+	listed, err := session.ListPrompts(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list prompts: %v", err)
+	}
+
+	var checked int
+	for _, p := range listed.Prompts {
+		// Prompts with required arguments are refused without them, and that
+		// refusal is a different path with nothing to describe.
+		var required bool
+		for _, a := range p.Arguments {
+			if a.Required {
+				required = true
+			}
+		}
+		if required || p.Description == "" {
+			continue
+		}
+		checked++
+
+		t.Run(p.Name, func(t *testing.T) {
+			got, getErr := session.GetPrompt(context.Background(), &mcp.GetPromptParams{Name: p.Name})
+			if getErr != nil {
+				t.Fatalf("prompts/get: %v", getErr)
+			}
+			if got.Description != p.Description {
+				t.Errorf("description = %q, want the catalog's %q", got.Description, p.Description)
+			}
+		})
+	}
+
+	if checked == 0 {
+		t.Fatal("no prompt was reachable without arguments, so this gate asserted nothing")
+	}
+	t.Logf("checked %d prompt(s)", checked)
+}

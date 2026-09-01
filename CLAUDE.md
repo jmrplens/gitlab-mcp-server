@@ -149,6 +149,7 @@ gitlab-mcp-server/
 │   └── ide-configuration.md     # Per-IDE MCP JSON configuration (stdio, HTTP legacy, OAuth)
 ├── test/e2e/                    # End-to-end integration tests
 │   ├── http/                    # HTTP transport module (`httpe2e`): cross-origin, preflight, auth modes, rate limiting, nginx layer. Needs no GitLab
+│   ├── stdio/                   # stdio transport module (`stdioe2e`): drives the real binary over pipes. Needs no GitLab
 │   ├── docker-compose.yml       # Ephemeral GitLab CE + Runner + fixture service for Docker mode
 │   ├── .env.docker              # Docker mode environment variables
 │   ├── README.md                # E2E documentation
@@ -208,6 +209,35 @@ Four error wrapping functions in `internal/toolutil/errors.go`, used across the 
 
 Use `IsHTTPStatus(err, code)` and `ContainsAny(err, substrs...)` for status-specific branching before calling `WrapErrWithHint`. For get handlers, check `IsHTTPStatus(err, 404)` **before** `LogToolCallAll` and return `NotFoundResult` with `nil` error to log at INFO instead of ERROR. See [ADR-0007](docs/development/adr/adr-0007-rich-error-semantics.md) and [Error Handling](docs/concepts/error-handling.md).
 
+### Transport end-to-end modules
+
+Two modules start the **real binary** and drive it the way a client does, both
+without GitLab or credentials, and both run on every CI push:
+
+- `test/e2e/http` (`httpe2e`) — the HTTP handler chain: cross-origin decisions,
+  preflight, authentication modes, rate limiting, the JSON-RPC shape of a
+  rejection, and the flags that restrict them.
+- `test/e2e/stdio` (`stdioe2e`) — the stdio transport: pipes, process lifetime,
+  stdout carrying nothing but JSON-RPC, logs on stderr, and the environment
+  variables stdio configuration actually uses.
+
+**They exist because the e2e suite cannot see any of this.** `test/e2e/suite`
+drives an in-memory transport in the same process, which is the right shape for
+questions about tool behavior and answers none about the transport: no streams,
+no process, no separation of stdout from stderr, and no flags or environment
+variables, since it builds the server directly.
+
+stdio is the primary transport and nothing drove it until `test/e2e/stdio`
+existed. Two defects shipped through that gap: a nil dereference that killed the
+process on an ordinary eliciting tool call, and a keepalive ping that closed the
+session of any client speaking 2026-07-28 after 45 idle seconds — the second
+held in place by a unit test asserting the ping ought to be there. Both were
+found by hand against a binary, which is what these modules automate.
+
+When adding a transport-level behavior, put its test here rather than in a unit
+test that reassembles the handler chain: a test that builds its own copy of the
+thing under test is testing the copy.
+
 ### Test infrastructure
 
 All tests use `httptest` to mock GitLab API responses. Shared helpers in `internal/testutil/`:
@@ -232,6 +262,7 @@ make golangci-lint                       # Consolidated Go formatting and lintin
 go test -v -tags e2e -timeout 300s ./test/e2e/suite/   # Run all e2e tests
 make test-e2e                                          # Same via Makefile
 make test-e2e-http                                     # HTTP transport module: no GitLab, no credentials
+make test-e2e-stdio                                    # stdio transport module: no GitLab, no credentials
 make test-e2e-docker                                   # Ephemeral GitLab CE + runner + fixture service (Docker, ~4 GB RAM)
 go test -tags e2e -c -o NUL ./test/e2e/suite/           # Compile-only check (Windows)
 go test -tags e2e -c -o /dev/null ./test/e2e/suite/     # Compile-only check (Linux)
@@ -381,6 +412,8 @@ In **HTTP mode**, configuration comes from CLI flags instead of environment vari
 | `--auth-mode`         | `legacy` | Authentication mode: `legacy` or `oauth` (RFC 9728 Bearer verification) |
 | `--public-url`        | _(empty)_ | Externally reachable https origin; required with `--auth-mode=oauth` (RFC 9728 resource identifier and metadata-URL derivation) |
 | `--resource-documentation` | _(empty)_ | https URL published as RFC 9728 `resource_documentation`; point it at a page describing your own OAuth application. Empty publishes this project's OAuth setup guide |
+| `--resource-policy-uri` | _(empty)_ | https URL published as RFC 9728 `resource_policy_uri`; your own page on what this deployment does with the data reached through it. Empty omits the field, which is the right default: a link to a page that does not exist would land on a consent screen |
+| `--resource-tos-uri` | _(empty)_ | https URL published as RFC 9728 `resource_tos_uri`; your own terms of service. Empty omits the field |
 | `--oauth-cache-ttl`   | `15m`   | OAuth token identity cache TTL (range 1m–2h)             |
 | `--oauth-client-uid`  | _(empty)_ | Comma-separated GitLab OAuth application uids whose tokens are admitted; empty admits any credential the instance accepts |
 | `--pool-idle-timeout` | `1h` | Reclaim a pooled per-token-and-URL server entry after this long unused; `0` keeps entries until the pool size bound evicts them (upper bound: 24h) |
@@ -630,7 +663,7 @@ Nothing here should need a reverse proxy to be correct: the binary answers its o
 - **A joiner waits for the first read** — the watcher's `ready` channel carries the outcome of the initial read (which is the authorization check), so a second subscriber is never told "subscribed" while the only read anyone attempted is still in flight or has already failed.
 - **Renewal happens after the handler, not before it** — a subscribe request is itself activity, so renewing first would un-demote every watcher a moment before that same request looked for a demoted one to evict, and eviction at the cap could never fire.
 - **The lease demotes, it does not stop** — 30 minutes without traffic drops a watch to a 10-minute poll; any request that reaches the server restores it (`renewOnActivity` middleware). From protocol 2026-07-28 a client may answer `tools/list` or a repeated `resources/read` from its own cache, so those never renew. Only `MaxLifetime` (24h), a 401/403/404, or eviction at the cap stop one without the client acting; `resources/unsubscribe` and session disconnect stop one from the client side.
-- **Stateless HTTP refuses the legacy path** — each stateless POST gets its own session that closes with the response, so `resources/subscribe` is answered with an error rather than accepted and left undeliverable. The capability bit stays on because `subscriptions/listen` does work there.
+- **Stateless HTTP refuses the legacy path, and only that path** — each stateless POST gets its own session that closes with the response, so `resources/subscribe` is answered with an error rather than accepted and left undeliverable. The capability bit stays on because `subscriptions/listen` does work there. That last sentence is load-bearing and was false for a while: the SDK routes both methods through the one `SubscribeHandler` (`subscriptionsListen` calls it per resource URI and returns the first error before acknowledging anything), so a refusal written for the legacy method killed every listen carrying a resource, and took a mixed listen's list-changed half with it. The listen path is marked in `listenStreams.middleware` and `subscribeUnlessStateless` consults that mark. A handler-level test cannot see this class of defect — the handler is correct in isolation and wrong only because of who else calls it — so the regression lives in `test/e2e/http/subscriptions_test.go`, on the wire.
 - **Ending a watch closes the client's stream** — on protocol 2026-07-28 a subscription is an open `subscriptions/listen` request. `SubscriptionsListenResult` cannot be constructed by application code, so `listenStreams` cancels the SDK handler's context, which makes the SDK emit it. A stream is only closed when every URI it carries has stopped, and never if it also carries list-changed subscriptions.
 
 Do not use `synctest` for tests that need a real HTTP backend: an `httptest` server's goroutines block on I/O, which is not a durable block, so the fake clock never advances and the test hangs until its timeout. The manager's own tests use fakes and synctest; the wiring tests use real time with short intervals injected through `withSubscriptionOptions`.

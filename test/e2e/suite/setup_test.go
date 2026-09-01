@@ -239,7 +239,7 @@ const (
 func configureReadOnlyE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
 		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
-		tools.RemoveNonReadOnlyTools(server)
+		tools.RemoveNonReadOnlyTools(context.Background(), server)
 		return nil
 	}
 }
@@ -271,7 +271,7 @@ func configureDynamicModeE2EServer(glClient *gitlabclient.Client, enterprise boo
 func configureSafeModeE2EServer(glClient *gitlabclient.Client, enterprise bool) func(*mcp.Server) error {
 	return func(server *mcp.Server) error {
 		tools.RegisterAll(server, glClient, edition.TierForEnterprise(enterprise))
-		tools.WrapMutatingToolsForSafeMode(server)
+		tools.WrapMutatingToolsForSafeMode(context.Background(), server)
 		return nil
 	}
 }

@@ -53,12 +53,58 @@ make the worst case something an operator can predict.
   Any request that reaches the server on that session restores it. An
   absolute 24-hour cap is the only deadline that stops a watch on time
   alone.
+
+  **An open `subscriptions/listen` stream renews its own watch.** Session
+  traffic is a proxy for "is anyone still there"; an open listen request
+  answers that question directly and better, since the subscriber is
+  demonstrably still connected and still reading. It is also the only answer
+  available on the transport this server ships by default: every stateless POST
+  is its own session, so a listen stream's session sees one request — the listen
+  itself — and nothing would ever renew it. Without this the feature would
+  degrade by a factor of forty half an hour in, while the client sat on a stream
+  it was still reading. The lease continues to govern the legacy
+  `resources/subscribe`, which has no stream to speak for it, and `MaxLifetime`
+  still caps every watch regardless.
 - **A subscriber is an identity, not a count.** Watches are held by the
   session that asked for them, so subscribing twice is idempotent and one
   session cannot release another's watch.
+
+  **That identity is the session for the legacy `resources/subscribe` and the
+  listen stream for `subscriptions/listen`.** This decision was written before
+  the 2026-07-28 path existed, and the specification has moved past it: that
+  revision makes the listen request the subscription's identity, and a session
+  may hold several. The SDK unsubscribes every URI a listen carried when the
+  listen ends, so with the session as the only identity, one stream closing
+  released a watch a sibling stream was still holding — leaving that sibling
+  acknowledged, open, and unable to ever fire. The bridge therefore records
+  which streams hold each watch and releases it when the last one goes.
+  Delivery remains per-session: `Server.ResourceUpdated` notifies sessions, not
+  listen requests, and only one request ID per session per URI survives in the
+  SDK's own table, so a session with two listens on a URI sees the notification
+  on one of them. That half is upstream.
 - **The legacy `resources/subscribe` is refused in stateless HTTP mode**,
   where the session ends with the POST that created it and no notification
   could ever be delivered. `subscriptions/listen` still works there.
+
+  **The refusal must be scoped by request path, not by transport.** The SDK
+  routes both methods through the one `SubscribeHandler`: `subscriptions/listen`
+  calls it once per resource URI it carries and returns the first error before
+  acknowledging anything. A handler that refuses every subscribe in stateless
+  mode therefore refuses `subscriptions/listen` too, which is how the feature
+  shipped dead in the default configuration while the handshake went on
+  advertising `resources.subscribe`. The listen path is marked in its
+  middleware and the refusal consults that mark.
+- **A torn-down listen stream gets its completion result and no
+  `notifications/cancelled`.** The 2026-07-28 cancellation page says a server
+  "**MUST** send `notifications/cancelled` referencing a `subscriptions/listen`
+  request ID when it tears down that subscription stream". This server does not,
+  and cannot: `SubscriptionsListenResult` embeds an unexported type, so
+  application code cannot construct the message, and the SDK exposes no other
+  way to send one. What a client does get is the graceful completion result the
+  SDK writes when the handler's context ends, which tells a conforming client
+  the stream is over — so the practical gap is small, and it is recorded here
+  rather than left unstated because it is a MUST that nobody in this process
+  satisfies. Raised upstream.
 - **Rate limiting pauses every watcher on the manager**, with exponential
   back-off, because GitLab enforces its limits per user.
 - **A watch that ends for a reason the client did not ask for closes the
@@ -156,6 +202,16 @@ make the worst case something an operator can predict.
   `resources.subscribe` for the `subscriptions/listen` path, which works in
   stateless mode. Refusing the one method that cannot be honored says more,
   and to the client that actually asked.
+
+  The second sentence was true and the third was not, as written. Refusing "the
+  one method that cannot be honored" described an intent the code could not
+  carry out, because the SDK gives both methods one handler: the refusal
+  reached every `subscriptions/listen` naming a resource, and a mixed listen
+  lost its list-changed half along with it. So for as long as that held, the
+  rejection of this alternative was resting on an outcome that was not
+  happening — the capability was advertised and no method could honor it,
+  which is the state F exists to avoid. The decision stands now that the
+  refusal is scoped by request path; it did not stand before.
 
 ## References
 

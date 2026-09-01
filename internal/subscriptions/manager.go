@@ -536,6 +536,25 @@ func (m *Manager[S]) Len() int {
 	return len(m.watchers)
 }
 
+// DemotedCount reports how many watches have dropped to the slow poll for want
+// of a renewal.
+//
+// It is the number that says whether the lease is doing what it was meant to:
+// zero when subscribers are present, non-zero when they have gone quiet. A
+// count that is stuck at the total is a sign that whatever renews watches on
+// this transport is not reaching them.
+func (m *Manager[S]) DemotedCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var n int
+	for _, w := range m.watchers {
+		if w.demoted {
+			n++
+		}
+	}
+	return n
+}
+
 // watch polls one URI until its lease expires, its last subscriber leaves,
 // or the manager closes.
 func (m *Manager[S]) watch(ctx context.Context, w *watcher[S], first time.Duration) {
@@ -681,6 +700,17 @@ func (m *Manager[S]) Renew(uri string) bool {
 // during exactly the wait its subscriber cared about. Renewing every watch
 // on the manager would be wrong in the other direction: one busy session
 // would keep another session's abandoned watches at full speed forever.
+
+// Lease returns how long a subscription is polled at full speed before it slows
+// down.
+//
+// Callers that hold a subscription open by some means other than request
+// traffic need this to renew it in time; guessing an interval would either
+// waste work or miss the deadline after the option is changed.
+func (m *Manager[S]) Lease() time.Duration {
+	return m.opts.Lease
+}
+
 func (m *Manager[S]) RenewAll(subscriber S) int {
 	m.mu.Lock()
 	revived := make([]*watcher[S], 0, len(m.watchers))

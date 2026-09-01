@@ -80,7 +80,11 @@ Returns a `Tracker` bound to the request's session and progress token. If the re
 
 #### Strictly-monotonic progress
 
-The MCP 2025-11-25 spec requires the `progress` value of every notification within a request to strictly increase. The `Tracker` enforces this internally: any `Update` whose new `progress` value is less than or equal to the last one is dropped silently and logged at debug level. This means tool handlers can call `Step`/`Update` defensively without risking protocol violations.
+The MCP spec requires the `progress` value of every notification within a request to strictly increase. The `Tracker` enforces this internally: any `Update` whose new `progress` value is less than or equal to the last one is dropped silently and logged at debug level.
+
+The guard is per-`Tracker`, and the invariant is per-**token**. A tool call has one progress token, so it must have one `Tracker`: two built from the same request each get their own counter, neither can see the other, and their notifications interleave on the wire into a sequence that goes backwards. That is not hypothetical — `publish_directory` counted files while the `Publish` it called counted bytes, and a client watching one token saw `200000` followed by `1`, with `total` alternating between the two meanings.
+
+So a handler that delegates to another must pass its `Tracker` down rather than let the callee build one, and the two levels must share a scale. [`Tracker.OnScale`](../../../internal/progress/progress.go) does that: it returns a `Tracker` sharing this one's state that places a sub-step's own numbers inside the outer measure. With one `Tracker` per call, handlers can then call `Step`/`Update` defensively without risking protocol violations.
 
 ### Step-Based Progress
 
@@ -95,7 +99,7 @@ tracker.Step(ctx, 2, 3, "Uploading file to GitLab...")
 tracker.Step(ctx, 3, 3, "Upload complete")
 ```
 
-`Step(ctx, 1, 3, msg)` sends `progress=0, total=3` to the client. The MCP protocol uses **0-based progress** with a total count, so the `Step` method translates from 1-based step numbers (more natural for the developer) to 0-based progress values (required by the protocol).
+`Step(ctx, 1, 3, msg)` sends `progress=0, total=3` to the client. Starting at zero is this project's convention, not a protocol rule: the specification constrains only that `progress` increase, and it may be a floating-point value. `Step` translates from 1-based step numbers, which are more natural to write, into that convention.
 
 ## Configuration
 

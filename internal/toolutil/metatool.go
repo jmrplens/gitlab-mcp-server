@@ -2264,8 +2264,15 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 		// Confirm destructive actions before execution using route metadata.
 		if route.Destructive {
 			msg := fmt.Sprintf("Confirm %s/%s? This action may be irreversible.", toolName, input.Action)
-			if result := ConfirmDestructiveAction(ctx, req, input.Params, msg); result != nil {
-				return result, nil, nil
+			guard, guardErr := ConfirmDestructiveAction(ctx, req, input.Params, msg)
+			if guardErr != nil {
+				// A protocol fault, not a tool outcome: it goes out as a
+				// JSON-RPC error rather than as tool output the model is
+				// invited to fix.
+				return nil, nil, guardErr
+			}
+			if guard != nil {
+				return guard, nil, nil
 			}
 		}
 

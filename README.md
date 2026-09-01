@@ -450,47 +450,47 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |       997 |     205,149 |
-| Unit tests (`_test.go`)  |       554 |     317,850 |
-| End-to-end tests         |       183 |      49,404 |
-| **Total**                | **1,734** | **572,403** |
+| Source (`.go`, non-test) |     1,001 |     206,590 |
+| Unit tests (`_test.go`)  |       557 |     320,253 |
+| End-to-end tests         |       188 |      50,658 |
+| **Total**                | **1,746** | **577,501** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,792 |
-| — exported (public)             |  2,700 |
-| — unexported (private)          |  5,092 |
-| Unit test functions (`TestXxx`) | 12,045 |
-| Subtests (`t.Run(...)`)         |  3,058 |
-| End-to-end test functions       |    468 |
+| Source functions                |  7,837 |
+| — exported (public)             |  2,711 |
+| — unexported (private)          |  5,126 |
+| Unit test functions (`TestXxx`) | 12,084 |
+| Subtests (`t.Run(...)`)         |  3,096 |
+| End-to-end test functions       |    481 |
 
 ### Ratios worth noting
 
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.55× more tests than code |
-| Average source file length         |                 ~205 lines |
-| Average test file length           |                 ~573 lines |
-| Comment lines in source            |  24,926 (~12.2% of source) |
+| Average source file length         |                 ~206 lines |
+| Average test file length           |                 ~574 lines |
+| Comment lines in source            |  25,575 (~12.4% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,777 |
-| `defer` statements                 |   967 |
-| `struct` types defined             | 2,752 |
-| `//nolint` suppressions            |   268 |
+| `if err != nil` checks             | 6,814 |
+| `defer` statements                 |   988 |
+| `struct` types defined             | 2,757 |
+| `//nolint` suppressions            |   271 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
 
 ### Project
 
 | Metric                         | Value |
 | ------------------------------ | ----: |
-| Go packages                    |   238 |
+| Go packages                    |   239 |
 | Direct dependencies (`go.mod`) |    18 |
 | Indirect dependencies          |    46 |
 
@@ -505,8 +505,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,729 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,828 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,756 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,835 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 
