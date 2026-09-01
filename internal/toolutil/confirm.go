@@ -17,7 +17,14 @@ import (
 // skipped entirely. Checks the YOLO_MODE and AUTOPILOT environment variables.
 // Any truthy value (1, true, yes — case-insensitive) enables the mode.
 func IsYOLOMode() bool {
-	return isTruthy(os.Getenv("YOLO_MODE")) || isTruthy(os.Getenv("AUTOPILOT"))
+	// The specific name decides when it is set at all, and the alias is only
+	// consulted when it is not. ORing the two meant an inherited AUTOPILOT=true
+	// could not be overridden by --yolo-mode=false, and the most specific
+	// instruction losing to an inherited one is precedence backwards.
+	if value := os.Getenv("YOLO_MODE"); strings.TrimSpace(value) != "" {
+		return isTruthy(value)
+	}
+	return isTruthy(os.Getenv("AUTOPILOT"))
 }
 
 // isTruthy returns true for common truthy string values.

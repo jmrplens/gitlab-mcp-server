@@ -4,7 +4,7 @@ description: Export traces, metrics and logs over OTLP to a collector you run. O
 datePublished: "2026-08-30"
 faq:
   - q: "Does this server send telemetry to its maintainer?"
-    a: "No, and there is no address to opt out of. Telemetry is off by default, and when you enable it the data goes to a collector **you** configure through the standard `OTEL_EXPORTER_OTLP_ENDPOINT` variable. If you set nothing, nothing is exported. There is no default endpoint and no fallback."
+    a: "No, and there is no address to opt out of. Telemetry is off by default, and when you enable it the data goes to a collector **you** configure through the standard `OTEL_EXPORTER_OTLP_ENDPOINT` variable. If you set nothing, the exporters fall back to their own specified default, `http://localhost:4318`, your machine, where the export fails quietly unless you run a collector there. No default in any code path points anywhere else."
   - q: "What does the telemetry actually contain?"
     a: "Operations, never their contents. The MCP method called, the canonical catalog action such as `issue.list`, whether it succeeded, and how long it took. Tool arguments, tool results, resource contents, search queries, GitLab response bodies and credentials are excluded by design rather than by a setting, because no setting would include them."
   - q: "Can I authenticate to my collector with a username and password?"

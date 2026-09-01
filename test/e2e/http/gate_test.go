@@ -828,6 +828,12 @@ func TestGate_StatefulServesEveryRevisionExceptTheStatelessOne(t *testing.T) {
 			session := got.header.Get("Mcp-Session-Id")
 			refused := strings.Contains(got.body, "unsupported protocol version")
 
+			// The sentence alone cannot tell a refusal from a 500 that quotes
+			// it; the HTTP outcome is part of the claim.
+			if wantSession && got.status != http.StatusOK {
+				t.Errorf("HTTP %d for a revision a stateful handler serves", got.status)
+			}
+
 			if wantSession {
 				if refused {
 					t.Fatalf("%s was refused by a stateful handler: %s", version, got.body)

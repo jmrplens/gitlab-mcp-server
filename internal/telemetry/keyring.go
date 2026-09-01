@@ -122,20 +122,24 @@ const MaxKeyRotation = 30 * 24 * time.Hour
 // for generated keys; with a secret it is ignored, and the caller is expected
 // to say so where an operator will read it.
 func NewKeyring(secret string, rotation time.Duration) (*Keyring, error) {
+	// The configured branch first, and before the rotation is judged: rotation
+	// does not apply to a configured key, and refusing the pair would let a
+	// setting that is documented as ignored veto the one the operator actually
+	// relies on.
+	if secret != "" {
+		ring := &Keyring{configured: true, now: time.Now}
+		if err := ring.derive([]byte(secret)); err != nil {
+			return nil, err
+		}
+		return ring, nil
+	}
+
 	if rotation < 0 || rotation > MaxKeyRotation {
 		return nil, fmt.Errorf("telemetry identity key rotation %s is out of range (0 disables it, maximum %s)",
 			rotation, MaxKeyRotation)
 	}
 
 	ring := &Keyring{rotation: rotation, now: time.Now}
-	if secret != "" {
-		ring.configured = true
-		ring.rotation = 0
-		if err := ring.derive([]byte(secret)); err != nil {
-			return nil, err
-		}
-		return ring, nil
-	}
 
 	if err := ring.generate(); err != nil {
 		return nil, err

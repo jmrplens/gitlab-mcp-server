@@ -2,6 +2,7 @@ package mcpotel
 
 import (
 	"context"
+	"log/slog"
 	"slices"
 	"sync"
 	"time"
@@ -60,6 +61,11 @@ func newSessionTracker(meter metric.Meter, constant []attribute.KeyValue, transp
 		),
 	)
 	if err != nil {
+		// Nil disables session telemetry, and doing that silently would leave
+		// an operator staring at a missing instrument with nothing anywhere
+		// saying why. The duration histograms log their failures the same way.
+		slog.Warn("mcp.server.session.duration could not be created; session telemetry is disabled",
+			"component", "telemetry", "error", err)
 		return nil
 	}
 	return &sessionTracker{

@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/telemetry"
 )
 
@@ -55,12 +54,12 @@ func telemetryEnabled() bool {
 // of those states. That is what lets the caller defer it unconditionally rather
 // than carrying a nil check into the exit path, which is the worst place to put
 // one because it runs after the work succeeded.
-func startTelemetry(ctx context.Context, serverVersion string) (provider *telemetry.Provider, stop func(context.Context)) {
+func startTelemetry(ctx context.Context, serverVersion, toolSurface string) (provider *telemetry.Provider, stop func(context.Context)) {
 	provider, err := telemetry.Start(ctx, telemetry.Config{
 		Enabled:                 telemetryEnabled(),
 		ServiceVersion:          serverVersion,
 		Signals:                 telemetry.AllSignals(),
-		DropToolNameFromMetrics: dropToolNameFromMetrics(),
+		DropToolNameFromMetrics: dropToolNameFromMetrics(toolSurface),
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "telemetry disabled: it could not be started",
@@ -217,7 +216,7 @@ var telemetryToolNameFlag *string
 // protects an individual-surface deployment from a thousand-series dimension,
 // so falling back to it is the safe direction, and the loud failure for a typo
 // belongs at startup validation rather than here.
-func dropToolNameFromMetrics() bool {
+func dropToolNameFromMetrics(toolSurface string) bool {
 	value := os.Getenv(telemetry.EnvToolNameName)
 	if telemetryToolNameFlag != nil && isFlagPassed("telemetry-tool-name") {
 		value = *telemetryToolNameFlag
@@ -230,6 +229,5 @@ func dropToolNameFromMetrics() bool {
 		policy = telemetry.ToolNameAuto
 	}
 
-	surface, _, _ := config.ParseToolSurface(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
-	return telemetry.DropToolName(policy, surface)
+	return telemetry.DropToolName(policy, toolSurface)
 }

@@ -159,7 +159,9 @@ func dynamicIdentifier(actions []actioncatalog.Action) mcpotel.CallIdentifier {
 		if action == "" {
 			return mcpotel.Identity{}, false
 		}
-		identity, ok := byID[action]
+		// Lowered like dynamic dispatch lowers before executing, or an
+		// uppercase action id runs fine and loses its action attribute.
+		identity, ok := byID[strings.ToLower(action)]
 		return identity, ok
 	})
 }

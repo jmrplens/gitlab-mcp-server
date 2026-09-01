@@ -4,7 +4,7 @@ description: Exporta trazas, métricas y logs por OTLP a un colector que tú eje
 datePublished: "2026-08-30"
 faq:
   - q: "¿Este servidor envía telemetría a su mantenedor?"
-    a: "No, y no hay ninguna dirección de la que darse de baja. La telemetría está desactivada por defecto, y cuando la activas los datos van a un colector que **tú** configuras mediante la variable estándar `OTEL_EXPORTER_OTLP_ENDPOINT`. Si no configuras nada, no se exporta nada. No hay endpoint por defecto ni de reserva."
+    a: "No, y no hay ninguna dirección de la que darse de baja. La telemetría está desactivada por defecto, y cuando la activas los datos van a un colector que **tú** configuras mediante la variable estándar `OTEL_EXPORTER_OTLP_ENDPOINT`. Si no configuras nada, los exportadores usan su propio valor por defecto especificado, `http://localhost:4318`, tu propia máquina, donde la exportación falla silenciosamente salvo que ejecutes ahí un colector. Ningún valor por defecto de ninguna ruta del código apunta a otro sitio."
   - q: "¿Qué contiene realmente la telemetría?"
     a: "Operaciones, nunca su contenido. El método MCP invocado, la acción canónica del catálogo como `issue.list`, si tuvo éxito y cuánto tardó. Los argumentos de las herramientas, sus resultados, el contenido de los recursos, las consultas de búsqueda, los cuerpos de respuesta de GitLab y las credenciales quedan excluidos por diseño, no por una opción: no existe ninguna opción que los incluyera."
   - q: "¿Puedo autenticarme ante mi colector con usuario y contraseña?"

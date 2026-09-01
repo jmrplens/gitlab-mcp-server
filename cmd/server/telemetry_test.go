@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"testing"
 	"time"
+
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/config"
 )
 
 // TestTelemetryEnabled_DefaultsToOff pins the default, which is a privacy
@@ -79,7 +81,7 @@ func TestStartTelemetry_DisabledReturnsAUsableStop(t *testing.T) {
 	telemetryFlag = nil
 	t.Setenv("GITLAB_MCP_TELEMETRY", "false")
 
-	provider, stop := startTelemetry(t.Context(), "2.7.6")
+	provider, stop := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
 	if stop == nil {
 		t.Fatal("startTelemetry returned a nil stop function; the deferred call in runWithContext would panic")
 	}
@@ -116,7 +118,7 @@ func TestStartTelemetry_SurvivesAnUnreachableCollector(t *testing.T) {
 	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "200")
 	t.Setenv("OTEL_BSP_EXPORT_TIMEOUT", "200")
 
-	_, stop := startTelemetry(t.Context(), "2.7.6")
+	_, stop := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
 
 	done := make(chan struct{})
 	go func() {
@@ -144,7 +146,7 @@ func TestStartTelemetry_RefusesAnUnusableProtocolWithoutKillingTheProcess(t *tes
 	t.Setenv("GITLAB_MCP_TELEMETRY", "true")
 	t.Setenv("OTEL_EXPORTER_OTLP_PROTOCOL", "carrier-pigeon")
 
-	provider, stop := startTelemetry(t.Context(), "2.7.6")
+	provider, stop := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
 	if stop == nil {
 		t.Fatal("a refused configuration returned a nil stop function")
 	}
@@ -169,7 +171,7 @@ func TestSDKDisabledVetoesTheFlag(t *testing.T) {
 	t.Setenv("GITLAB_MCP_TELEMETRY", "true")
 	t.Setenv("OTEL_SDK_DISABLED", "true")
 
-	provider, stop := startTelemetry(t.Context(), "2.7.6")
+	provider, stop := startTelemetry(t.Context(), "2.7.6", config.ToolSurfaceDynamic)
 	t.Cleanup(func() { stop(boundedShutdown(t)) })
 
 	if provider.Enabled() {

@@ -296,8 +296,6 @@ func main() {
 		"Whether the tool name is a metric dimension: auto (default; on for the dynamic and meta surfaces, off for individual, where ~1000 tools would exhaust the cardinality limit), on, or off")
 	telemetryIdentityFlag = flag.String("telemetry-identity", string(telemetry.DefaultIdentityPolicy),
 		"How much telemetry records about who made a call: none (default, records nobody), pseudonymous (a per-process digest that correlates one caller's calls without naming them), or full (the GitLab user id and username)")
-	telemetryIdentityKeyFlag = flag.String("telemetry-identity-key", "",
-		"secret the pseudonymous identity policy derives its keys from; empty generates one per process")
 	telemetryIdentityRotationFlag = flag.String("telemetry-identity-rotation", "",
 		"how long a generated pseudonymisation key lives, e.g. 24h; empty or 0 keeps it for the life of the process")
 	flag.Int64Var(&hcfg.maxRequestBodyBytes, "max-request-body-bytes", 0, "Maximum streamable HTTP request body size in bytes; 0 uses the SDK default (4 MiB)")
@@ -468,7 +466,7 @@ FLAGS
  Protective modes
   -read-only                Expose only read-only tools (default false)
   -safe-mode                Intercept mutating tools and return a preview instead of executing
-  -yolo-mode                Skip the confirmation prompt on destructive actions (default false)
+  -yolo-mode true|false     Skip the confirmation prompt on destructive actions (default false; overrides AUTOPILOT)
 
  Authentication (HTTP mode)
   -auth-mode string         Authentication mode: legacy|oauth (default "legacy")
@@ -493,7 +491,6 @@ FLAGS
  Telemetry
   -telemetry                Export OpenTelemetry traces, metrics and logs over OTLP (default false)
   -telemetry-identity str   What telemetry records about the caller: none|pseudonymous|full (default none)
-  -telemetry-identity-key   Secret the pseudonymous policy derives its keys from (empty generates one per process)
   -telemetry-identity-rotation str
                             How long a generated pseudonymisation key lives, e.g. 24h (empty keeps it for the process)
   -telemetry-tool-name str  Whether the tool name is a metric dimension: auto|on|off (default auto:
@@ -523,6 +520,15 @@ ENVIRONMENT VARIABLES (stdio mode)
   RATE_LIMIT_RPS            Per-server tools/call rate limit (default 0, disabled)
   RATE_LIMIT_BURST          Token-bucket burst size when RATE_LIMIT_RPS > 0 (default 40)
   YOLO_MODE                 Skip destructive action confirmation prompts (default false)
+  GITLAB_MCP_TELEMETRY      Export OpenTelemetry traces, metrics and logs over OTLP (default false)
+  GITLAB_MCP_TELEMETRY_IDENTITY
+                            What telemetry records about the caller: none|pseudonymous|full (default none)
+  GITLAB_MCP_TELEMETRY_IDENTITY_KEY
+                            Secret the pseudonymous policy derives its keys from; environment only, no flag
+  GITLAB_MCP_TELEMETRY_IDENTITY_ROTATION
+                            How long a generated pseudonymisation key lives, e.g. 24h (default: process lifetime)
+  GITLAB_MCP_TELEMETRY_TOOL_NAME
+                            Whether gen_ai.tool.name is a metric dimension: auto|on|off (default auto)
   LOG_LEVEL                 Logging: debug/info/warn/error (default info)
 
 ENVIRONMENT VARIABLES (HTTP mode)
@@ -598,6 +604,41 @@ func run(hcfg *httpConfig) error {
 	return runWithContext(ctx, hcfg)
 }
 
+// resolveToolSurfaceForTelemetry answers which surface this process will serve,
+// early enough for telemetry to size its metric label space by it.
+//
+// An unparseable value falls back to the default surface rather than failing:
+// the mode's own startup validates the same input a moment later and reports it
+// properly, and telemetry sized for the wrong surface is a worse failure than a
+// duplicate error message is a cost.
+func resolveToolSurfaceForTelemetry(hcfg *httpConfig) string {
+	if hcfg != nil {
+		surface, metaTools, err := config.ParseToolSurface(hcfg.toolSurface, legacyMetaToolsFlagValue(hcfg))
+		if err != nil {
+			return config.ToolSurfaceDynamic
+		}
+		return config.EffectiveToolSurface(metaTools, surface)
+	}
+	surface, metaTools, err := config.ParseToolSurface(os.Getenv("TOOL_SURFACE"), os.Getenv("META_TOOLS"))
+	if err != nil {
+		return config.ToolSurfaceDynamic
+	}
+	return config.EffectiveToolSurface(metaTools, surface)
+}
+
+// hostsOf extracts the hostnames a set of instance URLs names, dropping
+// whatever does not parse: an unparseable URL fails elsewhere with a message,
+// and this list only bounds a metric label.
+func hostsOf(urls []string) []string {
+	hosts := make([]string, 0, len(urls))
+	for _, raw := range urls {
+		if parsed, err := url.Parse(strings.TrimSpace(raw)); err == nil && parsed.Hostname() != "" {
+			hosts = append(hosts, parsed.Hostname())
+		}
+	}
+	return hosts
+}
+
 // runWithContext dispatches to HTTP or stdio mode depending on hcfg.
 // A non-nil hcfg starts the HTTP server using CLI-flag configuration
 // (no GITLAB_TOKEN required). A nil hcfg starts stdio mode using
@@ -611,12 +652,29 @@ func runWithContext(ctx context.Context, hcfg *httpConfig) error {
 	// usually already cancelled by the signal that started the shutdown, and
 	// passing a cancelled context to the exporters would discard the very
 	// batch describing why the process is stopping.
-	// The provider is held rather than discarded because the server card
-	// reports what telemetry is running: a person connecting to a published
-	// endpoint should be able to see that their calls are instrumented without
-	// having to ask.
-	telemetryProvider, stopTelemetry := startTelemetry(ctx, version)
-	_ = telemetryProvider
+	// The provider itself is not needed here: the server card reads the
+	// snapshot the package publishes, so what this call site keeps is only the
+	// stop function.
+	// The surface the process will serve, resolved from the inputs the mode
+	// really uses: HTTP takes it from its flags, stdio from the environment.
+	// The auto tool-name policy decides per surface, and reading TOOL_SURFACE
+	// here regardless of mode gave an HTTP deployment started with
+	// --tool-surface=individual the dynamic default's decision.
+	_, stopTelemetry := startTelemetry(ctx, version, resolveToolSurfaceForTelemetry(hcfg))
+
+	// Which GitLab hosts the http.client metric may name. Declared per mode,
+	// because the modes disagree about who chooses the instance: stdio and a
+	// pinned HTTP deployment serve a known list, while the free-selection mode
+	// serves whatever a caller names, which is exactly what must not become a
+	// metric label. See mcpotel.SetMetricServerAddresses.
+	if hcfg != nil {
+		mcpotel.SetMetricServerAddresses(hostsOf(hcfg.gitlabURLs))
+	} else if raw := os.Getenv("GITLAB_URL"); raw != "" {
+		mcpotel.SetMetricServerAddresses(hostsOf([]string{raw}))
+	} else {
+		mcpotel.SetMetricServerAddresses(hostsOf([]string{config.DefaultGitLabURL}))
+	}
+
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), telemetryShutdownTimeout)
 		defer cancel()

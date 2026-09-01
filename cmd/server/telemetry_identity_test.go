@@ -242,3 +242,20 @@ func resetIdentityKeyring(t *testing.T) {
 		identityKeyringVal = nil
 	})
 }
+
+// TestIdentityKeyring_AConfiguredKeySurvivesABrokenRotation is the wiring half
+// of the constructor test: the rotation variable is not even read when a key is
+// configured, so an unparseable value cannot stop the keyring being built.
+func TestIdentityKeyring_AConfiguredKeySurvivesABrokenRotation(t *testing.T) {
+	t.Setenv(telemetry.EnvIdentityKeyName, "a deployment-wide secret")
+	t.Setenv(telemetry.EnvIdentityRotationName, "not-a-duration")
+	resetIdentityKeyring(t)
+
+	ring := identityKeyring()
+	if ring == nil {
+		t.Fatal("an unparseable rotation stopped a configured key from building the keyring")
+	}
+	if !ring.Configured() {
+		t.Error("the keyring does not report the configured key")
+	}
+}

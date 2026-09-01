@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"go.opentelemetry.io/otel/codes"
@@ -194,4 +195,51 @@ func findSpan(t *testing.T, recorder *tracetest.SpanRecorder, name string) sdktr
 	}
 	t.Fatalf("no span named %q was recorded", name)
 	return nil
+}
+
+// TestNewTransport_TheMetricCannotBeMadeToNameACallersHost covers the label a
+// caller must not choose.
+//
+// In the deployment mode where the GITLAB-URL header selects an instance
+// freely, the host of every GitLab call is caller-supplied, and a metric label
+// that follows it hands the cardinality budget to whoever sends hostnames. The
+// rule is the one gen_ai.tool.name already follows: the span keeps the value
+// verbatim, the metric carries it only from the declared set.
+func TestNewTransport_TheMetricCannotBeMadeToNameACallersHost(t *testing.T) {
+	previous := metricServerAddresses.Load()
+	t.Cleanup(func() { metricServerAddresses.Store(previous) })
+
+	SetMetricServerAddresses([]string{"gitlab.example.com"})
+	if got := boundedServerAddress("gitlab.example.com"); got != "gitlab.example.com" {
+		t.Errorf("a declared host was bounded away to %q", got)
+	}
+	if got := boundedServerAddress("attacker-chosen.example"); got != OtherServerAddress {
+		t.Errorf("an undeclared host reached the metric as %q", got)
+	}
+
+	// The free-selection mode declares nothing, and then no host at all may
+	// label the metric: every one is a caller's choice.
+	SetMetricServerAddresses(nil)
+	if got := boundedServerAddress("gitlab.example.com"); got != OtherServerAddress {
+		t.Errorf("with no declared set, %q reached the metric", got)
+	}
+}
+
+// TestServerPort_SchemeDefaultsCollapse pins that "no port written" and "the
+// default port written out" are one endpoint, not two label values.
+func TestServerPort_SchemeDefaultsCollapse(t *testing.T) {
+	for raw, want := range map[string]int{
+		"https://gitlab.example.com":      443,
+		"https://gitlab.example.com:443":  443,
+		"http://gitlab.example.com":       80,
+		"https://gitlab.example.com:8443": 8443,
+	} {
+		parsed, err := url.Parse(raw)
+		if err != nil {
+			t.Fatalf("parsing %q: %v", raw, err)
+		}
+		if got := serverPort(parsed); got != want {
+			t.Errorf("serverPort(%q) = %d, want %d", raw, got, want)
+		}
+	}
 }

@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"strings"
 
@@ -71,8 +72,25 @@ func newLogExporter(ctx context.Context, protocol string) (sdklog.Exporter, erro
 func endpointForSignal(signalKey string) string {
 	for _, key := range []string{signalKey, "OTEL_EXPORTER_OTLP_ENDPOINT"} {
 		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-			return value
+			return redactEndpointUserinfo(value)
 		}
 	}
 	return ""
+}
+
+// redactEndpointUserinfo strips credentials from an endpoint before anything
+// displays it.
+//
+// The value here is display-only: the exporters read the variable themselves,
+// so nothing functional passes through this path. An operator can write
+// user:password@host into a URL, and the startup summary that logs the endpoint
+// is itself exported through the log bridge, so without this the credential
+// would travel to the very collector it authenticates to.
+func redactEndpointUserinfo(endpoint string) string {
+	parsed, err := url.Parse(endpoint)
+	if err != nil || parsed.User == nil {
+		return endpoint
+	}
+	parsed.User = url.User("redacted")
+	return parsed.String()
 }

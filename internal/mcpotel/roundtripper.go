@@ -2,6 +2,9 @@ package mcpotel
 
 import (
 	"net/http"
+	"net/url"
+	"strconv"
+	"sync/atomic"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -13,9 +16,12 @@ import (
 
 // Attribute keys for an outbound HTTP call, from the Stable HTTP conventions.
 const (
-	attrHTTPRequestMethod     = attribute.Key("http.request.method")
-	attrHTTPResponseStatus    = attribute.Key("http.response.status_code")
-	attrServerAddress         = attribute.Key("server.address")
+	attrHTTPRequestMethod  = attribute.Key("http.request.method")
+	attrHTTPResponseStatus = attribute.Key("http.response.status_code")
+	attrServerAddress      = attribute.Key("server.address")
+	// attrServerPort pairs with server.address; two ports on one host are
+	// two endpoints.
+	attrServerPort            = attribute.Key("server.port")
 	attrNetworkProtocolName   = attribute.Key("network.protocol.name")
 	attrURLScheme             = attribute.Key("url.scheme")
 	attrErrorTypeForTransport = AttrErrorType
@@ -69,6 +75,46 @@ func NewTransport(base http.RoundTripper) http.RoundTripper {
 	}
 }
 
+// metricServerAddresses is the closed set of GitLab hosts the http.client
+// metric may carry, set once at startup from what this process is configured
+// to serve.
+//
+// The span always carries the real host. The metric is where a caller must not
+// be able to choose the label: in the deployment mode where the GITLAB-URL
+// header selects an instance freely, every host a caller names would otherwise
+// mint a series, and the SDK's cardinality cap would fill with an attacker's
+// hostnames until real measurements collapsed into the overflow bucket. This is
+// the same rule the tool-name dimension follows, for the same reason.
+var metricServerAddresses atomic.Pointer[map[string]struct{}]
+
+// SetMetricServerAddresses declares which hosts the http.client metric may
+// name. Unset, or set empty, every host is recorded as OtherServerAddress.
+func SetMetricServerAddresses(hosts []string) {
+	set := make(map[string]struct{}, len(hosts))
+	for _, host := range hosts {
+		if host != "" {
+			set[host] = struct{}{}
+		}
+	}
+	metricServerAddresses.Store(&set)
+}
+
+// OtherServerAddress is what the metric carries for a host outside the declared
+// set: the absence of a known name, not the name a caller sent.
+const OtherServerAddress = "_OTHER"
+
+// boundedServerAddress returns the host as the metric may carry it.
+func boundedServerAddress(host string) string {
+	set := metricServerAddresses.Load()
+	if set == nil {
+		return OtherServerAddress
+	}
+	if _, ok := (*set)[host]; ok {
+		return host
+	}
+	return OtherServerAddress
+}
+
 type instrumentedTransport struct {
 	base     http.RoundTripper
 	tracer   trace.Tracer
@@ -80,16 +126,23 @@ func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	// low-cardinality route template, and there is none here: every GitLab path
 	// carries a project or group identifier, so a name built from one would
 	// mint a distinct span name per project.
-	attrs := []attribute.KeyValue{
+	host := req.URL.Hostname()
+	port := serverPort(req.URL)
+	shared := []attribute.KeyValue{
 		attrHTTPRequestMethod.String(req.Method),
-		attrServerAddress.String(req.URL.Hostname()),
 		attrURLScheme.String(req.URL.Scheme),
 		attrNetworkProtocolName.String("http"),
+		attrServerPort.Int(port),
 	}
+
+	// The span carries the real host; the metric carries it only when it is
+	// one this process is configured to serve. See metricServerAddresses.
+	spanAttrs := append(append([]attribute.KeyValue(nil), shared...),
+		attrServerAddress.String(host))
 
 	ctx, span := t.tracer.Start(req.Context(), req.Method,
 		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(attrs...),
+		trace.WithAttributes(spanAttrs...),
 	)
 	defer span.End()
 
@@ -99,7 +152,8 @@ func (t *instrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	resp, err := t.base.RoundTrip(req.WithContext(ctx))
 	elapsed := time.Since(started).Seconds()
 
-	metricAttrs := attrs
+	metricAttrs := append(append([]attribute.KeyValue(nil), shared...),
+		attrServerAddress.String(boundedServerAddress(host)))
 	switch {
 	case err != nil:
 		// A transport error, which is the only failure this layer treats as
@@ -136,4 +190,19 @@ func newHTTPClientDurationHistogram(meter metric.Meter) metric.Float64Histogram 
 		otel.Handle(err)
 	}
 	return histogram
+}
+
+// serverPort resolves the port the request will really use, scheme default
+// included, because "no port written" and "port 443 written out" are the same
+// endpoint and must not be two label values.
+func serverPort(u *url.URL) int {
+	if p := u.Port(); p != "" {
+		if n, err := strconv.Atoi(p); err == nil {
+			return n
+		}
+	}
+	if u.Scheme == "http" {
+		return 80
+	}
+	return 443
 }

@@ -17,15 +17,16 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// telemetryIdentityKeyFlag holds --telemetry-identity-key, and
-// telemetryIdentityRotationFlag holds --telemetry-identity-rotation. Pointers,
+// telemetryIdentityRotationFlag holds --telemetry-identity-rotation. A pointer,
 // for the same reason the policy flag is one: an explicit empty value on the
 // command line has to beat an environment variable, or the more specific
 // instruction loses.
-var (
-	telemetryIdentityKeyFlag      *string
-	telemetryIdentityRotationFlag *string
-)
+//
+// The key deliberately has no flag. Process arguments are readable by any local
+// principal through /proc, land in shell history, and get committed inside
+// service definitions; the environment is not free of caveats, but it is the
+// narrower channel and the one this project's other secrets already use.
+var telemetryIdentityRotationFlag *string
 
 // identityKeyring is the process's one keyring, built on first use.
 //
@@ -44,13 +45,10 @@ type Keyring = telemetry.Keyring
 // telemetryIdentityKey resolves the operator's pseudonymisation secret.
 //
 // Empty means none was supplied, which is the default and generates one
-// instead. The flag wins over the environment when it was actually passed.
+// instead. Environment only; see the note on telemetryIdentityRotationFlag for
+// why this secret has no command-line form.
 func telemetryIdentityKey() string {
-	value := os.Getenv(telemetry.EnvIdentityKeyName)
-	if telemetryIdentityKeyFlag != nil && isFlagPassed("telemetry-identity-key") {
-		value = *telemetryIdentityKeyFlag
-	}
-	return value
+	return os.Getenv(telemetry.EnvIdentityKeyName)
 }
 
 // telemetryIdentityRotation resolves how long a generated key lives.
@@ -80,14 +78,23 @@ func telemetryIdentityRotation() (time.Duration, error) {
 // back to naming people, and must not take the server down either.
 func identityKeyring() *Keyring {
 	identityKeyringOnce.Do(func() {
-		rotation, err := telemetryIdentityRotation()
-		if err != nil {
-			slog.Error("telemetry identity key rotation is unusable; recording nothing about callers",
-				"component", "telemetry", "error", err)
-			return
+		secret := telemetryIdentityKey()
+
+		// The rotation is read only when it applies, which is when no key is
+		// configured. Parsing it first let a typo in a setting that is
+		// documented as ignored stop identity recording for an operator whose
+		// key was fine.
+		var rotation time.Duration
+		if secret == "" {
+			var err error
+			rotation, err = telemetryIdentityRotation()
+			if err != nil {
+				slog.Error("telemetry identity key rotation is unusable; recording nothing about callers",
+					"component", "telemetry", "error", err)
+				return
+			}
 		}
 
-		secret := telemetryIdentityKey()
 		ring, err := telemetry.NewKeyring(secret, rotation)
 		if err != nil {
 			slog.Error("telemetry pseudonymisation keyring could not be built; recording nothing about callers",
@@ -121,12 +128,16 @@ func announceIdentityChoice() {
 		return
 	}
 
-	logIdentityPolicy(policy)
-
-	if ring := identityKeyring(); ring != nil {
-		rotation, _ := telemetryIdentityRotation()
-		logKeyringChoice(ring, rotation)
+	// The keyring first: announcing that identity is recorded and then failing
+	// to build the thing that records it would be the announcement lying.
+	ring := identityKeyring()
+	if ring == nil {
+		return
 	}
+
+	logIdentityPolicy(policy)
+	rotation, _ := telemetryIdentityRotation()
+	logKeyringChoice(ring, rotation)
 }
 
 // logKeyringChoice says what an operator configured, including the case where

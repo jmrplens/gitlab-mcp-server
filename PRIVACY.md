@@ -29,9 +29,11 @@ The server can export traces, metrics and logs, and this section exists so the
 paragraph above stays exactly true rather than becoming a technicality.
 
 It is **off by default**. When you enable it, the telemetry goes to a collector
-**you** configure and run. There is no default address, no fallback endpoint,
-and no path by which it could reach the maintainer: if you set nothing, nothing
-is exported. Turning it on is a decision you make about your own deployment and
+**you** configure and run. There is no path by which it could reach the
+maintainer: the only default the exporters have is their own specification's
+`http://localhost:4318`, your machine, where the export fails quietly unless
+you run a collector there. Nothing in any code path carries anyone else's
+address. Turning it on is a decision you make about your own deployment and
 your own users.
 
 What it records describes operations, never their contents: the method called,

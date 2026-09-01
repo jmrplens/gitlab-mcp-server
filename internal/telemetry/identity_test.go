@@ -278,3 +278,20 @@ func TestPolicyDescription_SaysWhatEachPolicyExports(t *testing.T) {
 		}
 	})
 }
+
+// TestRedactor_ABrokenKeyringYieldsNoIdentityAtAll covers the failure shape a
+// review named: pseudonymous with no usable keyring produced user.hash with an
+// empty value, a bucket that reads as one anonymous person while meaning "the
+// keyring is broken". Absence is the honest value.
+func TestRedactor_ABrokenKeyringYieldsNoIdentityAtAll(t *testing.T) {
+	t.Parallel()
+
+	redactor, err := NewRedactor(IdentityPseudonymous, nil)
+	if err != nil {
+		t.Fatalf("NewRedactor: %v", err)
+	}
+
+	if attrs := redactor.Attributes("42", "jane"); len(attrs) != 0 {
+		t.Errorf("a redactor with no keyring produced %v; an empty digest is not a pseudonym", attrs)
+	}
+}

@@ -180,3 +180,21 @@ func keyringFrom(t *testing.T, secret string, rotation time.Duration) *Keyring {
 	}
 	return ring
 }
+
+// TestKeyring_AConfiguredKeySurvivesABrokenRotation pins the precedence at the
+// constructor: rotation does not apply to a configured key, so a rotation value
+// that would be refused on its own must not veto the key.
+//
+// Before this, the range check ran first and an operator with a working key and
+// a typo in a setting documented as ignored lost identity recording entirely.
+func TestKeyring_AConfiguredKeySurvivesABrokenRotation(t *testing.T) {
+	t.Parallel()
+
+	ring, err := NewKeyring("a deployment-wide secret", -time.Hour)
+	if err != nil {
+		t.Fatalf("a configured key was refused over a rotation that does not apply to it: %v", err)
+	}
+	if !ring.Configured() || ring.Rotation() != 0 {
+		t.Errorf("configured=%v rotation=%s, want configured with no rotation", ring.Configured(), ring.Rotation())
+	}
+}

@@ -6412,6 +6412,9 @@ func TestUploadMaxFileSize_HTTPMode_HonorsTheSetting(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			// Cleared first, so the "unset" case tests an absent variable
+			// rather than whatever the developer's shell happens to export.
+			t.Setenv("UPLOAD_MAX_FILE_SIZE", "")
 			if tc.set {
 				t.Setenv("UPLOAD_MAX_FILE_SIZE", tc.value)
 			}

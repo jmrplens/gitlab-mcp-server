@@ -204,15 +204,20 @@ func Start(ctx context.Context, cfg Config) (*Provider, error) {
 	// Resolved per signal, before anything is built, so a protocol that cannot
 	// be honored fails at startup with a name rather than at the first export
 	// with a rejected batch.
-	traceProtocol, err := resolveProtocol(cfg.Protocol, tracesProtocolKey)
-	if err != nil {
-		return nil, err
-	}
-	// Only for the signals that are on. Validating a disabled signal's variable
-	// refuses a start over configuration that would never be read: a
+	//
+	// And only for the signals that are on. Validating a disabled signal's
+	// variable refuses a start over configuration that would never be read: a
 	// metrics-only deployment does not care that OTEL_EXPORTER_OTLP_TRACES_PROTOCOL
 	// is misspelled, and telling it otherwise is a failure it cannot act on.
-	var metricProtocol, logProtocol string
+	// The traces resolution used to run unconditionally, two lines above the
+	// comment saying it must not.
+	var traceProtocol, metricProtocol, logProtocol string
+	var err error
+	if signals.Traces {
+		if traceProtocol, err = resolveProtocol(cfg.Protocol, tracesProtocolKey); err != nil {
+			return nil, fmt.Errorf("traces OTLP protocol: %w", err)
+		}
+	}
 	if signals.Metrics {
 		if metricProtocol, err = resolveProtocol(cfg.Protocol, metricsProtocolKey); err != nil {
 			return nil, fmt.Errorf("metrics OTLP protocol: %w", err)

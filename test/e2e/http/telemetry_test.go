@@ -139,15 +139,17 @@ func TestTelemetry_AnUnreachableCollectorChangesNoResponse(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		want := quiet.do(t, tc.call)
-		got := instrumented.do(t, tc.call)
+		t.Run(firstNonEmpty(tc.call.path, tc.call.body), func(t *testing.T) {
+			want := quiet.do(t, tc.call)
+			got := instrumented.do(t, tc.call)
 
-		if got.status != want.status {
-			t.Errorf("status %d with telemetry and %d without, for %q", got.status, want.status, tc.call.body+tc.call.path)
-		}
-		if tc.bodyIsDeterministic && got.body != want.body {
-			t.Errorf("the body differs with telemetry enabled, for %q: got %q, want %q", tc.call.body+tc.call.path, got.body, want.body)
-		}
+			if got.status != want.status {
+				t.Errorf("status %d with telemetry and %d without", got.status, want.status)
+			}
+			if tc.bodyIsDeterministic && got.body != want.body {
+				t.Errorf("the body differs with telemetry enabled: got %q, want %q", got.body, want.body)
+			}
+		})
 	}
 
 	// Nothing about the collector may reach a client, whatever the outcome was.
@@ -187,4 +189,14 @@ func TestTelemetry_OffByDefaultOverHTTP(t *testing.T) {
 	if _, present := card["telemetry"]; present {
 		t.Errorf("the card carries a telemetry block with telemetry off: %s", got.body)
 	}
+}
+
+// firstNonEmpty names a subtest by whichever half of the request exists.
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return "empty"
 }

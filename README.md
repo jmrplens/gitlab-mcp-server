@@ -371,7 +371,7 @@ Yes. Set `GITLAB_URL` to your instance URL. When `GITLAB_URL` is omitted, stdio 
 <details>
 <summary><strong>Is my data safe?</strong></summary>
 
-When you run it yourself, locally over stdio or on your own infrastructure over HTTP, every request goes to your GitLab instance and nowhere else. There is no update check, no license check and no telemetry: your instance is the only host this server contacts.
+When you run it yourself, locally over stdio or on your own infrastructure over HTTP, every request goes to your GitLab instance and nowhere else. There is no update check and no phoning home; telemetry exists but is off by default, and turning it on exports to a collector you configure, never to anyone else.
 
 The exception is the <a href="#try-it-without-installing-anything-hosted-endpoint">hosted endpoint</a>: using <code>https://mcp.jmrp.io/gitlab</code> means your token and every request pass through that machine. Nothing is stored there, but it is someone else's server, which is why the hosted section says to keep using it locally.
 
@@ -423,10 +423,11 @@ The published container image is `ghcr.io/jmrplens/gitlab-mcp-server:latest`. Se
 
 ## Privacy Policy
 
-The server runs entirely on your machine and has **no telemetry, analytics, or
-backend of its own** — data flows only between your MCP client and the GitLab
-instance you configure (plus an optional signed-binary update check against
-GitHub Releases). Your token is used solely to authenticate GitLab requests
+The server runs entirely on your machine and has **no analytics and no backend
+of its own**: data flows only between your MCP client and the GitLab instance
+you configure. OpenTelemetry export exists, off by default, and when you enable
+it the data goes to a collector you run; nothing in any code path carries the
+maintainer's address. Your token is used solely to authenticate GitLab requests
 and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 ## Contributing & Security
@@ -446,20 +447,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,003 |     207,508 |
-| Unit tests (`_test.go`)  |       562 |     313,597 |
-| End-to-end tests         |       197 |      52,797 |
-| **Total**                | **1,762** | **573,902** |
+| Source (`.go`, non-test) |     1,003 |     207,763 |
+| Unit tests (`_test.go`)  |       562 |     313,848 |
+| End-to-end tests         |       197 |      52,815 |
+| **Total**                | **1,762** | **574,426** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,807 |
-| — exported (public)             |  2,697 |
-| — unexported (private)          |  5,110 |
-| Unit test functions (`TestXxx`) | 11,757 |
-| Subtests (`t.Run(...)`)         |  3,067 |
+| Source functions                |  7,815 |
+| — exported (public)             |  2,698 |
+| — unexported (private)          |  5,117 |
+| Unit test functions (`TestXxx`) | 11,768 |
+| Subtests (`t.Run(...)`)         |  3,068 |
 | End-to-end test functions       |    512 |
 
 ### Ratios worth noting
@@ -467,16 +468,16 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Observation                        |                      Value |
 | ---------------------------------- | -------------------------: |
 | Test lines vs source lines         | 1.51× more tests than code |
-| Average source file length         |                 ~206 lines |
+| Average source file length         |                 ~207 lines |
 | Average test file length           |                 ~558 lines |
-| Comment lines in source            |  27,919 (~13.5% of source) |
+| Comment lines in source            |  28,026 (~13.5% of source) |
 | Test functions per source function |                       1.5× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,593 |
+| `if err != nil` checks             | 6,598 |
 | `defer` statements                 | 1,000 |
 | `struct` types defined             | 2,756 |
 | `//nolint` suppressions            |   249 |
@@ -501,8 +502,8 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Source code printed at 55 lines/page | ~3,772 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,753 (impossible to avoid)                                                                         |
+| Source code printed at 55 lines/page | ~3,777 pages of A4                                                                                   |
+| Source lines mentioning `"gitlab"`   | 12,758 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

@@ -8,6 +8,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -78,7 +79,15 @@ func ServerMiddleware(next http.Handler) http.Handler {
 			name = "HTTP"
 		}
 
-		ctx, span := tracer.Start(r.Context(), name,
+		// The caller's trace context, when one arrives: a gateway in front of
+		// this server is upstream of it in the same sense a client is upstream
+		// of the MCP layer, and that layer already honors _meta. A malformed
+		// or absent header leaves the context untouched, which is the
+		// propagator's contract and the reason nothing is checked here.
+		parent := otel.GetTextMapPropagator().Extract(r.Context(),
+			propagation.HeaderCarrier(r.Header))
+
+		ctx, span := tracer.Start(parent, name,
 			trace.WithSpanKind(trace.SpanKindServer),
 			trace.WithAttributes(spanAttrs...),
 		)
@@ -152,6 +161,10 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 // the client never sees: wrapping the ResponseWriter without forwarding Flush
 // would turn every streaming response into a hang.
 func (r *statusRecorder) Flush() {
+	// A flush commits the implicit 200: after bytes are on the wire, a later
+	// WriteHeader changes nothing the client sees, and recording its status
+	// would label the measurement with a code that was never sent.
+	r.written = true
 	if flusher, ok := r.ResponseWriter.(http.Flusher); ok {
 		flusher.Flush()
 	}

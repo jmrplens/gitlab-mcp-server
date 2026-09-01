@@ -6,8 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 // TestKnownMethod_SubstitutesAnythingUnrecognized covers the classification the
@@ -141,7 +144,13 @@ func TestServerMiddleware_TheSpanNameIsHTTPForASubstitutedMethod(t *testing.T) {
 	handler.ServeHTTP(httptest.NewRecorder(),
 		httptest.NewRequestWithContext(t.Context(), "FROBNICATE", "/mcp", nil))
 
-	for _, span := range recorder.Ended() {
+	spans := recorder.Ended()
+	if len(spans) == 0 {
+		// Without this, a middleware that emitted nothing would pass every
+		// assertion in the loop below by never running it.
+		t.Fatal("no span was recorded")
+	}
+	for _, span := range spans {
 		if span.Name() != "HTTP" {
 			t.Errorf("span name = %q, want %q for a method the convention does not name", span.Name(), "HTTP")
 		}
@@ -213,3 +222,40 @@ type nonFlushingWriter struct{}
 func (nonFlushingWriter) Header() http.Header         { return http.Header{} }
 func (nonFlushingWriter) Write(b []byte) (int, error) { return len(b), nil }
 func (nonFlushingWriter) WriteHeader(int)             {}
+
+// TestServerMiddleware_JoinsTheCallersTrace covers the front door's half of a
+// promise the MCP layer already keeps.
+//
+// A gateway in front of this server sends traceparent like any instrumented
+// proxy. The middleware started a new root regardless, so the operator's own
+// trace broke exactly at this server while the layer underneath was carefully
+// honoring _meta. The assertion is on the trace id, which is the only thing
+// joining is.
+func TestServerMiddleware_JoinsTheCallersTrace(t *testing.T) {
+	recorder := newRecorder(t)
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)))
+	t.Cleanup(func() { otel.SetTracerProvider(previous) })
+
+	previousProp := otel.GetTextMapPropagator()
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+	t.Cleanup(func() { otel.SetTextMapPropagator(previousProp) })
+
+	handler := ServerMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	const upstream = "4bf92f3577b34da6a3ce929d0e0e4736"
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", nil)
+	req.Header.Set("traceparent", "00-"+upstream+"-00f067aa0ba902b7-01")
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	spans := recorder.Ended()
+	if len(spans) == 0 {
+		t.Fatal("no span was recorded")
+	}
+	if got := spans[0].SpanContext().TraceID().String(); got != upstream {
+		t.Errorf("the HTTP span has trace id %s; the caller sent %s, so their trace breaks at this server's front door",
+			got, upstream)
+	}
+}

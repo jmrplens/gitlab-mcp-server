@@ -3,6 +3,7 @@ package telemetry
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"go.opentelemetry.io/contrib/bridges/otelslog"
@@ -84,7 +85,14 @@ type fanOutHandler struct {
 // operator's LOG_LEVEL asked for, which is the opposite of what an export floor
 // is for.
 func (h *fanOutHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return h.stderr.Enabled(ctx, level)
+	// Either leg is reason enough. Delegating to stderr alone made LOG_LEVEL
+	// govern the export too: at warn, no INFO record ever reached Handle, and
+	// the guide's claim that the export floor is separate was false in that
+	// direction. Handle gates each leg on its own.
+	if h.stderr.Enabled(ctx, level) {
+		return true
+	}
+	return h.exported && level >= h.otlpMin
 }
 
 // Handle writes to stderr first, then to the collector.
@@ -95,8 +103,10 @@ func (h *fanOutHandler) Enabled(ctx context.Context, level slog.Level) bool {
 // through the handler installed in diagnostics.go, which is where an operator
 // should learn about it.
 func (h *fanOutHandler) Handle(ctx context.Context, record slog.Record) error {
-	err := h.stderr.Handle(ctx, record)
-
+	var err error
+	if h.stderr.Enabled(ctx, record.Level) {
+		err = h.stderr.Handle(ctx, record)
+	}
 	if h.exported && record.Level >= h.otlpMin {
 		_ = h.otlp.Handle(ctx, redactRecord(record, h.identity))
 	}
@@ -120,34 +130,63 @@ func (h *fanOutHandler) Handle(ctx context.Context, record slog.Record) error {
 // it came, which is every record this server writes except a handful about
 // subscriptions.
 func redactRecord(record slog.Record, identity *Redactor) slog.Record {
-	names := recordNamesSomebody(record)
-	if !recordNeedsRedaction(record) && !names {
+	if !recordNeedsRedaction(record) && !recordNamesSomebody(record) {
 		return record
 	}
 
 	redacted := slog.NewRecord(record.Time, record.Level,
 		RedactResourceURIs(record.Message), record.PC)
 
-	var userID, username string
+	attrs := make([]slog.Attr, 0, record.NumAttrs())
 	record.Attrs(func(attr slog.Attr) bool {
-		switch attr.Key {
-		case LogFieldUserID:
-			userID = attr.Value.String()
-		case LogFieldUser:
-			username = attr.Value.String()
-		default:
-			redacted.AddAttrs(redactAttr(attr))
-		}
+		attrs = append(attrs, attr)
 		return true
 	})
-
-	// Put back whatever the policy allows, under the registry's names rather
-	// than the stderr leg's: this copy is what leaves the process, and the
-	// user.* namespace is what a backend already knows how to join on.
-	for _, attr := range identity.Attributes(userID, username) {
-		redacted.AddAttrs(slog.String(string(attr.Key), attr.Value.AsString()))
-	}
+	redacted.AddAttrs(exportAttrs(attrs, identity)...)
 	return redacted
+}
+
+// exportAttrs returns what the exported copy of an attribute set may carry.
+//
+// It is the one place that decides, and both suppliers of exported attributes
+// go through it: a record's own attributes in redactRecord, and the attributes
+// a derived logger attaches in WithAttrs. Having two paths was the hole: the
+// attached ones went to the OTLP handler untransformed, so any component logger
+// built with slog.With bypassed the policy for whatever it attached.
+//
+// Identity fields are collected at any depth, groups included, because
+// slog.Group is an ordinary value a caller can pass and a group was enough to
+// smuggle user and user_id past the previous field check. What the policy
+// allows is re-added at the top level under the registry's user.* names, which
+// is what a backend already knows how to join on.
+func exportAttrs(attrs []slog.Attr, identity *Redactor) []slog.Attr {
+	var userID, username string
+	var strip func(attrs []slog.Attr) []slog.Attr
+	strip = func(attrs []slog.Attr) []slog.Attr {
+		out := make([]slog.Attr, 0, len(attrs))
+		for _, attr := range attrs {
+			switch {
+			case attr.Key == LogFieldUserID:
+				userID = attr.Value.String()
+			case attr.Key == LogFieldUser:
+				username = attr.Value.String()
+			case attr.Value.Kind() == slog.KindGroup:
+				out = append(out, slog.Attr{
+					Key:   attr.Key,
+					Value: slog.GroupValue(strip(attr.Value.Group())...),
+				})
+			default:
+				out = append(out, redactAttr(attr))
+			}
+		}
+		return out
+	}
+
+	out := strip(attrs)
+	for _, attr := range identity.Attributes(userID, username) {
+		out = append(out, slog.String(string(attr.Key), attr.Value.AsString()))
+	}
+	return out
 }
 
 // recordNamesSomebody reports whether a record carries the identity fields, so
@@ -156,13 +195,25 @@ func redactRecord(record slog.Record, identity *Redactor) slog.Record {
 func recordNamesSomebody(record slog.Record) bool {
 	found := false
 	record.Attrs(func(attr slog.Attr) bool {
-		if attr.Key == LogFieldUser || attr.Key == LogFieldUserID {
+		if attrNamesSomebody(attr) {
 			found = true
 			return false
 		}
 		return true
 	})
 	return found
+}
+
+// attrNamesSomebody descends groups, because slog.Group is an ordinary value a
+// caller can pass and a flat key check let a grouped user field through.
+func attrNamesSomebody(attr slog.Attr) bool {
+	if attr.Key == LogFieldUser || attr.Key == LogFieldUserID {
+		return true
+	}
+	if attr.Value.Kind() == slog.KindGroup {
+		return slices.ContainsFunc(attr.Value.Group(), attrNamesSomebody)
+	}
+	return false
 }
 
 // recordNeedsRedaction reports whether anything in the record mentions a
@@ -206,10 +257,15 @@ func redactAttr(attr slog.Attr) slog.Attr {
 // logger.
 func (h *fanOutHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &fanOutHandler{
-		stderr:   h.stderr.WithAttrs(attrs),
-		otlp:     h.otlp.WithAttrs(attrs),
+		stderr: h.stderr.WithAttrs(attrs),
+		// The exported copy of attached attributes goes through the same
+		// transform as a record's own. Handing them over raw was a bypass: a
+		// component logger built with slog.With exported whatever it attached,
+		// and redactRecord never saw it because attachment happens here.
+		otlp:     h.otlp.WithAttrs(exportAttrs(attrs, h.identity)),
 		otlpMin:  h.otlpMin,
 		exported: h.exported,
+		identity: h.identity,
 	}
 }
 
@@ -220,5 +276,6 @@ func (h *fanOutHandler) WithGroup(name string) slog.Handler {
 		otlp:     h.otlp.WithGroup(name),
 		otlpMin:  h.otlpMin,
 		exported: h.exported,
+		identity: h.identity,
 	}
 }

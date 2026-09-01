@@ -527,3 +527,83 @@ func exportedRecord(t *testing.T, identity *Redactor, write func(*slog.Logger)) 
 	})
 	return rendered
 }
+
+// TestSlogHandler_ADerivedLoggerObeysTheIdentityPolicy closes the bypass a
+// review found: attributes attached with slog.With reached the OTLP handler
+// untransformed, and the derived handler had lost the redactor besides.
+//
+// slog.With is the ordinary way this server builds component loggers, so the
+// bypass was not exotic: any component that attached a caller to its logger
+// exported that caller under every policy.
+func TestSlogHandler_ADerivedLoggerObeysTheIdentityPolicy(t *testing.T) {
+	redactor := newRedactor(t, IdentityPseudonymous)
+
+	exported := exportedRecord(t, redactor, func(logger *slog.Logger) {
+		logger.With(LogFieldUser, "jane", LogFieldUserID, "42").
+			Info("tool call completed", "tool", "gitlab_project/get")
+	})
+
+	for _, forbidden := range []string{"jane", AttrUserID, AttrUserName} {
+		if strings.Contains(exported, forbidden) {
+			t.Errorf("%s reached the collector through a derived logger: %s", forbidden, exported)
+		}
+	}
+	if !strings.Contains(exported, AttrUserHash) {
+		t.Errorf("the digest is absent, so the derived handler lost the redactor: %s", exported)
+	}
+}
+
+// TestSlogHandler_ADerivedLoggerRedactsAttachedURIs is the same bypass for the
+// other protected value: a resource URI attached at With time went to the OTLP
+// handler verbatim, while the same URI on a record was redacted.
+func TestSlogHandler_ADerivedLoggerRedactsAttachedURIs(t *testing.T) {
+	exported := exportedRecord(t, nil, func(logger *slog.Logger) {
+		logger.With("uri", "gitlab://project/82077663").Info("watch started")
+	})
+
+	if strings.Contains(exported, "82077663") {
+		t.Errorf("a URI attached with slog.With reached the collector verbatim: %s", exported)
+	}
+}
+
+// TestSlogHandler_AGroupedIdentityFieldIsStillRedacted covers the third route
+// in: slog.Group is an ordinary value a caller can pass, and the flat key check
+// let a grouped user field through untouched.
+func TestSlogHandler_AGroupedIdentityFieldIsStillRedacted(t *testing.T) {
+	exported := exportedRecord(t, nil, func(logger *slog.Logger) {
+		logger.Info("tool call completed",
+			slog.Group("caller", LogFieldUser, "jane", LogFieldUserID, "42"))
+	})
+
+	if strings.Contains(exported, "jane") || strings.Contains(exported, "user=") {
+		t.Errorf("an identity field inside a group reached the collector under policy none: %s", exported)
+	}
+}
+
+// TestSlogHandler_TheExportFloorSurvivesAQuietTerminal keeps the guide's
+// sentence true: "LOG_LEVEL still governs the terminal; the export floor is
+// separate". Enabled used to delegate to the stderr handler alone, so a
+// terminal at warn silently starved the collector of every INFO record, and
+// the two floors were one floor wearing two names.
+func TestSlogHandler_TheExportFloorSurvivesAQuietTerminal(t *testing.T) {
+	exp := &recordingExporter{}
+	lp := sdklog.NewLoggerProvider(sdklog.WithProcessor(sdklog.NewSimpleProcessor(exp)))
+	t.Cleanup(func() { _ = lp.Shutdown(context.Background()) })
+
+	previous := global.GetLoggerProvider()
+	global.SetLoggerProvider(lp)
+	t.Cleanup(func() { global.SetLoggerProvider(previous) })
+
+	var terminal bytes.Buffer
+	stderr := slog.NewJSONHandler(&terminal, &slog.HandlerOptions{Level: slog.LevelWarn})
+	logger := slog.New(NewSlogHandler(stderr, slog.LevelInfo, nil))
+
+	logger.Info("tool call completed", "tool", "gitlab_project/get")
+
+	if got := len(exp.all()); got != 1 {
+		t.Errorf("exported %d records, want 1: a terminal at warn must not starve the collector of INFO", got)
+	}
+	if terminal.Len() != 0 {
+		t.Errorf("the terminal printed an INFO record while set to warn: %s", terminal.String())
+	}
+}

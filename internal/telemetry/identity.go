@@ -161,7 +161,14 @@ func (r *Redactor) Attributes(userID, username string) []attribute.KeyValue {
 		}
 		return attrs
 	case IdentityPseudonymous:
-		return []attribute.KeyValue{attribute.String(AttrUserHash, r.pseudonym(userID))}
+		digest := r.pseudonym(userID)
+		if digest == "" {
+			// A keyring that failed to build yields no digest, and an empty
+			// user.hash would read as one anonymous person while meaning "the
+			// keyring is broken". Absence is the honest value.
+			return nil
+		}
+		return []attribute.KeyValue{attribute.String(AttrUserHash, digest)}
 	default:
 		return nil
 	}
