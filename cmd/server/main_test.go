@@ -6539,7 +6539,7 @@ func escapeSubstitutionHalf(s string) string {
 // served from the compiled-in registry, so no GitLab backend is involved.
 func firstDescribedResource(t *testing.T, session *mcp.ClientSession) (uri, description string) {
 	t.Helper()
-	res, err := session.ListResources(context.Background(), nil)
+	res, err := session.ListResources(t.Context(), nil)
 	if err != nil {
 		t.Fatalf("ListResources: %v", err)
 	}
@@ -6576,7 +6576,7 @@ func TestCreateServer_GatewayCompatWiring(t *testing.T) {
 		t.Fatalf("createServer (substituted): %v", err)
 	}
 	session := connectSessionAs(t, server, &mcp.Implementation{Name: "test-client", Version: "1.0.0"})
-	res, err := session.ListResources(context.Background(), nil)
+	res, err := session.ListResources(t.Context(), nil)
 	if err != nil {
 		t.Fatalf("ListResources (substituted): %v", err)
 	}
@@ -6654,7 +6654,7 @@ func connectSessionAs(t *testing.T, server *mcp.Server, impl *mcp.Implementation
 // GitLab backend call is involved) split into float and integer counts.
 func resourcePriorities(t *testing.T, session *mcp.ClientSession) (floats, integers int) {
 	t.Helper()
-	res, err := session.ListResources(context.Background(), nil)
+	res, err := session.ListResources(t.Context(), nil)
 	if err != nil {
 		t.Fatalf("ListResources: %v", err)
 	}

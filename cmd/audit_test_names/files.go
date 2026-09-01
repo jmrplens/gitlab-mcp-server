@@ -13,10 +13,11 @@
 //     <module>.go exists: a platform-gated test cannot live in the module's
 //     unconstrained test file (fileutils.go -> fileutils_unix_test.go).
 //   - <module>_<qualifier>_test.go in an external package (package x_test),
-//     when <module>.go exists: a module with an internal test file keeps its
-//     name, and Go allows one package per file name, so the external-package
+//     when <module>.go exists and an internal <module>_test.go holds the
+//     plain name: Go allows one package per file name, so external-package
 //     tests forced by an import cycle need a qualified sibling
-//     (kind.go -> kind_test.go + kind_integration_test.go).
+//     (kind.go -> kind_test.go + kind_integration_test.go). Without that
+//     internal sibling the external tests take the plain name themselves.
 //
 // test/e2e is exempt as a tree: its files have no source modules to be named
 // after.
@@ -63,8 +64,9 @@ func checkFileNamesInDir(dir string) []fileViolation {
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "readdir %s: %v\n", dir, err)
-		return nil
+		// An unreadable directory is itself a violation: a gate that cannot
+		// read what it was asked to certify must fail, not report clean.
+		return []fileViolation{{path: filepath.ToSlash(dir), reason: "unreadable: " + err.Error()}}
 	}
 
 	var violations []fileViolation
@@ -110,10 +112,27 @@ func classifyTestFileName(dir, name string) (reason string, ok bool) {
 		return "no module file matches this name", false
 	}
 	path := filepath.Join(dir, name)
-	if hasBuildConstraint(path) || isExternalTestPackage(path) {
+	if hasBuildConstraint(path) {
 		return "", true
 	}
-	return fmt.Sprintf("qualified name over %s.go needs a //go:build constraint or an external test package", module), false
+	// The external-package exemption is earned by a filename conflict, not by
+	// the package clause alone: without an internal <module>_test.go the
+	// external tests could simply take the plain name themselves.
+	if isExternalTestPackage(path) && internalTestSiblingExists(dir, module) {
+		return "", true
+	}
+	return fmt.Sprintf("qualified name over %s.go needs a //go:build constraint, or an external test package alongside an internal %s_test.go", module, module), false
+}
+
+// internalTestSiblingExists reports whether dir holds <module>_test.go
+// declaring the module's own package, which is what makes a qualified
+// external-package name a forced choice rather than a stylistic one.
+func internalTestSiblingExists(dir, module string) bool {
+	path := filepath.Join(dir, module+"_test.go")
+	if _, err := os.Stat(path); err != nil {
+		return false
+	}
+	return !isExternalTestPackage(path)
 }
 
 // moduleExists reports whether dir holds a non-test source file named
