@@ -28944,13 +28944,13 @@ Annotations: readOnly=false, destructive=false, idempotent=false, openWorld=true
 
 - **URI Template**: `gitlab://project/{project_id}/mr/{merge_request_iid}/discussions`
 - **MIME**: application/json
-- **Description**: List discussion threads on a merge request. Each discussion has an id, individual_note flag, and an array of notes (id, author, body, system, resolved/resolvable, created_at). Subscribable: subscriptions/listen (protocol 2026-07-28); resources/subscribe on stateful sessions.
+- **Description**: List discussion threads on a merge request. Returns up to one page of 100 discussions; a busier merge request has more than this resource shows. Each discussion has an id, individual_note flag, and an array of notes (id, author, body, system, resolved/resolvable, created_at). Subscribable: subscriptions/listen (protocol 2026-07-28); resources/subscribe on stateful sessions.
 
 ### merge_request_notes
 
 - **URI Template**: `gitlab://project/{project_id}/mr/{merge_request_iid}/notes`
 - **MIME**: application/json
-- **Description**: List notes (comments) on a merge request. Returns each note's id, author username, body, system flag, resolvable/resolved flags, and timestamps. Subscribable: subscriptions/listen (protocol 2026-07-28); resources/subscribe on stateful sessions.
+- **Description**: List notes (comments) on a merge request. Returns up to one page of 100 notes, newest ordering as GitLab returns it; a busier merge request has more than this resource shows. Each note carries id, author username, body, system flag, resolvable/resolved flags, and timestamps. Subscribable: subscriptions/listen (protocol 2026-07-28); resources/subscribe on stateful sessions.
 
 ### pipeline
 

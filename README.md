@@ -259,11 +259,11 @@ Measured with `go run ./cmd/audit_tokens/ -footprint` against the current catalo
 
 | Configuration (`TOOL_SURFACE` / `CAPABILITY_SURFACE`) | Tier     | Visible tools | Reachable actions | `META_PARAM_SCHEMA` | Tool schema tokens | Shared tokens | Total tokens |
 | ----------------------------------------------------- | -------- | ------------: | ----------------: | ------------------- | -----------------: | ------------: | -----------: |
-| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              1,499 |         8,781 |       10,280 |
+| `dynamic` / `full` (default)                          | Free/CE  |             2 |               851 | n/a                 |              1,499 |         8,832 |       10,331 |
 | `dynamic` / `minimal`                                 | Free/CE  |             2 |               851 | n/a                 |              1,499 |           170 |        1,669 |
-| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              1,499 |         8,781 |       10,280 |
+| `dynamic` / `full` (default)                          | Premium  |             2 |             1,003 | n/a                 |              1,499 |         8,832 |       10,331 |
 | `dynamic` / `minimal`                                 | Premium  |             2 |             1,003 | n/a                 |              1,499 |           170 |        1,669 |
-| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              1,499 |         8,781 |       10,280 |
+| `dynamic` / `full` (default)                          | Ultimate |             2 |             1,069 | n/a                 |              1,499 |         8,832 |       10,331 |
 | `dynamic` / `minimal`                                 | Ultimate |             2 |             1,069 | n/a                 |              1,499 |           170 |        1,669 |
 
 Rows use the base Community Edition catalog unless the Tier column says otherwise. `GITLAB_TIER` controls which actions are available; higher tiers expose more tools and thus more reachable actions.
@@ -503,7 +503,7 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Fact                                 | Value                                                                                                |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------- |
 | Source code printed at 55 lines/page | ~3,780 pages of A4                                                                                   |
-| Source lines mentioning `"gitlab"`   | 12,764 (impossible to avoid)                                                                         |
+| Source lines mentioning `"gitlab"`   | 12,765 (impossible to avoid)                                                                         |
 | Longest function name in source      | `assertDynamicCompatibilityPolicyOwnedByActionCompat` (51 chars)                                     |
 | Longest test function name           | `TestRequiredMissingAndUnknownParamNames_SchemaValidation_ReturnsSortedMissingAndUnknown` (87 chars) |
 

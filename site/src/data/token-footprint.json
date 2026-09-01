@@ -1,7 +1,7 @@
 {
   "tokenizer": "cl100k_base",
   "shared": {
-    "full": 8781,
+    "full": 8832,
     "minimal": 170
   },
   "dynamic": {

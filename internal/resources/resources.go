@@ -1264,7 +1264,7 @@ func registerMergeRequestNotesResource(server registrar, client *gitlabclient.Cl
 		Name:        "merge_request_notes",
 		Title:       "Merge Request Notes",
 		MIMEType:    mimeJSON,
-		Description: "List notes (comments) on a merge request. Returns each note's id, author username, body, system flag, resolvable/resolved flags, and timestamps.",
+		Description: "List notes (comments) on a merge request. Returns up to one page of 100 notes, newest ordering as GitLab returns it; a busier merge request has more than this resource shows. Each note carries id, author username, body, system flag, resolvable/resolved flags, and timestamps.",
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -1315,7 +1315,7 @@ func registerMergeRequestDiscussionsResource(server registrar, client *gitlabcli
 		Name:        "merge_request_discussions",
 		Title:       "Merge Request Discussions",
 		MIMEType:    mimeJSON,
-		Description: "List discussion threads on a merge request. Each discussion has an id, individual_note flag, and an array of notes (id, author, body, system, resolved/resolvable, created_at).",
+		Description: "List discussion threads on a merge request. Returns up to one page of 100 discussions; a busier merge request has more than this resource shows. Each discussion has an id, individual_note flag, and an array of notes (id, author, body, system, resolved/resolvable, created_at).",
 		Annotations: toolutil.ResourceList,
 		Icons:       toolutil.IconMR,
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
