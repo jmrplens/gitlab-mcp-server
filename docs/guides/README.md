@@ -19,6 +19,7 @@ current, or getting unstuck. New here? Start with
 | [OAuth App Setup](oauth-app-setup.md)                   | Create a GitLab OAuth application so MCP clients can authenticate                                                                                        |
 | [CI/CD Usage](ci-cd.md)                                 | Use the server inside CI/CD pipelines, with or without an LLM in the loop                                                                                |
 | [Client Compatibility](client-compatibility.md)         | Understand per-client response profiles (OpenAI Codex) and known client-side limits                                                                      |
+| [Telemetry](telemetry.md)                               | Export OpenTelemetry traces, metrics and logs over OTLP, and choose what is recorded about callers                                                       |
 | [Troubleshooting](troubleshooting.md)                   | Diagnose common connection, TLS, tool, and transport problems                                                                                            |
 | [Examples](examples/README.md)                          | Walk through real-world, multi-step usage scenarios and skill templates                                                                                  |
 

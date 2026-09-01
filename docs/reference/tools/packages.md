@@ -368,8 +368,8 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 ## Related
 
 - [GitLab Packages API](https://docs.gitlab.com/ee/api/packages.html)
-- [GitLab Generic Packages API](https://docs.gitlab.com/ee/api/packages/generic.html)
+- [GitLab Generic Packages API](https://docs.gitlab.com/user/packages/generic_packages/)
 - [GitLab Container Registry API](https://docs.gitlab.com/ee/api/container_registry.html)
-- [GitLab Container Registry Protection Rules API](https://docs.gitlab.com/ee/api/container_registry_protection_rules.html)
+- [GitLab Container Registry Protection Rules API](https://docs.gitlab.com/api/container_repository_protection_rules/)
 - [GitLab Dependencies API](https://docs.gitlab.com/ee/api/dependencies.html)
 - [GitLab Dependency List Export API](https://docs.gitlab.com/ee/api/dependency_list_export.html)

@@ -80,7 +80,7 @@ import stats from "../../../data/stats.json";
 
 :::tip[De un vistazo]
 
-- **Nueve formas de instalarlo**: Docker, un binario nativo (descarga directa, Homebrew, winget o el script de instalación), el lanzador de npm, las wheels de PyPI, la extensión para Claude Desktop, los Agent Plugins o el endpoint alojado. [Elige una vía](/gitlab-mcp-server/es/install/overview/).
+- **Nueve formas de instalarlo**: un binario nativo (descarga directa o el script de instalación), Homebrew, winget, Docker, el lanzador de npm, las wheels de PyPI, la extensión para Claude Desktop, los Agent Plugins o el endpoint alojado. [Elige una vía](/gitlab-mcp-server/es/install/overview/).
 - **La configuración mínima es un solo valor**: un token de acceso personal de GitLab con scope `api` en `GITLAB_TOKEN`. Define `GITLAB_URL` solo para instancias autogestionadas.
 - **La superficie predeterminada es el modo dinámico**: tu cliente ve dos herramientas, y con ellas alcanza cualquier operación de GitLab bajo demanda.
 
@@ -260,7 +260,7 @@ Es la forma más rápida de probar el servidor, y la forma correcta de usarlo a 
 
 El endpoint es **streamable HTTP sin estado** sobre la superficie `dynamic` por defecto: `POST` es el transporte y un `GET` _autenticado_ responde `405` por diseño; sin credencial, cualquier método responde `401` con el desafío RFC 6750 que sigue un cliente OAuth — un `curl` a secas que recibe `401` es el endpoint funcionando, no fallando. `https://mcp.jmrp.io/gitlab/health` no necesita credencial y responde `200` con `{"status":"ok",…}`. Es uno de los servidores listados en [mcp.jmrp.io](https://mcp.jmrp.io/), un directorio de los servidores MCP que mantiene el autor, cada uno accesible en su propio endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) es esa misma lista para clientes automáticos.
 
-Es un servicio personal, mantenido por una sola persona y ofrecido tal cual: sin SLA, sin canal de soporte y sin garantía de que siga igual la semana que viene. No añade cuota propia — cada llamada se descuenta de los límites de la propia GitLab.com, con tu token. Y sigue automáticamente la última release, así que lo que sirve va con la etiqueta más reciente, no con una versión fijada.
+Es un servicio personal, mantenido por una sola persona y ofrecido tal cual: sin SLA, sin canal de soporte y sin garantía de que siga igual la semana que viene. No añade cuota propia — cada llamada se descuenta de los límites de la propia GitLab.com, con tu token. Y avanza por sí solo, normalmente a la última release, así que lo que sirve nunca es una versión fijada.
 
 <LinkCard
   title="Endpoint alojado"

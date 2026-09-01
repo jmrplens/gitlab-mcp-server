@@ -6,7 +6,7 @@ datePublished: "2026-09-01"
 
 import { CardGrid, LinkCard } from "@astrojs/starlight/components";
 
-GitLab MCP Server is one static Go binary. Every channel on this page delivers that same binary, or a container that wraps it, and the same `gitlab-mcp-server` command, so the choice is about what you already have on the machine and how you want upgrades to arrive, not about features. Whatever you pick, the server needs one value to run: a GitLab personal access token in `GITLAB_TOKEN` (`api` scope; a `read_api` token also works and gets a read-only tool surface). `GITLAB_URL` defaults to `https://gitlab.com`, so set it only for a self-managed instance.
+GitLab MCP Server is one self-contained Go binary. Every channel on this page delivers that same binary, or a container that wraps it, and the same `gitlab-mcp-server` command, so the choice is about what you already have on the machine and how you want upgrades to arrive, not about features. Whatever you pick, the server needs one value to run: a GitLab personal access token in `GITLAB_TOKEN` (`api` scope; a `read_api` token also works and gets a read-only tool surface). `GITLAB_URL` defaults to `https://gitlab.com`, so set it only for a self-managed instance.
 
 ## Pick a channel
 
@@ -20,7 +20,7 @@ GitLab MCP Server is one static Go binary. Every channel on this page delivers t
 | [PyPI, uvx and pipx](/gitlab-mcp-server/install/pypi/)       | A wheel that places the binary on the environment's scripts path                   | Python 3.9 or newer (uv or pipx optional)                             | `pipx upgrade`, `pip install -U` or `uv tool upgrade`; `uvx` resolves the newest version on a cold run | Linux (glibc), macOS 11 or newer, Windows; x64 and arm64     |
 | [Agent Plugins](/gitlab-mcp-server/install/agent-plugin/)    | A plugin manifest that runs the Docker image over stdio                            | A conformant host (Cursor, Claude Code, VS Code, OpenCode) and Docker | The image's `latest` tag, pulled again                                                                 | Wherever the host and Docker run                             |
 | [Claude Desktop (.mcpb)](/gitlab-mcp-server/claude-desktop/) | A desktop extension bundling the macOS universal binary and the Windows executable | Claude Desktop 0.10.0 or newer                                        | A new extension version ships with every release                                                       | macOS (Apple Silicon and Intel), Windows (x64)               |
-| [Hosted endpoint](/gitlab-mcp-server/install/hosted/)        | Nothing installed: a public streamable HTTP endpoint                               | An HTTP-capable MCP client and a GitLab.com token                     | Tracks the latest release automatically                                                                | Any                                                          |
+| [Hosted endpoint](/gitlab-mcp-server/install/hosted/)        | Nothing installed: a public streamable HTTP endpoint                               | An HTTP-capable MCP client and a GitLab.com token                     | Moves on its own, normally to the newest release                                                       | Any                                                          |
 
 :::note[The server never updates itself]
 It never checks for updates and never replaces its own binary, on any channel. Upgrades come from whatever installed it: `brew upgrade`, `winget upgrade`, `npm update`, a newer image tag, a newer extension version, or a fresh download. `gitlab-mcp-server --version` prints `gitlab-mcp-server <version> (commit: <commit>)`, so you can always see what you have.
@@ -52,7 +52,7 @@ Every channel ends at the same place: your MCP client launches `gitlab-mcp-serve
 
 Two things worth knowing before the first run:
 
-- If you start the binary in a terminal, or double-click it on Windows, without `GITLAB_TOKEN` set, it prints what it is and the two values it needs, then waits for Enter. An MCP client never sees that screen, because it connects pipes rather than a terminal. There is no setup wizard.
+- If you start the binary in a terminal, or double-click it on Windows, without both `GITLAB_URL` and `GITLAB_TOKEN` set, it prints what it is and the two values it needs, then waits for Enter. An MCP client never sees that screen, because it connects pipes rather than a terminal. There is no setup wizard.
 - The token can stay out of client JSON entirely: an explicit environment variable wins over a `.env` in the working directory, which wins over `~/.gitlab-mcp-server.env` (one `KEY=value` per line). See [Configuration](/gitlab-mcp-server/configuration/).
 
 Then open your client and ask _"Who am I on GitLab?"_. On the default `dynamic` surface the assistant calls `gitlab_find_action` and then `gitlab_execute_action` with the `user.current` action, and answers with your GitLab profile.

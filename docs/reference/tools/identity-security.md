@@ -5,7 +5,7 @@
 > **Individual tools**: 30
 > **Meta-tools**: `gitlab_group_scim` and `gitlab_member_role` (with `TOOL_SURFACE=meta` and the Enterprise/Premium catalog enabled); SSH certificates, security settings, group credentials, LDAP links and SAML links have no meta-tool of their own and are enterprise-only routes inside `gitlab_group` / `gitlab_project`
 > **Dynamic IDs**: `group.*`, `group_scim.*`, `member_role.*`, `project.*` (default surface, via `gitlab_execute_action`)
-> **GitLab API**: [SCIM API](https://docs.gitlab.com/ee/api/scim.html) · [Group SSH Certificates API](https://docs.gitlab.com/ee/api/group_ssh_certificates.html) · [Security Settings API](https://docs.gitlab.com/ee/api/project_security_settings.html) · [Member Roles API](https://docs.gitlab.com/ee/api/member_roles.html) · [Group Credentials API](https://docs.gitlab.com/ee/api/group_credentials.html) · [LDAP Group Links API](https://docs.gitlab.com/ee/api/group_level_mr_approvals.html) · [SAML Group Links API](https://docs.gitlab.com/ee/api/groups.html#saml-group-links)
+> **GitLab API**: [SCIM API](https://docs.gitlab.com/ee/api/scim.html) · [Group SSH Certificates API](https://docs.gitlab.com/ee/api/group_ssh_certificates.html) · [Security Settings API](https://docs.gitlab.com/ee/api/project_security_settings.html) · [Member Roles API](https://docs.gitlab.com/ee/api/member_roles.html) · [Group Credentials API](https://docs.gitlab.com/user/group/credentials_inventory/) · [LDAP Group Links API](https://docs.gitlab.com/api/merge_request_approval_settings/) · [SAML Group Links API](https://docs.gitlab.com/ee/api/groups.html#saml-group-links)
 > **Audience**: 👤 End users, AI assistant users
 
 ---

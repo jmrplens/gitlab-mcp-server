@@ -6,7 +6,7 @@ datePublished: "2026-09-01"
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-Every release publishes one static binary per platform: Linux, macOS and Windows, on amd64 and arm64, built with `CGO_ENABLED=0` as position-independent executables with the version and commit stamped in. No runtime, no shared libraries, no container. This page covers the two install scripts, downloading by hand, checking what you downloaded, where to keep the file, and how to replace it later.
+Every release publishes one self-contained binary per platform: Linux, macOS and Windows, on amd64 and arm64, built with `CGO_ENABLED=0` as position-independent executables with the version and commit stamped in. No runtime, no shared libraries, no container; on Linux the binary still needs the glibc dynamic loader, so use the Docker image on musl systems such as Alpine. This page covers the two install scripts, downloading by hand, checking what you downloaded, where to keep the file, and how to replace it later.
 
 ## Install script
 
@@ -152,7 +152,7 @@ Clients started from the desktop rather than from a shell do not always inherit 
 gitlab-mcp-server --version
 ```
 
-prints `gitlab-mcp-server 2.7.5 (commit: <commit>)` for the current release. Starting the binary with no arguments in a terminal, or double-clicking it on Windows, without `GITLAB_TOKEN` set prints a short first-run screen naming the two values it needs and waits for Enter; an MCP client never sees it, because it talks to the server over pipes. There is no setup wizard.
+prints `gitlab-mcp-server 2.7.5 (commit: <commit>)` for the current release. Starting the binary with no arguments in a terminal, or double-clicking it on Windows, without both `GITLAB_URL` and `GITLAB_TOKEN` set prints a short first-run screen naming the two values it needs and waits for Enter; an MCP client never sees it, because it talks to the server over pipes. There is no setup wizard.
 
 ## Configure your client
 

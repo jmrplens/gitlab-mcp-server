@@ -923,14 +923,14 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 ## Related
 
 - [GitLab Projects API](https://docs.gitlab.com/ee/api/projects.html)
-- [GitLab Project Webhooks API](https://docs.gitlab.com/ee/api/project_hooks.html)
+- [GitLab Project Webhooks API](https://docs.gitlab.com/api/project_webhooks/)
 - [GitLab Service Accounts API](https://docs.gitlab.com/api/service_accounts/)
 - [GitLab Push Rules API](https://docs.gitlab.com/ee/api/project_push_rules.html)
-- [GitLab Uploads API](https://docs.gitlab.com/ee/api/project_uploads.html)
+- [GitLab Uploads API](https://docs.gitlab.com/api/project_markdown_uploads/)
 - [GitLab Project Import/Export API](https://docs.gitlab.com/ee/api/project_import_export.html)
 - [GitLab Pages API](https://docs.gitlab.com/ee/api/pages.html)
 - [GitLab Pages Domains API](https://docs.gitlab.com/ee/api/pages_domains.html)
-- [GitLab Integrations API](https://docs.gitlab.com/ee/api/integrations.html)
+- [GitLab Integrations API](https://docs.gitlab.com/api/project_integrations/)
 - [GitLab Group Integrations API](https://docs.gitlab.com/ee/api/group_integrations.html)
 - [GitLab Members API](https://docs.gitlab.com/ee/api/members.html)
 - [GitLab Approvals API](https://docs.gitlab.com/ee/api/merge_request_approvals.html)

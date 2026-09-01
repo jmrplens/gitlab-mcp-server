@@ -5,7 +5,7 @@
 > **Individual tools**: 42
 > **Meta-tools**: none of its own — every action on this page belongs to `gitlab_user`, `gitlab_issue`, `gitlab_merge_request`, `gitlab_group` or `gitlab_snippet` (`TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `issue.*`, `merge_request.*`, `snippet.*`, `user.*` (default surface, via `gitlab_execute_action`)
-> **GitLab API**: [Notification Settings](https://docs.gitlab.com/ee/api/notification_settings.html) · [Resource Label/Milestone/State Events](https://docs.gitlab.com/ee/api/resource_label_events.html) · [Award Emoji](https://docs.gitlab.com/ee/api/award_emoji.html)
+> **GitLab API**: [Notification Settings](https://docs.gitlab.com/ee/api/notification_settings.html) · [Resource Label/Milestone/State Events](https://docs.gitlab.com/ee/api/resource_label_events.html) · [Award Emoji](https://docs.gitlab.com/api/emoji_reactions/)
 > **Audience**: 👤 End users, AI assistant users
 
 ---
@@ -461,4 +461,4 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - [GitLab Resource Label Events API](https://docs.gitlab.com/ee/api/resource_label_events.html)
 - [GitLab Resource Milestone Events API](https://docs.gitlab.com/ee/api/resource_milestone_events.html)
 - [GitLab Resource State Events API](https://docs.gitlab.com/ee/api/resource_state_events.html)
-- [GitLab Award Emoji API](https://docs.gitlab.com/ee/api/award_emoji.html)
+- [GitLab Award Emoji API](https://docs.gitlab.com/api/emoji_reactions/)

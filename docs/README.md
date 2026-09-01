@@ -6,20 +6,21 @@ exposes GitLab's REST and GraphQL APIs as MCP tools for AI assistants.
 The docs are organized **by what you're trying to do**. Pick the entry point that
 matches your goal:
 
-| If you want to…                                                                    | Go to                                                                    |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| **Get running in ~5 minutes**                                                      | [Getting Started](getting-started.md) — download, configure, first query |
-| **Do a specific task** (IDE setup, HTTP mode, CI, OAuth, updates, fixing problems) | [Guides](guides/README.md)                                               |
-| **Look up an exact flag, variable, tool, resource, or prompt**                     | [Reference](reference/README.md)                                         |
-| **Understand how the server works and why**                                        | [Concepts](concepts/README.md)                                           |
-| **Contribute to the codebase**                                                     | [Development](development/README.md)                                     |
+| If you want to…                                                                         | Go to                                                                    |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **Get running in ~5 minutes**                                                           | [Getting Started](getting-started.md) — download, configure, first query |
+| **Do a specific task** (installation, IDE setup, HTTP mode, CI, OAuth, fixing problems) | [Guides](guides/README.md)                                               |
+| **Look up an exact flag, variable, tool, resource, or prompt**                          | [Reference](reference/README.md)                                         |
+| **Understand how the server works and why**                                             | [Concepts](concepts/README.md)                                           |
+| **Contribute to the codebase**                                                          | [Development](development/README.md)                                     |
 
 ## Sections
 
 ### 📘 [Guides](guides/README.md) — how-to
 
-Task-oriented instructions for running the server: IDE configuration, HTTP server
-mode, OAuth app setup, CI/CD usage, troubleshooting, and worked examples.
+Task-oriented instructions for running the server: installation through any
+channel, IDE configuration, HTTP server mode, OAuth app setup, CI/CD usage,
+troubleshooting, and worked examples.
 
 ### 📖 [Reference](reference/README.md) — look-up
 

@@ -231,14 +231,14 @@ Permitir el origen es solo la mitad de lo que necesita un navegador. Antes de en
 Cada GitHub Release incluye tres artefactos de integridad:
 
 - `checksums.txt` — hashes SHA-256 de todos los binarios del release
-- `checksums.txt.sigstore.json` — bundle de firma keyless [Cosign](https://docs.sigstore.dev/cosign/installation/) / Sigstore (GitHub OIDC, sin distribución de claves)
+- `checksums.txt.sigstore.json` — bundle de firma keyless [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/) / Sigstore (GitHub OIDC, sin distribución de claves)
 - `<artefacto>.sbom.json` — un SBOM en formato SPDX por cada binario
 
 Nada de esto se verifica por ti: el servidor nunca descarga ni reemplaza su propio binario, así que quien pone un binario en la máquina es quien lo comprueba. Los gestores de paquetes hacen su propia verificación (Homebrew fija una fórmula con checksums; npm y el registro de contenedores fijan digests). Para un binario que descargues tú, verifica tanto la firma como el checksum antes de ejecutarlo.
 
 ### 1. Instalar Cosign
 
-Sigue la [guía oficial de instalación](https://docs.sigstore.dev/cosign/installation/). Instalación rápida:
+Sigue la [guía oficial de instalación](https://docs.sigstore.dev/cosign/system_config/installation/). Instalación rápida:
 
 ```bash
 # macOS

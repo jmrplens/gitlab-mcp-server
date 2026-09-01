@@ -133,7 +133,7 @@
 	line-height: 1.4;
 }
 /* The labels are links, but the readout is a row of figures rather than a list
-   of destinations: underlining all four turns the strip into navigation. The
+   of destinations: underlining every label turns the strip into navigation. The
    rule appears on hover and focus, where it is asked for. */
 .readout-label a {
 	color: inherit;

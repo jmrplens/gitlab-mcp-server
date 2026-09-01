@@ -20,7 +20,7 @@ El nombre completo añade el tap `jmrplens/tap` de paso, así que no hay un `bre
 gitlab-mcp-server --version
 ```
 
-imprime `gitlab-mcp-server 2.7.5 (commit: <commit>)`. Es también lo que ejecuta el test de la propia fórmula. `brew info gitlab-mcp-server` muestra la versión instalada y los avisos de la fórmula, que repiten la configuración de cliente de más abajo.
+imprime `gitlab-mcp-server 2.7.5 (commit: <commit>)`. Es también lo que ejecuta el test de la propia fórmula. `brew info gitlab-mcp-server` muestra la versión instalada y los avisos de la fórmula, que repiten la configuración de cliente de más abajo. La fórmula publicada para 2.7.5 aún menciona `AUTO_UPDATE=false` y `--setup` en esos avisos; ninguno existe ya, el generador no emite esas líneas y la fórmula de la siguiente release no las llevará.
 
 ## Dónde queda el binario
 
@@ -52,7 +52,7 @@ brew update
 brew upgrade gitlab-mcp-server
 ```
 
-Como el workflow de release publica la fórmula regenerada como parte de cada release, `brew upgrade` ve la versión nueva en cuanto sale la GitHub Release. La fórmula declara además un bloque `livecheck` que sigue la última release de GitHub, de modo que las propias herramientas de Homebrew pueden avisar si el tap se queda atrás. Para eliminarla:
+Como el workflow de release publica la fórmula regenerada como parte de cada release, `brew upgrade` ve la versión nueva en cuanto sale la GitHub Release. El generador emite ahora un bloque `livecheck` (estrategia `github_latest`) para que las propias herramientas de Homebrew avisen si el tap se queda atrás; la fórmula de 2.7.5 es anterior, y el bloque aparecerá con la siguiente release. Para eliminarla:
 
 ```bash
 brew uninstall gitlab-mcp-server

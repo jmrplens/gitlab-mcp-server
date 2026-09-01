@@ -635,8 +635,8 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 
 - [GitLab Users API](https://docs.gitlab.com/ee/api/users.html)
 - [GitLab User Keys (SSH) API](https://docs.gitlab.com/ee/api/user_keys.html)
-- [GitLab User GPG Keys API](https://docs.gitlab.com/ee/api/user_gpg_keys.html)
-- [GitLab Emails API](https://docs.gitlab.com/ee/api/email.html)
+- [GitLab User GPG Keys API](https://docs.gitlab.com/api/user_keys/)
+- [GitLab Emails API](https://docs.gitlab.com/api/user_email_addresses/)
 - [GitLab Avatars API](https://docs.gitlab.com/ee/api/avatar.html)
 - [GitLab To-Dos API](https://docs.gitlab.com/ee/api/todos.html)
 - [GitLab Events API](https://docs.gitlab.com/ee/api/events.html)

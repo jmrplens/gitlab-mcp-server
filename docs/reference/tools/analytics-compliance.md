@@ -5,7 +5,7 @@
 > **Individual tools**: 12
 > **Meta-tool**: split across `gitlab_group` (enterprise routes), `gitlab_compliance_policy`, `gitlab_project_alias`
 > **Dynamic IDs**: `compliance_policy.*`, `dora_metrics.*`, `group.*`, `project.*`, `project_alias.*` (default surface, via `gitlab_execute_action`)
-> **GitLab API**: [Group Activity Analytics API](https://docs.gitlab.com/ee/api/group_activity_analytics.html), [DORA Metrics API](https://docs.gitlab.com/ee/api/dora/metrics.html), [Compliance Policy API](https://docs.gitlab.com/ee/api/compliance_policy.html), [Project Aliases API](https://docs.gitlab.com/ee/api/project_aliases.html)
+> **GitLab API**: [Group Activity Analytics API](https://docs.gitlab.com/ee/api/group_activity_analytics.html), [DORA Metrics API](https://docs.gitlab.com/ee/api/dora/metrics.html), [Compliance Policy API](https://docs.gitlab.com/api/compliance_policy_settings/), [Project Aliases API](https://docs.gitlab.com/ee/api/project_aliases.html)
 > **Audience**: End users, AI assistant users
 
 ---

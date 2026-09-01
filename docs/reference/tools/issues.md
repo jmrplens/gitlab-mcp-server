@@ -510,4 +510,4 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - [GitLab Issue Links API](https://docs.gitlab.com/ee/api/issue_links.html)
 - [GitLab Discussions API](https://docs.gitlab.com/ee/api/discussions.html#issues)
 - [GitLab Issue Statistics API](https://docs.gitlab.com/ee/api/issues_statistics.html)
-- [GitLab Work Items API](https://docs.gitlab.com/ee/api/work_items.html)
+- [GitLab Work Items API](https://docs.gitlab.com/api/graphql/reference/#workitem)

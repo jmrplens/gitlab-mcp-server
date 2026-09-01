@@ -189,10 +189,12 @@ Meta-tool mode (`TOOL_SURFACE=meta`) consolidates related operations into **doma
   "tool": "gitlab_issue",
   "arguments": {
     "action": "create",
-    "project": "my-group/my-project",
-    "title": "Fix login redirect",
-    "description": "Users are redirected to 404 after login",
-    "labels": "bug,priority::high"
+    "params": {
+      "project_id": "my-group/my-project",
+      "title": "Fix login redirect",
+      "description": "Users are redirected to 404 after login",
+      "labels": ["bug", "priority::high"]
+    }
   }
 }
 ```

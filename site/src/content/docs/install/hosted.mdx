@@ -98,9 +98,10 @@ whole catalog with no credential at all.
   support channel, and no promise it is unchanged next week.
 - **It adds no quota of its own.** Every call spends GitLab.com's own rate
   limits, under your own token.
-- **It follows the newest release, not a pinned version.** What it serves
-  can change with every tag; if you need a version that stays put, run it
-  yourself.
+- **It runs whatever the maintainer deploys, never a pinned version.**
+  Normally that is the newest release, occasionally a pre-release branch;
+  `GET https://mcp.jmrp.io/gitlab/health` reports the `version` and `commit`
+  actually serving. If you need a version that stays put, run it yourself.
 - **It is deployed out of band.** The deployment lives with the
   [mcp.jmrp.io](https://github.com/jmrplens/mcp.jmrp.io) host; this
   repository publishes artifacts and deploys nothing.
@@ -152,8 +153,8 @@ the HTTP shapes for VS Code, OpenCode and `curl` are in
 
 ## Upgrade and uninstall
 
-There is nothing to upgrade: the endpoint follows the newest release on its
-own, which is one of the caveats above as much as a convenience.
+There is nothing to upgrade: the endpoint moves on its own, normally to the
+newest release, which is one of the caveats above as much as a convenience.
 
 To stop using it, delete the entry from your client's configuration. Then
 revoke whatever you handed it: a personal access token is revoked in GitLab

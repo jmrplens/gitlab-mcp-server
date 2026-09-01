@@ -20,7 +20,7 @@ The fully qualified name taps `jmrplens/tap` on the way, so there is no separate
 gitlab-mcp-server --version
 ```
 
-prints `gitlab-mcp-server 2.7.5 (commit: <commit>)`. That is also what the formula's own test runs. `brew info gitlab-mcp-server` shows the installed version and the formula's caveats, which repeat the client configuration below.
+prints `gitlab-mcp-server 2.7.5 (commit: <commit>)`. That is also what the formula's own test runs. `brew info gitlab-mcp-server` shows the installed version and the formula's caveats, which repeat the client configuration below. The formula published for 2.7.5 still mentions `AUTO_UPDATE=false` and `--setup` in those caveats; neither exists any more, the generator no longer emits those lines, and the next release's formula will not carry them.
 
 ## Where the binary lands
 
@@ -52,7 +52,7 @@ brew update
 brew upgrade gitlab-mcp-server
 ```
 
-Because the release workflow pushes the regenerated formula as part of every release, `brew upgrade` sees the new version as soon as the GitHub release is out. The formula also declares a `livecheck` block that follows GitHub's latest release, so Homebrew's own tooling can tell when the tap falls behind. To remove it:
+Because the release workflow pushes the regenerated formula as part of every release, `brew upgrade` sees the new version as soon as the GitHub release is out. The generator now emits a `livecheck` block (strategy `github_latest`) so Homebrew's own tooling can tell when the tap falls behind; the 2.7.5 formula predates it, and the block appears with the next release. To remove it:
 
 ```bash
 brew uninstall gitlab-mcp-server

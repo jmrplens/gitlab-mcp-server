@@ -5,7 +5,7 @@
 > **Individual tools**: 29
 > **Meta-tools**: `gitlab_project` (integrations + badges), `gitlab_admin` (topics and imports) (`TOOL_SURFACE=meta` catalog)
 > **Dynamic IDs**: `admin.*`, `group.*`, `project.*` (default surface, via `gitlab_execute_action`)
-> **GitLab API**: [Integrations API](https://docs.gitlab.com/ee/api/integrations.html), [Badges API](https://docs.gitlab.com/ee/api/project_badges.html), [Topics API](https://docs.gitlab.com/ee/api/topics.html), [Import API](https://docs.gitlab.com/ee/api/import.html)
+> **GitLab API**: [Integrations API](https://docs.gitlab.com/api/project_integrations/), [Badges API](https://docs.gitlab.com/ee/api/project_badges.html), [Topics API](https://docs.gitlab.com/ee/api/topics.html), [Import API](https://docs.gitlab.com/ee/api/import.html)
 > **Audience**: 👤 End users, AI assistant users
 
 ---
@@ -323,7 +323,7 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 
 ## Related
 
-- [GitLab Integrations API](https://docs.gitlab.com/ee/api/integrations.html)
+- [GitLab Integrations API](https://docs.gitlab.com/api/project_integrations/)
 - [GitLab Project Badges API](https://docs.gitlab.com/ee/api/project_badges.html)
 - [GitLab Group Badges API](https://docs.gitlab.com/ee/api/group_badges.html)
 - [GitLab Topics API](https://docs.gitlab.com/ee/api/topics.html)

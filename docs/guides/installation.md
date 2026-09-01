@@ -32,14 +32,14 @@ Not sure? Docker or the one-line installer for a first try, Homebrew or winget i
 - **The binary is the same everywhere.** Homebrew and winget point at the GitHub Release assets, pinned by the SHA-256 values in that release's `checksums.txt`; the npm and PyPI packages and the `.mcpb` are assembled in the release job from the same build outputs. `gitlab-mcp-server --version` prints `gitlab-mcp-server <version> (commit: <commit>)` on every channel, which is the quickest way to see what a client is actually running.
 - **Two values configure it.** `GITLAB_TOKEN` is the only required setting: a Personal Access Token (`glpat-...`) with the `api` scope. A `read_api` token also works and is served a read-only tool surface; pair it with `GITLAB_READ_ONLY=true` for an explicit read-only setup. `GITLAB_URL` defaults to `https://gitlab.com`, so set it only for a self-managed instance. Everything else is optional and listed in the [configuration reference](../reference/configuration.md).
 - **The server never updates itself.** There is no update check and no in-place binary replacement on any channel. Upgrades come from whichever channel installed it: `brew upgrade`, `winget upgrade`, `npm update -g`, a newer image tag, a newer Claude Desktop extension, or a fresh download. An earlier self-update subsystem was removed; package managers own the files they install.
-- **There is no setup wizard.** Started in a terminal, or double-clicked on Windows, with no `GITLAB_TOKEN` set, the binary prints what it is and the two values it needs to stderr, then waits for Enter so a console window does not vanish before you read it. An MCP client never sees that screen, because a client connects pipes rather than a terminal. Configuration lives in the client's own JSON; see [Configure your client](#configure-your-client).
+- **There is no setup wizard.** Started in a terminal, or double-clicked on Windows, without both `GITLAB_URL` and `GITLAB_TOKEN` set, the binary prints what it is and the two values it needs to stderr, then waits for Enter so a console window does not vanish before you read it. An MCP client never sees that screen, because a client connects pipes rather than a terminal. Configuration lives in the client's own JSON; see [Configure your client](#configure-your-client).
 - **The current release is v2.7.5** (2026-08-27). Every registry below carries that version, and the Docker `latest` tag resolves to it. Facts in this guide that depend on the live registries were checked on 2026-09-01.
 
 ---
 
 ## Native binary (GitHub Releases)
 
-Release binaries are built by GoReleaser with `CGO_ENABLED=0`, `-trimpath` and `-buildmode=pie`, so each one is a single static file with no runtime dependency.
+Release binaries are built by GoReleaser with `CGO_ENABLED=0`, `-trimpath` and `-buildmode=pie`, so each one is a single self-contained file with no shared-library dependencies; the Linux binaries are PIEs that need the glibc dynamic loader, so use the Docker image on musl systems such as Alpine.
 
 ### Assets
 
@@ -97,7 +97,7 @@ On Windows, put the `.exe` in a directory on your `PATH`, or reference its full 
 
 ### Verify a download
 
-Every release ships `checksums.txt` and `checksums.txt.sigstore.json`, and both can be checked for every release including v2.7.5. Install [Cosign](https://docs.sigstore.dev/cosign/installation/), download the binary and the two files into one directory, then:
+Every release ships `checksums.txt` and `checksums.txt.sigstore.json`, and both can be checked for every release including v2.7.5. Install [Cosign](https://docs.sigstore.dev/cosign/system_config/installation/), download the binary and the two files into one directory, then:
 
 ```bash
 cosign verify-blob \
@@ -126,7 +126,7 @@ Re-run the install script, or download the newer asset over the old file: the sc
 brew install jmrplens/tap/gitlab-mcp-server
 ```
 
-The tap is [`jmrplens/homebrew-tap`](https://github.com/jmrplens/homebrew-tap) and the formula is `Formula/gitlab-mcp-server.rb`, a binary formula: it downloads the release asset for your OS and architecture (`on_macos`/`on_linux` × `on_arm`/`on_intel`) pinned by the SHA-256 from that release's `checksums.txt`, and installs it as `bin/gitlab-mcp-server`. The formula is regenerated from `checksums.txt` by `scripts/update-homebrew-tap.sh` on every release, its `test` block runs `gitlab-mcp-server --version`, and its `livecheck` follows the latest GitHub release. The live formula is at 2.7.5 with hashes matching that release.
+The tap is [`jmrplens/homebrew-tap`](https://github.com/jmrplens/homebrew-tap) and the formula is `Formula/gitlab-mcp-server.rb`, a binary formula: it downloads the release asset for your OS and architecture (`on_macos`/`on_linux` × `on_arm`/`on_intel`) pinned by the SHA-256 from that release's `checksums.txt`, and installs it as `bin/gitlab-mcp-server`. The formula is regenerated from `checksums.txt` by `scripts/update-homebrew-tap.sh` on every release, its `test` block runs `gitlab-mcp-server --version`, and the generator now emits a `livecheck` block (strategy `github_latest`). The live formula is at 2.7.5 with hashes matching that release; it predates the `livecheck` block, which appears with the next release.
 
 Configure your client with the command `$(brew --prefix)/bin/gitlab-mcp-server` (or just `gitlab-mcp-server` when Homebrew's bin directory is on your `PATH`), `GITLAB_TOKEN`, and `GITLAB_URL` for a self-managed instance.
 
@@ -166,7 +166,7 @@ winget installs a user-scope portable package into a per-package folder under `%
 winget upgrade --id jmrplens.gitlab-mcp-server -e
 ```
 
-`winget update` is an alias. winget downloads the new executable to a temporary location, replaces the existing file, and refreshes the symlink and the Apps & Features entry. If the server is running at that moment winget says so; `--force` terminates it.
+`winget update` is an alias. winget downloads the new executable to a temporary location, replaces the existing file, and refreshes the symlink and the Apps & Features entry. If the executable is in use, winget reports that the application is running and stops; close the MCP client and run the upgrade again (`--force` only overrides the modified-file check on a portable package and terminates nothing).
 
 ### Uninstall
 
@@ -232,7 +232,7 @@ A client then uses `type: "http"` with a URL such as `http://localhost:8080/mcp`
 
 ### Environment variables
 
-The container reads the same variables as the binary. The Agent Plugins config (root `mcp.json`) and `server.json` forward this set with `-e`: `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_SKIP_TLS_VERIFY`, `TOOL_SURFACE`, `CAPABILITY_SURFACE`, `META_PARAM_SCHEMA`, `GITLAB_TIER`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `EMBEDDED_RESOURCES`, `EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `UPLOAD_MAX_FILE_SIZE`, `GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`, `CLIENT_COMPAT` and `LOG_LEVEL`. In stdio mode each one you use needs its own `-e NAME` in `args` and its value in the client's `env` block. In HTTP mode the flags in the command line take their place; see the [configuration reference](../reference/configuration.md).
+The container reads the same variables as the binary. The Agent Plugins config (root `mcp.json`) forwards this set with `-e`, and `server.json` declares the same variables, minus `CLIENT_COMPAT`, as `environmentVariables`: `GITLAB_URL`, `GITLAB_TOKEN`, `GITLAB_SKIP_TLS_VERIFY`, `TOOL_SURFACE`, `CAPABILITY_SURFACE`, `META_PARAM_SCHEMA`, `GITLAB_TIER`, `GITLAB_READ_ONLY`, `GITLAB_SAFE_MODE`, `EMBEDDED_RESOURCES`, `EXCLUDE_TOOLS`, `GITLAB_IGNORE_SCOPES`, `UPLOAD_MAX_FILE_SIZE`, `GITLAB_MCP_ALLOWED_IMPORT_DIRS`, `RATE_LIMIT_RPS`, `RATE_LIMIT_BURST`, `CLIENT_COMPAT` and `LOG_LEVEL`. In stdio mode each one you use needs its own `-e NAME` in `args` and its value in the client's `env` block. In HTTP mode the flags in the command line take their place; see the [configuration reference](../reference/configuration.md).
 
 For a self-signed certificate, mount the CA into the container and set `SSL_CERT_FILE=/path/to/ca-bundle.crt` rather than reaching for `GITLAB_SKIP_TLS_VERIFY=true`, which disables verification outright and which OAuth mode refuses for any non-loopback instance.
 
@@ -252,7 +252,7 @@ npm install -g @jmrp.io/gitlab-mcp-server   # global install
 pnpm add -g @jmrp.io/gitlab-mcp-server      # global install with pnpm
 ```
 
-[`@jmrp.io/gitlab-mcp-server`](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server) is a launcher package (the esbuild and biome model): its `bin` is `gitlab-mcp-server`, mapped to a small `cli.js`, and six optional dependencies, `@jmrp.io/gitlab-mcp-server-linux-x64`, `-linux-arm64`, `-darwin-x64`, `-darwin-arm64`, `-win32-x64` and `-win32-arm64`, each carry the release binary for one platform, gated by `os` and `cpu` (the Linux ones also by `libc: ["glibc"]`) and pinned to the launcher's exact version. npm installs only the one that matches, so nothing compiles and nothing runs at install time: `--ignore-scripts` works, and so does a proxy. Node.js 18 or newer is required. `cli.js` resolves the platform package, spawns the binary with inherited stdio, forwards every argument verbatim and mirrors the exit code, so `gitlab-mcp-server --version` after a global install prints the binary's own version.
+[`@jmrp.io/gitlab-mcp-server`](https://www.npmjs.com/package/@jmrp.io/gitlab-mcp-server) is a launcher package (the esbuild and biome model): its `bin` is `gitlab-mcp-server`, mapped to a small `cli.js`, and six optional dependencies, `@jmrp.io/gitlab-mcp-server-linux-x64`, `-linux-arm64`, `-darwin-x64`, `-darwin-arm64`, `-win32-x64` and `-win32-arm64`, each carry the release binary for one platform, gated by `os` and `cpu` (the Linux ones also by `libc: ["glibc"]` from the first release after 2.7.5) and pinned to the launcher's exact version. npm installs only the one that matches, so nothing compiles and nothing runs at install time: `--ignore-scripts` works, and so does a proxy. Node.js 18 or newer is required. `cli.js` resolves the platform package, spawns the binary with inherited stdio, forwards every argument verbatim and mirrors the exit code, so `gitlab-mcp-server --version` after a global install prints the binary's own version.
 
 A client launches it with `npx`:
 
@@ -270,7 +270,7 @@ A client launches it with `npx`:
 
 After a global install the command is plain `gitlab-mcp-server`. On the registry, 2.7.5 is both `latest` and the only published version.
 
-If the launcher reports that the platform package is missing, the usual causes are `npm install --no-optional`, a lockfile generated on another operating system, or a musl-based distribution such as Alpine: the Linux packages are skipped there on purpose, because the PIE binaries need the glibc loader. Use the [Docker image](#docker), which is musl-based, or build from source. On an unsupported platform the launcher exits with a message pointing at the release binaries.
+If the launcher reports that the platform package is missing, the usual causes are `npm install --no-optional`, a lockfile generated on another operating system, or a musl-based distribution such as Alpine: from the first release after 2.7.5 the Linux packages are skipped there on purpose, because the PIE binaries need the glibc loader (on 2.7.5 the package installs and the binary then fails to start with "no such file or directory"). Use the [Docker image](#docker), which is musl-based, or build from source. On an unsupported platform the launcher exits with a message pointing at the release binaries.
 
 **Upgrade and uninstall.** `npm update -g @jmrp.io/gitlab-mcp-server` (documented) or `pnpm update -g @jmrp.io/gitlab-mcp-server`; `npx -y` resolves the newest version on each cold run, subject to the npx cache. Remove a global install with `npm uninstall -g @jmrp.io/gitlab-mcp-server` or `pnpm remove -g @jmrp.io/gitlab-mcp-server`. These are ordinary package-manager commands.
 
@@ -376,7 +376,7 @@ The transport is stateless streamable HTTP on the default dynamic surface (`gitl
 
 Three companion pages: the [server card](https://mcp.jmrp.io/servers/gitlab/) lists the whole catalog unauthenticated and carries copy-paste config for Claude Code, Cursor and VS Code, including the OAuth client ID those clients need (without it they fall back to dynamic registration and receive a scope the server cannot use); the [browser inspector](https://mcp.jmrp.io/inspector/?server=gitlab) signs in with OAuth and makes read-only calls with nothing installed; and [mcp.jmrp.io](https://mcp.jmrp.io/) is the directory, with `https://mcp.jmrp.io/servers.json` as its machine-readable form. The MCP server card is at `/gitlab/server-card`.
 
-It is a personal service run by one person, as-is: no SLA, no support channel, no promise it is unchanged next week. Your token and every request pass through someone else's machine, which is the reason to run the server locally once you have decided to keep using it, and the only sensible choice for a private self-managed instance. It adds no quota of its own (every call spends GitLab.com's limits under your token), it tracks the latest release rather than a pinned version, and it is deployed out of band from the [mcp.jmrp.io](https://github.com/jmrplens/mcp.jmrp.io) host; this repository deploys nothing. The full property table is in [HTTP Server Mode](http-server-mode.md#public-hosted-endpoint), and self-hosting the same setup is `--auth-mode=oauth --gitlab-url=https://gitlab.com --public-url=https://mcp.example.com/mcp`, with `--public-url` exactly the URL clients are configured with; see [OAuth App Setup](oauth-app-setup.md).
+It is a personal service run by one person, as-is: no SLA, no support channel, no promise it is unchanged next week. Your token and every request pass through someone else's machine, which is the reason to run the server locally once you have decided to keep using it, and the only sensible choice for a private self-managed instance. It adds no quota of its own (every call spends GitLab.com's limits under your token), it runs whatever the maintainer deploys rather than a pinned version (normally the newest release, occasionally a pre-release branch; `GET https://mcp.jmrp.io/gitlab/health` reports the `version` and `commit` serving), and it is deployed out of band from the [mcp.jmrp.io](https://github.com/jmrplens/mcp.jmrp.io) host; this repository deploys nothing. The full property table is in [HTTP Server Mode](http-server-mode.md#public-hosted-endpoint), and self-hosting the same setup is `--auth-mode=oauth --gitlab-url=https://gitlab.com --public-url=https://mcp.example.com/mcp`, with `--public-url` exactly the URL clients are configured with; see [OAuth App Setup](oauth-app-setup.md).
 
 There is nothing to upgrade or uninstall: remove the entry from your client's configuration.
 
@@ -397,7 +397,7 @@ Every stdio channel is configured the same way: the client starts `gitlab-mcp-se
 }
 ```
 
-Add `"GITLAB_URL": "https://gitlab.example.com"` to `env` only for a self-managed instance. VS Code uses `.vscode/mcp.json` with a `servers` map and `"type": "stdio"`, and its `promptString` inputs keep the token out of plain text; Claude Code takes `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`. Per-client file locations and shapes are in [IDE Configuration](ide-configuration.md) and on the site's [Quick Start](https://jmrp.io/docs/gitlab-mcp-server/getting-started/#manual-configuration).
+Add `"GITLAB_URL": "https://gitlab.example.com"` to `env` only for a self-managed instance. VS Code uses `.vscode/mcp.json` with a `servers` map and `"type": "stdio"`, and its `promptString` inputs keep the token out of plain text; Claude Code takes `claude mcp add gitlab --env GITLAB_TOKEN=glpat-xxxx -- gitlab-mcp-server`. Per-client file locations and shapes are in [IDE Configuration](ide-configuration.md) and on the site's [Getting Started](https://jmrp.io/docs/gitlab-mcp-server/getting-started/#manual-configuration).
 
 To keep the token out of client JSON entirely, put it in `~/.gitlab-mcp-server.env` (one `KEY=value` per line): an explicit environment variable beats a `.env` in the working directory, which beats that file. Then ask your assistant "List my GitLab projects." or "Who am I on GitLab?" to confirm the connection.
 

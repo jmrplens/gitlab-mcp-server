@@ -5,7 +5,7 @@
 > **Individual tools**: 75
 > **Meta-tool**: `gitlab_admin` (`TOOL_SURFACE=meta` catalog) — one tool for the whole domain, Terraform states, cluster agents and the dependency proxy included
 > **Dynamic IDs**: `admin.*`, `audit_event.*` (default surface, via `gitlab_execute_action`)
-> **GitLab API**: [Settings](https://docs.gitlab.com/ee/api/settings.html) · [Appearance](https://docs.gitlab.com/ee/api/appearance.html) · [Broadcast Messages](https://docs.gitlab.com/ee/api/broadcast_messages.html) · [Features](https://docs.gitlab.com/ee/api/features.html) · [License](https://docs.gitlab.com/ee/api/license.html) · [System Hooks](https://docs.gitlab.com/ee/api/system_hooks.html) · [Sidekiq](https://docs.gitlab.com/ee/api/sidekiq_metrics.html) · [Plan Limits](https://docs.gitlab.com/ee/api/plan_limits.html) · [Usage Data](https://docs.gitlab.com/ee/api/usage_data.html) · [Audit Events](https://docs.gitlab.com/ee/api/audit_events.html) · [Terraform States](https://docs.gitlab.com/ee/api/terraform_state.html) · [Cluster Agents](https://docs.gitlab.com/ee/api/cluster_agents.html)
+> **GitLab API**: [Settings](https://docs.gitlab.com/ee/api/settings.html) · [Appearance](https://docs.gitlab.com/ee/api/appearance.html) · [Broadcast Messages](https://docs.gitlab.com/ee/api/broadcast_messages.html) · [Features](https://docs.gitlab.com/ee/api/features.html) · [License](https://docs.gitlab.com/ee/api/license.html) · [System Hooks](https://docs.gitlab.com/ee/api/system_hooks.html) · [Sidekiq](https://docs.gitlab.com/ee/api/sidekiq_metrics.html) · [Plan Limits](https://docs.gitlab.com/ee/api/plan_limits.html) · [Usage Data](https://docs.gitlab.com/ee/api/usage_data.html) · [Audit Events](https://docs.gitlab.com/ee/api/audit_events.html) · [Terraform States](https://docs.gitlab.com/user/infrastructure/iac/terraform_state/) · [Cluster Agents](https://docs.gitlab.com/ee/api/cluster_agents.html)
 > **Audience**: 👤 End users, AI assistant users
 
 ---
@@ -779,6 +779,6 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - [GitLab Custom Attributes API](https://docs.gitlab.com/ee/api/custom_attributes.html)
 - [GitLab Bulk Imports API](https://docs.gitlab.com/ee/api/bulk_imports.html)
 - [GitLab Dependency Proxy API](https://docs.gitlab.com/ee/api/dependency_proxy.html)
-- [GitLab Terraform States API](https://docs.gitlab.com/ee/api/terraform_state.html)
+- [GitLab Terraform States API](https://docs.gitlab.com/user/infrastructure/iac/terraform_state/)
 - [GitLab Cluster Agents API](https://docs.gitlab.com/ee/api/cluster_agents.html)
 - [GitLab Audit Events API](https://docs.gitlab.com/ee/api/audit_events.html)

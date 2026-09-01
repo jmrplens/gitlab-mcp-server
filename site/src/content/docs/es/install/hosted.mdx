@@ -75,7 +75,7 @@ cuando solo quieres leer.
 | Autenticación              | Modo OAuth. `Authorization: Bearer` en cada petición, verificado contra GitLab.com, nunca guardado en el servidor.                                                                   |
 | Salud                      | `GET https://mcp.jmrp.io/gitlab/health` no necesita credencial y responde `200` con `{"status":"ok",...}`.                                                                           |
 | Ficha del servidor         | [`https://mcp.jmrp.io/es/servers/gitlab/`](https://mcp.jmrp.io/es/servers/gitlab/): el catálogo completo y la configuración por cliente, sin autenticación.                          |
-| Server card MCP            | `GET https://mcp.jmrp.io/gitlab/server-card`, sin autenticación.                                                                                                                     |
+| Ficha MCP del servidor     | `GET https://mcp.jmrp.io/gitlab/server-card`, sin autenticación.                                                                                                                     |
 | Directorio                 | [mcp.jmrp.io](https://mcp.jmrp.io/) lista los servidores MCP que mantiene el autor; [`servers.json`](https://mcp.jmrp.io/servers.json) es esa misma lista para clientes automáticos. |
 
 Un `curl` a secas que recibe `401` es el endpoint funcionando, no fallando.
@@ -102,8 +102,10 @@ catálogo completo sin credencial alguna.
   semana que viene.
 - **No añade cuota propia.** Cada llamada se descuenta de los límites de la
   propia GitLab.com, con tu token.
-- **Sigue la última release, no una versión fijada.** Lo que sirve puede
-  cambiar con cada etiqueta; si necesitas una versión que no se mueva,
+- **Sirve lo que el mantenedor despliega, nunca una versión fijada.**
+  Normalmente es la última release, a veces una rama previa a una release;
+  `GET https://mcp.jmrp.io/gitlab/health` indica la `version` y el `commit`
+  que sirve en ese momento. Si necesitas una versión que no se mueva,
   ejecútalo tú.
 - **Se despliega por separado.** El despliegue vive con el host
   [mcp.jmrp.io](https://github.com/jmrplens/mcp.jmrp.io); este repositorio
@@ -157,8 +159,9 @@ las formas HTTP para VS Code, OpenCode y `curl` están en
 
 ## Actualizar y desinstalar
 
-No hay nada que actualizar: el endpoint sigue la última release por sí solo,
-que es tanto una de las salvedades de arriba como una comodidad.
+No hay nada que actualizar: el endpoint avanza por sí solo, normalmente a la
+última release, lo que es tanto una de las salvedades de arriba como una
+comodidad.
 
 Para dejar de usarlo, borra la entrada de la configuración de tu cliente.
 Después revoca lo que le entregaste: un token de acceso personal se revoca

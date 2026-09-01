@@ -1043,7 +1043,7 @@ The following tools are annotated with `DestructiveHint: true` and require user 
 - [GitLab Group Milestones API](https://docs.gitlab.com/ee/api/group_milestones.html)
 - [GitLab Group Import/Export API](https://docs.gitlab.com/ee/api/group_import_export.html)
 - [GitLab Group Issue Boards API](https://docs.gitlab.com/ee/api/group_boards.html)
-- [GitLab Group Webhooks API](https://docs.gitlab.com/ee/api/group_hooks.html)
+- [GitLab Group Webhooks API](https://docs.gitlab.com/api/group_webhooks/)
 - [GitLab Protected Branches API](https://docs.gitlab.com/ee/api/protected_branches.html)
 - [GitLab Push Rules API](https://docs.gitlab.com/ee/api/protected_branches.html#push-rules)
 - [GitLab Group Wikis API](https://docs.gitlab.com/ee/api/wikis.html)

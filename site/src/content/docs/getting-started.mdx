@@ -80,7 +80,7 @@ import FAQ from "../../components/FAQ.astro";
 
 :::tip[At a glance]
 
-- **Nine ways to install**: Docker, a native binary (direct download, Homebrew, winget or the install script), the npm launcher, the PyPI wheels, the Claude Desktop extension, Agent Plugins, or the hosted endpoint. [Choose a path](/gitlab-mcp-server/install/overview/).
+- **Nine ways to install**: a native binary (direct download or the install script), Homebrew, winget, Docker, the npm launcher, the PyPI wheels, the Claude Desktop extension, Agent Plugins, or the hosted endpoint. [Choose a path](/gitlab-mcp-server/install/overview/).
 - **The minimum configuration is one value** — a GitLab personal access token with `api` scope in `GITLAB_TOKEN`. Set `GITLAB_URL` only for self-managed instances.
 - **The default surface is dynamic mode**: your client sees two tools, and they reach every GitLab operation on demand.
 
@@ -259,7 +259,7 @@ It is the fastest way to try the server, and the right way to keep using it is s
 
 The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport and an _authenticated_ `GET` answers `405` by design; with no credential, any method answers `401` carrying the RFC 6750 challenge an OAuth client follows — a bare `curl` that gets `401` is the endpoint working, not failing. `https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",…}`. It is one of the servers listed at [mcp.jmrp.io](https://mcp.jmrp.io/), a directory of the MCP servers maintained by this author, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
 
-It is a personal service, run by one person and offered as-is: no SLA, no support channel, and no promise it is unchanged next week. It adds no quota of its own — every call spends GitLab.com's own limits, under your own token. And it tracks the latest release automatically, so what it serves follows the newest tag rather than a pinned version.
+It is a personal service, run by one person and offered as-is: no SLA, no support channel, and no promise it is unchanged next week. It adds no quota of its own — every call spends GitLab.com's own limits, under your own token. And it moves on its own, normally to the newest release, so what it serves is never a pinned version.
 
 <LinkCard
   title="Hosted endpoint"

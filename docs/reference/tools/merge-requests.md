@@ -589,6 +589,6 @@ The following tools are annotated with `DestructiveHint: true` or require user c
 - [GitLab Merge Request Context Commits API](https://docs.gitlab.com/ee/api/merge_request_context_commits.html)
 - [GitLab Merge Trains API](https://docs.gitlab.com/ee/api/merge_trains.html)
 - [GitLab External Status Checks API](https://docs.gitlab.com/ee/api/status_checks.html)
-- [GitLab Group MR Approval Settings API](https://docs.gitlab.com/ee/api/group_level_mr_approvals.html)
-- [GitLab Project MR Approval Settings API](https://docs.gitlab.com/ee/api/project_level_mr_approvals.html)
+- [GitLab Group MR Approval Settings API](https://docs.gitlab.com/api/merge_request_approval_settings/)
+- [GitLab Project MR Approval Settings API](https://docs.gitlab.com/api/merge_request_approvals/)
 - [MR Review — Tool Reference](mr-review.md)

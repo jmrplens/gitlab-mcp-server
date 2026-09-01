@@ -222,7 +222,7 @@ It is the fastest way to try the server, and the right way to keep using it is s
 
 The endpoint is **stateless streamable HTTP** on the default `dynamic` surface: `POST` is the transport and an _authenticated_ `GET` answers `405` by design; with no credential, any method answers `401` carrying the RFC 6750 challenge an OAuth client follows — a bare `curl` that gets `401` is the endpoint working, not failing. `https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",…}`. A self-hosted HTTP deployment can also run `--auth-mode=oauth --gitlab-url=https://gitlab.com --public-url=https://mcp.example.com/mcp` (both are required: OAuth needs a fixed instance, and `--public-url` is the RFC 9728 resource identifier — pass exactly the URL your clients are configured with, since a client discards metadata naming a different one), where clients discover GitLab as the authorization server through that metadata and authorize in the browser instead of copying tokens — see [OAuth App Setup](docs/guides/oauth-app-setup.md). It is one of the servers listed at **[mcp.jmrp.io](https://mcp.jmrp.io/)**, a directory of the MCP servers I maintain, each reachable at its own endpoint; [`https://mcp.jmrp.io/servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients.
 
-It is a personal service, run by one person and offered as-is: no SLA, no support channel, and no promise it is unchanged next week. It adds no quota of its own — every call spends GitLab.com's own limits, under your own token. And it tracks the latest release automatically, so what it serves follows the newest tag rather than a pinned version.
+It is a personal service, run by one person and offered as-is: no SLA, no support channel, and no promise it is unchanged next week. It adds no quota of its own — every call spends GitLab.com's own limits, under your own token. And it moves on its own, normally to the newest release, so what it serves is never a pinned version.
 
 **Then just ask:** open your AI client and try _"List my GitLab projects."_ See the [Getting Started guide](https://jmrp.io/docs/gitlab-mcp-server/getting-started/) for per-client details and [more example prompts](docs/guides/examples/usage-examples.md).
 
@@ -348,28 +348,29 @@ The published model-evaluation set covers 124 task attempts and 808 expected MCP
 
 Full documentation is at **[jmrp.io/docs/gitlab-mcp-server](https://jmrp.io/docs/gitlab-mcp-server)**. Use this map for the source-of-truth reference on a specific area:
 
-| Document                                              | Description                                                                            |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| [Getting Started](docs/getting-started.md)            | Install paths, first query, per-client configuration                                   |
-| [IDE Configuration](docs/guides/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                 |
-| [Configuration](docs/reference/configuration.md)      | Environment variables, transport modes, TLS                                            |
-| [Environment Variables](docs/reference/env.md)        | Exhaustive environment variable table with defaults and examples                       |
-| [CLI Reference](docs/reference/cli.md)                | All command-line flags, exit codes, and runtime examples                               |
-| [HTTP Server Mode](docs/guides/http-server-mode.md)   | Shared HTTP deployments, authentication, server pool isolation                         |
-| [OAuth App Setup](docs/guides/oauth-app-setup.md)     | GitLab OAuth application, scopes, redirect URIs, and which clients can complete a flow |
-| [CI/CD](docs/guides/ci-cd.md)                         | Running the server inside GitLab CI and GitHub Actions pipelines                       |
-| [Output Format](docs/reference/output-format.md)      | The response contract every tool follows: content blocks, pagination, next steps       |
-| [Error Handling](docs/concepts/error-handling.md)     | Error classification, GitLab message extraction, and the hints tools return            |
-| [Tools Reference](docs/reference/tools/README.md)     | All individual tools with input/output schemas, including GitLab.com-only Orbit        |
-| [Meta-Tools](docs/concepts/meta-tools.md)             | 32/49/50 domain meta-tools with action dispatching                                     |
-| [Dynamic Toolset](docs/concepts/dynamic-tools.md)     | 2-tool low-token mode with canonical action catalog, safety model, and examples        |
-| [Resources](docs/reference/resources.md)              | All 45 resources with URI templates                                                    |
-| [Prompts](docs/reference/prompts.md)                  | All 37 prompts with arguments and output format                                        |
-| [Testing](docs/development/testing/README.md)         | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results |
-| [Security](docs/concepts/security.md)                 | Security model, token scopes, input validation                                         |
-| [Architecture](docs/concepts/architecture.md)         | System architecture, component design, data flow                                       |
-| [Development Guide](docs/development/development.md)  | Building, testing, CI/CD, contributing                                                 |
-| [Troubleshooting](docs/guides/troubleshooting.md)     | Common startup, token, TLS, transport, and tool-discovery issues                       |
+| Document                                              | Description                                                                                                                              |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| [Getting Started](docs/getting-started.md)            | Install paths, first query, per-client configuration                                                                                     |
+| [Installation](docs/guides/installation.md)           | Every install channel (binary, Homebrew, winget, Docker, npm, PyPI, `.mcpb`, Agent Plugins, hosted), verification, upgrade and uninstall |
+| [IDE Configuration](docs/guides/ide-configuration.md) | Per-client stdio, HTTP legacy, and HTTP OAuth examples                                                                                   |
+| [Configuration](docs/reference/configuration.md)      | Environment variables, transport modes, TLS                                                                                              |
+| [Environment Variables](docs/reference/env.md)        | Exhaustive environment variable table with defaults and examples                                                                         |
+| [CLI Reference](docs/reference/cli.md)                | All command-line flags, exit codes, and runtime examples                                                                                 |
+| [HTTP Server Mode](docs/guides/http-server-mode.md)   | Shared HTTP deployments, authentication, server pool isolation                                                                           |
+| [OAuth App Setup](docs/guides/oauth-app-setup.md)     | GitLab OAuth application, scopes, redirect URIs, and which clients can complete a flow                                                   |
+| [CI/CD](docs/guides/ci-cd.md)                         | Running the server inside GitLab CI and GitHub Actions pipelines                                                                         |
+| [Output Format](docs/reference/output-format.md)      | The response contract every tool follows: content blocks, pagination, next steps                                                         |
+| [Error Handling](docs/concepts/error-handling.md)     | Error classification, GitLab message extraction, and the hints tools return                                                              |
+| [Tools Reference](docs/reference/tools/README.md)     | All individual tools with input/output schemas, including GitLab.com-only Orbit                                                          |
+| [Meta-Tools](docs/concepts/meta-tools.md)             | 32/49/50 domain meta-tools with action dispatching                                                                                       |
+| [Dynamic Toolset](docs/concepts/dynamic-tools.md)     | 2-tool low-token mode with canonical action catalog, safety model, and examples                                                          |
+| [Resources](docs/reference/resources.md)              | All 45 resources with URI templates                                                                                                      |
+| [Prompts](docs/reference/prompts.md)                  | All 37 prompts with arguments and output format                                                                                          |
+| [Testing](docs/development/testing/README.md)         | Unit, E2E, schema model evaluation, Docker model evaluation, and curated model results                                                   |
+| [Security](docs/concepts/security.md)                 | Security model, token scopes, input validation                                                                                           |
+| [Architecture](docs/concepts/architecture.md)         | System architecture, component design, data flow                                                                                         |
+| [Development Guide](docs/development/development.md)  | Building, testing, CI/CD, contributing                                                                                                   |
+| [Troubleshooting](docs/guides/troubleshooting.md)     | Common startup, token, TLS, transport, and tool-discovery issues                                                                         |
 
 ## FAQ
 

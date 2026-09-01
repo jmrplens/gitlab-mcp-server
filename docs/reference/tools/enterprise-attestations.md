@@ -5,7 +5,7 @@
 > **Individual tools**: 6
 > **Meta-tool**: `gitlab_enterprise_user`, `gitlab_attestation`
 > **Dynamic IDs**: `attestation.*`, `enterprise_user.*` (default surface, via `gitlab_execute_action`)
-> **GitLab API**: [Enterprise Users API](https://docs.gitlab.com/ee/api/enterprise_users.html), [Attestations API](https://docs.gitlab.com/ee/api/attestations.html)
+> **GitLab API**: [Enterprise Users API](https://docs.gitlab.com/api/group_enterprise_users/), [Attestations API](https://docs.gitlab.com/ee/api/attestations.html)
 > **Audience**: End users, AI assistant users
 > **Tier**: Premium (enterprise users), Ultimate (attestations)
 

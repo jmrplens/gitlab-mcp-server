@@ -34,11 +34,13 @@ postinstall script, nothing is downloaded after the install and nothing is
 compiled. That is why the install works with `--ignore-scripts`, behind a
 proxy and in a lockfile-driven CI job.
 
-Requirements: Node.js 18 or newer. The Linux packages declare
-`libc: ["glibc"]` because the binaries are position-independent executables
-that need the glibc dynamic loader, so on musl distributions such as Alpine
-npm skips them on purpose. Use the [Docker image](/gitlab-mcp-server/install/docker/)
-there; it is musl-based.
+Requirements: Node.js 18 or newer, and glibc on Linux: the binaries are
+position-independent executables that need the glibc dynamic loader. From the
+first release after 2.7.5 the Linux packages declare `libc: ["glibc"]`, so npm
+skips them on musl distributions such as Alpine and the launcher points you at
+the [Docker image](/gitlab-mcp-server/install/docker/), which is musl-based.
+On 2.7.5 the package installs on Alpine and the binary then fails to start
+with "no such file or directory"; use the Docker image there.
 
 ## Install
 
@@ -89,7 +91,7 @@ gitlab-mcp-server --version
 # gitlab-mcp-server 2.7.5 (commit: ...)
 ```
 
-Started in a terminal with no `GITLAB_TOKEN` set, the binary prints what it
+Started in a terminal without both `GITLAB_URL` and `GITLAB_TOKEN` set, the binary prints what it
 is and the two values it needs, then waits for Enter. That is the first-run
 screen, not an error: an MCP client connects pipes rather than a terminal
 and never sees it. There is no setup wizard; configuration lives in your

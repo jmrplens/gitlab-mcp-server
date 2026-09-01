@@ -6,7 +6,7 @@ datePublished: "2026-09-01"
 
 import { Tabs, TabItem } from "@astrojs/starlight/components";
 
-Cada release publica un binario estático por plataforma: Linux, macOS y Windows, en amd64 y arm64, compilado con `CGO_ENABLED=0` como ejecutable independiente de la posición y con la versión y el commit grabados dentro. Sin runtime, sin bibliotecas compartidas, sin contenedor. Esta página cubre los dos scripts de instalación, la descarga manual, cómo comprobar lo que has descargado, dónde guardar el archivo y cómo reemplazarlo más adelante.
+Cada release publica un binario autocontenido por plataforma: Linux, macOS y Windows, en amd64 y arm64, compilado con `CGO_ENABLED=0` como ejecutable independiente de la posición y con la versión y el commit grabados dentro. Sin runtime, sin bibliotecas compartidas, sin contenedor; en Linux el binario necesita aun así el cargador dinámico de glibc, así que en sistemas con musl como Alpine usa la imagen Docker. Esta página cubre los dos scripts de instalación, la descarga manual, cómo comprobar lo que has descargado, dónde guardar el archivo y cómo reemplazarlo más adelante.
 
 ## Script de instalación
 
@@ -152,7 +152,7 @@ Los clientes que arrancan desde el escritorio en lugar de desde una shell no sie
 gitlab-mcp-server --version
 ```
 
-imprime `gitlab-mcp-server 2.7.5 (commit: <commit>)` para la release actual. Arrancar el binario sin argumentos en una terminal, o hacerle doble clic en Windows, sin `GITLAB_TOKEN` definido imprime una breve pantalla de primera ejecución que nombra los dos valores que necesita y espera a que pulses Enter; un cliente MCP nunca la ve, porque habla con el servidor por tuberías. No hay asistente de configuración.
+imprime `gitlab-mcp-server 2.7.5 (commit: <commit>)` para la release actual. Arrancar el binario sin argumentos en una terminal, o hacerle doble clic en Windows, sin `GITLAB_URL` y `GITLAB_TOKEN` definidos imprime una breve pantalla de primera ejecución que nombra los dos valores que necesita y espera a que pulses Enter; un cliente MCP nunca la ve, porque habla con el servidor por tuberías. No hay asistente de configuración.
 
 ## Configura tu cliente
 

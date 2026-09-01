@@ -66,7 +66,7 @@ winget gestiona las actualizaciones; el binario nunca se actualiza a sí mismo.
 winget upgrade --id jmrplens.gitlab-mcp-server -e
 ```
 
-`update` es un alias de `upgrade`. En un paquete portable, winget descarga el ejecutable nuevo a una ubicación temporal y reemplaza el archivo existente, y después actualiza el alias y la entrada de Aplicaciones y características. Si el servidor está en ejecución en ese momento, winget lo avisa y se detiene; `--force` lo termina primero, así que cierra tu cliente MCP antes de actualizar.
+`update` es un alias de `upgrade`. En un paquete portable, winget descarga el ejecutable nuevo a una ubicación temporal y reemplaza el archivo existente, y después actualiza el alias y la entrada de Aplicaciones y características. Si el ejecutable está en uso, winget avisa de que la aplicación se está ejecutando y se detiene, así que cierra tu cliente MCP y vuelve a lanzar la actualización; `--force` solo omite la comprobación de archivo modificado de un paquete portable y no termina nada.
 
 ```powershell
 winget uninstall --id jmrplens.gitlab-mcp-server -e

@@ -66,16 +66,23 @@ const readout = [
 	},
 ];
 
+// A locale template that lost a placeholder would ship a sentence with a
+// figure missing and nothing else would notice, so refuse to build one.
+for (const placeholder of ["{default}", "{minimal}"]) {
+	if (!content.contextClaim.includes(placeholder)) {
+		throw new Error(`contextClaim for ${content.numberLocale} lacks ${placeholder}`);
+	}
+}
 const contextClaim = content.contextClaim
-	.replace("{default}", formatCount(defaultContext))
-	.replace("{minimal}", formatCount(minimalContext));
+	.replaceAll("{default}", formatCount(defaultContext))
+	.replaceAll("{minimal}", formatCount(minimalContext));
 
 // Per-surface tool counts, as a Free/CE → widest-tier range where the tier
 // moves the number.
 const surfaceCounts: Record<string, string> = {
 	dynamic: String(stats.dynamic),
-	meta: `${stats.meta.base}–${stats.meta.gitlab_com}`,
-	individual: `${stats.tools.free}–${stats.tools.gitlab_com}`,
+	meta: `${formatCount(stats.meta.base)}–${formatCount(stats.meta.gitlab_com)}`,
+	individual: `${formatCount(stats.tools.free)}–${formatCount(stats.tools.gitlab_com)}`,
 };
 ---
 

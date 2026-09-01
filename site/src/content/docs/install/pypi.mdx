@@ -112,8 +112,8 @@ gitlab-mcp-server --version
 ```
 
 With `uvx` no command lands on your PATH; `uvx jmrplens-gitlab-mcp-server --version`
-runs the same check. Started in a terminal with no `GITLAB_TOKEN` set, the
-binary prints what it is and the two values it needs, then waits for Enter.
+runs the same check. Started in a terminal without both `GITLAB_URL` and
+`GITLAB_TOKEN` set, the binary prints what it is and the two values it needs, then waits for Enter.
 That is the first-run screen, not an error: an MCP client connects pipes
 rather than a terminal and never sees it. There is no setup wizard;
 configuration lives in your client's JSON, below.
