@@ -21,11 +21,11 @@ curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scr
 
 El script necesita `curl` o `wget`, además de `sha256sum` o `shasum`. Traduce `x86_64` a `amd64` y `aarch64` a `arm64`, rechaza cualquier otro sistema o arquitectura, e instala el archivo con modo `0755` como `$HOME/.local/bin/gitlab-mcp-server`. Si ya hay un binario en esa ruta lo elimina primero, de modo que volver a ejecutarlo sobre un servidor en marcha no falla con "Text file busy". Si `$HOME/.local/bin` no está en tu PATH, el script lo avisa e imprime la línea `export PATH=...` que debes añadir.
 
-| Variable           | Por defecto                  | Efecto                                                                       |
-| ------------------ | ---------------------------- | ---------------------------------------------------------------------------- |
-| `INSTALL_DIR`      | `$HOME/.local/bin`           | Directorio de destino                                                        |
-| `VERSION`          | `latest`                     | Etiqueta de la release a instalar, por ejemplo `v2.7.5`                      |
-| `REPO`             | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub desde el que descargar                                 |
+| Variable           | Por defecto                  | Efecto                                                                        |
+| ------------------ | ---------------------------- | ----------------------------------------------------------------------------- |
+| `INSTALL_DIR`      | `$HOME/.local/bin`           | Directorio de destino                                                         |
+| `VERSION`          | `latest`                     | Etiqueta de la release a instalar, por ejemplo `v2.7.5`                       |
+| `REPO`             | `jmrplens/gitlab-mcp-server` | Repositorio de GitHub desde el que descargar                                  |
 | `ALLOW_UNVERIFIED` | sin definir                  | `1` omite la verificación del checksum, para sistemas sin herramienta SHA-256 |
 
 Las variables van delante de `sh`, que es el proceso que ejecuta el script:
@@ -61,17 +61,17 @@ Un cambio en el PATH solo llega a los procesos nuevos. Cierra y vuelve a abrir P
 
 La [última release](https://github.com/jmrplens/gitlab-mcp-server/releases/latest) incluye estos archivos:
 
-| Plataforma            | Archivo                                                                                       |
-| --------------------- | --------------------------------------------------------------------------------------------- |
-| Linux (x86_64)        | `gitlab-mcp-server-linux-amd64`                                                               |
-| Linux (ARM64)         | `gitlab-mcp-server-linux-arm64`                                                               |
-| macOS (universal)     | `gitlab-mcp-server-darwin-all`                                                                |
-| macOS (Intel)         | `gitlab-mcp-server-darwin-amd64`                                                              |
-| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                              |
-| Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                         |
-| Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                         |
-| Integridad            | `checksums.txt`, `checksums.txt.sigstore.json`                                                |
-| Claude Desktop        | `gitlab-mcp-server.mcpb`, consulta [Claude Desktop](/gitlab-mcp-server/es/claude-desktop/)    |
+| Plataforma            | Archivo                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------ |
+| Linux (x86_64)        | `gitlab-mcp-server-linux-amd64`                                                            |
+| Linux (ARM64)         | `gitlab-mcp-server-linux-arm64`                                                            |
+| macOS (universal)     | `gitlab-mcp-server-darwin-all`                                                             |
+| macOS (Intel)         | `gitlab-mcp-server-darwin-amd64`                                                           |
+| macOS (Apple Silicon) | `gitlab-mcp-server-darwin-arm64`                                                           |
+| Windows (x86_64)      | `gitlab-mcp-server-windows-amd64.exe`                                                      |
+| Windows (ARM64)       | `gitlab-mcp-server-windows-arm64.exe`                                                      |
+| Integridad            | `checksums.txt`, `checksums.txt.sigstore.json`                                             |
+| Claude Desktop        | `gitlab-mcp-server.mcpb`, consulta [Claude Desktop](/gitlab-mcp-server/es/claude-desktop/) |
 
 `gitlab-mcp-server-darwin-all` es un binario universal (arm64 y amd64 en un solo archivo), producido para la extensión de Claude Desktop porque su manifiesto solo puede elegir un archivo por sistema operativo, no por arquitectura. En macOS puedes usarlo o usar el archivo de una sola arquitectura; los tres aparecen en `checksums.txt`.
 

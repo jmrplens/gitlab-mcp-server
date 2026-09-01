@@ -51,13 +51,13 @@ cannot use, so every action would fail.
 
 ## Tokens and what they unlock
 
-| Credential                                  | Result                                                                                                                       |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Token with the `api` scope                  | The full tool surface.                                                                                                       |
-| Token with the `read_api` scope             | Admitted and served a read-only tool surface. The write check is per action, so a credential that cannot change anything is a supported way in, not a rejected one. |
-| `PRIVATE-TOKEN` header                      | Not accepted. It is the legacy-mode header; the endpoint is Bearer-only.                                                     |
-| `GITLAB-URL` header                         | Ignored. The instance is fixed to `https://gitlab.com`, so a self-managed instance cannot be reached through this endpoint.  |
-| No credential                               | Any method answers `401` with `WWW-Authenticate: Bearer ... resource_metadata=...`, the challenge an OAuth client follows.  |
+| Credential                      | Result                                                                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token with the `api` scope      | The full tool surface.                                                                                                                                              |
+| Token with the `read_api` scope | Admitted and served a read-only tool surface. The write check is per action, so a credential that cannot change anything is a supported way in, not a rejected one. |
+| `PRIVATE-TOKEN` header          | Not accepted. It is the legacy-mode header; the endpoint is Bearer-only.                                                                                            |
+| `GITLAB-URL` header             | Ignored. The instance is fixed to `https://gitlab.com`, so a self-managed instance cannot be reached through this endpoint.                                         |
+| No credential                   | Any method answers `401` with `WWW-Authenticate: Bearer ... resource_metadata=...`, the challenge an OAuth client follows.                                          |
 
 Use a token scoped to what you actually need. A hosted endpoint sees every
 request you send through it; `read_api` is the right choice when you only
@@ -65,15 +65,15 @@ want to read.
 
 ## What the endpoint is
 
-| Property        | Value                                                                                                                                               |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| URL             | `https://mcp.jmrp.io/gitlab`                                                                                                                        |
-| Transport       | Stateless streamable HTTP. `POST` is the transport; an authenticated `GET` or `DELETE` answers `405` by design.                                      |
-| Tool surface    | The default `dynamic` surface: `gitlab_find_action` and `gitlab_execute_action`, reaching every catalog action by its canonical id.                  |
-| Authentication  | OAuth mode. `Authorization: Bearer` per request, verified against GitLab.com, never stored server-side.                                              |
-| Health          | `GET https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",...}`.                                          |
-| Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/): the whole catalog and per-client configuration, unauthenticated.       |
-| MCP server card | `GET https://mcp.jmrp.io/gitlab/server-card`, unauthenticated.                                                                                      |
+| Property        | Value                                                                                                                                                                      |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| URL             | `https://mcp.jmrp.io/gitlab`                                                                                                                                               |
+| Transport       | Stateless streamable HTTP. `POST` is the transport; an authenticated `GET` or `DELETE` answers `405` by design.                                                            |
+| Tool surface    | The default `dynamic` surface: `gitlab_find_action` and `gitlab_execute_action`, reaching every catalog action by its canonical id.                                        |
+| Authentication  | OAuth mode. `Authorization: Bearer` per request, verified against GitLab.com, never stored server-side.                                                                    |
+| Health          | `GET https://mcp.jmrp.io/gitlab/health` needs no credential and answers `200` with `{"status":"ok",...}`.                                                                  |
+| Server card     | [`https://mcp.jmrp.io/servers/gitlab/`](https://mcp.jmrp.io/servers/gitlab/): the whole catalog and per-client configuration, unauthenticated.                             |
+| MCP server card | `GET https://mcp.jmrp.io/gitlab/server-card`, unauthenticated.                                                                                                             |
 | Directory       | [mcp.jmrp.io](https://mcp.jmrp.io/) lists the MCP servers the author maintains; [`servers.json`](https://mcp.jmrp.io/servers.json) is the same list for automated clients. |
 
 A bare `curl` that gets `401` is the endpoint working, not failing. The

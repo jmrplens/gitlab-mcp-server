@@ -21,11 +21,11 @@ curl -fsSL https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scr
 
 The script needs `curl` or `wget`, plus `sha256sum` or `shasum`. It maps `x86_64` to `amd64` and `aarch64` to `arm64`, refuses any other OS or architecture, and installs the file with mode `0755` as `$HOME/.local/bin/gitlab-mcp-server`. An existing binary at that path is removed first, so re-running over a server that is still running does not fail with "Text file busy". If `$HOME/.local/bin` is not on your PATH, the script says so and prints the `export PATH=...` line to add.
 
-| Variable           | Default                      | Effect                                                                   |
-| ------------------ | ---------------------------- | ------------------------------------------------------------------------ |
-| `INSTALL_DIR`      | `$HOME/.local/bin`           | Target directory                                                         |
-| `VERSION`          | `latest`                     | Release tag to install, for example `v2.7.5`                             |
-| `REPO`             | `jmrplens/gitlab-mcp-server` | GitHub repository to download from                                       |
+| Variable           | Default                      | Effect                                                                  |
+| ------------------ | ---------------------------- | ----------------------------------------------------------------------- |
+| `INSTALL_DIR`      | `$HOME/.local/bin`           | Target directory                                                        |
+| `VERSION`          | `latest`                     | Release tag to install, for example `v2.7.5`                            |
+| `REPO`             | `jmrplens/gitlab-mcp-server` | GitHub repository to download from                                      |
 | `ALLOW_UNVERIFIED` | unset                        | `1` skips the checksum verification, for systems without a SHA-256 tool |
 
 Variables go in front of `sh`, since that is the process running the script:

@@ -44,7 +44,7 @@ head:
             "@type": "HowToStep",
             "position": 2,
             "name": "Install the server",
-            "text": "Pick one install path. The one-click buttons register a Docker-based server that auto-pulls the image on first run. The one-line installer places the native binary on your PATH via Homebrew, winget, or a shell script. Claude Desktop has a native .mcpb extension that stores the token in the OS keychain. You can also download the binary for your platform from GitHub Releases.",
+            "text": "Pick one install path. The one-click buttons register a Docker-based server that auto-pulls the image on first run. The one-line installer places the native binary on your PATH via Homebrew, winget, or a shell script. Claude Desktop has a native .mcpb extension that stores the token in the OS keychain. npm (npx) and PyPI (uvx) launchers run it with no separate install step. You can also download the binary for your platform from GitHub Releases.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/getting-started/#quick-install"
           },
           {
@@ -80,7 +80,7 @@ import FAQ from "../../components/FAQ.astro";
 
 :::tip[At a glance]
 
-- **Four ways to install**: a Docker image, a single native binary, the npm launcher, or the PyPI wheels (uvx/pipx).
+- **Nine ways to install**: Docker, a native binary (direct download, Homebrew, winget or the install script), the npm launcher, the PyPI wheels, the Claude Desktop extension, Agent Plugins, or the hosted endpoint. [Choose a path](/gitlab-mcp-server/install/overview/).
 - **The minimum configuration is one value** — a GitLab personal access token with `api` scope in `GITLAB_TOKEN`. Set `GITLAB_URL` only for self-managed instances.
 - **The default surface is dynamic mode**: your client sees two tools, and they reach every GitLab operation on demand.
 

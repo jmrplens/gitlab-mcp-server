@@ -44,7 +44,7 @@ head:
             "@type": "HowToStep",
             "position": 2,
             "name": "Instalar el servidor",
-            "text": "Elige una vía de instalación. Los botones de un clic registran un servidor basado en Docker que descarga la imagen en la primera ejecución. El instalador de una línea coloca el binario nativo en tu PATH mediante Homebrew, winget o un script de shell. Claude Desktop tiene una extensión nativa .mcpb que guarda el token en el llavero del sistema. También puedes descargar el binario para tu plataforma desde GitHub Releases.",
+            "text": "Elige una vía de instalación. Los botones de un clic registran un servidor basado en Docker que descarga la imagen en la primera ejecución. El instalador de una línea coloca el binario nativo en tu PATH mediante Homebrew, winget o un script de shell. Claude Desktop tiene una extensión nativa .mcpb que guarda el token en el llavero del sistema. Los lanzadores de npm (npx) y PyPI (uvx) lo ejecutan sin un paso de instalación aparte. También puedes descargar el binario para tu plataforma desde GitHub Releases.",
             "url": "https://jmrplens.github.io/gitlab-mcp-server/es/getting-started/#instalación-rápida"
           },
           {
@@ -80,7 +80,7 @@ import stats from "../../../data/stats.json";
 
 :::tip[De un vistazo]
 
-- **Cuatro formas de instalarlo**: una imagen Docker, un único binario nativo, el lanzador de npm o las wheels de PyPI (uvx/pipx).
+- **Nueve formas de instalarlo**: Docker, un binario nativo (descarga directa, Homebrew, winget o el script de instalación), el lanzador de npm, las wheels de PyPI, la extensión para Claude Desktop, los Agent Plugins o el endpoint alojado. [Elige una vía](/gitlab-mcp-server/es/install/overview/).
 - **La configuración mínima es un solo valor**: un token de acceso personal de GitLab con scope `api` en `GITLAB_TOKEN`. Define `GITLAB_URL` solo para instancias autogestionadas.
 - **La superficie predeterminada es el modo dinámico**: tu cliente ve dos herramientas, y con ellas alcanza cualquier operación de GitLab bajo demanda.
 

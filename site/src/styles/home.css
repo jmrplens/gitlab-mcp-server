@@ -97,8 +97,12 @@
 
 /* ---- The readout: the numbers, stated once, up top ---- */
 .readout {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+	/* Five cells, and five is prime: whatever column count an auto-fit grid
+	   settles on below the full width, the last row ends short and the ruled
+	   ground shows through where a cell should be. A wrapping flex row has no
+	   such hole, because the cells of a short row grow to fill it. */
+	display: flex;
+	flex-wrap: wrap;
 	/* The 1px gap over a bordered ground is what draws the cell separators, so
 	   there is one rule between cells rather than two abutting borders. */
 	gap: 1px;
@@ -114,6 +118,7 @@
 	flex-direction: column;
 	gap: 0.3rem;
 	min-width: 0;
+	flex: 1 1 10rem;
 }
 .readout-value {
 	font-family: var(--gm-mono);
@@ -139,6 +144,14 @@
 	color: var(--sl-color-white);
 	text-decoration: underline;
 	text-decoration-color: var(--gm-mark);
+}
+/* The sentence the figures add up to, set like a lead but tighter to the strip. */
+.readout-claim {
+	margin-top: 0.75rem;
+	max-width: 62ch;
+	font-size: var(--sl-text-sm);
+	line-height: 1.5;
+	color: var(--sl-color-gray-3);
 }
 
 /* ---- Prose ---- */

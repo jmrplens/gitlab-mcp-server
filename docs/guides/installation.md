@@ -84,8 +84,6 @@ irm https://raw.githubusercontent.com/jmrplens/gitlab-mcp-server/main/scripts/in
 
 The script detects AMD64 or ARM64 (reading `PROCESSOR_ARCHITEW6432` first, so a 32-bit PowerShell on a 64-bit machine still picks the right build) and refuses 32-bit x86, for which no build is published. It downloads `gitlab-mcp-server-windows-<arch>.exe`, verifies it against `checksums.txt` with `Get-FileHash` (same `ALLOW_UNVERIFIED=1` bypass), installs it as `gitlab-mcp-server.exe` under `%LOCALAPPDATA%\Programs\gitlab-mcp-server` by default, and appends that directory to your user-scope `PATH`. Open a new PowerShell or Windows Terminal window before relying on the new `PATH`. `-Version`, `-InstallDir` and `-Repo` (or the `VERSION`, `INSTALL_DIR` and `REPO` environment variables) override the defaults.
 
-The script's closing text still advertises a `--setup` wizard; that flag no longer exists, so ignore that line and register the server with your client instead.
-
 ### Manual download
 
 Download the asset for your platform, then on Linux or macOS:

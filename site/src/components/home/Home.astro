@@ -230,30 +230,3 @@ const surfaceCounts: Record<string, string> = {
 		</div>
 	</section>
 </div>
-
-<style>
-	/*
-	 * The readout is five cells now, and five is prime: whatever column count
-	 * an auto-fit grid settles on below the full width, the last row ends
-	 * short and the ruled ground shows through where a cell should be. A
-	 * wrapping flex row has no such hole, because the cells of a short row grow
-	 * to fill it. The shared rule in styles/home.css keeps the ground, the
-	 * hairline gap and the radius; `.home` is in the selector so this override
-	 * outranks that rule's single class whatever order the stylesheets load in.
-	 */
-	.home .readout {
-		display: flex;
-		flex-wrap: wrap;
-	}
-	.home .readout-cell {
-		flex: 1 1 10rem;
-	}
-	/* The sentence the figures add up to, set like a lead but tighter to the strip. */
-	.home .readout-claim {
-		margin-top: 0.75rem;
-		max-width: 62ch;
-		font-size: var(--sl-text-sm);
-		line-height: 1.5;
-		color: var(--sl-color-gray-3);
-	}
-</style>
