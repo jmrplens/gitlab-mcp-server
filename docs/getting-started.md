@@ -75,6 +75,7 @@ The server is also published as [`jmrplens-gitlab-mcp-server`](https://pypi.org/
 uvx jmrplens-gitlab-mcp-server             # zero install; clients launch it directly
 pipx install jmrplens-gitlab-mcp-server    # or install globally (pipx)
 pip install jmrplens-gitlab-mcp-server     # or into the active environment (pip)
+# Linux wheels need glibc; on musl systems such as Alpine use the Docker image instead
 ```
 
 ```json

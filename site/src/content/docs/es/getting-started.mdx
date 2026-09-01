@@ -179,7 +179,7 @@ Apunta cualquier cliente MCP a `npx` sin instalar nada:
 
 ### PyPI / uvx (cualquier plataforma)
 
-Publicado como [`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/) con el mismo modelo que `uv` y `ruff`: cada wheel de plataforma lleva el binario nativo, el instalador lo coloca en la ruta de scripts como el propio comando `gitlab-mcp-server`, y no se ejecuta Python cuando corre el servidor.
+Publicado como [`jmrplens-gitlab-mcp-server`](https://pypi.org/project/jmrplens-gitlab-mcp-server/) con el mismo modelo que `uv` y `ruff`: cada wheel de plataforma lleva el binario nativo, el instalador lo coloca en la ruta de scripts como el propio comando `gitlab-mcp-server`, y no se ejecuta Python cuando corre el servidor. Las wheels de Linux necesitan glibc; en sistemas musl como Alpine, usa la imagen Docker en su lugar.
 
 ```bash
 uvx jmrplens-gitlab-mcp-server
