@@ -19,6 +19,17 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
+// invalidIIDCases lists the work item IIDs every handler must reject before
+// reaching the API: Get, Delete and Update share the same guard.
+var invalidIIDCases = []struct {
+	name string
+	iid  int64
+}{
+	{"zero", 0},
+	{"negative", -1},
+	{"large_negative", -100},
+}
+
 // TestGet_Success verifies Get when success.
 func TestGet_Success(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -40,14 +51,16 @@ func TestGet_Success(t *testing.T) {
 // TestGet_InvalidIID verifies Get when invalid IID.
 func TestGet_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	for _, iid := range []int64{0, -1, -100} {
-		_, err := Get(t.Context(), client, GetInput{FullPath: testFullPath, IID: iid})
-		if err == nil {
-			t.Fatalf("expected error for IID=%d, got nil", iid)
-		}
-		if !strings.Contains(err.Error(), "work_item_iid") {
-			t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", iid, err)
-		}
+	for _, tc := range invalidIIDCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Get(t.Context(), client, GetInput{FullPath: testFullPath, IID: tc.iid})
+			if err == nil {
+				t.Fatalf("expected error for IID=%d, got nil", tc.iid)
+			}
+			if !strings.Contains(err.Error(), "work_item_iid") {
+				t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", tc.iid, err)
+			}
+		})
 	}
 }
 
@@ -391,14 +404,16 @@ func TestDelete_Success(t *testing.T) {
 // TestDelete_InvalidIID verifies that Delete rejects invalid IIDs.
 func TestDelete_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	for _, iid := range []int64{0, -1, -100} {
-		err := Delete(t.Context(), client, DeleteInput{FullPath: testFullPath, IID: iid})
-		if err == nil {
-			t.Fatalf("expected error for IID=%d, got nil", iid)
-		}
-		if !strings.Contains(err.Error(), "work_item_iid") {
-			t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", iid, err)
-		}
+	for _, tc := range invalidIIDCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Delete(t.Context(), client, DeleteInput{FullPath: testFullPath, IID: tc.iid})
+			if err == nil {
+				t.Fatalf("expected error for IID=%d, got nil", tc.iid)
+			}
+			if !strings.Contains(err.Error(), "work_item_iid") {
+				t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", tc.iid, err)
+			}
+		})
 	}
 }
 
@@ -1343,14 +1358,16 @@ func TestUpdate_AllOptions(t *testing.T) {
 // with an error mentioning "iid".
 func TestUpdate_InvalidIID(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	for _, iid := range []int64{0, -1, -100} {
-		_, err := Update(t.Context(), client, UpdateInput{FullPath: testFullPath, IID: iid, Title: "x"})
-		if err == nil {
-			t.Fatalf("expected error for IID=%d, got nil", iid)
-		}
-		if !strings.Contains(err.Error(), "work_item_iid") {
-			t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", iid, err)
-		}
+	for _, tc := range invalidIIDCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Update(t.Context(), client, UpdateInput{FullPath: testFullPath, IID: tc.iid, Title: "x"})
+			if err == nil {
+				t.Fatalf("expected error for IID=%d, got nil", tc.iid)
+			}
+			if !strings.Contains(err.Error(), "work_item_iid") {
+				t.Errorf("expected error to mention 'iid' for IID=%d, got: %v", tc.iid, err)
+			}
+		})
 	}
 }
 

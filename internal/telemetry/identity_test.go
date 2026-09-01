@@ -238,13 +238,17 @@ func TestParseIdentityPolicy_AcceptsTheSpellingsOperatorsWrite(t *testing.T) {
 // policy's behavior: a line telling somebody their deployment records nobody
 // while it records names is worse than no line at all.
 func TestPolicyDescription_SaysWhatEachPolicyExports(t *testing.T) {
+	// The subtests below read this map, and subtests run in order, so every
+	// policy that has a description is in it before they start.
 	descriptions := map[IdentityPolicy]string{}
 	for _, policy := range []IdentityPolicy{IdentityNone, IdentityPseudonymous, IdentityFull} {
-		description := PolicyDescription(policy)
-		if description == "" {
-			t.Fatalf("policy %q has no description, so the startup line says nothing", policy)
-		}
-		descriptions[policy] = description
+		t.Run(string(policy)+" has a description", func(t *testing.T) {
+			description := PolicyDescription(policy)
+			if description == "" {
+				t.Fatalf("policy %q has no description, so the startup line says nothing", policy)
+			}
+			descriptions[policy] = description
+		})
 	}
 
 	t.Run("the three are distinguishable", func(t *testing.T) {

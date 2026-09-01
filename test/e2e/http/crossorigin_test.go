@@ -100,25 +100,31 @@ func TestCrossOrigin_ExactlyOneAllowOriginHeader(t *testing.T) {
 		"--trusted-origins="+trustedOrigin,
 	)
 
-	for _, r := range []request{
-		mcpPOST(map[string]string{
+	cases := []struct {
+		name string
+		req  request
+	}{
+		{"actual_request", mcpPOST(map[string]string{
 			"PRIVATE-TOKEN":  "glpat-whatever",
 			"Origin":         trustedOrigin,
 			"Sec-Fetch-Site": "cross-site",
-		}),
-		{
+		})},
+		{"preflight", request{
 			method: http.MethodOptions, path: "/mcp",
 			headers: map[string]string{
 				"Origin":                         trustedOrigin,
 				"Access-Control-Request-Method":  http.MethodPost,
 				"Access-Control-Request-Headers": "content-type",
 			},
-		},
-	} {
-		got := srv.do(t, r)
-		if n := len(got.header.Values("Access-Control-Allow-Origin")); n > 1 {
-			t.Errorf("%s: %d Access-Control-Allow-Origin headers, want at most 1 — a browser rejects the response outright", r.method, n)
-		}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := srv.do(t, tc.req)
+			if n := len(got.header.Values("Access-Control-Allow-Origin")); n > 1 {
+				t.Errorf("%s: %d Access-Control-Allow-Origin headers, want at most 1 — a browser rejects the response outright", tc.req.method, n)
+			}
+		})
 	}
 }
 

@@ -518,11 +518,20 @@ func TestSetHookCustomHeader_Success(t *testing.T) {
 // TestSetHookCustomHeader_Guards verifies required-input guards.
 func TestSetHookCustomHeader_Guards(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	cases := []SetHookCustomHeaderInput{{}, {GroupID: "99"}, {GroupID: "99", HookID: 10}}
-	for i, in := range cases {
-		if err := SetHookCustomHeader(context.Background(), client, in); err == nil {
-			t.Errorf("case %d: expected error", i)
-		}
+	cases := []struct {
+		name string
+		in   SetHookCustomHeaderInput
+	}{
+		{"missing_group_id", SetHookCustomHeaderInput{}},
+		{"missing_hook_id", SetHookCustomHeaderInput{GroupID: "99"}},
+		{"missing_key", SetHookCustomHeaderInput{GroupID: "99", HookID: 10}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := SetHookCustomHeader(context.Background(), client, tc.in); err == nil {
+				t.Error("expected error")
+			}
+		})
 	}
 }
 
@@ -562,11 +571,20 @@ func TestDeleteHookCustomHeader_Success(t *testing.T) {
 // TestDeleteHookCustomHeader_Guards verifies required-input guards.
 func TestDeleteHookCustomHeader_Guards(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	cases := []DeleteHookCustomHeaderInput{{}, {GroupID: "99"}, {GroupID: "99", HookID: 10}}
-	for i, in := range cases {
-		if err := DeleteHookCustomHeader(context.Background(), client, in); err == nil {
-			t.Errorf("case %d: expected error", i)
-		}
+	cases := []struct {
+		name string
+		in   DeleteHookCustomHeaderInput
+	}{
+		{"missing_group_id", DeleteHookCustomHeaderInput{}},
+		{"missing_hook_id", DeleteHookCustomHeaderInput{GroupID: "99"}},
+		{"missing_key", DeleteHookCustomHeaderInput{GroupID: "99", HookID: 10}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := DeleteHookCustomHeader(context.Background(), client, tc.in); err == nil {
+				t.Error("expected error")
+			}
+		})
 	}
 }
 
@@ -609,11 +627,20 @@ func TestSetHookURLVariable_IllegalKey422_HintsKeyFormat(t *testing.T) {
 // TestSetHookURLVariable_Guards verifies required-input guards.
 func TestSetHookURLVariable_Guards(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	cases := []SetHookURLVariableInput{{}, {GroupID: "99"}, {GroupID: "99", HookID: 10}}
-	for i, in := range cases {
-		if err := SetHookURLVariable(context.Background(), client, in); err == nil {
-			t.Errorf("case %d: expected error", i)
-		}
+	cases := []struct {
+		name string
+		in   SetHookURLVariableInput
+	}{
+		{"missing_group_id", SetHookURLVariableInput{}},
+		{"missing_hook_id", SetHookURLVariableInput{GroupID: "99"}},
+		{"missing_key", SetHookURLVariableInput{GroupID: "99", HookID: 10}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := SetHookURLVariable(context.Background(), client, tc.in); err == nil {
+				t.Error("expected error")
+			}
+		})
 	}
 }
 
@@ -653,11 +680,20 @@ func TestDeleteHookURLVariable_Success(t *testing.T) {
 // TestDeleteHookURLVariable_Guards verifies required-input guards.
 func TestDeleteHookURLVariable_Guards(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	cases := []DeleteHookURLVariableInput{{}, {GroupID: "99"}, {GroupID: "99", HookID: 10}}
-	for i, in := range cases {
-		if err := DeleteHookURLVariable(context.Background(), client, in); err == nil {
-			t.Errorf("case %d: expected error", i)
-		}
+	cases := []struct {
+		name string
+		in   DeleteHookURLVariableInput
+	}{
+		{"missing_group_id", DeleteHookURLVariableInput{}},
+		{"missing_hook_id", DeleteHookURLVariableInput{GroupID: "99"}},
+		{"missing_key", DeleteHookURLVariableInput{GroupID: "99", HookID: 10}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := DeleteHookURLVariable(context.Background(), client, tc.in); err == nil {
+				t.Error("expected error")
+			}
+		})
 	}
 }
 
@@ -683,11 +719,20 @@ func TestTestHook_Success(t *testing.T) {
 // TestTestHook_Guards verifies required-input guards.
 func TestTestHook_Guards(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	cases := []TestHookInput{{}, {GroupID: "99"}, {GroupID: "99", HookID: 10}}
-	for i, in := range cases {
-		if err := TestHook(context.Background(), client, in); err == nil {
-			t.Errorf("case %d: expected error", i)
-		}
+	cases := []struct {
+		name string
+		in   TestHookInput
+	}{
+		{"missing_group_id", TestHookInput{}},
+		{"missing_hook_id", TestHookInput{GroupID: "99"}},
+		{"missing_trigger", TestHookInput{GroupID: "99", HookID: 10}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := TestHook(context.Background(), client, tc.in); err == nil {
+				t.Error("expected error")
+			}
+		})
 	}
 }
 
@@ -727,11 +772,20 @@ func TestResendHookEvent_Success(t *testing.T) {
 // TestResendHookEvent_Guards verifies required-input guards.
 func TestResendHookEvent_Guards(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	cases := []ResendHookEventInput{{}, {GroupID: "99"}, {GroupID: "99", HookID: 10}}
-	for i, in := range cases {
-		if err := ResendHookEvent(context.Background(), client, in); err == nil {
-			t.Errorf("case %d: expected error", i)
-		}
+	cases := []struct {
+		name string
+		in   ResendHookEventInput
+	}{
+		{"missing_group_id", ResendHookEventInput{}},
+		{"missing_hook_id", ResendHookEventInput{GroupID: "99"}},
+		{"missing_event_id", ResendHookEventInput{GroupID: "99", HookID: 10}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := ResendHookEvent(context.Background(), client, tc.in); err == nil {
+				t.Error("expected error")
+			}
+		})
 	}
 }
 

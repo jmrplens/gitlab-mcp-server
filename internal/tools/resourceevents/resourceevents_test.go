@@ -1296,15 +1296,20 @@ func TestListGroupEpicLabelEvents_Success(t *testing.T) {
 // input missing any required field without reaching the API.
 func TestGetGroupEpicLabelEvent_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
-	cases := []GetGroupEpicLabelEventInput{
-		{},
-		{GroupID: covGID()},
-		{GroupID: covGID(), EpicIID: 7},
+	cases := []struct {
+		name string
+		in   GetGroupEpicLabelEventInput
+	}{
+		{"empty_input", GetGroupEpicLabelEventInput{}},
+		{"missing_epic_iid", GetGroupEpicLabelEventInput{GroupID: covGID()}},
+		{"missing_label_event_id", GetGroupEpicLabelEventInput{GroupID: covGID(), EpicIID: 7}},
 	}
-	for _, in := range cases {
-		if _, err := GetGroupEpicLabelEvent(t.Context(), client, in); err == nil {
-			t.Fatalf("expected validation error for %+v", in)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := GetGroupEpicLabelEvent(t.Context(), client, tc.in); err == nil {
+				t.Fatalf("expected validation error for %+v", tc.in)
+			}
+		})
 	}
 }
 

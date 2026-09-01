@@ -350,7 +350,8 @@ func TestCallTool_CodexClient_RoundsEveryContentBlockType(t *testing.T) {
 	if len(res.Content) != 6 {
 		t.Fatalf("content length = %d, want 6", len(res.Content))
 	}
-	annotationsOf := func(block mcp.Content) *mcp.Annotations {
+	annotationsOf := func(t *testing.T, block mcp.Content) *mcp.Annotations {
+		t.Helper()
 		switch c := block.(type) {
 		case *mcp.TextContent:
 			return c.Annotations
@@ -367,18 +368,32 @@ func TestCallTool_CodexClient_RoundsEveryContentBlockType(t *testing.T) {
 			return nil
 		}
 	}
-	wantPriorities := []float64{0, 1, 1, 1, 1, 1}
-	for i, want := range wantPriorities {
-		a := annotationsOf(res.Content[i])
-		if a == nil {
-			t.Fatalf("content[%d] annotations dropped; want audience preserved", i)
-		}
-		if a.Priority != want {
-			t.Errorf("content[%d] priority = %v, want %v", i, a.Priority, want)
-		}
-		if len(a.Audience) == 0 {
-			t.Errorf("content[%d] audience dropped", i)
-		}
+	// One case per block addMixedContentTool returns, in order.
+	cases := []struct {
+		name  string
+		index int
+		want  float64
+	}{
+		{"text_low_rounds_down", 0, 0},
+		{"text_integer_preserved", 1, 1},
+		{"image_rounds_up", 2, 1},
+		{"audio_rounds_up", 3, 1},
+		{"resource_link_rounds_up", 4, 1},
+		{"embedded_resource_rounds_up", 5, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := annotationsOf(t, res.Content[tc.index])
+			if a == nil {
+				t.Fatalf("content[%d] annotations dropped; want audience preserved", tc.index)
+			}
+			if a.Priority != tc.want {
+				t.Errorf("content[%d] priority = %v, want %v", tc.index, a.Priority, tc.want)
+			}
+			if len(a.Audience) == 0 {
+				t.Errorf("content[%d] audience dropped", tc.index)
+			}
+		})
 	}
 }
 

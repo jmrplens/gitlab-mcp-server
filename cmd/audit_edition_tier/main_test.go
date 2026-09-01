@@ -15,22 +15,25 @@ import (
 // because a badge lists every tier the endpoint is available in.
 func TestParseTierBadge_Values_MapToMinimumTier(t *testing.T) {
 	cases := []struct {
+		name  string
 		value string
 		want  tier
 		ok    bool
 	}{
-		{"Free, Premium, Ultimate", tierFree, true},
-		{"Premium, Ultimate", tierPremium, true},
-		{"Ultimate", tierUltimate, true},
-		{"premium, ultimate", tierPremium, true},
-		{"", tierFree, false},
-		{"Something else", tierFree, false},
+		{"all_tiers_is_free", "Free, Premium, Ultimate", tierFree, true},
+		{"premium_and_ultimate_is_premium", "Premium, Ultimate", tierPremium, true},
+		{"ultimate_only", "Ultimate", tierUltimate, true},
+		{"lowercase_names", "premium, ultimate", tierPremium, true},
+		{"empty_value", "", tierFree, false},
+		{"unknown_value", "Something else", tierFree, false},
 	}
 	for _, c := range cases {
-		got, ok := parseTierBadge(c.value)
-		if got != c.want || ok != c.ok {
-			t.Errorf("parseTierBadge(%q) = (%v, %v); want (%v, %v)", c.value, got, ok, c.want, c.ok)
-		}
+		t.Run(c.name, func(t *testing.T) {
+			got, ok := parseTierBadge(c.value)
+			if got != c.want || ok != c.ok {
+				t.Errorf("parseTierBadge(%q) = (%v, %v); want (%v, %v)", c.value, got, ok, c.want, c.ok)
+			}
+		})
 	}
 }
 

@@ -304,15 +304,20 @@ func TestOrderSharedFixtureDestructiveLast_UsesTypedFixtureDependencies(t *testi
 // TestCatalogHasEnterpriseRoutes_DetectsRouteMapShapes verifies Enterprise
 // detection works for unified, dynamic, and split meta route maps.
 func TestCatalogHasEnterpriseRoutes_DetectsRouteMapShapes(t *testing.T) {
-	cases := []map[string]toolutil.ActionMap{
-		{"gitlab": {"merge_train.list_project": toolutil.ActionRoute{}}},
-		{dynamicExecuteActionTool: {"merge_train.list_project": toolutil.ActionRoute{}}},
-		{"gitlab_merge_train": {"list_project": toolutil.ActionRoute{}}},
+	cases := []struct {
+		name   string
+		routes map[string]toolutil.ActionMap
+	}{
+		{"unified_meta_map", map[string]toolutil.ActionMap{"gitlab": {"merge_train.list_project": toolutil.ActionRoute{}}}},
+		{"dynamic_map", map[string]toolutil.ActionMap{dynamicExecuteActionTool: {"merge_train.list_project": toolutil.ActionRoute{}}}},
+		{"split_meta_map", map[string]toolutil.ActionMap{"gitlab_merge_train": {"list_project": toolutil.ActionRoute{}}}},
 	}
-	for _, routes := range cases {
-		if !catalogHasEnterpriseRoutes(routes) {
-			t.Fatalf("catalogHasEnterpriseRoutes(%v) = false, want true", routes)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !catalogHasEnterpriseRoutes(tc.routes) {
+				t.Fatalf("catalogHasEnterpriseRoutes(%v) = false, want true", tc.routes)
+			}
+		})
 	}
 	if catalogHasEnterpriseRoutes(map[string]toolutil.ActionMap{"gitlab_project": {"get": toolutil.ActionRoute{}}}) {
 		t.Fatal("catalogHasEnterpriseRoutes(base route) = true, want false")

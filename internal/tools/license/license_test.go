@@ -116,11 +116,20 @@ func TestDelete_InvalidID(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	for _, id := range []int64{0, -1} {
-		err := Delete(t.Context(), client, DeleteInput{ID: id})
-		if err == nil {
-			t.Errorf("expected error for ID %d", id)
-		}
+	cases := []struct {
+		name string
+		id   int64
+	}{
+		{"zero", 0},
+		{"negative", -1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := Delete(t.Context(), client, DeleteInput{ID: tc.id})
+			if err == nil {
+				t.Errorf("expected error for ID %d", tc.id)
+			}
+		})
 	}
 }
 
