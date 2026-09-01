@@ -30,6 +30,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -101,63 +102,99 @@ func main() {
 	checkOnly := flag.Bool("check", false, "validate generated llms files without writing them")
 	flag.Parse()
 
-	if err := run(*checkOnly); err != nil {
+	if err := run(defaultLLMSSurface(), *checkOnly); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to generate llms files: %v\n", err)
 		os.Exit(1)
 	}
 }
 
+// llmsSurface names the introspection calls run makes against the MCP
+// surface. main passes the real ones through defaultLLMSSurface; a test can
+// substitute a small canned surface, or a failing one, so the generator's own
+// behavior is observable without building the full catalog for every case.
+type llmsSurface struct {
+	newStubClient       func() (*gitlabclient.Client, func(), error)
+	newGitLabComClient  func() (*gitlabclient.Client, error)
+	resources           func(*gitlabclient.Client) ([]*mcp.Resource, []*mcp.ResourceTemplate, error)
+	listTools           func(client *gitlabclient.Client, meta bool) ([]*mcp.Tool, error)
+	listToolsEnterprise func(*gitlabclient.Client) ([]*mcp.Tool, error)
+	dynamicTools        func(*gitlabclient.Client) ([]*mcp.Tool, error)
+	actionCatalog       func(*gitlabclient.Client) (*actioncatalog.Catalog, error)
+	prompts             func(*gitlabclient.Client) ([]*mcp.Prompt, error)
+}
+
+// defaultLLMSSurface is the surface the command introspects: the in-process
+// stub and GitLab.com clients, and the real registration paths behind them.
+func defaultLLMSSurface() llmsSurface {
+	return llmsSurface{
+		newStubClient:       mcpsurface.NewStubClient,
+		newGitLabComClient:  mcpsurface.NewGitLabComClient,
+		resources:           mcpsurface.Resources,
+		listTools:           listTools,
+		listToolsEnterprise: listToolsEnterprise,
+		dynamicTools:        mcpsurface.DynamicTools,
+		actionCatalog:       buildMetaActionCatalog,
+		prompts:             mcpsurface.Prompts,
+	}
+}
+
+// buildMetaActionCatalog builds the Enterprise meta action catalog whose
+// per-action output schemas llms-full.txt embeds.
+func buildMetaActionCatalog(client *gitlabclient.Client) (*actioncatalog.Catalog, error) {
+	return tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: true})
+}
+
 // run introspects the live MCP catalog and regenerates llms.txt and
 // llms-full.txt in the project root.
-func run(checkOnly bool) error {
+func run(surface llmsSurface, checkOnly bool) error {
 	rootDir, err := mcpsurface.ProjectRoot()
 	if err != nil {
 		return err
 	}
 
-	client, closeStub, err := mcpsurface.NewStubClient()
+	client, closeStub, err := surface.newStubClient()
 	if err != nil {
 		return fmt.Errorf("create client: %w", err)
 	}
 	defer closeStub()
-	gitLabComClient, err := mcpsurface.NewGitLabComClient()
+	gitLabComClient, err := surface.newGitLabComClient()
 	if err != nil {
 		return err
 	}
 	version := readVersion(rootDir)
-	res, resTpl, err := mcpsurface.Resources(client)
+	res, resTpl, err := surface.resources(client)
 	if err != nil {
 		return err
 	}
-	individualSelfManaged, err := listTools(client, false)
+	individualSelfManaged, err := surface.listTools(client, false)
 	if err != nil {
 		return err
 	}
-	individualGitLabCom, err := listTools(gitLabComClient, false)
+	individualGitLabCom, err := surface.listTools(gitLabComClient, false)
 	if err != nil {
 		return err
 	}
-	metaBase, err := listTools(client, true)
+	metaBase, err := surface.listTools(client, true)
 	if err != nil {
 		return err
 	}
-	metaEnterprise, err := listToolsEnterprise(client)
+	metaEnterprise, err := surface.listToolsEnterprise(client)
 	if err != nil {
 		return err
 	}
-	metaGitLabComEnterprise, err := listToolsEnterprise(gitLabComClient)
+	metaGitLabComEnterprise, err := surface.listToolsEnterprise(gitLabComClient)
 	if err != nil {
 		return err
 	}
-	dynamicTools, err := mcpsurface.DynamicTools(gitLabComClient)
+	dynamicTools, err := surface.dynamicTools(gitLabComClient)
 	if err != nil {
 		return err
 	}
-	metaCatalog, err := tools.BuildActionCatalog(gitLabComClient, tools.ActionCatalogOptions{Enterprise: true})
+	metaCatalog, err := surface.actionCatalog(gitLabComClient)
 	if err != nil {
 		return fmt.Errorf("build meta action catalog: %w", err)
 	}
-	promptList, err := mcpsurface.Prompts(client)
+	promptList, err := surface.prompts(client)
 	if err != nil {
 		return err
 	}
