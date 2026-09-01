@@ -32,7 +32,7 @@ func TestRegisterIndividualCatalogTools_GoldenSnapshotParity(t *testing.T) {
 		t.Fatalf("parse golden file %s: %v", goldenPath, unmarshalErr)
 	}
 	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
 	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{
 		IncludeStandaloneUtilities: true,
 	})
@@ -68,12 +68,12 @@ func TestRegisterAll_CatalogBackedMatchesCatalogProjectionToolNames(t *testing.T
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			catalog := mustBuildActionCatalog(t, tc.client, ActionCatalogOptions{Enterprise: tc.enterprise, IncludeMCP: true})
-			expectedServer := mcp.NewServer(&mcp.Implementation{Name: "expected", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+			expectedServer := mcp.NewServer(&mcp.Implementation{Name: "expected", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
 			RegisterIndividualCatalogTools(expectedServer, catalog, IndividualCatalogRegisterOptions{IncludeStandaloneUtilities: true})
 			RegisterMetaStandaloneTools(expectedServer, tc.client)
 			expectedNames := toolNamesFromServer(t, expectedServer)
 
-			catalogServer := mcp.NewServer(&mcp.Implementation{Name: "catalog", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+			catalogServer := mcp.NewServer(&mcp.Implementation{Name: "catalog", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
 			RegisterAll(catalogServer, tc.client, edition.TierForEnterprise(tc.enterprise))
 			catalogNames := toolNamesFromServer(t, catalogServer)
 
@@ -107,7 +107,7 @@ func TestRegisterIndividualCatalogTools_ExecutesCatalogHandler(t *testing.T) {
 		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_echo", Title: "Echo", Description: "Echo a value."},
 	}))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{})
 	session := connectServerForTools(t, server)
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
@@ -169,14 +169,14 @@ func TestRegisterIndividualCatalogTools_ReadOnlyAndSafeModePolicies(t *testing.T
 	})
 	catalog := testIndividualCatalog(t, readSpec, writeSpec)
 
-	readOnlyServer := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	readOnlyServer := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	RegisterIndividualCatalogTools(readOnlyServer, catalog, IndividualCatalogRegisterOptions{ReadOnlyOnly: true})
 	readOnlyNames := toolNamesFromServer(t, readOnlyServer)
 	if strings.Join(readOnlyNames, ",") != "gitlab_test_read" {
 		t.Fatalf("read-only registered tools = %v, want only gitlab_test_read", readOnlyNames)
 	}
 
-	safeServer := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	safeServer := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	RegisterIndividualCatalogTools(safeServer, catalog, IndividualCatalogRegisterOptions{SafeMode: true})
 	session := connectServerForTools(t, safeServer)
 	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
@@ -231,7 +231,7 @@ func TestRegisterIndividualCatalogTools_EditionFilters(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 			RegisterIndividualCatalogTools(server, catalog, tc.opts)
 			names := toolNamesFromServer(t, server)
 			if strings.Join(names, ",") != strings.Join(tc.want, ",") {
@@ -271,7 +271,7 @@ func TestRegisterIndividualCatalogTools_AllowExcludeAndDuplicateTools(t *testing
 		newSpec("duplicate_b", "gitlab_test_duplicate"),
 	)
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{
 		AllowedToolNames: []string{"gitlab_test_keep", "gitlab_test_excluded", "gitlab_test_duplicate"},
 		ExcludeToolNames: []string{"gitlab_test_excluded"},
@@ -314,7 +314,7 @@ func TestRegisterIndividualCatalogTools_SkipsIneligibleGroup(t *testing.T) {
 		t.Fatalf("AddGroup() error = %v", err)
 	}
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{})
 	if names := toolNamesFromServer(t, server); len(names) != 0 {
 		t.Fatalf("registered tools = %v, want none", names)
@@ -339,7 +339,7 @@ func TestRegisterIndividualCatalogTools_DestructiveConfirmationDeclined(t *testi
 		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_delete", Title: "Delete", Description: "Delete test."},
 	})
 	catalog := testIndividualCatalog(t, spec)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{})
 
 	st, ct := mcp.NewInMemoryTransports()
@@ -427,7 +427,7 @@ func TestRegisterIndividualCatalogTools_InputRequiredResultSurfaced(t *testing.T
 		IndividualTool: toolutil.IndividualToolSpec{Name: "gitlab_test_confirm_thing", Title: "Confirm Thing", Description: "Confirm thing test."},
 	})
 	catalog := testIndividualCatalog(t, spec)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	RegisterIndividualCatalogTools(server, catalog, IndividualCatalogRegisterOptions{})
 
 	st, ct := mcp.NewInMemoryTransports()
@@ -574,7 +574,7 @@ func TestIndividualCatalogActionReadOnly_AnnotationOverride(t *testing.T) {
 // inputs are ignored without panicking.
 func TestRegisterIndividualCatalogTools_NilInputs(t *testing.T) {
 	RegisterIndividualCatalogTools(nil, nil, IndividualCatalogRegisterOptions{})
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	RegisterIndividualCatalogTools(server, nil, IndividualCatalogRegisterOptions{})
 }
 

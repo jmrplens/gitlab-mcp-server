@@ -1016,18 +1016,25 @@ func measureTokenFootprintRows(client *gitlabclient.Client) ([]tokenFootprintRow
 		{"Ultimate", edition.Ultimate},
 	}
 
+	promptTokens, err := fpMeasurePrompts(client)
+	if err != nil {
+		return nil, err
+	}
 	for i, t := range tiers {
 		cmdutil.Progressf("audit_tokens: measuring footprint [%d/%d] %s tier (all surfaces x schema modes)...", i+1, len(tiers), t.label)
-		rows, err := measureTierFootprint(client, t.tier, t.label)
-		if err != nil {
-			return nil, err
+		rows, tierErr := measureTierFootprintWithPrompts(client, t.tier, t.label, promptTokens)
+		if tierErr != nil {
+			return nil, tierErr
 		}
 		allRows = append(allRows, rows...)
 	}
 	return allRows, nil
 }
 
-func measureTierFootprint(client *gitlabclient.Client, tier edition.Tier, tierLabel string) ([]tokenFootprintRow, error) {
+// measureTierFootprintWithPrompts measures one tier; promptTokens carries the
+// tier-independent prompt measurement so the caller pays it once for all
+// three tiers (a negative value measures it here, for a standalone caller).
+func measureTierFootprintWithPrompts(client *gitlabclient.Client, tier edition.Tier, tierLabel string, promptTokens int) ([]tokenFootprintRow, error) {
 	metaCatalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{
 		Tier:       tier,
 		IncludeMCP: true,
@@ -1061,9 +1068,12 @@ func measureTierFootprint(client *gitlabclient.Client, tier edition.Tier, tierLa
 	if err != nil {
 		return nil, err
 	}
-	promptTokens, err := fpMeasurePrompts(client)
-	if err != nil {
-		return nil, err
+	if promptTokens < 0 {
+		measured, promptErr := fpMeasurePrompts(client)
+		if promptErr != nil {
+			return nil, promptErr
+		}
+		promptTokens = measured
 	}
 
 	dynamicFullShared, err := measureSharedTokens(client, sharedTokenMeasureOptions{

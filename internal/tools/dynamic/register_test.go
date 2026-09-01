@@ -371,23 +371,9 @@ func TestSearch_CurrentHighConfidenceQueriesRemainStable(t *testing.T) {
 //	go test ./internal/tools/dynamic/ -run TestDynamicSearchCorpus -count=1
 func TestDynamicSearchCorpus(t *testing.T) {
 	cases := loadDynamicSearchCorpus(t)
-	baseCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{IncludeMCP: true})
-	if err != nil {
-		t.Fatalf("BuildActionCatalog() error = %v", err)
-	}
-	baseCatalog, err = AddStandaloneCatalog(baseCatalog, nil, StandaloneOptions{})
-	if err != nil {
-		t.Fatalf("AddStandaloneCatalog() error = %v", err)
-	}
+	baseCatalog := mustCachedCatalog(t, false)
 	baseRegistry := NewRegistryFromCatalog(baseCatalog)
-	enterpriseCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
-	if err != nil {
-		t.Fatalf("BuildActionCatalog(enterprise) error = %v", err)
-	}
-	enterpriseCatalog, err = AddStandaloneCatalog(enterpriseCatalog, nil, StandaloneOptions{})
-	if err != nil {
-		t.Fatalf("AddStandaloneCatalog(enterprise) error = %v", err)
-	}
+	enterpriseCatalog := mustCachedCatalog(t, true)
 	enterpriseRegistry := NewRegistryFromCatalog(enterpriseCatalog)
 
 	for _, tc := range cases {
@@ -3065,14 +3051,7 @@ func TestSearch_ProviderConfusionQueries_PrioritizeExactTopResult(t *testing.T) 
 // registry is built from the larger enterprise catalog, ensuring the extra enterprise actions
 // do not displace the exact match.
 func TestSearch_ProviderConfusionQueries_PrioritizeExactTopResult_EnterpriseCatalog(t *testing.T) {
-	enterpriseCatalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
-	if err != nil {
-		t.Fatalf("BuildActionCatalog(enterprise) error = %v", err)
-	}
-	enterpriseCatalog, err = AddStandaloneCatalog(enterpriseCatalog, nil, StandaloneOptions{})
-	if err != nil {
-		t.Fatalf("AddStandaloneCatalog(enterprise) error = %v", err)
-	}
+	enterpriseCatalog := mustCachedCatalog(t, true)
 	registry := NewRegistryFromCatalog(enterpriseCatalog)
 
 	result, output, err := registry.Search(t.Context(), nil, SearchInput{Query: "project list search gitlab-mcp-server", Limit: 20})
@@ -3214,6 +3193,41 @@ func actionDescriptionByID(t *testing.T, output DescribeOutput, id string) Actio
 	}
 	t.Fatalf("DescribeOutput missing action %q: %+v", id, output.Actions)
 	return ActionDescription{}
+}
+
+// cachedBaseCatalog and cachedEnterpriseCatalog memoize the two standard
+// full catalogs (base and enterprise, standalone actions included) that the
+// search tests exercise read-only: building one resolves ~850+ action
+// schemas, and dozens of tests used to rebuild it each. Tests that mutate a
+// catalog keep building their own.
+var cachedBaseCatalog = sync.OnceValues(func() (*actioncatalog.Catalog, error) {
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{IncludeMCP: true})
+	if err != nil {
+		return nil, fmt.Errorf("BuildActionCatalog() error = %w", err)
+	}
+	return AddStandaloneCatalog(catalog, nil, StandaloneOptions{})
+})
+
+var cachedEnterpriseCatalog = sync.OnceValues(func() (*actioncatalog.Catalog, error) {
+	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	if err != nil {
+		return nil, fmt.Errorf("BuildActionCatalog(enterprise) error = %w", err)
+	}
+	return AddStandaloneCatalog(catalog, nil, StandaloneOptions{})
+})
+
+// mustCachedCatalog unwraps one of the cached catalogs for a test.
+func mustCachedCatalog(t *testing.T, enterprise bool) *actioncatalog.Catalog {
+	t.Helper()
+	get := cachedBaseCatalog
+	if enterprise {
+		get = cachedEnterpriseCatalog
+	}
+	catalog, err := get()
+	if err != nil {
+		t.Fatalf("cached catalog: %v", err)
+	}
+	return catalog
 }
 
 var cachedRealCatalogRegistry = sync.OnceValues(func() (*Registry, error) {
@@ -5983,14 +5997,7 @@ func TestCompactParameterGuidance_AlphabeticalTieBreaker(t *testing.T) {
 // top hit for this query, and it must not depend on the result window — the
 // limit-sensitivity that prompted the investigation in the first place.
 func TestRegistrySearch_ProjectListSearchQuery_RanksSearchProjectsFirst(t *testing.T) {
-	catalog, err := tools.BuildActionCatalog(nil, tools.ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
-	if err != nil {
-		t.Fatalf("BuildActionCatalog() error = %v", err)
-	}
-	catalog, err = AddStandaloneCatalog(catalog, nil, StandaloneOptions{})
-	if err != nil {
-		t.Fatalf("AddStandaloneCatalog() error = %v", err)
-	}
+	catalog := mustCachedCatalog(t, true)
 	reg := NewRegistryFromCatalog(catalog)
 
 	const query = "project list search gitlab-mcp-server"

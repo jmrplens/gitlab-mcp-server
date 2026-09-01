@@ -16,7 +16,7 @@ import (
 // TestWrapMutatingToolsForSafeMode_ReadOnlyToolPassesThrough verifies that
 // read-only tools are not wrapped by SafeMode and still call the real handler.
 func TestWrapMutatingToolsForSafeMode_ReadOnlyToolPassesThrough(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	called := false
 	server.AddTool(&mcp.Tool{
 		Name:        "gitlab_list_projects",
@@ -48,7 +48,7 @@ func TestWrapMutatingToolsForSafeMode_ReadOnlyToolPassesThrough(t *testing.T) {
 // TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview verifies that
 // mutating tools return a SafeModePreview instead of executing.
 func TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	var mutatingCalls atomic.Int64
 	server.AddTool(&mcp.Tool{
 		Name:        "gitlab_create_issue",
@@ -110,7 +110,7 @@ func TestWrapMutatingToolsForSafeMode_MutatingToolReturnsPreview(t *testing.T) {
 // TestWrapMutatingToolsForSafeMode_NilAnnotations verifies that tools with nil
 // annotations are treated as mutating and get wrapped.
 func TestWrapMutatingToolsForSafeMode_NilAnnotations(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	var handlerCalls atomic.Int64
 	server.AddTool(&mcp.Tool{
 		Name:        "gitlab_delete_project",
@@ -142,7 +142,7 @@ func TestWrapMutatingToolsForSafeMode_NilAnnotations(t *testing.T) {
 // TestWrapMutatingToolsForSafeMode_MixedTools verifies that only mutating tools
 // are wrapped when a mix of read-only and mutating tools are registered.
 func TestWrapMutatingToolsForSafeMode_MixedTools(t *testing.T) {
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 
 	readOnlyCalled := false
 	server.AddTool(&mcp.Tool{

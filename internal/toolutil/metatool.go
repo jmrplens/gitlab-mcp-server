@@ -2519,6 +2519,14 @@ var (
 // other value is coerced to opaque so that misconfiguration cannot break the
 // tools/list payload. Must be called before meta-tools are registered; later
 // calls only affect schemas built after the call returns.
+// MetaParamSchemaMode reports the meta-tool input schema strategy currently
+// selected by [SetMetaParamSchemaMode]: "opaque", "compact" or "full".
+// Callers that memoize a registered surface must key on it, because the
+// same registration produces different input schemas under each mode.
+func MetaParamSchemaMode() string {
+	return metaParamSchemaMode
+}
+
 func SetMetaParamSchemaMode(mode string) {
 	metaParamSchemaMu.Lock()
 	defer metaParamSchemaMu.Unlock()

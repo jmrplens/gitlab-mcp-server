@@ -228,7 +228,7 @@ func TestPackageMeta_UnmarshalErrors(t *testing.T) {
 		respondJSON(w, http.StatusOK, `{}`)
 	}))
 
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, nil)
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{SchemaCache: testSchemaCache})
 	if err := RegisterAllMeta(server, client, edition.Free); err != nil {
 		t.Fatalf("RegisterAllMeta() error = %v", err)
 	}

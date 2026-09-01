@@ -817,7 +817,7 @@ func collectPackageActionCoverage() (map[string]packageActionCoverage, error) {
 	}
 
 	coverage := make(map[string]packageActionCoverage)
-	for _, group := range tools.CollectActionSpecs(client, true) {
+	for _, group := range auditshared.CachedActionSpecs(client, true) {
 		kind := normalizedSurfaceKind(group.SurfaceKind)
 		for _, spec := range group.Actions {
 			owner := strings.TrimSpace(spec.OwnerPackage)

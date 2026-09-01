@@ -28,8 +28,9 @@ import (
 func registrarTestClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
 	client, err := gitlabclient.NewClient(&config.Config{
-		GitLabURL:   "http://127.0.0.1:1", // deliberately unreachable: registration must not dial
-		GitLabToken: "glpat-test",
+		GitLabURL:      "http://127.0.0.1:1", // deliberately unreachable: registration must not dial
+		GitLabToken:    "glpat-test",
+		DisableRetries: true,
 	})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)

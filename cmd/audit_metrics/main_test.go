@@ -17,6 +17,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -28,22 +29,31 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
-// newAuditMetricsClient creates a [gitlabclient.Client] backed by a mock
-// /api/v4/version endpoint for audit_metrics tests.
+// newAuditMetricsClient returns the binary-lifetime [gitlabclient.Client]
+// backed by a mock /api/v4/version endpoint. Shared across tests (process
+// teardown reclaims the httptest server) so listServerTools' per-client
+// memo can serve every test from one surface registration, the same
+// pattern cmd/server's createServer tests use.
 func newAuditMetricsClient(t *testing.T) *gitlabclient.Client {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"version":"17.0.0"}`)
-	}))
-	t.Cleanup(srv.Close)
-
-	client, err := gitlabclient.NewClient(&config.Config{GitLabURL: srv.URL, GitLabToken: "audit-token"})
-	if err != nil {
-		t.Fatalf("NewClient() error: %v", err)
+	sharedClientOnce.Do(func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"version":"17.0.0"}`)
+		}))
+		sharedClient, errSharedClient = gitlabclient.NewClient(&config.Config{GitLabURL: srv.URL, GitLabToken: "audit-token"})
+	})
+	if errSharedClient != nil {
+		t.Fatalf("NewClient() error: %v", errSharedClient)
 	}
-	return client
+	return sharedClient
 }
+
+var (
+	sharedClientOnce sync.Once
+	sharedClient     *gitlabclient.Client
+	errSharedClient  error
+)
 
 // TestCountResources_IncludesToolManifest verifies resource metrics include the
 // surface-aware tool manifest registration path used by the audit command.
@@ -524,6 +534,38 @@ func TestPrintMetaSchemaModes_ListsActiveAndAllModes(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Fatalf("printMetaSchemaModes() missing %q:\n%s", want, output)
 		}
+	}
+}
+
+// TestPrintMetaSchemaModes_ReportsDistinctSizesPerMode verifies that the
+// schema-modes section measures each META_PARAM_SCHEMA mode on its own
+// registration rather than reusing one memoized tool list for all three:
+// the opaque, compact and full strategies produce input schemas of
+// different sizes, so three equal totals would mean the memo returned the
+// first listing to every mode.
+func TestPrintMetaSchemaModes_ReportsDistinctSizesPerMode(t *testing.T) {
+	t.Setenv("META_PARAM_SCHEMA", "opaque")
+
+	output := captureStdout(t, func() {
+		printMetaSchemaModes(newAuditMetricsClient(t))
+	})
+
+	totals := map[string]string{}
+	for line := range strings.SplitSeq(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 {
+			continue
+		}
+		switch fields[0] {
+		case "opaque", "compact", "full":
+			totals[fields[0]] = fields[1]
+		}
+	}
+	if len(totals) != 3 {
+		t.Fatalf("printMetaSchemaModes() reported %d modes, want 3:\n%s", len(totals), output)
+	}
+	if totals["opaque"] == totals["compact"] || totals["compact"] == totals["full"] || totals["opaque"] == totals["full"] {
+		t.Fatalf("printMetaSchemaModes() reported equal totals across modes, want one measurement per mode: %v\n%s", totals, output)
 	}
 }
 

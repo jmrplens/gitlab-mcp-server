@@ -259,7 +259,15 @@ func startForSnapshot(t *testing.T, signals Signals) Snapshot {
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	t.Cleanup(func() { _ = p.Shutdown(boundedShutdown(t)) })
+	// A tight teardown bound: these tests point exporters at .invalid hosts
+	// and assert on the snapshot, so the final flush has nowhere to deliver
+	// and waiting shutdownTimeout for it bought each test five silent
+	// seconds. Shutdown honors the tighter caller deadline.
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		_ = p.Shutdown(ctx)
+	})
 	return p.Snapshot()
 }
 

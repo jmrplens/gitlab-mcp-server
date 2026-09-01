@@ -390,6 +390,10 @@ func buildCatalog(client *gitlabclient.Client, toolSurface, serverMode string) (
 	return toolsResult, routes, nil
 }
 
+// evalSchemaCache caches resolved tool schemas across every catalog
+// session; see the SchemaCache option below.
+var evalSchemaCache = mcp.NewSchemaCache()
+
 // newCatalogSession constructs catalog session.
 func newCatalogSession(client *gitlabclient.Client, toolSurface, serverMode string) (*mcp.ClientSession, func(), error) {
 	session, closeSession, _, _, err := buildCatalogSession(client, toolSurface, serverMode)
@@ -416,6 +420,11 @@ func buildCatalogSession(client *gitlabclient.Client, toolSurface, serverMode st
 	completionHandler := completions.NewHandler(client)
 	server := mcp.NewServer(&mcp.Implementation{Name: "eval-mcp-surfaces", Version: "0.0.1"}, &mcp.ServerOptions{
 		PageSize: 2000,
+		// Shared across every catalog session this process builds: resolved
+		// tool schemas depend only on the compiled-in catalog, and reusing
+		// them skips schema resolution on every registration after the
+		// first (the same cache cmd/server shares across its pool).
+		SchemaCache: evalSchemaCache,
 		Capabilities: &mcp.ServerCapabilities{
 			Tools:     &mcp.ToolCapabilities{ListChanged: true},
 			Resources: &mcp.ResourceCapabilities{ListChanged: true},

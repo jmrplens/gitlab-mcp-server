@@ -205,7 +205,7 @@ func newMetaServer(t *testing.T) *mcp.Server {
 		_, _ = w.Write([]byte(`{"version":"17.0.0"}`))
 	})
 	client := newTestClient(t, handler)
-	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000})
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0.0.1"}, &mcp.ServerOptions{PageSize: 2000, SchemaCache: testSchemaCache})
 	if err := RegisterAllMeta(server, client, edition.Ultimate); err != nil {
 		t.Fatalf("RegisterAllMeta() error = %v", err)
 	}

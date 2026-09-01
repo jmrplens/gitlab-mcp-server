@@ -60,7 +60,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/cmdutil"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -297,7 +296,7 @@ func buildReport(gapsOnly bool, minAliases int) (report, error) {
 	}
 	defer cleanup()
 
-	projected, err := auditshared.ProjectIndividualDescriptions(client)
+	projected, err := auditshared.CachedIndividualDescriptions(client)
 	if err != nil {
 		return report{}, err
 	}
@@ -322,7 +321,7 @@ func buildReport(gapsOnly bool, minAliases int) (report, error) {
 func collectAllClusters(client *gitlabclient.Client) []clusterRecord {
 	specsByOwner := map[string][]toolutil.ActionSpec{}
 	seen := map[string]bool{}
-	for _, group := range tools.CollectActionSpecs(client, true) {
+	for _, group := range auditshared.CachedActionSpecs(client, true) {
 		for _, spec := range group.Actions {
 			owner := auditshared.OwnerPackage(group, spec)
 			key := owner + "\x00" + spec.Name
@@ -340,7 +339,7 @@ func collectAllClusters(client *gitlabclient.Client) []clusterRecord {
 // ready for JSON output. Gaps-only mode filters clean packages.
 func buildPackageReports(client *gitlabclient.Client, allClusters []clusterRecord, projected map[string]string, minAliases int, gapsOnly bool) []packageReport {
 	byPackage := map[string]*packageReport{}
-	for _, group := range tools.CollectActionSpecs(client, true) {
+	for _, group := range auditshared.CachedActionSpecs(client, true) {
 		for _, spec := range group.Actions {
 			owner := auditshared.OwnerPackage(group, spec)
 			clusterMembers := clusterMembersFor(allClusters, owner, spec.Name)

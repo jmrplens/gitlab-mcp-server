@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -90,7 +91,25 @@ func ConnectLegacyElicitationClient(ctx context.Context, t *testing.T, server *m
 		t.Fatalf("legacy client: write initialized notification: %v", notifyErr)
 	}
 
-	go serveLegacyClient(ctx, conn, handler)
+	served := make(chan struct{})
+	go func() {
+		defer close(served)
+		serveLegacyClient(ctx, conn, handler)
+	}()
+	// Registered after the connection-closing cleanup, so it runs before it
+	// (LIFO): close the connection here and join the serve goroutine. The
+	// join is what makes coverage deterministic across GOMAXPROCS — without
+	// it, on a single P the test ends before the goroutine ever observes the
+	// closed connection, and its exit path counts on some runs and not
+	// others. It also stops the goroutine from leaking into later tests.
+	t.Cleanup(func() {
+		_ = conn.Close()
+		select {
+		case <-served:
+		case <-time.After(5 * time.Second):
+			t.Error("legacy client: serve goroutine did not exit after connection close")
+		}
+	})
 	return ss
 }
 

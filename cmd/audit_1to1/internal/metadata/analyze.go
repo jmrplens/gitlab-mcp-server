@@ -21,7 +21,6 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
-	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -77,13 +76,13 @@ func buildReport(gapsOnly bool) (report, error) {
 	}
 	defer cleanup()
 
-	projected, err := auditshared.ProjectIndividualDescriptions(client)
+	projected, err := auditshared.CachedIndividualDescriptions(client)
 	if err != nil {
 		return report{}, err
 	}
 
 	byPackage := map[string]*packageReport{}
-	for _, group := range tools.CollectActionSpecs(client, true) {
+	for _, group := range auditshared.CachedActionSpecs(client, true) {
 		for _, spec := range group.Actions {
 			owner := auditshared.OwnerPackage(group, spec)
 			pr := packageFor(byPackage, owner)
