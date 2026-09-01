@@ -385,7 +385,13 @@ func (p *Provider) Signals() Signals {
 	return p.signals
 }
 
-// Shutdown flushes and retires every exporter, bounded by [shutdownTimeout].
+// Shutdown flushes and retires every exporter, bounded by [shutdownTimeout]
+// or by the caller's deadline, whichever comes first. The caller's
+// cancellation is deliberately detached (a dying request must not abort the
+// final flush), but a deadline the caller chose is a bound to honor: before
+// this, the internal five seconds silently overrode any tighter one, which
+// made cmd/server's own shutdown bound dead code and held every test that
+// pointed an exporter at an unreachable collector for the full five seconds.
 //
 // Errors are joined rather than returned on the first failure: each exporter
 // owns a connection of its own, and stopping the rest matters more than
@@ -394,7 +400,13 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 	if p == nil || len(p.shutdowns) == 0 {
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
+	bound := shutdownTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		if remaining := time.Until(deadline); remaining < bound {
+			bound = remaining
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), bound)
 	defer cancel()
 
 	var errs []error
