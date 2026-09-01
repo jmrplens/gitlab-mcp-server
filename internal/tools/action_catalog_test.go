@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -858,4 +860,110 @@ func TestActionAnnotations_AdditiveActionsAreNotIdempotent(t *testing.T) {
 		t.Fatal("no additive action was found, so this gate asserted nothing")
 	}
 	t.Logf("checked %d additive action(s)", checked)
+}
+
+// Shared catalog memoization for this package's tests: building the full
+// catalog resolves and validates ~850 action schemas (~2s), and the result
+// depends only on the projection options, so tests share one build per
+// option set.
+
+// sharedCatalogKey identifies one cacheable nil-client catalog projection.
+type sharedCatalogKey struct {
+	tier       edition.Tier
+	enterprise bool
+	includeMCP bool
+}
+
+var (
+	sharedCatalogsMu sync.Mutex
+	sharedCatalogs   = map[sharedCatalogKey]*actioncatalog.Catalog{}
+)
+
+// cacheableCatalogOptions reports whether opts only carries the fields the
+// shared cache keys on: a client or spec-group override makes the
+// build unique to its caller.
+func cacheableCatalogOptions(opts ActionCatalogOptions) bool {
+	return opts.SpecGroups == nil
+}
+
+// sharedActionCatalog returns a clone of the memoized nil-client catalog for
+// opts, building it on first use.
+func sharedActionCatalog(opts ActionCatalogOptions) (*actioncatalog.Catalog, error) {
+	key := sharedCatalogKey{tier: opts.Tier, enterprise: opts.Enterprise, includeMCP: opts.IncludeMCP}
+	sharedCatalogsMu.Lock()
+	defer sharedCatalogsMu.Unlock()
+	if cached, ok := sharedCatalogs[key]; ok {
+		return cached.Clone(), nil
+	}
+	catalog, err := BuildActionCatalog(nil, opts)
+	if err != nil {
+		return nil, err
+	}
+	sharedCatalogs[key] = catalog
+	return catalog.Clone(), nil
+}
+
+// Guard for the tool-name references embedded in the catalog's free-text
+// surfaces: usage sentences, descriptions, aliases, and parameter guidance
+// name other tools, and every such name must resolve on the surface that
+// serves it.
+
+// textNameToken matches anything that looks like a tool reference inside
+// free text.
+var textNameToken = regexp.MustCompile(`\bgitlab_[a-z0-9_]+\b`)
+
+// textNameAllowlist holds gitlab_-prefixed tokens that are GitLab API
+// vocabulary, not tool references: template-type enum values in the
+// project templates schemas.
+var textNameAllowlist = map[string]bool{
+	"gitlab_ci_ymls":        true,
+	"gitlab_ci_syntax_ymls": true,
+}
+
+// TestCatalogTextFields_NameReferencesResolve verifies every tool-name
+// token in the catalog's text fields resolves against the catalog itself.
+// The sweep that introduced this guard found a ghost alias and two
+// archive descriptions whose "(read-only)" parenthetical described the
+// archived project, not the action.
+func TestCatalogTextFields_NameReferencesResolve(t *testing.T) {
+	catalog := mustBuildActionCatalog(t, nil, ActionCatalogOptions{Enterprise: true, IncludeMCP: true})
+	valid := map[string]bool{
+		"gitlab_find_action":    true,
+		"gitlab_execute_action": true,
+	}
+	for _, spec := range StandaloneSurfaceToolSpecs(nil) {
+		if action, err := spec.ActionSpec(); err == nil {
+			valid[action.IndividualTool.Name] = true
+		}
+	}
+	// The catalog is the second source: it carries every action projected onto
+	// the individual and meta surfaces, which the domain specs above do not.
+	for _, action := range catalog.Actions() {
+		if action.IndividualTool.Name != "" {
+			valid[action.IndividualTool.Name] = true
+		}
+		if action.ToolName != "" {
+			valid[action.ToolName] = true
+		}
+	}
+
+	check := func(owner, field, text string) {
+		t.Helper()
+		for _, token := range textNameToken.FindAllString(text, -1) {
+			if !valid[token] && !textNameAllowlist[token] {
+				t.Errorf("%s (%s) references %q, which is not a tool or dispatcher in the catalog", owner, field, token)
+			}
+		}
+	}
+	for _, action := range catalog.Actions() {
+		id := string(action.ID)
+		check(id, "usage", action.Usage)
+		check(id, "description", action.IndividualTool.Description)
+		for _, alias := range action.Aliases {
+			check(id, "alias", alias)
+		}
+		for param, guidance := range action.Route.ParameterGuidance {
+			check(id, "guidance."+param, strings.Join(append([]string{guidance.ValueSource, guidance.ExampleBinding}, guidance.CommonConfusions...), " "))
+		}
+	}
 }

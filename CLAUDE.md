@@ -65,7 +65,7 @@ gitlab-mcp-server/
 │   ├── audit_metrics/           # Audits MCP tool/resource/prompt metrics
 │   ├── audit_surface_quality/   # Consolidated surface audit: metadata violations + output quality (was audit_tools + audit_output)
 │   ├── audit_test_goroutines/   # Audits testing.T aborts made off the test goroutine (A/B categories, --check gate)
-│   ├── audit_test_names/        # Audits test function naming convention compliance
+│   ├── audit_test_names/        # Audits test function naming compliance; -check-files gates test-file naming (make check-test-file-names)
 │   ├── audit_tokens/            # Audits token usage for model-facing surfaces (+ --compare-schemas sizing spike)
 │   ├── eval_mcp_surfaces/       # Evaluates model-facing MCP surface behavior
 │   ├── audit_string_dupes/      # Finds duplicated string literals missing constants
@@ -245,6 +245,7 @@ All tests use `httptest` to mock GitLab API responses. Shared helpers in `intern
 - `testutil.RespondJSONWithPagination()` — responds with pagination headers
 - **Never `t.Fatal`/`FailNow` off the test goroutine** (httptest handlers, `go` statements, MCP handlers): follow the six-rule contract in `.github/instructions/test-goroutines.instructions.md` — `t.Errorf` + deterministic response + `return`, or record with atomics and assert afterwards. `make check-test-goroutines` detects violations; `make audit-test-goroutines` writes the work list
 - Test naming: `TestToolName_Scenario_ExpectedResult`
+- Test-file naming: a `_test.go` exists only under the name of a module it tests (`register.go` → `register_test.go`); `export_test.go`, build-constrained qualifiers (`fileutils_unix_test.go`), external-package qualifiers (`kind_integration_test.go`), and `test/e2e/` are the codified exemptions. `make check-test-file-names` gates it in CI
 
 ### Build & test commands
 

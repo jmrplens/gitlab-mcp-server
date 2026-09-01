@@ -63,12 +63,20 @@ var (
 func main() {
 	apply := flag.Bool("apply", false, "rename test functions in place to match the suggested names")
 	dryRun := flag.Bool("dry-run", false, "print what would be renamed without writing files (use with -apply)")
+	checkFiles := flag.Bool("check-files", false, "audit test FILE names against the module-naming convention and exit non-zero on violations")
 	flag.Parse()
 
 	args := flag.Args()
 	if len(args) == 0 {
 		fmt.Fprintln(os.Stderr, "usage: go run ./cmd/audit_test_names/ [flags] <dir>...")
 		os.Exit(1)
+	}
+
+	if *checkFiles {
+		if !runFileCheck(args, os.Stdout) {
+			os.Exit(1)
+		}
+		return
 	}
 
 	if *apply || *dryRun {

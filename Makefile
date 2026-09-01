@@ -9,7 +9,7 @@
 	analyze analyze-fix analyze-report install-tools \
 	audit-output audit-tokens audit-tools audit-surface-quality audit-metrics audit-dynamic-aliases audit-test-names audit-godocs audit-godocs-check fix-godocs \
 	audit-struct-completeness audit-action-coverage audit-metadata-completeness audit-1to1 audit-1to1-validate-docs audit-edition-tier \
-	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars \
+	audit-discovery audit-discovery-check audit-e2e-gaps audit-gateway-chars check-gateway-chars check-test-file-names \
 	audit-doc-coverage audit-doc-coverage-check \
 	gen-action-catalog-manifest check-action-catalog-manifest gen-llms check-llms gen-lhm-manifest check-lhm-manifest gen-icon-webp check-icon-webp check-server-json check-server-json-packages check-openplugin audit-doc-tool-names check-doc-tool-names check-mcpb mcpb gen-npm sync-npm-version validate-npm validate-npm-local publish-npm-dry publish-npm publish-lobehub gen-readme gen-footprint check-footprint gen-stats check-stats gen-site-stats check-site-stats gen-testing-docs update-all \
 	docs-local-go \
@@ -1004,6 +1004,12 @@ check-gateway-chars:
 ## audit-test-names: audit test function naming convention compliance.
 audit-test-names:
 	go run ./cmd/audit_test_names/ cmd internal test
+
+## check-test-file-names: fail when a _test.go file is not named after a
+## module it tests (export_test.go, build-constrained and external-package
+## qualifiers, and test/e2e are the codified exemptions).
+check-test-file-names:
+	go run ./cmd/audit_test_names/ -check-files cmd internal test
 
 ## audit-godocs: generate a Godoc compliance report, including test functions.
 audit-godocs:
