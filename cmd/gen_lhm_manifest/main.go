@@ -34,6 +34,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -162,13 +163,30 @@ func run(checkOnly bool) error {
 // generate returns the manifest bytes that current should have, with the
 // capability arrays replaced by the registered surface and every other field
 // left untouched.
+// surfaceCache memoizes readSurface: the listed capability arrays depend
+// only on the compiled-in catalog, the round-trip costs seconds, and this
+// one-shot command (and its test binary) may assemble more than one
+// manifest from the same surface.
+var surfaceCache struct {
+	once       sync.Once
+	registered surface
+	err        error
+}
+
+func cachedSurface() (surface, error) {
+	surfaceCache.once.Do(func() {
+		surfaceCache.registered, surfaceCache.err = readSurface()
+	})
+	return surfaceCache.registered, surfaceCache.err
+}
+
 func generate(current []byte) (out []byte, counts string, err error) {
 	m, err := decodeManifest(current)
 	if err != nil {
 		return nil, "", err
 	}
 
-	registered, err := readSurface()
+	registered, err := cachedSurface()
 	if err != nil {
 		return nil, "", err
 	}
