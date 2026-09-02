@@ -43,6 +43,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/actioncatalog"
 	dynamictools "github.com/jmrplens/gitlab-mcp-server/v2/internal/tools/dynamic"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
 // HTTP header names, MIME types, and test values reused across tests.
@@ -1214,6 +1215,63 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 	}
 }
 
+// TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification
+// verifies that the help says what the pool now does.
+//
+// The pool rebuilds any entry whose credential was last checked more than
+// [serverpool.DefaultMaxCredentialAge] ago, and that ceiling cannot be turned
+// off. "0 to disable" was true before the ceiling existed; leaving it there
+// tells an operator who needs re-verification stopped, for a long-lived
+// stateful session that a rebuild answers 404, that a flag they set achieved
+// it.
+func TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stdout = w
+
+	printHelp()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+
+	// The entry is its own line plus any indented continuation lines, since a
+	// flag long enough to need this correction is long enough to wrap.
+	var entry []string
+	lines := strings.Split(string(out), "\n")
+	for i, candidate := range lines {
+		if !strings.Contains(candidate, "-revalidate-interval") {
+			continue
+		}
+		entry = append(entry, candidate)
+		for _, next := range lines[i+1:] {
+			trimmed := strings.TrimSpace(next)
+			if trimmed == "" || strings.HasPrefix(trimmed, "-") {
+				break
+			}
+			entry = append(entry, trimmed)
+		}
+		break
+	}
+	if len(entry) == 0 {
+		t.Fatal("the help does not document -revalidate-interval at all")
+	}
+	line := strings.Join(entry, " ")
+	if strings.Contains(line, "0 to disable") {
+		t.Errorf("the help still promises that 0 disables re-validation: %q", line)
+	}
+	if !strings.Contains(line, serverpool.DefaultMaxCredentialAge.String()) {
+		t.Errorf("the help does not name the credential ceiling that keeps running at 0: %q", line)
+	}
+}
+
 // TestPrintHelp_NoPanic verifies that printHelp can be called without panicking.
 func TestPrintHelp_NoPanic(t *testing.T) {
 	oldStdout := os.Stdout
@@ -1431,6 +1489,87 @@ func TestCreateServer_DynamicToolSurface(t *testing.T) {
 	_, err = session.ReadResource(t.Context(), &mcp.ReadResourceParams{URI: "gitlab://tools/project.get"})
 	if err != nil {
 		t.Fatalf("dynamic surface should expose tool manifest detail resources: %v", err)
+	}
+}
+
+// TestCreateServer_DynamicSurface_ReportsWhatTheExclusionRemoved verifies that
+// a working exclusion says so at startup.
+//
+// The dynamic surface registers two tools, neither of which is ever an
+// exclusion target, so the only line an operator saw counted registered names
+// and read "excluded=0" beside an exclusion that had just removed an action
+// from the catalog. That is the same line a typo produces, which makes the
+// startup log useless for the one question it is read for.
+func TestCreateServer_DynamicSurface_ReportsWhatTheExclusionRemoved(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+
+	client := newMockGitLabClient(t)
+	mustCreateServer(t, client, &config.ServerConfig{
+		ToolSurface:  config.ToolSurfaceDynamic,
+		ExcludeTools: []string{"gitlab_issue_delete"},
+	})
+
+	if !strings.Contains(logged.String(), `"msg":"excluded catalog actions by configuration","excluded":1`) {
+		t.Errorf("the startup log does not report the catalog action the exclusion removed: %s", logged.String())
+	}
+}
+
+// TestCreateServer_IndividualSurface_ExcludesByEveryNameAnOperatorMayUse
+// verifies that EXCLUDE_TOOLS means the same thing here as on the dynamic and
+// meta surfaces.
+//
+// Exclusion used to run against the registered tool names alone, and on this
+// surface those are the per-action names declared in the ActionSpec, so the two
+// other spellings an operator legitimately uses, the meta group name (which is
+// what the documented example carries) and the canonical action ID, removed
+// nothing and reported nothing. A configuration reused across surfaces was
+// therefore half applied on one of them, with no warning either way.
+func TestCreateServer_IndividualSurface_ExcludesByEveryNameAnOperatorMayUse(t *testing.T) {
+	const (
+		excluded = "gitlab_issue_delete"
+		control  = "gitlab_issue_list"
+	)
+	for _, tc := range []struct {
+		name    string
+		exclude []string
+	}{
+		{name: "the meta group name", exclude: []string{"gitlab_issue"}},
+		{name: "the canonical action ID", exclude: []string{"issue.delete"}},
+		{name: "the individual tool name", exclude: []string{excluded}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := newMockGitLabClient(t)
+			server := mustCreateServer(t, client, &config.ServerConfig{
+				ToolSurface:  config.ToolSurfaceIndividual,
+				ExcludeTools: tc.exclude,
+			})
+			session := newInMemorySession(t, server)
+
+			listed, err := session.ListTools(t.Context(), nil)
+			if err != nil {
+				t.Fatalf("ListTools() error = %v", err)
+			}
+			var sawExcluded, sawControl bool
+			for _, tool := range listed.Tools {
+				switch tool.Name {
+				case excluded:
+					sawExcluded = true
+				case control:
+					sawControl = true
+				}
+			}
+			if sawExcluded {
+				t.Errorf("%q is still registered after excluding %v", excluded, tc.exclude)
+			}
+			// A group-name exclusion removes the whole group, so the control
+			// only has to survive the two narrower spellings.
+			if !sawControl && tc.exclude[0] != "gitlab_issue" {
+				t.Errorf("%q disappeared as well; the exclusion removed more than it was given", control)
+			}
+		})
 	}
 }
 
@@ -4428,6 +4567,53 @@ func TestNewHTTPServer_Timeouts(t *testing.T) {
 				t.Errorf("ReadTimeout = %s, want %s", srv.ReadTimeout, baseHTTPReadTimeout)
 			}
 		})
+	}
+}
+
+// TestNewHTTPServer_HeaderCeiling_IsFarBelowTheStandardLibraryDefault verifies
+// that a request's headers are bounded before anything reads them.
+//
+// Every header-borne carrier is written to the log before the caller is
+// authenticated: the Host of a refused request, the method of a cross-origin
+// one. Go's own ceiling is 1 MiB, so twenty requests were enough to write 18 MB
+// of stderr and 2500 to write 157 MB, from a client that never presented a
+// credential. The timeouts above bound how long a request may take; this bounds
+// how much of one there can be.
+func TestNewHTTPServer_HeaderCeiling_IsFarBelowTheStandardLibraryDefault(t *testing.T) {
+	srv := newHTTPServer(":0", http.NewServeMux(), 0)
+	if srv.MaxHeaderBytes != baseHTTPMaxHeaderBytes {
+		t.Errorf("MaxHeaderBytes = %d, want %d", srv.MaxHeaderBytes, baseHTTPMaxHeaderBytes)
+	}
+	if srv.MaxHeaderBytes >= http.DefaultMaxHeaderBytes {
+		t.Errorf("MaxHeaderBytes = %d, which is not below the standard library's %d default",
+			srv.MaxHeaderBytes, http.DefaultMaxHeaderBytes)
+	}
+}
+
+// TestHostValidationMiddleware_LogsABoundedHost verifies that the refusal an
+// unauthenticated caller triggers cannot write an arbitrary amount to the log.
+//
+// The Host header is caller-supplied and was logged verbatim, so the refusal
+// meant to protect against DNS rebinding was also the cheapest way to fill an
+// operator's disk. The bounded prefix keeps the line diagnostic, since a
+// rebinding attempt is recognizable from its first bytes, and host_len keeps
+// the fact that it was truncated visible.
+func TestHostValidationMiddleware_LogsABoundedHost(t *testing.T) {
+	var logged bytes.Buffer
+	previous := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+
+	handler := hostValidationMiddleware(map[string]bool{"localhost": true}, http.NotFoundHandler())
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "http://localhost/mcp", http.NoBody)
+	req.Host = strings.Repeat("a", 32_000)
+	handler.ServeHTTP(httptest.NewRecorder(), req)
+
+	if logged.Len() > 4096 {
+		t.Errorf("a single refused request wrote %d bytes of log for a %d byte Host", logged.Len(), len(req.Host))
+	}
+	if !strings.Contains(logged.String(), `"host_len":32000`) {
+		t.Errorf("the log does not report the real Host length: %s", logged.String())
 	}
 }
 
@@ -8349,6 +8535,52 @@ func TestMCPServerGate_MultiInstanceWithoutHeader_Refused(t *testing.T) {
 			}
 			if !strings.Contains(failure.message, serverpool.RequestOptionGitLabURL) {
 				t.Errorf("message = %q, want it to name the header the client must set", failure.message)
+			}
+		})
+	}
+}
+
+// TestApplyLocalFilesystemPolicy_FollowsTheParsedFlag_NotTheArgumentScan
+// verifies that the local-path policy is settled from the flag the server
+// actually runs on.
+//
+// [toolutil] infers it once at init time by scanning os.Args, and that scanner
+// stops at the first --http token while Go's flag package keeps the last one it
+// parses. `--http=false --http` is the command line a launcher produces when a
+// unit file carries a default and a person appends an override: the parsers
+// disagree, the server listens on HTTP, and every file_path a remote caller
+// sends is honored against the operator's own disk. Both rows are driven
+// through the real flag parser so the divergence is measured rather than
+// assumed.
+func TestApplyLocalFilesystemPolicy_FollowsTheParsedFlag_NotTheArgumentScan(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		args        []string
+		wantAllowed bool
+	}{
+		{name: "no flag at all is stdio", args: nil, wantAllowed: true},
+		{name: "an explicit false is stdio", args: []string{"--http=false"}, wantAllowed: true},
+		{name: "http refuses local paths", args: []string{"--http"}, wantAllowed: false},
+		{name: "a later http beats an earlier false", args: []string{"--http=false", "--http"}, wantAllowed: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			previous := toolutil.LocalFilesystemAccessAllowed()
+			t.Cleanup(func() { toolutil.SetLocalFilesystemAccess(previous) })
+			// Start from the wrong answer so a policy that never ran is
+			// distinguishable from one that ran and agreed.
+			toolutil.SetLocalFilesystemAccess(!tc.wantAllowed)
+
+			withFreshFlagSet(t)
+			var useHTTP bool
+			flag.BoolVar(&useHTTP, "http", false, "Run MCP server in HTTP mode")
+			if err := flag.CommandLine.Parse(tc.args); err != nil {
+				t.Fatalf("parsing %v: %v", tc.args, err)
+			}
+
+			applyLocalFilesystemPolicy(useHTTP)
+
+			if got := toolutil.LocalFilesystemAccessAllowed(); got != tc.wantAllowed {
+				t.Errorf("local filesystem access = %v after %v, want %v", got, tc.args, tc.wantAllowed)
 			}
 		})
 	}

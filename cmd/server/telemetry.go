@@ -100,7 +100,13 @@ func startTelemetry(ctx context.Context, serverVersion, toolSurface string) (pro
 				"component", "telemetry", "signals", affected)
 		}
 
-		slog.InfoContext(ctx, "telemetry enabled",
+		// WARN rather than INFO: this is the only local evidence that an
+		// operational log leaves the machine, and LOG_LEVEL is free to
+		// suppress everything below it. A deployment running at warn would
+		// otherwise export every record with nothing on its own stderr
+		// naming the collector, and the exported copy is no help to
+		// somebody looking for the destination.
+		slog.WarnContext(ctx, "telemetry enabled",
 			"component", "telemetry",
 			"protocol", snapshot.Protocol,
 			"endpoint", snapshot.Endpoint,

@@ -326,11 +326,13 @@ func TestSanitizedInput_OverlongLineIsRefusedAndTheStreamResynchronises(t *testi
 		line        string
 		wantRefused bool
 	}{
-		// Every cap admits the 41 bytes of the trailing well-formed line, so
-		// what a row varies is whether the line under test fits.
+		// Every cap admits the 40 bytes of the trailing well-formed line, so
+		// what a row varies is whether the line under test fits. The cap is on
+		// the message, not on the framing: a line of exactly cap bytes is
+		// within it, which is what the middle two rows pin.
 		{"under_the_cap", 512, `{"jsonrpc":"2.0","id":2,"method":"ping"}`, false},
-		{"at_the_cap", 41, `{"jsonrpc":"2.0","id":2,"method":"ping"}`, false},
-		{"one_over_the_cap", 41, `{"jsonrpc":"2.0","id":22,"method":"ping"}`, true},
+		{"at_the_cap", 41, `{"jsonrpc":"2.0","id":22,"method":"ping"}`, false},
+		{"one_over_the_cap", 41, `{"jsonrpc":"2.0","id":222,"method":"ping"}`, true},
 		{"far_over_the_cap", 64, strings.Repeat("x", 200_000), true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

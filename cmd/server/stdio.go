@@ -202,10 +202,19 @@ func (s *sanitizedInput) readLine() (line string, oversize bool, err error) {
 	var assembled []byte
 	for {
 		chunk, readErr := s.in.ReadSlice('\n')
+		// ReadSlice yields the delimiter with the line it terminates. The
+		// ceiling is on the message, not on the framing around it, so the
+		// newline is not charged to it: counting it refused a message of
+		// exactly the ceiling, which is a byte narrower than the SDK's HTTP
+		// body cap this is meant to match.
+		counted := len(chunk)
+		if readErr == nil && counted > 0 {
+			counted--
+		}
 		switch {
 		case oversize:
 			// Already over: keep reading to the newline, keep nothing.
-		case len(assembled)+len(chunk) > limit:
+		case len(assembled)+counted > limit:
 			oversize = true
 			assembled = nil
 		default:

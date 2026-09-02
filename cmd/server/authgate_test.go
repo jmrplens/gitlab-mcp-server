@@ -886,7 +886,7 @@ func TestMCPServerGate_SpoofedProxyHeaderRotation_StaysBounded(t *testing.T) {
 			gate := newGate(t, okFactory)
 			gate.trustedProxyHeader = tc.header
 			if tc.header != "" {
-				gate.sourceLimiter = serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow)
+				gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
 			}
 			handler := gate.middleware(http.NotFoundHandler())
 
@@ -929,7 +929,7 @@ func TestMCPServerGate_SpoofedProxyHeaderRotation_StaysBounded(t *testing.T) {
 func TestMCPServerGate_TrustedProxyKeepsPerClientGranularity(t *testing.T) {
 	gate := newGate(t, okFactory)
 	gate.trustedProxyHeader = "X-Forwarded-For"
-	gate.sourceLimiter = serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow)
+	gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
 	handler := gate.middleware(http.NotFoundHandler())
 
 	post := func(client string) int {
@@ -951,6 +951,97 @@ func TestMCPServerGate_TrustedProxyKeepsPerClientGranularity(t *testing.T) {
 		t.Errorf("a second client behind the same proxy got %d, want %d — the fleet must not share one budget",
 			got, http.StatusUnauthorized)
 	}
+}
+
+// TestMCPServerGate_TrustedProxy_TheFleetBudgetCountsClientsNotFailures is the
+// acceptance criterion the coarseness of [transportFailureLimit] was supposed
+// to buy and did not.
+//
+// Behind a genuine proxy the transport source is the proxy for every client, so
+// charging it once per failure aggregates the whole fleet: fifty clients
+// failing their own ten times each spend the five hundred between them, and the
+// budget is checked before the credential is read, so the next request through
+// that proxy is refused whatever it carries. The rotation the budget exists to
+// bound mints a fresh key every request, which is what makes counting keys
+// rather than failures separate the two.
+func TestMCPServerGate_TrustedProxy_TheFleetBudgetCountsClientsNotFailures(t *testing.T) {
+	gate := newGate(t, okFactory)
+	gate.trustedProxyHeader = "X-Forwarded-For"
+	gate.sourceBudget = newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
+	handler := gate.middleware(http.NotFoundHandler())
+
+	post := func(client, token string) int {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+		req.RemoteAddr = "203.0.113.7:44444"
+		req.Header.Set("X-Forwarded-For", client)
+		if token != "" {
+			req.Header.Set("PRIVATE-TOKEN", token)
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	// Every client stays inside its own budget, so nothing here is an abuse
+	// the primary limiter would catch: it is an ordinary bad afternoon for a
+	// fleet of fifty behind one proxy.
+	clients := transportFailureLimit / authFailureLimit
+	for client := range clients {
+		address := "198.51.100." + strconv.Itoa(client+1)
+		for range authFailureLimit {
+			if got := post(address, ""); got != http.StatusUnauthorized {
+				t.Fatalf("client %s got %d for a credential-less request, want %d", address, got, http.StatusUnauthorized)
+			}
+		}
+	}
+
+	if got := post("198.51.100.251", testToken); got == http.StatusTooManyRequests {
+		t.Errorf("a client presenting a valid token through the same proxy got %d; %d failures spread over %d clients locked out the fleet",
+			got, transportFailureLimit, clients)
+	}
+}
+
+// TestTransportBudget_ChargesOncePerKeyPerWindow pins the accounting the gates
+// share, without a request in sight.
+//
+// The source budget is a bound on how many distinct primary keys one transport
+// source may mint, not on how often the clients behind it fail. A key that is
+// already known keeps its own ten-a-minute budget and costs the source nothing
+// further, so the fleet total tracks the number of failing clients.
+func TestTransportBudget_ChargesOncePerKeyPerWindow(t *testing.T) {
+	t.Parallel()
+
+	budget := newTransportBudget(serverpool.NewAuthRateLimiter(2, authFailureWindow))
+	const source = "203.0.113.7"
+
+	for range 50 {
+		budget.charge(source, "198.51.100.1")
+	}
+	if budget.blocked(source) {
+		t.Error("fifty failures from one client exhausted a budget of two distinct clients")
+	}
+
+	budget.charge(source, "198.51.100.2")
+	if !budget.blocked(source) {
+		t.Error("a second distinct client did not reach a budget of two")
+	}
+}
+
+// TestTransportBudget_NilBudgetIsInert covers the deployment without
+// --trusted-proxy-header, where the primary key is already the transport source
+// and a second budget over the same string would only halve it.
+func TestTransportBudget_NilBudgetIsInert(t *testing.T) {
+	t.Parallel()
+
+	var budget *transportBudget
+	budget.charge("203.0.113.7", "203.0.113.7")
+	if budget.blocked("203.0.113.7") {
+		t.Error("an absent budget blocked a request")
+	}
+	if budget.rateLimiter() != nil {
+		t.Error("an absent budget handed out a limiter")
+	}
+	budget.cleanup()
 }
 
 // TestTransportSource verifies that the connection's own address is read from

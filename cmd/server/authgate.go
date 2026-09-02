@@ -35,15 +35,15 @@ const (
 	// /user verification, spending the deployment's own throttle budget
 	// there from a cheap client.
 	//
-	// Deliberately two orders of magnitude coarser than the per-caller one.
-	// Behind a genuine proxy the transport source is the proxy for every
-	// client, so a tight secondary budget would lock out the whole fleet for
-	// what one client did — which is why the finding's own proposal, charging
-	// both budgets the same ten, is not what is implemented here. At five
-	// hundred failures a minute the correctly configured topology is
-	// unaffected and the rotation is bounded.
+	// It counts distinct primary keys, not failures. See [transportBudget]:
+	// charging it per failure aggregated a whole fleet behind one proxy, so
+	// fifty clients failing their own ten times each exhausted it between
+	// them and the next request through that proxy was refused before its
+	// credential was read.
 	//
-	// It also bounds the primary limiter's map: a blocked source is refused
+	// Five hundred distinct failing client identities inside a minute from
+	// one transport source is the rotation, or an incident either way. It
+	// also bounds the primary limiter's map: a blocked source is refused
 	// before a failure is recorded, so it stops minting keys.
 	transportFailureLimit = 500
 )
@@ -218,12 +218,13 @@ type mcpServerGate struct {
 	// share one per-address budget and a caller cannot earn a fresh
 	// allowance by failing at whichever layer it has not exhausted yet.
 	limiter *serverpool.AuthRateLimiter
-	// sourceLimiter is the secondary, far coarser budget charged to the
+	// sourceBudget is the secondary, far coarser budget charged to the
 	// transport source. Set only when trustedProxyHeader is configured,
 	// which is the only case in which the primary key is caller-controlled;
 	// without a trusted header the two keys are the same string and one
-	// budget is the whole story. Shared with [bearerGuard], like limiter.
-	sourceLimiter      *serverpool.AuthRateLimiter
+	// budget is the whole story. Its limiter is shared with [bearerGuard],
+	// like limiter.
+	sourceBudget       *transportBudget
 	trustedProxyHeader string
 	// challenge is the WWW-Authenticate value sent with a 401.
 	challenge string
@@ -503,7 +504,7 @@ func (g *mcpServerGate) blockedByBudget(key, source string) bool {
 	if g.limiter != nil && g.limiter.IsBlocked(key) {
 		return true
 	}
-	return g.sourceLimiter != nil && g.sourceLimiter.IsBlocked(source)
+	return g.sourceBudget.blocked(source)
 }
 
 // chargeFailure charges one authentication failure to both budgets.
@@ -511,9 +512,97 @@ func (g *mcpServerGate) chargeFailure(key, source string) {
 	if g.limiter != nil {
 		g.limiter.RecordFailure(key)
 	}
-	if g.sourceLimiter != nil {
-		g.sourceLimiter.RecordFailure(source)
+	g.sourceBudget.charge(source, key)
+}
+
+// transportBudget is the secondary authentication budget of
+// [transportFailureLimit], charged to the transport source.
+//
+// It charges once per distinct primary key inside a window rather than once
+// per failure, and that distinction is the whole design. The budget exists to
+// bound header rotation, which mints a fresh primary key on every request; a
+// genuine proxy's clients keep theirs, and a client whose key is already known
+// is already bounded by its own ten-a-minute allowance. Counting failures
+// instead aggregated the fleet: fifty clients failing their own ten times each
+// spent all five hundred between them, and since both gates consult the budget
+// before the credential is read, the next request through that proxy was
+// refused whatever it carried, including a valid token, and including the
+// clients that had never failed at all.
+//
+// The zero value is not usable; a nil *transportBudget is, and is what a
+// deployment without --trusted-proxy-header gets. Every method tolerates it.
+type transportBudget struct {
+	limiter *serverpool.AuthRateLimiter
+
+	mu sync.Mutex
+	// charged records when a (source, key) pair last opened a window, so a
+	// key already counted against a source is not counted again until its
+	// window lapses. It cannot grow without bound: a source stops charging
+	// once it is blocked, and blocked sources are refused before a failure is
+	// recorded.
+	charged map[string]time.Time
+}
+
+// newTransportBudget wraps a limiter in the per-key accounting above.
+func newTransportBudget(limiter *serverpool.AuthRateLimiter) *transportBudget {
+	if limiter == nil {
+		return nil
 	}
+	return &transportBudget{limiter: limiter, charged: make(map[string]time.Time)}
+}
+
+// rateLimiter is the underlying limiter, for the layer that shares this budget
+// rather than owning it.
+func (b *transportBudget) rateLimiter() *serverpool.AuthRateLimiter {
+	if b == nil {
+		return nil
+	}
+	return b.limiter
+}
+
+// blocked reports whether a transport source has minted more distinct primary
+// keys than its budget allows.
+func (b *transportBudget) blocked(source string) bool {
+	if b == nil {
+		return false
+	}
+	return b.limiter.IsBlocked(source)
+}
+
+// charge counts one failure against the source, unless this key has already
+// been counted against it inside the current window.
+func (b *transportBudget) charge(source, key string) {
+	if b == nil {
+		return
+	}
+	pair := source + "\x00" + key
+	b.mu.Lock()
+	first, seen := b.charged[pair]
+	fresh := !seen || time.Since(first) > authFailureWindow
+	if fresh {
+		b.charged[pair] = time.Now()
+	}
+	b.mu.Unlock()
+	if fresh {
+		b.limiter.RecordFailure(source)
+	}
+}
+
+// cleanup drops lapsed pairs and the limiter's own expired records. It stands
+// in for the limiter's Cleanup wherever a budget owns one.
+func (b *transportBudget) cleanup() {
+	if b == nil {
+		return
+	}
+	b.mu.Lock()
+	now := time.Now()
+	for pair, first := range b.charged {
+		if now.Sub(first) > authFailureWindow {
+			delete(b.charged, pair)
+		}
+	}
+	b.mu.Unlock()
+	b.limiter.Cleanup()
 }
 
 // transportSource is the address the connection actually came from.

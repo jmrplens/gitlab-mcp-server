@@ -239,6 +239,18 @@ const (
 	// never resets it and WriteTimeout would otherwise sever the stream prematurely.
 	baseHTTPWriteTimeout = 60 * time.Second
 
+	// baseHTTPMaxHeaderBytes bounds the headers of one request.
+	//
+	// Go's own ceiling is 1 MiB, and a header is the cheapest thing an
+	// unauthenticated caller can make this server write down: the Host of a
+	// refused request and the method of a cross-origin one are both logged
+	// before anybody is authenticated. Twenty requests at the standard
+	// ceiling produced 18 MB of stderr. 64 KiB is well above what a real MCP
+	// client sends (the largest header this deployment reads is a bearer
+	// token) and below the point where one request is worth writing home
+	// about.
+	baseHTTPMaxHeaderBytes = 64 << 10
+
 	// idleTimeoutDisabled is the sentinel used when idle closure is disabled (input 0).
 	// Go falls back to ReadTimeout when IdleTimeout == 0; this large value instead
 	// keeps idle keep-alive connections effectively unrestricted.
@@ -275,7 +287,7 @@ func main() {
 	flag.BoolVar(&hcfg.ignoreScopes, "ignore-scopes", false, "Skip PAT scope detection and register all tools")
 	flag.IntVar(&hcfg.maxHTTPClients, "max-http-clients", config.DefaultMaxHTTPClients, "Maximum unique (token, GitLab URL) server entries kept in the pool; bounds pooled entries, not sessions or concurrent requests")
 	flag.DurationVar(&hcfg.sessionTimeout, "session-timeout", config.DefaultSessionTimeout, "Idle MCP session timeout; applies to --stateless=false only (under the default stateless transport each POST's session ends with its response)")
-	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval (0 to disable)")
+	flag.DurationVar(&hcfg.revalidateInterval, "revalidate-interval", config.DefaultRevalidateInterval, "Token re-validation interval; 0 stops the periodic check, but an entry whose credential is older than "+serverpool.DefaultMaxCredentialAge.String()+" is still rebuilt")
 	flag.DurationVar(&hcfg.poolIdleTimeout, "pool-idle-timeout", config.DefaultPoolIdleTimeout, "Reclaim a pooled per-token-and-URL server entry after this long unused (0 to disable)")
 	flag.StringVar(&hcfg.authMode, "auth-mode", "legacy", "Authentication mode: legacy (default) or oauth")
 	flag.StringVar(&hcfg.publicURL, "public-url", "", "Externally reachable origin of this deployment (https). Required with --auth-mode=oauth: it is the RFC 9728 protected-resource identifier")
@@ -322,6 +334,7 @@ func main() {
 
 	flag.Parse()
 	applyEnvBackedFlags()
+	applyLocalFilesystemPolicy(useHTTP)
 	hcfg.setFlags = make(map[string]bool)
 	flag.Visit(func(f *flag.Flag) {
 		hcfg.setFlags[f.Name] = true
@@ -484,7 +497,9 @@ FLAGS
   -public-url string        Externally reachable https origin; required with -auth-mode=oauth
   -oauth-cache-ttl duration OAuth token cache TTL (default %s, min %s, max %s)
   -oauth-client-uid string  Comma-separated GitLab OAuth application uids whose tokens are admitted (default: any)
-  -revalidate-interval dur  How often pooled tokens are re-validated against GitLab (default %s, 0 to disable)
+  -revalidate-interval dur  How often pooled tokens are re-validated against GitLab (default %s; 0 stops the
+                            periodic check, but an entry whose credential is older than %s is still rebuilt,
+                            which ends any stateful session on it)
   -resource-documentation string
                             https URL published as RFC 9728 resource_documentation (default: this project's OAuth setup guide)
   -resource-policy-uri string
@@ -610,7 +625,7 @@ JSON CONFIGURATION EXAMPLES
 		// stop lining up and a reader catches when they do not.
 		config.DefaultSessionTimeout,
 		config.DefaultOAuthCacheTTL, config.MinOAuthCacheTTL, config.MaxOAuthCacheTTL,
-		config.DefaultRevalidateInterval,
+		config.DefaultRevalidateInterval, serverpool.DefaultMaxCredentialAge,
 		config.DefaultMaxHTTPClients, config.DefaultPoolIdleTimeout,
 		config.DefaultRateLimitBurst,
 		config.DefaultGitLabURL)
@@ -1514,7 +1529,11 @@ func createServer(
 func applyToolVisibilityConfig(ctx context.Context, server *mcp.Server, cfg *config.ServerConfig, toolSurface string, surfaceCatalog *actioncatalog.Catalog) {
 	if len(cfg.ExcludeTools) > 0 {
 		removed := removeExcludedTools(ctx, server, cfg.ExcludeTools)
-		slog.InfoContext(ctx, "excluded tools by configuration", "excluded", removed, "patterns", cfg.ExcludeTools)
+		// Named for what it counts. This pass sees registered tool names only,
+		// so on a surface whose exclusions are applied to the catalog it
+		// legitimately removes nothing, and a bare "excluded" reading zero
+		// there said the opposite of what had happened.
+		slog.InfoContext(ctx, "excluded tools by configuration", "excluded_registered_tools", removed, "patterns", cfg.ExcludeTools)
 	}
 	if cfg.TokenScopes != nil {
 		removed := gitlabtools.RemoveScopeFilteredTools(server, cfg.TokenScopes)
@@ -1623,10 +1642,51 @@ func registerConfiguredToolSurfaceWithCatalog(server *mcp.Server, client *gitlab
 		// tool name is declared per ActionSpec rather than derived, so nothing
 		// downstream can map one back to its action without it, and telemetry
 		// recorded no action here at all until this returned something.
-		return serverSurfaceRegistration{
-			surfaceCatalog: gitlabtools.RegisterAll(server, client, cfg.Tier),
-		}, nil
+		individualCatalog := prebuiltCatalog
+		if individualCatalog == nil {
+			built, catalogErr := gitlabtools.BuildActionCatalog(client, gitlabtools.ActionCatalogOptions{Tier: cfg.Tier, IncludeMCP: true})
+			if catalogErr != nil {
+				return serverSurfaceRegistration{}, fmt.Errorf("build individual action catalog: %w", catalogErr)
+			}
+			// Excluded in the catalog, as on the other two surfaces, rather
+			// than by name after registration. Removing by registered name
+			// worked for exactly one of the three spellings an operator
+			// writes: the two others, the meta group name that the
+			// documented example carries and the canonical action ID,
+			// removed nothing and warned about nothing.
+			// removeExcludedTools still runs afterwards, for the standalone
+			// tools registered outside the catalog.
+			individualCatalog = excludeFromCatalog(built, cfg.ExcludeTools)
+		}
+		gitlabtools.RegisterIndividualCatalogTools(server, individualCatalog, gitlabtools.IndividualCatalogRegisterOptions{
+			IncludeStandaloneUtilities: true,
+			// Safe across an exclusion: the key is qualified per tool name,
+			// and excluding actions makes the catalog a subset rather than
+			// changing any surviving tool's schema.
+			SchemaCacheKey: "individual|" + cfg.Tier.String(),
+		})
+		gitlabtools.RegisterMetaStandaloneTools(server, client)
+		return serverSurfaceRegistration{surfaceCatalog: individualCatalog}, nil
 	}
+}
+
+// excludeFromCatalog removes the groups and actions an operator excluded, and
+// reports how many actions that was.
+//
+// The count is the point. Removal already worked on the dynamic and meta
+// surfaces, but the only line an operator saw came from removeExcludedTools,
+// which counts registered tool names: on the dynamic surface there are two of
+// them and neither is ever an exclusion target, so a working exclusion logged
+// "excluded=0" and was indistinguishable from one that matched nothing.
+func excludeFromCatalog(catalog *actioncatalog.Catalog, excludeTools []string) *actioncatalog.Catalog {
+	if len(excludeTools) == 0 {
+		return catalog
+	}
+	filtered := catalog.FilterExcludedTools(excludeTools)
+	if removed := catalog.CountActions() - filtered.CountActions(); removed > 0 {
+		slog.Info("excluded catalog actions by configuration", "excluded", removed, "patterns", excludeTools)
+	}
+	return filtered
 }
 
 // httpShutdownTimeout bounds graceful HTTP shutdown after the process context
@@ -1853,6 +1913,7 @@ func newHTTPServer(addr string, handler http.Handler, httpIdleTimeout time.Durat
 		ReadTimeout:       baseHTTPReadTimeout,
 		WriteTimeout:      baseHTTPWriteTimeout,
 		IdleTimeout:       effectiveIdleTimeout(httpIdleTimeout),
+		MaxHeaderBytes:    baseHTTPMaxHeaderBytes,
 	}
 }
 
@@ -2483,12 +2544,12 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	// by failing at a different layer. The gate reaches it only for the pool
 	// rejections the guard cannot see.
 	authLimiter := serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
-	sourceLimiter := transportFailureLimiter(cfg.TrustedProxyHeader)
+	sourceBudget := transportFailureBudget(cfg.TrustedProxyHeader)
 	gate := &mcpServerGate{
 		pool:               pool,
 		gitlabURLs:         cfg.InstanceURLs(),
 		limiter:            authLimiter,
-		sourceLimiter:      sourceLimiter,
+		sourceBudget:       sourceBudget,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		sessionTags:        sessionTags,
 		// The same challenge the guard in front emits, minus its error
@@ -2542,7 +2603,7 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 		instances:          cfg.InstanceURLs(),
 		rejected:           rejectedTokens,
 		limiter:            authLimiter,
-		sourceLimiter:      sourceLimiter,
+		sourceLimiter:      sourceBudget.rateLimiter(),
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		metadataURL:        resourceMetadataURL,
 		// The door asks only for what every action needs. Whether a
@@ -2579,8 +2640,8 @@ func registerOAuthMCPHandlers(ctx context.Context, cfg *config.Config, _ string,
 	startPeriodicCleanup(ctx, tokenCache.Cleanup)
 	startPeriodicCleanup(ctx, rejectedTokens.Cleanup)
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
-	if sourceLimiter != nil {
-		startPeriodicCleanup(ctx, sourceLimiter.Cleanup)
+	if sourceBudget != nil {
+		startPeriodicCleanup(ctx, sourceBudget.cleanup)
 	}
 	slog.InfoContext(ctx, "oauth mode enabled", "cache_ttl", cacheTTL, "resource", resourceID, "metadata_url", resourceMetadataURL)
 }
@@ -2609,15 +2670,15 @@ func oauthCacheTTL(configured time.Duration) time.Duration {
 func registerLegacyMCPHandlers(ctx context.Context, cfg *config.Config, pool *serverpool.ServerPool, sessionTags *sync.Map, mux *http.ServeMux) {
 	authLimiter := serverpool.NewAuthRateLimiter(authFailureLimit, authFailureWindow)
 	startPeriodicCleanup(ctx, authLimiter.Cleanup)
-	sourceLimiter := transportFailureLimiter(cfg.TrustedProxyHeader)
-	if sourceLimiter != nil {
-		startPeriodicCleanup(ctx, sourceLimiter.Cleanup)
+	sourceBudget := transportFailureBudget(cfg.TrustedProxyHeader)
+	if sourceBudget != nil {
+		startPeriodicCleanup(ctx, sourceBudget.cleanup)
 	}
 	gate := &mcpServerGate{
 		pool:               pool,
 		gitlabURLs:         cfg.InstanceURLs(),
 		limiter:            authLimiter,
-		sourceLimiter:      sourceLimiter,
+		sourceBudget:       sourceBudget,
 		trustedProxyHeader: cfg.TrustedProxyHeader,
 		sessionTags:        sessionTags,
 		challenge:          legacyAuthChallenge,
@@ -2729,18 +2790,18 @@ func safeTokenSuffix(token string) string {
 	return "..." + token[len(token)-4:]
 }
 
-// transportFailureLimiter builds the secondary authentication budget, or nil
+// transportFailureBudget builds the secondary authentication budget, or nil
 // when there is nothing for it to catch.
 //
 // It exists only when a proxy header is trusted, because that is the only
 // configuration in which the primary budget's key is chosen by the caller.
 // Without one, [clientIP] already returns RemoteAddr and a second limiter over
 // the same string would just halve the budget.
-func transportFailureLimiter(trustedProxyHeader string) *serverpool.AuthRateLimiter {
+func transportFailureBudget(trustedProxyHeader string) *transportBudget {
 	if strings.TrimSpace(trustedProxyHeader) == "" {
 		return nil
 	}
-	return serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow)
+	return newTransportBudget(serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow))
 }
 
 // clientIP extracts the real client IP from the request. When a trusted
@@ -2773,6 +2834,20 @@ func clientIP(r *http.Request, trustedHeader string) string {
 	}
 	host, _, _ := net.SplitHostPort(r.RemoteAddr)
 	return host
+}
+
+// applyLocalFilesystemPolicy settles whether tool handlers may name paths on
+// the machine this process runs on, from the parsed flag.
+//
+// [toolutil] infers the same answer at init time by scanning os.Args, which is
+// the right default for a deployment that never heard of the policy and the
+// wrong one whenever the two parsers disagree. They disagree on a repeated
+// flag: the scanner stops at the first --http token, Go's flag package calls
+// Set for every occurrence and keeps the last, so `--http=false --http` served
+// HTTP with every caller-supplied path still honored. Settling it here from
+// the value the server actually runs on removes the second parser's vote.
+func applyLocalFilesystemPolicy(useHTTP bool) {
+	toolutil.SetLocalFilesystemAccess(!useHTTP)
 }
 
 // parseLogLevel converts a LOG_LEVEL string to slog.Level.
@@ -3157,6 +3232,22 @@ func crossOriginProtectionMiddleware(trustedOrigins []string, next http.Handler)
 	return protection.Handler(next)
 }
 
+// loggedHeaderPrefixBytes is how much of a caller-supplied header value a
+// pre-authentication log line may carry. Enough to recognize a rebinding
+// attempt by the name it asked for, far short of what a header can hold.
+const loggedHeaderPrefixBytes = 128
+
+// loggedHeaderPrefix bounds a header value on its way to the log, so a refusal
+// that costs an unauthenticated caller one request cannot cost the operator a
+// kilobyte of disk. The length is reported alongside it rather than lost, since
+// an implausible one is itself the diagnosis.
+func loggedHeaderPrefix(value string) string {
+	if len(value) <= loggedHeaderPrefixBytes {
+		return value
+	}
+	return value[:loggedHeaderPrefixBytes] + "..."
+}
+
 // hostValidationMiddleware rejects requests whose Host header does not match
 // the allowed set, mitigating DNS rebinding attacks on local servers.
 func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.Handler {
@@ -3166,7 +3257,8 @@ func hostValidationMiddleware(allowed map[string]bool, next http.Handler) http.H
 			host = h
 		}
 		if !allowed[host] {
-			slog.WarnContext(r.Context(), "request blocked: invalid Host header", "host", r.Host) //#nosec G706 -- slog structured args are not interpolated
+			slog.WarnContext(r.Context(), "request blocked: invalid Host header", //#nosec G706 -- slog structured args are not interpolated
+				"host", loggedHeaderPrefix(r.Host), "host_len", len(r.Host))
 			// JSON-RPC rather than http.Error's plain text, for the same
 			// reason the cross-origin refusal is: an unparseable 4xx body
 			// reads to a Streamable HTTP client as a pre-negotiation server.
@@ -3691,7 +3783,7 @@ func filterActionCatalog(catalog *actioncatalog.Catalog, cfg *config.ServerConfi
 	// Tools the operator excluded by name are not "withheld": the point of the
 	// exclusion is that they do not exist for this deployment, so naming them
 	// in an error would both leak the configuration and contradict it.
-	filtered := catalog.FilterExcludedTools(cfg.ExcludeTools)
+	filtered := excludeFromCatalog(catalog, cfg.ExcludeTools)
 	scoped, err := gitlabtools.FilterScopeFilteredCatalog(filtered, cfg.TokenScopes)
 	if err != nil {
 		return nil, withheldActions{}, err
