@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -363,4 +364,94 @@ func TestRequestDigest_AStringCannotImpersonateANumber(t *testing.T) {
 	if numeric == forged {
 		t.Errorf("digest %q is shared by a number and a string crafted to look like its canonical form", numeric)
 	}
+}
+
+// TestDecodeState_SignedButUnreadable_IsThisServersBug covers the two failures
+// that can only happen after the MAC has already verified.
+//
+// Both mean the payload was signed by this process and still cannot be read, so
+// neither is a client's doing: the first stays an integrity failure because an
+// undecodable body is indistinguishable from a corrupted one, and the second is
+// reported plainly, because a state this server signed and cannot parse is a bug
+// here that an operator should see named rather than blamed on the caller.
+func TestDecodeState_SignedButUnreadable_IsThisServersBug(t *testing.T) {
+	t.Parallel()
+
+	notBase64 := "!!!not-base64!!!"
+	notJSON := base64.RawURLEncoding.EncodeToString([]byte("this is not a JSON document"))
+
+	tests := []struct {
+		name        string
+		body        string
+		wantTamper  bool
+		wantMessage string
+	}{
+		{name: "a body that is not base64", body: notBase64, wantTamper: true, wantMessage: "undecodable payload"},
+		{name: "a payload that is not JSON", body: notJSON, wantMessage: "invalid requestState"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			state := fmt.Sprintf("v%d.%s.%s", flowStateVersion, tt.body, signPayload(tt.body))
+
+			answers, err := decodeState(state, "digest", time.Now())
+
+			if err == nil {
+				t.Fatalf("decodeState accepted an unreadable state and returned %v", answers)
+			}
+			if got := errors.Is(err, errStateTampered); got != tt.wantTamper {
+				t.Errorf("errors.Is(err, errStateTampered) = %v, want %v (err = %v)", got, tt.wantTamper, err)
+			}
+			if !strings.Contains(err.Error(), tt.wantMessage) {
+				t.Errorf("err = %q, want it to say %q", err, tt.wantMessage)
+			}
+		})
+	}
+}
+
+// TestCanonicalizeNumbers_LeavesNonNumericScalarsAlone covers the default arm of
+// the walk, which is what every value that is neither a number, a string nor a
+// container takes.
+//
+// The digest has to see booleans and nulls unchanged: marking them would be
+// harmless but pointless, and passing them through is what keeps two argument
+// sets that differ only in a boolean hashing differently, since the surrounding
+// JSON encoding still distinguishes them.
+func TestCanonicalizeNumbers_LeavesNonNumericScalarsAlone(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		value any
+		want  any
+	}{
+		{name: "true", value: true, want: true},
+		{name: "false", value: false, want: false},
+		{name: "null", value: nil, want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := canonicalizeNumbers(tt.value); got != tt.want {
+				t.Errorf("canonicalizeNumbers(%v) = %v, want it returned unchanged", tt.value, got)
+			}
+		})
+	}
+
+	t.Run("nested in a document", func(t *testing.T) {
+		t.Parallel()
+
+		document := map[string]any{"confirm": true, "note": nil, "items": []any{false, nil}}
+		got, ok := canonicalizeNumbers(document).(map[string]any)
+		if !ok {
+			t.Fatalf("canonicalizeNumbers returned %T, want the document shape kept", got)
+		}
+		if got["confirm"] != true || got["note"] != nil {
+			t.Errorf("canonicalized document = %v, want its booleans and nulls untouched", got)
+		}
+	})
 }

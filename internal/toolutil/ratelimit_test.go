@@ -487,3 +487,54 @@ func TestRateLimiter_EveryRefusalIsRecordedEvenWhenTheLogIsSuppressed(t *testing
 			marked, refusals)
 	}
 }
+
+// TestAttachRateLimit_CompletionOverBudget_AnswersWithNoSuggestions covers what
+// a throttled completion request receives on the wire.
+//
+// Completions arrive as somebody types, so the bucket is ten times the
+// tool-call one and the refusal is an empty suggestion list rather than an
+// error: an argument-completion request that fails loudly would put an error in
+// front of a user who is only typing. The tool-call budget stays untouched by
+// it, which is the reason the two buckets are separate at all.
+func TestAttachRateLimit_CompletionOverBudget_AnswersWithNoSuggestions(t *testing.T) {
+	t.Parallel()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, &mcp.ServerOptions{
+		CompletionHandler: func(context.Context, *mcp.CompleteRequest) (*mcp.CompleteResult, error) {
+			return &mcp.CompleteResult{Completion: mcp.CompletionResultDetails{Values: []string{"suggested"}}}, nil
+		},
+	})
+	server.AddPrompt(&mcp.Prompt{
+		Name:      "review",
+		Arguments: []*mcp.PromptArgument{{Name: "project"}},
+	}, func(context.Context, *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+		return &mcp.GetPromptResult{}, nil
+	})
+	AttachRateLimit(server, NewRateLimiter(1, 1))
+
+	session, ctx := connectClient(t, server)
+
+	params := &mcp.CompleteParams{
+		Ref:      &mcp.CompleteReference{Type: "ref/prompt", Name: "review"},
+		Argument: mcp.CompleteParamsArgument{Name: "project", Value: "gitl"},
+	}
+	var served, refused int
+	for range completionBurstFactor + 3 {
+		res, err := session.Complete(ctx, params)
+		if err != nil {
+			t.Fatalf("completion/complete: %v", err)
+		}
+		if len(res.Completion.Values) == 0 {
+			refused++
+			continue
+		}
+		served++
+	}
+
+	if served == 0 {
+		t.Error("every completion was refused; ordinary typing would stop suggesting anything")
+	}
+	if refused == 0 {
+		t.Errorf("no completion was refused after %d requests; the method is ungated", completionBurstFactor+3)
+	}
+}

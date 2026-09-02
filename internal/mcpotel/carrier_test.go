@@ -128,3 +128,23 @@ func requestsWithoutParams() map[string]mcp.Request {
 		"resources/list": &mcp.ListResourcesRequest{},
 	}
 }
+
+// TestParamsOf_NoRequestAtAll_IsNotParams covers the entry guard, which is what
+// keeps every caller of paramsOf free of its own nil check.
+//
+// The middleware asks for a request's params on the receiving path of every
+// method, including the notifications the SDK delivers without one, so a nil
+// dereference here would be a panic per request rather than a rare edge.
+func TestParamsOf_NoRequestAtAll_IsNotParams(t *testing.T) {
+	t.Parallel()
+
+	if got := paramsOf(nil); got != nil {
+		t.Errorf("paramsOf(nil) = %#v, want nil", got)
+	}
+	// A request carrying the Params interface itself rather than one of its
+	// implementations: GetParams then hands back a genuinely nil interface,
+	// which is the case the typed-nil check above it must not swallow.
+	if got := paramsOf(&mcp.ServerRequest[mcp.Params]{}); got != nil {
+		t.Errorf("paramsOf(a request with no params at all) = %#v, want nil", got)
+	}
+}

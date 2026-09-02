@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"time"
 
 	"go.opentelemetry.io/otel"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -151,5 +152,63 @@ func TestSetDiagnosticSinks_TheSDKWarnChannelSurvivesTheDefaultLevel(t *testing.
 	}
 	if !strings.Contains(buf.String(), `"level":"WARN"`) {
 		t.Errorf("the SDK warning arrived at the wrong level: %q", buf.String())
+	}
+}
+
+// TestSDKVerbosityHandler_ADerivedHandlerKeepsTheClamp covers the two methods
+// slog calls when a caller attaches context to a logger.
+//
+// Both must return a handler that still clamps. The SDK's own logger is derived
+// this way — it attaches a name and its component fields before logging
+// anything — so a WithAttrs that returned the bare inner handler would put the
+// clamp back exactly where it was before this type existed: warnings arriving
+// at a level nothing prints, and a debug channel at -8 that even LOG_LEVEL=debug
+// cannot see.
+func TestSDKVerbosityHandler_ADerivedHandlerKeepsTheClamp(t *testing.T) {
+	t.Parallel()
+
+	// The SDK's warn channel: below Info, above Debug, and therefore invisible
+	// to a handler at the default level unless it is clamped up to Warn.
+	const sdkWarn = slog.LevelInfo - 1
+
+	tests := []struct {
+		name    string
+		derive  func(slog.Handler) slog.Handler
+		enabled bool
+	}{
+		{
+			name:   "with attributes",
+			derive: func(h slog.Handler) slog.Handler { return h.WithAttrs([]slog.Attr{slog.String("component", "sdk")}) },
+		},
+		{
+			name:   "with a group",
+			derive: func(h slog.Handler) slog.Handler { return h.WithGroup("sdk") },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var buf bytes.Buffer
+			base := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})
+			derived := tt.derive(&sdkVerbosityHandler{Handler: base})
+
+			if !derived.Enabled(context.Background(), sdkWarn) {
+				t.Fatal("the derived handler refuses the SDK's warn channel; every SDK warning would be dropped")
+			}
+			record := slog.NewRecord(time.Now(), sdkWarn, "the SDK said something", 0)
+			if err := derived.Handle(context.Background(), record); err != nil {
+				t.Fatalf("Handle: %v", err)
+			}
+
+			line := buf.String()
+			if !strings.Contains(line, "level=WARN") {
+				t.Errorf("record was written as %q, want it clamped up to WARN", strings.TrimSpace(line))
+			}
+			if !strings.Contains(line, "the SDK said something") {
+				t.Errorf("record %q lost its message", strings.TrimSpace(line))
+			}
+		})
 	}
 }

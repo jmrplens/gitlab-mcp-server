@@ -8,6 +8,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -34,6 +35,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/edition"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/gatewaycompat"
 	gitlabclient "github.com/jmrplens/gitlab-mcp-server/v2/internal/gitlab"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/oauth"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/prompts"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/resources"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/serverpool"
@@ -6723,5 +6725,1279 @@ func TestCreateServer_ClientCompatKillSwitch(t *testing.T) {
 	floats, _ := resourcePriorities(t, codex)
 	if floats == 0 {
 		t.Error("CLIENT_COMPAT=off but codex session sees no float priorities; middleware still active")
+	}
+}
+
+// TestPublicPaths_MountEveryPublicRouteUnderTheForwardedPrefix covers the
+// routing a reverse proxy that forwards its own prefix produces.
+//
+// Such a deployment reaches this server at /prefix/health rather than /health,
+// and mounting only the bare paths left it answering 404 for its own health
+// check, server card and RFC 9728 document — the three things an operator and a
+// scanner reach for first. The prefix is not new configuration: --public-url
+// already states the path the deployment is published under.
+func TestPublicPaths_MountEveryPublicRouteUnderTheForwardedPrefix(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		publicURL string
+		want      []string
+	}{
+		{name: "no public url", publicURL: "", want: []string{"/health"}},
+		{name: "an origin with no path", publicURL: "https://mcp.example.com", want: []string{"/health"}},
+		{name: "a trailing slash is not a prefix", publicURL: "https://mcp.example.com/", want: []string{"/health"}},
+		{name: "the mcp endpoint is not a prefix", publicURL: "https://mcp.example.com/mcp", want: []string{"/health"}},
+		{name: "unparseable", publicURL: "://nonsense", want: []string{"/health"}},
+		{
+			name:      "a path prefix is mounted alongside the bare path",
+			publicURL: "https://mcp.example.com/gitlab",
+			want:      []string{"/health", "/gitlab/health"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := publicPaths(&config.Config{PublicURL: tt.publicURL}, "/health")
+
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("publicPaths = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMCPEndpointPatterns_CoverTheRootTheEndpointAndThePrefix pins the routes
+// the MCP handler is mounted on.
+//
+// Routing happens before authentication, so this list is also the list of paths
+// that can answer anything at all: everything else is an unauthenticated 404,
+// which is what stopped this server from telling every scanner that
+// /.well-known/oauth-authorization-server was a protected document that is not
+// there.
+func TestMCPEndpointPatterns_CoverTheRootTheEndpointAndThePrefix(t *testing.T) {
+	t.Parallel()
+
+	bare := mcpEndpointPatterns(&config.Config{})
+	if len(bare) == 0 {
+		t.Fatal("no MCP endpoint patterns; the server would answer nothing")
+	}
+	for _, want := range []string{"/{$}", "/mcp"} {
+		t.Run(want, func(t *testing.T) {
+			t.Parallel()
+
+			if !slices.Contains(bare, want) {
+				t.Errorf("patterns %v are missing %q", bare, want)
+			}
+		})
+	}
+
+	prefixed := mcpEndpointPatterns(&config.Config{PublicURL: "https://mcp.example.com/gitlab"})
+	for _, want := range []string{"/gitlab", "/gitlab/{$}", "/gitlab/mcp", "/gitlab/mcp/{$}"} {
+		t.Run(want, func(t *testing.T) {
+			t.Parallel()
+
+			if !slices.Contains(prefixed, want) {
+				t.Errorf("patterns %v are missing the forwarded-prefix form %q", prefixed, want)
+			}
+		})
+	}
+}
+
+// TestServerCardMediaType_FollowsThePathTheCardWasFetchedFrom covers the one
+// difference between the two mounted card paths.
+//
+// The .well-known location predates the extension's own recommendation and is
+// kept because scanners written against the earlier draft already fetch it;
+// they expect application/json there, while the current location serves the
+// card's own media type. Matching on the suffix is what keeps a deployment that
+// mounts the card under a forwarded prefix classified the same way.
+func TestServerCardMediaType_FollowsThePathTheCardWasFetchedFrom(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{name: "the current location", path: serverCardPath, want: mimeServerCard},
+		{name: "the legacy well-known location", path: serverCardLegacyPath, want: mimeJSON},
+		{name: "the legacy location behind a forwarded prefix", path: "/gitlab" + serverCardLegacyPath, want: mimeJSON},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := serverCardMediaType(tt.path); got != tt.want {
+				t.Errorf("serverCardMediaType(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestSessionTagOf_ReadsTheTagAServerMinted covers the parse behind session
+// ownership.
+//
+// A session ID this deployment never minted carries no tag, and saying so is
+// what makes the gate refuse it: under the stateless transport no session IDs
+// are issued at all, so anything untagged is either stale or forged. Reading a
+// missing tag as an empty one would compare equal to an entry that had none and
+// hand someone else's session over.
+func TestSessionTagOf_ReadsTheTagAServerMinted(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		id      string
+		wantTag string
+		wantOK  bool
+	}{
+		{name: "a minted id", id: "tag123" + sessionTagSeparator + "abcdef", wantTag: "tag123", wantOK: true},
+		{name: "no separator at all", id: "abcdef"},
+		{name: "an empty tag", id: sessionTagSeparator + "abcdef"},
+		{name: "nothing", id: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tag, ok := sessionTagOf(tt.id)
+
+			if ok != tt.wantOK {
+				t.Errorf("sessionTagOf(%q) ok = %v, want %v", tt.id, ok, tt.wantOK)
+			}
+			if tag != tt.wantTag {
+				t.Errorf("sessionTagOf(%q) tag = %q, want %q", tt.id, tag, tt.wantTag)
+			}
+		})
+	}
+}
+
+// TestOAuthCacheTTL_ANonPositiveValueFallsBackAndSaysSo covers the guard in
+// front of the identity cache's lifetime.
+//
+// A zero TTL would mean every request re-verifies upstream, which is a load
+// multiplier on the GitLab instance rather than a security setting; the flag
+// validation rejects such a value, and this is the second line of defense for a
+// Config assembled directly.
+func TestOAuthCacheTTL_ANonPositiveValueFallsBackAndSaysSo(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		configured time.Duration
+		want       time.Duration
+	}{
+		{name: "a configured ttl is kept", configured: 5 * time.Minute, want: 5 * time.Minute},
+		{name: "zero falls back", configured: 0, want: config.DefaultOAuthCacheTTL},
+		{name: "negative falls back", configured: -time.Minute, want: config.DefaultOAuthCacheTTL},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := oauthCacheTTL(tt.configured); got != tt.want {
+				t.Errorf("oauthCacheTTL(%s) = %s, want %s", tt.configured, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestUploadMaxFileSize_ClampsAndFallsBackWithoutRefusingToStart covers the
+// upload limit HTTP mode reads from the environment.
+//
+// Neither branch stops the server: this runs while the HTTP configuration is
+// being assembled, where a malformed or oversized value is worth a loud line and
+// a working server rather than a dead one. The ceiling is applied here because
+// the HTTP path never calls config.Validate, so without it "1025GB" would parse
+// cleanly and start a deployment above the documented maximum with nothing
+// saying so.
+func TestUploadMaxFileSize_ClampsAndFallsBackWithoutRefusingToStart(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  int64
+	}{
+		{name: "unset uses the default", value: "", want: config.DefaultMaxFileSize},
+		{name: "unparseable uses the default", value: "the-size-of-a-cat", want: config.DefaultMaxFileSize},
+		{name: "above the ceiling is clamped", value: "1025GB", want: config.MaxFileSize},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.value == "" {
+				t.Setenv("UPLOAD_MAX_FILE_SIZE", "")
+				os.Unsetenv("UPLOAD_MAX_FILE_SIZE")
+			} else {
+				t.Setenv("UPLOAD_MAX_FILE_SIZE", tt.value)
+			}
+
+			if got := uploadMaxFileSize(); got != tt.want {
+				t.Errorf("uploadMaxFileSize() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestMCPOriginMiddleware_DecidesInTheDocumentedOrder covers every arm of the
+// origin decision the MCP endpoint makes before authentication.
+//
+// The order is the substance. An operator-named origin is allowed even when the
+// browser calls it cross-site, because being deliberately cross-origin is what
+// --trusted-origins is for. Fetch metadata then outranks the Origin comparison,
+// exactly as the standard library's own protection treats it: a desktop client
+// sending an app:// Origin with Sec-Fetch-Site: none is the case that matters,
+// since comparing that Origin against the listen host would refuse it forever.
+// Only with no metadata at all does the host comparison decide.
+func TestMCPOriginMiddleware_DecidesInTheDocumentedOrder(t *testing.T) {
+	t.Parallel()
+
+	trusted := &config.Config{TrustedOrigins: []string{"https://app.example.com"}}
+	wildcard := &config.Config{TrustedOrigins: []string{"*"}}
+
+	tests := []struct {
+		name      string
+		cfg       *config.Config
+		origin    string
+		fetchSite string
+		preflight bool
+		wantPass  bool
+	}{
+		{name: "no origin at all", cfg: trusted, wantPass: true},
+		{name: "the wildcard trusts everything", cfg: wildcard, origin: "https://evil.example.com", fetchSite: "cross-site", wantPass: true},
+		{name: "a preflight is answered rather than judged", cfg: trusted, origin: "https://evil.example.com", preflight: true, wantPass: true},
+		{name: "a named origin passes even cross-site", cfg: trusted, origin: "https://app.example.com", fetchSite: "cross-site", wantPass: true},
+		{name: "the browser says same-origin", cfg: trusted, origin: "https://mcp.example.com", fetchSite: "same-origin", wantPass: true},
+		{name: "a desktop client with no initiating site", cfg: trusted, origin: "app://obsidian.md", fetchSite: "none", wantPass: true},
+		{name: "the browser says cross-site", cfg: trusted, origin: "https://evil.example.com", fetchSite: "cross-site"},
+		{name: "no metadata and a matching host", cfg: trusted, origin: "https://mcp.example.com", wantPass: true},
+		{name: "no metadata and another host", cfg: trusted, origin: "https://evil.example.com"},
+		{name: "no metadata and an unparseable origin", cfg: trusted, origin: "://nonsense"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var reached bool
+			handler := mcpOriginMiddleware(tt.cfg, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				reached = true
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			method := http.MethodPost
+			if tt.preflight {
+				method = http.MethodOptions
+			}
+			req := httptest.NewRequestWithContext(t.Context(), method, "/mcp", http.NoBody)
+			req.Host = "mcp.example.com"
+			if tt.origin != "" {
+				req.Header.Set("Origin", tt.origin)
+			}
+			if tt.fetchSite != "" {
+				req.Header.Set("Sec-Fetch-Site", tt.fetchSite)
+			}
+			if tt.preflight {
+				req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+			}
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			if reached != tt.wantPass {
+				t.Errorf("handler reached = %v, want %v (status %d)", reached, tt.wantPass, rec.Code)
+			}
+			if !tt.wantPass && rec.Code != http.StatusForbidden {
+				t.Errorf("status = %d, want %d for a refused origin", rec.Code, http.StatusForbidden)
+			}
+		})
+	}
+}
+
+// TestServerCardAuthentication_OAuthModeNamesTheScopeAndTheMetadata covers what
+// the public card says about getting in.
+//
+// The scope is the least privilege the deployment can work with rather than a
+// constant, so a read-only deployment does not ask a client to authorize a write
+// scope it will never use. The metadata link is named as the RFC 9728 field a
+// client already knows, so a consumer that understands protected-resource
+// metadata can follow it without learning a card-specific convention.
+func TestServerCardAuthentication_OAuthModeNamesTheScopeAndTheMetadata(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name             string
+		cfg              *config.Config
+		wantRequired     bool
+		wantScope        string
+		wantResourceMeta bool
+	}{
+		{
+			name:             "oauth with a public url",
+			cfg:              &config.Config{AuthMode: config.AuthModeOAuth, PublicURL: "https://mcp.example.com"},
+			wantRequired:     true,
+			wantScope:        oauth.ScopeAPI,
+			wantResourceMeta: true,
+		},
+		{
+			name:         "oauth read-only asks for less",
+			cfg:          &config.Config{AuthMode: config.AuthModeOAuth, ReadOnly: true},
+			wantRequired: true,
+			wantScope:    oauth.ScopeReadAPI,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			info := serverCardAuthentication(tt.cfg)
+
+			if got, _ := info["required"].(bool); got != tt.wantRequired {
+				t.Errorf("required = %v, want %v", info["required"], tt.wantRequired)
+			}
+			scopes, _ := info["scopes"].([]string)
+			if len(scopes) != 1 || scopes[0] != tt.wantScope {
+				t.Errorf("scopes = %v, want [%s]", info["scopes"], tt.wantScope)
+			}
+			_, hasMeta := info["resourceMetadata"]
+			if hasMeta != tt.wantResourceMeta {
+				t.Errorf("resourceMetadata present = %v, want %v", hasMeta, tt.wantResourceMeta)
+			}
+		})
+	}
+}
+
+// TestValidateHTTPSurfaceConfig_DefaultsThenRefusesWhatItCannotServe covers the
+// two surface selectors an HTTP deployment can misspell.
+//
+// Each empty value takes the documented default rather than an error, because
+// omitting a flag is not a mistake; each unrecognized value is refused at
+// startup naming what was accepted, because the alternative is a server that
+// silently serves a different surface than the operator configured.
+func TestValidateHTTPSurfaceConfig_DefaultsThenRefusesWhatItCannotServe(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		cfg     *config.Config
+		wantErr string
+		want    func(*config.Config) bool
+	}{
+		{
+			name: "both empty take their defaults",
+			cfg:  &config.Config{},
+			want: func(c *config.Config) bool {
+				return c.MetaParamSchema == config.DefaultMetaParamSchema && c.CapabilitySurface == config.DefaultCapabilitySurface
+			},
+		},
+		{
+			name: "both set are kept",
+			cfg:  &config.Config{MetaParamSchema: config.MetaParamSchemaFull, CapabilitySurface: config.CapabilitySurfaceMinimal},
+			want: func(c *config.Config) bool {
+				return c.MetaParamSchema == config.MetaParamSchemaFull && c.CapabilitySurface == config.CapabilitySurfaceMinimal
+			},
+		},
+		{name: "an unknown param schema", cfg: &config.Config{MetaParamSchema: "verbose"}, wantErr: "meta-param-schema"},
+		{name: "an unknown capability surface", cfg: &config.Config{CapabilitySurface: "some"}, wantErr: "capability-surface"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateHTTPSurfaceConfig(tt.cfg)
+
+			if tt.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("error = %v, want it to name %s", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("validateHTTPSurfaceConfig: %v", err)
+			}
+			if !tt.want(tt.cfg) {
+				t.Errorf("config = %+v after validation, want the documented defaults kept", tt.cfg)
+			}
+		})
+	}
+}
+
+// TestValidateHTTPDurationConfig_RefusesWhatWouldNeverExpire covers the upper
+// bounds on the two intervals that keep a pooled entry honest.
+//
+// Both exist because the failure is invisible: a revalidation interval of a
+// week means a revoked token keeps working for a week, and a pool idle timeout
+// past a day means a credential nobody has used since yesterday still holds a
+// server and its GitLab client.
+func TestValidateHTTPDurationConfig_RefusesWhatWouldNeverExpire(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		cfg     *config.Config
+		wantErr string
+	}{
+		{name: "inside every bound", cfg: &config.Config{SessionTimeout: time.Minute, RevalidateInterval: time.Minute, PoolIdleTimeout: time.Hour}},
+		{name: "revalidation past its maximum", cfg: &config.Config{SessionTimeout: time.Minute, RevalidateInterval: config.MaxRevalidateInterval + time.Hour}, wantErr: "revalidate-interval"},
+		{name: "pool idle past its maximum", cfg: &config.Config{SessionTimeout: time.Minute, PoolIdleTimeout: config.MaxPoolIdleTimeout + time.Hour}, wantErr: "pool-idle-timeout"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateHTTPDurationConfig(tt.cfg)
+
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("validateHTTPDurationConfig = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %v, want it to name %s", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestDoToolSearch_AnEmptyQuery_IsNotAnError covers the exit taken before a
+// catalog is ever built.
+//
+// --tool-search with nothing in it has nothing to report, and refusing would be
+// a failure the caller cannot act on. It also skips building a catalog of a
+// thousand tools to search for nothing.
+func TestDoToolSearch_AnEmptyQuery_IsNotAnError(t *testing.T) {
+	t.Parallel()
+
+	if err := doToolSearch("   ", config.ToolSurfaceDynamic, edition.Free); err != nil {
+		t.Errorf("doToolSearch with an empty query = %v, want nil", err)
+	}
+}
+
+// TestRemovedActionKeys_ReportsWhatAFilterTookAway covers the diff behind the
+// message a caller gets when an action was withheld.
+//
+// Naming the cause is the whole point: a model told only that an action is
+// unknown, alongside suggestions that are all real read-only actions, concludes
+// the server lacks the capability rather than that the credential is narrow.
+// A missing catalog on either side yields nothing rather than claiming
+// everything was removed.
+func TestRemovedActionKeys_ReportsWhatAFilterTookAway(t *testing.T) {
+	t.Parallel()
+
+	if got := removedActionKeys(nil, actioncatalog.NewCatalog()); got != nil {
+		t.Errorf("removedActionKeys(nil, empty) = %v, want nothing claimed", got)
+	}
+	if got := removedActionKeys(actioncatalog.NewCatalog(), nil); got != nil {
+		t.Errorf("removedActionKeys(empty, nil) = %v, want nothing claimed", got)
+	}
+}
+
+// TestRemoveExcludedTools_WithNothingToExclude_TouchesNothing covers the early
+// exit that keeps startup free of an in-memory MCP round trip nobody asked for.
+//
+// The filter works by listing the registered tools through an ephemeral
+// session, which is real work on a surface with a thousand tools; a deployment
+// that excludes nothing must not pay for it.
+func TestRemoveExcludedTools_WithNothingToExclude_TouchesNothing(t *testing.T) {
+	t.Parallel()
+
+	if got := removeExcludedTools(t.Context(), nil, nil); got != 0 {
+		t.Errorf("removeExcludedTools with no patterns = %d, want 0 (and no server call)", got)
+	}
+}
+
+// TestResolveToolSurfaceForTelemetry_ReadsTheInputsEachModeReallyUses covers
+// how telemetry learns which surface this process will serve.
+//
+// It has to be answered before anything is registered, because the auto
+// tool-name policy sizes the metric label space by it, and the two modes take
+// their surface from different places: HTTP from its flags with the environment
+// filling in behind them, stdio from the environment alone. Reading the flags
+// alone made TOOL_SURFACE exported into an HTTP deployment's environment
+// invisible here while the overlay honored it, so telemetry sized itself for
+// the wrong surface. An unparseable value falls back to the default rather than
+// failing: the mode's own startup reports it properly a moment later.
+func TestResolveToolSurfaceForTelemetry_ReadsTheInputsEachModeReallyUses(t *testing.T) {
+	tests := []struct {
+		name       string
+		envSurface string
+		envMeta    string
+		hcfg       *httpConfig
+		want       string
+	}{
+		{name: "stdio with nothing set", want: config.ToolSurfaceDynamic},
+		{name: "stdio reads the environment", envSurface: config.ToolSurfaceIndividual, want: config.ToolSurfaceIndividual},
+		{name: "stdio honors the deprecated selector", envMeta: "true", want: config.ToolSurfaceMeta},
+		{
+			name: "http takes the flag",
+			hcfg: &httpConfig{toolSurface: config.ToolSurfaceMeta},
+			want: config.ToolSurfaceMeta,
+		},
+		{
+			name:       "http lets the environment fill in behind the flag",
+			envSurface: config.ToolSurfaceIndividual,
+			hcfg:       &httpConfig{},
+			want:       config.ToolSurfaceIndividual,
+		},
+		{
+			name: "http honors an explicitly passed --meta-tools",
+			hcfg: &httpConfig{metaTools: true, metaToolsSet: true},
+			want: config.ToolSurfaceMeta,
+		},
+		{
+			name:       "an unusable value falls back to the default",
+			envSurface: "telepathy",
+			want:       config.ToolSurfaceDynamic,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("TOOL_SURFACE", tt.envSurface)
+			t.Setenv("META_TOOLS", tt.envMeta)
+
+			if got := resolveToolSurfaceForTelemetry(tt.hcfg); got != tt.want {
+				t.Errorf("resolveToolSurfaceForTelemetry = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestCreateServer_WithoutAClient_IsRefused covers the one argument createServer
+// cannot work without.
+//
+// Every registration path dereferences the client, so accepting nil would move
+// a nil dereference from this line into whichever tool a model happened to call
+// first — a panic on the request path rather than an error at startup.
+func TestCreateServer_WithoutAClient_IsRefused(t *testing.T) {
+	t.Parallel()
+
+	server, err := createServer(t.Context(), nil, &config.ServerConfig{})
+
+	if err == nil {
+		t.Fatal("createServer accepted a nil client")
+	}
+	if server != nil {
+		t.Errorf("server = %v, want nothing built", server)
+	}
+	if !strings.Contains(err.Error(), "client") {
+		t.Errorf("error = %q, want it to name the missing client", err)
+	}
+}
+
+// TestValidateHTTPRuntimeConfig_RefusesEachUnusableSetting covers the startup
+// checks an HTTP deployment gets before anything is bound.
+//
+// Every one of these is a setting whose failure is otherwise invisible or late:
+// a TLS pair that does not load fails on the first handshake nobody watches, a
+// malformed trusted origin would be silently dropped and leave a browser client
+// refused forever, and a metadata link that is not a URL lands on somebody's
+// consent screen. Each is refused here, naming the flag the operator typed.
+func TestValidateHTTPRuntimeConfig_RefusesEachUnusableSetting(t *testing.T) {
+	t.Parallel()
+
+	base := func() *config.Config {
+		return &config.Config{
+			SessionTimeout:    time.Minute,
+			MetaParamSchema:   config.DefaultMetaParamSchema,
+			CapabilitySurface: config.DefaultCapabilitySurface,
+			RateLimitRPS:      1,
+			RateLimitBurst:    1,
+		}
+	}
+
+	tests := []struct {
+		name    string
+		mutate  func(*config.Config)
+		wantErr string
+	}{
+		{name: "a usable configuration", mutate: func(*config.Config) {}},
+		{
+			name:    "an unknown capability surface",
+			mutate:  func(c *config.Config) { c.CapabilitySurface = "some" },
+			wantErr: "capability-surface",
+		},
+		{
+			name:    "a revalidation interval past its maximum",
+			mutate:  func(c *config.Config) { c.RevalidateInterval = config.MaxRevalidateInterval + time.Hour },
+			wantErr: "revalidate-interval",
+		},
+		{
+			name:    "a TLS certificate without its key",
+			mutate:  func(c *config.Config) { c.TLSCertFile = "/etc/ssl/mcp.crt" },
+			wantErr: "tls-key",
+		},
+		{
+			name:    "a burst that cannot serve the configured rate",
+			mutate:  func(c *config.Config) { c.RateLimitRPS, c.RateLimitBurst = 10, 0 },
+			wantErr: "rate-limit",
+		},
+		{
+			name:    "a trusted origin that is not an origin",
+			mutate:  func(c *config.Config) { c.TrustedOrigins = []string{"*", "https://app.example.com", "not-an-origin"} },
+			wantErr: "trusted-origins",
+		},
+		{
+			name:    "a documentation link that is not a URL",
+			mutate:  func(c *config.Config) { c.ResourceDocumentation = "see the wiki" },
+			wantErr: "resource-documentation",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := base()
+			tt.mutate(cfg)
+
+			err := validateHTTPRuntimeConfig(cfg)
+
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validateHTTPRuntimeConfig = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("validateHTTPRuntimeConfig accepted %+v", cfg)
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %q, want it to name %s", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestValidateOAuthCacheTTL_AcceptsWhatIsInsideTheDocumentedRange covers the
+// bounds on how long an identity may be answered from memory.
+//
+// Too short and every request re-verifies upstream, which is a load multiplier
+// on the GitLab instance; too long and a revoked token keeps working. The
+// range is what the documentation promises, so both ends are checked rather
+// than clamped silently.
+func TestValidateOAuthCacheTTL_AcceptsWhatIsInsideTheDocumentedRange(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		ttl     time.Duration
+		wantErr bool
+	}{
+		{name: "the default", ttl: config.DefaultOAuthCacheTTL},
+		{name: "the minimum", ttl: config.MinOAuthCacheTTL},
+		{name: "the maximum", ttl: config.MaxOAuthCacheTTL},
+		{name: "below the minimum", ttl: config.MinOAuthCacheTTL - time.Second, wantErr: true},
+		{name: "above the maximum", ttl: config.MaxOAuthCacheTTL + time.Second, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validateOAuthCacheTTL(tt.ttl)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateOAuthCacheTTL(%s) = %v, want error=%v", tt.ttl, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestRunHTTP_RefusesABadConfigurationBeforeBinding covers the settings HTTP
+// mode rejects on the way in, each from a different layer of the same startup.
+//
+// They are worth one test together because the property under test is shared:
+// none of them may reach the point where a listener exists. A server that binds
+// and then discovers its socket mode is nonsense has already told the operator
+// it started.
+func TestRunHTTP_RefusesABadConfigurationBeforeBinding(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     map[string]string
+		hcfg    *httpConfig
+		wantErr string
+	}{
+		{
+			name:    "an environment value that does not parse",
+			env:     map[string]string{"CAPABILITY_SURFACE": "some"},
+			hcfg:    &httpConfig{gitlabURL: "https://gitlab.example.com"},
+			wantErr: "loading environment configuration",
+		},
+		{
+			name:    "a socket mode that is not a mode",
+			hcfg:    &httpConfig{gitlabURL: "https://gitlab.example.com", socketMode: "999"},
+			wantErr: "http-socket-mode",
+		},
+		{
+			name:    "a tool surface this server does not serve",
+			hcfg:    &httpConfig{gitlabURL: "https://gitlab.example.com", toolSurface: "telepathy"},
+			wantErr: "tool surface",
+		},
+		{
+			name:    "a tier this server does not know",
+			hcfg:    &httpConfig{gitlabURL: "https://gitlab.example.com", tier: "platinum", tierSet: true},
+			wantErr: "tier",
+		},
+		{
+			name:    "an instance URL carrying credentials",
+			hcfg:    &httpConfig{gitlabURL: "https://user:pass@gitlab.example.com"},
+			wantErr: "gitlab-url",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for key, value := range tt.env {
+				t.Setenv(key, value)
+			}
+			hcfg := tt.hcfg
+			hcfg.maxHTTPClients = config.DefaultMaxHTTPClients
+			hcfg.sessionTimeout = config.DefaultSessionTimeout
+
+			err := runHTTP(t.Context(), hcfg)
+
+			if err == nil {
+				t.Fatal("runHTTP started with a configuration it must refuse")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %q, want it to name %s", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestRunWithContext_DeclaresWhichGitLabHostsAMetricMayName covers the
+// per-mode decision about the http.client metric's server.address dimension.
+//
+// The modes disagree about who chooses the instance, and the dimension has to
+// follow: a pinned deployment names its own hosts, while a deployment that lets
+// every caller choose must declare none, because a caller-supplied hostname on a
+// metric is a caller minting time series. The assertion is indirect — the
+// declaration happens before the mode's own validation refuses the rest of the
+// configuration — so what is pinned here is that the refusal still comes from
+// the mode and not from the declaration.
+func TestRunWithContext_DeclaresWhichGitLabHostsAMetricMayName(t *testing.T) {
+	tests := []struct {
+		name string
+		env  string
+		hcfg *httpConfig
+	}{
+		{
+			name: "an http deployment pinned by flag",
+			hcfg: &httpConfig{gitlabURLs: repeatedFlag{"https://gitlab.example.com"}, authMode: "saml"},
+		},
+		{
+			name: "an http deployment pinned by the environment",
+			env:  "https://gitlab.example.com",
+			hcfg: &httpConfig{authMode: "saml"},
+		},
+		{
+			name: "an http deployment that lets callers choose",
+			hcfg: &httpConfig{authMode: "saml"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("GITLAB_URL", tt.env)
+			tt.hcfg.maxHTTPClients = config.DefaultMaxHTTPClients
+			tt.hcfg.sessionTimeout = config.DefaultSessionTimeout
+
+			err := runWithContext(t.Context(), tt.hcfg)
+
+			if err == nil || !strings.Contains(err.Error(), "auth-mode") {
+				t.Errorf("error = %v, want the mode's own refusal of --auth-mode", err)
+			}
+		})
+	}
+}
+
+// TestMain_VersionAndToolSearch_ExitBeforeAnythingIsStarted covers the argument
+// forms that answer and return without becoming a server.
+//
+// Each of them runs before the configuration is read, which is the point: an
+// operator asking what version this is, or which tools match a word, must get
+// an answer on a machine that has no GITLAB_TOKEN and no reachable instance.
+// The two failure paths exit non-zero through the seam rather than returning,
+// so a script can tell "no such surface" from "no matches".
+func TestMain_VersionAndToolSearch_ExitBeforeAnythingIsStarted(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		// wantStdout is a fragment the answer must carry, for the forms that
+		// print one themselves.
+		wantStdout string
+		// wantSearch is the query the search runner must receive, or "" when
+		// no search may run.
+		wantSearch string
+		wantExit   []int
+	}{
+		{
+			name:       "--version prints and returns",
+			args:       []string{"gitlab-mcp-server", "-version"},
+			wantStdout: version,
+		},
+		{
+			name:       "--tool-search runs the search",
+			args:       []string{"gitlab-mcp-server", "-tool-search", "issue list"},
+			wantSearch: "issue list",
+		},
+		{
+			name:     "a surface the search cannot use exits non-zero",
+			args:     []string{"gitlab-mcp-server", "-tool-search", "issue", "-tool-surface", "telepathy"},
+			wantExit: []int{1},
+		},
+		{
+			name:     "a tier the search cannot use exits non-zero",
+			args:     []string{"gitlab-mcp-server", "-tool-search", "issue", "-tier", "platinum"},
+			wantExit: []int{1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			withFreshFlagSet(t)
+
+			var searched string
+			originalRunner, originalExit := toolSearchRunner, exitProcess
+			t.Cleanup(func() { toolSearchRunner, exitProcess = originalRunner, originalExit })
+			toolSearchRunner = func(query, _ string, _ edition.Tier) error {
+				searched = query
+				return nil
+			}
+			var exits []int
+			exitProcess = func(code int) { exits = append(exits, code) }
+
+			originalArgs := os.Args
+			os.Args = tt.args
+			t.Cleanup(func() { os.Args = originalArgs })
+			stdout := captureStdout(t)
+
+			main()
+
+			printed := stdout()
+			if tt.wantStdout != "" && !strings.Contains(printed, tt.wantStdout) {
+				t.Errorf("stdout = %q, want it to carry %q", printed, tt.wantStdout)
+			}
+			if searched != tt.wantSearch {
+				t.Errorf("search query = %q, want %q", searched, tt.wantSearch)
+			}
+			if !slices.Equal(exits, tt.wantExit) {
+				t.Errorf("exit codes = %v, want %v", exits, tt.wantExit)
+			}
+		})
+	}
+}
+
+// TestMain_StdioMode_StartsAndStopsWithTheClient covers the ordinary path all
+// the way through main: no flags, credentials from the environment, and a
+// client that closes its pipe.
+//
+// It is the only test that runs the startup summary — the logger, the server
+// info the health tool reports, and the transport selection — in the order main
+// really runs them. The client's departure is the documented way this process
+// ends, and it has to end by returning rather than by a non-zero exit, because
+// systemd's Restart=on-failure acts on the difference.
+func TestMain_StdioMode_StartsAndStopsWithTheClient(t *testing.T) {
+	withFreshFlagSet(t)
+	gitlab := newMockGitLabServerWithUser(t)
+	t.Setenv("GITLAB_URL", gitlab.URL)
+	t.Setenv("GITLAB_TOKEN", testToken)
+	t.Setenv("TOOL_SURFACE", config.ToolSurfaceDynamic)
+	t.Setenv("LOG_LEVEL", "error")
+
+	originalArgs := os.Args
+	os.Args = []string{"gitlab-mcp-server"}
+	t.Cleanup(func() { os.Args = originalArgs })
+
+	// A closed pipe as stdin: the SDK reads EOF immediately, which is exactly
+	// what a client exiting does, and it is also what keeps this test from
+	// reading the test runner's own stdin.
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	_ = writer.Close()
+	originalStdin, originalLogger := os.Stdin, slog.Default()
+	os.Stdin = reader
+	t.Cleanup(func() {
+		os.Stdin = originalStdin
+		slog.SetDefault(originalLogger)
+		_ = reader.Close()
+	})
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		main()
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(testHTTPLivenessTimeout):
+		t.Fatal("main did not return after the client closed its end of the pipe")
+	}
+}
+
+// captureStdout redirects os.Stdout for the duration of the test and returns a
+// function that stops the capture and yields what was written.
+func captureStdout(t *testing.T) func() string {
+	t.Helper()
+
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	original := os.Stdout
+	os.Stdout = writer
+
+	var once sync.Once
+	var captured string
+	stop := func() string {
+		once.Do(func() {
+			os.Stdout = original
+			_ = writer.Close()
+			out, readErr := io.ReadAll(reader)
+			if readErr != nil {
+				t.Errorf("reading captured stdout: %v", readErr)
+			}
+			captured = string(out)
+			_ = reader.Close()
+		})
+		return captured
+	}
+	t.Cleanup(func() { stop() })
+	return stop
+}
+
+// TestBuildServerCard_AnUnusableInstanceURL_IsReportedNotServed covers the one
+// failure the card builder can hit before it inspects anything.
+//
+// The card is a public document, so a deployment whose configured instance URL
+// does not parse must answer 503 rather than serve a card built against a
+// client that does not exist.
+func TestBuildServerCard_AnUnusableInstanceURL_IsReportedNotServed(t *testing.T) {
+	t.Parallel()
+
+	card, err := buildServerCard(t.Context(), &config.Config{GitLabURL: "://not-a-url"})
+
+	if err == nil {
+		t.Fatalf("buildServerCard returned a card for an unusable instance URL: %s", card)
+	}
+	if card != nil {
+		t.Errorf("card = %s, want nothing published", card)
+	}
+}
+
+// TestRemoveExcludedTools_RemovesOnlyTheNamedTools covers the filter an
+// operator uses to take a tool off the surface.
+//
+// The count is what the startup line reports, and the tools left behind are the
+// deployment's actual surface, so an over-broad match would silently remove
+// capability an operator still expects to have.
+func TestRemoveExcludedTools_RemovesOnlyTheNamedTools(t *testing.T) {
+	t.Parallel()
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	for _, name := range []string{"gitlab_issue", "gitlab_runner", "gitlab_project"} {
+		mcp.AddTool(server, &mcp.Tool{Name: name, Description: name},
+			func(context.Context, *mcp.CallToolRequest, map[string]any) (*mcp.CallToolResult, any, error) {
+				return &mcp.CallToolResult{}, nil, nil
+			})
+	}
+
+	removed := removeExcludedTools(t.Context(), server, []string{"gitlab_runner", "gitlab_absent"})
+
+	if removed != 1 {
+		t.Errorf("removeExcludedTools = %d, want the one tool that was actually registered", removed)
+	}
+	tools, err := listRegisteredTools(server, "test")
+	if err != nil {
+		t.Fatalf("listRegisteredTools: %v", err)
+	}
+	for _, tool := range tools {
+		if tool.Name == "gitlab_runner" {
+			t.Error("the excluded tool is still registered")
+		}
+	}
+	if len(tools) != 2 {
+		t.Errorf("registered tools = %d, want the other two left alone", len(tools))
+	}
+}
+
+// TestCatalogBackedToolNames_WithoutACatalog_ExemptsNothing covers the safe-mode
+// exemption set when there is no catalog to read.
+//
+// Exempting a tool means safe mode does not wrap it, on the grounds that the
+// catalog already previews each of its actions. With no catalog that reasoning
+// does not hold, so nothing may be exempt: the alternative is a mutating tool
+// executing for real in a deployment that asked for previews.
+func TestCatalogBackedToolNames_WithoutACatalog_ExemptsNothing(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		surface string
+		catalog *actioncatalog.Catalog
+	}{
+		{name: "the individual surface exempts nothing by design", surface: config.ToolSurfaceIndividual, catalog: actioncatalog.NewCatalog()},
+		{name: "no catalog to read", surface: config.ToolSurfaceMeta, catalog: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := catalogBackedToolNames(tt.catalog, tt.surface); len(got) != 0 {
+				t.Errorf("catalogBackedToolNames = %v, want nothing exempt from safe mode", got)
+			}
+		})
+	}
+}
+
+// TestDeprecationWarnings_SayWhatToWriteInstead covers the three lines an
+// operator gets for configuration this server still honors but no longer
+// documents.
+//
+// Each has to name the replacement rather than just the deprecation, because
+// the reader's next action is editing a unit file. Nothing is logged for a
+// configuration that is already current, so the lines only appear when they
+// apply to something.
+func TestDeprecationWarnings_SayWhatToWriteInstead(t *testing.T) {
+	tests := []struct {
+		name     string
+		log      func()
+		want     []string
+		wantNone bool
+	}{
+		{
+			name: "the deprecated boolean tool selector",
+			log:  func() { logLegacyMetaToolsDeprecation("", "true") },
+			want: []string{"TOOL_SURFACE"},
+		},
+		{
+			name:     "an unusable value for it says nothing here",
+			log:      func() { logLegacyMetaToolsDeprecation("", "sometimes") },
+			wantNone: true,
+		},
+		{
+			name:     "a current configuration says nothing",
+			log:      func() { logLegacyMetaToolsDeprecation(config.ToolSurfaceMeta, "") },
+			wantNone: true,
+		},
+		{
+			name: "the deprecated enterprise switch",
+			log:  func() { logLegacyEnterpriseEnvDeprecation("", "true") },
+			want: []string{"GITLAB_ENTERPRISE", "GITLAB_TIER"},
+		},
+		{
+			name:     "the tier variable alone says nothing",
+			log:      func() { logLegacyEnterpriseEnvDeprecation("ultimate", "") },
+			wantNone: true,
+		},
+		{
+			name: "request options this deployment ignores",
+			log: func() {
+				logIgnoredRequestOptions("glpat-0123456789", serverpool.RequestOptions{
+					IgnoredOptions:    []string{"META_TOOLS"},
+					DeprecatedOptions: []string{"META_TOOLS"},
+				})
+			},
+			want: []string{"META_TOOLS", "TOOL_SURFACE"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			previous := slog.Default()
+			slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
+			t.Cleanup(func() { slog.SetDefault(previous) })
+
+			tt.log()
+
+			logged := buf.String()
+			if tt.wantNone {
+				if logged != "" {
+					t.Errorf("logged %q for a configuration that needs no warning", logged)
+				}
+				return
+			}
+			for _, want := range tt.want {
+				if !strings.Contains(logged, want) {
+					t.Errorf("log %q is missing %q", logged, want)
+				}
+			}
+		})
+	}
+}
+
+// TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive covers
+// the three answers the heartbeat gives without emitting a frame.
+//
+// The keep-alive exists because the hops in between close an idle response —
+// nginx at 60 seconds by default, mobile carrier NATs sooner — so a stream that
+// has just written is not idle and must not be padded, a stream whose handler
+// has returned must never be written to again, and a stream whose connection is
+// gone must stop rather than write into a closed socket every 25 seconds.
+func TestSSEAwareWriter_WriteKeepAlive_StopsWhenThereIsNothingToKeepAlive(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a stream that has just written is not idle", func(t *testing.T) {
+		t.Parallel()
+
+		rec := httptest.NewRecorder()
+		writer := &sseAwareWriter{ResponseWriter: rec, lastWrite: time.Now()}
+
+		if !writer.writeKeepAlive() {
+			t.Error("the heartbeat stopped on a stream that is alive")
+		}
+		if rec.Body.Len() != 0 {
+			t.Errorf("body = %q, want no frame written to a stream that just wrote", rec.Body.String())
+		}
+	})
+
+	t.Run("a finished handler is never written to", func(t *testing.T) {
+		t.Parallel()
+
+		rec := httptest.NewRecorder()
+		writer := &sseAwareWriter{ResponseWriter: rec, stopped: true}
+
+		if writer.writeKeepAlive() {
+			t.Error("the heartbeat continued after the handler returned")
+		}
+		if rec.Body.Len() != 0 {
+			t.Errorf("body = %q, want nothing written after the handler returned", rec.Body.String())
+		}
+	})
+
+	t.Run("a broken connection stops the heartbeat", func(t *testing.T) {
+		t.Parallel()
+
+		writer := &sseAwareWriter{ResponseWriter: brokenResponseWriter{httptest.NewRecorder()}}
+
+		if writer.writeKeepAlive() {
+			t.Error("the heartbeat continued after the write failed; it would write into a closed socket forever")
+		}
+	})
+}
+
+// brokenResponseWriter is a ResponseWriter whose connection has gone away.
+type brokenResponseWriter struct {
+	*httptest.ResponseRecorder
+}
+
+func (brokenResponseWriter) Write([]byte) (int, error) {
+	return 0, errors.New("connection reset by peer")
+}
+
+// TestSSEAwareWriter_ABrokenStream_EndsItsHeartbeat covers the heartbeat
+// goroutine's own exit, as opposed to the decision it takes each tick.
+//
+// A stream whose connection has gone away must stop rather than write into a
+// closed socket every twenty-five seconds for the lifetime of the process. The
+// goroutine is joined here rather than merely given time, so the exit is
+// observed on every run instead of raced: without the join this path is covered
+// on some runs and not others, which is how a regression in it would ship.
+func TestSSEAwareWriter_ABrokenStream_EndsItsHeartbeat(t *testing.T) {
+	restore := sseKeepAliveInterval
+	sseKeepAliveInterval = time.Millisecond
+	t.Cleanup(func() { sseKeepAliveInterval = restore })
+
+	rec := httptest.NewRecorder()
+	rec.Header().Set(hdrContentType, "text/event-stream")
+	writer := &sseAwareWriter{ResponseWriter: brokenResponseWriter{rec}}
+
+	writer.WriteHeader(http.StatusOK)
+	if writer.done == nil {
+		t.Fatal("no heartbeat was started for a response that committed to text/event-stream")
+	}
+
+	select {
+	case <-writer.done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the heartbeat is still running on a stream whose writes fail")
+	}
+
+	// And stopping it afterwards is still safe: the handler always defers this,
+	// including for a stream that died on its own.
+	writer.stopKeepAlive()
+}
+
+// TestServeStdio_TheTwoDocumentedShutdowns_ExitCleanly pins the exit status of
+// the two ways an stdio session is meant to end.
+//
+// Neither is a failure, and saying otherwise has consequences beyond a log
+// line: a nonzero status is what systemd's Restart=on-failure acts on, what
+// fails a CI wrapper, and what a launcher passes outward as its own. Both used
+// to arrive here as errors — a client closing its pipe returns cleanly only
+// when nothing is in flight, and a signal returns ctx.Err() whether or not
+// anything was open — so the only stop that exited zero was EOF on a completely
+// idle server, and the everyday case did not.
+//
+// The two cases are distinguished by what stdin does, which is also what makes
+// them deterministic: a closed pipe is EOF before anything else can happen, and
+// a pipe held open cannot produce one, so the cancelled context is the only
+// thing left to end the run.
+func TestServeStdio_TheTwoDocumentedShutdowns_ExitCleanly(t *testing.T) {
+	tests := []struct {
+		name string
+		// holdOpen keeps the write end of the pipe, so the reader never sees
+		// EOF and the context is what ends the session.
+		holdOpen bool
+		// cancelFirst cancels the context before serving, standing in for a
+		// signal that arrives immediately.
+		cancelFirst bool
+	}{
+		{name: "the client closes its pipe", cancelFirst: false},
+		{name: "a signal cancels the context", holdOpen: true, cancelFirst: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader, writer, err := os.Pipe()
+			if err != nil {
+				t.Fatalf("os.Pipe: %v", err)
+			}
+			if !tt.holdOpen {
+				_ = writer.Close()
+			} else {
+				t.Cleanup(func() { _ = writer.Close() })
+			}
+			original := os.Stdin
+			os.Stdin = reader
+			t.Cleanup(func() {
+				os.Stdin = original
+				_ = reader.Close()
+			})
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tt.cancelFirst {
+				cancel()
+			}
+
+			done := make(chan error, 1)
+			go func() { done <- serveStdio(ctx, newTestMCPServer(t)) }()
+
+			select {
+			case serveErr := <-done:
+				if serveErr != nil {
+					t.Errorf("serveStdio() = %v, want a clean exit: this is a documented shutdown, not a failure", serveErr)
+				}
+			case <-time.After(testHTTPLivenessTimeout):
+				t.Fatal("serveStdio did not return")
+			}
+		})
 	}
 }

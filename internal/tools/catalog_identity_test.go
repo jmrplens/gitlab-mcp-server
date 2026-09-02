@@ -354,3 +354,45 @@ func buildTestCatalog(t *testing.T) *actioncatalog.Catalog {
 }
 
 var _ mcpotel.CallIdentifier = NewCallIdentifier(nil, config.ToolSurfaceDynamic)
+
+// TestNewCallIdentifier_MetaCallWithoutAnAction_StillNamesTheDomain covers a
+// dispatcher call whose arguments name no action.
+//
+// It happens whenever a model calls a meta-tool with an incomplete argument
+// object, which is the shape a retry loop produces. The domain is still true —
+// the tool name proves it — and recording it is what keeps such a call visible
+// on a dashboard grouped by domain, rather than dropping out of the telemetry
+// as though it had never arrived.
+func TestNewCallIdentifier_MetaCallWithoutAnAction_StillNamesTheDomain(t *testing.T) {
+	t.Parallel()
+
+	identifier := NewCallIdentifier(buildTestCatalog(t), config.ToolSurfaceMeta)
+
+	tests := []struct {
+		name      string
+		arguments any
+	}{
+		{name: "no arguments at all", arguments: nil},
+		{name: "an argument map without an action", arguments: map[string]any{"project_id": "42"}},
+		{name: "an action that is not a string", arguments: map[string]any{"action": 42}},
+		{name: "an action the catalog does not have", arguments: map[string]any{"action": "invented"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			identity, ok := identifier.Identify("gitlab_issue", tt.arguments)
+
+			if !ok {
+				t.Fatal("the call resolved to nothing; a dashboard grouped by domain would lose it entirely")
+			}
+			if identity.Domain != "issue" {
+				t.Errorf("domain = %q, want the domain the tool name proves", identity.Domain)
+			}
+			if identity.ActionID != "" {
+				t.Errorf("action = %q, want none recorded for a call that named none", identity.ActionID)
+			}
+		})
+	}
+}

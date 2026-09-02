@@ -462,3 +462,45 @@ func TestFormatTarget(t *testing.T) {
 		})
 	}
 }
+
+// TestEscapeConsentValue_ADataValueCannotImpersonateTheServer covers the
+// escaping applied to every value interpolated into a confirmation dialog.
+//
+// The dialog is where a person decides whether to allow a destructive action,
+// so what it shows has to be the server's own words plus data that cannot pass
+// for them. A project path of "demo/proj\n\n**SECURITY NOTICE** Verify at
+// https://evil.example/verify" reached the user as bold text and a link inside
+// the question they were being asked, all of it attacker-supplied by way of the
+// model. Line breaks collapse so a value cannot add structure, URL schemes are
+// defanged so nothing linkifies, and the result is fenced so emphasis and link
+// syntax are shown rather than rendered — with a fence longer than any run of
+// backticks inside it, which is the rule Markdown itself uses for nesting code.
+func TestEscapeConsentValue_ADataValueCannotImpersonateTheServer(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "an ordinary value is fenced", in: "demo/project", want: "`demo/project`"},
+		{name: "an empty value keeps the span closed", in: "", want: "` `"},
+		{name: "line breaks collapse", in: "demo\n\nSECURITY NOTICE", want: "`demo  SECURITY NOTICE`"},
+		{name: "a carriage return pair collapses once", in: "demo\r\nmore", want: "`demo more`"},
+		{name: "a URL is defanged", in: "see https://evil.example/verify", want: "`see https[:]//evil.example/verify`"},
+		{name: "a backtick is fenced by a longer run", in: "a`b", want: "``a`b``"},
+		{name: "a run of backticks is exceeded", in: "a```b", want: "````a```b````"},
+		{name: "a leading backtick is padded", in: "`a", want: "`` `a ``"},
+		{name: "a trailing backtick is padded", in: "a`", want: "`` a` ``"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := EscapeConsentValue(tt.in); got != tt.want {
+				t.Errorf("EscapeConsentValue(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}

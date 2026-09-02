@@ -307,3 +307,37 @@ func TestRedactor_ABrokenKeyringYieldsNoIdentityAtAll(t *testing.T) {
 		t.Errorf("a redactor with no keyring produced %v; an empty digest is not a pseudonym", attrs)
 	}
 }
+
+// TestPolicyDescription_AnUnknownPolicy_PromisesNothing covers the fallback of
+// the sentence an operator reads at startup.
+//
+// The description exists so that one line says what will actually leave the
+// process rather than a mode name somebody would have to look up. A value this
+// build does not know must therefore describe the safe outcome — nothing
+// recorded — because the parser that rejects unknown values runs elsewhere and
+// a description promising more than the code does is worse than no line at all.
+func TestPolicyDescription_AnUnknownPolicy_PromisesNothing(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		policy IdentityPolicy
+		want   string
+	}{
+		{name: "full names the user", policy: IdentityFull, want: "the GitLab user id and username"},
+		{name: "pseudonymous names a digest", policy: IdentityPseudonymous, want: "a per-process digest, with no readable identity"},
+		{name: "none names nobody", policy: IdentityNone, want: "nothing about who made a call"},
+		{name: "the zero value names nobody", policy: IdentityPolicy(""), want: "nothing about who made a call"},
+		{name: "a value from a future build names nobody", policy: IdentityPolicy("hashed-with-pepper"), want: "nothing about who made a call"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := PolicyDescription(tt.policy); got != tt.want {
+				t.Errorf("PolicyDescription(%q) = %q, want %q", tt.policy, got, tt.want)
+			}
+		})
+	}
+}

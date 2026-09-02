@@ -12,6 +12,8 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	apimetric "go.opentelemetry.io/otel/metric"
+	noopmetric "go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
@@ -1064,5 +1066,127 @@ func TestMiddleware_AnInventedActionStillNamesItsDomain(t *testing.T) {
 	}
 	if _, ok := attrOf(span, AttrActionID); ok {
 		t.Error("an unresolved action recorded an action id anyway")
+	}
+}
+
+// refusingMeter is a Meter whose histogram constructor fails, standing in for a
+// provider that rejects an instrument — a duplicate registration under a
+// different description, or a name a future SDK validates more strictly.
+//
+// It embeds the interface rather than implementing it: every other method keeps
+// the noop behavior, so the fake stays valid as the Meter interface grows.
+type refusingMeter struct {
+	apimetric.Meter
+	err error
+}
+
+func (m refusingMeter) Float64Histogram(string, ...apimetric.Float64HistogramOption) (apimetric.Float64Histogram, error) {
+	return nil, m.err
+}
+
+// TestInstrumentConstructors_ARefusedHistogram_IsReportedNotSwallowed covers
+// what each of the four instrument constructors does when the provider refuses.
+//
+// Returning nil is the deliberate half: a nil Float64Histogram records nothing
+// and panics on nobody, so a refused instrument costs its own measurements and
+// not the server. Reporting through otel.Handle is the other half and the one
+// that was worth a test — doing this silently would leave an operator looking
+// at a missing instrument with nothing anywhere saying why, which is
+// indistinguishable from a collector problem on their side.
+func TestInstrumentConstructors_ARefusedHistogram_IsReportedNotSwallowed(t *testing.T) {
+	refused := errors.New("the provider refused this instrument")
+	meter := refusingMeter{Meter: noopmetric.NewMeterProvider().Meter("test"), err: refused}
+
+	tests := []struct {
+		name string
+		// builtNothing reports whether the constructor produced nothing: a nil
+		// histogram for four of them, a nil tracker for the session one.
+		builtNothing func() bool
+	}{
+		{name: "mcp.server.operation.duration", builtNothing: func() bool { return newDurationHistogram(meter) == nil }},
+		{name: "mcp.client.operation.duration", builtNothing: func() bool { return newClientDurationHistogram(meter) == nil }},
+		{name: "http.server.request.duration", builtNothing: func() bool { return newHTTPServerDurationHistogram(meter) == nil }},
+		{name: "http.client.request.duration", builtNothing: func() bool { return newHTTPClientDurationHistogram(meter) == nil }},
+		{name: "mcp.server.session.duration", builtNothing: func() bool { return newSessionTracker(meter, nil, TransportPipe) == nil }},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var handled []error
+			previous := otel.GetErrorHandler()
+			otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) { handled = append(handled, err) }))
+			t.Cleanup(func() { otel.SetErrorHandler(previous) })
+
+			if !tt.builtNothing() {
+				t.Error("the constructor returned an instrument for a refused registration, want nil so it records nothing")
+			}
+			if len(handled) != 1 || !errors.Is(handled[0], refused) {
+				t.Errorf("otel error handler saw %v, want exactly the provider's refusal", handled)
+			}
+		})
+	}
+}
+
+// TestDescribe_ParamShapesWithoutTheirOwnTest covers the three request shapes
+// the description switch handles that no other test reaches.
+//
+// The typed CallToolParams is the shape a client-initiated call carries, as
+// opposed to the raw one a server receives, and both have to name the tool.
+// resources/unsubscribe is the mirror of subscribe and must describe the same
+// resource. A tools/call with no name at all is the malformed case: the span
+// keeps the bare method rather than gaining an empty gen_ai.tool.name, which
+// would be a dimension value meaning "we did not look".
+func TestDescribe_ParamShapesWithoutTheirOwnTest(t *testing.T) {
+	tests := []struct {
+		name         string
+		method       string
+		req          mcp.Request
+		res          mcp.Result
+		wantSpan     string
+		wantToolName string
+	}{
+		{
+			name:         "a typed CallToolParams still names the tool",
+			method:       "tools/call",
+			req:          &mcp.ServerRequest[*mcp.CallToolParams]{Params: &mcp.CallToolParams{Name: "gitlab_issue_list"}},
+			res:          &mcp.CallToolResult{},
+			wantSpan:     "tools/call gitlab_issue_list",
+			wantToolName: "gitlab_issue_list",
+		},
+		{
+			name:     "an unnamed tool call keeps the bare method",
+			method:   "tools/call",
+			req:      &mcp.ServerRequest[*mcp.CallToolParams]{Params: &mcp.CallToolParams{}},
+			res:      &mcp.CallToolResult{},
+			wantSpan: "tools/call",
+		},
+		{
+			name:     "resources/unsubscribe is described like its subscribe",
+			method:   "resources/unsubscribe",
+			req:      &mcp.UnsubscribeRequest{Params: &mcp.UnsubscribeParams{URI: "gitlab://project/82077663"}},
+			res:      nil,
+			wantSpan: "resources/unsubscribe",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			span := runOnce(t, Options{}, tt.method, tt.req, tt.res, nil)
+
+			if got := span.Name(); got != tt.wantSpan {
+				t.Errorf("span name = %q, want %q", got, tt.wantSpan)
+			}
+			gotValue, recorded := attrOf(span, AttrGenAIToolName)
+			got := gotValue.AsString()
+			if tt.wantToolName == "" {
+				if recorded {
+					t.Errorf("%s = %q was recorded for a request that named no tool", AttrGenAIToolName, got)
+				}
+				return
+			}
+			if !recorded || got != tt.wantToolName {
+				t.Errorf("%s = %q (recorded=%v), want %q", AttrGenAIToolName, got, recorded, tt.wantToolName)
+			}
+		})
 	}
 }

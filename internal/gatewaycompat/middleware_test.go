@@ -8,6 +8,8 @@ package gatewaycompat_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -285,5 +287,108 @@ func TestMiddleware_NonListResults_PassThrough(t *testing.T) {
 	}
 	if text.Text != "a; b" {
 		t.Errorf("call result text = %q, payload must survive verbatim", text.Text)
+	}
+}
+
+// TestMiddleware_FailedCall_IsPassedThroughUntouched covers the guard the
+// rewriting switch stands behind: a handler that failed, or that answered with
+// no result at all, has nothing to rewrite.
+//
+// The distinction matters because every branch below the guard type-asserts the
+// result. A nil result reaching the switch would fall through to the default and
+// be returned unchanged anyway, but an error result must keep its error:
+// dropping it here would turn a refused call into a successful empty one.
+func TestMiddleware_FailedCall_IsPassedThroughUntouched(t *testing.T) {
+	t.Parallel()
+
+	failed := errors.New("the handler refused this call")
+	tests := []struct {
+		name    string
+		res     mcp.Result
+		err     error
+		wantErr error
+	}{
+		{name: "an error and no result", res: nil, err: failed, wantErr: failed},
+		{name: "no result and no error", res: nil, err: nil, wantErr: nil},
+		{
+			name:    "a result alongside an error is not rewritten",
+			res:     &mcp.ListToolsResult{Tools: []*mcp.Tool{{Name: "x", Description: "a;b"}}},
+			err:     failed,
+			wantErr: failed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler := gatewaycompat.Middleware(semicolonToPeriod)(
+				func(context.Context, string, mcp.Request) (mcp.Result, error) {
+					return tt.res, tt.err
+				},
+			)
+
+			res, err := handler(context.Background(), "tools/list", nil)
+
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("error = %v, want %v", err, tt.wantErr)
+			}
+			if tt.res == nil && res != nil {
+				t.Errorf("result = %#v, want the handler's own nil", res)
+			}
+			if tt.res != nil && res != tt.res {
+				t.Errorf("result = %#v, want the handler's own result returned unrewritten", res)
+			}
+		})
+	}
+}
+
+// TestMiddleware_UnrewritableSchema_KeepsItsOriginalValue covers the two ways a
+// tool's schema comes back exactly as it arrived.
+//
+// A schema that cannot be marshaled has no JSON form to walk, and a schema with
+// no prose in it has nothing to change; in both cases the original typed value
+// is kept rather than a decoded copy, so a caller's *jsonschema.Schema stays a
+// *jsonschema.Schema. Returning the decoded map instead would marshal to the
+// same wire bytes while silently changing the type every other layer sees.
+//
+// The listing is handed to the middleware directly rather than served over a
+// session, because one of the cases is a schema the JSON encoder refuses and no
+// session could carry it.
+func TestMiddleware_UnrewritableSchema_KeepsItsOriginalValue(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		schema any
+	}{
+		{name: "nothing to marshal", schema: make(chan int)},
+		{name: "no prose to rewrite", schema: map[string]any{"type": "object", "properties": map[string]any{"id": map[string]any{"type": "integer"}}}},
+		{name: "prose the substitutions do not touch", schema: map[string]any{"description": "nothing here"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler := gatewaycompat.Middleware(semicolonToPeriod)(
+				func(context.Context, string, mcp.Request) (mcp.Result, error) {
+					return &mcp.ListToolsResult{Tools: []*mcp.Tool{{Name: "t", InputSchema: tt.schema}}}, nil
+				},
+			)
+
+			res, err := handler(context.Background(), "tools/list", nil)
+			if err != nil {
+				t.Fatalf("middleware returned %v for a listing it cannot rewrite", err)
+			}
+			listed, ok := res.(*mcp.ListToolsResult)
+			if !ok || len(listed.Tools) != 1 {
+				t.Fatalf("result = %#v, want one listed tool", res)
+			}
+
+			if !reflect.DeepEqual(listed.Tools[0].InputSchema, tt.schema) {
+				t.Errorf("input schema = %#v, want the original %#v", listed.Tools[0].InputSchema, tt.schema)
+			}
+		})
 	}
 }

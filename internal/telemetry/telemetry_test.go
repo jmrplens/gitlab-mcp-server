@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
+	nooptrace "go.opentelemetry.io/otel/trace/noop"
 )
 
 // TestBuildResource_ServiceNameFromEnv_WinsOverTheDefault asserts the promise
@@ -654,6 +656,198 @@ func TestEnvSwitch_ReadsTheServerOwnVariable(t *testing.T) {
 			}
 			if got := EnvSwitch(); got != tc.want {
 				t.Errorf("EnvSwitch() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestProvider_ZeroValueAndNil_AnswerAsAnUntelemeteredProcess covers the
+// accessors on a provider that never started.
+//
+// Both shapes are ordinary rather than defensive: Start returns &Provider{} when
+// telemetry is off or vetoed, and the server card asks the same questions
+// whether or not anything is running. Each answer has to be the untelemetered
+// one — no signals, a snapshot that says disabled — rather than a panic on the
+// path that renders a public document.
+func TestProvider_ZeroValueAndNil_AnswerAsAnUntelemeteredProcess(t *testing.T) {
+	t.Parallel()
+
+	var absent *Provider
+	if got := absent.Signals(); got != (Signals{}) {
+		t.Errorf("(*Provider)(nil).Signals() = %+v, want no signals", got)
+	}
+	if absent.Enabled() {
+		t.Error("(*Provider)(nil).Enabled() = true")
+	}
+
+	off := &Provider{}
+	if got := off.Signals(); got != (Signals{}) {
+		t.Errorf("Signals() = %+v on a provider that never started, want no signals", got)
+	}
+	snapshot := off.Snapshot()
+	if snapshot.Enabled {
+		t.Errorf("Snapshot() = %+v, want Enabled false", snapshot)
+	}
+	if len(snapshot.Signals) != 0 {
+		t.Errorf("Snapshot().Signals = %v, want nothing announced", snapshot.Signals)
+	}
+}
+
+// TestProviderAbandon_WithNothingStarted_ReturnsTheCauseAlone covers the
+// abandon path when the shutdown it runs has nothing to flush.
+//
+// The cause has to come back unwrapped and unjoined, because it is the error
+// the operator will see: joining a nil shutdown error would be invisible, but
+// returning anything other than the cause would report the wrong reason for a
+// failed start. The globals are put back to no-ops on the way out so a signal
+// that had already installed its provider does not leave every instrument in
+// the process pointing at a dead pipeline.
+func TestProviderAbandon_WithNothingStarted_ReturnsTheCauseAlone(t *testing.T) {
+	provider := &Provider{enabled: true}
+	cause := errors.New("the first signal failed")
+
+	returned := provider.abandon(boundedShutdown(t), cause)
+
+	if !errors.Is(returned, cause) {
+		t.Errorf("abandon returned %v, want the cause it was given", returned)
+	}
+	if returned.Error() != cause.Error() {
+		t.Errorf("abandon returned %q, want exactly the cause with nothing joined onto it", returned)
+	}
+	// The globals are what a failed start must leave behind: no-ops, so every
+	// instrument already handed out by a signal that did come up points at
+	// nothing rather than at a pipeline nobody will flush.
+	if _, isNoop := otel.GetTracerProvider().(nooptrace.TracerProvider); !isNoop {
+		t.Errorf("tracer provider = %T after abandon, want the no-op", otel.GetTracerProvider())
+	}
+}
+
+// TestStart_WithoutAnySignalSelected_ExportsEverything covers the default an
+// operator gets by turning telemetry on and saying nothing else.
+//
+// The zero Signals value means "not chosen", not "none": a config that selected
+// nothing would otherwise start a provider that reports itself enabled while
+// exporting nothing at all, which is the failure mode that looks exactly like a
+// broken collector from the outside.
+func TestStart_WithoutAnySignalSelected_ExportsEverything(t *testing.T) {
+	// A port nothing listens on: the OTLP exporters connect lazily, so this
+	// asserts what starting does without depending on a collector.
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+	t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "200")
+	t.Setenv("OTEL_BSP_EXPORT_TIMEOUT", "200")
+
+	provider, err := Start(context.Background(), Config{Enabled: true})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = provider.Shutdown(boundedShutdown(t)) })
+
+	if got := provider.Signals(); got != AllSignals() {
+		t.Errorf("Signals() = %+v, want every signal when the config selected none", got)
+	}
+	snapshot := provider.Snapshot()
+	if !snapshot.Enabled {
+		t.Error("Snapshot() reports telemetry disabled after a successful Start")
+	}
+	if len(snapshot.Signals) != 3 {
+		t.Errorf("Snapshot().Signals = %v, want all three announced", snapshot.Signals)
+	}
+}
+
+// TestBuildResource_ServiceNameInResourceAttributes_BeatsTheDefault covers the
+// second spelling of the same operator decision.
+//
+// OTEL_SERVICE_NAME is the obvious one and has its own test; service.name
+// inside OTEL_RESOURCE_ATTRIBUTES is what a deployment written against the
+// specification's resource variable uses, and it has to win over this server's
+// built-in default in exactly the same way. Reading only the dedicated variable
+// discarded it silently, with no error and no log line, while the doc comment
+// claimed the environment won.
+func TestBuildResource_ServiceNameInResourceAttributes_BeatsTheDefault(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=staging,service.name=named-by-the-operator")
+
+	res, err := buildResource(context.Background(), Config{ServiceVersion: "2.7.6"})
+	if err != nil {
+		t.Fatalf("buildResource: %v", err)
+	}
+
+	var name, version, environment string
+	for _, attr := range res.Attributes() {
+		switch attr.Key {
+		case semconv.ServiceNameKey:
+			name = attr.Value.AsString()
+		case semconv.ServiceVersionKey:
+			version = attr.Value.AsString()
+		case "deployment.environment":
+			environment = attr.Value.AsString()
+		}
+	}
+
+	if name != "named-by-the-operator" {
+		t.Errorf("service.name = %q, want the value from OTEL_RESOURCE_ATTRIBUTES", name)
+	}
+	if version != "2.7.6" {
+		t.Errorf("service.version = %q, want the configured version", version)
+	}
+	if environment != "staging" {
+		t.Errorf("deployment.environment = %q, want the rest of OTEL_RESOURCE_ATTRIBUTES kept", environment)
+	}
+}
+
+// TestStart_EachSignalValidatesItsOwnProtocol pins that the per-signal protocol
+// variables are resolved for the signals that are on, and only those.
+//
+// A metrics-only deployment cannot act on a complaint about the traces
+// protocol, and refusing to start over a variable that would never be read is a
+// failure with no fix. The mirror case is the one that must fail: a misspelled
+// protocol for a signal this deployment does export has to stop startup with
+// the name in it, rather than surface later as a rejected batch nobody sees.
+func TestStart_EachSignalValidatesItsOwnProtocol(t *testing.T) {
+	tests := []struct {
+		name     string
+		variable string
+		signals  Signals
+		wantErr  string
+	}{
+		{
+			name:     "the metrics protocol is refused for a metrics deployment",
+			variable: "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL",
+			signals:  Signals{Metrics: true},
+			wantErr:  "metrics OTLP protocol",
+		},
+		{
+			name:     "the logs protocol is refused for a logs deployment",
+			variable: "OTEL_EXPORTER_OTLP_LOGS_PROTOCOL",
+			signals:  Signals{Logs: true},
+			wantErr:  "logs OTLP protocol",
+		},
+		{
+			name:     "a disabled signal's protocol is not read",
+			variable: "OTEL_EXPORTER_OTLP_METRICS_PROTOCOL",
+			signals:  Signals{Traces: true},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(tt.variable, "carrier-pigeon")
+			t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1")
+			t.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "200")
+
+			provider, err := Start(context.Background(), Config{Enabled: true, Signals: tt.signals})
+			t.Cleanup(func() { _ = provider.Shutdown(boundedShutdown(t)) })
+
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("Start refused a signal that is off: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("Start accepted a protocol it cannot honor for a signal it exports")
+			}
+			if !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("error = %q, want it to name %q", err, tt.wantErr)
 			}
 		})
 	}

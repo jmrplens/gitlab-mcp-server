@@ -223,3 +223,45 @@ func TestRejectedTokens_IsScopedToTheInstance(t *testing.T) {
 		})
 	}
 }
+
+// TestRejectedTokens_Lookup_HonorsDisabledAndExpiry pins the two answers Lookup
+// gives without consulting a live entry.
+//
+// A disabled cache must answer "not refused" rather than its zero RejectionKind
+// as though it knew something, and an entry past its TTL must be dropped on the
+// way out so a token refused an hour ago is verified upstream again rather than
+// refused from memory forever.
+func TestRejectedTokens_Lookup_HonorsDisabledAndExpiry(t *testing.T) {
+	t.Parallel()
+
+	const instance = "https://gitlab.example.com"
+	tests := []struct {
+		name    string
+		cache   *RejectedTokens
+		wantLen int
+	}{
+		{name: "capacity of zero disables it", cache: NewRejectedTokens(0, time.Hour)},
+		{name: "a zero TTL disables it", cache: NewRejectedTokens(8, 0)},
+		{name: "an entry past its TTL is forgotten", cache: NewRejectedTokens(8, time.Nanosecond)},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			tt.cache.RecordKind(instance, "token", RejectionUnaccepted)
+
+			kind, refused := tt.cache.Lookup(instance, "token")
+
+			if refused {
+				t.Errorf("Lookup reported a live refusal (%v) from a cache that holds none", kind)
+			}
+			if kind != RejectionInvalid {
+				t.Errorf("kind = %v, want the zero RejectionInvalid when nothing is known", kind)
+			}
+			if got := tt.cache.Len(); got != tt.wantLen {
+				t.Errorf("Len = %d, want %d entries left behind", got, tt.wantLen)
+			}
+		})
+	}
+}

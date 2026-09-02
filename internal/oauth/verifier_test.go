@@ -1204,3 +1204,154 @@ func TestGitLabVerifier_RecipientPinIsEnforcedBeforeAnythingIsCached(t *testing.
 		}
 	})
 }
+
+// TestSupportedScopes_FollowsWhatTheDeploymentCanDo pins the list published as
+// RFC 9728 scopes_supported.
+//
+// A deployment that cannot write must not advertise the write scope: a client
+// reading the metadata authorizes for what it is offered, and offering api on a
+// read-only server asks the user to grant a permission the server will never
+// use. A deployment that can write advertises both, so a client that
+// deliberately wants a credential which cannot break anything has one to ask
+// for.
+func TestSupportedScopes_FollowsWhatTheDeploymentCanDo(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		readOnly bool
+		safeMode bool
+		want     []string
+	}{
+		{name: "a writing deployment offers both", want: []string{ScopeAPI, ScopeReadAPI}},
+		{name: "read-only offers only the read scope", readOnly: true, want: []string{ScopeReadAPI}},
+		{name: "safe mode offers only the read scope", safeMode: true, want: []string{ScopeReadAPI}},
+		{name: "both together still offer only the read scope", readOnly: true, safeMode: true, want: []string{ScopeReadAPI}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := SupportedScopes(tt.readOnly, tt.safeMode); !slices.Equal(got, tt.want) {
+				t.Errorf("SupportedScopes(%v, %v) = %v, want %v", tt.readOnly, tt.safeMode, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestNewGitLabVerifierFor_UnresolvableInstance_IsNotATokenVerdict covers the
+// resolver failing before any credential is examined.
+//
+// The request named an instance this deployment does not publish, which says
+// nothing about the token: the resolver's own error has to travel out
+// unwrapped, so the layer above answers 403 for the instance rather than 401
+// for the credential and neither the limiter nor the negative cache is charged.
+func TestNewGitLabVerifierFor_UnresolvableInstance_IsNotATokenVerdict(t *testing.T) {
+	t.Parallel()
+
+	unpublished := errors.New("this deployment does not serve that instance")
+	verifier := NewGitLabVerifierFor(
+		func(*http.Request) (string, error) { return "", unpublished },
+		false, 15*time.Minute, NewTokenCache(),
+	)
+
+	info, err := verifier(context.Background(), "any-token",
+		httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/mcp", http.NoBody))
+
+	if !errors.Is(err, unpublished) {
+		t.Errorf("error = %v, want the resolver's own error", err)
+	}
+	if errors.Is(err, auth.ErrInvalidToken) {
+		t.Error("an unresolvable instance was reported as an invalid token; the client would discard a working credential")
+	}
+	if info != nil {
+		t.Errorf("info = %+v, want nothing identified", info)
+	}
+}
+
+// TestNewGitLabVerifierFor_ForeignDefaultTransport_StillVerifies covers the
+// fallback taken when http.DefaultTransport is not the standard one.
+//
+// A process that installs its own instrumented or mocked RoundTripper as the
+// default has nothing to clone, and the verifier builds a plain transport
+// rather than dereferencing what it found. Nothing about verification changes,
+// which is what this asserts: the clone exists to inherit proxy and timeout
+// settings, not to make the request work.
+func TestNewGitLabVerifierFor_ForeignDefaultTransport_StillVerifies(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v4/user" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(gitlabUserResponse{ID: 9, Username: "foreign-transport"})
+	}))
+	defer srv.Close()
+
+	original := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = original })
+	http.DefaultTransport = roundTripperFunc(func(r *http.Request) (*http.Response, error) {
+		return original.RoundTrip(r)
+	})
+
+	verifier := NewGitLabVerifierFor(
+		func(*http.Request) (string, error) { return srv.URL, nil },
+		false, 15*time.Minute, nil,
+	)
+	info, err := verifier(context.Background(), "valid-token",
+		httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/mcp", http.NoBody))
+	if err != nil {
+		t.Fatalf("verification failed with a non-standard DefaultTransport: %v", err)
+	}
+	if info.UserID != "9" {
+		t.Errorf("UserID = %q, want the verified identity", info.UserID)
+	}
+}
+
+// roundTripperFunc is a RoundTripper that is deliberately not an
+// *http.Transport, which is the condition the fallback above exists for.
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+// TestEffectiveCacheTTL_NeverOutlivesTheToken covers how long an identity may
+// be answered from memory.
+//
+// The configured TTL is a ceiling, not the answer: a token that expires in two
+// minutes must not be cached for fifteen, or the server keeps admitting a
+// credential GitLab has already stopped accepting. A token already past its
+// expiry gets the smallest useful lifetime rather than a negative one, which
+// would make the entry immediately stale in the other direction.
+func TestEffectiveCacheTTL_NeverOutlivesTheToken(t *testing.T) {
+	t.Parallel()
+
+	const configured = 15 * time.Minute
+	tests := []struct {
+		name   string
+		expiry time.Time
+		want   time.Duration
+	}{
+		{name: "no expiry keeps the configured TTL", expiry: time.Time{}, want: configured},
+		{name: "an expiry already past gets a second", expiry: time.Now().Add(-time.Hour), want: time.Second},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := effectiveCacheTTL(configured, tt.expiry); got != tt.want {
+				t.Errorf("effectiveCacheTTL(%s, %v) = %s, want %s", configured, tt.expiry, got, tt.want)
+			}
+		})
+	}
+
+	t.Run("an expiry sooner than the TTL wins", func(t *testing.T) {
+		t.Parallel()
+
+		got := effectiveCacheTTL(configured, time.Now().Add(2*time.Minute))
+		if got > 2*time.Minute || got <= 0 {
+			t.Errorf("effectiveCacheTTL = %s, want at most the token's own two minutes", got)
+		}
+	})
+}

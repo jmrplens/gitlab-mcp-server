@@ -91,3 +91,32 @@ func TestPipelineInputsSchema_ConstrainsMapValues(t *testing.T) {
 		t.Fatalf("inputs.additionalProperties.oneOf has %d entries, want 4 (string, number, boolean, string array)", len(oneOf))
 	}
 }
+
+// TestPipelineInputsSchema_AStructWithoutTheProperty_Panics covers the guard
+// that turns a schema drifting away from its input struct into a startup
+// failure.
+//
+// The override exists because the generic map field alone advertises
+// additionalProperties:true, promising value shapes the converter rejects. If
+// the property is renamed and this is not, the override silently stops applying
+// and the tool starts accepting arguments it cannot convert — so failing at
+// registration, loudly, is the point.
+func TestPipelineInputsSchema_AStructWithoutTheProperty_Panics(t *testing.T) {
+	t.Parallel()
+
+	type withoutInputs struct {
+		ProjectID string `json:"project_id"`
+	}
+
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("PipelineInputsSchema accepted a struct that has no such property")
+		}
+		if message, _ := recovered.(string); !strings.Contains(message, "inputs") {
+			t.Errorf("panic = %v, want the missing property named", recovered)
+		}
+	}()
+
+	_ = PipelineInputsSchema[withoutInputs]("inputs")
+}

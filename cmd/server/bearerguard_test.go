@@ -597,3 +597,71 @@ func assertSpendsNoBudget(t *testing.T, g *bearerGuard) {
 		}
 	}
 }
+
+// TestBearerGuard_UnpublishedInstance_IsForbiddenAndNotChargedToTheLimiter
+// covers a request that names an instance this deployment does not serve.
+//
+// It is a 403 about the instance rather than a 401 about the credential,
+// because the caller misaddressed the request and nothing was learned about the
+// token. It is also not charged to the per-address budget: charging it would
+// let a client with a perfectly good token lock its own address out by
+// mistyping a hostname ten times.
+func TestBearerGuard_UnpublishedInstance_IsForbiddenAndNotChargedToTheLimiter(t *testing.T) {
+	t.Parallel()
+
+	g := newTestGuard(okVerifier(oauth.ScopeAPI))
+	g.resolveInstance = func(*http.Request) (string, error) {
+		return "", &serverpool.DisallowedGitLabURLError{Allowed: []string{"https://gitlab.com"}}
+	}
+
+	failure := g.check(guardRequest(t, "gloas-valid"))
+
+	if failure == nil || failure.status != http.StatusForbidden {
+		t.Fatalf("failure = %+v, want a 403 naming the instance", failure)
+	}
+	if !strings.Contains(failure.message, "GITLAB-URL") {
+		t.Errorf("message = %q, want it to name the header that selected the instance", failure.message)
+	}
+	// The limiter's budget is three; ten more misaddressed requests must all
+	// come back as the same 403 rather than turning into a 429.
+	for range 10 {
+		if next := g.check(guardRequest(t, "gloas-valid")); next == nil || next.status != http.StatusForbidden {
+			t.Fatalf("a misaddressed request was rate limited: %+v", next)
+		}
+	}
+}
+
+// TestBearerGuard_GitLabReportsAnInsufficientScope_IsForbiddenAndNotCached
+// covers the scope verdict that comes back from GitLab rather than from the
+// token's own scope list.
+//
+// The token is valid, so the client is told to ask for the named scope rather
+// than to discard a working credential, and neither the address budget nor the
+// negative cache is charged: caching it would keep refusing that token for the
+// whole TTL after the user granted the missing scope.
+func TestBearerGuard_GitLabReportsAnInsufficientScope_IsForbiddenAndNotCached(t *testing.T) {
+	t.Parallel()
+
+	g := newTestGuard(func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
+		return nil, oauth.ErrInsufficientScope
+	})
+
+	failure := g.check(guardRequest(t, "gloas-narrow"))
+
+	if failure == nil || failure.status != http.StatusForbidden {
+		t.Fatalf("failure = %+v, want a 403 about the scope", failure)
+	}
+	challenge := failure.header.Get(headerWWWAuthenticate)
+	for _, want := range []string{`error="insufficient_scope"`, oauth.MinimumScope} {
+		t.Run(want, func(t *testing.T) {
+			t.Parallel()
+
+			if !strings.Contains(challenge, want) {
+				t.Errorf("challenge %q is missing %s", challenge, want)
+			}
+		})
+	}
+	if g.rejected.Contains("", "gloas-narrow") {
+		t.Error("a scope refusal was cached; the token would keep being refused after the user granted the scope")
+	}
+}

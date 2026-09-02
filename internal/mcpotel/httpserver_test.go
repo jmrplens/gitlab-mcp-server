@@ -2,6 +2,7 @@ package mcpotel
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -257,5 +258,44 @@ func TestServerMiddleware_JoinsTheCallersTrace(t *testing.T) {
 	if got := spans[0].SpanContext().TraceID().String(); got != upstream {
 		t.Errorf("the HTTP span has trace id %s; the caller sent %s, so their trace breaks at this server's front door",
 			got, upstream)
+	}
+}
+
+// TestRequestScheme_ReadsTheConnectionAndNotAHeader pins where the scheme comes
+// from.
+//
+// X-Forwarded-Proto is deliberately not consulted: it is attacker-controlled on
+// any deployment reachable without a proxy, and nothing here branches on the
+// scheme, so honoring it would let a caller write the wrong value into an
+// operator's dashboard for free. TLS on the connection is the one signal a
+// client cannot forge.
+func TestRequestScheme_ReadsTheConnectionAndNotAHeader(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		tls  bool
+		want string
+	}{
+		{name: "a plain connection", want: "http"},
+		{name: "a TLS connection", tls: true, want: "https"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/mcp", http.NoBody)
+			r.Header.Set("X-Forwarded-Proto", "https")
+			if tt.tls {
+				r.TLS = &tls.ConnectionState{}
+			} else {
+				r.TLS = nil
+			}
+
+			if got := requestScheme(r); got != tt.want {
+				t.Errorf("requestScheme = %q, want %q (a forwarded-proto header must not decide it)", got, tt.want)
+			}
+		})
 	}
 }

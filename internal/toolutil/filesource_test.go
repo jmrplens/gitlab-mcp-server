@@ -162,4 +162,17 @@ func TestFileOrBase64_Base64SizeLimit(t *testing.T) {
 	if _, _, _, err := OpenFileOrBase64Source("op", "", within); err != nil {
 		t.Errorf("OpenFileOrBase64Source within-limit err = %v, want nil", err)
 	}
+
+	// Far past the limit, which is the case the cheap pre-decode check exists
+	// for: base64.DecodedLen overestimates by up to two bytes, so a payload
+	// only just over the limit falls through to the exact check after
+	// decoding, and only a clearly oversized one is refused without allocating
+	// its decoded form at all.
+	t.Run("an oversized payload is refused before it is decoded", func(t *testing.T) {
+		huge := base64.StdEncoding.EncodeToString([]byte(strings.Repeat("x", 1024)))
+		if _, _, _, err := OpenFileOrBase64Source("op", "", huge); err == nil ||
+			!strings.Contains(err.Error(), "would exceed maximum allowed size") {
+			t.Errorf("OpenFileOrBase64Source oversized err = %v, want the pre-decode size refusal", err)
+		}
+	})
 }
