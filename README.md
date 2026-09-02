@@ -459,20 +459,20 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 
 | Category                 |     Files |       Lines |
 | ------------------------ | --------: | ----------: |
-| Source (`.go`, non-test) |     1,009 |     210,437 |
-| Unit tests (`_test.go`)  |       579 |     342,599 |
+| Source (`.go`, non-test) |     1,009 |     210,472 |
+| Unit tests (`_test.go`)  |       579 |     342,667 |
 | End-to-end tests         |       212 |      56,705 |
-| **Total**                | **1,800** | **609,741** |
+| **Total**                | **1,800** | **609,844** |
 
 ### Functions
 
 | Category                        |  Count |
 | ------------------------------- | -----: |
-| Source functions                |  7,922 |
-| . Exported (public)             |  2,712 |
+| Source functions                |  7,924 |
+| . Exported (public)             |  2,714 |
 | . Unexported (private)          |  5,210 |
-| Unit test functions (`TestXxx`) | 12,508 |
-| Subtests (`t.Run(...)`)         |  4,475 |
+| Unit test functions (`TestXxx`) | 12,510 |
+| Subtests (`t.Run(...)`)         |  4,477 |
 | End-to-end test functions       |    539 |
 
 ### Ratios worth noting
@@ -482,15 +482,15 @@ and is never logged. Full details: [PRIVACY.md](PRIVACY.md).
 | Test lines vs source lines         | 1.63× more tests than code |
 | Average source file length         |                 ~208 lines |
 | Average test file length           |                 ~591 lines |
-| Comment lines in source            |  28,677 (~13.6% of source) |
+| Comment lines in source            |  28,699 (~13.6% of source) |
 | Test functions per source function |                       1.6× |
 
 ### Code patterns
 
 | Pattern                            | Count |
 | ---------------------------------- | ----: |
-| `if err != nil` checks             | 6,906 |
-| `defer` statements                 | 1,079 |
+| `if err != nil` checks             | 6,908 |
+| `defer` statements                 | 1,080 |
 | `struct` types defined             | 2,777 |
 | `//nolint` suppressions            |   253 |
 | `TODO` / `FIXME` / `HACK` comments |     2 |
