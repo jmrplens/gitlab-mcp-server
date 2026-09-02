@@ -148,6 +148,30 @@ func (s *server) httpClient() *http.Client {
 	return http.DefaultClient
 }
 
+// withInstancePolicy prepends the escape hatch that lets a server start
+// without publishing a GitLab instance, unless the caller has published one
+// itself.
+//
+// HTTP mode refuses to start when no --gitlab-url is given, because a
+// deployment that has not said which GitLab it serves will make requests to
+// whatever host a caller names in the GITLAB-URL header, carrying whatever
+// token that caller supplied. Almost nothing in this module reaches GitLab at
+// all: the behavior under test is decided before a request would leave the
+// process. Those tests take the hatch so they exercise the transport rather
+// than the instance policy.
+//
+// A test that publishes its own instance, and so is testing that policy, is
+// left exactly as it was written.
+func withInstancePolicy(flags []string) []string {
+	for _, f := range flags {
+		name, _, _ := strings.Cut(strings.TrimLeft(f, "-"), "=")
+		if name == "gitlab-url" || name == "allow-any-gitlab-url" {
+			return flags
+		}
+	}
+	return append([]string{"--allow-any-gitlab-url"}, flags...)
+}
+
 // startServer launches the binary with the given extra flags and environment,
 // waits for /health, and stops it when the test ends.
 //
@@ -167,7 +191,7 @@ func startServerOnPort(t *testing.T, port int, env map[string]string, flags ...s
 	bin := serverBinary(t)
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 
-	args := append([]string{"--http", "--http-addr=" + addr}, flags...)
+	args := append([]string{"--http", "--http-addr=" + addr}, withInstancePolicy(flags)...)
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = append(os.Environ(),

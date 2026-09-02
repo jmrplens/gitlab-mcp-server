@@ -509,14 +509,17 @@ func TestOAuth_MultiInstanceAllowList(t *testing.T) {
 		return h
 	}
 
-	t.Run("no header reaches the first published instance", func(t *testing.T) {
+	t.Run("no header is refused rather than served from a default", func(t *testing.T) {
 		before := primary.calls()
 		got := srv.do(t, mcpPOST(headers(nil)))
-		if got.status != http.StatusOK {
-			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusOK, got.body)
+		if got.status != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusBadRequest, got.body)
 		}
-		if primary.calls() == before {
-			t.Error("the default instance was never contacted")
+		if !strings.Contains(got.body, primary.url) || !strings.Contains(got.body, secondary.url) {
+			t.Errorf("the refusal must name the instances this deployment publishes; got: %s", got.body)
+		}
+		if primary.calls() != before {
+			t.Error("a request naming no instance still reached one: the bearer went on the wire before the caller chose where")
 		}
 	})
 
