@@ -510,7 +510,7 @@ func TestOAuth_MultiInstanceAllowList(t *testing.T) {
 	}
 
 	t.Run("no header is refused rather than served from a default", func(t *testing.T) {
-		before := primary.calls()
+		primaryBefore, secondaryBefore := primary.calls(), secondary.calls()
 		got := srv.do(t, mcpPOST(headers(nil)))
 		if got.status != http.StatusBadRequest {
 			t.Fatalf("status = %d, want %d: %s", got.status, http.StatusBadRequest, got.body)
@@ -518,8 +518,16 @@ func TestOAuth_MultiInstanceAllowList(t *testing.T) {
 		if !strings.Contains(got.body, primary.url) || !strings.Contains(got.body, secondary.url) {
 			t.Errorf("the refusal must name the instances this deployment publishes; got: %s", got.body)
 		}
-		if primary.calls() != before {
-			t.Error("a request naming no instance still reached one: the bearer went on the wire before the caller chose where")
+		// Both counters, not just the first instance's. Watching the default
+		// alone catches nothing but a regression back to "resolve to the
+		// first published"; last published, round robin, or verifying against
+		// each instance in turn all put the bearer on the wire just as surely
+		// while leaving that one counter still.
+		if primary.calls() != primaryBefore {
+			t.Error("a request naming no instance still reached the first published one: the bearer went on the wire before the caller chose where")
+		}
+		if secondary.calls() != secondaryBefore {
+			t.Error("a request naming no instance still reached the second published one: the bearer went on the wire before the caller chose where")
 		}
 	})
 
