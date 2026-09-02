@@ -70,8 +70,11 @@ func newGitLabComClient(t *testing.T) *gitlabclient.Client {
 func collectedMetrics(t *testing.T) auditMetrics {
 	t.Helper()
 	metricsOnce.Do(func() {
-		metricsShared = collectMetrics(newAuditMetricsClient(t), newGitLabComClient(t))
+		metricsShared, errMetricsShared = collectMetrics(newAuditMetricsClient(t), newGitLabComClient(t))
 	})
+	if errMetricsShared != nil {
+		t.Fatalf("collectMetrics() error: %v", errMetricsShared)
+	}
 	return metricsShared
 }
 
@@ -84,12 +87,38 @@ var (
 	errGitLabComClient  error
 	metricsOnce         sync.Once
 	metricsShared       auditMetrics
+	errMetricsShared    error
 )
+
+// mustDynamicCatalog builds the dynamic action catalog for one surface,
+// failing the test when the catalog cannot be built.
+func mustDynamicCatalog(t *testing.T, client *gitlabclient.Client, enterprise bool) *actioncatalog.Catalog {
+	t.Helper()
+	catalog, err := dynamicActionCatalog(client, enterprise)
+	if err != nil {
+		t.Fatalf("dynamicActionCatalog(enterprise=%t) error: %v", enterprise, err)
+	}
+	return catalog
+}
+
+// mustListServerTools lists one registered surface, failing the test when the
+// registration or the listing does not complete.
+func mustListServerTools(t *testing.T, client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
+	t.Helper()
+	listed, err := listServerTools(client, meta, enterprise)
+	if err != nil {
+		t.Fatalf("listServerTools(meta=%t, enterprise=%t) error: %v", meta, enterprise, err)
+	}
+	return listed
+}
 
 // TestCountResources_IncludesToolManifest verifies resource metrics include the
 // surface-aware tool manifest registration path used by the audit command.
 func TestCountResources_IncludesToolManifest(t *testing.T) {
-	static, templates := countResources(newAuditMetricsClient(t))
+	static, templates, err := countResources(newAuditMetricsClient(t))
+	if err != nil {
+		t.Fatalf("countResources() error: %v", err)
+	}
 	if static == 0 {
 		t.Fatal("countResources() static = 0, want registered resources")
 	}
@@ -107,7 +136,10 @@ func TestListDynamicTools_ExposesTwoTools(t *testing.T) {
 		},
 	}
 
-	dynamicTools := listDynamicTools(actioncatalog.FromActionMaps(routes))
+	dynamicTools, err := listDynamicTools(actioncatalog.FromActionMaps(routes))
+	if err != nil {
+		t.Fatalf("listDynamicTools() error: %v", err)
+	}
 	if len(dynamicTools) != 2 {
 		t.Fatalf("listDynamicTools() count = %d, want 2", len(dynamicTools))
 	}
@@ -271,7 +303,7 @@ func TestCountCatalogDomains_ToolWithoutDomain_CountsAsUnknown(t *testing.T) {
 // TestDynamicSearchMetrics_ReportsIndexAndAliasCounts verifies static dynamic
 // search metrics are available without adding visible MCP tools.
 func TestDynamicSearchMetrics_ReportsIndexAndAliasCounts(t *testing.T) {
-	catalog := dynamicActionCatalog(newAuditMetricsClient(t), false)
+	catalog := mustDynamicCatalog(t, newAuditMetricsClient(t), false)
 
 	metrics := dynamicSearchMetrics(catalog)
 	if metrics.ActionCount == 0 {
@@ -286,7 +318,11 @@ func TestDynamicSearchMetrics_ReportsIndexAndAliasCounts(t *testing.T) {
 	if metrics.UnsearchableAliasCount == 0 {
 		t.Fatalf("metrics = %+v, want non-zero unsearchable alias count", metrics)
 	}
-	if len(listDynamicTools(catalog)) != 2 {
+	dynamicTools, err := listDynamicTools(catalog)
+	if err != nil {
+		t.Fatalf("listDynamicTools() error: %v", err)
+	}
+	if len(dynamicTools) != 2 {
 		t.Fatal("dynamic metrics changed advertised dynamic tool count")
 	}
 }
@@ -353,9 +389,9 @@ func TestAuditEnterpriseActionSpecs_RealCatalogHasNoLegacyRoutes(t *testing.T) {
 	selfManagedClient := newAuditMetricsClient(t)
 
 	audit := auditEnterpriseActionSpecs(
-		dynamicActionCatalog(selfManagedClient, false),
-		dynamicActionCatalog(selfManagedClient, true),
-		dynamicActionCatalog(newGitLabComClient(t), true),
+		mustDynamicCatalog(t, selfManagedClient, false),
+		mustDynamicCatalog(t, selfManagedClient, true),
+		mustDynamicCatalog(t, newGitLabComClient(t), true),
 	)
 	if len(audit.MissingSpec) != 0 {
 		t.Fatalf("MissingSpec = %v, want none", audit.MissingSpec)
@@ -472,41 +508,6 @@ func captureStderr(t *testing.T, fn func()) string {
 	return captureStream(t, &os.Stderr, fn)
 }
 
-// exitCode is the sentinel the exit seam panics with, so a test can observe
-// an audit failure that would otherwise terminate the test binary.
-type exitCode int
-
-// expectExit runs fn with exitProcess replaced by a panicking stand-in and
-// returns the status code fn tried to exit with. It fails the test when fn
-// returns without exiting, and re-raises any other panic untouched.
-func expectExit(t *testing.T, fn func()) (code int) {
-	t.Helper()
-	originalExit := exitProcess
-	exitProcess = func(code int) { panic(exitCode(code)) }
-	t.Cleanup(func() { exitProcess = originalExit })
-
-	exited := false
-	func() {
-		defer func() {
-			recovered := recover()
-			if recovered == nil {
-				return
-			}
-			sentinel, ok := recovered.(exitCode)
-			if !ok {
-				panic(recovered)
-			}
-			exited = true
-			code = int(sentinel)
-		}()
-		fn()
-	}()
-	if !exited {
-		t.Fatal("function returned instead of exiting")
-	}
-	return code
-}
-
 // TestDiffByName_CountsOnlyUniqueDifferences verifies the diff helper returns
 // the number of names in a missing from b, ignoring duplicates and overlap.
 func TestDiffByName_CountsOnlyUniqueDifferences(t *testing.T) {
@@ -602,7 +603,10 @@ func TestPrintActionIDList_ListsAllIDs(t *testing.T) {
 // TestCountPrompts_ReturnsRegisteredPromptCount verifies the prompt counter
 // returns a positive count for the live registration path.
 func TestCountPrompts_ReturnsRegisteredPromptCount(t *testing.T) {
-	got := countPrompts(newAuditMetricsClient(t))
+	got, err := countPrompts(newAuditMetricsClient(t))
+	if err != nil {
+		t.Fatalf("countPrompts() error: %v", err)
+	}
 	if got <= 0 {
 		t.Fatalf("countPrompts() = %d, want positive registered prompt count", got)
 	}
@@ -690,15 +694,15 @@ func TestPrintDomainTable_EqualCounts_SortsByName(t *testing.T) {
 func TestListServerTools_IndividualAndMetaReturnsPopulatedLists(t *testing.T) {
 	client := newAuditMetricsClient(t)
 
-	individual := listServerTools(client, false, false)
+	individual := mustListServerTools(t, client, false, false)
 	if len(individual) == 0 {
 		t.Fatal("listServerTools(individual) = 0, want registered tools")
 	}
-	meta := listServerTools(client, true, false)
+	meta := mustListServerTools(t, client, true, false)
 	if len(meta) == 0 {
 		t.Fatal("listServerTools(meta) = 0, want registered meta tools")
 	}
-	metaEnterprise := listServerTools(client, true, true)
+	metaEnterprise := mustListServerTools(t, client, true, true)
 	if len(metaEnterprise) < len(meta) {
 		t.Fatalf("listServerTools(enterprise meta) = %d, want >= %d", len(metaEnterprise), len(meta))
 	}
@@ -712,9 +716,13 @@ func TestPrintMetaSchemaModes_ListsActiveAndAllModes(t *testing.T) {
 	t.Setenv("META_PARAM_SCHEMA", "compact")
 
 	client := newAuditMetricsClient(t)
+	var err error
 	output := captureStdout(t, func() {
-		printMetaSchemaModes(client)
+		err = printMetaSchemaModes(client)
 	})
+	if err != nil {
+		t.Fatalf("printMetaSchemaModes() error: %v", err)
+	}
 
 	for _, want := range []string{
 		"Active mode (env): compact",
@@ -741,9 +749,13 @@ func TestPrintMetaSchemaModes_ListsActiveAndAllModes(t *testing.T) {
 func TestPrintMetaSchemaModes_ReportsDistinctSizesPerMode(t *testing.T) {
 	t.Setenv("META_PARAM_SCHEMA", "opaque")
 
+	var err error
 	output := captureStdout(t, func() {
-		printMetaSchemaModes(newAuditMetricsClient(t))
+		err = printMetaSchemaModes(newAuditMetricsClient(t))
 	})
+	if err != nil {
+		t.Fatalf("printMetaSchemaModes() error: %v", err)
+	}
 
 	totals := map[string]string{}
 	for line := range strings.SplitSeq(output, "\n") {
@@ -769,9 +781,13 @@ func TestPrintMetaSchemaModes_ReportsDistinctSizesPerMode(t *testing.T) {
 func TestPrintMetaSchemaModes_DefaultsToOpaqueWhenUnset(t *testing.T) {
 	t.Setenv("META_PARAM_SCHEMA", "bogus")
 
+	var err error
 	output := captureStdout(t, func() {
-		printMetaSchemaModes(newAuditMetricsClient(t))
+		err = printMetaSchemaModes(newAuditMetricsClient(t))
 	})
+	if err != nil {
+		t.Fatalf("printMetaSchemaModes() error: %v", err)
+	}
 
 	if !strings.Contains(output, "Active mode (env): opaque") {
 		t.Fatalf("printMetaSchemaModes() did not default to opaque:\n%s", output)
@@ -930,9 +946,13 @@ func TestPrintReport_RealMetrics_PrintsEveryCountedRow(t *testing.T) {
 	t.Setenv("META_PARAM_SCHEMA", "opaque")
 	metrics := collectedMetrics(t)
 
+	var err error
 	output := captureStdout(t, func() {
-		printReport(metrics, newAuditMetricsClient(t))
+		err = printReport(metrics, newAuditMetricsClient(t))
 	})
+	if err != nil {
+		t.Fatalf("printReport() error: %v", err)
+	}
 
 	rows := []struct {
 		label string
@@ -1036,9 +1056,13 @@ func TestPrintReport_FixtureMetrics_ListsSurfaceDeltas(t *testing.T) {
 		elicitationCount:                  1,
 	}
 
+	var err error
 	output := captureStdout(t, func() {
-		printReport(metrics, newAuditMetricsClient(t))
+		err = printReport(metrics, newAuditMetricsClient(t))
 	})
+	if err != nil {
+		t.Fatalf("printReport() error: %v", err)
+	}
 
 	rows := []struct {
 		label string

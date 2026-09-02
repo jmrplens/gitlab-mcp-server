@@ -23,13 +23,17 @@ import (
 var (
 	siteStatsOnce   sync.Once
 	siteStatsShared siteStats
+	errSiteStats    error
 )
 
 func newSiteStats(t *testing.T) siteStats {
 	t.Helper()
 	siteStatsOnce.Do(func() {
-		siteStatsShared = generateSiteStats(newAuditMetricsClient(t), newGitLabComClient(t))
+		siteStatsShared, errSiteStats = generateSiteStats(newAuditMetricsClient(t), newGitLabComClient(t))
 	})
+	if errSiteStats != nil {
+		t.Fatalf("generateSiteStats() error: %v", errSiteStats)
+	}
 	return siteStatsShared
 }
 
@@ -182,27 +186,28 @@ func TestReadVersionFile_RepositoryVersion_MatchesVersionFile(t *testing.T) {
 	if want == "" {
 		t.Fatal("VERSION file is empty")
 	}
-	if got := readVersionFile(); got != want {
+	got, err := readVersionFile()
+	if err != nil {
+		t.Fatalf("readVersionFile() error: %v", err)
+	}
+	if got != want {
 		t.Fatalf("readVersionFile() = %q, want %q", got, want)
 	}
 }
 
-// TestReadVersionFileAt_MissingFile_ExitsWithMessage verifies a missing
-// VERSION file is reported on stderr and terminates the generator, rather
-// than publishing stats with an empty version.
-func TestReadVersionFileAt_MissingFile_ExitsWithMessage(t *testing.T) {
+// TestReadVersionFileAt_MissingFile_ReturnsReadError verifies a missing
+// VERSION file travels back to the caller as an error naming the read,
+// rather than publishing stats with an empty version.
+func TestReadVersionFileAt_MissingFile_ReturnsReadError(t *testing.T) {
 	root := t.TempDir()
 
-	code := 0
-	stderr := captureStderr(t, func() {
-		code = expectExit(t, func() { readVersionFileAt(root) })
-	})
+	got, err := readVersionFileAt(root)
 
-	if code != 1 {
-		t.Fatalf("exit code = %d, want 1", code)
+	if err == nil || !strings.Contains(err.Error(), "read VERSION: ") {
+		t.Fatalf("readVersionFileAt(missing) error = %v, want the VERSION read failure", err)
 	}
-	if !strings.Contains(stderr, "read VERSION: ") || !strings.Contains(stderr, "VERSION") {
-		t.Fatalf("stderr = %q, want the VERSION read failure", stderr)
+	if got != "" {
+		t.Fatalf("readVersionFileAt(missing) = %q, want no version", got)
 	}
 }
 

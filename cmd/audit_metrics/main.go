@@ -67,12 +67,14 @@ func main() {
 	flag.BoolVar(&opts.checkOnly, "check", false, "with -site-stats, verify the committed file is up to date instead of writing it")
 	flag.Parse()
 
-	exitProcess(run(opts, os.Stdout, os.Stderr))
+	os.Exit(run(opts, os.Stdout, os.Stderr))
 }
 
 // run builds the audit clients, dispatches to the selected mode, and returns
 // the process exit code. Every write goes to the given writers so a test can
-// read what a mode produced.
+// read what a mode produced, and every helper below returns its failure here
+// rather than reporting one itself: run is the only place that prints a
+// failure and decides the exit code.
 func run(opts auditOptions, stdout, stderr io.Writer) int {
 	topDomains = opts.topDomains
 	if opts.topDomains < 0 {
@@ -98,14 +100,23 @@ func run(opts auditOptions, stdout, stderr io.Writer) int {
 	}
 
 	if opts.siteStatsPath != "" {
-		if statsErr := writeOrCheckSiteStats(opts.siteStatsPath, generateSiteStats(client, gitLabComClient), opts.checkOnly); statsErr != nil {
+		stats, statsErr := generateSiteStats(client, gitLabComClient)
+		if statsErr != nil {
 			fmt.Fprintf(stderr, "%v\n", statsErr)
+			return 1
+		}
+		if writeErr := writeOrCheckSiteStats(opts.siteStatsPath, stats, opts.checkOnly); writeErr != nil {
+			fmt.Fprintf(stderr, "%v\n", writeErr)
 			return 1
 		}
 		return 0
 	}
 
-	metrics := collectMetrics(client, gitLabComClient)
+	metrics, metricsErr := collectMetrics(client, gitLabComClient)
+	if metricsErr != nil {
+		fmt.Fprintf(stderr, "%v\n", metricsErr)
+		return 1
+	}
 	if opts.jsonOut {
 		if encErr := writeJSONSummary(stdout, metrics); encErr != nil {
 			fmt.Fprintf(stderr, "encode json: %v\n", encErr)
@@ -113,14 +124,12 @@ func run(opts auditOptions, stdout, stderr io.Writer) int {
 		}
 		return 0
 	}
-	printReport(metrics, client)
+	if reportErr := printReport(metrics, client); reportErr != nil {
+		fmt.Fprintf(stderr, "%v\n", reportErr)
+		return 1
+	}
 	return 0
 }
-
-// exitProcess terminates the process after an unrecoverable failure has been
-// reported on stderr. It is a variable so tests can observe the exit path
-// instead of dying with it.
-var exitProcess = os.Exit
 
 // auditMetrics holds every number the text report and the JSON summary
 // print, gathered once by [collectMetrics] so both renderers read the same
@@ -165,21 +174,23 @@ type auditMetrics struct {
 // collectMetrics gathers every count the report prints from the registered
 // MCP surfaces, the canonical catalog and the repository tree. client is a
 // self-managed instance client; gitLabComClient targets GitLab.com so the
-// GitLab.com-only tools are counted where relevant.
-func collectMetrics(client, gitLabComClient *gitlabclient.Client) auditMetrics {
-	dynamicBaseCatalog := dynamicActionCatalog(client, false)
-	dynamicEnterpriseCatalog := dynamicActionCatalog(client, true)
-	dynamicGitLabComEnterpriseCatalog := dynamicActionCatalog(gitLabComClient, true)
+// GitLab.com-only tools are counted where relevant. The first catalog,
+// registration or listing failure is returned instead of a partial payload.
+func collectMetrics(client, gitLabComClient *gitlabclient.Client) (auditMetrics, error) {
+	dynamicBaseCatalog, err := dynamicActionCatalog(client, false)
+	if err != nil {
+		return auditMetrics{}, err
+	}
+	dynamicEnterpriseCatalog, err := dynamicActionCatalog(client, true)
+	if err != nil {
+		return auditMetrics{}, err
+	}
+	dynamicGitLabComEnterpriseCatalog, err := dynamicActionCatalog(gitLabComClient, true)
+	if err != nil {
+		return auditMetrics{}, err
+	}
 
 	metrics := auditMetrics{
-		individualTools:                   listServerTools(client, false, false),
-		gitLabComIndividualTools:          listServerTools(gitLabComClient, false, false),
-		metaBase:                          listServerTools(client, true, false),
-		metaEnterprise:                    listServerTools(client, true, true),
-		metaGitLabComEnterprise:           listServerTools(gitLabComClient, true, true),
-		dynamicBase:                       listDynamicTools(dynamicBaseCatalog),
-		dynamicEnterprise:                 listDynamicTools(dynamicEnterpriseCatalog),
-		dynamicGitLabComEnterprise:        listDynamicTools(dynamicGitLabComEnterpriseCatalog),
 		dynamicBaseActions:                countActionRoutes(dynamicBaseCatalog.ActionMaps()),
 		dynamicEnterpriseActions:          countActionRoutes(dynamicEnterpriseCatalog.ActionMaps()),
 		dynamicGitLabComEnterpriseActions: countActionRoutes(dynamicGitLabComEnterpriseCatalog.ActionMaps()),
@@ -188,17 +199,45 @@ func collectMetrics(client, gitLabComClient *gitlabclient.Client) auditMetrics {
 		dynamicGitLabComEnterpriseMetrics: dynamicSearchMetrics(dynamicGitLabComEnterpriseCatalog),
 		enterpriseActionAudit:             auditEnterpriseActionSpecs(dynamicBaseCatalog, dynamicEnterpriseCatalog, dynamicGitLabComEnterpriseCatalog),
 		gitLabComEnterpriseDomains:        countCatalogDomains(dynamicGitLabComEnterpriseCatalog),
-		promptCount:                       countPrompts(client),
 		toolPackages:                      countToolPackages(),
 	}
-	metrics.staticResources, metrics.templateResources = countResources(client)
+	if metrics.individualTools, err = listServerTools(client, false, false); err != nil {
+		return auditMetrics{}, err
+	}
+	if metrics.gitLabComIndividualTools, err = listServerTools(gitLabComClient, false, false); err != nil {
+		return auditMetrics{}, err
+	}
+	if metrics.metaBase, err = listServerTools(client, true, false); err != nil {
+		return auditMetrics{}, err
+	}
+	if metrics.metaEnterprise, err = listServerTools(client, true, true); err != nil {
+		return auditMetrics{}, err
+	}
+	if metrics.metaGitLabComEnterprise, err = listServerTools(gitLabComClient, true, true); err != nil {
+		return auditMetrics{}, err
+	}
+	if metrics.dynamicBase, err = listDynamicTools(dynamicBaseCatalog); err != nil {
+		return auditMetrics{}, err
+	}
+	if metrics.dynamicEnterprise, err = listDynamicTools(dynamicEnterpriseCatalog); err != nil {
+		return auditMetrics{}, err
+	}
+	if metrics.dynamicGitLabComEnterprise, err = listDynamicTools(dynamicGitLabComEnterpriseCatalog); err != nil {
+		return auditMetrics{}, err
+	}
+	if metrics.promptCount, err = countPrompts(client); err != nil {
+		return auditMetrics{}, err
+	}
+	if metrics.staticResources, metrics.templateResources, err = countResources(client); err != nil {
+		return auditMetrics{}, err
+	}
 	metrics.srcFiles, metrics.testFiles = countSourceFiles()
 	for _, tool := range metrics.individualTools {
 		if strings.HasPrefix(tool.Name, "gitlab_interactive_") {
 			metrics.elicitationCount++
 		}
 	}
-	return metrics
+	return metrics, nil
 }
 
 // writeJSONSummary encodes the headline counts as an indented JSON object,
@@ -227,8 +266,9 @@ func writeJSONSummary(w io.Writer, metrics auditMetrics) error {
 
 // printReport writes the Markdown metrics report to stdout. client is needed
 // only by the schema-mode section, which re-registers the meta surface under
-// each META_PARAM_SCHEMA mode to size its input schemas.
-func printReport(metrics auditMetrics, client *gitlabclient.Client) {
+// each META_PARAM_SCHEMA mode to size its input schemas; a failure there is
+// returned so the caller reports it.
+func printReport(metrics auditMetrics, client *gitlabclient.Client) error {
 	resourceCount := metrics.staticResources + metrics.templateResources
 
 	fmt.Println("=" + strings.Repeat("=", 59))
@@ -270,7 +310,9 @@ func printReport(metrics auditMetrics, client *gitlabclient.Client) {
 
 	fmt.Println("## Meta-Tool Schema Modes")
 	fmt.Println()
-	printMetaSchemaModes(client)
+	if err := printMetaSchemaModes(client); err != nil {
+		return err
+	}
 	fmt.Println()
 
 	fmt.Println("## Codebase Metrics")
@@ -316,6 +358,7 @@ func printReport(metrics auditMetrics, client *gitlabclient.Client) {
 			fmt.Printf(toolListFormat, tool.Name)
 		}
 	}
+	return nil
 }
 
 // countToolPackages counts Go package directories under internal/tools,
@@ -475,23 +518,23 @@ func printDynamicSearchMetrics(base, enterprise, gitLabCom dynamictools.Registry
 	printRow("Dynamic aliases ambiguous (GitLab.com enterprise)", gitLabCom.AmbiguousAliasCount)
 }
 
-func dynamicActionCatalog(client *gitlabclient.Client, enterprise bool) *actioncatalog.Catalog {
+// dynamicActionCatalog builds the canonical catalog for the requested tier
+// and adds the standalone dynamic routes to it.
+func dynamicActionCatalog(client *gitlabclient.Client, enterprise bool) (*actioncatalog.Catalog, error) {
 	catalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{Enterprise: enterprise, IncludeMCP: true})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "build dynamic action catalog: %v\n", err)
-		exitProcess(1)
+		return nil, fmt.Errorf("build dynamic action catalog: %w", err)
 	}
 	catalog, err = dynamictools.AddStandaloneCatalog(catalog, client, dynamictools.StandaloneOptions{})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "add standalone dynamic actions: %v\n", err)
-		exitProcess(1)
+		return nil, fmt.Errorf("add standalone dynamic actions: %w", err)
 	}
-	return catalog
+	return catalog, nil
 }
 
 // listDynamicTools registers the low-token dynamic public toolset backed by
 // catalog action routes and returns the advertised tool definitions.
-func listDynamicTools(catalog *actioncatalog.Catalog) []*mcp.Tool {
+func listDynamicTools(catalog *actioncatalog.Catalog) ([]*mcp.Tool, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}})
 	dynamictools.RegisterCatalogFindExecuteTools(server, catalog)
 	return listToolsFromServer(server)
@@ -507,29 +550,26 @@ func countActionRoutes(routes map[string]toolutil.ActionMap) int {
 }
 
 // listToolsFromServer connects to server in-memory and returns advertised tools.
-func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
+func listToolsFromServer(server *mcp.Server) ([]*mcp.Tool, error) {
 	st, ct := mcp.NewInMemoryTransports()
 	ctx := context.Background()
 
 	if _, err := server.Connect(ctx, st, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "server connect: %v\n", err)
-		exitProcess(1)
+		return nil, fmt.Errorf("server connect: %w", err)
 	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: auditClientName, Version: auditVersion}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect: %v\n", err)
-		exitProcess(1)
+		return nil, fmt.Errorf("client connect: %w", err)
 	}
 	defer session.Close()
 
 	result, err := session.ListTools(ctx, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListTools: %v\n", err)
-		exitProcess(1)
+		return nil, fmt.Errorf("ListTools: %w", err)
 	}
-	return result.Tools
+	return result.Tools, nil
 }
 
 // listServerTools registers tools on an in-memory MCP server and returns
@@ -542,7 +582,9 @@ func listToolsFromServer(server *mcp.Server) []*mcp.Tool {
 // re-registers the meta surface under each mode to size its input schemas;
 // a key without it would hand every mode the first listing and report three
 // identical sizes. The audit repeats the opaque meta enterprise listing, and
-// the test binary repeats several combinations.
+// the test binary repeats several combinations. Only a listing that
+// succeeded is stored: a failure travels to the caller, and the next call
+// registers the surface again rather than serving a memoized nothing.
 var listedToolsCache sync.Map // listKey -> []*mcp.Tool
 
 type listKey struct {
@@ -552,25 +594,27 @@ type listKey struct {
 	schemaMode string
 }
 
-func listServerTools(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
+func listServerTools(client *gitlabclient.Client, meta, enterprise bool) ([]*mcp.Tool, error) {
 	key := listKey{client: client, meta: meta, enterprise: enterprise, schemaMode: tools.MetaParamSchema()}
 	if cached, ok := listedToolsCache.Load(key); ok {
 		listed, _ := cached.([]*mcp.Tool)
-		return listed
+		return listed, nil
 	}
-	listed := listServerToolsUncached(client, meta, enterprise)
+	listed, err := listServerToolsUncached(client, meta, enterprise)
+	if err != nil {
+		return nil, err
+	}
 	listedToolsCache.Store(key, listed)
-	return listed
+	return listed, nil
 }
 
-func listServerToolsUncached(client *gitlabclient.Client, meta, enterprise bool) []*mcp.Tool {
+func listServerToolsUncached(client *gitlabclient.Client, meta, enterprise bool) ([]*mcp.Tool, error) {
 	opts := &mcp.ServerOptions{PageSize: 2000, Capabilities: &mcp.ServerCapabilities{}}
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, opts)
 
 	if meta {
 		if err := tools.RegisterAllMeta(server, client, edition.TierForEnterprise(enterprise)); err != nil {
-			fmt.Fprintf(os.Stderr, "register meta tools: %v\n", err)
-			exitProcess(1)
+			return nil, fmt.Errorf("register meta tools: %w", err)
 		}
 	} else {
 		tools.RegisterAll(server, client, edition.Ultimate)
@@ -582,12 +626,11 @@ func listServerToolsUncached(client *gitlabclient.Client, meta, enterprise bool)
 // countResources registers all MCP resources and returns static and template counts.
 // This includes resources from Register(), schema resources, and RegisterWorkflowGuides().
 // Workspace roots (+1) are counted separately because they need a roots.Manager.
-func countResources(client *gitlabclient.Client) (static, templates int) {
+func countResources(client *gitlabclient.Client) (static, templates int, err error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	metaCatalog, err := tools.BuildActionCatalog(client, tools.ActionCatalogOptions{IncludeMCP: true})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "build meta action catalog: %v\n", err)
-		exitProcess(1)
+		return 0, 0, fmt.Errorf("build meta action catalog: %w", err)
 	}
 	resources.Register(server, client)
 	resources.RegisterToolSurfaceResources(server, resources.ToolSurfaceResourceOptions{
@@ -600,36 +643,30 @@ func countResources(client *gitlabclient.Client) (static, templates int) {
 	ctx := context.Background()
 
 	if _, connectErr := server.Connect(ctx, st, nil); connectErr != nil {
-		fmt.Fprintf(os.Stderr, "server connect (resources): %v\n", connectErr)
-		exitProcess(1)
+		return 0, 0, fmt.Errorf("server connect (resources): %w", connectErr)
 	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: auditClientName, Version: auditVersion}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect (resources): %v\n", err)
-		exitProcess(1)
+		return 0, 0, fmt.Errorf("client connect (resources): %w", err)
 	}
 	defer session.Close()
 
 	res, err := session.ListResources(ctx, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListResources: %v\n", err)
-		exitProcess(1)
+		return 0, 0, fmt.Errorf("ListResources: %w", err)
 	}
-	static = len(res.Resources)
 
 	tpl, tplErr := session.ListResourceTemplates(ctx, nil)
 	if tplErr != nil {
-		fmt.Fprintf(os.Stderr, "ListResourceTemplates: %v\n", tplErr)
-		exitProcess(1)
+		return 0, 0, fmt.Errorf("ListResourceTemplates: %w", tplErr)
 	}
-	templates = len(tpl.ResourceTemplates)
-	return static, templates
+	return len(res.Resources), len(tpl.ResourceTemplates), nil
 }
 
 // countPrompts registers all MCP prompts and returns the count.
-func countPrompts(client *gitlabclient.Client) int {
+func countPrompts(client *gitlabclient.Client) (int, error) {
 	server := mcp.NewServer(&mcp.Implementation{Name: auditServerName, Version: auditVersion}, &mcp.ServerOptions{Capabilities: &mcp.ServerCapabilities{}})
 	prompts.Register(server, client)
 
@@ -637,24 +674,21 @@ func countPrompts(client *gitlabclient.Client) int {
 	ctx := context.Background()
 
 	if _, err := server.Connect(ctx, st, nil); err != nil {
-		fmt.Fprintf(os.Stderr, "server connect (prompts): %v\n", err)
-		exitProcess(1)
+		return 0, fmt.Errorf("server connect (prompts): %w", err)
 	}
 
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: auditClientName, Version: auditVersion}, nil)
 	session, err := mcpClient.Connect(ctx, ct, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "client connect (prompts): %v\n", err)
-		exitProcess(1)
+		return 0, fmt.Errorf("client connect (prompts): %w", err)
 	}
 	defer session.Close()
 
 	result, err := session.ListPrompts(ctx, nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "ListPrompts: %v\n", err)
-		exitProcess(1)
+		return 0, fmt.Errorf("ListPrompts: %w", err)
 	}
-	return len(result.Prompts)
+	return len(result.Prompts), nil
 }
 
 // countSourceFiles walks the internal/ directory and counts .go source files
@@ -710,8 +744,9 @@ func diffByName(a, b []*mcp.Tool) int {
 
 // printMetaSchemaModes reports the active META_PARAM_SCHEMA mode and the
 // total meta-tool InputSchema byte size each mode would produce. Useful
-// for ops to size the impact of META_PARAM_SCHEMA before flipping it.
-func printMetaSchemaModes(client *gitlabclient.Client) {
+// for ops to size the impact of META_PARAM_SCHEMA before flipping it. A
+// registration failure ends the table and is returned to the caller.
+func printMetaSchemaModes(client *gitlabclient.Client) error {
 	// Read META_PARAM_SCHEMA directly: config.Load() requires GITLAB_URL +
 	// GITLAB_TOKEN and would silently fall back to "opaque" if they are
 	// missing, misreporting the active mode in environments where this
@@ -726,11 +761,18 @@ func printMetaSchemaModes(client *gitlabclient.Client) {
 	fmt.Printf("  Active mode (env): %s\n\n", active)
 	fmt.Printf("  %-12s %12s\n", "mode", "total bytes")
 	fmt.Printf("  %-12s %12s\n", strings.Repeat("-", 12), strings.Repeat("-", 12))
+	// The sizing table leaves the process on the default mode whether or not
+	// every mode could be measured.
+	defer tools.SetMetaParamSchema("opaque")
 	for _, mode := range []string{"opaque", "compact", "full"} {
 		tools.SetMetaParamSchema(mode)
-		fmt.Printf("  %-12s %12d\n", mode, totalInputSchemaBytes(listServerTools(client, true, true)))
+		listed, err := listServerTools(client, true, true)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("  %-12s %12d\n", mode, totalInputSchemaBytes(listed))
 	}
-	tools.SetMetaParamSchema("opaque")
+	return nil
 }
 
 // totalInputSchemaBytes sums the serialized InputSchema size of the listed
