@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1523,4 +1524,198 @@ func TestSessionBridge_OneRenewalTickerPerStream(t *testing.T) {
 	if got := bridge.activeRenewals(); got != 0 {
 		t.Errorf("%d renewal ticker(s) still running after the stream ended", got)
 	}
+}
+
+// TestListenLimit_CapsConcurrentStreams verifies that concurrent
+// subscriptions/listen requests are bounded per server and process-wide, that
+// the refusal is the busy code rather than a closed stream, and that streams
+// under the cap stay open.
+//
+// Each listen blocks server-side until its context ends, holding a goroutine,
+// an ephemeral session and transport, and a file descriptor. The documented
+// valve, MaxWatchers, counts only resource watchers created through
+// manager.Subscribe: a listen that asks only for list-changed notifications
+// creates none, and one that carries a resource joins an existing watcher's
+// subscriber set with no cap check either — so stream count has never been
+// bounded on any path. Measured at 2000 concurrent streams on one token:
+// 2007 descriptors and 55 to 100 KB retained each, about tenfold what an idle
+// connection costs. The last assertion is the one that matters: a "fix" that
+// closed every stream would satisfy the cap and destroy the feature.
+func TestListenLimit_CapsConcurrentStreams(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		perServer   int
+		perProcess  int
+		streams     int
+		wantServed  int
+		wantRefused int
+	}{
+		{"under_the_per_server_cap", 4, 100, 3, 3, 0},
+		{"at_the_per_server_cap", 4, 100, 4, 4, 0},
+		{"over_the_per_server_cap", 4, 100, 7, 4, 3},
+		{"the_process_cap_binds_first", 100, 2, 5, 2, 3},
+		{"disabled_by_a_non_positive_cap", 0, 0, 6, 6, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			limits := listenLimits{
+				perServer:   tc.perServer,
+				perProcess:  tc.perProcess,
+				processOpen: &listenCounter{},
+				serverOpen:  &listenCounter{},
+			}
+
+			held := make(chan struct{})
+			var inFlight atomic.Int64
+			handler := limits.middleware()(func(ctx context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+				inFlight.Add(1)
+				defer inFlight.Add(-1)
+				<-held
+				return &mcp.CallToolResult{}, nil
+			})
+
+			var served, refused atomic.Int64
+			var wg sync.WaitGroup
+			for range tc.streams {
+				wg.Go(func() {
+					_, err := handler(t.Context(), methodSubscriptionsListen, nil)
+					if err != nil {
+						refused.Add(1)
+						return
+					}
+					served.Add(1)
+				})
+			}
+
+			// Let the refusals land while the served streams are still held.
+			waitFor(t, func() bool {
+				return refused.Load() == int64(tc.wantRefused) && inFlight.Load() == int64(tc.wantServed)
+			})
+			if got := inFlight.Load(); got != int64(tc.wantServed) {
+				t.Errorf("streams held open = %d, want %d", got, tc.wantServed)
+			}
+			close(held)
+			wg.Wait()
+
+			if got := served.Load(); got != int64(tc.wantServed) {
+				t.Errorf("streams served = %d, want %d", got, tc.wantServed)
+			}
+			if got := refused.Load(); got != int64(tc.wantRefused) {
+				t.Errorf("streams refused = %d, want %d", got, tc.wantRefused)
+			}
+		})
+	}
+}
+
+// TestListenLimit_RefusalCarriesTheBusyCode verifies the wire shape of the
+// refusal: -32000, the code this server already uses for state-dependent
+// refusals a retry can clear, rather than an invalid-params verdict on a
+// request that was well formed.
+func TestListenLimit_RefusalCarriesTheBusyCode(t *testing.T) {
+	limits := listenLimits{
+		perServer:   1,
+		perProcess:  1,
+		processOpen: &listenCounter{},
+		serverOpen:  &listenCounter{},
+	}
+	held := make(chan struct{})
+	defer close(held)
+	handler := limits.middleware()(func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+		<-held
+		return &mcp.CallToolResult{}, nil
+	})
+
+	opened := make(chan struct{})
+	go func() {
+		close(opened)
+		_, _ = handler(t.Context(), methodSubscriptionsListen, nil)
+	}()
+	<-opened
+	waitFor(t, func() bool { return limits.serverOpen.count() == 1 })
+
+	_, err := handler(t.Context(), methodSubscriptionsListen, nil)
+	if err == nil {
+		t.Fatal("a stream over the cap was accepted")
+	}
+	wireErr, ok := errors.AsType[*jsonrpc.Error](err)
+	if !ok {
+		t.Fatalf("refusal is %T, want *jsonrpc.Error so the code reaches the client", err)
+	}
+	if wireErr.Code != codeServerBusy {
+		t.Errorf("code = %d, want %d", wireErr.Code, codeServerBusy)
+	}
+	if !strings.Contains(wireErr.Message, "subscriptions/listen") {
+		t.Errorf("message = %q, want it to name the method that was refused", wireErr.Message)
+	}
+}
+
+// TestListenLimit_OtherMethodsAreNotCounted verifies that the cap applies to
+// subscriptions/listen alone: an ordinary request must not consume a slot, or
+// a busy server would start refusing subscriptions for reasons unrelated to
+// them.
+func TestListenLimit_OtherMethodsAreNotCounted(t *testing.T) {
+	limits := listenLimits{
+		perServer:   1,
+		perProcess:  1,
+		processOpen: &listenCounter{},
+		serverOpen:  &listenCounter{},
+	}
+	handler := limits.middleware()(func(_ context.Context, _ string, _ mcp.Request) (mcp.Result, error) {
+		return &mcp.CallToolResult{}, nil
+	})
+	for _, method := range []string{"tools/call", "tools/list", "resources/read", "ping"} {
+		t.Run(method, func(t *testing.T) {
+			if _, err := handler(t.Context(), method, nil); err != nil {
+				t.Fatalf("%s: %v", method, err)
+			}
+			if open := limits.serverOpen.count(); open != 0 {
+				t.Errorf("%s left %d listen slots taken, want 0", method, open)
+			}
+		})
+	}
+}
+
+// TestListenLimitsFromEnv verifies that the ceilings are configurable and that
+// anything that is not a positive number leaves the defaults in place.
+func TestListenLimitsFromEnv(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		perServer      string
+		wantPerServer  int
+		wantPerProcess int
+	}{
+		{"unset", "", maxListenStreamsPerServer, maxListenStreamsPerProcess},
+		{"explicit", "8", 8, maxListenStreamsPerProcess},
+		{"zero_disables", "0", 0, maxListenStreamsPerProcess},
+		{"garbage_keeps_the_default", "many", maxListenStreamsPerServer, maxListenStreamsPerProcess},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.perServer != "" {
+				t.Setenv(maxListenStreamsEnv, tc.perServer)
+			}
+			got := listenLimitsFromEnv()
+			if got.perServer != tc.wantPerServer {
+				t.Errorf("perServer = %d, want %d", got.perServer, tc.wantPerServer)
+			}
+			if got.perProcess != tc.wantPerProcess {
+				t.Errorf("perProcess = %d, want %d", got.perProcess, tc.wantPerProcess)
+			}
+			if got.processOpen == nil || got.serverOpen == nil {
+				t.Error("the counters must be non-nil, or the middleware cannot count")
+			}
+		})
+	}
+}
+
+// waitFor blocks until cond holds or the test's budget runs out, so a test
+// asserting on concurrent state does not race the goroutines it started.
+func waitFor(t *testing.T, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Error("condition never held within the budget")
 }

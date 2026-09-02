@@ -66,6 +66,10 @@ type bearerGuard struct {
 	verify   auth.TokenVerifier
 	rejected *oauth.RejectedTokens
 	limiter  *serverpool.AuthRateLimiter
+	// sourceLimiter is the coarse secondary budget charged to the transport
+	// source, set only when trustedProxyHeader makes the primary key
+	// caller-controlled. Shared with [mcpServerGate].
+	sourceLimiter *serverpool.AuthRateLimiter
 	// trustedProxyHeader names the header carrying the real client IP, so
 	// the limiter counts per caller rather than per reverse proxy.
 	trustedProxyHeader string
@@ -82,6 +86,10 @@ type bearerGuard struct {
 	// verifier runs the same resolver again for the URL to verify against;
 	// it is a pure function of the request, so the two cannot disagree.
 	resolveInstance oauth.InstanceResolver
+	// instances is the published set, named back to a caller that failed to
+	// select one. Safe to echo here and only here: oauth mode already serves
+	// the same list unauthenticated as RFC 9728 authorization_servers.
+	instances []string
 	// minimumScope is the least a token must carry to be admitted. A token
 	// without it is refused with insufficient_scope rather than executed and
 	// failed later by GitLab.
@@ -121,10 +129,11 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 	}
 
 	ip := clientIP(r, g.trustedProxyHeader)
+	source := transportSource(r)
 
 	// Ordered before everything else on purpose: a blocked caller must cost
 	// nothing, least of all an upstream call.
-	if g.limiter != nil && g.limiter.IsBlocked(ip) {
+	if g.blockedByBudget(ip, source) {
 		slog.WarnContext(r.Context(), "request blocked: too many authentication failures", "ip", ip) //#nosec G706 -- slog structured args are not interpolated
 		return &gateFailure{
 			status:  http.StatusTooManyRequests,
@@ -136,7 +145,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 
 	token := serverpool.ExtractBearerToken(r)
 	if token == "" {
-		g.recordFailure(ip)
+		g.recordFailure(ip, source)
 		// RFC 6750 section 3.1: a challenge answering a request that carried
 		// no credential at all must not name an error code, since the client
 		// has not got anything wrong yet.
@@ -154,9 +163,24 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 	instance := ""
 	if g.resolveInstance != nil {
 		resolved, err := g.resolveInstance(r)
+		// Neither branch is charged to the limiter: the caller misaddressed
+		// the request, which says nothing about the credential.
+		if errors.Is(err, errMissingGitLabURL) {
+			// Refused rather than resolved to the first published instance:
+			// answering would put this bearer on the wire to an instance the
+			// caller never named, and it is answered BEFORE verification for
+			// exactly that reason.
+			slog.InfoContext(r.Context(), "request rejected: no instance selected on a multi-instance deployment",
+				"instances", len(g.instances))
+			return &gateFailure{
+				status: http.StatusBadRequest,
+				code:   errCodeInvalidRequest,
+				message: "This deployment serves several GitLab instances, so the " +
+					serverpool.RequestOptionGitLabURL + " header must name the one this token belongs to. It publishes: " +
+					strings.Join(g.instances, ", ") + ".",
+			}
+		}
 		if err != nil {
-			// Not charged to the limiter: the caller misaddressed the
-			// request, which says nothing about the credential.
 			slog.InfoContext(r.Context(), "request rejected: unpublished GitLab instance requested", "error", err)
 			return &gateFailure{
 				status:  http.StatusForbidden,
@@ -179,7 +203,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 					"token_suffix", safeTokenSuffix(token))
 				return g.unacceptedRecipientFailure()
 			}
-			g.recordFailure(ip)
+			g.recordFailure(ip, source)
 			slog.InfoContext(r.Context(), "request rejected: token already known to be invalid", "token_suffix", safeTokenSuffix(token))
 			return g.invalidTokenFailure("GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.")
 		}
@@ -187,7 +211,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 
 	info, err := g.verify(r.Context(), token, r)
 	if err != nil {
-		return g.classify(err, ip, instance, token)
+		return g.classify(err, ip, source, instance, token)
 	}
 
 	if !oauth.SatisfiesMinimum(info.Scopes, g.minimumScope) {
@@ -223,7 +247,7 @@ func (g *bearerGuard) check(r *http.Request) *gateFailure {
 
 // classify turns a verification error into the response it deserves, keeping
 // "your credential is bad" and "GitLab could not tell us" apart.
-func (g *bearerGuard) classify(err error, ip, instance, token string) *gateFailure {
+func (g *bearerGuard) classify(err error, ip, source, instance, token string) *gateFailure {
 	if upstream, ok := errors.AsType[*oauth.UpstreamError](err); ok {
 		// Deliberately not charged to the limiter and never cached: the
 		// token was never judged, so counting this would let a GitLab
@@ -308,7 +332,7 @@ func (g *bearerGuard) classify(err error, ip, instance, token string) *gateFailu
 		if g.rejected != nil {
 			g.rejected.Record(instance, token)
 		}
-		g.recordFailure(ip)
+		g.recordFailure(ip, source)
 		slog.Info("request rejected: gitlab rejected the supplied token", "token_suffix", safeTokenSuffix(token))
 		return g.invalidTokenFailure("GitLab rejected this token. Check that it is valid, unexpired, and issued by the target instance.")
 	}
@@ -359,11 +383,25 @@ func (g *bearerGuard) invalidTokenFailure(message string) *gateFailure {
 	}
 }
 
-// recordFailure charges an authentication failure to the caller's address.
-func (g *bearerGuard) recordFailure(ip string) {
+// recordFailure charges an authentication failure to both budgets: the
+// caller's key, and — behind a trusted proxy header, where that key is
+// caller-controlled — the transport source it arrived from. See
+// [transportFailureLimit].
+func (g *bearerGuard) recordFailure(key, source string) {
 	if g.limiter != nil {
-		g.limiter.RecordFailure(ip)
+		g.limiter.RecordFailure(key)
 	}
+	if g.sourceLimiter != nil {
+		g.sourceLimiter.RecordFailure(source)
+	}
+}
+
+// blockedByBudget reports whether either budget is exhausted.
+func (g *bearerGuard) blockedByBudget(key, source string) bool {
+	if g.limiter != nil && g.limiter.IsBlocked(key) {
+		return true
+	}
+	return g.sourceLimiter != nil && g.sourceLimiter.IsBlocked(source)
 }
 
 // challenge builds the WWW-Authenticate value, appending the given key/value

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -292,5 +293,191 @@ func TestResilientStdio_AFinalLineWithoutANewline_IsStillDelivered(t *testing.T)
 	}
 	if out.Len() != 0 {
 		t.Errorf("a valid message produced output on the response stream: %q", out.String())
+	}
+}
+
+// endlessNonNewline yields a byte that is never a newline, so a line of any
+// length can be fed to the reader without allocating it.
+type endlessNonNewline struct{}
+
+func (endlessNonNewline) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = 'a'
+	}
+	return len(p), nil
+}
+
+// TestSanitizedInput_OverlongLineIsRefusedAndTheStreamResynchronises verifies
+// that a line longer than the cap is dropped, answered, and followed by
+// service as usual.
+//
+// The accumulator had no ceiling at all: bytes with no newline in them were
+// held until one arrived, so writing 1 GiB with no newline took the process
+// from 204 MiB resident to 1190 MiB and it was still growing. stdio is also
+// the one transport with no body cap of any kind, since MaxRequestBodyBytes is
+// a streamable-HTTP setting. Resynchronising rather than dying is the
+// behavior this file already implements for unparseable lines, and it is what
+// keeps a client's next request served.
+func TestSanitizedInput_OverlongLineIsRefusedAndTheStreamResynchronises(t *testing.T) {
+	const valid = `{"jsonrpc":"2.0","id":1,"method":"ping"}`
+	for _, tc := range []struct {
+		name        string
+		cap         int
+		line        string
+		wantRefused bool
+	}{
+		// Every cap admits the 41 bytes of the trailing well-formed line, so
+		// what a row varies is whether the line under test fits.
+		{"under_the_cap", 512, `{"jsonrpc":"2.0","id":2,"method":"ping"}`, false},
+		{"at_the_cap", 41, `{"jsonrpc":"2.0","id":2,"method":"ping"}`, false},
+		{"one_over_the_cap", 41, `{"jsonrpc":"2.0","id":22,"method":"ping"}`, true},
+		{"far_over_the_cap", 64, strings.Repeat("x", 200_000), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			reader, _ := resilientStdioWith(
+				strings.NewReader(tc.line+"\n"+valid+"\n"), &out,
+				stdioLimits{maxLineBytes: tc.cap, maxDepth: maxInboundJSONDepth},
+			)
+
+			forwarded, err := io.ReadAll(reader)
+			if err != nil && !errors.Is(err, io.EOF) {
+				t.Fatalf("reading: %v", err)
+			}
+			if !strings.Contains(string(forwarded), valid) {
+				t.Errorf("the well-formed line after the refusal never reached the SDK: %q", forwarded)
+			}
+			if !tc.wantRefused {
+				if out.Len() != 0 {
+					t.Errorf("a line within the cap was answered with %q", out.String())
+				}
+				return
+			}
+			if strings.Contains(string(forwarded), tc.line) {
+				t.Errorf("the over-long line reached the SDK: %d bytes forwarded", len(forwarded))
+			}
+			assertJSONRPCRefusal(t, out.Bytes(), -32600, strconv.Itoa(tc.cap))
+		})
+	}
+}
+
+// TestSanitizedInput_UnterminatedLineIsBounded verifies that a flood with no
+// newline in it is refused at the cap instead of being accumulated.
+//
+// The reader yields non-newline bytes without ever allocating the stream, so a
+// failure here is a hang or an out-of-memory rather than a wrong value: the
+// point of the cap is that the process does not grow with the input.
+func TestSanitizedInput_UnterminatedLineIsBounded(t *testing.T) {
+	var out bytes.Buffer
+	reader, _ := resilientStdioWith(
+		io.LimitReader(endlessNonNewline{}, 8<<20), &out,
+		stdioLimits{maxLineBytes: 4096, maxDepth: maxInboundJSONDepth},
+	)
+
+	forwarded, err := io.ReadAll(reader)
+	if err != nil && !errors.Is(err, io.EOF) {
+		t.Fatalf("reading: %v", err)
+	}
+	if len(forwarded) != 0 {
+		t.Errorf("%d bytes of an unterminated flood reached the SDK", len(forwarded))
+	}
+	assertJSONRPCRefusal(t, out.Bytes(), -32600, "4096")
+}
+
+// TestRefuseUnreadable_RefusesOverNestedLines verifies that a line whose JSON
+// nests past the ceiling is refused before it is parsed.
+//
+// stdio's accidental protection is the standard library's nesting cap of
+// 10000, reached only by the pre-parse this function performs: below it, a
+// tools/call nested 9000 deep still cost 1.57 seconds of CPU in the SDK's
+// decode. The explicit ceiling is what makes the bound deliberate, and it also
+// covers params._meta, which the SDK decodes into a map for every method
+// before any middleware could refuse it.
+func TestRefuseUnreadable_RefusesOverNestedLines(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		depth       int
+		wantRefused bool
+	}{
+		{"ordinary_message", 4, false},
+		{"at_the_ceiling", maxInboundJSONDepth, false},
+		{"one_past_the_ceiling", maxInboundJSONDepth + 1, true},
+		{"the_amplification_payload", 9000, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			line := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"_meta":` +
+				strings.Repeat("[", tc.depth-2) + strings.Repeat("]", tc.depth-2) + `}}`
+			refusal, refused := refuseUnreadable(line, maxInboundJSONDepth)
+			if refused != tc.wantRefused {
+				t.Fatalf("refuseUnreadable at depth %d refused = %v, want %v", tc.depth, refused, tc.wantRefused)
+			}
+			if !tc.wantRefused {
+				return
+			}
+			assertJSONRPCRefusal(t, refusal, -32600, strconv.Itoa(maxInboundJSONDepth))
+		})
+	}
+}
+
+// TestStdioLimitsFromEnv verifies that the line cap is configurable, that a
+// value that is not a positive number leaves the default in place, and that
+// the default is above the largest legitimate message rather than below it.
+func TestStdioLimitsFromEnv(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  int
+	}{
+		{"unset", "", defaultMaxStdioLineBytes},
+		{"explicit", "65536", 65536},
+		{"padded", "  65536  ", 65536},
+		{"zero_keeps_the_default", "0", defaultMaxStdioLineBytes},
+		{"negative_keeps_the_default", "-1", defaultMaxStdioLineBytes},
+		{"garbage_keeps_the_default", "plenty", defaultMaxStdioLineBytes},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.value != "" {
+				t.Setenv(stdioMaxLineBytesEnv, tc.value)
+			}
+			got := stdioLimitsFromEnv()
+			if got.maxLineBytes != tc.want {
+				t.Errorf("maxLineBytes = %d, want %d", got.maxLineBytes, tc.want)
+			}
+			if got.maxDepth != maxInboundJSONDepth {
+				t.Errorf("maxDepth = %d, want %d", got.maxDepth, maxInboundJSONDepth)
+			}
+		})
+	}
+}
+
+// assertJSONRPCRefusal checks that raw is one newline-terminated JSON-RPC
+// error carrying the given code, and that its message names detail — the
+// limit the caller passed, so a refusal tells its sender what to change.
+func assertJSONRPCRefusal(t *testing.T, raw []byte, wantCode int, detail string) {
+	t.Helper()
+	if len(raw) == 0 {
+		t.Fatal("no refusal was written")
+	}
+	if !bytes.HasSuffix(raw, []byte("\n")) {
+		t.Error("the refusal is not newline-terminated, so it runs into the next message")
+	}
+	var answer struct {
+		JSONRPC string `json:"jsonrpc"`
+		Error   struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(raw), &answer); err != nil {
+		t.Fatalf("the refusal is not JSON: %q (%v)", raw, err)
+	}
+	if answer.JSONRPC != "2.0" {
+		t.Errorf("refusal is not JSON-RPC 2.0: %q", raw)
+	}
+	if answer.Error.Code != wantCode {
+		t.Errorf("code = %d, want %d", answer.Error.Code, wantCode)
+	}
+	if !strings.Contains(answer.Error.Message, detail) {
+		t.Errorf("message = %q, want it to name %s", answer.Error.Message, detail)
 	}
 }

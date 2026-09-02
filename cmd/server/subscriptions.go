@@ -3,6 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -853,4 +857,158 @@ func newServerSettings(opts []serverOption) serverSettings {
 // tests running in parallel cannot change each other's cadence.
 func withSubscriptionOptions(opts subscriptions.Options) serverOption {
 	return func(settings *serverSettings) { settings.subscriptions = opts }
+}
+
+// Concurrency ceilings on open subscriptions/listen streams.
+//
+// A listen is a request the client leaves open, and the SDK holds its handler
+// on <-ctx.Done() for the lifetime of the connection: a blocked goroutine, an
+// ephemeral session and transport, and a file descriptor each. Nothing bounded
+// how many one caller could open. MaxWatchers reads like the valve for this
+// and is not: it counts resource watchers created through manager.Subscribe,
+// so a listen asking only for list-changed notifications creates none, and one
+// carrying a resource joins an existing watcher's subscriber set without a cap
+// check either. Measured at 2000 concurrent streams on one token: 2007 file
+// descriptors and 55 to 100 KB retained per stream, roughly tenfold what the
+// idle connection underneath already costs. With a container RLIMIT_NOFILE of
+// 1024, about a thousand held streams stop the process accepting anything.
+//
+// Two ceilings, because one is not enough in either direction. Per server is
+// per pool entry, which is per token and instance, and bounds fairness; it
+// multiplies by however many tokens an attacker holds, so the process-wide one
+// is what bounds the process. Both are generous next to any real client, which
+// opens a handful.
+const (
+	maxListenStreamsPerServer  = 64
+	maxListenStreamsPerProcess = 512
+)
+
+// maxListenStreamsEnv overrides the per-server ceiling. Zero disables it,
+// which leaves the process-wide one in place.
+const maxListenStreamsEnv = "GITLAB_MCP_MAX_LISTEN_STREAMS"
+
+// listenCounter counts open streams against a ceiling.
+type listenCounter struct {
+	open atomic.Int64
+}
+
+// acquire takes a slot, or reports that the ceiling is reached. A
+// non-positive limit means no ceiling.
+func (c *listenCounter) acquire(limit int) bool {
+	if limit <= 0 {
+		return true
+	}
+	if c.open.Add(1) > int64(limit) {
+		c.open.Add(-1)
+		return false
+	}
+	return true
+}
+
+// release gives a slot back. Safe to call only for an acquire that succeeded
+// against a positive limit.
+func (c *listenCounter) release() { c.open.Add(-1) }
+
+// count is how many slots are currently held.
+func (c *listenCounter) count() int64 { return c.open.Load() }
+
+// listenLimits bounds concurrent subscriptions/listen streams for one server
+// and for the process it runs in.
+type listenLimits struct {
+	perServer   int
+	perProcess  int
+	serverOpen  *listenCounter
+	processOpen *listenCounter
+}
+
+// processListenStreams is the ceiling shared by every server this process
+// builds. In HTTP mode the pool builds one MCP server per token and instance,
+// so a per-server counter alone would be per-token and multiply by however
+// many tokens the caller holds.
+var processListenStreams = &listenCounter{}
+
+// listenLimitsFromEnv builds the ceilings for one server, reading the
+// per-server override and sharing the process-wide counter.
+//
+// A bad value warns rather than refusing startup, for the same reason the
+// stdio line limit does: a mistyped number should not take the client down
+// with it.
+func listenLimitsFromEnv() listenLimits {
+	limits := listenLimits{
+		perServer:   maxListenStreamsPerServer,
+		perProcess:  maxListenStreamsPerProcess,
+		serverOpen:  &listenCounter{},
+		processOpen: processListenStreams,
+	}
+	raw := strings.TrimSpace(os.Getenv(maxListenStreamsEnv))
+	if raw == "" {
+		return limits
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		slog.Warn("listen stream limit could not be parsed; using the default",
+			"variable", maxListenStreamsEnv, "value", raw, "default", maxListenStreamsPerServer)
+		return limits
+	}
+	limits.perServer = value
+	return limits
+}
+
+// middleware refuses a subscriptions/listen once either ceiling is reached,
+// and holds a slot for as long as the stream is open.
+//
+// It is installed on EVERY server, unconditionally, rather than beside the
+// rest of the subscription machinery: listenStreams.middleware is wired only
+// when the subscription runtime exists, and under
+// --capability-surface=minimal that runtime is nil while the SDK still
+// acknowledges and holds a list-changed listen. A cap that is absent on one
+// configuration is not a cap.
+//
+// Refusing with the busy code rather than closing the stream is deliberate:
+// the request is well formed and a retry later can succeed, which is exactly
+// what -32000 already means everywhere else in this file.
+func (l listenLimits) middleware() mcp.Middleware {
+	return func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method != methodSubscriptionsListen {
+				return next(ctx, method, req)
+			}
+			if !l.serverOpen.acquire(l.perServer) {
+				return nil, l.busy(ctx, "per-credential", l.perServer)
+			}
+			defer l.releaseServer()
+			if !l.processOpen.acquire(l.perProcess) {
+				return nil, l.busy(ctx, "server-wide", l.perProcess)
+			}
+			defer l.releaseProcess()
+			return next(ctx, method, req)
+		}
+	}
+}
+
+// releaseServer and releaseProcess give a slot back only when one was taken:
+// a non-positive ceiling means acquire never counted.
+func (l listenLimits) releaseServer() {
+	if l.perServer > 0 {
+		l.serverOpen.release()
+	}
+}
+
+func (l listenLimits) releaseProcess() {
+	if l.perProcess > 0 {
+		l.processOpen.release()
+	}
+}
+
+// busy is the refusal, naming which ceiling was reached so an operator
+// reading the client's error knows which number to raise.
+func (l listenLimits) busy(ctx context.Context, scope string, limit int) error {
+	slog.WarnContext(ctx, "subscriptions/listen refused: too many open streams",
+		"scope", scope, "limit", limit)
+	return &jsonrpc.Error{
+		Code: codeServerBusy,
+		Message: fmt.Sprintf(
+			"too many open subscriptions/listen streams (%s limit %d); close one and retry", scope, limit,
+		),
+	}
 }

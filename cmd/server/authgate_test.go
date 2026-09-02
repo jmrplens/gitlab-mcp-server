@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -849,6 +850,131 @@ func TestMcpServerGate_InvalidTokenChallenge_NamesTheVerdictInOAuthMode(t *testi
 
 			if !strings.Contains(oauthed, want) {
 				t.Errorf("oauth challenge %q is missing %s", oauthed, want)
+			}
+		})
+	}
+}
+
+// TestMCPServerGate_SpoofedProxyHeaderRotation_StaysBounded verifies that a
+// caller who supplies the trusted proxy header themselves cannot mint a fresh
+// failure budget per request.
+//
+// When --trusted-proxy-header is set the limiter key comes from that header,
+// which is correct for the intended topology and wrong the moment the server
+// is also reachable directly: an attacker rotates the value, every request
+// gets a distinct "client IP", the ten-failures-a-minute lockout never fires,
+// and each invalid-token request is relayed one to one to GitLab as a /user
+// verification. The secondary budget is charged to the transport source, which
+// no header can change.
+//
+// It is deliberately far coarser than the per-caller one. Charging both to the
+// same ten would break the correctly configured topology outright: behind a
+// genuine proxy the transport source is the proxy for every client, so ten
+// aggregate failures a minute would lock out the whole fleet.
+func TestMCPServerGate_SpoofedProxyHeaderRotation_StaysBounded(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		header      string
+		rotate      bool
+		wantBlocked bool
+	}{
+		{"rotating_a_spoofed_header", "X-Forwarded-For", true, true},
+		{"repeating_one_header_value", "X-Forwarded-For", false, true},
+		{"no_trusted_header_configured", "", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gate := newGate(t, okFactory)
+			gate.trustedProxyHeader = tc.header
+			if tc.header != "" {
+				gate.sourceLimiter = serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow)
+			}
+			handler := gate.middleware(http.NotFoundHandler())
+
+			// One more than the coarse budget, which is the only one a
+			// rotating caller can exhaust.
+			blocked := false
+			for i := range transportFailureLimit + 1 {
+				req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+				req.RemoteAddr = "203.0.113.7:44444"
+				if tc.header != "" {
+					value := "198.51.100.1"
+					if tc.rotate {
+						value = "198.51.100." + strconv.Itoa(i%250+1) + ":" + strconv.Itoa(i)
+					}
+					req.Header.Set(tc.header, value)
+				}
+				rec := httptest.NewRecorder()
+				handler.ServeHTTP(rec, req)
+				if rec.Code == http.StatusTooManyRequests {
+					blocked = true
+					break
+				}
+			}
+			if blocked != tc.wantBlocked {
+				t.Errorf("blocked = %v after %d credential-less requests, want %v",
+					blocked, transportFailureLimit+1, tc.wantBlocked)
+			}
+		})
+	}
+}
+
+// TestMCPServerGate_TrustedProxyKeepsPerClientGranularity verifies that the
+// coarse transport budget does not collapse a genuine proxy's clients into one
+// bucket: one client behind the proxy exhausting its own ten failures must not
+// refuse the next client through the same proxy.
+//
+// This is the pair to the test above, and it is the real acceptance criterion:
+// a fix that bounded rotation by keying on the transport source alone would
+// pass that one and fail this.
+func TestMCPServerGate_TrustedProxyKeepsPerClientGranularity(t *testing.T) {
+	gate := newGate(t, okFactory)
+	gate.trustedProxyHeader = "X-Forwarded-For"
+	gate.sourceLimiter = serverpool.NewAuthRateLimiter(transportFailureLimit, authFailureWindow)
+	handler := gate.middleware(http.NotFoundHandler())
+
+	post := func(client string) int {
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", strings.NewReader("{}"))
+		req.RemoteAddr = "203.0.113.7:44444"
+		req.Header.Set("X-Forwarded-For", client)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec.Code
+	}
+
+	for range authFailureLimit {
+		post("198.51.100.1")
+	}
+	if got := post("198.51.100.1"); got != http.StatusTooManyRequests {
+		t.Fatalf("the exhausted client got %d, want %d", got, http.StatusTooManyRequests)
+	}
+	if got := post("198.51.100.2"); got != http.StatusUnauthorized {
+		t.Errorf("a second client behind the same proxy got %d, want %d — the fleet must not share one budget",
+			got, http.StatusUnauthorized)
+	}
+}
+
+// TestTransportSource verifies that the connection's own address is read from
+// RemoteAddr and never from a header, since that is the whole point of the
+// secondary budget.
+func TestTransportSource(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		remote string
+		want   string
+	}{
+		{"host_and_port", "203.0.113.7:44444", "203.0.113.7"},
+		{"ipv6", "[2001:db8::1]:443", "2001:db8::1"},
+		{"no_port", "203.0.113.7", ""},
+		{"empty", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/", http.NoBody)
+			req.RemoteAddr = tc.remote
+			req.Header.Set("X-Forwarded-For", "198.51.100.9")
+			if got := transportSource(req); got != tc.want {
+				t.Errorf("transportSource(%q) = %q, want %q", tc.remote, got, tc.want)
 			}
 		})
 	}
