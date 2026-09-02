@@ -40,12 +40,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
 	"go/format"
 	"go/parser"
 	"go/token"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -104,12 +106,26 @@ var nameFields = []string{"name", "desc", "description", "label", "title", "id"}
 var assertMethods = map[string]bool{"Error": true, "Errorf": true, "Fatal": true, "Fatalf": true, "Fail": true, "FailNow": true}
 
 func main() {
-	jsonPath := flag.String("json", "", "write the JSON work list to this path")
-	check := flag.Bool("check", false, "exit non-zero when any case loop still asserts without a subtest")
-	fix := flag.Bool("fix", false, "rewrite the sites whose subtest name is unambiguous, then report what remains")
-	flag.Parse()
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
+}
 
-	dirs := flag.Args()
+// run parses the command line, performs the sweep and returns the process
+// exit code: 2 when the flags, a directory walk, a rewrite or the JSON work
+// list fail, 1 when -check finds a remaining site, 0 otherwise.
+func run(args []string, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("audit_test_subtests", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	jsonPath := flags.String("json", "", "write the JSON work list to this path")
+	check := flags.Bool("check", false, "exit non-zero when any case loop still asserts without a subtest")
+	fix := flags.Bool("fix", false, "rewrite the sites whose subtest name is unambiguous, then report what remains")
+	if err := flags.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
+		}
+		return 2
+	}
+
+	dirs := flags.Args()
 	if len(dirs) == 0 {
 		dirs = []string{"./cmd", "./internal", "./test"}
 	}
@@ -117,42 +133,43 @@ func main() {
 	if *fix {
 		rewritten, err := fixAll(dirs)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "audit_test_subtests: fix: %v\n", err)
-			os.Exit(2)
+			fmt.Fprintf(stderr, "audit_test_subtests: fix: %v\n", err)
+			return 2
 		}
-		fmt.Printf("fix: rewrote %d site(s)\n", rewritten)
+		fmt.Fprintf(stdout, "fix: rewrote %d site(s)\n", rewritten)
 	}
 
 	report, err := scan(dirs)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "audit_test_subtests: %v\n", err)
-		os.Exit(2)
+		fmt.Fprintf(stderr, "audit_test_subtests: %v\n", err)
+		return 2
 	}
 
-	printHuman(report)
+	printHuman(stdout, report)
 
 	if *jsonPath != "" {
 		data, marshalErr := json.MarshalIndent(report, "", "  ")
 		if marshalErr != nil {
-			fmt.Fprintf(os.Stderr, "audit_test_subtests: marshal: %v\n", marshalErr)
-			os.Exit(2)
+			fmt.Fprintf(stderr, "audit_test_subtests: marshal: %v\n", marshalErr)
+			return 2
 		}
 		if writeErr := os.WriteFile(*jsonPath, append(data, '\n'), 0o600); writeErr != nil {
-			fmt.Fprintf(os.Stderr, "audit_test_subtests: write %s: %v\n", *jsonPath, writeErr)
-			os.Exit(2)
+			fmt.Fprintf(stderr, "audit_test_subtests: write %s: %v\n", *jsonPath, writeErr)
+			return 2
 		}
-		fmt.Printf("work list written to %s\n", *jsonPath)
+		fmt.Fprintf(stdout, "work list written to %s\n", *jsonPath)
 	}
 
 	if *check && len(report.Findings) > 0 {
-		fmt.Printf("check: FAIL. %d case loop(s) assert without a subtest (%d declared sequential)\n",
+		fmt.Fprintf(stdout, "check: FAIL. %d case loop(s) assert without a subtest (%d declared sequential)\n",
 			len(report.Findings), len(report.Sequential))
-		os.Exit(1)
+		return 1
 	}
 	if *check {
-		fmt.Printf("check: PASS. Every case loop runs its cases under t.Run (%d declared sequential)\n",
+		fmt.Fprintf(stdout, "check: PASS. Every case loop runs its cases under t.Run (%d declared sequential)\n",
 			len(report.Sequential))
 	}
+	return 0
 }
 
 // scan walks every _test.go file under dirs and collects findings.
@@ -704,8 +721,8 @@ func sortFindings(findings []Finding) {
 	})
 }
 
-// printHuman writes the per-file tallies and the summary.
-func printHuman(report *Report) {
+// printHuman writes the per-file tallies and the summary to w.
+func printHuman(w io.Writer, report *Report) {
 	perFile := map[string][2]int{}
 	for _, f := range report.Findings {
 		c := perFile[f.File]
@@ -722,8 +739,8 @@ func printHuman(report *Report) {
 	sort.Strings(files)
 	for _, f := range files {
 		c := perFile[f]
-		fmt.Printf("%-72s sites=%-3d fixable=%d\n", f, c[0], c[1])
+		fmt.Fprintf(w, "%-72s sites=%-3d fixable=%d\n", f, c[0], c[1])
 	}
-	fmt.Printf("\nsummary: %d case loop(s) assert without a subtest (%d fixable by -fix), %d declared sequential, %d inside synctest bubbles, %d compliant, across %d file(s)\n",
+	fmt.Fprintf(w, "\nsummary: %d case loop(s) assert without a subtest (%d fixable by -fix), %d declared sequential, %d inside synctest bubbles, %d compliant, across %d file(s)\n",
 		report.Summary.Sites, report.Summary.Fixable, report.Summary.Sequential, report.Summary.Synctest, report.Summary.Compliant, report.Summary.Files)
 }

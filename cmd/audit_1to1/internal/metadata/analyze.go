@@ -21,6 +21,7 @@ import (
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/audit_1to1/internal/shared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/cmd/internal/auditshared"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/auditclient"
+	"github.com/jmrplens/gitlab-mcp-server/v2/internal/tools"
 	"github.com/jmrplens/gitlab-mcp-server/v2/internal/toolutil"
 )
 
@@ -81,8 +82,20 @@ func buildReport(gapsOnly bool) (report, error) {
 		return report{}, err
 	}
 
+	packagesOut := collectPackages(auditshared.CachedActionSpecs(client, true), projected, gapsOnly)
+	return report{
+		SchemaVersion: shared.SchemaVersion,
+		Summary:       summarize(packagesOut),
+		Packages:      packagesOut,
+	}, nil
+}
+
+// collectPackages analyzes every spec of every group and returns the per-owner
+// package reports, sorted by package and, within one, by action. gapsOnly
+// drops the packages that raise no finding.
+func collectPackages(groups []tools.ActionSpecGroup, projected map[string]string, gapsOnly bool) []packageReport {
 	byPackage := map[string]*packageReport{}
-	for _, group := range auditshared.CachedActionSpecs(client, true) {
+	for _, group := range groups {
 		for _, spec := range group.Actions {
 			owner := auditshared.OwnerPackage(group, spec)
 			pr := packageFor(byPackage, owner)
@@ -102,11 +115,7 @@ func buildReport(gapsOnly bool) (report, error) {
 		packagesOut = append(packagesOut, *pr)
 	}
 	sort.Slice(packagesOut, func(i, j int) bool { return packagesOut[i].Package < packagesOut[j].Package })
-	return report{
-		SchemaVersion: shared.SchemaVersion,
-		Summary:       summarize(packagesOut),
-		Packages:      packagesOut,
-	}, nil
+	return packagesOut
 }
 
 // analyzeSpec returns the R-META finding for one spec. The boolean is false when

@@ -22,6 +22,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -97,24 +98,31 @@ func main() {
 	check := flag.Bool("check", false, "exit non-zero when the docs name a tool that does not exist")
 	flag.Parse()
 
-	registered, err := registeredToolNames()
+	os.Exit(run(*check, docRoots, registeredToolNames, os.Stdout, os.Stderr))
+}
+
+// run audits roots against the names collectNames returns and reports on stdout,
+// returning the process exit code: 1 when a name set or the scan cannot be
+// built, 1 under check when any unregistered name is referenced, 0 otherwise.
+func run(check bool, roots []string, collectNames func() (map[string]struct{}, error), stdout, stderr io.Writer) int {
+	registered, err := collectNames()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "collect tool names: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "collect tool names: %v\n", err)
+		return 1
 	}
 
-	findings, scanned, err := scanDocs(registered)
+	findings, scanned, err := scanDocs(roots, registered)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "scan docs: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "scan docs: %v\n", err)
+		return 1
 	}
 
-	fmt.Printf("audit_doc_tool_names: %d registered tool names, %d documentation files scanned\n",
+	fmt.Fprintf(stdout, "audit_doc_tool_names: %d registered tool names, %d documentation files scanned\n",
 		len(registered), scanned)
 
 	if len(findings) == 0 {
-		fmt.Println("no documentation names an unregistered tool")
-		return
+		fmt.Fprintln(stdout, "no documentation names an unregistered tool")
+		return 0
 	}
 
 	names := make([]string, 0, len(findings))
@@ -128,20 +136,21 @@ func main() {
 		return names[i] < names[j]
 	})
 
-	fmt.Printf("\n%d unregistered tool name(s) referenced:\n", len(names))
+	fmt.Fprintf(stdout, "\n%d unregistered tool name(s) referenced:\n", len(names))
 	for _, name := range names {
 		files := findings[name]
 		sort.Strings(files)
-		fmt.Printf("  %-38s %d file(s)\n", name, len(files))
+		fmt.Fprintf(stdout, "  %-38s %d file(s)\n", name, len(files))
 		for _, f := range files {
-			fmt.Printf("      %s\n", f)
+			fmt.Fprintf(stdout, "      %s\n", f)
 		}
 	}
 
-	if *check {
-		fmt.Fprintf(os.Stderr, "\nERROR: the documentation names %d tool(s) the server does not register\n", len(names))
-		os.Exit(1)
+	if check {
+		fmt.Fprintf(stderr, "\nERROR: the documentation names %d tool(s) the server does not register\n", len(names))
+		return 1
 	}
+	return 0
 }
 
 // registeredToolNames builds every surface in memory and returns the union of
@@ -229,12 +238,12 @@ func collect(server *mcp.Server, names map[string]struct{}) error {
 	return nil
 }
 
-// scanDocs walks the documentation trees and returns unregistered names mapped
+// scanDocs walks the documentation roots and returns unregistered names mapped
 // to the files that mention them, plus the number of files scanned.
-func scanDocs(registered map[string]struct{}) (findingsByName map[string][]string, filesScanned int, err error) {
+func scanDocs(roots []string, registered map[string]struct{}) (findingsByName map[string][]string, filesScanned int, err error) {
 	findingsByName = make(map[string][]string)
 
-	for _, root := range docRoots {
+	for _, root := range roots {
 		n, rootErr := scanRoot(root, registered, findingsByName)
 		if rootErr != nil {
 			return nil, 0, rootErr

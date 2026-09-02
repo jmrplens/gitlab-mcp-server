@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"sort"
@@ -68,6 +69,13 @@ type offender struct {
 // every listed surface, and naming it once keeps the report rows uniform.
 const fieldDescription = " description"
 
+// stdout and stderr are the report and diagnostic streams. They are variables
+// so a test can read what the command prints without redirecting the process.
+var (
+	stdout io.Writer = os.Stdout
+	stderr io.Writer = os.Stderr
+)
+
 func main() {
 	check := flag.Bool("check", false, "exit non-zero if any offending character is served")
 	apply := flag.Bool("apply", false,
@@ -86,11 +94,11 @@ func run(check, apply bool) int {
 	if apply {
 		subs, err := gatewaycompat.FromEnv()
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(stderr, err)
 			return 1
 		}
 		if len(subs) == 0 {
-			fmt.Fprintf(os.Stderr, "-apply: %s is empty, nothing to apply\n", gatewaycompat.EnvVar)
+			fmt.Fprintf(stderr, "-apply: %s is empty, nothing to apply\n", gatewaycompat.EnvVar)
 			return 1
 		}
 		appliedSubstitutions = subs
@@ -98,7 +106,7 @@ func run(check, apply bool) int {
 
 	client, cleanup, err := mcpsurface.NewStubClient()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "stub client: %v\n", err)
+		fmt.Fprintf(stderr, "stub client: %v\n", err)
 		return 1
 	}
 	defer cleanup()
@@ -106,7 +114,12 @@ func run(check, apply bool) int {
 	var found []offender
 	found = append(found, scanTools(client)...)
 	found = append(found, scanPromptsAndResources(client)...)
+	return report(found, check)
+}
 
+// report prints the offenders, sorted by surface then location, and returns
+// the exit code: 1 when check is set and anything offends, 0 otherwise.
+func report(found []offender, check bool) int {
 	sort.Slice(found, func(i, j int) bool {
 		if found[i].surface != found[j].surface {
 			return found[i].surface < found[j].surface
@@ -115,19 +128,19 @@ func run(check, apply bool) int {
 	})
 
 	if len(found) == 0 {
-		fmt.Println("gateway character audit: nothing served carries an offending character")
+		fmt.Fprintln(stdout, "gateway character audit: nothing served carries an offending character")
 		return 0
 	}
 	for _, f := range found {
 		if fullStrings {
 			// Tab-separated, because the whole string is for machines and
 			// greps; the padded excerpt form is for eyes.
-			fmt.Printf("%s\t%s\t%s\n", f.surface, f.where, f.excerpt)
+			fmt.Fprintf(stdout, "%s\t%s\t%s\n", f.surface, f.where, f.excerpt)
 			continue
 		}
-		fmt.Printf("%-11s %-52s %s\n", f.surface, f.where, f.excerpt)
+		fmt.Fprintf(stdout, "%-11s %-52s %s\n", f.surface, f.where, f.excerpt)
 	}
-	fmt.Printf("gateway character audit: %d served string(s) carry an offending character\n", len(found))
+	fmt.Fprintf(stdout, "gateway character audit: %d served string(s) carry an offending character\n", len(found))
 	if check {
 		return 1
 	}
@@ -143,7 +156,7 @@ func scanTools(client *gitlabclient.Client) []offender {
 	for _, surface := range []string{config.ToolSurfaceDynamic, config.ToolSurfaceMeta, config.ToolSurfaceIndividual} {
 		listed, err := listSurface(client, surface)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "listing %s tools: %v\n", surface, err)
+			fmt.Fprintf(stderr, "listing %s tools: %v\n", surface, err)
 			os.Exit(1)
 		}
 		for _, tool := range listed {
@@ -196,7 +209,7 @@ func scanPromptsAndResources(client *gitlabclient.Client) []offender {
 
 	prompts, err := mcpsurface.Prompts(client)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "listing prompts: %v\n", err)
+		fmt.Fprintf(stderr, "listing prompts: %v\n", err)
 		os.Exit(1)
 	}
 	for _, prompt := range prompts {
@@ -208,7 +221,7 @@ func scanPromptsAndResources(client *gitlabclient.Client) []offender {
 
 	resources, templates, err := mcpsurface.Resources(client)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "listing resources: %v\n", err)
+		fmt.Fprintf(stderr, "listing resources: %v\n", err)
 		os.Exit(1)
 	}
 	for _, resource := range resources {

@@ -20,6 +20,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -52,27 +53,37 @@ func main() {
 		return
 	}
 
-	scopes, err := parseScope(*scope)
-	if err != nil {
+	if err := run(*scope, *gapsOnly, *outputPath); err != nil {
 		cmdutil.Fatalf("%v", err)
+	}
+}
+
+// run resolves the -scope selection, produces the report it names (the merged
+// backlog for all three, one analyzer's native shape for a single scope) and
+// writes it to outputPath.
+func run(scope string, gapsOnly bool, outputPath string) error {
+	scopes, err := parseScope(scope)
+	if err != nil {
+		return err
 	}
 
 	var content []byte
 	switch {
 	case len(scopes) == 3:
-		content, err = runMerged(*gapsOnly)
+		content, err = runMerged(gapsOnly)
 	case len(scopes) == 1:
-		content, err = runSingle(scopes[0], *gapsOnly)
+		content, err = runSingle(scopes[0], gapsOnly)
 	default:
-		cmdutil.Fatalf("scope must be a single value or all three (got %d: %s); partial two-scope combinations are not supported",
+		return fmt.Errorf("scope must be a single value or all three (got %d: %s); partial two-scope combinations are not supported",
 			len(scopes), strings.Join(scopes, ","))
 	}
 	if err != nil {
-		cmdutil.Fatalf("%v", err)
+		return err
 	}
-	if writeErr := writeOutput(*outputPath, content); writeErr != nil {
-		cmdutil.Fatalf("write output: %v", writeErr)
+	if writeErr := writeOutput(outputPath, content); writeErr != nil {
+		return fmt.Errorf("write output: %w", writeErr)
 	}
+	return nil
 }
 
 // runValidateDocsMode resolves the repo root, builds the shared API-doc fetcher,
@@ -89,16 +100,26 @@ func runValidateDocsMode(outputPath string, refresh, offline bool, maxAge time.D
 	// Strict: a download failure (e.g. an upstream 404 for a renamed/removed doc)
 	// must surface as a stale citation rather than be masked by a cached copy.
 	fetcher := apidocs.New(root, apidocs.Options{Refresh: refresh, Offline: offline, MaxAge: maxAge, Strict: true})
+	if validateErr := validateDocs(ctx, root, outputPath, fetcher); validateErr != nil {
+		cmdutil.Fatalf("%v", validateErr)
+	}
+}
+
+// validateDocs runs the citation check against fetcher, writes the report to
+// outputPath, and returns an error when the report could not be produced or
+// when any citation is stale.
+func validateDocs(ctx context.Context, root, outputPath string, fetcher *apidocs.Fetcher) error {
 	content, ok, err := runValidateDocs(ctx, root, fetcher)
 	if err != nil {
-		cmdutil.Fatalf("%v", err)
+		return err
 	}
 	if writeErr := writeOutput(outputPath, content); writeErr != nil {
-		cmdutil.Fatalf("write output: %v", writeErr)
+		return fmt.Errorf("write output: %w", writeErr)
 	}
 	if !ok {
-		cmdutil.Fatalf("audit_1to1: stale doc/api citations found (see report)")
+		return errors.New("audit_1to1: stale doc/api citations found (see report)")
 	}
+	return nil
 }
 
 // runMerged runs all three analyzers and produces the merged backlog JSON via
