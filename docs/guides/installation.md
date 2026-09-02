@@ -214,13 +214,15 @@ docker run -i --rm -e GITLAB_TOKEN ghcr.io/jmrplens/gitlab-mcp-server:latest --h
 
 ### HTTP: a long-running container on a port
 
-The container's default mode serves HTTP on `:8080`, where each client sends its own token per request. The simplest form is:
+The container's default mode serves HTTP on `:8080`, where each client sends its own token per request. It has to be told which GitLab it serves, so the simplest form names one:
 
 ```bash
-docker run --rm -p 8080:8080 ghcr.io/jmrplens/gitlab-mcp-server:latest
+docker run --rm -p 8080:8080 -e GITLAB_URL=https://gitlab.com ghcr.io/jmrplens/gitlab-mcp-server:latest
 ```
 
-That starts the server **without** `--gitlab-url`, so it is in multi-instance mode: a client chooses the instance with a `GITLAB-URL` header and gets `https://gitlab.com` when it sends none. To fix the instance, and for the hardening flags a shared deployment should have, pass the flags explicitly:
+The `CMD` carries no instance, so `docker run -p 8080:8080 <image>` with nothing else exits immediately with `--gitlab-url is required in HTTP mode`. That refusal is deliberate: a deployment that names no instance makes requests to whatever host a caller puts in the `GITLAB-URL` header, with whatever token that caller supplied. `-e GITLAB_URL=` fills the list without replacing the `CMD`; a comma-separated value publishes several, among which the header then chooses. For a local single-user run where you are the only caller, `--allow-any-gitlab-url` starts with no instance published and warns in the log that it did.
+
+To fix the instance on the command line, and for the hardening flags a shared deployment should have, pass the flags explicitly (any argument after the image name replaces the `CMD`, so `--http` and `--http-addr` come back with them):
 
 ```bash
 docker run -d --name gitlab-mcp \

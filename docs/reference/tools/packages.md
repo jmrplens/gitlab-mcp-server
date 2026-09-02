@@ -39,6 +39,8 @@ Tools marked **Delete** require user confirmation before execution.
 
 ## Generic Package Registry
 
+> **Local paths are confined to allow-listed roots.** Every `file_path` and `directory_path` below must resolve, after symlinks, under the working directory, the OS temporary directory, or a directory named in `GITLAB_MCP_ALLOWED_UPLOAD_DIRS` (path-list separated: `:` on Unix, `;` on Windows). Destinations written by a download follow the same rule under `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS`. A server reached over HTTP refuses every local path outright, whatever those variables say: the caller has no files on the machine the server runs on, so `content_base64` is the remote form.
+
 ### `gitlab_package_publish`
 
 Publish (upload) a file to the GitLab Generic Package Registry. Provide either file_path (absolute local path) or content_base64 (base64-encoded content), not both. The `file_name` may include `/` to describe a directory structure inside the package; segments between separators must not be empty, `.`, or `..`. Returns the package file ID, size, SHA256, and download URL.
@@ -50,8 +52,10 @@ Publish (upload) a file to the GitLab Generic Package Registry. Provide either f
 
 Download a file from the GitLab Generic Package Registry and save it to a local path. Returns the output path, file size, and SHA256 checksum.
 
-| Annotation | **Read** |
-| ---------- | -------- |
+The read is of the registry, but the write is to this machine's disk, so the action is classified as mutating rather than read-only: `--read-only` removes it, `--safe-mode` previews it, a `read_api` token is not served it, and a client that auto-approves `readOnlyHint: true` no longer auto-approves a file write. `output_path` must resolve under the working directory, the OS temporary directory, or a directory named in `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS`; a server reached over HTTP refuses every local path, since the caller has no files on this machine.
+
+| Annotation | **Update** |
+| ---------- | ---------- |
 
 ### `gitlab_package_list`
 
@@ -317,7 +321,7 @@ Download a completed dependency list export (CycloneDX SBOM JSON). Returns raw S
 | # | Tool Name | Category | Annotation |
 | --: | --------- | -------- | :--------: |
 | 1 | `gitlab_package_publish` | Generic Package Registry | Create |
-| 2 | `gitlab_package_download` | Generic Package Registry | Read |
+| 2 | `gitlab_package_download` | Generic Package Registry | Update |
 | 3 | `gitlab_package_list` | Generic Package Registry | Read |
 | 4 | `gitlab_package_file_list` | Generic Package Registry | Read |
 | 5 | `gitlab_package_delete` | Generic Package Registry | Delete |

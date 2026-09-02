@@ -207,10 +207,10 @@ Edit an existing system hook by ID (admin). Supports URL, metadata, event subscr
 
 ### `gitlab_test_system_hook`
 
-Test a system hook by ID (admin). Triggers a test event and returns the result.
+Test a system hook by ID (admin). Triggers a test event and returns the result. Nothing changes on the instance, but GitLab delivers an event to the hook's configured URL, so the action is classified as mutating on every surface: `--read-only` removes it and `--safe-mode` previews it.
 
-| Annotation | **Read** |
-| ---------- | -------- |
+| Annotation | **Create** |
+| ---------- | ---------- |
 
 ### `gitlab_set_system_hook_url_variable`
 
@@ -686,7 +686,7 @@ Get a single project-level audit event by ID.
 | 18 | `gitlab_get_system_hook` | System Hooks | Read |
 | 19 | `gitlab_add_system_hook` | System Hooks | Create |
 | 20 | `gitlab_edit_system_hook` | System Hooks | Update |
-| 21 | `gitlab_test_system_hook` | System Hooks | Read |
+| 21 | `gitlab_test_system_hook` | System Hooks | Create |
 | 22 | `gitlab_set_system_hook_url_variable` | System Hooks | Update |
 | 23 | `gitlab_delete_system_hook_url_variable` | System Hooks | Delete |
 | 24 | `gitlab_delete_system_hook` | System Hooks | Delete |

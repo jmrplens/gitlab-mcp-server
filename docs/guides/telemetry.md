@@ -44,7 +44,7 @@ a second, worse copy of configuration you already know, and it would break the
 ordinary case of a host that exports `OTEL_EXPORTER_OTLP_ENDPOINT` once for
 every service running on it.
 
-### The three traps in the standard variables
+### The four traps in the standard variables
 
 These catch people, they are not this server's doing, and each one fails
 quietly.
@@ -81,6 +81,27 @@ not. Honoring it would give one deployment two encodings at once, JSON spans
 beside protobuf metrics, from a single setting that reads as though it selects
 one thing. So it fails at startup, by name, rather than silently downgrading or
 silently splitting.
+
+**`OTEL_EXPORTER_OTLP_INSECURE=true` overrides an `https` endpoint, for traces
+and metrics.** The specification says the variable "only applies to OTLP/gRPC
+when an endpoint is provided without the http or https scheme". The Go trace and
+metric exporters do not read it that way: their environment configuration
+applies the scheme first and the `INSECURE` options after, so the later one
+wins and an `https` endpoint is downgraded to plaintext, taking whatever
+credential you set with it. The newer log exporters resolve the scheme first and
+are correct, which is why one deployment can end up exporting two signals in the
+clear and the third over TLS.
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=https://collector.example.com:4318
+OTEL_EXPORTER_OTLP_INSECURE=true   # traces and metrics go out in plaintext anyway
+```
+
+The precedence runs the other way too: an `INSECURE=false` beside an `http`
+endpoint upgrades traces and metrics to TLS. This server emulates the deviation
+per signal rather than reading the scheme off the URL, so the plaintext warning
+below names the signals that are actually affected. It does not refuse the
+configuration: the endpoint is yours to choose.
 
 ## Authenticating to your collector
 
@@ -119,9 +140,18 @@ W3C Baggage format, so it is percent-decoded:
 - Base64 padding is safe. `=` separates a key from its value at the **first**
   occurrence only, so the trailing `==` of a basic credential survives.
 
-This server never reads, logs or transforms that variable. Whatever you set is
-what your collector receives, and a test asserts the credential never appears in
-this server's own log output, including when an export fails.
+This server never transforms that variable. Whatever you set is what your
+collector receives, and it is never logged: a test asserts the credential never
+appears in this server's own log output, including when an export fails.
+
+It is read, once, and only in order to keep it out of that output. The SDK's own
+header parser prints what it could not parse, and the log exporter hands the
+*entire* variable to the error handler, so one malformed non-credential pair is
+enough to print a perfectly well formed credential beside it. This server reads
+the same variables the exporters do at startup, and redacts those values, and
+their percent-decoded spellings, out of every SDK diagnostic it emits. The
+variable name is left in place, because an operator whose configuration is
+malformed needs to know which one to fix.
 
 ## What is recorded
 
@@ -296,6 +326,11 @@ Not by default and not by any setting, because there is no setting:
 - Full URLs of GitLab calls. The child span records the method, the host and the
   status, and the parent span already names the action, which identifies the
   endpoint family more legibly than a URL would.
+- `token_suffix`, the last four characters of an HTTP client's credential. It
+  keeps being written to stderr, where it is what an operator correlates a
+  refusal by on their own terminal, and it is stripped from the exported copy of
+  every log record at any depth: it authenticates nothing and correlates
+  everything, which is not a distinction a telemetry backend can make for you.
 
 An end-to-end test drives real traffic carrying a distinctive project path, a
 search query and a token, then searches every exported payload for all three.
