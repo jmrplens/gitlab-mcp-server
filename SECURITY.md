@@ -46,14 +46,26 @@ That shape is what determines whether something counts as a vulnerability here.
    influenced by content it read earlier. The server must not treat an argument
    as authority to exceed the token's own permissions, and must not let an
    argument redirect a request to an unintended host or path.
-2. **GitLab → server → model.** Everything the GitLab API returns is attacker-
-   influenced whenever an attacker can file an issue, open an MR, or push a
-   commit. It is rendered into tool results through the escaping helpers in
+2. **GitLab → server → model.** GitLab content is untrusted input even when the
+   GitLab instance is trusted infrastructure. An issue title, a repository file,
+   a job log or a discussion note is written by whoever can open an issue or
+   push a branch, which on a public project is anybody, and none of it is the
+   caller. It is rendered into tool results through the escaping helpers in
    `internal/toolutil/text.go`, so a way to break out of a table cell, a code
-   fence, or a heading is a vulnerability.
+   fence, a link label or a heading is a vulnerability, as is any way to forge
+   the guidance the server writes for the model in its own voice.
 3. **Tenant → tenant (HTTP mode).** One process serves many callers. The bounded
    per-token+URL server pool in `internal/serverpool/` is what keeps one caller's
    token, client, and cached tier from reaching another caller's session.
+4. **Working directory → server.** The process starts wherever a client chose to
+   start it, which for a stdio server is whatever repository somebody just
+   opened. A file that arrives by `git clone` must not be able to configure this
+   server, so a dotenv file is read only from `~/.gitlab-mcp-server.env` or from
+   the path `GITLAB_MCP_ENV_FILE` names, and that variable is read from the
+   process environment alone, so a file the server declines to load cannot
+   nominate itself. A `./.env` is still looked for and reported at WARN with its
+   absolute path, because a developer whose repository-local file stopped taking
+   effect deserves to be told why rather than left debugging it.
 
 **What we consider a vulnerability, specifically:**
 
@@ -161,13 +173,58 @@ The remainder of this document describes how the server handles security-sensiti
 - The GitLab Personal Access Token is provided via `GITLAB_TOKEN` environment variable (stdio mode) or per-request HTTP header (HTTP mode).
 - Tokens are never logged, displayed in tool output, or included in error messages.
 - In HTTP mode, each client authenticates via `PRIVATE-TOKEN` or `Authorization: Bearer` header — tokens are isolated per session.
+- **A credential does not leave the instance it was issued for.** A redirect that
+  crosses hosts, or downgrades https to http, loses `PRIVATE-TOKEN`,
+  `Authorization`, `Sudo` and `Job-Token` before the next hop. Go's own client
+  strips `Authorization` and cannot strip GitLab's header, and no adversary is
+  needed to reach this: GitLab answers artifact, trace and package downloads
+  with a redirect to object storage whenever object storage is configured. The
+  OAuth verifier refuses such a hop outright rather than following it stripped,
+  because there the response body is the caller's identity rather than an asset.
+- **HTTP mode names the instances it serves.** It refuses to start without
+  `--gitlab-url`, because a deployment that names none makes requests to
+  whatever host a caller puts in a header, with whatever token that caller
+  supplied, and returns the answer to them. `--allow-any-gitlab-url` accepts
+  that for a single-user local deployment and warns at startup. Where several
+  instances are published the header is required, since choosing for the caller
+  would send their token to an instance they never named.
 - The `.env` file containing credentials is excluded from version control via `.gitignore`.
 
-### File System Access (`file_path` uploads)
+### File System Access (caller-supplied local paths)
 
-- `gitlab_project_upload` accepts a `file_path` to read a local file from the MCP server's filesystem (an alternative to `content_base64`).
-- The server reads any path its process can access, so run it with least privilege and treat `file_path` as trusted input from the MCP client.
-- Prefer `content_base64` when the caller should not be able to read arbitrary server-side files.
+Eleven actions take a path on the machine running the server: the project and
+wiki uploads, secure files, alert metric images, the three avatars, package
+publish and publish-directory, the import archives, and `package.download`,
+which writes rather than reads.
+
+- **Paths are confined, not merely cleaned.** Every one of them resolves
+  symlinks and must land inside the working directory, the operating system
+  temporary directory, or a directory the operator named. A path that resolves
+  outside those roots is refused. `package.download` resolves its destination
+  again after creating parent directories, so a symlink planted underneath a
+  directory the call just made cannot decide where the bytes go.
+- **The operator widens the roots, the caller never does.**
+  `GITLAB_MCP_ALLOWED_UPLOAD_DIRS` for reads, `GITLAB_MCP_ALLOWED_DOWNLOAD_DIRS`
+  for writes, and `GITLAB_MCP_ALLOWED_IMPORT_DIRS` for import archives.
+- **The working directory is dropped from the roots when it is the filesystem
+  root.** A stdio server usually starts in the workspace somebody just opened,
+  which is why it is a root at all. Some clients start their servers in `/`,
+  where keeping it would allow-list the whole disk and undo the confinement
+  without saying so.
+- **A local path may not be named at all over HTTP.** This is a property of the
+  transport rather than a setting. A stdio server shares a machine with the
+  person driving it and `file_path` is the point of it; a caller reached over
+  HTTP has no files here, so every path they could name belongs to somebody
+  else. Such a request is refused with an error naming `content_base64`, which
+  is what a remote caller can actually supply.
+- **Reads are bounded while reading**, not by the size the filesystem reported
+  beforehand. A procfs entry is a regular file that reports zero bytes and then
+  returns many, which is how this process's own environment could be streamed
+  past a limit it had already satisfied.
+
+`file_path` is caller-supplied input. Treating it as trusted was the earlier
+position here and it was wrong even for stdio, because the argument arrives
+from a model that may have read attacker-influenced content.
 
 ### TLS Configuration
 
