@@ -442,6 +442,14 @@ type listenStream struct {
 type listenStreams struct {
 	mu      sync.Mutex
 	streams map[*listenStream]struct{}
+	// closed records that closeAll has run, so a stream armed afterwards is
+	// ended straight away instead of being filed in a registry nothing will
+	// read again. Shutdown stops the listener but lets in-flight requests
+	// finish, and a request that was already on the wire can reach this
+	// middleware after the registry has been emptied; without the flag that
+	// one stream held the process open for the whole drain budget, which is
+	// the very outcome closeAll exists to prevent.
+	closed bool
 }
 
 func newListenStreams() *listenStreams {
@@ -456,8 +464,17 @@ func (s *listenStreams) arm(uris []string, cancel context.CancelFunc) (stream *l
 	}
 
 	s.mu.Lock()
-	s.streams[stream] = struct{}{}
+	closed := s.closed
+	if !closed {
+		s.streams[stream] = struct{}{}
+	}
 	s.mu.Unlock()
+
+	if closed {
+		// Outside the lock, like every other cancel here: the SDK's handler
+		// unwinds through the unsubscribe path.
+		stream.cancel()
+	}
 
 	return stream, func() {
 		s.mu.Lock()
@@ -509,6 +526,7 @@ func (s *listenStreams) closeAll() {
 		open = append(open, stream)
 	}
 	clear(s.streams)
+	s.closed = true
 	s.mu.Unlock()
 
 	for _, stream := range open {
@@ -716,28 +734,56 @@ func (b *sessionBridge) subscribeUnlessStateless(ctx context.Context, req *mcp.S
 	return errStatelessSubscribe
 }
 
-// attach connects the runtime to the server it notifies through, once that
-// server exists.
-func (r *subscriptionRuntime) attach(ctx context.Context, server *mcp.Server) {
+// streamRegistry returns the registry that can end this server's open
+// subscriptions/listen requests, building a standalone one when there is no
+// subscription runtime at all.
+//
+// A server without a runtime still needs one. Whether resource subscriptions
+// are offered is what the capability surface decides; whether a stream the SDK
+// is already holding can be closed is not. The SDK acknowledges a listen
+// carrying only list-changed notifications on every surface (the go-sdk client
+// opens one by itself at connect time whenever it registers a list-changed
+// handler), and it keeps that request open until the handler's context ends.
+// Nothing else ends it.
+//
+// So wiring the registry beside the runtime left --capability-surface=minimal
+// with open streams nobody could reach: SIGTERM was answered by the full
+// httpShutdownTimeout of waiting, then "http server shutdown: context deadline
+// exceeded" and exit 1, with the streams never getting their completion result
+// either. The per-server and per-process ceilings on open streams reduce how
+// many can pile up and do not change that outcome for the ones that do.
+func (r *subscriptionRuntime) streamRegistry() *listenStreams {
 	if r == nil {
-		return
+		return newListenStreams()
 	}
-	r.notifier.attach(server)
+	return r.streams
+}
+
+// attach connects the runtime to the server it notifies through, once that
+// server exists, and installs the listen-stream registry every server needs.
+//
+// The registry half runs even on a nil runtime, which is why this is not the
+// usual early return: see [subscriptionRuntime.streamRegistry].
+func (r *subscriptionRuntime) attach(ctx context.Context, server *mcp.Server) {
+	streams := r.streamRegistry()
+	middlewares := make([]mcp.Middleware, 0, 2)
+	if r != nil {
+		r.notifier.attach(server)
+		// Traffic on a session is the only evidence this server gets that
+		// a subscriber is still there, so it is what holds the watchers at
+		// full speed.
+		middlewares = append(middlewares, renewOnActivity(r.manager))
+	}
+	middlewares = append(middlewares, streams.middleware())
 
 	// Shutdown has to reach the open listen streams, and nothing else does:
 	// their handlers block on contexts derived from each session, which the
 	// SDK does not end while it is waiting for those same handlers to return.
 	go func() {
 		<-ctx.Done()
-		r.streams.closeAll()
+		streams.closeAll()
 	}()
-	server.AddReceivingMiddleware(
-		// Traffic on a session is the only evidence this server gets that
-		// a subscriber is still there, so it is what holds the watchers at
-		// full speed.
-		renewOnActivity(r.manager),
-		r.streams.middleware(),
-	)
+	server.AddReceivingMiddleware(middlewares...)
 }
 
 // renewOnActivity returns middleware that keeps a session's subscriptions
@@ -958,11 +1004,12 @@ func listenLimitsFromEnv() listenLimits {
 // and holds a slot for as long as the stream is open.
 //
 // It is installed on EVERY server, unconditionally, rather than beside the
-// rest of the subscription machinery: listenStreams.middleware is wired only
-// when the subscription runtime exists, and under
-// --capability-surface=minimal that runtime is nil while the SDK still
-// acknowledges and holds a list-changed listen. A cap that is absent on one
-// configuration is not a cap.
+// rest of the subscription machinery: under --capability-surface=minimal the
+// subscription runtime is nil while the SDK still acknowledges and holds a
+// list-changed listen. A cap that is absent on one configuration is not a cap.
+// The same reasoning is why [subscriptionRuntime.attach] installs the stream
+// registry on a nil runtime as well: a ceiling on how many streams may exist is
+// not a way to end the ones that do.
 //
 // Refusing with the busy code rather than closing the stream is deliberate:
 // the request is well formed and a retry later can succeed, which is exactly

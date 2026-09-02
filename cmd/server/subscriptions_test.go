@@ -806,6 +806,137 @@ func TestNewSubscriptionRuntime_MinimalSurface_IsNil(t *testing.T) {
 	if sub != nil || unsub != nil {
 		t.Error("handlers() on no runtime returned non-nil handlers; the SDK would advertise a capability with no backing")
 	}
+
+	if runtime.streamRegistry() == nil {
+		t.Error("streamRegistry() on no runtime returned nil; nothing could then end a stream the SDK is holding")
+	}
+}
+
+// TestSubscriptionRuntime_NoRuntime_ShutdownStillEndsListenStreams verifies a
+// server that offers no resource subscriptions still ends the listen streams
+// the SDK holds on its behalf.
+//
+// The capability surface decides whether subscriptions are advertised. It does
+// not decide whether the SDK acknowledges a subscriptions/listen carrying only
+// list-changed notifications: it always does, and the go-sdk client opens one
+// by itself at connect time whenever it registers a list-changed handler. That
+// request is then held open until its handler's context ends, and nothing but
+// the stream registry ends it.
+//
+// So on --capability-surface=minimal, where newSubscriptionRuntime returns nil,
+// the registry used to be absent and those streams became unreachable. The
+// visible symptom was in shutdown: the process ignored its signal for the full
+// HTTP drain budget and then died with "http server shutdown: context deadline
+// exceeded" and exit 1. The wire half of this is pinned in
+// test/e2e/http/shutdown_test.go, which drives the real binary with that flag
+// and a real signal; this half pins the wiring that makes it possible.
+//
+// The server here is a bare one carrying the capabilities the minimal surface
+// declares, rather than one from createServer. What changed is attach's
+// contract on a nil runtime, and registering the whole catalog to reach it
+// would add several seconds to a package that is already close to the test
+// timeout.
+func TestSubscriptionRuntime_NoRuntime_ShutdownStillEndsListenStreams(t *testing.T) {
+	// The server's own context, which is what the signal handler cancels.
+	ctx, shutdown := context.WithCancel(context.Background())
+	t.Cleanup(shutdown)
+
+	server := mcp.NewServer(&mcp.Implementation{Name: "no-subscriptions", Version: "1"}, &mcp.ServerOptions{
+		// What createServer declares on the minimal capability surface: list
+		// changes, and no resources.subscribe.
+		Capabilities: &mcp.ServerCapabilities{
+			Tools:     &mcp.ToolCapabilities{ListChanged: true},
+			Resources: &mcp.ResourceCapabilities{ListChanged: true},
+		},
+	})
+
+	// Nil is exactly what the minimal capability surface produces, and attach
+	// is called on it unconditionally.
+	var runtime *subscriptionRuntime
+	runtime.attach(ctx, server)
+
+	// Applied last, so it wraps the stream registry's middleware and sees what
+	// the SDK's handler finally returned.
+	ended := make(chan error, 1)
+	server.AddReceivingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			if method != methodSubscriptionsListen {
+				return next(ctx, method, req)
+			}
+			result, listenErr := next(ctx, method, req)
+			select {
+			case ended <- listenErr:
+			default:
+			}
+			return result, listenErr
+		}
+	})
+
+	// The acknowledgment is the SDK's own signal that the stream is registered
+	// and it is about to block, so waiting for it is what makes the shutdown
+	// below land on an established stream every time. Canceling earlier would
+	// exercise the arrived-during-the-drain path instead, which is
+	// TestListenStreams_ArmedAfterCloseAll_EndsImmediately's job.
+	acknowledged := make(chan struct{}, 1)
+	server.AddSendingMiddleware(func(next mcp.MethodHandler) mcp.MethodHandler {
+		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
+			result, sendErr := next(ctx, method, req)
+			if method == "notifications/subscriptions/acknowledged" {
+				select {
+				case acknowledged <- struct{}{}:
+				default:
+				}
+			}
+			return result, sendErr
+		}
+	})
+
+	session := connectListeningForToolChanges(t, server)
+	if session.InitializeResult().ProtocolVersion < "2026-07-28" {
+		t.Skip("subscriptions/listen only exists from protocol 2026-07-28")
+	}
+
+	select {
+	case <-acknowledged:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the client's listen stream was never acknowledged, so there was nothing for shutdown to close")
+	}
+
+	shutdown()
+
+	select {
+	case listenErr := <-ended:
+		if listenErr != nil {
+			t.Errorf("the listen stream ended with %v, want the graceful result", listenErr)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown left a listen stream open; the process would wait out its whole drain budget and exit with an error")
+	}
+}
+
+// connectListeningForToolChanges connects a client that asks for tools/list
+// change notifications, which is what makes the SDK open a subscriptions/listen
+// of its own during the handshake.
+//
+// It is the shape a real 2026-07-28 client has, since a list-changed handler is
+// ordinary, and therefore the shape that produced open streams on a server
+// advertising no subscriptions at all.
+func connectListeningForToolChanges(t *testing.T, server *mcp.Server) *mcp.ClientSession {
+	t.Helper()
+	ctx := context.Background()
+	st, ct := mcp.NewInMemoryTransports()
+	if _, err := server.Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	client := mcp.NewClient(&mcp.Implementation{Name: "listening-client", Version: "1"}, &mcp.ClientOptions{
+		ToolListChangedHandler: func(context.Context, *mcp.ToolListChangedRequest) {},
+	})
+	session, err := client.Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session
 }
 
 // TestServerNotifier_BeforeAttach_IsQuiet verifies the notifier tolerates
@@ -937,6 +1068,68 @@ func TestListenStreams_ReleasedStream_IsNotCancelled(t *testing.T) {
 	streams.stopped("uri", subscriptions.ErrInaccessible)
 	if cancelled {
 		t.Error("a released stream was cancelled; its request had already returned")
+	}
+}
+
+// TestListenStreams_CloseAll_EndsEveryStreamItHolds verifies shutdown reaches
+// streams no URI will ever close on its own.
+//
+// stopped() only ever ends a stream once every URI it named has stopped, so a
+// listen carrying only list-changed subscriptions names none and can never be
+// ended that way. closeAll is the only thing that ends those, and the SDK's
+// handler blocks until it does, so a stream missed here is a process that
+// outlives its own shutdown.
+func TestListenStreams_CloseAll_EndsEveryStreamItHolds(t *testing.T) {
+	streams := newListenStreams()
+
+	cases := []struct {
+		name string
+		uris []string
+	}{
+		{name: "a stream watching resources", uris: []string{"gitlab://project/42/pipeline/99"}},
+		{name: "a list-changed stream, which names no URI", uris: nil},
+	}
+
+	// One armed stream per case, each recording its own cancellation, so the
+	// assertions below can tell which of them closeAll reached. The real cancel
+	// is a context's; a bare function is enough to observe the call, and
+	// closeAll makes it on this goroutine.
+	ended := make([]bool, len(cases))
+	for i, tc := range cases {
+		_, release := streams.arm(tc.uris, func() { ended[i] = true })
+		t.Cleanup(release)
+	}
+
+	streams.closeAll()
+
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if !ended[i] {
+				t.Error("closeAll left the stream open; its handler would block shutdown until the drain deadline")
+			}
+		})
+	}
+}
+
+// TestListenStreams_ArmedAfterCloseAll_EndsImmediately verifies a listen that
+// arrives during the drain is ended rather than filed away.
+//
+// Shutdown stops the listener and lets in-flight requests finish, so a request
+// already on the wire can reach this middleware after closeAll has emptied the
+// registry. Registering it there would put it beyond anyone's reach a second
+// time, and one such stream is enough to hold the process open for the whole
+// shutdown budget, which is the exact outcome closeAll exists to prevent.
+func TestListenStreams_ArmedAfterCloseAll_EndsImmediately(t *testing.T) {
+	streams := newListenStreams()
+	streams.closeAll()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, release := streams.arm(nil, cancel)
+	defer release()
+
+	if ctx.Err() == nil {
+		t.Error("a listen armed after shutdown was left open, so its handler would never return")
 	}
 }
 
