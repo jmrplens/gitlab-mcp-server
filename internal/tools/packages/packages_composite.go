@@ -132,33 +132,35 @@ type PublishDirOutput struct {
 	Errors     []string         `json:"errors,omitempty"`
 }
 
-// validatePublishDirInput checks required fields and verifies that
-// [PublishDirInput.DirectoryPath] exists and is a directory.
-func validatePublishDirInput(ctx context.Context, input PublishDirInput) error {
+// validatePublishDirInput checks required fields and resolves
+// [PublishDirInput.DirectoryPath] to a canonical directory confined to the
+// allowed upload roots, returning the path the publish loop should walk.
+//
+// The whole tree is read and shipped to a project the caller names, so the
+// directory is confined exactly as a single file_path is; without it, one call
+// exfiltrates a home directory.
+func validatePublishDirInput(ctx context.Context, input PublishDirInput) (string, error) {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf(fmtCtxCancelled, err)
+		return "", fmt.Errorf(fmtCtxCancelled, err)
 	}
 	if input.ProjectID == "" {
-		return errors.New("packagePublishDirectory: project_id is required")
+		return "", errors.New("packagePublishDirectory: project_id is required")
 	}
 	if err := toolutil.ValidatePackageName(input.PackageName); err != nil {
-		return fmt.Errorf("packagePublishDirectory: %w", err)
+		return "", fmt.Errorf("packagePublishDirectory: %w", err)
 	}
 	if input.PackageVersion == "" {
-		return errors.New("packagePublishDirectory: package_version is required")
+		return "", errors.New("packagePublishDirectory: package_version is required")
 	}
 	if input.DirectoryPath == "" {
-		return errors.New("packagePublishDirectory: directory_path is required")
+		return "", errors.New("packagePublishDirectory: directory_path is required")
 	}
 
-	info, err := os.Stat(input.DirectoryPath)
+	directoryPath, err := toolutil.CanonicalLocalDirPath(input.DirectoryPath)
 	if err != nil {
-		return fmt.Errorf("packagePublishDirectory: %w", err)
+		return "", fmt.Errorf("packagePublishDirectory: %w", err)
 	}
-	if !info.IsDir() {
-		return fmt.Errorf("packagePublishDirectory: %s is not a directory", input.DirectoryPath)
-	}
-	return nil
+	return directoryPath, nil
 }
 
 // shouldIncludeFile reports whether a directory entry is a regular file whose
@@ -215,11 +217,12 @@ func collectMatchingFiles(directoryPath, pattern string) ([]string, error) {
 // pattern, and publishes each matching regular file to the Generic Package
 // Registry. It continues on individual file errors and reports them in output.
 func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *gitlabclient.Client, input PublishDirInput) (PublishDirOutput, error) {
-	if err := validatePublishDirInput(ctx, input); err != nil {
+	directoryPath, err := validatePublishDirInput(ctx, input)
+	if err != nil {
 		return PublishDirOutput{}, err
 	}
 
-	files, err := collectMatchingFiles(input.DirectoryPath, input.IncludePattern)
+	files, err := collectMatchingFiles(directoryPath, input.IncludePattern)
 	if err != nil {
 		return PublishDirOutput{}, err
 	}
@@ -233,7 +236,7 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 	// measure both levels can share, and they are the more useful of the two:
 	// a directory of one large file and twenty small ones is not five percent
 	// done after the first.
-	sizes := fileSizes(input.DirectoryPath, files)
+	sizes := fileSizes(directoryPath, files)
 	var totalBytes, doneBytes int64
 	for _, size := range sizes {
 		totalBytes += size
@@ -257,7 +260,7 @@ func PublishDirectory(ctx context.Context, req *mcp.CallToolRequest, client *git
 			PackageName:    input.PackageName,
 			PackageVersion: input.PackageVersion,
 			FileName:       name,
-			FilePath:       filepath.Join(input.DirectoryPath, name),
+			FilePath:       filepath.Join(directoryPath, name),
 			Status:         input.Status,
 		}
 

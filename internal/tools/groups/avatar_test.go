@@ -108,6 +108,72 @@ func TestUploadAvatar_FilePath(t *testing.T) {
 	}
 }
 
+// makeDirs creates each directory or fails the test, so a containment fixture
+// reads as one line instead of a loop that asserts.
+func makeDirs(t *testing.T, dirs ...string) {
+	t.Helper()
+	for _, dir := range dirs {
+		if err := os.Mkdir(dir, 0o750); err != nil {
+			t.Fatalf("Mkdir(%q) error = %v", dir, err)
+		}
+	}
+}
+
+// TestUploadAvatar_FilePathOutsideAllowedDirs_Rejected verifies that the
+// streaming upload path inherits the same containment as the buffered one: a
+// file_path outside the allow-listed roots and a symlink pointing outside are
+// refused, before any byte reaches the wire.
+//
+// This is the handler shape that leaked most: it copies to EOF rather than
+// sizing its read from os.Stat, so a zero-size procfs entry such as
+// /proc/self/environ streamed the server's whole environment, live token
+// included, into a project the caller named.
+func TestUploadAvatar_FilePathOutsideAllowedDirs_Rejected(t *testing.T) {
+	root := t.TempDir()
+	allowed := filepath.Join(root, "workspace")
+	outside := filepath.Join(root, "home")
+	makeDirs(t, allowed, outside)
+	secret := filepath.Join(outside, "id_rsa")
+	if err := os.WriteFile(secret, []byte("PRIVATE KEY"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	link := filepath.Join(allowed, "pic.png")
+	symlinked := os.Symlink(secret, link) == nil
+
+	t.Setenv("TMPDIR", allowed)
+	t.Chdir(allowed)
+
+	tests := []struct {
+		name string
+		path string
+		skip bool
+	}{
+		{name: "absolute path outside every allowed root is refused", path: secret},
+		{name: "parent traversal out of the workspace is refused", path: filepath.Join(allowed, "..", "home", "id_rsa")},
+		{name: "symlink inside the workspace pointing outside is refused", path: link, skip: !symlinked},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skip {
+				t.Skip("symlinks unsupported on this platform")
+			}
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+			_, err := UploadAvatar(context.Background(), client, UploadAvatarInput{
+				GroupID:  "99",
+				Filename: "pic.png",
+				FilePath: tt.path,
+			})
+			if err == nil {
+				t.Fatalf("UploadAvatar(%q) error = nil, want refusal", tt.path)
+			}
+			if !strings.Contains(err.Error(), "outside allowed") {
+				t.Errorf("UploadAvatar(%q) error = %q, want it to name the allow-list", tt.path, err)
+			}
+		})
+	}
+}
+
 // TestUploadAvatar_Validation covers the input validation branches.
 func TestUploadAvatar_Validation(t *testing.T) {
 	client := testutil.NewTestClient(t, http.NewServeMux())

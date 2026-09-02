@@ -37,13 +37,62 @@ func OpenFileOrBase64Source(op, filePath, contentBase64 string) (reader io.Reade
 		if openErr != nil {
 			return nil, 0, nil, fmt.Errorf("%s: %w", op, openErr)
 		}
-		return f, info.Size(), func() { _ = f.Close() }, nil
+		// The cap is enforced again while reading, not just against the size
+		// os.Stat reported. A procfs entry is a regular file whose reported
+		// size is zero and whose content is not, so a check that trusted
+		// os.Stat streamed /proc/self/environ — this process's own
+		// credentials — past a limit it had already satisfied.
+		return newLimitedFileReader(op, f, cfg.MaxFileSize), info.Size(), func() { _ = f.Close() }, nil
 	}
 	decoded, decodeErr := decodeBase64Content(op, contentBase64)
 	if decodeErr != nil {
 		return nil, 0, nil, decodeErr
 	}
 	return bytes.NewReader(decoded), int64(len(decoded)), func() { /* in-memory reader; nothing to release */ }, nil
+}
+
+// limitedFileReader stops a streaming upload at the configured maximum and
+// reports the refusal as a read error, so a source whose length could not be
+// known in advance cannot exceed the limit merely by lying about its size.
+type limitedFileReader struct {
+	op      string
+	inner   io.Reader
+	read    int64
+	maxSize int64
+}
+
+// newLimitedFileReader wraps r so it yields at most maxSize bytes. A maxSize
+// of zero or less means unlimited, matching [OpenAndValidateFile].
+func newLimitedFileReader(op string, r io.Reader, maxSize int64) io.Reader {
+	if maxSize <= 0 {
+		return r
+	}
+	return &limitedFileReader{op: op, inner: r, maxSize: maxSize}
+}
+
+// Read implements io.Reader, failing the read once the source has produced
+// more bytes than the configured limit allows. A source of exactly maxSize
+// bytes still reads to EOF: one byte beyond the limit is what proves the
+// source is over it.
+func (l *limitedFileReader) Read(p []byte) (int, error) {
+	if l.read > l.maxSize {
+		return 0, l.tooLarge()
+	}
+	if allowed := l.maxSize - l.read + 1; int64(len(p)) > allowed {
+		p = p[:allowed]
+	}
+	n, err := l.inner.Read(p)
+	l.read += int64(n)
+	if l.read > l.maxSize {
+		return 0, l.tooLarge()
+	}
+	return n, err
+}
+
+// tooLarge reports the limit refusal in the op-prefixed shape every upload
+// input error uses.
+func (l *limitedFileReader) tooLarge() error {
+	return fmt.Errorf("%s: file exceeds maximum allowed size of %d bytes", l.op, l.maxSize)
 }
 
 // decodeBase64Content decodes an inline content_base64 payload and enforces

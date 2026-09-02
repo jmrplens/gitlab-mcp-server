@@ -475,6 +475,56 @@ func TestPackagePublishDirectory_NotADirectory(t *testing.T) {
 	}
 }
 
+// TestPackagePublishDirectory_OutsideAllowedDirs_Rejected verifies that the
+// directory a publish walks is confined to the allow-listed roots. It is the
+// widest local read in the tool surface — one call ships every file it finds
+// to a project the caller names — so a directory outside the workspace, a
+// parent-traversal escape and a symlinked directory are all refused, and no
+// upload is attempted: the mock handler fails the test if it is reached.
+func TestPackagePublishDirectory_OutsideAllowedDirs_Rejected(t *testing.T) {
+	root := t.TempDir()
+	allowed := filepath.Join(root, "workspace")
+	outside := filepath.Join(root, "home")
+	makeDirs(t, allowed, outside)
+	if err := os.WriteFile(filepath.Join(outside, "id_rsa"), []byte("PRIVATE KEY"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	link := filepath.Join(allowed, "linked")
+	symlinked := os.Symlink(outside, link) == nil
+	confineDownloadRoots(t, allowed)
+
+	tests := []struct {
+		name string
+		path string
+		skip bool
+	}{
+		{name: "directory outside every allowed root is refused", path: outside},
+		{name: "parent traversal out of the workspace is refused", path: filepath.Join(allowed, "..", "home")},
+		{name: "symlinked directory pointing outside is refused", path: link, skip: !symlinked},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.skip {
+				t.Skip("symlinks unsupported on this platform")
+			}
+			client := testutil.NewTestClient(t, testutil.ForbiddenHandler(t))
+
+			_, err := PublishDirectory(context.Background(), nil, client, PublishDirInput{
+				ProjectID:      "42",
+				PackageName:    "my-pkg",
+				PackageVersion: "1.0.0",
+				DirectoryPath:  tt.path,
+			})
+			if err == nil {
+				t.Fatalf("PublishDirectory(%q) error = nil, want refusal", tt.path)
+			}
+			if !strings.Contains(err.Error(), "outside allowed") {
+				t.Errorf("PublishDirectory(%q) error = %q, want it to name the allow-list", tt.path, err)
+			}
+		})
+	}
+}
+
 // TestPackagePublishDirectory_MissingDirectoryPath verifies PackagePublishDirectory when missing directory path.
 func TestPackagePublishDirectory_MissingDirectoryPath(t *testing.T) {
 	client := testutil.NewTestClient(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

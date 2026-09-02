@@ -54,14 +54,30 @@ func streamDownloadPackageFile(
 		return 0, "", fmt.Errorf("create download request: %w", err)
 	}
 
-	dir := filepath.Dir(input.OutputPath)
+	// Resolved and confined before anything is created, so a destination
+	// outside the allowed roots leaves no directory behind either.
+	outputPath, err := toolutil.CanonicalDownloadOutputPath(input.OutputPath)
+	if err != nil {
+		return 0, "", err
+	}
+
+	dir := filepath.Dir(outputPath)
 	if mkdirErr := os.MkdirAll(dir, 0o750); mkdirErr != nil {
 		return 0, "", fmt.Errorf("create output directory %s: %w", dir, mkdirErr)
 	}
 
-	outFile, err := os.Create(input.OutputPath)
+	// Resolved a second time now that the parent exists: the first pass could
+	// only vouch for the ancestors that were there at the time, and a symlink
+	// planted under a directory this call just created would otherwise decide
+	// where the bytes land.
+	outputPath, err = toolutil.CanonicalDownloadOutputPath(outputPath)
 	if err != nil {
-		return 0, "", fmt.Errorf("create output file %s: %w", input.OutputPath, err)
+		return 0, "", err
+	}
+
+	outFile, err := os.Create(outputPath) //#nosec G304 -- path is resolved through symlinks and confined to the allowed download directories, before and after its parents are created
+	if err != nil {
+		return 0, "", fmt.Errorf("create output file %s: %w", outputPath, err)
 	}
 	defer outFile.Close()
 

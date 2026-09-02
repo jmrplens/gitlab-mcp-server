@@ -23385,7 +23385,7 @@ Download a single file from the Generic Package Registry to a local path. Return
 - `package_version` (string) (required): Package version
 - `project_id` (string) (required): Project ID or URL-encoded path
 
-Annotations: readOnly=true, destructive=false, idempotent=true, openWorld=true
+Annotations: readOnly=false, destructive=false, idempotent=true, openWorld=true
 
 #### gitlab_package_file_delete
 

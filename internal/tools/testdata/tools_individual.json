@@ -138104,7 +138104,7 @@
       "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": true,
-      "readOnlyHint": true
+      "readOnlyHint": false
     }
   },
   {
