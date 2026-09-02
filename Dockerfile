@@ -77,4 +77,19 @@ LABEL org.opencontainers.image.title="gitlab-mcp-server" \
 	io.modelcontextprotocol.server.name="io.github.jmrplens/gitlab-mcp-server"
 
 ENTRYPOINT ["gitlab-mcp-server"]
-CMD ["--http", "--http-addr", "0.0.0.0:8080"]
+
+# --transport auto, not --http, so one image serves both uses without the
+# caller overriding the command.
+#
+# Any argument after the image name replaces CMD wholesale, so while this said
+# --http, an MCP client running `docker run -i <image>` got an HTTP listener
+# and waited at initialize forever. The documented cure was --http=false in
+# every client configuration, which is a flag copied into three dozen files to
+# work around this line.
+#
+# auto reads the transport off file descriptor 0: `docker run` without -i, and
+# Compose without stdin_open, connect /dev/null, which nobody speaks JSON-RPC
+# down, so that means HTTP. `docker run -i` connects a pipe, which is a client.
+# --http and --http=false both still work and still win, for a deployment that
+# would rather say it outright.
+CMD ["--transport", "auto", "--http-addr", "0.0.0.0:8080"]

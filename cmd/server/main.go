@@ -264,6 +264,7 @@ func main() {
 	var showVersion bool
 	var shutdownPeers bool
 	var useHTTP bool
+	var transport string
 	var toolSearch string
 	var hcfg httpConfig
 
@@ -272,6 +273,7 @@ func main() {
 	flag.BoolVar(&showVersion, "version", false, "Print version and exit")
 	flag.StringVar(&toolSearch, "tool-search", "", "Search tools by name/description and exit")
 	flag.BoolVar(&useHTTP, "http", false, "Run MCP server in HTTP mode")
+	flag.StringVar(&transport, "transport", "", "Transport to serve: stdio, http, or auto. Empty defers to --http. auto serves HTTP only when stdin is "+os.DevNull+", which is what a container started without -i gives, and stdio for the pipe every MCP client provides")
 	flag.StringVar(&hcfg.addr, "http-addr", ":8080", "HTTP listen address")
 	flag.Var(&hcfg.gitlabURLs, "gitlab-url", "GitLab instance URL, required in HTTP mode unless --allow-any-gitlab-url is passed. Repeat (or comma-separate) to publish several instances; the GITLAB-URL header then selects among them and is required, since choosing on the caller's behalf would send their token to an instance they never named")
 	flag.BoolVar(&hcfg.allowAnyGitLabURL, "allow-any-gitlab-url", false, "Let the GITLAB-URL header name any instance when --gitlab-url publishes none. Every request is then served against a host the caller chose, with a token only that host can judge; use it for a single-user local deployment and never on a reachable one")
@@ -334,6 +336,17 @@ func main() {
 
 	flag.Parse()
 	applyEnvBackedFlags()
+
+	// Before applyLocalFilesystemPolicy, which asks what transport this
+	// process is serving: a caller reached over HTTP has no files here, so an
+	// inferred transport has to be settled before the answer is used.
+	resolvedHTTP, transportErr := resolveTransport(transport, useHTTP, flagWasSet("http"))
+	if transportErr != nil {
+		fmt.Fprintln(os.Stderr, transportErr)
+		os.Exit(2)
+	}
+	useHTTP = resolvedHTTP
+
 	applyLocalFilesystemPolicy(useHTTP)
 	hcfg.setFlags = make(map[string]bool)
 	flag.Visit(func(f *flag.Flag) {
