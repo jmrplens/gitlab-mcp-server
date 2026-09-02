@@ -83,7 +83,14 @@ func EscapeMdTableCell(s string) string {
 
 // mdLinkLabelEscaper backslash-escapes the characters that let text inside a
 // link label end the label, or open a construct of its own.
-var mdLinkLabelEscaper = strings.NewReplacer(`\`, `\\`, "[", `\[`, "]", `\]`, "`", "\\`")
+//
+// The angle brackets are there because CommonMark gives autolinks and raw HTML
+// precedence over the link brackets around them: a label holding
+// <a href="http://attacker.invalid"> opens an anchor of its own inside the one
+// this package wrote, and an HTML-rendering client closes the outer link at it.
+// Both are backslash-escapable ASCII punctuation, so the visible text is what
+// it always was.
+var mdLinkLabelEscaper = strings.NewReplacer(`\`, `\\`, "[", `\[`, "]", `\]`, "`", "\\`", "<", `\<`, ">", `\>`)
 
 // EscapeMdLinkLabel renders s as the visible text of a Markdown link.
 //
@@ -177,6 +184,13 @@ func WrapGFMBody(body string) string {
 		return ""
 	}
 	body = DefuseHintsHeading(StripControlBytes(body))
+	// CommonMark counts a CRLF and a bare CR as line endings too (spec 2.1), so
+	// splitting on LF alone leaves whatever follows a CR outside the quote. A
+	// heading or a list item there is structure rather than a lazy paragraph
+	// continuation, which is precisely what the quote exists to prevent, and
+	// GitLab stores a note body as it was posted.
+	body = strings.ReplaceAll(body, "\r\n", "\n")
+	body = strings.ReplaceAll(body, "\r", "\n")
 	lines := strings.Split(body, "\n")
 	for i, line := range lines {
 		if line == "" {

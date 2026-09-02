@@ -2283,6 +2283,10 @@ func MakeMetaHandler(toolName string, routes ActionMap, formatResult FormatResul
 
 		start := time.Now()
 		result, err := route.Handler(actionCtx, input.Params)
+		// Not every handler goes through the wrapping helpers, and one that
+		// wraps a client-go error with %w itself hands the whole upstream body
+		// to the response text and to the log line. See [SanitizeError].
+		err = SanitizeError(err)
 		if inputResult, needsInput := InputRequiredResultFromError(err); needsInput {
 			return inputResult, nil, nil
 		}

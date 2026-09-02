@@ -6,8 +6,10 @@ package toolutil
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"os"
 	"reflect"
@@ -1437,6 +1439,126 @@ func TestWrapErrWithMessage_DoesNotReflectUpstreamResponseBody(t *testing.T) {
 			}
 			if strings.Contains(msg, "<html>") {
 				t.Errorf("upstream markup reflected into the error: %s", msg)
+			}
+		})
+	}
+}
+
+// TestWrapErr_DoesNotReflectAnUpstreamBodyClientGoProduced pins the drop rule
+// to client-go's behavior rather than to a copy of its wording.
+//
+// Every other test here builds the *gl.ErrorResponse by hand with the
+// "failed to parse unknown error format:" prefix written out, and the
+// production check compares against its own copy of that literal. The two
+// copies are independent, so a wording change in a client-go bump — which this
+// project takes on every release — would restore the full-body reflection with
+// all of those tests still green. This one drives a real client against a real
+// server and never names the prefix.
+func TestWrapErr_DoesNotReflectAnUpstreamBodyClientGoProduced(t *testing.T) {
+	const sentinel = "gitlab-web-03.internal:8181"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusBadGateway)
+		_, _ = io.WriteString(w, "<html><head><title>502 Bad Gateway</title></head><body>upstream "+sentinel+" failed</body></html>")
+	}))
+	defer server.Close()
+
+	client, err := gl.NewClient("token", gl.WithBaseURL(server.URL), gl.WithoutRetries())
+	if err != nil {
+		t.Fatalf("gl.NewClient() error = %v", err)
+	}
+	_, _, err = client.Projects.GetProject(1, nil)
+	if err == nil {
+		t.Fatal("GetProject() error = nil, want the 502 client-go builds from the proxy page")
+	}
+
+	tests := []struct {
+		name string
+		wrap func(error) error
+	}{
+		{name: "WrapErr", wrap: func(err error) error { return WrapErr("projectGet", err) }},
+		{name: "WrapErrWithMessage", wrap: func(err error) error { return WrapErrWithMessage("projectGet", err) }},
+		{name: "SanitizeError", wrap: SanitizeError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.wrap(err).Error()
+			if strings.Contains(got, sentinel) {
+				t.Errorf("wrapped error = %q, must not carry the upstream host %q", got, sentinel)
+			}
+			if strings.Contains(got, "<html>") {
+				t.Errorf("wrapped error = %q, must not carry the proxy page markup", got)
+			}
+		})
+	}
+}
+
+// TestWrapErrWithMessage_DoesNotReflectAJSONBodyGitLabDidNotCompose verifies
+// that a body which happens to be JSON is not reflected merely because
+// client-go could parse it.
+//
+// The unparsed-body rule only catches an interloper answering in HTML. An API
+// gateway, a JSON-speaking WAF or an ingress error page answers in JSON too,
+// and client-go flattens any object into Message, so the operator's upstream
+// hostnames and request identifiers reached the model wearing GitLab's voice.
+// GitLab's own error body carries nothing but message, error and
+// error_description, which is what tells the two apart.
+func TestWrapErrWithMessage_DoesNotReflectAJSONBodyGitLabDidNotCompose(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		wantSeen []string
+		wantGone []string
+	}{
+		{
+			name:     "gateway JSON with fields GitLab never sends",
+			body:     `{"error":"upstream timeout","upstream":"gitlab-web-03.internal:8181","request_id":"req-abc-123"}`,
+			wantGone: []string{"gitlab-web-03.internal", "req-abc-123", "upstream timeout"},
+		},
+		{
+			name:     "GitLab's own message body",
+			body:     `{"message":"403 Forbidden - the token lacks api scope"}`,
+			wantSeen: []string{"the token lacks api scope"},
+		},
+		{
+			name:     "GitLab's own error body",
+			body:     `{"error":"insufficient_scope","error_description":"requires api"}`,
+			wantSeen: []string{"insufficient_scope"},
+		},
+		{
+			name:     "a description with nothing it describes",
+			body:     `{"error_description":"contact platform-team@internal"}`,
+			wantGone: []string{"platform-team@internal"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = io.WriteString(w, tt.body)
+			}))
+			defer server.Close()
+
+			client, newErr := gl.NewClient("token", gl.WithBaseURL(server.URL), gl.WithoutRetries())
+			if newErr != nil {
+				t.Fatalf("gl.NewClient() error = %v", newErr)
+			}
+			_, _, callErr := client.Projects.GetProject(1, nil)
+			if callErr == nil {
+				t.Fatal("GetProject() error = nil, want the 403 client-go builds from the body")
+			}
+
+			got := WrapErrWithMessage("projectGet", callErr).Error()
+			for _, want := range tt.wantSeen {
+				if !strings.Contains(got, want) {
+					t.Errorf("wrapped error = %q, want it to keep GitLab's own detail %q", got, want)
+				}
+			}
+			for _, unwanted := range tt.wantGone {
+				if strings.Contains(got, unwanted) {
+					t.Errorf("wrapped error = %q, must not carry %q from a body GitLab did not compose", got, unwanted)
+				}
 			}
 		})
 	}

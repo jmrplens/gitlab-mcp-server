@@ -2,6 +2,7 @@ package toolutil
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -287,6 +288,49 @@ func IsNotFound(err error) bool {
 // truncated.
 const unparsedBodyPrefix = "failed to parse unknown error format:"
 
+// gitLabErrorBodyKeys is the whole of GitLab's documented API error body: a
+// "message", an "error", and the "error_description" the OAuth endpoints add
+// beside it.
+var gitLabErrorBodyKeys = map[string]bool{"message": true, "error": true, "error_description": true}
+
+// gitLabAuthoredMessage returns the response message when the body it was
+// parsed from is GitLab's own error shape, and the empty string otherwise.
+//
+// [unparsedBodyPrefix] only catches an interloper whose body is not JSON.
+// An API gateway, a JSON-speaking WAF or an ingress error page answers in JSON
+// too, and client-go flattens any object into Message, so a body like
+// {"error":"upstream timeout","upstream":"gitlab-web-03.internal:8181"} was
+// reflected as though GitLab had written it. GitLab's own error body carries
+// nothing but the keys above, so a top-level key outside that set is the
+// evidence that something else composed the body; the status and the
+// classification still describe what happened.
+//
+// A response with no body at all is trusted, because client-go fills Message
+// and Body together: an ErrorResponse carrying a message and no body was
+// composed by something other than CheckResponse.
+func gitLabAuthoredMessage(glErr *gl.ErrorResponse) string {
+	if len(glErr.Body) == 0 {
+		return glErr.Message
+	}
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(glErr.Body, &body); err != nil {
+		return ""
+	}
+	named := false
+	for key := range body {
+		if !gitLabErrorBodyKeys[key] {
+			return ""
+		}
+		if key != "error_description" {
+			named = true
+		}
+	}
+	if !named {
+		return ""
+	}
+	return glErr.Message
+}
+
 // ExtractGitLabMessage extracts the specific error message from a GitLab
 // ErrorResponse in the error chain. Returns empty string if not found, if the
 // message only repeats the HTTP status text (e.g. "405 Method Not Allowed"), or
@@ -301,7 +345,7 @@ func ExtractGitLabMessage(err error) string {
 	if !errors.As(err, &glErr) {
 		return ""
 	}
-	msg := glErr.Message
+	msg := gitLabAuthoredMessage(glErr)
 	if msg == "" || strings.HasPrefix(strings.TrimSpace(msg), unparsedBodyPrefix) {
 		return ""
 	}
@@ -411,6 +455,17 @@ func sanitize(err error) error {
 	return &sanitizedCauseError{text: text, cause: err}
 }
 
+// SanitizeError returns err with a rendering that reflects no upstream response
+// body, leaving the chain intact for [errors.As] and [errors.Is].
+//
+// The four wrapping helpers in this file already do this to what they wrap, but
+// a handler is free to wrap a client-go error itself with %w, and a good many
+// do, so for those actions nothing between the handler and the SDK ever bounded
+// the body. Calling this at the dispatchers, where every action's error passes
+// on its way to the model and to the "tool call failed" log line, makes the
+// wrapping helpers defense in depth rather than the only gate.
+func SanitizeError(err error) error { return sanitize(err) }
+
 // renderGitLabResponse returns client-go's own rendering of a GitLab error
 // response and the bounded rendering that replaces it. The first is recovered
 // rather than trusted: ErrorResponse.Error() dereferences the request without
@@ -428,11 +483,17 @@ func renderGitLabResponse(glErr *gl.ErrorResponse) (raw, safe string) {
 }
 
 // unreflectableMessage returns the response message when no part of it may be
-// reflected verbatim: an unparsed upstream body, or one long enough that
-// [boundedGitLabMessage] would have to cut it.
+// reflected verbatim: an unparsed upstream body, a body GitLab did not compose,
+// or one long enough that [boundedGitLabMessage] would have to cut it.
 func unreflectableMessage(glErr *gl.ErrorResponse) string {
 	msg := strings.TrimSpace(glErr.Message)
-	if msg == "" || boundedGitLabMessage(msg) == flattenErrorText(msg) {
+	if msg == "" {
+		return ""
+	}
+	if gitLabAuthoredMessage(glErr) == "" {
+		return msg
+	}
+	if boundedGitLabMessage(msg) == flattenErrorText(msg) {
 		return ""
 	}
 	return msg
@@ -440,15 +501,15 @@ func unreflectableMessage(glErr *gl.ErrorResponse) string {
 
 // describeGitLabResponse renders a GitLab error response the way client-go's
 // own Error() does — request line, status, message — with the message put
-// through [boundedGitLabMessage] first. That is the whole difference: a body
-// client-go could not parse is dropped instead of being pasted in full, and a
-// message it could parse is flattened and capped.
+// through [gitLabAuthoredMessage] and [boundedGitLabMessage] first. That is the
+// whole difference: a body GitLab did not compose is dropped instead of being
+// pasted in full, and a message it did is flattened and capped.
 func describeGitLabResponse(glErr *gl.ErrorResponse) string {
 	status := glErr.StatusCode
 	if glErr.Response != nil {
 		status = glErr.Response.StatusCode
 	}
-	msg := boundedGitLabMessage(glErr.Message)
+	msg := boundedGitLabMessage(gitLabAuthoredMessage(glErr))
 	if glErr.Response == nil || glErr.Response.Request == nil || glErr.Response.Request.URL == nil {
 		if msg == "" {
 			return fmt.Sprintf("HTTP %d", status)

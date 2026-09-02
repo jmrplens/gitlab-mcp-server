@@ -167,12 +167,44 @@ func OpenAndValidateFile(path string, maxSize int64) (*os.File, os.FileInfo, err
 			canonicalPath, info.Size(), maxSize)
 	}
 
-	f, err := os.Open(canonicalPath) //#nosec G304 -- path is resolved through symlinks, confined to the allowed upload directories, validated as a regular file, and size-checked before open
+	f, err := openLeafNoFollow(canonicalPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open %s: %w", canonicalPath, err)
 	}
 
-	return f, info, nil
+	// The checks above ran on a path; these run on the descriptor, which is
+	// the only thing that can still be read from. Between the Lstat and the
+	// open the leaf may have been replaced, and a swap the open itself could
+	// not refuse is caught here instead.
+	opened, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, nil, fmt.Errorf("stat %s: %w", canonicalPath, err)
+	}
+	if !opened.Mode().IsRegular() {
+		_ = f.Close()
+		return nil, nil, fmt.Errorf("%s is not a regular file", canonicalPath)
+	}
+	if maxSize > 0 && opened.Size() > maxSize {
+		_ = f.Close()
+		return nil, nil, fmt.Errorf("file %s is %d bytes, exceeds maximum allowed size of %d bytes",
+			canonicalPath, opened.Size(), maxSize)
+	}
+
+	return f, opened, nil
+}
+
+// CreateDownloadOutputFile creates the destination a download writes to,
+// refusing a symlink at the leaf where the platform can.
+//
+// [CanonicalDownloadOutputPath] refuses a destination that is already a
+// symlink, but it refuses a path, and the file is created by a later syscall:
+// a local principal who can write in an allowed root can put a symlink there
+// in between and redirect the write to whatever the server may overwrite. The
+// creation is the only place that race can be closed, so it happens here
+// rather than at the call site.
+func CreateDownloadOutputFile(path string) (*os.File, error) {
+	return createLeafNoFollow(path)
 }
 
 // CanonicalLocalFilePath resolves a caller-supplied path to an existing local

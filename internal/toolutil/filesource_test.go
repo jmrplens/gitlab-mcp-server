@@ -203,11 +203,14 @@ func TestOpenFileOrBase64Source_ZeroStatSizeFile_Bounded(t *testing.T) {
 
 	reader, size, cleanup, err := OpenFileOrBase64Source("op", "/proc/self/environ", "")
 	if err != nil {
-		t.Skipf("procfs entry not readable through the allow-list: %v", err)
+		// Not a skip. The environment gates above already ran, so an error here
+		// is the allow-list or the open path refusing for some new reason, and
+		// skipping would report a regression in the containment as a pass.
+		t.Fatalf("OpenFileOrBase64Source() error = %v, want the procfs entry opened through the allow-list", err)
 	}
 	defer cleanup()
 	if size != 0 {
-		t.Skipf("procfs entry reported size %d, not the zero-size shape under test", size)
+		t.Fatalf("procfs entry reported size %d, want 0: the zero-size shape is what this test exists to bound", size)
 	}
 
 	read, err := io.ReadAll(reader)
@@ -219,5 +222,44 @@ func TestOpenFileOrBase64Source_ZeroStatSizeFile_Bounded(t *testing.T) {
 	}
 	if len(read) > limit {
 		t.Errorf("io.ReadAll() read %d bytes, want no more than the configured limit of %d", len(read), limit)
+	}
+}
+
+// TestNewLimitedFileReader_BoundsWhatItYields verifies the streaming bound on a
+// synthetic source, so the limit is proven without procfs and stays proven on
+// the platforms and in the sandboxes where procfs is not there to prove it.
+//
+// The boundary is the whole point: a source of exactly the limit reads to EOF,
+// and one byte past it is what the reader refuses, because a source that lies
+// about its size is only detectable by reading further than it claimed.
+func TestNewLimitedFileReader_BoundsWhatItYields(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		maxSize  int64
+		wantRead int
+		wantErr  bool
+	}{
+		{name: "empty source", content: "", maxSize: 8, wantRead: 0},
+		{name: "under the limit", content: "abc", maxSize: 8, wantRead: 3},
+		{name: "exactly the limit", content: "abcdefgh", maxSize: 8, wantRead: 8},
+		{name: "one byte over the limit", content: "abcdefghi", maxSize: 8, wantRead: 8, wantErr: true},
+		{name: "far over the limit", content: strings.Repeat("x", 4096), maxSize: 8, wantRead: 8, wantErr: true},
+		{name: "no limit configured", content: strings.Repeat("x", 4096), maxSize: 0, wantRead: 4096},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader := newLimitedFileReader("op", strings.NewReader(tt.content), tt.maxSize)
+			read, err := io.ReadAll(reader)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("io.ReadAll() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr && !strings.Contains(err.Error(), "op: file exceeds maximum allowed size") {
+				t.Errorf("io.ReadAll() error = %q, want the op-prefixed size refusal", err)
+			}
+			if len(read) > tt.wantRead {
+				t.Errorf("io.ReadAll() yielded %d bytes, want no more than %d", len(read), tt.wantRead)
+			}
+		})
 	}
 }

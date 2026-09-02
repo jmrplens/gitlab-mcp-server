@@ -954,3 +954,45 @@ func TestHTTPTransportConfigured(t *testing.T) {
 		})
 	}
 }
+
+// TestCreateDownloadOutputFile_CreatesAndTruncates verifies that the download
+// destination helper creates a missing file and truncates an existing one, so
+// closing the symlink race at the creation costs a download nothing it did
+// before. The refusal itself is platform-specific and is pinned in
+// fileutils_unix_test.go.
+func TestCreateDownloadOutputFile_CreatesAndTruncates(t *testing.T) {
+	dir := t.TempDir()
+	existing := filepath.Join(dir, "existing.bin")
+	if err := os.WriteFile(existing, []byte("old content"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		path string
+	}{
+		{name: "destination does not exist", path: filepath.Join(dir, "fresh.bin")},
+		{name: "destination already holds a longer file", path: existing},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f, err := CreateDownloadOutputFile(tt.path)
+			if err != nil {
+				t.Fatalf("CreateDownloadOutputFile(%q) error = %v, want nil", tt.path, err)
+			}
+			if _, err = f.WriteString("new"); err != nil {
+				t.Errorf("write error = %v, want nil", err)
+			}
+			if err = f.Close(); err != nil {
+				t.Errorf("close error = %v, want nil", err)
+			}
+			got, err := os.ReadFile(tt.path)
+			if err != nil {
+				t.Fatalf("read back error = %v, want nil", err)
+			}
+			if string(got) != "new" {
+				t.Errorf("file content = %q, want %q", got, "new")
+			}
+		})
+	}
+}
