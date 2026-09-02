@@ -241,6 +241,77 @@ func TestExportDownload_ReadAllError(t *testing.T) {
 	}
 }
 
+// TestExportDownloadOutput_ArchiveOverTheCeiling_IsRefusedNotTruncated verifies
+// that the archive this action turns into base64 and copies into a JSON-RPC
+// message is bounded, and that an archive above the bound produces an error
+// naming the way out rather than a partial archive.
+//
+// A prefix of a .tar.gz cannot be imported into another group, which is the
+// documented next step, so truncating would hand back an answer that looks
+// whole and is not. The exactly-at-the-ceiling case is here because an
+// off-by-one in the limit reader would refuse an archive that fits.
+func TestExportDownloadOutput_ArchiveOverTheCeiling_IsRefusedNotTruncated(t *testing.T) {
+	tests := []struct {
+		name    string
+		size    int
+		wantErr bool
+	}{
+		{name: "small archive is returned whole", size: 1024},
+		{name: "archive exactly at the ceiling is returned whole", size: maxExportBytes},
+		{name: "archive one byte over the ceiling is refused", size: maxExportBytes + 1, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := exportDownloadOutput(bytes.NewReader(make([]byte, tt.size)))
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("exportDownloadOutput(%d bytes) error = nil, want a refusal", tt.size)
+				}
+				if !strings.Contains(err.Error(), "download it from GitLab directly") {
+					t.Errorf("exportDownloadOutput(%d bytes) error = %v, want it to name the way out", tt.size, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("exportDownloadOutput(%d bytes) error = %v", tt.size, err)
+			}
+			if out.SizeBytes != tt.size {
+				t.Errorf("SizeBytes = %d, want %d", out.SizeBytes, tt.size)
+			}
+		})
+	}
+}
+
+// TestExportDownload_ResponseOverTheClientCeiling_NamesTheWayOut verifies that
+// an archive the client-wide response ceiling refuses to read produces the same
+// actionable message as one this action refuses to encode.
+//
+// The ceiling stops the read inside the SDK, so the failure arrives as a
+// transport error with nothing in it about export archives; an operator whose
+// group export is simply too big to travel this way otherwise sees only that
+// something exceeded a maximum size.
+func TestExportDownload_ResponseOverTheClientCeiling_NamesTheWayOut(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v4/groups/1/export/download" && r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(make([]byte, 4096))
+			return
+		}
+		http.NotFound(w, r)
+	})
+	client := testutil.NewTestClient(t, handler)
+	client.SetMaxResponseBytes(1024)
+
+	_, err := ExportDownload(t.Context(), client, ExportDownloadInput{GroupID: "1"})
+	if err == nil {
+		t.Fatal("expected an error for a response over the client ceiling")
+	}
+	if !strings.Contains(err.Error(), "download it from GitLab directly") {
+		t.Errorf("ExportDownload() error = %v, want it to name the way out", err)
+	}
+}
+
 // TestExportDownload_HTTPShortBodyError verifies ExportDownload returns an error
 // when GitLab advertises a longer archive body than it sends.
 //

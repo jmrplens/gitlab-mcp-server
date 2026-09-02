@@ -345,7 +345,7 @@ func writeReleaseHistoryTable(b *strings.Builder, releases []*gl.Release) {
 		if name == "" {
 			name = r.TagName
 		}
-		fmt.Fprintf(b, "| %s | %s | %s | %s |\n", name, r.TagName, dateFmt, daysSince)
+		fmt.Fprintf(b, "| %s | %s | %s | %s |\n", mdInline(name), mdInline(r.TagName), dateFmt, daysSince)
 	}
 	b.WriteString("\n")
 }

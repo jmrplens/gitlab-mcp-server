@@ -262,6 +262,65 @@ func TestFilterExcludedTools_DelegatesToNameMatching(t *testing.T) {
 	}
 }
 
+// TestFilterExcludedToolNames_EntriesNamingAnAlreadyRemovedAction_AreNotReported
+// verifies that an entry naming an action some other entry already removed is
+// not reported as naming nothing.
+//
+// Two entries reach the same action routinely: a configuration merged from two
+// sources carries both spellings of it, and a file that excludes a whole group
+// often also lists the member action that motivated the exclusion. Reporting
+// the second one as unmatched accuses a correct configuration, and the warning
+// is the operator's only signal that an entry really is wrong, so a false
+// positive teaches them to stop reading it.
+func TestFilterExcludedToolNames_EntriesNamingAnAlreadyRemovedAction_AreNotReported(t *testing.T) {
+	tests := []struct {
+		name        string
+		exclude     []string
+		wantActions []string
+		wantGroups  int
+	}{
+		{
+			name:        "individual tool name then canonical ID",
+			exclude:     []string{"gitlab_issue_delete", "issue.delete"},
+			wantActions: []string{"issue.list", "project.get"},
+			wantGroups:  2,
+		},
+		{
+			name:        "canonical ID then individual tool name",
+			exclude:     []string{"issue.delete", "gitlab_issue_delete"},
+			wantActions: []string{"issue.list", "project.get"},
+			wantGroups:  2,
+		},
+		{
+			name:        "group name and a member individual tool name",
+			exclude:     []string{"gitlab_issue", "gitlab_issue_delete"},
+			wantActions: []string{"project.get"},
+			wantGroups:  1,
+		},
+		{
+			name:        "group name and a member canonical ID",
+			exclude:     []string{"gitlab_issue", "issue.delete"},
+			wantActions: []string{"project.get"},
+			wantGroups:  1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			catalog := exclusionTestCatalog(t)
+			filtered, unmatched := catalog.FilterExcludedToolNames(tt.exclude)
+			if len(unmatched) != 0 {
+				t.Errorf("FilterExcludedToolNames(%v) unmatched = %v, want none", tt.exclude, unmatched)
+			}
+			if got := catalogActionIDs(filtered); !slices.Equal(got, tt.wantActions) {
+				t.Errorf("FilterExcludedToolNames(%v) actions = %v, want %v", tt.exclude, got, tt.wantActions)
+			}
+			if got := filtered.CountGroups(); got != tt.wantGroups {
+				t.Errorf("FilterExcludedToolNames(%v) CountGroups() = %d, want %d", tt.exclude, got, tt.wantGroups)
+			}
+		})
+	}
+}
+
 // TestUnmatchedExcludedPatterns_ReportsInputOrderWithoutDuplicates verifies the
 // reporting helper feeding the startup warning: an operator reading it must see
 // the entries in the order they wrote them, once each, with blanks dropped.

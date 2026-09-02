@@ -45,6 +45,11 @@ func (c *Catalog) FilterExcludedToolNames(excludeTools []string) (filtered *Cata
 	for _, group := range c.Groups() {
 		if _, ok := patterns[group.ToolName]; ok {
 			matched[group.ToolName] = struct{}{}
+			// The group takes its actions with it, so an entry naming one of
+			// them named something too and must not be reported as unmatched.
+			for _, action := range group.ActionsInOrder() {
+				recordExcludedActionPatterns(action, patterns, matched)
+			}
 			continue
 		}
 		kept, removedAny := groupWithoutExcludedActions(group, patterns, matched)
@@ -133,8 +138,7 @@ func groupWithoutExcludedActions(group Group, patterns, matched map[string]struc
 	})
 	removedAny := false
 	for _, action := range group.ActionsInOrder() {
-		if pattern, excluded := excludedActionPattern(action, patterns); excluded {
-			matched[pattern] = struct{}{}
+		if recordExcludedActionPatterns(action, patterns, matched) {
 			removedAny = true
 			continue
 		}
@@ -146,22 +150,29 @@ func groupWithoutExcludedActions(group Group, patterns, matched map[string]struc
 	return kept, true
 }
 
-// excludedActionPattern reports which exclusion entry, if any, names this
-// action. The individual tool name is checked before the canonical ID only so
-// the reported entry is the one the operator is most likely to have written;
-// either match removes the same action.
-func excludedActionPattern(action Action, patterns map[string]struct{}) (string, bool) {
-	if name := strings.TrimSpace(action.IndividualTool.Name); name != "" {
+// recordExcludedActionPatterns records every exclusion entry that names this
+// action, its individual tool name and its canonical action ID alike, and
+// reports whether any did.
+//
+// Every spelling is recorded, not just the first to hit, because more than one
+// entry legitimately reaches the same action: a configuration merged from two
+// sources carries both spellings, and a file that excludes a whole group often
+// also names the member action that motivated it. Recording only the first made
+// the others look like entries that named nothing, so the startup warning
+// accused a configuration that was doing exactly what the operator wrote.
+func recordExcludedActionPatterns(action Action, patterns, matched map[string]struct{}) bool {
+	excluded := false
+	for _, spelling := range [...]string{action.IndividualTool.Name, string(action.ID)} {
+		name := strings.TrimSpace(spelling)
+		if name == "" {
+			continue
+		}
 		if _, ok := patterns[name]; ok {
-			return name, true
+			matched[name] = struct{}{}
+			excluded = true
 		}
 	}
-	if id := strings.TrimSpace(string(action.ID)); id != "" {
-		if _, ok := patterns[id]; ok {
-			return id, true
-		}
-	}
-	return "", false
+	return excluded
 }
 
 // excludedToolPatterns returns the exclusion entries as a lookup set, with
