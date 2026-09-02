@@ -39,8 +39,15 @@ BASE_TOOLS = [
 ]
 
 
+LATEST_TAG = "v1.2.3"
+
+
 class FixtureRelease:
-    """A directory of release assets served over HTTP on localhost."""
+    """A directory of release assets served over HTTP on localhost.
+
+    It also answers /releases/latest with the redirect GitHub sends, so the
+    installer's tag resolution can be driven without reaching the network.
+    """
 
     def __init__(self, directory):
         self.directory = directory
@@ -52,6 +59,30 @@ class FixtureRelease:
 
             def log_message(self, *args):  # keep the test output readable
                 pass
+
+            def do_HEAD(self):
+                if self._release_redirect():
+                    return
+                super().do_HEAD()
+
+            def do_GET(self):
+                if self._release_redirect():
+                    return
+                super().do_GET()
+
+            def _release_redirect(self):
+                if self.path == "/releases/latest":
+                    self.send_response(302)
+                    self.send_header("Location", f"/releases/tag/{LATEST_TAG}")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return True
+                if self.path.startswith("/releases/tag/"):
+                    self.send_response(200)
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return True
+                return False
 
         self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -177,14 +208,61 @@ class InstallShTest(unittest.TestCase):
                 self.assertIn(message, result.stderr)
                 self.assertIn("cosign fixture invoked", result.stderr)
 
-    def test_missing_bundle_is_reported_not_ignored(self):
-        """A release with no signature is called out rather than passed over."""
+    def test_missing_bundle_with_a_verifier_present_aborts(self):
+        """Deleting one asset must not be a way past the signature check.
+
+        Every release since signing began publishes the bundle, so on a machine
+        that has cosign its absence is the tamper signal, not an old release:
+        the principal who replaced the binary and checksums.txt together also
+        has to remove the one file that would expose them.
+        """
         self.write_checksums()
         self.fake_tool("cosign", 0)
         result = self.run_installer()
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotEqual(result.returncode, 0, result.stderr)
         self.assertIn("publishes no checksums.txt.sigstore.json", result.stderr)
-        self.assertIn("no signature was verified", result.stderr)
+        self.assertIn("refusing to install unverified bytes", result.stderr)
+        self.assertFalse(os.path.exists(os.path.join(self.install_dir, "gitlab-mcp-server")))
+
+    def test_missing_bundle_falls_back_to_gh_attestation(self):
+        """gh is tried even when cosign is installed, because the attestation
+        lives in GitHub's store rather than among the release assets, so it is
+        still verifiable when the bundle is the asset that went missing."""
+        self.write_checksums()
+        self.fake_tool("cosign", 0)
+        self.fake_tool("gh", 0)
+        result = self.run_installer(REQUIRE_SIGNATURE="1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("attestation OK", result.stderr)
+
+    def test_contradictory_verification_switches_are_refused(self):
+        """ALLOW_UNVERIFIED=1 used to win over REQUIRE_SIGNATURE=1 in silence."""
+        self.write_checksums()
+        result = self.run_installer(ALLOW_UNVERIFIED="1", REQUIRE_SIGNATURE="1")
+        self.assertNotEqual(result.returncode, 0, result.stderr)
+        self.assertIn("contradict each other", result.stderr)
+
+    def test_signature_identity_names_the_release_being_installed(self):
+        """The asset names carry no version, so an unpinned identity accepts a
+        rollback: an older release's consistent binary/checksums/bundle triple
+        satisfies the `latest` regexp. Resolving /releases/latest to its tag
+        first is what makes cosign check the version actually being installed."""
+        self.write_checksums()
+        self.write_bundle()
+        self.fake_tool("cosign", 0)
+        workflow = "https://github.com/jmrplens/gitlab-mcp-server/.github/workflows/release.yml"
+        cases = [
+            ("latest resolves to a tag", {"RELEASE_LATEST_URL": f"{self.release.base_url}/releases/latest"},
+             f"--certificate-identity {workflow}@refs/tags/{LATEST_TAG}"),
+            ("an explicit version pins itself", {"VERSION": "v9.9.9"},
+             f"--certificate-identity {workflow}@refs/tags/v9.9.9"),
+            ("an unresolvable latest keeps the regexp", {}, "--certificate-identity-regexp"),
+        ]
+        for name, env, expected in cases:
+            with self.subTest(name):
+                result = self.run_installer(REQUIRE_SIGNATURE="1", **env)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(expected, result.stderr)
 
     def test_gh_attestation_is_the_fallback(self):
         """With no cosign but a gh CLI, the build-provenance attestation counts."""

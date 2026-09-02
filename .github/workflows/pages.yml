@@ -12,10 +12,12 @@ on:
       - "!site/node_modules/**"
   workflow_dispatch:
 
+# Workflow-wide: a read token and nothing else. The build job runs third-party
+# code (pnpm install, a headless Chromium fetched outside any lockfile), so the
+# Pages credential and the OIDC identity that mints it live on `deploy`, which
+# runs one pinned action and no code of its own.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -65,6 +67,10 @@ jobs:
     name: Deploy
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write # publish the uploaded artifact
+      id-token: write # actions/deploy-pages authenticates to Pages with OIDC
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

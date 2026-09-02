@@ -10,6 +10,7 @@
 #   REPO               owner/repo (default: jmrplens/gitlab-mcp-server)
 #   REQUIRE_SIGNATURE  set to 1 to abort when no signature can be verified
 #   RELEASE_BASE_URL   override the release download base (used by the tests)
+#   RELEASE_LATEST_URL override the /releases/latest URL (used by the tests)
 #   ALLOW_UNVERIFIED   set to 1 to skip verification entirely (not recommended)
 #
 # After install, register the server with Claude Code:
@@ -44,6 +45,71 @@ esac
 
 asset="${BIN_NAME}-${os}-${arch}"
 
+# --- pick a downloader -----------------------------------------------------
+# Real installs stay on https end to end, redirects included: a chain that
+# dropped to http would otherwise be followed without a word. RELEASE_BASE_URL
+# is the test hook and points at a local http fixture, so it opts out.
+#
+# final_url reports where a URL ends up after redirects; wget prints each hop as
+# a `Location:` header rather than the final URL, so the last one is the answer.
+last_location() {
+	sed -n 's/^[[:space:]]*[Ll]ocation:[[:space:]]*\([^[:space:]]*\).*/\1/p' | tr -d '\r' | tail -n 1
+}
+
+if command -v curl >/dev/null 2>&1; then
+	if [ -n "${RELEASE_BASE_URL:-}" ]; then
+		dl() { curl -fsSL "$1" -o "$2"; }
+		final_url() { curl -fsSLI -o /dev/null -w '%{url_effective}' "$1" 2>/dev/null || true; }
+	else
+		dl() { curl -fsSL --proto '=https' --proto-redir '=https' --tlsv1.2 "$1" -o "$2"; }
+		final_url() {
+			curl -fsSLI --proto '=https' --proto-redir '=https' --tlsv1.2 \
+				-o /dev/null -w '%{url_effective}' "$1" 2>/dev/null || true
+		}
+	fi
+elif command -v wget >/dev/null 2>&1; then
+	if [ -n "${RELEASE_BASE_URL:-}" ]; then
+		dl() { wget -qO "$2" "$1"; }
+		final_url() { wget --max-redirect=10 -S --spider "$1" 2>&1 | last_location; }
+	elif wget --help 2>&1 | grep -q -- '--https-only'; then
+		dl() { wget --https-only -qO "$2" "$1"; }
+		final_url() { wget --https-only --max-redirect=10 -S --spider "$1" 2>&1 | last_location; }
+	else
+		# BusyBox's wget (Alpine) has neither --https-only nor --spider, and
+		# breaking those installs to gain the restriction would be a poor trade:
+		# the URLs are https literals, and "latest" stays unresolved.
+		dl() { wget -qO "$2" "$1"; }
+		final_url() { echo ""; }
+	fi
+else
+	err "need curl or wget to download"
+fi
+
+# --- resolve which release to install --------------------------------------
+# The asset names carry no version (gitlab-mcp-server-<os>-<arch>) and neither
+# does checksums.txt, so "latest" left unresolved lets whoever can replace
+# release assets serve a consistent, correctly signed triple from an older,
+# vulnerable release. Following the /releases/latest redirect names the tag
+# before anything is downloaded, which is what pins the signature identity to
+# the version being installed.
+if [ -n "${RELEASE_BASE_URL:-}" ]; then
+	latest_url="${RELEASE_LATEST_URL:-}"
+else
+	latest_url="https://github.com/$REPO/releases/latest"
+fi
+if [ "$VERSION" = "latest" ] && [ -n "$latest_url" ]; then
+	resolved=$(final_url "$latest_url")
+	case "$resolved" in
+	*/releases/tag/*)
+		VERSION="${resolved##*/releases/tag/}"
+		info "latest is $VERSION"
+		;;
+	*)
+		info "WARNING: could not resolve which release is latest; the signature check cannot name a version"
+		;;
+	esac
+fi
+
 # --- resolve download base -------------------------------------------------
 # RELEASE_BASE_URL exists so the installer can be driven against a local
 # fixture server in tests; leave it unset for real installs.
@@ -53,15 +119,6 @@ elif [ "$VERSION" = "latest" ]; then
 	base="https://github.com/$REPO/releases/latest/download"
 else
 	base="https://github.com/$REPO/releases/download/$VERSION"
-fi
-
-# --- pick a downloader -----------------------------------------------------
-if command -v curl >/dev/null 2>&1; then
-	dl() { curl -fsSL "$1" -o "$2"; }
-elif command -v wget >/dev/null 2>&1; then
-	dl() { wget -qO "$2" "$1"; }
-else
-	err "need curl or wget to download"
 fi
 
 # --- pick a checksum tool --------------------------------------------------
@@ -82,6 +139,12 @@ trap 'rm -rf "$tmp"' EXIT INT TERM
 info "downloading $asset ($VERSION)"
 dl "$base/$asset" "$tmp/$asset" || err "download failed: $base/$asset"
 
+# The two knobs pull in opposite directions, so a configuration that sets both
+# is a mistake worth naming rather than resolving silently in either direction.
+if [ "${ALLOW_UNVERIFIED:-0}" = "1" ] && [ "${REQUIRE_SIGNATURE:-0}" = "1" ]; then
+	err "ALLOW_UNVERIFIED=1 and REQUIRE_SIGNATURE=1 contradict each other; unset one"
+fi
+
 if [ "${ALLOW_UNVERIFIED:-0}" = "1" ]; then
 	info "WARNING: ALLOW_UNVERIFIED=1 — skipping checksum verification"
 else
@@ -96,18 +159,25 @@ else
 	# signature over checksums.txt, and GitHub holds a build-provenance
 	# attestation for the binary itself; verify whichever the machine can.
 	verified_signature=0
+	bundle_missing=0
+
+	# Both verifiers are told which release they are looking at. An unresolved
+	# "latest" is the only case left with no tag to name, and its regexp is
+	# satisfied by any release version, which is precisely the rollback this
+	# cannot otherwise see.
+	if [ "$VERSION" = "latest" ]; then
+		identity_arg="--certificate-identity-regexp"
+		gh_identity_arg="--cert-identity-regex"
+		identity="^https://github\\.com/${REPO}/\\.github/workflows/release\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+\$"
+	else
+		identity_arg="--certificate-identity"
+		gh_identity_arg="--cert-identity"
+		identity="https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${VERSION}"
+	fi
+
 	if command -v cosign >/dev/null 2>&1; then
 		if dl "$base/checksums.txt.sigstore.json" "$tmp/checksums.txt.sigstore.json" 2>/dev/null; then
 			info "verifying the cosign signature over checksums.txt"
-			# /releases/latest/download never reveals the tag, so pin the
-			# workflow identity and let the tag itself be any release version.
-			if [ "$VERSION" = "latest" ]; then
-				identity_arg="--certificate-identity-regexp"
-				identity="^https://github\\.com/${REPO}/\\.github/workflows/release\\.yml@refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+\$"
-			else
-				identity_arg="--certificate-identity"
-				identity="https://github.com/${REPO}/.github/workflows/release.yml@refs/tags/${VERSION}"
-			fi
 			cosign verify-blob \
 				--bundle "$tmp/checksums.txt.sigstore.json" \
 				"$identity_arg" "$identity" \
@@ -117,11 +187,16 @@ else
 			verified_signature=1
 			info "signature OK"
 		else
+			bundle_missing=1
 			info "WARNING: this release publishes no checksums.txt.sigstore.json"
 		fi
-	elif command -v gh >/dev/null 2>&1; then
+	fi
+	# Not an elif: when the bundle is the asset that went missing, gh still has
+	# something to say, because the build-provenance attestation lives in
+	# GitHub's own store rather than among the release assets.
+	if [ "$verified_signature" -eq 0 ] && command -v gh >/dev/null 2>&1; then
 		info "verifying the build-provenance attestation with gh"
-		if gh attestation verify "$tmp/$asset" --repo "$REPO" >/dev/null 2>&1; then
+		if gh attestation verify "$tmp/$asset" --repo "$REPO" "$gh_identity_arg" "$identity" >/dev/null 2>&1; then
 			verified_signature=1
 			info "attestation OK"
 		else
@@ -129,6 +204,12 @@ else
 		fi
 	fi
 	if [ "$verified_signature" -eq 0 ]; then
+		# Every release since signing began publishes the bundle, so on a machine
+		# that can check one its absence is not an old release: it is the single
+		# asset whoever replaced the binary and checksums.txt also has to remove.
+		if [ "$bundle_missing" -eq 1 ]; then
+			err "no checksums.txt.sigstore.json is served for this release and no attestation could be verified; refusing to install unverified bytes (set ALLOW_UNVERIFIED=1 to bypass at your own risk)"
+		fi
 		msg="no signature was verified — install cosign or the gh CLI to check that these bytes came from ${REPO}'s release workflow"
 		if [ "${REQUIRE_SIGNATURE:-0}" = "1" ]; then
 			err "$msg (REQUIRE_SIGNATURE=1)"

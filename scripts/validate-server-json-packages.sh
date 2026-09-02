@@ -190,7 +190,10 @@ while read -r identifier; do
     | select((.platform.os // "") != "unknown")
     | "\(.digest)\t\(.platform.os // "?")/\(.platform.architecture // "?")"')
   if [[ ${#children[@]} -eq 0 ]]; then
-    children=("$(echo "$index" | jq -r '.config.digest // ""')\tsingle")
+    # $'\t' outside the quotes: inside them it is a backslash and a t, which the
+    # tab-splitting below never finds, so both halves came out as the whole
+    # string and the empty-digest guard could not fire.
+    children=("$(echo "$index" | jq -r '.config.digest // ""')"$'\t'"single")
     manifests_are_index=0
   else
     manifests_are_index=1
@@ -201,17 +204,29 @@ while read -r identifier; do
   for child_entry in "${children[@]}"; do
     child=${child_entry%%$'\t'*}
     child_platform=${child_entry##*$'\t'}
-    [[ -n "$child" ]] || continue
     if [[ "$manifests_are_index" -eq 1 ]]; then
+      [[ -n "$child" ]] || continue
       manifest=$(curl "${CURL_META[@]}" -fsS -H "Authorization: Bearer $token" -H "Accept: $accept" \
         "https://ghcr.io/v2/${repo}/manifests/${child}")
     else
       manifest="$index"
     fi
 
-    config_digest=$(echo "$manifest" | jq -r '.config.digest')
-    config=$(curl "${CURL_META[@]}" -fsSL -H "Authorization: Bearer $token" \
-      "https://ghcr.io/v2/${repo}/blobs/${config_digest}")
+    # A manifest with no config declares no labels either, and fetching
+    # blobs/null aborts the whole run under `set -e` without a FAIL line naming
+    # the package that failed.
+    config_digest=$(echo "$manifest" | jq -r '.config.digest // ""')
+    if [[ -z "$config_digest" || "$config_digest" == "null" ]]; then
+      fail "$child_platform: the image manifest declares no config digest"
+      entry_failed=1
+      continue
+    fi
+    if ! config=$(curl "${CURL_META[@]}" -fsSL -H "Authorization: Bearer $token" \
+      "https://ghcr.io/v2/${repo}/blobs/${config_digest}"); then
+      fail "$child_platform: image config blob $config_digest could not be fetched"
+      entry_failed=1
+      continue
+    fi
 
     label=$(echo "$config" | jq -r '.config.Labels["io.modelcontextprotocol.server.name"] // ""')
     if [[ "$label" != "$server_name" ]]; then

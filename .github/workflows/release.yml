@@ -331,6 +331,12 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version: ${{ env.GO_VERSION }}
+          # setup-go caches ~/go/pkg/mod and the build cache by default, and a
+          # tag run restores what a run on main wrote. This job signs what it
+          # compiles, so its inputs must all be fixed by the repository: the
+          # modules are downloaded fresh and checked against go.sum instead of
+          # coming from an Actions cache no signature covers.
+          cache: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
@@ -558,10 +564,15 @@ jobs:
   mcp-registry:
     name: Publish to MCP Registry
     runs-on: ubuntu-latest
-    # npm because the registry validates the npm package entry by fetching the
-    # version this release published; docker because it validates the OCI entry
-    # by fetching the image tag and digest.
-    needs: [release, npm, docker]
+    # npm and pypi because the registry validates those package entries by
+    # fetching the versions this release published: a pypi entry is checked by
+    # GETting pypi.org/pypi/<name>/<version>/json, so racing the upload spends
+    # the retry budget on a version that is not there yet. docker because it
+    # validates the OCI entry by fetching the image tag and digest.
+    # verify-published because this job is what points installers at the npm
+    # and PyPI packages: the listing must not advertise bytes nobody compared
+    # with the signed checksums.
+    needs: [release, npm, pypi, docker, verify-published]
     environment: release
     permissions:
       contents: read # download the published release assets
@@ -626,14 +637,15 @@ jobs:
             if grep -q "invalid version: cannot publish duplicate version" mcp-publisher-publish.log; then
               break
             fi
-            # The registry validates the npm entry by fetching the version the
-            # npm job published minutes ago, and the oci entry by fetching the
-            # image tag the docker job pushed. Retry only errors the registry
-            # itself labels transient, plus the not-yet-visible npm version,
-            # which is indistinguishable from registry-side propagation lag.
-            # Strings are quoted from the v1.8.1 validators (internal/validators/
-            # registries/{npm,oci}.go); a genuine "not found (status: 404)" is
-            # deliberately absent, so a truly unpublished package fails fast.
+            # The registry validates the npm and pypi entries by fetching the
+            # versions those jobs published minutes ago, and the oci entry by
+            # fetching the image tag the docker job pushed. Retry only errors
+            # the registry itself labels transient, plus a not-yet-visible npm
+            # or PyPI version, which is indistinguishable from registry-side
+            # propagation lag. Strings are quoted from the v1.8.1 validators
+            # (internal/validators/registries/{npm,pypi,oci}.go); a genuine
+            # "not found (status: 404)" is deliberately absent, so a truly
+            # unpublished package fails fast.
             # The OCI validator's own 404 text — "does not exist in the
             # registry" — is absent for the same reason: the image is pushed by
             # the docker job this one depends on, so its absence is a broken
@@ -689,8 +701,11 @@ jobs:
     # package the manifest declares. Committing before npm and PyPI have
     # published would fail that gate on a version that is merely not there yet.
     # Depending on the publishers also preserves the old single-job semantics:
-    # a failed publish aborted before the commit ever happened.
-    needs: [release, docker, npm, pypi, homebrew, mcp-registry]
+    # a failed publish aborted before the commit ever happened. verify-published
+    # is listed for the same reason and not left to transitivity through
+    # mcp-registry: if what the registries serve does not match the signed
+    # checksums, main must not gain a manifest advertising it.
+    needs: [release, docker, npm, pypi, homebrew, mcp-registry, verify-published]
     environment: release
     permissions:
       contents: read # download the published release assets

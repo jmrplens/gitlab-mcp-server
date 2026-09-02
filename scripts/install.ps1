@@ -62,6 +62,45 @@ $arch = switch ($procArch) {
 
 $asset = "$binName-windows-$arch.exe"
 
+# --- resolve which release to install --------------------------------------
+# The asset names carry no version (gitlab-mcp-server-windows-<arch>.exe) and
+# neither does checksums.txt, so "latest" left unresolved lets whoever can
+# replace release assets serve a consistent, correctly signed triple from an
+# older, vulnerable release. Following the /releases/latest redirect names the
+# tag before anything is downloaded, which is what pins the signature identity
+# to the version being installed.
+function Resolve-LatestTag {
+    param([string]$Url)
+    try {
+        $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -MaximumRedirection 5
+        # Windows PowerShell 5.1 hands back an HttpWebResponse and PowerShell 7
+        # an HttpResponseMessage; each spells "where this ended up" its own way.
+        $inner = $response.BaseResponse
+        $final = if ($inner.PSObject.Properties['ResponseUri']) { $inner.ResponseUri.AbsoluteUri }
+        elseif ($inner.PSObject.Properties['RequestMessage']) { $inner.RequestMessage.RequestUri.AbsoluteUri }
+        else { '' }
+        if ($final -match '/releases/tag/(?<tag>[^/]+)$') { return $Matches['tag'] }
+    }
+    catch {
+        return $null
+    }
+    return $null
+}
+
+# RELEASE_BASE_URL is the test hook and points at a local fixture with no
+# /releases/latest of its own, so resolution follows it.
+$latestUrl = if ($env:RELEASE_BASE_URL) { $env:RELEASE_LATEST_URL } else { "https://github.com/$Repo/releases/latest" }
+if ($Version -eq 'latest' -and $latestUrl) {
+    $latestTag = Resolve-LatestTag -Url $latestUrl
+    if ($latestTag) {
+        $Version = $latestTag
+        Write-Info "latest is $Version"
+    }
+    else {
+        Write-Info 'WARNING: could not resolve which release is latest; the signature check cannot name a version'
+    }
+}
+
 # --- resolve download base -------------------------------------------------
 # RELEASE_BASE_URL exists so the installer can be driven against a local
 # fixture server in tests; leave it unset for real installs.
@@ -85,6 +124,13 @@ try {
     # --- verify checksum ---------------------------------------------------
     # Integrity verification is mandatory by default (fail closed). Set the
     # environment variable ALLOW_UNVERIFIED=1 to bypass, at your own risk.
+    #
+    # The two knobs pull in opposite directions, so a configuration that sets
+    # both is a mistake worth naming rather than resolving silently in either
+    # direction.
+    if ($env:ALLOW_UNVERIFIED -eq '1' -and $env:REQUIRE_SIGNATURE -eq '1') {
+        throw 'ALLOW_UNVERIFIED=1 and REQUIRE_SIGNATURE=1 contradict each other; unset one'
+    }
     if ($env:ALLOW_UNVERIFIED -eq '1') {
         Write-Info 'WARNING: ALLOW_UNVERIFIED=1 - skipping checksum verification'
     }
@@ -103,28 +149,34 @@ try {
         # signature over checksums.txt, and GitHub holds a build-provenance
         # attestation for the binary; verify whichever tool is present.
         $verifiedSignature = $false
+        $bundleMissing = $false
+
+        # Both verifiers are told which release they are looking at. An
+        # unresolved "latest" is the only case left with no tag to name, and its
+        # regexp is satisfied by any release version - which is precisely the
+        # rollback this cannot otherwise see.
+        if ($Version -eq 'latest') {
+            $identity = '^https://github\.com/' + $Repo + '/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
+            $identityArgs = @('--certificate-identity-regexp', $identity)
+            $ghIdentityArgs = @('--cert-identity-regex', $identity)
+        }
+        else {
+            $identity = "https://github.com/$Repo/.github/workflows/release.yml@refs/tags/$Version"
+            $identityArgs = @('--certificate-identity', $identity)
+            $ghIdentityArgs = @('--cert-identity', $identity)
+        }
+
         if (Get-Command cosign -ErrorAction SilentlyContinue) {
             $bundlePath = Join-Path $tmp 'checksums.txt.sigstore.json'
-            $haveBundle = $true
             try {
                 Invoke-WebRequest -Uri "$base/checksums.txt.sigstore.json" -OutFile $bundlePath -UseBasicParsing
             }
             catch {
-                $haveBundle = $false
+                $bundleMissing = $true
                 Write-Info 'WARNING: this release publishes no checksums.txt.sigstore.json'
             }
-            if ($haveBundle) {
+            if (-not $bundleMissing) {
                 Write-Info 'verifying the cosign signature over checksums.txt'
-                # /releases/latest/download never reveals the tag, so pin the
-                # workflow identity and let the tag be any release version.
-                $identityArgs = if ($Version -eq 'latest') {
-                    @('--certificate-identity-regexp',
-                        ('^https://github\.com/' + $Repo + '/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'))
-                }
-                else {
-                    @('--certificate-identity',
-                        "https://github.com/$Repo/.github/workflows/release.yml@refs/tags/$Version")
-                }
                 & cosign verify-blob --bundle $bundlePath @identityArgs `
                     --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' $sumsPath | Out-Null
                 if ($LASTEXITCODE -ne 0) {
@@ -134,9 +186,18 @@ try {
                 Write-Info 'signature OK'
             }
         }
-        elseif (Get-Command gh -ErrorAction SilentlyContinue) {
+        # Not an elseif: when the bundle is the asset that went missing, gh
+        # still has something to say, because the build-provenance attestation
+        # lives in GitHub's own store rather than among the release assets.
+        if (-not $verifiedSignature -and (Get-Command gh -ErrorAction SilentlyContinue)) {
             Write-Info 'verifying the build-provenance attestation with gh'
-            & gh attestation verify $assetPath --repo $Repo 2>&1 | Out-Null
+            # No `2>&1` here: on Windows PowerShell 5.1 - the host the documented
+            # one-liner lands in - merging a native command's stderr while
+            # $ErrorActionPreference is 'Stop' turns gh's first diagnostic line
+            # into a terminating error, so neither the warning below nor the
+            # REQUIRE_SIGNATURE gate was reachable on a failed attestation. The
+            # exit code decides, and gh's own message reaches the user.
+            & gh attestation verify $assetPath --repo $Repo @ghIdentityArgs | Out-Null
             if ($LASTEXITCODE -eq 0) {
                 $verifiedSignature = $true
                 Write-Info 'attestation OK'
@@ -146,6 +207,13 @@ try {
             }
         }
         if (-not $verifiedSignature) {
+            # Every release since signing began publishes the bundle, so on a
+            # machine that can check one its absence is not an old release: it
+            # is the single asset whoever replaced the binary and checksums.txt
+            # also has to remove.
+            if ($bundleMissing) {
+                throw 'no checksums.txt.sigstore.json is served for this release and no attestation could be verified; refusing to install unverified bytes (set ALLOW_UNVERIFIED=1 to bypass at your own risk)'
+            }
             $msg = "no signature was verified - install cosign or the gh CLI to check that these bytes came from $Repo's release workflow"
             if ($env:REQUIRE_SIGNATURE -eq '1') { throw "$msg (REQUIRE_SIGNATURE=1)" }
             Write-Info "WARNING: $msg"
