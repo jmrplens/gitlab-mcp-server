@@ -560,7 +560,7 @@ func TestTransportAuto_WithAPipeOnStdin_SpeaksStdio(t *testing.T) {
 		})
 	}
 
-	inferred := findLogRecord(t, s.stderrText(), "transport inferred from stdin")
+	inferred := awaitLogRecord(t, s, "transport inferred from stdin", 10*time.Second)
 	if got, _ := inferred["transport"].(string); got != "stdio" {
 		t.Errorf("the transport was inferred as %q, want stdio: %v", got, inferred)
 	}
@@ -576,11 +576,35 @@ func TestTransportAuto_WithAPipeOnStdin_SpeaksStdio(t *testing.T) {
 	}
 }
 
-// findLogRecord returns the first JSON log record on stderr whose msg matches,
-// failing the test when there is none.
-func findLogRecord(t *testing.T, logs, msg string) map[string]any {
+// awaitLogRecord polls stderr until a JSON log record with the given msg
+// appears, and fails the test when none does within the window.
+//
+// Polling rather than reading once, because stderr is copied into the session
+// by a goroutine of its own: a record the server has already written is not
+// necessarily in that buffer at the moment a later request's answer arrives on
+// stdout, so a single read raced the drain and could fail while the feature
+// worked. An intermittent failure in a test that pins a startup property is
+// worse than no test at all, since what it teaches is to re-run.
+func awaitLogRecord(t *testing.T, s *session, msg string, within time.Duration) map[string]any {
 	t.Helper()
 
+	deadline := time.Now().Add(within)
+	for {
+		logs := s.stderrText()
+		if record, ok := findLogRecord(logs, msg); ok {
+			return record
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no log record with msg %q was written within %s:\n%s", msg, within, logs)
+			return nil
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// findLogRecord returns the first JSON log record in the given stderr text
+// whose msg matches, and reports whether there was one.
+func findLogRecord(logs, msg string) (map[string]any, bool) {
 	for line := range strings.SplitSeq(strings.TrimSpace(logs), "\n") {
 		if line == "" {
 			continue
@@ -590,9 +614,8 @@ func findLogRecord(t *testing.T, logs, msg string) map[string]any {
 			continue
 		}
 		if got, _ := record["msg"].(string); got == msg {
-			return record
+			return record, true
 		}
 	}
-	t.Fatalf("no log record with msg %q was written:\n%s", msg, logs)
-	return nil
+	return nil, false
 }

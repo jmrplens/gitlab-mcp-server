@@ -470,6 +470,10 @@ FLAGS
   -log-level string         Logging verbosity: debug|info|warn|error (default info)
 
  Transport
+  -transport string         Transport to serve: stdio|http|auto. Empty defers to -http; given both, -transport
+                            wins. auto reads file descriptor 0: HTTP only when stdin is the null device, which
+                            is what a container started without -i gives, and stdio for the pipe an MCP client
+                            connects
   -http                     Run in HTTP transport mode (default: stdio)
   -http-addr string         Listen address: host:port, or a path to bind a unix socket (default ":8080")
   -http-socket-mode str     Octal permission mode for a unix socket (default "0660")

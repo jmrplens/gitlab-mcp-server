@@ -273,7 +273,15 @@ while read -r identifier; do
   # below. Excused only while this repository's own CMD does reach stdio: a
   # Dockerfile regressed back to a bare --http fails here, published image or
   # not.
-  elif [[ "$(grep -c '^CMD.*--transport", *"\(auto\|stdio\)' "$DOCKERFILE" 2> /dev/null || true)" != "0" ]]; then
+  #
+  # Readability is checked before the grep rather than folded into it. A
+  # `grep ... || true` on a file that is missing or unreadable yields an empty
+  # string, which is not "0", so the excuse used to be granted by evidence
+  # nobody could read: a gate that cannot reach its evidence has to fail.
+  elif [[ ! -r "$DOCKERFILE" ]]; then
+    fail "image CMD is \"$cmd\", the package names no transport, and $DOCKERFILE could not be read to check the next release's"
+    continue
+  elif grep -qE '^CMD.*--transport", *"(auto|stdio)' "$DOCKERFILE"; then
     echo "  NOTE: published CMD is \"$cmd\"; the argument-free entry is correct from the next release, whose image infers the transport"
     transport_source="the next release's CMD infers the transport"
   else

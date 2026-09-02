@@ -1215,6 +1215,78 @@ func TestPrintHelp_ContainsExpectedSections(t *testing.T) {
 	}
 }
 
+// TestPrintHelp_Transport_NamesEverySelectorAndThePrecedence verifies that
+// -transport is documented in the curated help, with all three values it
+// accepts and the rule that settles a run passing both selectors.
+//
+// The flag is discoverable through the flag package's own output, but nobody
+// reads that: -h prints printHelp, and a transport flag missing from it is a
+// flag an operator has to already know about to find. The precedence is worth
+// stating there too, because -http is in every existing deployment and the
+// answer to "what happens if I keep it" is the first question this flag raises.
+func TestPrintHelp_Transport_NamesEverySelectorAndThePrecedence(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	os.Stdout = w
+
+	printHelp()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	// The entry is its own line plus its indented continuation lines: the
+	// description is long enough to wrap, and a value named on a wrapped line
+	// is still documented.
+	entry := helpEntry(string(out), "-transport string")
+	if entry == "" {
+		t.Fatal("the help does not document -transport at all")
+	}
+
+	for _, tc := range []struct {
+		name string
+		want string
+	}{
+		{name: "stdio is named", want: transportStdio},
+		{name: "http is named", want: transportHTTP},
+		{name: "auto is named", want: transportAuto},
+		{name: "the precedence over -http is stated", want: "defers to -http"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if !strings.Contains(entry, tc.want) {
+				t.Errorf("the -transport help entry does not mention %q: %q", tc.want, entry)
+			}
+		})
+	}
+}
+
+// helpEntry returns one flag's help entry joined into a single line: the line
+// naming the flag plus every indented continuation line under it.
+func helpEntry(help, flagName string) string {
+	lines := strings.Split(help, "\n")
+	for i, candidate := range lines {
+		if !strings.Contains(candidate, flagName) {
+			continue
+		}
+		entry := []string{strings.TrimSpace(candidate)}
+		for _, next := range lines[i+1:] {
+			trimmed := strings.TrimSpace(next)
+			if trimmed == "" || strings.HasPrefix(trimmed, "-") {
+				break
+			}
+			entry = append(entry, trimmed)
+		}
+		return strings.Join(entry, " ")
+	}
+	return ""
+}
+
 // TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification
 // verifies that the help says what the pool now does.
 //
@@ -1244,26 +1316,10 @@ func TestPrintHelp_RevalidateInterval_DoesNotPromiseThatZeroStopsReverification(
 
 	// The entry is its own line plus any indented continuation lines, since a
 	// flag long enough to need this correction is long enough to wrap.
-	var entry []string
-	lines := strings.Split(string(out), "\n")
-	for i, candidate := range lines {
-		if !strings.Contains(candidate, "-revalidate-interval") {
-			continue
-		}
-		entry = append(entry, candidate)
-		for _, next := range lines[i+1:] {
-			trimmed := strings.TrimSpace(next)
-			if trimmed == "" || strings.HasPrefix(trimmed, "-") {
-				break
-			}
-			entry = append(entry, trimmed)
-		}
-		break
-	}
-	if len(entry) == 0 {
+	line := helpEntry(string(out), "-revalidate-interval")
+	if line == "" {
 		t.Fatal("the help does not document -revalidate-interval at all")
 	}
-	line := strings.Join(entry, " ")
 	if strings.Contains(line, "0 to disable") {
 		t.Errorf("the help still promises that 0 disables re-validation: %q", line)
 	}
