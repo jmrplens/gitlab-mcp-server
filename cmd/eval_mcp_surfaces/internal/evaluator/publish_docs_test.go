@@ -1226,7 +1226,7 @@ func TestPublishSectionLabel_QualifiesOnlyWithSiblingSection(t *testing.T) {
 	if got := publishSectionLabel("Nightly", publishSectionMeta, siblings[:1]); got != "Nightly" {
 		t.Fatalf("publishSectionLabel(without sibling) = %q, want Nightly", got)
 	}
-	if got := publishSectionLabel("", publishSectionUnknown, nil); got == "" {
+	if publishSectionLabel("", publishSectionUnknown, nil) == "" {
 		t.Fatal("publishSectionLabel(empty) = empty, want fallback snapshot label")
 	}
 }

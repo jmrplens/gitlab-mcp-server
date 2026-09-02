@@ -350,7 +350,7 @@ func TestRunApply_DryRunAndApply_RewriteLegacyNames(t *testing.T) {
 			}
 
 			var stdout, stderr bytes.Buffer
-			if ok := runApply([]string{root}, &stdout, &stderr, tc.dryRun); !ok {
+			if !runApply([]string{root}, &stdout, &stderr, tc.dryRun) {
 				t.Fatalf("runApply() = false, want true; stderr:\n%s", stderr.String())
 			}
 

@@ -1147,7 +1147,7 @@ func TestHandleExpectedDynamicFindStep_MissingExpectedAction_DoesNotAdvance(t *t
 		followups: followups,
 	}
 
-	if stop := runner.handleExpectedDynamicFindStep(t.Context(), auxCtx); stop {
+	if runner.handleExpectedDynamicFindStep(t.Context(), auxCtx) {
 		t.Fatal("handleExpectedDynamicFindStep() = true, want the attempt to continue")
 	}
 	if state.stepIndex != 0 || result.CompletedSteps != 0 || !result.SchemaLookupUsed {
@@ -1184,7 +1184,7 @@ func TestHandleExpectedDynamicFindStep_MatchingResult_AdvancesScenario(t *testin
 		followups: followups,
 	}
 
-	if stop := runner.handleExpectedDynamicFindStep(t.Context(), auxCtx); stop {
+	if runner.handleExpectedDynamicFindStep(t.Context(), auxCtx) {
 		t.Fatal("handleExpectedDynamicFindStep() = true, want the scenario to continue into the execute step")
 	}
 	if state.stepIndex != 1 || result.CompletedSteps != 1 || !result.SchemaLookupUsed {
@@ -1238,7 +1238,7 @@ func TestHandleInvalidCapabilityBridgeCall_RepairsThenStops(t *testing.T) {
 
 	t.Run("first invalid call repairs", func(t *testing.T) {
 		bridgeCtx, result, followups := newContext(false, &modelEvaluationState{})
-		if stop := handleInvalidCapabilityBridgeCall(bridgeCtx, bridgeCtx.steps[0], validation); stop {
+		if handleInvalidCapabilityBridgeCall(bridgeCtx, bridgeCtx.steps[0], validation) {
 			t.Fatal("handleInvalidCapabilityBridgeCall() = true, want continue after repair")
 		}
 		if !result.RepairAttempted || len(*followups) != 1 || !(*followups)[0].IsError {
@@ -1248,7 +1248,7 @@ func TestHandleInvalidCapabilityBridgeCall_RepairsThenStops(t *testing.T) {
 	t.Run("repeated fingerprint stops", func(t *testing.T) {
 		state := &modelEvaluationState{lastInvalidFingerprint: invalidToolUseFingerprint(toolUse)}
 		bridgeCtx, _, followups := newContext(false, state)
-		if stop := handleInvalidCapabilityBridgeCall(bridgeCtx, bridgeCtx.steps[0], validation); !stop {
+		if !handleInvalidCapabilityBridgeCall(bridgeCtx, bridgeCtx.steps[0], validation) {
 			t.Fatal("handleInvalidCapabilityBridgeCall() = false, want stop on repeated invalid retry")
 		}
 		if len(*followups) != 0 {
@@ -1257,7 +1257,7 @@ func TestHandleInvalidCapabilityBridgeCall_RepairsThenStops(t *testing.T) {
 	})
 	t.Run("repair budget exhausted stops", func(t *testing.T) {
 		bridgeCtx, _, _ := newContext(true, &modelEvaluationState{})
-		if stop := handleInvalidCapabilityBridgeCall(bridgeCtx, bridgeCtx.steps[0], validation); !stop {
+		if !handleInvalidCapabilityBridgeCall(bridgeCtx, bridgeCtx.steps[0], validation) {
 			t.Fatal("handleInvalidCapabilityBridgeCall() = false, want stop when repair budget is spent")
 		}
 	})

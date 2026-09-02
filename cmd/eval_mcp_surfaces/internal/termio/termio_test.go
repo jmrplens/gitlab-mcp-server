@@ -249,7 +249,7 @@ func TestConfigure_ValidPath_RoutesOutputAndRestoresOnClose(t *testing.T) {
 	if commandOutput.file != nil || commandOutput.echo {
 		t.Errorf("commandOutput after close = %+v, want the zero sink", commandOutput)
 	}
-	if closeErr := closer(); closeErr == nil {
+	if closer() == nil {
 		t.Error("second closer() error = nil, want the already-closed file error")
 	}
 }

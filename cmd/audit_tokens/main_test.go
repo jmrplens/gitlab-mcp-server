@@ -1754,7 +1754,7 @@ func TestRunFootprintMode_CheckFlag_SelectsCheckOrWrite(t *testing.T) {
 		if !strings.HasPrefix(output, "Token footprint is current (") {
 			t.Fatalf("runFootprintMode(check) output = %q", output)
 		}
-		if after := readReplica(t, root, readmePath); after != before {
+		if readReplica(t, root, readmePath) != before {
 			t.Fatal("runFootprintMode(check) modified README.md")
 		}
 	})

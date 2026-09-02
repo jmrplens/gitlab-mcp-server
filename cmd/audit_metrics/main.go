@@ -49,49 +49,72 @@ const (
 
 var topDomains = 20
 
-// main builds the audit client, gathers runtime counts from the registered MCP
-// surface, and prints the metrics report to stdout.
+// auditOptions is what the command line selects: which mode to run and where
+// to write. Parsing it is separate from acting on it so the modes are testable.
+type auditOptions struct {
+	topDomains    int
+	jsonOut       bool
+	siteStatsPath string
+	checkOnly     bool
+}
+
+// main parses flags and hands the work to run, whose exit code it returns.
 func main() {
-	flag.IntVar(&topDomains, "top-domains", 20, "number of domains to list by tool count")
-	jsonOut := flag.Bool("json", false, "emit JSON summary instead of markdown report")
-	siteStatsPath := flag.String("site-stats", "", "write the single-sourced site stats JSON to the given path (use with -check to verify instead of write)")
-	checkOnly := flag.Bool("check", false, "with -site-stats, verify the committed file is up to date instead of writing it")
+	opts := auditOptions{}
+	flag.IntVar(&opts.topDomains, "top-domains", 20, "number of domains to list by tool count")
+	flag.BoolVar(&opts.jsonOut, "json", false, "emit JSON summary instead of markdown report")
+	flag.StringVar(&opts.siteStatsPath, "site-stats", "", "write the single-sourced site stats JSON to the given path (use with -check to verify instead of write)")
+	flag.BoolVar(&opts.checkOnly, "check", false, "with -site-stats, verify the committed file is up to date instead of writing it")
 	flag.Parse()
-	if topDomains < 0 {
-		cmdutil.Fatalf("-top-domains must be >= 0")
+
+	exitProcess(run(opts, os.Stdout, os.Stderr))
+}
+
+// run builds the audit clients, dispatches to the selected mode, and returns
+// the process exit code. Every write goes to the given writers so a test can
+// read what a mode produced.
+func run(opts auditOptions, stdout, stderr io.Writer) int {
+	topDomains = opts.topDomains
+	if opts.topDomains < 0 {
+		fmt.Fprintln(stderr, "-top-domains must be >= 0")
+		return 1
 	}
 
 	cmdutil.Progressf("audit_metrics: building catalog and counting tools/resources/prompts across surfaces...")
 	client, cleanup, err := auditclient.NewMock()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create client: %v\n", err)
-		os.Exit(1)
+		fmt.Fprintf(stderr, "failed to create client: %v\n", err)
+		return 1
 	}
 	defer cleanup()
+
 	gitLabComClient, err := gitlabclient.NewClient(&config.Config{ //#nosec G101 -- not a real credential, audit-only dummy token
 		GitLabURL:   config.DefaultGitLabURL,
 		GitLabToken: "audit-token",
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create gitlab.com client: %v\n", err)
-		os.Exit(1) //nolint:gocritic // CLI tool: OS reclaims resources on exit.
+		fmt.Fprintf(stderr, "failed to create gitlab.com client: %v\n", err)
+		return 1
 	}
 
-	if *siteStatsPath != "" {
-		if statsErr := writeOrCheckSiteStats(*siteStatsPath, generateSiteStats(client, gitLabComClient), *checkOnly); statsErr != nil {
-			cmdutil.Fatalf("%v", statsErr)
+	if opts.siteStatsPath != "" {
+		if statsErr := writeOrCheckSiteStats(opts.siteStatsPath, generateSiteStats(client, gitLabComClient), opts.checkOnly); statsErr != nil {
+			fmt.Fprintf(stderr, "%v\n", statsErr)
+			return 1
 		}
-		return
+		return 0
 	}
 
 	metrics := collectMetrics(client, gitLabComClient)
-	if *jsonOut {
-		if encErr := writeJSONSummary(os.Stdout, metrics); encErr != nil {
-			cmdutil.Fatalf("encode json: %v", encErr)
+	if opts.jsonOut {
+		if encErr := writeJSONSummary(stdout, metrics); encErr != nil {
+			fmt.Fprintf(stderr, "encode json: %v\n", encErr)
+			return 1
 		}
-		return
+		return 0
 	}
 	printReport(metrics, client)
+	return 0
 }
 
 // exitProcess terminates the process after an unrecoverable failure has been

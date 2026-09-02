@@ -1126,3 +1126,101 @@ func sectionBetween(t *testing.T, s, start, end string) string {
 	}
 	return s[from : from+to]
 }
+
+// TestRun_RejectsNegativeTopDomains verifies that the flag guard refuses a
+// negative count before any catalog work starts, and says so on stderr.
+func TestRun_RejectsNegativeTopDomains(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run(auditOptions{topDomains: -1}, &stdout, &stderr)
+
+	if code != 1 {
+		t.Errorf("run() = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "-top-domains must be >= 0") {
+		t.Errorf("stderr = %q, want the guard message", stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Errorf("stdout = %q, want nothing written before the guard fires", stdout.String())
+	}
+}
+
+// TestRun_JSONMode_WritesTheSummaryToTheGivenWriter verifies that -json emits
+// the JSON summary to the writer run was handed rather than to os.Stdout, and
+// that the document carries the counts the report is built from.
+func TestRun_JSONMode_WritesTheSummaryToTheGivenWriter(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	code := run(auditOptions{topDomains: 5, jsonOut: true}, &stdout, &stderr)
+
+	if code != 0 {
+		t.Fatalf("run() = %d, want 0 (stderr: %s)", code, stderr.String())
+	}
+	var summary map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &summary); err != nil {
+		t.Fatalf("stdout is not JSON: %v\n%s", err, stdout.String())
+	}
+	for _, key := range []string{"individual_tools", "meta_base", "meta_enterprise", "dynamic_base", "resources", "prompts", "tool_packages"} {
+		t.Run(key, func(t *testing.T) {
+			if _, ok := summary[key]; !ok {
+				t.Errorf("summary has no %q key: %v", key, summary)
+			}
+		})
+	}
+}
+
+// TestRun_ReportMode_PrintsTheMarkdownReport verifies the default mode writes
+// the human report and nothing to stderr.
+func TestRun_ReportMode_PrintsTheMarkdownReport(t *testing.T) {
+	var stderr bytes.Buffer
+
+	var code int
+	out := captureStdout(t, func() {
+		code = run(auditOptions{topDomains: 3}, os.Stdout, &stderr)
+	})
+
+	if code != 0 {
+		t.Fatalf("run() = %d, want 0 (stderr: %s)", code, stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Errorf("stderr = %q, want empty on the happy path", stderr.String())
+	}
+	if !strings.Contains(out, "Tools") {
+		t.Errorf("report does not look like the metrics report:\n%s", out)
+	}
+}
+
+// TestRun_SiteStats_WritesAndThenVerifies verifies the site-stats mode writes
+// the JSON document, and that running it again with checkOnly accepts the file
+// it just wrote and rejects a modified one.
+func TestRun_SiteStats_WritesAndThenVerifies(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "stats.json")
+	var stdout, stderr bytes.Buffer
+
+	if code := run(auditOptions{topDomains: 1, siteStatsPath: path}, &stdout, &stderr); code != 0 {
+		t.Fatalf("write mode = %d, want 0 (stderr: %s)", code, stderr.String())
+	}
+	written, err := os.ReadFile(path) //#nosec G304 -- path is a temporary directory this test created
+	if err != nil {
+		t.Fatalf("read written stats: %v", err)
+	}
+	if !json.Valid(written) {
+		t.Fatalf("written stats are not JSON:\n%s", written)
+	}
+
+	stderr.Reset()
+	if code := run(auditOptions{topDomains: 1, siteStatsPath: path, checkOnly: true}, &stdout, &stderr); code != 0 {
+		t.Fatalf("check mode on a fresh file = %d, want 0 (stderr: %s)", code, stderr.String())
+	}
+
+	if writeErr := os.WriteFile(path, []byte(`{"version":"0.0.0"}`), 0o600); writeErr != nil {
+		t.Fatalf("rewrite stats: %v", writeErr)
+	}
+	stderr.Reset()
+	if code := run(auditOptions{topDomains: 1, siteStatsPath: path, checkOnly: true}, &stdout, &stderr); code != 1 {
+		t.Errorf("check mode on a stale file = %d, want 1", code)
+	}
+	if stderr.Len() == 0 {
+		t.Error("check mode failed without saying why")
+	}
+}

@@ -397,7 +397,7 @@ func TestRun_CheckModeAcceptsFreshOutput(t *testing.T) {
 	if !c.closed {
 		t.Error("run(check) did not release the stub client")
 	}
-	if got := readGenerated(t, dir, llmsFileName); got != crlf {
+	if readGenerated(t, dir, llmsFileName) != crlf {
 		t.Error("run(check) rewrote llms.txt; check mode must not write")
 	}
 }
@@ -458,7 +458,7 @@ func disturbGenerated(t *testing.T, dir, name string, remove bool) func(t *testi
 	writeFile(t, dir, name, "# stale\n")
 	return func(t *testing.T) {
 		t.Helper()
-		if got := readGenerated(t, dir, name); got != "# stale\n" {
+		if readGenerated(t, dir, name) != "# stale\n" {
 			t.Error("run(check) rewrote the stale file; check mode must not write")
 		}
 	}

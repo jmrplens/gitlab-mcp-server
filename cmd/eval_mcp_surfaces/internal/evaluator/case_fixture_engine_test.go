@@ -331,7 +331,7 @@ func TestErrWithPreparedFixtureCleanup_WrapsCleanupFailure(t *testing.T) {
 // cleanup yields no handle, and a handle invoked with a nil context falls back
 // to the preparation context.
 func TestCleanupHandle_NilCleanupAndFallbackContext(t *testing.T) {
-	if handle := cleanupHandle(t.Context(), FixtureContext{}, CaseFixtureSpec{}, nil); handle != nil {
+	if cleanupHandle(t.Context(), FixtureContext{}, CaseFixtureSpec{}, nil) != nil {
 		t.Fatal("cleanupHandle() = non-nil, want nil for fixture without cleanup")
 	}
 	type ctxKey struct{}
