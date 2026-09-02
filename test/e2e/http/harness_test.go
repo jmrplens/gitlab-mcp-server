@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -194,7 +195,7 @@ func startServerOnPort(t *testing.T, port int, env map[string]string, flags ...s
 	args := append([]string{"--http", "--http-addr=" + addr}, withInstancePolicy(flags)...)
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = append(os.Environ(),
+	cmd.Env = append(configFreeEnviron(),
 		"LOG_LEVEL=info",
 		"TOOL_SURFACE=dynamic",
 	)
@@ -413,9 +414,51 @@ func runServerExpectingExit(t *testing.T, bin string, args ...string) (string, e
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Env = append(os.Environ(), "LOG_LEVEL=info")
+	cmd.Env = append(configFreeEnviron(), "LOG_LEVEL=info")
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// genericServerSettings are the settings this server reads under names generic
+// enough to belong to something else in the same shell. They are listed here
+// rather than imported because this module builds the binary rather than
+// linking it, so the list is duplicated on purpose and a name added to the
+// server without being added here only weakens the isolation, never the build.
+var genericServerSettings = []string{
+	"AUTH_MODE", "CAPABILITY_SURFACE", "CLIENT_COMPAT", "EXCLUDE_TOOLS",
+	"LOG_LEVEL", "MAX_HTTP_CLIENTS", "META_PARAM_SCHEMA", "META_TOOLS",
+	"OAUTH_CACHE_TTL", "OAUTH_CLIENT_UID", "POOL_IDLE_TIMEOUT", "PUBLIC_URL",
+	"RATE_LIMIT_BURST", "RATE_LIMIT_RPS", "TOOL_SURFACE", "TRUSTED_ORIGINS",
+	"UPLOAD_MAX_FILE_SIZE",
+}
+
+// configFreeEnviron is the process environment with every variable that
+// configures this server removed, so a test's flags decide its behavior and
+// nothing else does.
+//
+// The server reads its settings from the environment when a flag is absent, and
+// these tests start it as a child of whatever shell the developer or the runner
+// is using. A GITLAB_URL exported there therefore reaches the server as a
+// published instance, which silently defeats every test that pins what a
+// deployment publishing none does: they pass on a clean machine and fail on a
+// configured one, which is the worst way for a test to be wrong.
+//
+// Filtered rather than replaced, because the child still needs PATH, HOME and
+// the rest of the machine to run at all.
+func configFreeEnviron() []string {
+	kept := make([]string, 0, len(os.Environ()))
+	for _, entry := range os.Environ() {
+		name, _, ok := strings.Cut(entry, "=")
+		if !ok {
+			continue
+		}
+		if strings.HasPrefix(name, "GITLAB_") || strings.HasPrefix(name, "OTEL_") ||
+			slices.Contains(genericServerSettings, name) {
+			continue
+		}
+		kept = append(kept, entry)
+	}
+	return kept
 }
 
 // itoa keeps strconv out of every test file that needs one port number.
